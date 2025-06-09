@@ -7,12 +7,9 @@ services:
     startCommand: "flask db upgrade && gunicorn run:app"
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: "3.11.0"
       - key: FLASK_ENV
-        value: production
-      - key: DATABASE_URL
-        from: database
-        property: connectionString
+        value: "production"
 
 databases:
   - name: sistema-fretes-db
