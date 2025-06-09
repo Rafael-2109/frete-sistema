@@ -190,9 +190,7 @@ def obter_lista_vendedores():
         print(f"Erro ao obter lista de vendedores: {e}")
         return []
 
-@login_manager.user_loader
-def load_user(user_id):
-    return Usuario.query.get(int(user_id))
+
 
 @auth_bp.route('/teste')
 def teste():
