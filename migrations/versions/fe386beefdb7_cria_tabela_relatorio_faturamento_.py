@@ -1,7 +1,7 @@
 """Cria tabela relatorio_faturamento_importado
 
 Revision ID: fe386beefdb7
-Revises: c9c19ef29882
+Revises:
 Create Date: 2025-05-03 19:18:13.702410
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'fe386beefdb7'
-down_revision = 'c9c19ef29882'
+down_revision = None
 branch_labels = None
 depends_on = None
 
