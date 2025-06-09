@@ -1,7 +1,7 @@
 """Cria tabela de fretes lançados
 
 Revision ID: c9c19ef29882
-Revises: 2f2db28f83e2
+Revises: 
 Create Date: 2025-04-21 19:51:23.583150
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'c9c19ef29882'
-down_revision = '2f2db28f83e2'
+down_revision = None
 branch_labels = None
 depends_on = None
 
