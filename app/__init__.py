@@ -129,8 +129,8 @@ def create_app(config_name=None):
 
     @login_manager.user_loader
     def load_user(user_id):
-        from app.auth.models import User
-        return User.query.get(int(user_id))
+        from app.auth.models import Usuario
+        return Usuario.query.get(int(user_id))
 
     # Registra comandos CLI apenas se existirem
     try:
