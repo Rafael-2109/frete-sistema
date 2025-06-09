@@ -1,0 +1,339 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container mt-4">
+  <h4>🔎 Consulta de Vínculos</h4>
+
+  <!-- ===============================
+       1) BOTÕES DE REGIÕES + ESTADOS
+     =============================== -->
+  <div class="mb-3 d-flex gap-2">
+    <!-- NORTE -->
+    <div class="btn-group">
+      <button type="button" class="btn btn-sm btn-dark dropdown-toggle" data-bs-toggle="dropdown">Norte</button>
+      <ul class="dropdown-menu">        
+        <li><a class="dropdown-item" href="?uf=AC">AC</a></li>
+        <li><a class="dropdown-item" href="?uf=AM">AM</a></li>
+        <li><a class="dropdown-item" href="?uf=AP">AP</a></li>
+        <li><a class="dropdown-item" href="?uf=PA">PA</a></li>
+        <li><a class="dropdown-item" href="?uf=RO">RO</a></li>
+        <li><a class="dropdown-item" href="?uf=RR">RR</a></li>
+        <li><a class="dropdown-item" href="?uf=TO">TO</a></li>
+      </ul>
+    </div>
+
+    <!-- NORDESTE -->
+    <div class="btn-group">
+      <button type="button" class="btn btn-sm btn-primary dropdown-toggle" data-bs-toggle="dropdown">Nordeste</button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="?uf=AL">AL</a></li>
+        <li><a class="dropdown-item" href="?uf=BA">BA</a></li>
+        <li><a class="dropdown-item" href="?uf=CE">CE</a></li>
+        <li><a class="dropdown-item" href="?uf=MA">MA</a></li>
+        <li><a class="dropdown-item" href="?uf=PB">PB</a></li>
+        <li><a class="dropdown-item" href="?uf=PE">PE</a></li>
+        <li><a class="dropdown-item" href="?uf=PI">PI</a></li>
+        <li><a class="dropdown-item" href="?uf=RN">RN</a></li>
+        <li><a class="dropdown-item" href="?uf=SE">SE</a></li>
+      </ul>
+    </div>
+
+    <!-- CENTRO-OESTE -->
+    <div class="btn-group">
+      <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">C.Oeste</button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="?uf=DF">DF</a></li>
+        <li><a class="dropdown-item" href="?uf=GO">GO</a></li>
+        <li><a class="dropdown-item" href="?uf=MS">MS</a></li>
+        <li><a class="dropdown-item" href="?uf=MT">MT</a></li>
+      </ul>
+    </div>
+
+    <!-- SUDESTE -->
+    <div class="btn-group">
+      <button type="button" class="btn btn-sm btn-warning dropdown-toggle" data-bs-toggle="dropdown">Sudeste</button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="?uf=ES">ES</a></li>
+        <li><a class="dropdown-item" href="?uf=MG">MG</a></li>
+        <li><a class="dropdown-item" href="?uf=RJ">RJ</a></li>
+        <li><a class="dropdown-item" href="?uf=SP">SP</a></li>
+      </ul>
+    </div>
+
+    <!-- SUL -->
+    <div class="btn-group">
+      <button type="button" class="btn btn-sm btn-info dropdown-toggle" data-bs-toggle="dropdown">Sul</button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="?uf=PR">PR</a></li>
+        <li><a class="dropdown-item" href="?uf=RS">RS</a></li>
+        <li><a class="dropdown-item" href="?uf=SC">SC</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===============================
+       2) FILTRO COM FORM PADRÃO
+     =============================== -->
+  <form method="GET" class="card p-3 shadow-sm mb-4">
+    <div class="row g-2">
+      <div class="col-md-2">{{ form.razao_social.label }}{{ form.razao_social(class="form-control") }}</div>
+      <div class="col-md-2">{{ form.cnpj.label }}{{ form.cnpj(class="form-control") }}</div>
+      <div class="col-md-1">{{ form.uf.label }}{{ form.uf(class="form-control") }}</div>
+      <div class="col-md-2">{{ form.cidade.label }}{{ form.cidade(class="form-control") }}</div>
+      <div class="col-md-2">{{ form.codigo_ibge.label }}{{ form.codigo_ibge(class="form-control") }}</div>
+      <div class="col-md-2">{{ form.nome_tabela.label }}{{ form.nome_tabela(class="form-control") }}</div>
+      <div class="col-md-1 d-grid">{{ form.submit(class="btn btn-primary") }}</div>
+    </div>
+    <div class="row g-2 mt-2">
+      <div class="col-md-3">
+        <label class="form-label">Status do Vínculo</label>
+        <select name="status" class="form-select">
+          <option value="">Todos os Status</option>
+          <option value="ok" {% if request.args.get('status') == 'ok' %}selected{% endif %}>✅ OK</option>
+          <option value="orfa" {% if request.args.get('status') == 'orfa' %}selected{% endif %}>❌ Órfão</option>
+          <option value="grupo_empresarial" {% if request.args.get('status') == 'grupo_empresarial' %}selected{% endif %}>🔄 Grupo Empresarial</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check mt-4">
+          <input class="form-check-input" type="checkbox" name="apenas_orfaos" value="1" 
+                 {% if request.args.get('apenas_orfaos') %}checked{% endif %}>
+          <label class="form-check-label">
+            🚨 Apenas Vínculos Órfãos
+          </label>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  {% if registros %}
+  <div class="d-flex justify-content-end mb-3 gap-2">
+    <!-- Botão Apenas Exportar -->
+    <form method="POST" action="{{ url_for('vinculos.exportar_vinculos') }}">
+      {{ form.csrf_token }}
+      <button type="submit" class="btn btn-info btn-sm">⬇️ Exportar ({{ paginacao.total }})</button>
+    </form>
+
+    <!-- Botão Exportar e Excluir -->
+    <form method="POST" action="{{ url_for('vinculos.exportar_apagar_vinculos') }}"
+          onsubmit="return confirm('Tem certeza que deseja exportar e excluir {{ paginacao.total }} vínculos?');">
+      {{ form.csrf_token }}
+      <button type="submit" class="btn btn-success btn-sm">⬇️🗑️ Exportar & Excluir ({{ paginacao.total }})</button>
+    </form>
+  </div>
+
+  <!-- Tabela de Resultados -->
+  <div class="table-responsive">
+    <table class="table table-sm table-hover table-striped">
+      <thead>
+        <tr class="text-center">
+          <th>ID</th>
+          <th>Status</th>
+          <th>Transportadora</th>
+          <th>Cidade</th>
+          <th>UF</th>
+          <th>IBGE</th>
+          <th>Tabela</th>
+          <th>Lead Time</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in paginacao.items %}
+        <tr class="text-center">
+          <td>{{ v.id }}</td>
+          <td>
+            <span class="badge" style="background-color: {{ v.status_cor }}; color: white;">
+              {{ v.status_texto }}
+            </span>
+          </td>
+          <td>{{ v.transportadora.razao_social }}</td>
+          <td>{{ v.cidade.nome }}</td>
+          <td>{{ v.cidade.uf }}</td>
+          <td>{{ v.cidade.codigo_ibge }}</td>
+          <td>{{ v.nome_tabela }}</td>
+          <td>{{ v.lead_time or '' }}</td>
+          <td class="d-flex justify-content-center gap-1">
+            <!-- Botão que abre modal de edição -->
+            <button class="btn btn-sm btn-outline-primary" onclick="abrirModalEditar('{{ v.id }}', '{{ v.transportadora.razao_social }}', '{{ v.transportadora.cnpj }}', '{{ v.cidade.uf }}', '{{ v.cidade.nome }}', '{{ v.cidade.codigo_ibge }}', '{{ v.nome_tabela }}', '{{ v.lead_time or '' }}')">
+              Editar
+            </button>
+
+            <!-- Form para excluir este vínculo -->
+            <form method="POST"
+                  action="{{ url_for('vinculos.excluir_vinculo', id=v.id) }}"
+                  onsubmit="return confirm('Tem certeza que deseja excluir o vínculo ID {{ v.id }}?');"
+                  style="display: inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                Excluir
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Paginação -->
+  <div class="d-flex justify-content-center mt-3">
+    <nav>
+      <ul class="pagination">
+        <!-- << primeira página -->
+        {% set first_args = request.args.copy() %}
+        {% set _ignore = first_args.pop('page', None) %}
+        <li class="page-item {% if paginacao.page <= 1 %}disabled{% endif %}">
+          <a class="page-link" href="?{{ first_args|urlencode }}" aria-label="Primeira">&laquo;</a>
+        </li>
+
+        <!-- < anterior -->
+        {% set prev_args = request.args.copy() %}
+        {% set _ignore = prev_args.pop('page', None) %}
+        {% if paginacao.has_prev %}
+          {% set _ignore = prev_args.update({'page': paginacao.prev_num}) %}
+        {% endif %}
+        <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+          <a class="page-link" href="?{{ prev_args|urlencode }}">&lt;</a>
+        </li>
+
+        <!-- Páginas -->
+        {% for page_num in paginacao.iter_pages(left_edge=2, left_current=2, right_current=2, right_edge=2) %}
+          {% if page_num %}
+            {% set page_args = request.args.copy() %}
+            {% set _ignore = page_args.pop('page', None) %}
+            {% set _ignore = page_args.update({'page': page_num}) %}
+            <li class="page-item {% if page_num == paginacao.page %}active{% endif %}">
+              <a class="page-link" href="?{{ page_args|urlencode }}">{{ page_num }}</a>
+            </li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+          {% endif %}
+        {% endfor %}
+
+        <!-- > próxima -->
+        {% set next_args = request.args.copy() %}
+        {% set _ignore = next_args.pop('page', None) %}
+        {% if paginacao.has_next %}
+          {% set _ignore = next_args.update({'page': paginacao.next_num}) %}
+        {% endif %}
+        <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+          <a class="page-link" href="?{{ next_args|urlencode }}">&gt;</a>
+        </li>
+
+        <!-- >> última página -->
+        {% set last_args = request.args.copy() %}
+        {% set _ignore = last_args.pop('page', None) %}
+        {% set _ignore = last_args.update({'page': paginacao.pages}) %}
+        <li class="page-item {% if paginacao.page >= paginacao.pages %}disabled{% endif %}">
+          <a class="page-link" href="?{{ last_args|urlencode }}" aria-label="Última">&raquo;</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+
+  <!-- Contador de Registros -->
+  <div class="text-center mt-2">
+    <small class="text-muted">
+      Exibindo registros {{ (paginacao.page - 1) * paginacao.per_page + 1 }}
+      ao {{ (paginacao.page - 1) * paginacao.per_page + paginacao.items|length }}
+      de {{ paginacao.total }} no total
+    </small>
+  </div>
+
+  {% else %}
+  <div class="alert alert-warning">Nenhum vínculo encontrado.</div>
+  {% endif %}
+</div>
+
+<!-- Modal de Edição -->
+<div class="modal fade" id="modalEditar" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">✏️ Editar Vínculo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('vinculos.editar_vinculo') }}">
+        {{ editar_form.csrf_token }}
+        {{ editar_form.vinculo_id }}
+        
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">ID do Vínculo</label>
+            <input type="text" id="visual_id_vinculo" class="form-control" readonly>
+          </div>
+          
+          <div class="mb-3">
+            {{ editar_form.razao_social.label(class="form-label") }}
+            {{ editar_form.razao_social(class="form-control", id="edit_razao_social") }}
+          </div>
+          
+          <div class="mb-3">
+            {{ editar_form.cnpj.label(class="form-label") }}
+            {{ editar_form.cnpj(class="form-control", id="edit_cnpj", readonly=true) }}
+          </div>
+          
+          <div class="row mb-3">
+            <div class="col-md-2">
+              {{ editar_form.uf.label(class="form-label") }}
+              {{ editar_form.uf(class="form-control", id="edit_uf") }}
+            </div>
+            <div class="col-md-10">
+              {{ editar_form.cidade.label(class="form-label") }}
+              {{ editar_form.cidade(class="form-control", id="edit_cidade") }}
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            {{ editar_form.codigo_ibge.label(class="form-label") }}
+            {{ editar_form.codigo_ibge(class="form-control", id="edit_codigo_ibge") }}
+          </div>
+          
+          <div class="mb-3">
+            {{ editar_form.nome_tabela.label(class="form-label") }}
+            {{ editar_form.nome_tabela(class="form-control", id="edit_nome_tabela") }}
+          </div>
+          
+          <div class="mb-3">
+            {{ editar_form.lead_time.label(class="form-label") }}
+            {{ editar_form.lead_time(class="form-control", id="edit_lead_time") }}
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          {{ editar_form.submit(class="btn btn-primary") }}
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Script para abrir o Modal de Edição -->
+<script>
+function abrirModalEditar(id, razao, cnpj, uf, cidade, ibge, tabela, lead) {
+  // Preencher o hidden vinculo_id corretamente
+  var hiddenIdField = document.getElementsByName('vinculo_id')[0];
+  if (hiddenIdField) {
+    hiddenIdField.value = id;
+  }
+
+  // Preencher o campo visual do ID para o usuário ver
+  document.getElementById('visual_id_vinculo').value = id;
+
+  // Preencher os outros campos
+  document.getElementById('edit_razao_social').value = razao;
+  document.getElementById('edit_cnpj').value = cnpj;
+  document.getElementById('edit_uf').value = uf;
+  document.getElementById('edit_cidade').value = cidade;
+  document.getElementById('edit_codigo_ibge').value = ibge;
+  document.getElementById('edit_nome_tabela').value = tabela;
+  document.getElementById('edit_lead_time').value = lead;
+
+  // Abrir o modal
+  var modal = new bootstrap.Modal(document.getElementById('modalEditar'));
+  modal.show();
+}
+</script>
+{% endblock %}

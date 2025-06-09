@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}Selecionar Frete - Nova Despesa Extra{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-hand-pointer"></i> Selecionar Frete
+                <small class="text-muted">NF: {{ numero_nf }}</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}">Nova Despesa Extra</a></li>
+            <li class="breadcrumb-item active">Selecionar Frete</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i>
+                <strong>{{ fretes|length }} frete(s) encontrado(s)</strong> contendo a NF <strong>{{ numero_nf }}</strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de fretes encontrados -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-truck"></i> Fretes Encontrados
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Frete</th>
+                                    <th>Cliente</th>
+                                    <th>Embarque</th>
+                                    <th>Transportadora</th>
+                                    <th>Valor Cotado</th>
+                                    <th>Status</th>
+                                    <th>CTe</th>
+                                    <th class="text-center">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for frete in fretes %}
+                                <tr>
+                                    <td>
+                                        <strong>#{{ frete.id }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ frete.criado_em.strftime('%d/%m/%Y') }}</small>
+                                    </td>
+                                    <td>
+                                        <strong>{{ frete.nome_cliente[:30] }}{% if frete.nome_cliente|length > 30 %}...{% endif %}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ frete.cnpj_cliente }}</small>
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}" class="text-decoration-none">
+                                            #{{ frete.embarque.numero }}
+                                        </a>
+                                        <br>
+                                        <small class="text-muted d-block" style="color: black !important;">
+                                            <span class="badge {% if frete.tipo_carga == 'DIRETA' %}badge-info{% else %}badge-warning{% endif %}" 
+                                                  style="color: white; background-color: {% if frete.tipo_carga == 'DIRETA' %}#17a2b8{% else %}#ffc107{% endif %};">
+                                                {{ frete.tipo_carga }}
+                                            </span>
+                                        </small>
+                                    </td>
+                                    <td>
+                                        {{ frete.transportadora.razao_social[:25] }}{% if frete.transportadora.razao_social|length > 25 %}...{% endif %}
+                                    </td>
+                                    <td>
+                                        <strong>R$ {{ "%.2f"|format(frete.valor_cotado) }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ frete.quantidade_nfs }} NF(s)</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if frete.status == 'APROVADO' %}badge-success
+                                            {% elif frete.status == 'EM_TRATATIVA' %}badge-warning
+                                            {% elif frete.status == 'REJEITADO' %}badge-danger
+                                            {% elif frete.status == 'PAGO' %}badge-primary
+                                            {% elif frete.status == 'CANCELADO' %}badge-secondary
+                                            {% else %}badge-info{% endif %}"
+                                            style="color: white; background-color: 
+                                            {% if frete.status == 'APROVADO' %}#28a745
+                                            {% elif frete.status == 'EM_TRATATIVA' %}#ffc107
+                                            {% elif frete.status == 'REJEITADO' %}#dc3545
+                                            {% elif frete.status == 'PAGO' %}#007bff
+                                            {% elif frete.status == 'CANCELADO' %}#6c757d
+                                            {% else %}#17a2b8{% endif %};">
+                                            {{ frete.status }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if frete.numero_cte %}
+                                            <span class="text-success">
+                                                <i class="fas fa-check"></i> {{ frete.numero_cte }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">
+                                                <i class="fas fa-times"></i> Não lançado
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <a href="{{ url_for('fretes.criar_despesa_extra_frete', frete_id=frete.id) }}" 
+                                           class="btn btn-primary btn-sm">
+                                            <i class="fas fa-plus"></i> Selecionar
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Nova Busca
+            </a>
+        </div>
+    </div>
+
+    <!-- Detalhes das NFs (expandível) -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Detalhes das NFs nos Fretes
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% for frete in fretes %}
+                    <div class="mb-3">
+                        <strong style="color: black;">Frete #{{ frete.id }}:</strong>
+                        <div class="mt-1">
+                            {% if frete.numeros_nfs %}
+                                {% set nfs_list = frete.numeros_nfs.split(',') %}
+                                {% for nf in nfs_list %}
+                                    {% if nf.strip() %}
+                                        <span class="badge {% if nf.strip() == numero_nf %}badge-warning{% else %}badge-secondary{% endif %} mr-1"
+                                              style="color: white; background-color: {% if nf.strip() == numero_nf %}#ffc107{% else %}#6c757d{% endif %};">
+                                            {{ nf.strip() }}
+                                            {% if nf.strip() == numero_nf %}
+                                                <i class="fas fa-search"></i>
+                                            {% endif %}
+                                        </span>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

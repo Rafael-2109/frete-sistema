@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block content %}
+<div>
+    <form method="POST" action="{{ url_for('financeiro.excluir_pendencias_selecionadas') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-3">
+            <button type="submit" class="btn btn-danger">Excluir Selecionadas</button>
+            <a href="{{ url_for('financeiro.excluir_todas_pendencias') }}" class="btn btn-outline-danger"
+               onclick="return confirm('Deseja realmente excluir TODAS as pendências?');">Excluir Todas</a>
+        </div>
+
+        <table class="table table-striped mt-3">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>NF</th>
+                    <th>CNPJ</th>
+                    <th>Cliente</th>
+                    <th>Valor</th>
+                    <th>Obs. Financeira</th>
+                    <th>Resposta Logística</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in pendencias %}
+                <tr>
+                    <td><input type="checkbox" name="selecionadas" value="{{ p.id }}"></td>
+                    <td>{{ p.numero_nf }}</td>
+                    <td>{{ p.entrega.cnpj_cliente if p.entrega else '-' }}</td>
+                    <td>{{ p.entrega.cliente if p.entrega else '-' }}</td>
+                    <td>{{ "%.2f"|format(p.entrega.valor_nf) if p.entrega else '-' }}</td>
+                    <td>{{ p.observacao }}</td>
+                    <td>{{ p.resposta_logistica or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </form>
+
+    <a href="{{url_for('financeiro.exportar_pendencias')}}" class="btn btn-success">Exportar Excel</a>
+</div>
+{% endblock %}

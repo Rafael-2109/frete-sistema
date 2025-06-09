@@ -1,0 +1,551 @@
+{% extends "base.html" %}
+
+{% block title %}Análise Detalhada das Diferenças - Frete #{{ frete.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-calculator"></i> Análise Detalhada das Diferenças
+                <small class="text-muted">Frete #{{ frete.id }}</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Informações do Frete -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-truck"></i> Informações do Frete
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Cliente:</strong><br>
+                            {{ frete.nome_cliente }}<br>
+                            <small class="text-muted">CNPJ: {{ frete.cnpj_cliente }}</small>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Transportadora:</strong><br>
+                            {{ frete.transportadora.razao_social }}<br>
+                            <small class="text-muted">Embarque #{{ frete.embarque.numero }}</small>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Dados Físicos:</strong><br>
+                            Peso: {{ "%.2f"|format(frete.peso_total) }} kg<br>
+                            <small class="text-muted">Valor NFs: R$ {{ "%.2f"|format(frete.valor_total_nfs) }}</small>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Tabela Usada:</strong><br>
+                            {{ tabela_dados.nome_tabela or 'N/A' }}<br>
+                            <small class="text-muted">Modalidade: {{ frete.modalidade }}</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Componentes da Tabela -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-table"></i> Componentes da Tabela de Frete
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                                                 <table class="table table-striped table-hover table-sm">
+                             <thead class="thead-dark">
+                                 <tr>
+                                     <th width="140">Componente</th>
+                                     <th width="100">Valor Tabela</th>
+                                     <th width="100">Valor Usado</th>
+                                     <th width="150">Fórmula de Cálculo</th>
+                                     <th width="100" style="text-align: right;">Valor Calculado</th>
+                                     <th width="100" style="text-align: center;">Valor CTe</th>
+                                     <th width="100" style="text-align: center;">Tabela CTe</th>
+                                     <th width="80" style="text-align: right;">Diferença</th>
+                                 </tr>
+                             </thead>
+                             <tbody>
+                                 {% for componente in componentes %}
+                                 <tr>
+                                     <td>
+                                         <strong>{{ componente.nome }}</strong>
+                                         {% if componente.observacao %}
+                                             <br><small class="text-muted">{{ componente.observacao }}</small>
+                                         {% endif %}
+                                         {% if componente.tipo == 'peso' %}
+                                             <span class="badge badge-info badge-sm">PESO</span>
+                                         {% elif componente.tipo == 'subtotal' %}
+                                             <span class="badge badge-warning badge-sm">SUBTOTAL</span>
+                                         {% elif componente.tipo == 'ajuste' %}
+                                             <span class="badge badge-danger badge-sm">AJUSTE</span>
+                                         {% endif %}
+                                     </td>
+                                     <td><small><strong>{{ componente.valor_tabela }}</strong></small></td>
+                                     <td><small>{{ componente.valor_usado }}</small></td>
+                                     <td><code style="font-size: 11px;">{{ componente.formula }}</code></td>
+                                     <td style="text-align: right;">
+                                         {% if componente.unidade == 'R$' %}
+                                             <span class="badge badge-success text-dark" style="background-color: #d4edda; color: #155724 !important;">
+                                                 R$ {{ "%.2f"|format(componente.valor_calculado) }}
+                                             </span>
+                                         {% else %}
+                                             <span class="badge badge-primary text-white" style="background-color: #007bff;">
+                                                 {{ "%.2f"|format(componente.valor_calculado) }} {{ componente.unidade }}
+                                             </span>
+                                         {% endif %}
+                                     </td>
+                                     <td style="text-align: center;">
+                                         {% if componente.tipo == 'valor' %}
+                                             <input type="text" class="form-control form-control-sm valor-cte-campo" 
+                                                    data-componente="{{ loop.index0 }}"
+                                                    placeholder="0,00"
+                                                    style="font-size: 11px;">
+                                         {% else %}
+                                             <span class="text-muted">-</span>
+                                         {% endif %}
+                                     </td>
+                                     <td style="text-align: center;">
+                                         {% if componente.tipo == 'valor' %}
+                                             <span class="usado-transportadora text-dark" data-componente="{{ loop.index0 }}"
+                                                   style="font-size: 11px; font-weight: bold;">
+                                                 -
+                                             </span>
+                                         {% else %}
+                                             <span class="text-muted">-</span>
+                                         {% endif %}
+                                     </td>
+                                     <td style="text-align: right;">
+                                         {% if componente.tipo == 'valor' %}
+                                             <span class="diferenca-componente text-dark" data-componente="{{ loop.index0 }}"
+                                                   style="font-size: 11px; font-weight: bold;">
+                                                 -
+                                             </span>
+                                         {% else %}
+                                             <span class="text-muted">-</span>
+                                         {% endif %}
+                                     </td>
+                                 </tr>
+                                 {% endfor %}
+                             </tbody>
+                         </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumos -->
+    <div class="row">
+        <!-- Resumo da Cotação -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clipboard-list"></i> Resumo da Cotação
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <td><strong>Total Líquido:</strong></td>
+                            <td style="text-align: right;">
+                                <span class="badge badge-success text-dark" style="background-color: #d4edda; color: #155724 !important;">
+                                    R$ {{ "%.2f"|format(resumo_cotacao.total_liquido) }}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>% ICMS:</strong></td>
+                            <td style="text-align: right;">
+                                {{ "%.2f"|format(resumo_cotacao.percentual_icms*100) }}%
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Valor ICMS:</strong></td>
+                            <td style="text-align: right;">
+                                R$ {{ "%.2f"|format(resumo_cotacao.valor_icms) }}
+                            </td>
+                        </tr>
+                        <tr class="table-success">
+                            <td><strong>Total Bruto Final:</strong></td>
+                            <td style="text-align: right;">
+                                <h5 class="mb-0">
+                                    R$ {{ "%.2f"|format(resumo_cotacao.total_bruto) }}
+                                </h5>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resumo do CTe -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-invoice"></i> Resumo do CTe
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <td><strong>Total Líquido CTe:</strong></td>
+                            <td style="text-align: right;">
+                                <span class="badge badge-success text-dark" style="background-color: #d4edda; color: #155724 !important;" id="total-liquido-cte-display">
+                                    R$ 0,00
+                                </span>
+                                <input type="hidden" id="total-liquido-cte" value="0">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>% ICMS CTe:</strong></td>
+                            <td style="text-align: right;">
+                                <input type="text" class="form-control form-control-sm" 
+                                       id="percentual-icms-cte" placeholder="0,00">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Valor ICMS CTe:</strong></td>
+                            <td style="text-align: right;">
+                                <span id="valor-icms-cte" class="badge badge-success text-dark" style="background-color: #d4edda; color: #155724 !important;">
+                                    R$ 0,00
+                                </span>
+                            </td>
+                        </tr>
+                        <tr class="table-warning">
+                            <td><strong>Total Bruto CTe:</strong></td>
+                            <td style="text-align: right;">
+                                <h5 class="mb-0" id="total-bruto-cte">
+                                    R$ {{ "%.2f"|format(frete.valor_cte or 0) }}
+                                </h5>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Diferença Final -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-balance-scale"></i> Análise Final das Diferenças
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <h6>Diferença Total:</h6>
+                            <h4 id="diferenca-total" class="text-danger">R$ 0,00</h4>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <h6>Percentual:</h6>
+                            <h4 id="percentual-diferenca" class="text-danger">0,00%</h4>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <h6>Status:</h6>
+                            <h4 id="status-diferenca" class="text-success">Em análise</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botões -->
+    <div class="row mt-4 mb-4">
+        <div class="col-12 text-center">
+            <button type="button" class="btn btn-secondary btn-lg me-3" onclick="window.close()">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+            <button type="button" class="btn btn-primary btn-lg" onclick="window.print()">
+                <i class="fas fa-print"></i> Imprimir Análise
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const componentesCalculados = {{ componentes|tojson }};
+    const valorCotacaoTotal = {{ resumo_cotacao.total_bruto }};
+    const valorCteInformado = {{ frete.valor_cte or 0 }};
+    
+    // Função para converter valor brasileiro para float
+    function converterValor(valor) {
+        if (!valor || valor.trim() === '') return 0;
+        return parseFloat(valor.replace(/\./g, '').replace(',', '.')) || 0;
+    }
+    
+    // Função para formatar valor para exibição
+    function formatarValor(valor) {
+        return valor.toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        });
+    }
+    
+    // Calcula total líquido CTe automaticamente
+    function calcularTotalLiquidoCte() {
+        let totalLiquido = 0;
+        document.querySelectorAll('.valor-cte-campo').forEach(function(campo) {
+            totalLiquido += converterValor(campo.value);
+        });
+        
+        document.getElementById('total-liquido-cte').value = totalLiquido;
+        document.getElementById('total-liquido-cte-display').textContent = formatarValor(totalLiquido);
+        
+        return totalLiquido;
+    }
+
+    // Atualiza diferenças dos componentes
+    function atualizarDiferencasComponentes() {
+        console.log('=== INICIANDO atualizarDiferencasComponentes ===');
+        
+        // Primeiro calcula o total líquido CTe automaticamente
+        const totalLiquidoCte = calcularTotalLiquidoCte();
+        
+        document.querySelectorAll('.valor-cte-campo').forEach(function(campo) {
+            // ✅ CORREÇÃO: Usa o data-componente do próprio campo
+            const componenteIndex = campo.getAttribute('data-componente');
+            const valorCte = converterValor(campo.value);
+            const valorCalculado = componentesCalculados[componenteIndex] ? componentesCalculados[componenteIndex].valor_calculado : 0;
+            const diferenca = valorCte - valorCalculado;
+            
+            // ✅ CORREÇÃO: Busca pelos elementos usando o data-componente correto
+            const spanDiferenca = document.querySelector(`.diferenca-componente[data-componente="${componenteIndex}"]`);
+            const spanUsadoTransp = document.querySelector(`.usado-transportadora[data-componente="${componenteIndex}"]`);
+            
+            console.log(`Campo data-componente="${componenteIndex}":`, {
+                valorCte: valorCte,
+                valorCalculado: valorCalculado,
+                diferenca: diferenca,
+                spanDiferenca: spanDiferenca,
+                spanUsadoTransp: spanUsadoTransp,
+                componenteInfo: componentesCalculados[componenteIndex]
+            });
+            
+            if (!spanDiferenca || !spanUsadoTransp) {
+                console.error(`Elementos não encontrados para data-componente="${componenteIndex}"`);
+                return;
+            }
+            
+            if (valorCte > 0) {
+                // Calcula valor da tabela que a transportadora usou (cálculo reverso)
+                let tabelaCte = '';
+                const componenteTipo = componentesCalculados[componenteIndex];
+                
+                // ✅ CÁLCULO REVERSO: Qual valor da tabela a transportadora usou
+                if (componenteTipo.nome === 'Frete por Peso' && valorCte > 0) {
+                    // CTe ÷ peso considerado = valor por kg usado pela transportadora
+                    const pesoConsiderado = {{ frete.peso_considerado or frete.peso_total or 0 }};
+                    if (pesoConsiderado > 0) {
+                        const valorKgCte = valorCte / pesoConsiderado;
+                        tabelaCte = `R$ ${valorKgCte.toFixed(4)}/kg`;
+                    }
+                } else if (componenteTipo.nome === 'Frete por Valor (%)' && valorCte > 0) {
+                    // CTe ÷ valor mercadoria × 100 = percentual usado pela transportadora
+                    const valorMercadoria = {{ frete.valor_total_nfs or 0 }};
+                    if (valorMercadoria > 0) {
+                        const percentualCte = (valorCte / valorMercadoria) * 100;
+                        tabelaCte = `${percentualCte.toFixed(4)}%`;
+                    }
+                } else if (componenteTipo.nome === 'GRIS (% s/ Mercadoria)' && valorCte > 0) {
+                    // CTe ÷ valor mercadoria × 100 = percentual GRIS usado pela transportadora
+                    const valorMercadoria = {{ frete.valor_total_nfs or 0 }};
+                    if (valorMercadoria > 0) {
+                        const percentualGrisCte = (valorCte / valorMercadoria) * 100;
+                        tabelaCte = `${percentualGrisCte.toFixed(4)}%`;
+                    }
+                } else if (componenteTipo.nome === 'ADV (% s/ Mercadoria)' && valorCte > 0) {
+                    // CTe ÷ valor mercadoria × 100 = percentual ADV usado pela transportadora
+                    const valorMercadoria = {{ frete.valor_total_nfs or 0 }};
+                    if (valorMercadoria > 0) {
+                        const percentualAdvCte = (valorCte / valorMercadoria) * 100;
+                        tabelaCte = `${percentualAdvCte.toFixed(4)}%`;
+                    }
+                } else if (componenteTipo.nome === 'RCA (% s/ Mercadoria)' && valorCte > 0) {
+                    // CTe ÷ valor mercadoria × 100 = percentual RCA usado pela transportadora
+                    const valorMercadoria = {{ frete.valor_total_nfs or 0 }};
+                    if (valorMercadoria > 0) {
+                        const percentualRcaCte = (valorCte / valorMercadoria) * 100;
+                        tabelaCte = `${percentualRcaCte.toFixed(4)}%`;
+                    }
+                } else if (componenteTipo.nome === 'Pedágio (por fração 100kg)' && valorCte > 0) {
+                    // CTe ÷ frações de 100kg = valor por 100kg usado pela transportadora
+                    const pesoConsiderado = {{ frete.peso_considerado or frete.peso_total or 0 }};
+                    if (pesoConsiderado > 0) {
+                        const fracoes = Math.ceil(pesoConsiderado / 100); // Frações de 100kg
+                        if (fracoes > 0) {
+                            const valorPor100kgCte = valorCte / fracoes;
+                            tabelaCte = `R$ ${valorPor100kgCte.toFixed(2)}/100kg`;
+                        }
+                    }
+                } else {
+                    // Para valores fixos, mostra o valor como tabela fixa
+                    tabelaCte = `R$ ${valorCte.toFixed(2)} (fixo)`;
+                }
+                
+                spanUsadoTransp.innerHTML = tabelaCte;
+                spanDiferenca.innerHTML = `<span class="${diferenca >= 0 ? 'text-danger' : 'text-success'}">
+                    ${diferenca >= 0 ? '+' : ''}${formatarValor(diferenca)}
+                </span>`;
+                console.log(`Atualizado campo data-componente="${componenteIndex}": Tabela CTe = ${tabelaCte}, Diferença = ${formatarValor(diferenca)}`);
+            } else {
+                spanUsadoTransp.innerHTML = '-';
+                spanDiferenca.innerHTML = '-';
+                console.log(`Campo data-componente="${componenteIndex}" vazio, mostrando "-"`);
+            }
+        });
+        
+        console.log('=== FINALIZANDO atualizarDiferencasComponentes ===');
+        atualizarResumoFinal();
+    }
+    
+    // Atualiza ICMS CTe automaticamente
+    function atualizarIcmsCte() {
+        const totalLiquido = parseFloat(document.getElementById('total-liquido-cte').value) || 0;
+        const percentualIcms = converterValor(document.getElementById('percentual-icms-cte').value);
+        
+        let valorIcms = 0;
+        let totalBrutoCte = totalLiquido;
+        
+        if (percentualIcms > 0 && totalLiquido > 0) {
+            // ✅ CÁLCULO CORRETO: valor_bruto = valor_liquido / (1 - icms_decimal)
+            const icmsDecimal = percentualIcms / 100;
+            totalBrutoCte = totalLiquido / (1 - icmsDecimal);
+            valorIcms = totalBrutoCte - totalLiquido;
+        }
+        
+        document.getElementById('valor-icms-cte').textContent = formatarValor(valorIcms);
+        document.getElementById('total-bruto-cte').textContent = formatarValor(totalBrutoCte);
+        
+        atualizarResumoFinal();
+    }
+    
+    // Atualiza resumo final
+    function atualizarResumoFinal() {
+        // Usa o total bruto CTe calculado automaticamente em vez do valor original
+        const totalBrutoCteElement = document.getElementById('total-bruto-cte');
+        const totalBrutoCteCalculado = totalBrutoCteElement ? converterValor(totalBrutoCteElement.textContent.replace('R$', '')) : valorCteInformado;
+        
+        const diferencaTotal = totalBrutoCteCalculado - valorCotacaoTotal;
+        const percentualDiferenca = valorCotacaoTotal > 0 ? (diferencaTotal / valorCotacaoTotal) * 100 : 0;
+        
+        document.getElementById('diferenca-total').textContent = formatarValor(diferencaTotal);
+        document.getElementById('diferenca-total').className = diferencaTotal >= 0 ? 'text-danger' : 'text-success';
+        
+        document.getElementById('percentual-diferenca').textContent = percentualDiferenca.toFixed(2) + '%';
+        document.getElementById('percentual-diferenca').className = Math.abs(percentualDiferenca) > 10 ? 'text-danger' : 'text-warning';
+        
+        let status = 'Em análise';
+        let statusClass = 'text-warning';
+        
+        if (Math.abs(percentualDiferenca) <= 5) {
+            status = 'Diferença Aceitável';
+            statusClass = 'text-success';
+        } else if (Math.abs(percentualDiferenca) > 10) {
+            status = 'Requer Aprovação';
+            statusClass = 'text-danger';
+        }
+        
+        document.getElementById('status-diferenca').textContent = status;
+        document.getElementById('status-diferenca').className = statusClass;
+    }
+    
+    // Event listeners - simplificado para garantir funcionamento
+    document.querySelectorAll('.valor-cte-campo').forEach(function(campo) {
+        const componenteIndex = campo.getAttribute('data-componente');
+        console.log('Configurando event listener para campo data-componente=', componenteIndex, ':', campo);
+        
+        // Usando apenas 'input' que é mais confiável
+        campo.addEventListener('input', function() {
+            console.log('Evento input detectado no campo data-componente=', componenteIndex, 'valor:', this.value);
+            atualizarDiferencasComponentes();
+            atualizarIcmsCte();
+        });
+        
+        // Backup com 'keyup' 
+        campo.addEventListener('keyup', function() {
+            console.log('Evento keyup detectado no campo data-componente=', componenteIndex, 'valor:', this.value);
+            atualizarDiferencasComponentes();
+            atualizarIcmsCte();
+        });
+    });
+    
+    document.getElementById('percentual-icms-cte').addEventListener('input', atualizarIcmsCte);
+    
+    // Diagnóstico inicial - quantos elementos foram encontrados
+    console.log('=== DIAGNÓSTICO INICIAL ===');
+    console.log('Componentes calculados:', componentesCalculados.length);
+    console.log('Campos CTe encontrados:', document.querySelectorAll('.valor-cte-campo').length);
+    console.log('Elementos diferença encontrados:', document.querySelectorAll('.diferenca-componente').length);
+    console.log('Elementos tabela CTe encontrados:', document.querySelectorAll('.usado-transportadora').length);
+    
+    // Lista todos os data-componente encontrados
+    document.querySelectorAll('.valor-cte-campo').forEach(function(campo) {
+        const componenteIndex = campo.getAttribute('data-componente');
+        console.log(`Campo encontrado: data-componente="${componenteIndex}"`);
+    });
+    
+    // Lista todos os componentes e seus tipos
+    componentesCalculados.forEach(function(comp, index) {
+        console.log(`Componente ${index}: nome="${comp.nome}", tipo="${comp.tipo}"`);
+    });
+    
+    // Verifica quais elementos realmente existem
+    document.querySelectorAll('[data-componente]').forEach(function(elemento) {
+        const componenteIndex = elemento.getAttribute('data-componente');
+        const classes = elemento.className;
+        console.log(`Elemento encontrado: data-componente="${componenteIndex}", classes="${classes}"`);
+    });
+    
+    // Cálculos iniciais - aguarda um pouco para garantir que DOM está pronto
+    console.log('Iniciando cálculos...');
+    setTimeout(function() {
+        calcularTotalLiquidoCte();
+        atualizarDiferencasComponentes();
+        atualizarIcmsCte();
+        atualizarResumoFinal();
+        console.log('Cálculos iniciais concluídos');
+    }, 100);
+});
+</script>
+
+<style>
+@media print {
+    .btn {
+        display: none !important;
+    }
+    
+    .card {
+        border: 1px solid #333 !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    .card-header {
+        background-color: #f8f9fa !important;
+        color: #333 !important;
+        border-bottom: 1px solid #333 !important;
+    }
+    
+    input[type="text"] {
+        border: 1px solid #333 !important;
+    }
+}
+</style>
+{% endblock %} 

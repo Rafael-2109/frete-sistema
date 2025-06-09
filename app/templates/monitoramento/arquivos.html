@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Arquivos da Entrega - NF {{ entrega.numero_nf }}</h3>
+    <a href="{{ url_for('monitoramento.visualizar_entrega', id=entrega.id) }}" class="btn btn-secondary">Voltar para Entrega</a>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="mb-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2">
+      <div class="col-md-8">
+        <input type="file" name="arquivo" class="form-control" required>
+      </div>
+      <div class="col-md-4">
+        <button type="submit" class="btn btn-success">Enviar Arquivo</button>
+      </div>
+    </div>
+  </form>
+
+  <ul class="list-group">
+    {% for nome in arquivos %}
+      {% set ext = nome.split('.')[-1]|lower %}
+      {% if ext in ['pdf'] %} {% set icone = '📄' %}
+      {% elif ext in ['jpg', 'jpeg', 'png'] %} {% set icone = '🖼️' %}
+      {% elif ext in ['doc', 'docx'] %} {% set icone = '📝' %}
+      {% elif ext in ['xls', 'xlsx'] %} {% set icone = '📊' %}
+      {% else %} {% set icone = '📁' %}
+      {% endif %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        {{ icone }} {{ nome }}
+        <a href="{{ url_for('monitoramento.get_arquivo_entrega', entrega_id=entrega.id, filename=nome) }}" 
+           target="_blank" class="btn btn-sm btn-outline-primary">Abrir</a>
+      </li>
+    {% else %}
+      <li class="list-group-item text-muted">Nenhum arquivo encontrado.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

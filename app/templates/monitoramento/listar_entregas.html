@@ -1,0 +1,779 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<!-- 1) Se quiser um fundo claro só para os filtros, use algo como: -->
+<div class="bg-light py-1">
+  <div class="container-fluid">
+    <!-- Filtros -->
+    <form method="get" class="row g-1 align-items-end">
+    <div class="col-md-2">
+      <label class="form-label">Nota Fiscal</label>
+      <input type="text" name="numero_nf" class="form-control" placeholder="Nota Fiscal">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Transportadora</label>
+      <input type="text" name="transportadora" class="form-control" placeholder="Transportadora">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Cliente</label>
+      <input type="text" name="cliente" class="form-control" placeholder="Cliente">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">CNPJ</label>
+      <input type="text" name="cnpj_cliente" class="form-control" placeholder="CNPJ">
+    </div>
+    <div class="col-md-1">
+      <label class="form-label">UF</label>
+      <input type="text" name="uf" class="form-control" placeholder="UF">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Protocolo</label>
+      <input type="text" name="protocolo" class="form-control" placeholder="Protocolo">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Data Emissão</label>
+      <input type="date" name="data_emissao" class="form-control">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Data Embarque</label>
+      <input type="date" name="data_embarque" class="form-control">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Data Entrega</label>
+      <input type="date" name="data_entrega" class="form-control">
+    </div>  
+
+    <div class="col-md-3">
+      <div class="form-check mt-4">
+          <input class="form-check-input" type="checkbox"
+                 name="agrupar" value="status" id="agrupar"
+               {% if agrupar %}checked{% endif %}>
+          <label class="form-check-label fw-bold {% if agrupar %}text-primary{% endif %}" 
+                 for="agrupar">
+          Agrupar por Status
+        </label>
+      </div>
+    </div>
+
+    <div class="col-md-3 text-end">
+      <a href="?status=pendencia_financeira"
+         class="btn {% if request.args.get('status') == 'pendencia_financeira' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+         ⚠️ Pendência Financeira
+      </a>
+      <button type="submit" class="btn btn-primary">Buscar</button>
+        <a href="{{ url_for('monitoramento.listar_entregas') }}" class="btn btn-secondary">
+          Limpar
+        </a>
+    </div>
+  </form>
+
+    <!-- Botões de filtro rápido -->
+    <div class="d-flex flex-wrap gap-2 mt-3">
+    <a href="{{ url_for('monitoramento.listar_entregas') }}" 
+       class="btn {% if not request.args.get('status') %}btn-dark{% else %}btn-outline-dark{% endif %}">
+      📋 Todas
+    </a>
+    <a href="?status=pendente" 
+       class="btn {% if request.args.get('status') == 'pendente' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      ⚪ Pendentes
+    </a>
+    <a href="?status=atrasada" 
+       class="btn {% if request.args.get('status') == 'atrasada' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+      🔴 Atrasadas
+    </a>
+    <a href="?status=sem_previsao" 
+       class="btn {% if request.args.get('status') == 'sem_previsao' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+      🟡 Sem Previsão
+    </a>
+    <a href="?status=entregue" 
+       class="btn {% if request.args.get('status') == 'entregue' %}btn-success{% else %}btn-outline-success{% endif %}">
+      ✅ Entregues
+    </a>
+    <a href="?status=sem_agendamento" 
+       class="btn {% if request.args.get('status') == 'sem_agendamento' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+      ⚠️ Sem Agendamento
+    </a>
+    <a href="?status=com_comentarios" 
+       class="btn {% if request.args.get('status') == 'com_comentarios' %}btn-info{% else %}btn-outline-info{% endif %}">
+      💬 Comentários em NFs
+    </a>    
+    <a href="?status=reagendar" 
+       class="btn {% if request.args.get('status') == 'reagendar' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+      🔁 Reagendar
+    </a>
+   </div>
+
+  </div>
+</div>
+
+<!-- TABELA -->
+<div class="container-fluid mt-3">
+
+  <!-- Exemplo: barra de rolagem horizontal -->
+  <div class="table-responsive">
+  {% if agrupar %}
+      <!-- Modo Acordeão (agrupar por status) -->
+    <div class="accordion" id="accordionEntregas">
+      {% for status, grupo in entregas_agrupadas.items() %}
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#grupo{{ loop.index }}">
+            {{ status }} ({{ grupo|length }})
+          </button>
+        </h2>
+        <div id="grupo{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#accordionEntregas">
+          <div class="accordion-body p-0">
+            <table class="table table-hover table-bordered m-0">
+              {% set current_sort = request.args.get('sort', '') %}
+              {% set current_dir = request.args.get('direction', 'asc') %}
+
+              <thead>
+                <tr>
+                  <!-- NF -->
+                  <th>
+                    {% if current_sort == 'numero_nf' and current_dir == 'asc' %}
+                      {% set next_dir = 'desc' %}
+                    {% else %}
+                      {% set next_dir = 'asc' %}
+                    {% endif %}
+                    <a href="?sort=numero_nf&direction={{ next_dir }}">NF</a>
+                  </th>
+
+                  <!-- CNPJ -->
+                  <th>
+                    {% if current_sort == 'cnpj_cliente' and current_dir == 'asc' %}
+                      {% set next_dir = 'desc' %}
+                    {% else %}
+                      {% set next_dir = 'asc' %}
+                    {% endif %}
+                    <a href="?sort=cnpj_cliente&direction={{ next_dir }}">CNPJ</a>
+                  </th>
+
+                  <!-- Cliente -->
+                  <th>
+                    {% if current_sort == 'cliente' and current_dir == 'asc' %}
+                      {% set next_dir = 'desc' %}
+                    {% else %}
+                      {% set next_dir = 'asc' %}
+                    {% endif %}
+                    <a href="?sort=cliente&direction={{ next_dir }}">Cliente</a>
+                  </th>
+
+                  <!-- Transportadora -->
+                  <th>
+                    {% if current_sort == 'transportadora' and current_dir == 'asc' %}
+                      {% set next_dir = 'desc' %}
+                    {% else %}
+                      {% set next_dir = 'asc' %}
+                    {% endif %}
+                    <a href="?sort=transportadora&direction={{ next_dir }}">Transportadora</a>
+                  </th>
+
+                  <!-- UF -->
+                  <th>
+                    {% if current_sort == 'uf' and current_dir == 'asc' %}
+                      {% set next_dir = 'desc' %}
+                    {% else %}
+                      {% set next_dir = 'asc' %}
+                    {% endif %}
+                    <a href="?sort=uf&direction={{ next_dir }}">UF</a>
+                  </th>
+                  
+                  <!-- Município -->
+                  <th>
+                    {% if current_sort == 'municipio' and current_dir == 'asc' %}
+                      {% set next_dir = 'desc' %}
+                    {% else %}
+                      {% set next_dir = 'asc' %}
+                    {% endif %}
+                    <a href="?sort=municipio&direction={{ next_dir }}">Município</a>
+                  </th>
+
+                  <!-- Faturamento -->
+                  <th>
+                    {% if current_sort == 'data_faturamento' and current_dir == 'asc' %}
+                      {% set next_dir = 'desc' %}
+                    {% else %}
+                      {% set next_dir = 'asc' %}
+                    {% endif %}
+                    <a href="?sort=data_faturamento&direction={{ next_dir }}">Faturamento</a>
+                  </th>
+
+                  <!-- Embarque -->
+                  <th>
+                    {% if current_sort == 'data_embarque' and current_dir == 'asc' %}
+                      {% set next_dir = 'desc' %}
+                    {% else %}
+                      {% set next_dir = 'asc' %}
+                    {% endif %}
+                    <a href="?sort=data_embarque&direction={{ next_dir }}">Embarque</a>
+                  </th>
+
+                  <!-- Agendamento -->
+                  <th>
+                    <!-- Se você tiver um campo "data_agendamento" no model ou algo similar -->
+                    {% if current_sort == 'data_agendamento' and current_dir == 'asc' %}
+                      {% set next_dir = 'desc' %}
+                    {% else %}
+                      {% set next_dir = 'asc' %}
+                    {% endif %}
+                    <a href="?sort=data_agendamento&direction={{ next_dir }}">Agendamento</a>
+                  </th>
+
+                  <!-- Prevista -->
+                  <th>
+                    {% if current_sort == 'data_entrega_prevista' and current_dir == 'asc' %}
+                      {% set next_dir = 'desc' %}
+                    {% else %}
+                      {% set next_dir = 'asc' %}
+                    {% endif %}
+                    <a href="?sort=data_entrega_prevista&direction={{ next_dir }}">Prevista</a>
+                  </th>
+
+                  <!-- Status -->
+                  <th>Status</th>
+                  <!-- Alertas -->
+                  <th>Alertas</th>
+                  <!-- Ações -->
+                  <th>Ações</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {% for e in grupo %}
+                <tr>
+                  <td>{{ e.numero_nf }}</td>
+                  <td>{{ e.cnpj_cliente }}</td>
+                  <td>{{ e.cliente }}</td>
+                  <td>{{ e.transportadora }}</td>
+                  <td>{{ e.uf }}</td>
+                  <td>{{ e.municipio }}</td>
+                  <td>{{ e.data_faturamento.strftime('%d/%m/%Y') if e.data_faturamento else '-' }}</td>
+                  <td>{{ e.data_embarque.strftime('%d/%m/%Y') if e.data_embarque else '-' }}</td>
+                  <td>{{ e.data_agendamento.strftime('%d/%m/%Y') if e.data_agendamento else '-' }}</td>
+                  <td>
+                    {% if e.data_entrega_prevista %}
+                      {{ e.data_entrega_prevista.strftime('%d/%m/%Y') }}
+                    {% else %}-{% endif %}
+                  </td>
+                  <td>
+                    {% if e.entregue and e.data_hora_entrega_realizada %}
+                      <span class="badge bg-success entregue-popup"
+                            data-entrega="{{ e.data_hora_entrega_realizada.strftime('%d/%m/%Y %H:%M') }}">
+                        Entregue
+                      </span>
+                    {% elif e.entregue %}
+                      <span class="badge bg-success">Entregue</span>
+                    {% elif e.data_entrega_prevista and e.data_entrega_prevista < current_date %}
+                      <span class="badge bg-danger">Atrasada</span>
+                    {% elif not e.data_entrega_prevista %}
+                      <span class="badge bg-secondary">Sem Previsão</span>
+                    {% else %}
+                      <span class="badge bg-warning text-dark">Pendente</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if e.pendencias_financeiras|selectattr("respondida_em", "none")|list %}
+                      {% set pendencia = e.pendencias_financeiras|selectattr("respondida_em", "none")|first %}
+                      <button class="btn btn-sm btn-danger pendencia-btn"
+                              data-nf="{{ e.numero_nf }}"
+                              data-observacao="{{ pendencia.observacao }}">
+                        Pend. Financ.
+                      </button>
+                    {% endif %}
+                    {% if e.possui_comentarios %}
+                      <span class="badge bg-info">💬 Comentários</span>
+                    {% endif %}
+                    {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 %}
+                      <span class="badge bg-danger">⚠️ Sem Agendamento</span>
+                    {% endif %}
+                    {% if e.reagendar %}
+                      <span class="badge bg-danger">🔁 Reagendar</span>
+                    {% endif %}
+                  </td>
+                  <td class="d-flex flex-nowrap align-items-center gap-2">
+                    <a href="{{ url_for('monitoramento.visualizar_entrega', id=e.id, **request.args) }}"
+                       class="btn btn-sm btn-outline-primary">
+                      Info
+                    </a>
+                    <form method="post" action="{{ url_for('monitoramento.toggle_reagendar', id=e.id, **request.args) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      {% if e.reagendar %}
+                        <button class="btn btn-sm btn-outline-danger reagendar-btn">
+                          <span class="text-curto">Reagenda</span>
+                          <span class="text-completo">Cancelar</span>
+                        </button>
+                      {% else %}
+                        <button class="btn btn-sm btn-outline-warning reagendar-btn">
+                          <span class="text-curto">Reagenda</span>
+                          <span class="text-completo">Marcar</span>
+                        </button>
+                      {% endif %}
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+  {% else %}
+     <!-- SE NÃO AGRUPAR, tabela normal -->
+      <!-- Sticky col: NF e CNPJ -->
+      <style>
+        .sticky-col {
+          position: sticky;
+          left: 0;
+          background: #fff;
+          z-index: 10;
+        }
+        .sticky-col-2 {
+          position: sticky;
+          left: 5em; /* ou algo relativo à largura da 1ª col */
+          background: #fff;
+          z-index: 10;
+        }
+        .sticky-col-3 {
+          position: sticky;
+          left: 10em; /* ou algo relativo à largura da 1ª col */
+          background: #fff;
+          z-index: 10;
+        }
+      </style>
+
+      <table class="table table-hover table-bordered align-middle">
+
+      {% set current_sort = request.args.get('sort', '') %}
+      {% set current_dir = request.args.get('direction', 'asc') %}
+
+      <thead>
+        <tr>
+          <!-- NF -->
+          <th class="sticky-col">
+            {% if current_sort == 'numero_nf' and current_dir == 'asc' %}
+              {% set next_dir = 'desc' %}
+            {% else %}
+              {% set next_dir = 'asc' %}
+            {% endif %}
+            <a href="?sort=numero_nf&direction={{ next_dir }}">NF</a>
+          </th>
+
+          <!-- CNPJ -->
+          <th class="sticky-col-2">
+            {% if current_sort == 'cnpj_cliente' and current_dir == 'asc' %}
+              {% set next_dir = 'desc' %}
+            {% else %}
+              {% set next_dir = 'asc' %}
+            {% endif %}
+            <a href="?sort=cnpj_cliente&direction={{ next_dir }}">CNPJ</a>
+          </th>
+
+          <!-- Cliente -->
+          <th class="sticky-col-3">
+            {% if current_sort == 'cliente' and current_dir == 'asc' %}
+              {% set next_dir = 'desc' %}
+            {% else %}
+              {% set next_dir = 'asc' %}
+            {% endif %}
+            <a href="?sort=cliente&direction={{ next_dir }}">Cliente</a>
+          </th>
+
+          <!-- Transportadora -->
+          <th>
+            {% if current_sort == 'transportadora' and current_dir == 'asc' %}
+              {% set next_dir = 'desc' %}
+            {% else %}
+              {% set next_dir = 'asc' %}
+            {% endif %}
+            <a href="?sort=transportadora&direction={{ next_dir }}">Transportadora</a>
+          </th>
+
+          <!-- UF -->
+          <th>
+            {% if current_sort == 'uf' and current_dir == 'asc' %}
+              {% set next_dir = 'desc' %}
+            {% else %}
+              {% set next_dir = 'asc' %}
+            {% endif %}
+            <a href="?sort=uf&direction={{ next_dir }}">UF</a>
+          </th>          
+
+          <!-- Município -->
+          <th>
+            {% if current_sort == 'municipio' and current_dir == 'asc' %}
+              {% set next_dir = 'desc' %}
+            {% else %}
+              {% set next_dir = 'asc' %}
+            {% endif %}
+            <a href="?sort=municipio&direction={{ next_dir }}">Município</a>
+          </th>
+
+          <!-- Faturamento -->
+          <th>
+            {% if current_sort == 'data_faturamento' and current_dir == 'asc' %}
+              {% set next_dir = 'desc' %}
+            {% else %}
+              {% set next_dir = 'asc' %}
+            {% endif %}
+            <a href="?sort=data_faturamento&direction={{ next_dir }}">Faturamento</a>
+          </th>
+
+          <!-- Embarque -->
+          <th>
+            {% if current_sort == 'data_embarque' and current_dir == 'asc' %}
+              {% set next_dir = 'desc' %}
+            {% else %}
+              {% set next_dir = 'asc' %}
+            {% endif %}
+            <a href="?sort=data_embarque&direction={{ next_dir }}">Embarque</a>
+          </th>
+
+          <!-- Agendamento -->
+          <th>
+            <!-- Se você tiver um campo "data_agendamento" no model ou algo similar -->
+            {% if current_sort == 'data_agenda' and current_dir == 'asc' %}
+              {% set next_dir = 'desc' %}
+            {% else %}
+              {% set next_dir = 'asc' %}
+            {% endif %}
+            <a href="?sort=data_agenda&direction={{ next_dir }}">Agendamento</a>
+          </th>
+
+          <!-- Prevista -->
+          <th>
+            {% if current_sort == 'data_entrega_prevista' and current_dir == 'asc' %}
+              {% set next_dir = 'desc' %}
+            {% else %}
+              {% set next_dir = 'asc' %}
+            {% endif %}
+            <a href="?sort=data_entrega_prevista&direction={{ next_dir }}">Prevista</a>
+          </th>
+
+          <!-- Status -->
+          <th>Status</th>
+          <!-- Alertas -->
+          <th>Alertas</th>
+          <!-- Ações -->
+          <th>Ações</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for e in entregas %}
+        <tr>
+          <td class="sticky-col">
+            {% if e.comentarios_pendentes(current_user.nome) > 0 %}
+              <span class="badge bg-info" style="cursor:pointer;">
+                💬 {{ e.comentarios_pendentes(current_user.nome) }}
+              </span>
+            {% endif %}
+            {{ e.numero_nf }}</td>
+          <td class="sticky-col-2">{{ e.cnpj_cliente }}</td>
+          <td class="sticky-col-3">{{ e.cliente }}</td>
+          <td>{{ e.transportadora }}</td>
+          <td>{{ e.uf }}</td>
+          <td>{{ e.municipio }}</td>
+          <td>{{ e.data_faturamento.strftime('%d/%m/%Y') if e.data_faturamento else '-' }}</td>
+          <td>{{ e.data_embarque.strftime('%d/%m/%Y') if e.data_embarque else '-' }}</td>
+          <td>
+            {% if e.data_agenda %}
+              {{ e.data_agenda.strftime('%d/%m/%Y') }}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>
+            {% if e.data_entrega_prevista %}
+              {{ e.data_entrega_prevista.strftime('%d/%m/%Y') }}
+            {% else %}-{% endif %}
+          </td>
+          <td>
+            {% if e.nf_cd %}
+                <span class="badge bg-info">NF no CD</span>
+
+            {% elif e.status_finalizacao == "Troca de NF" and e.nova_nf %}
+                <a href="?numero_nf={{ e.nova_nf }}" class="btn btn-sm btn-info">
+                  Nova NF {{ e.nova_nf }}
+                </a>
+            {% elif e.entregue %}
+            <span class="badge bg-success entregue-popup" 
+                  data-entrega={{ e.data_hora_entrega_realizada.strftime('%d/%m/%Y-%H:%M') if e.data_hora_entrega_realizada else '-' }}
+                  style="cursor:pointer;"
+                  tabindex="0">
+              Entregue
+              </span>
+            {% elif e.status_finalizacao %}
+                <span class="badge bg-dark">{{ e.status_finalizacao }}</span>
+            {% elif e.data_entrega_prevista and e.data_entrega_prevista < current_date %}
+                <span class="badge bg-danger">Atrasada</span>
+            {% elif not e.data_entrega_prevista %}
+            <span class="badge bg-warning text-dark">Sem Previsão</span>
+            {% else %}
+              <span class="badge bg-light text-dark">Pendente</span>
+            {% endif %}
+            </td>
+            
+          <td>
+            {% if e.pendencias_financeiras|selectattr("respondida_em", "none")|list %}
+              {% set pendencia = e.pendencias_financeiras|selectattr("respondida_em", "none")|first %}
+              <button class="btn btn-sm btn-danger pendencia-btn"
+                      data-nf="{{ e.numero_nf }}"
+                      data-observacao="{{ pendencia.observacao }}">
+                Pend. Financ.
+              </button>
+            {% endif %}
+            {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 %}
+              <span class="badge bg-danger">⚠️ Sem Agendamento</span>
+            {% endif %}
+            {% if e.reagendar %}
+              <span class="badge bg-danger">🔁 Reagendar</span>
+            {% endif %}
+          </td>
+          <td class="d-flex flex-nowrap align-items-center gap-2">
+            <a href="{{ url_for('monitoramento.visualizar_entrega', id=e.id, **request.args) }}"
+               class="btn btn-sm btn-outline-primary">
+               Info
+            </a>
+            <form method="post" action="{{ url_for('monitoramento.toggle_reagendar', id=e.id, **request.args) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              {% if e.reagendar %}
+                <button class="btn btn-sm btn-outline-danger reagendar-btn">
+                  <span class="text-curto">Reagenda</span>
+                  <span class="text-completo">Cancelar</span>
+                </button>
+              {% else %}
+                <button class="btn btn-sm btn-outline-warning reagendar-btn">
+                  <span class="text-curto">Reagenda</span>
+                  <span class="text-completo">Marcar</span>
+                </button>
+              {% endif %}
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+
+      </tbody>
+    </table>
+  {% endif %}
+</div>
+
+<!-- PAGINAÇÃO se não estiver agrupado -->
+{% if not agrupar and paginacao.pages > 1 %}
+<div class="d-flex justify-content-center mt-3">
+  <nav>
+    <ul class="pagination pagination-sm">
+
+      {% set args_no_page = request.args.copy() %}
+      {% if 'page' in args_no_page %}
+        {% set _ = args_no_page.pop('page') %}
+      {% endif %}
+
+      <!-- Primeira página -->
+      <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('monitoramento.listar_entregas',
+                            page=1,
+                            **args_no_page) }}">
+          «
+        </a>
+      </li>
+
+      <!-- Anterior -->
+      <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('monitoramento.listar_entregas',
+                            page=paginacao.prev_num,
+                            **args_no_page) }}">
+          ‹
+        </a>
+      </li>
+
+      <!-- Páginas ao redor -->
+      {% for p in range(paginacao.page - 2, paginacao.page + 3) if p > 0 and p <= paginacao.pages %}
+        <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('monitoramento.listar_entregas',
+                              page=p,
+                              **args_no_page) }}">
+            {{ p }}
+          </a>
+        </li>
+      {% endfor %}
+
+      <!-- Próxima -->
+      <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('monitoramento.listar_entregas',
+                            page=paginacao.next_num,
+                            **args_no_page) }}">
+          ›
+        </a>
+      </li>
+
+      <!-- Última -->
+      <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('monitoramento.listar_entregas',
+                            page=paginacao.pages,
+                            **args_no_page) }}">
+          »
+        </a>
+      </li>
+    </ul>
+  </nav>
+</div>
+
+<div class="text-center">
+  Registros
+  {{ (paginacao.page - 1) * paginacao.per_page + 1 }}
+  –
+  {{ (paginacao.page - 1) * paginacao.per_page + paginacao.items|length }}
+  de
+  {{ paginacao.total }}
+</div>
+{% endif %}
+
+
+
+
+
+
+<!-- ===========================
+     MODAL PARA PENDÊNCIA FINANCEIRA
+     =========================== -->
+<div class="modal fade" id="pendenciaModal" tabindex="-1" aria-labelledby="pendenciaModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      
+      <!-- Cabeçalho do Modal -->
+      <div class="modal-header">
+        <h5 class="modal-title" id="pendenciaModalLabel">Pendência Financeira</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <!-- Corpo do Modal -->
+      <div class="modal-body">
+        <p>
+          <strong>NF:</strong>
+          <span id="nf-modal"></span>
+        </p>
+        <p>
+          <strong>Observação Financeiro:</strong><br>
+          <span id="observacao-modal"></span>
+        </p>
+        <div class="mb-3">
+          <textarea id="resposta-logistica" class="form-control" rows="5" placeholder="Resposta Logística"></textarea>
+        </div>
+      </div>
+
+      <!-- Rodapé do Modal -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" id="confirmar-resposta">
+          Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<!-- ===========================
+     SCRIPTS ESPECÍFICOS
+     =========================== -->
+
+<!-- Exemplo de popover para 'Entregue' (não tem a ver com o modal) -->
+<script>
+  document.querySelectorAll('.entregue-popup').forEach(item => {
+  item.style.cursor = 'pointer';
+  item.addEventListener('click', function(event) {
+    const dataEntrega = event.target.getAttribute('data-entrega');
+
+    // Se já existir um popover aberto, "dispose" para fechar
+    if (window.currentPopover) {
+      window.currentPopover.dispose();
+    }
+
+    // Instancia o popover, mas agora com container: 'body'
+    window.currentPopover = new bootstrap.Popover(event.target, {
+      container: 'body',                  // importante para não "cortar" dentro de div com overflow
+      content: 'Entregue em: ' + dataEntrega,
+      placement: 'top',
+      trigger: 'focus'
+    });
+    window.currentPopover.show();
+  });
+});
+
+</script>
+
+<script>
+  console.log("DEBUG: Iniciando script do Modal Pendência.");
+
+  // 1. Pega o token CSRF do <meta name="csrf-token">
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  console.log("DEBUG: CSRF token =", csrfToken);
+
+  // 2. Instancia o modal do Bootstrap
+  const pendenciaModal = new bootstrap.Modal(document.getElementById('pendenciaModal'));
+
+  // Ao clicar no botão .pendencia-btn, abrimos o modal
+  document.querySelectorAll('.pendencia-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      console.log("DEBUG: Botão Pend. Financ. clicado.");
+      const nf = this.dataset.nf;
+      const observacao = this.dataset.observacao;
+
+      // Preenche campos do modal
+      document.getElementById('nf-modal').textContent = nf;
+      document.getElementById('observacao-modal').textContent = observacao;
+      document.getElementById('resposta-logistica').value = '';
+
+      // Armazena a NF no botão "Confirmar"
+      document.getElementById('confirmar-resposta').setAttribute('data-nf', nf);
+
+      // Abre o modal
+      pendenciaModal.show();
+    });
+  });
+
+  // Ao clicar no botão Confirmar do modal
+  document.getElementById('confirmar-resposta').addEventListener('click', function() {
+    console.log("DEBUG: Botão Confirmar clicado.");
+    const nf = this.getAttribute('data-nf');
+    const resposta = document.getElementById('resposta-logistica').value;
+
+    fetch(`/financeiro/pendencias/${nf}/responder`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // 3. Inclui o token CSRF no cabeçalho X-CSRFToken
+        'X-CSRFToken': csrfToken
+      },
+      body: JSON.stringify({ resposta: resposta })
+    })
+    .then(r => r.json())
+    .then(data => {
+      console.log("DEBUG: Resposta do servidor:", data);
+      if (data.success) {
+        alert('Resposta salva com sucesso!');
+        pendenciaModal.hide();
+        location.reload();
+      } else {
+        alert('Erro ao salvar resposta.');
+      }
+    })
+    .catch(err => {
+      console.error("DEBUG: Erro no fetch:", err);
+      alert("Erro na requisição ao servidor.");
+    });
+  });
+</script>
+{% endblock %}

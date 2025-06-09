@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Despesas Extras{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-cogs"></i> Gerenciar Despesas Extras
+                <small class="text-muted">Vincular a faturas e editar</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item active">Gerenciar Despesas</li>
+        </ol>
+    </nav>
+
+    <!-- ⚠️ AVISO SOBRE NOVA REGRA -->
+    <div class="alert alert-info mb-4">
+        <h5><i class="fas fa-info-circle"></i> Nova Regra de Negócio Implementada</h5>
+        <p class="mb-2">
+            <strong>📋 Fluxo Obrigatório para Despesas Extras:</strong>
+        </p>
+        <ol class="mb-2">
+            <li><strong>1º</strong> Criar despesa extra (sem documento)</li>
+            <li><strong>2º</strong> Vincular fatura da transportadora</li>
+            <li><strong>3º</strong> Preencher número do CTe/documento</li>
+        </ol>
+        <small class="text-muted">
+            <i class="fas fa-lock"></i>
+            O número do documento (CTe, NFS, etc.) só pode ser preenchido APÓS vincular uma fatura
+        </small>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ despesas_sem_fatura|length }}</h4>
+                            <span class="small">Despesas SEM Fatura</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ despesas_com_fatura|length }}</h4>
+                            <span class="small">Despesas COM Fatura</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-check-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Despesas SEM fatura -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-triangle"></i> Despesas SEM Fatura
+                        <small class="ml-2">({{ despesas_sem_fatura|length }} itens)</small>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if despesas_sem_fatura %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Frete</th>
+                                        <th>Cliente</th>
+                                        <th>Transportadora</th>
+                                        <th>Tipo Despesa</th>
+                                        <th>Valor</th>
+                                        <th>Vencimento</th>
+                                        <th>Criado em</th>
+                                        <th class="text-center">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for despesa in despesas_sem_fatura %}
+                                    <tr>
+                                        <td><strong>#{{ despesa.id }}</strong></td>
+                                        <td>
+                                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete.id) }}">
+                                                Frete #{{ despesa.frete.id }}
+                                            </a>
+                                        </td>
+                                        <td>{{ despesa.frete.nome_cliente[:25] }}{% if despesa.frete.nome_cliente|length > 25 %}...{% endif %}</td>
+                                        <td>{{ despesa.frete.transportadora.razao_social[:20] }}{% if despesa.frete.transportadora.razao_social|length > 20 %}...{% endif %}</td>
+                                        <td>
+                                            <span class="badge badge-info" style="color: white; background-color: #17a2b8;">{{ despesa.tipo_despesa }}</span>
+                                        </td>
+                                        <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
+                                        <td>{{ despesa.vencimento_despesa.strftime('%d/%m/%Y') if despesa.vencimento_despesa else 'N/A' }}</td>
+                                        <td>{{ despesa.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                                        <td class="text-center">
+                                            <a href="{{ url_for('fretes.vincular_despesa_fatura', despesa_id=despesa.id) }}" 
+                                               class="btn btn-success btn-sm" 
+                                               title="Vincular à Fatura">
+                                                <i class="fas fa-link"></i> Vincular
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle"></i>
+                            <strong>Excelente!</strong> Todas as despesas extras já estão vinculadas a faturas.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Despesas COM fatura -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-check-circle"></i> Despesas COM Fatura
+                        <small class="ml-2">({{ despesas_com_fatura|length }} itens)</small>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if despesas_com_fatura %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Frete</th>
+                                        <th>Cliente</th>
+                                        <th>Transportadora</th>
+                                        <th>Tipo Despesa</th>
+                                        <th>Valor</th>
+                                        <th>Fatura</th>
+                                        <th>Vencimento</th>
+                                        <th class="text-center">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for despesa in despesas_com_fatura %}
+                                    <tr>
+                                        <td><strong>#{{ despesa.id }}</strong></td>
+                                        <td>
+                                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete.id) }}">
+                                                Frete #{{ despesa.frete.id }}
+                                            </a>
+                                        </td>
+                                        <td>{{ despesa.frete.nome_cliente[:25] }}{% if despesa.frete.nome_cliente|length > 25 %}...{% endif %}</td>
+                                        <td>{{ despesa.frete.transportadora.razao_social[:20] }}{% if despesa.frete.transportadora.razao_social|length > 20 %}...{% endif %}</td>
+                                        <td>
+                                            <span class="badge badge-success" style="color: white; background-color: #28a745;">{{ despesa.tipo_despesa }}</span>
+                                        </td>
+                                        <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
+                                        <td>
+                                            {% if despesa.observacoes and 'Fatura:' in despesa.observacoes %}
+                                                {% set fatura_info = despesa.observacoes.split('Fatura:')[1].split('|')[0].strip() %}
+                                                <span class="badge badge-primary" style="color: white; background-color: #007bff;">{{ fatura_info }}</span>
+                                            {% else %}
+                                                <span class="text-muted">N/A</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ despesa.vencimento_despesa.strftime('%d/%m/%Y') if despesa.vencimento_despesa else 'N/A' }}</td>
+                                        <td class="text-center">
+                                            <form method="POST" action="{{ url_for('fretes.desvincular_despesa_fatura', despesa_id=despesa.id) }}" 
+                                                  style="display: inline-block;"
+                                                  onsubmit="return confirm('Deseja realmente desvincular esta despesa da fatura?')">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <button type="submit" class="btn btn-warning btn-sm" title="Desvincular da Fatura">
+                                                    <i class="fas fa-unlink"></i>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Informação:</strong> Nenhuma despesa extra está vinculada a faturas ainda.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botões de ação -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <a href="{{ url_for('fretes.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+            </a>
+            <a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Nova Despesa Extra
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %} 

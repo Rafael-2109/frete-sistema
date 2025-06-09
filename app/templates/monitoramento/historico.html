@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Histórico de Eventos - NF {{ entrega.numero_nf }}</h3>
+    <a href="{{ url_for('monitoramento.visualizar_entrega', id=entrega.id) }}" class="btn btn-secondary">Voltar para Entrega</a>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-bordered table-striped">
+      <thead>
+        <tr>
+          <th>Tipo</th>
+          <th>Data/Hora</th>
+          <th>Autor</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+        
+      <tbody>
+        {% for data, tipo, autor, descricao in historico %}
+        <tr>
+          <td>{{ tipo }}</td>
+          <td>{{ data.strftime('%d/%m/%Y %H:%M') if data else '-' }}</td>
+          <td>{{ autor or '-' }}</td>
+          <td class="descricao">{{ descricao }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="text-center text-muted">Nenhum histórico registrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>  
+    </table>
+  </div>
+</div>
+{% endblock %}

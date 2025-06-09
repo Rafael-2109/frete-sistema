@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow p-4">
+        <h2 class="mb-3">Bem-vindo, {{ usuario.nome }} 👋</h2>
+        <p>Você está logado como <strong>{{ usuario.perfil }}</strong>.</p>
+        <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger mt-3">Sair</a>
+    </div>
+</div>
+{% endblock %}

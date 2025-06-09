@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Documento - Despesa Extra{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0">
+                        <i class="fas fa-edit"></i>
+                        Editar Documento - Despesa Extra
+                    </h4>
+                </div>
+                
+                <div class="card-body">
+                    <!-- ✅ INFORMAÇÕES DE VALIDAÇÃO -->
+                    <div class="alert alert-info">
+                        <h5><i class="fas fa-info-circle"></i> Validação Ativa</h5>
+                        <p class="mb-0">
+                            <strong>✅ Fatura Vinculada:</strong> {{ fatura.numero_fatura }} 
+                            <span class="badge badge-success">PERMITIDO EDITAR</span>
+                        </p>
+                        <small class="text-muted">
+                            Só é possível preencher o número do documento quando há fatura vinculada
+                        </small>
+                    </div>
+                    
+                    <!-- DADOS DA DESPESA -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5 class="text-muted">Despesa Extra</h5>
+                            <p><strong>Tipo:</strong> {{ despesa.tipo_despesa }}</p>
+                            <p><strong>Setor:</strong> {{ despesa.setor_responsavel }}</p>
+                            <p><strong>Motivo:</strong> {{ despesa.motivo_despesa }}</p>
+                            <p><strong>Valor:</strong> R$ {{ "%.2f"|format(despesa.valor_despesa) }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h5 class="text-muted">Fatura Vinculada</h5>
+                            <p><strong>Número:</strong> {{ fatura.numero_fatura }}</p>
+                            <p><strong>Transportadora:</strong> {{ fatura.transportadora.nome }}</p>
+                            <p><strong>Emissão:</strong> {{ fatura.data_emissao.strftime('%d/%m/%Y') if fatura.data_emissao else 'N/A' }}</p>
+                            <p><strong>Vencimento:</strong> {{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else 'N/A' }}</p>
+                        </div>
+                    </div>
+                    
+                    <!-- FORMULÁRIO PARA EDITAR DOCUMENTO -->
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">
+                                <i class="fas fa-file-alt"></i>
+                                Preencher Número do Documento
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="tipo_documento">
+                                                <i class="fas fa-tag"></i>
+                                                Tipo do Documento *
+                                            </label>
+                                            <select name="tipo_documento" id="tipo_documento" class="form-control" required>
+                                                <option value="">Selecione...</option>
+                                                <option value="CTe" {{ 'selected' if despesa.tipo_documento == 'CTe' else '' }}>CTe</option>
+                                                <option value="NFS" {{ 'selected' if despesa.tipo_documento == 'NFS' else '' }}>NFS</option>
+                                                <option value="RECIBO" {{ 'selected' if despesa.tipo_documento == 'RECIBO' else '' }}>RECIBO</option>
+                                                <option value="OUTROS" {{ 'selected' if despesa.tipo_documento == 'OUTROS' else '' }}>OUTROS</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="numero_documento">
+                                                <i class="fas fa-file-invoice"></i>
+                                                Número do Documento *
+                                            </label>
+                                            <input type="text" 
+                                                   name="numero_documento" 
+                                                   id="numero_documento" 
+                                                   class="form-control"
+                                                   value="{{ despesa.numero_documento if despesa.numero_documento != 'PENDENTE_FATURA' else '' }}"
+                                                   placeholder="Ex: 12345, CTe-123, NFS-456"
+                                                   required>
+                                            <small class="form-text text-muted">
+                                                Informe o número do CTe, NFS ou outro documento
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group mt-4">
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-save"></i>
+                                        Salvar Documento
+                                    </button>
+                                    
+                                    <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete_id) }}" 
+                                       class="btn btn-secondary ml-2">
+                                        <i class="fas fa-arrow-left"></i>
+                                        Voltar
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

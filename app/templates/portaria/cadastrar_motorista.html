@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>
+      <i class="fas fa-user-plus me-2"></i>
+      {% if motorista %}Editar Motorista{% else %}Cadastrar Motorista{% endif %}
+    </h1>
+    <a href="{{ url_for('portaria.dashboard') }}" class="btn btn-outline-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar para Portaria
+    </a>
+  </div>
+
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">
+            <i class="fas fa-user me-2"></i>
+            Dados do Motorista
+          </h5>
+        </div>
+        <div class="card-body">
+          <form method="POST" enctype="multipart/form-data">
+            {{ form.hidden_tag() }}
+            
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  {{ form.nome_completo.label(class="form-label") }}
+                  {{ form.nome_completo(class="form-control") }}
+                  {% if form.nome_completo.errors %}
+                    <div class="invalid-feedback d-block">
+                      {{ form.nome_completo.errors[0] }}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+              
+              <div class="col-md-6">
+                <div class="mb-3">
+                  {{ form.rg.label(class="form-label") }}
+                  {{ form.rg(class="form-control") }}
+                  {% if form.rg.errors %}
+                    <div class="invalid-feedback d-block">
+                      {{ form.rg.errors[0] }}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  {{ form.cpf.label(class="form-label") }}
+                  {{ form.cpf(class="form-control", id="cpf-input") }}
+                  {% if form.cpf.errors %}
+                    <div class="invalid-feedback d-block">
+                      {{ form.cpf.errors[0] }}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+              
+              <div class="col-md-6">
+                <div class="mb-3">
+                  {{ form.telefone.label(class="form-label") }}
+                  {{ form.telefone(class="form-control", id="telefone-input") }}
+                  {% if form.telefone.errors %}
+                    <div class="invalid-feedback d-block">
+                      {{ form.telefone.errors[0] }}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <!-- Seção de Foto do Documento -->
+            <div class="mb-4">
+              <h6 class="text-muted mb-3">
+                <i class="fas fa-camera me-2"></i>Foto do Documento
+              </h6>
+              
+              {% if motorista and motorista.foto_documento %}
+              <div class="mb-3">
+                <label class="form-label">Foto Atual:</label>
+                <div class="text-center">
+                  <img src="{{ url_for('static', filename=motorista.foto_documento) }}" 
+                       alt="Documento do motorista" 
+                       class="img-thumbnail"
+                       style="max-width: 300px; max-height: 200px;">
+                </div>
+              </div>
+              {% endif %}
+              
+              <div class="row">
+                <div class="col-md-8">
+                  <div class="mb-3">
+                    {{ form.foto_documento.label(class="form-label") }}
+                    {{ form.foto_documento(class="form-control") }}
+                    {% if form.foto_documento.errors %}
+                      <div class="invalid-feedback d-block">
+                        {{ form.foto_documento.errors[0] }}
+                      </div>
+                    {% endif %}
+                    <small class="form-text text-muted">
+                      Formatos aceitos: JPG, JPEG, PNG. Tamanho máximo: 5MB
+                    </small>
+                  </div>
+                </div>
+                
+                <div class="col-md-4">
+                  <label class="form-label">&nbsp;</label>
+                  <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-primary" onclick="iniciarWebcam()">
+                      <i class="fas fa-camera"></i> Tirar Foto
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Webcam para tirar foto -->
+            <div id="webcam-container" class="mb-4" style="display: none;">
+              <div class="card">
+                <div class="card-header">
+                  <h6 class="mb-0">
+                    <i class="fas fa-camera me-2"></i>Capturar Foto do Documento
+                  </h6>
+                </div>
+                <div class="card-body text-center">
+                  <video id="webcam" width="320" height="240" autoplay style="border: 1px solid #ccc;"></video>
+                  <canvas id="canvas" width="320" height="240" style="display: none;"></canvas>
+                  <div class="mt-3">
+                    <button type="button" class="btn btn-success me-2" onclick="capturarFoto()">
+                      <i class="fas fa-camera"></i> Capturar
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="pararWebcam()">
+                      <i class="fas fa-times"></i> Cancelar
+                    </button>
+                  </div>
+                  <div id="foto-preview" class="mt-3" style="display: none;">
+                    <img id="foto-capturada" src="" alt="Foto capturada" class="img-thumbnail" style="max-width: 300px;">
+                    <div class="mt-2">
+                      <button type="button" class="btn btn-primary me-2" onclick="usarFotoCapturada()">
+                        <i class="fas fa-check"></i> Usar Esta Foto
+                      </button>
+                      <button type="button" class="btn btn-secondary" onclick="novaFoto()">
+                        <i class="fas fa-redo"></i> Tirar Nova Foto
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botões de Ação -->
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+              <a href="{{ url_for('portaria.dashboard') }}" class="btn btn-outline-secondary me-md-2">
+                <i class="fas fa-times"></i> Cancelar
+              </a>
+              {{ form.submit(class="btn btn-primary") }}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let stream = null;
+let fotoCapturadaBlob = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Máscara para CPF
+  const cpfInput = document.getElementById('cpf-input');
+  cpfInput.addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    value = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    e.target.value = value;
+  });
+  
+  // Máscara para telefone
+  const telefoneInput = document.getElementById('telefone-input');
+  telefoneInput.addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length <= 10) {
+      value = value.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+    } else {
+      value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    }
+    e.target.value = value;
+  });
+});
+
+function iniciarWebcam() {
+  const webcamContainer = document.getElementById('webcam-container');
+  const video = document.getElementById('webcam');
+  
+  webcamContainer.style.display = 'block';
+  
+  navigator.mediaDevices.getUserMedia({ video: true })
+    .then(function(mediaStream) {
+      stream = mediaStream;
+      video.srcObject = stream;
+    })
+    .catch(function(err) {
+      console.error('Erro ao acessar webcam:', err);
+      alert('Erro ao acessar a webcam. Verifique as permissões.');
+      webcamContainer.style.display = 'none';
+    });
+}
+
+function capturarFoto() {
+  const video = document.getElementById('webcam');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const fotoPreview = document.getElementById('foto-preview');
+  const fotoCapturada = document.getElementById('foto-capturada');
+  
+  // Desenha o frame atual do vídeo no canvas
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  
+  // Converte para blob
+  canvas.toBlob(function(blob) {
+    fotoCapturadaBlob = blob;
+    
+    // Mostra preview
+    const url = URL.createObjectURL(blob);
+    fotoCapturada.src = url;
+    fotoPreview.style.display = 'block';
+  }, 'image/jpeg', 0.8);
+}
+
+function usarFotoCapturada() {
+  if (fotoCapturadaBlob) {
+    // Cria um novo File object
+    const file = new File([fotoCapturadaBlob], 'foto_documento.jpg', { type: 'image/jpeg' });
+    
+    // Cria um novo DataTransfer para simular upload de arquivo
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    
+    // Atualiza o input de arquivo
+    const fileInput = document.querySelector('input[name="foto_documento"]');
+    fileInput.files = dt.files;
+    
+    // Mostra mensagem de sucesso
+    alert('Foto capturada com sucesso! Salve o formulário para confirmar.');
+    
+    pararWebcam();
+  }
+}
+
+function novaFoto() {
+  document.getElementById('foto-preview').style.display = 'none';
+  fotoCapturadaBlob = null;
+}
+
+function pararWebcam() {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+  document.getElementById('webcam-container').style.display = 'none';
+  document.getElementById('foto-preview').style.display = 'none';
+  fotoCapturadaBlob = null;
+}
+</script>
+{% endblock %} 

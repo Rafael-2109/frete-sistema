@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Fatura - {{ fatura.numero_fatura }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-edit"></i> Editar Fatura - {{ fatura.numero_fatura }}</h2>
+        <a href="{{ url_for('fretes.listar_faturas') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar às Faturas
+        </a>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.listar_faturas') }}">Faturas</a></li>
+            <li class="breadcrumb-item active">Editar {{ fatura.numero_fatura }}</li>
+        </ol>
+    </nav>
+
+    <!-- Formulário de Edição -->
+    <div class="card">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0"><i class="fas fa-edit"></i> Editar Dados da Fatura</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="numero_fatura">Número da Fatura *</label>
+                            <input type="text" class="form-control" id="numero_fatura" name="numero_fatura" 
+                                   value="{{ fatura.numero_fatura }}" required>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="transportadora_id">Transportadora *</label>
+                            <select class="form-control" id="transportadora_id" name="transportadora_id" required>
+                                <option value="">Selecione a transportadora</option>
+                                {% for transportadora in transportadoras %}
+                                    <option value="{{ transportadora.id }}" 
+                                            {% if transportadora.id == fatura.transportadora_id %}selected{% endif %}>
+                                        {{ transportadora.razao_social }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="data_emissao">Data de Emissão *</label>
+                            <input type="date" class="form-control" id="data_emissao" name="data_emissao" 
+                                   value="{{ fatura.data_emissao.strftime('%Y-%m-%d') if fatura.data_emissao }}" required>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="valor_total_fatura">Valor Total da Fatura *</label>
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">R$</span>
+                                </div>
+                                <input type="text" class="form-control" id="valor_total_fatura" name="valor_total_fatura" 
+                                       value="{{ '%.2f'|format(fatura.valor_total_fatura) }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="vencimento">Vencimento</label>
+                            <input type="date" class="form-control" id="vencimento" name="vencimento" 
+                                   value="{{ fatura.vencimento.strftime('%Y-%m-%d') if fatura.vencimento }}">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Atual -->
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-info-circle"></i> Status Atual da Fatura</h6>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong style="color: black;">Status Conferência:</strong><br>
+                            {% if fatura.status_conferencia == 'CONFERIDO' %}
+                                <span class="badge badge-success" style="color: white; background-color: #28a745;">CONFERIDO</span>
+                            {% elif fatura.status_conferencia == 'EM_CONFERENCIA' %}
+                                <span class="badge badge-warning" style="color: #212529; background-color: #ffc107;">EM CONFERÊNCIA</span>
+                            {% else %}
+                                <span class="badge badge-secondary" style="color: white; background-color: #6c757d;">PENDENTE</span>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <strong style="color: black;">Fretes Vinculados:</strong><br>
+                            <span class="badge badge-primary" style="color: white; background-color: #007bff;">{{ fatura.total_fretes() }} frete(s)</span>
+                            {% if fatura.total_despesas_extras() > 0 %}
+                                <br><span class="badge badge-warning" style="color: #212529; background-color: #ffc107;">{{ fatura.total_despesas_extras() }} despesa(s)</span>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <strong style="color: black;">Valores:</strong><br>
+                            <small style="color: black;">Fretes: R$ {{ "%.2f"|format(fatura.valor_total_fretes()) }}</small>
+                            {% if fatura.total_despesas_extras() > 0 %}
+                                <br><small style="color: black;">Despesas: R$ {{ "%.2f"|format(fatura.valor_total_despesas_extras()) }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <strong style="color: black;">Anexo:</strong><br>
+                            {% if fatura.arquivo_pdf %}
+                                <a href="{{ url_for('static', filename=fatura.arquivo_pdf) }}" 
+                                   target="_blank" 
+                                   class="btn btn-sm btn-outline-primary" 
+                                   title="Visualizar Anexo">
+                                    <i class="fas fa-file-pdf"></i> PDF
+                                </a>
+                            {% else %}
+                                <span class="text-muted small">Sem anexo</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botões -->
+                <div class="form-group">
+                    <button type="submit" class="btn btn-success btn-lg">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                    <a href="{{ url_for('fretes.listar_faturas') }}" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Fretes Vinculados (se houver) -->
+    {% if fatura.total_fretes() > 0 %}
+    <div class="card mt-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="fas fa-truck"></i> Fretes Vinculados ({{ fatura.total_fretes() }})</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>CTe</th>
+                            <th>Cliente</th>
+                            <th>Valor CTe</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for frete in fatura.fretes %}
+                        <tr>
+                            <td>{{ frete.numero_cte or 'Pendente' }}</td>
+                            <td>{{ frete.nome_cliente }}</td>
+                            <td>R$ {{ "%.2f"|format(frete.valor_cte or 0) }}</td>
+                            <td>
+                                {% if frete.status == 'CONFERIDO' %}
+                                    <span class="badge badge-success" style="color: white; background-color: #28a745;">{{ frete.status }}</span>
+                                {% elif frete.status == 'LANCADO' %}
+                                    <span class="badge badge-primary" style="color: white; background-color: #007bff;">{{ frete.status }}</span>
+                                {% else %}
+                                    <span class="badge badge-secondary" style="color: white; background-color: #6c757d;">{{ frete.status }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Despesas Extras Vinculadas (se houver) -->
+    {% if fatura.total_despesas_extras() > 0 %}
+    <div class="card mt-4">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0"><i class="fas fa-exclamation-circle"></i> Despesas Extras Vinculadas ({{ fatura.total_despesas_extras() }})</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Tipo</th>
+                            <th>Frete</th>
+                            <th>Documento</th>
+                            <th>Valor</th>
+                            <th>Vencimento</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for despesa in fatura.todas_despesas_extras() %}
+                        <tr>
+                            <td><strong>#{{ despesa.id }}</strong></td>
+                            <td>
+                                <span class="badge badge-info" style="color: white; background-color: #17a2b8;">
+                                    {{ despesa.tipo_despesa }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete.id) }}">
+                                    Frete #{{ despesa.frete.id }}
+                                </a>
+                            </td>
+                            <td>{{ despesa.numero_documento or 'Pendente' }}</td>
+                            <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
+                            <td>{{ despesa.vencimento_despesa.strftime('%d/%m/%Y') if despesa.vencimento_despesa else 'N/A' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Formatação do valor monetário
+document.getElementById('valor_total_fatura').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/[^\d,]/g, '');
+    e.target.value = value;
+});
+</script>
+{% endblock %} 

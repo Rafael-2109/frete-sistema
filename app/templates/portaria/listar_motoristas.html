@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-users me-2"></i>Motoristas Cadastrados</h1>
+    <div>
+      <a href="{{ url_for('portaria.cadastrar_motorista') }}" class="btn btn-success me-2">
+        <i class="fas fa-plus"></i> Novo Motorista
+      </a>
+      <a href="{{ url_for('portaria.dashboard') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left"></i> Voltar para Portaria
+      </a>
+    </div>
+  </div>
+
+  {% if motoristas.items %}
+  <!-- Estatísticas -->
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="card bg-primary text-white">
+        <div class="card-body text-center">
+          <h5 class="card-title">{{ motoristas.total }}</h5>
+          <p class="card-text">Total de Motoristas</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-success text-white">
+        <div class="card-body text-center">
+          <h5 class="card-title">{{ motoristas.items|length }}</h5>
+          <p class="card-text">Nesta Página</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <div class="input-group">
+            <input type="text" id="filtro-motoristas" class="form-control" placeholder="Filtrar por nome, CPF ou telefone...">
+            <button class="btn btn-outline-secondary" type="button" onclick="limparFiltro()">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lista de Motoristas -->
+  <div class="card">
+    <div class="card-header bg-dark text-white">
+      <h5 class="mb-0"><i class="fas fa-list me-2"></i>Lista de Motoristas</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0" id="tabela-motoristas">
+          <thead class="table-light">
+            <tr>
+              <th>Foto</th>
+              <th>Nome Completo</th>
+              <th>CPF</th>
+              <th>RG</th>
+              <th>Telefone</th>
+              <th>Cadastrado em</th>
+              <th>Registros</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for motorista in motoristas.items %}
+            <tr class="linha-motorista">
+              <td>
+                {% if motorista.foto_documento %}
+                  <img src="{{ url_for('static', filename=motorista.foto_documento) }}" 
+                       alt="Foto do documento" 
+                       class="rounded-circle"
+                       style="width: 40px; height: 40px; object-fit: cover;">
+                {% else %}
+                  <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white" 
+                       style="width: 40px; height: 40px;">
+                    <i class="fas fa-user"></i>
+                  </div>
+                {% endif %}
+              </td>
+              <td>
+                <strong class="nome-motorista">{{ motorista.nome_completo }}</strong>
+                {% if motorista.atualizado_em != motorista.criado_em %}
+                  <br><small class="text-muted">
+                    <i class="fas fa-edit"></i> Atualizado em {{ motorista.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}
+                  </small>
+                {% endif %}
+              </td>
+              <td>
+                <span class="cpf-motorista">{{ motorista.cpf }}</span>
+              </td>
+              <td>{{ motorista.rg }}</td>
+              <td class="telefone-motorista">{{ motorista.telefone }}</td>
+              <td>
+                <small class="text-muted">
+                  {{ motorista.criado_em.strftime('%d/%m/%Y') }}<br>
+                  às {{ motorista.criado_em.strftime('%H:%M') }}
+                </small>
+              </td>
+              <td class="text-center">
+                {% set registros_count = motorista.registros_portaria.count() %}
+                {% if registros_count > 0 %}
+                  <span class="badge bg-primary">{{ registros_count }}</span>
+                  <br><small class="text-muted">registros</small>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="btn-group btn-group-sm">
+                  <a href="{{ url_for('portaria.editar_motorista', id=motorista.id) }}" 
+                     class="btn btn-outline-primary" title="Editar">
+                    <i class="fas fa-edit"></i> Editar
+                  </a>
+                  
+                  {% if motorista.registros_portaria.count() == 0 %}
+                  <form method="POST" action="{{ url_for('portaria.excluir_motorista', id=motorista.id) }}" 
+                        class="d-inline" onsubmit="return confirmarExclusao('{{ motorista.nome_completo }}')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-outline-danger" title="Excluir">
+                      <i class="fas fa-trash"></i> Excluir
+                    </button>
+                  </form>
+                  {% else %}
+                  <button type="button" class="btn btn-outline-secondary" disabled title="Não pode excluir - possui registros">
+                    <i class="fas fa-lock"></i> Bloqueado
+                  </button>
+                  {% endif %}
+                  
+                  <button type="button" class="btn btn-outline-info" 
+                          onclick="verDetalhesMotorista({{ motorista.id }})" title="Ver detalhes">
+                    <i class="fas fa-eye"></i> Detalhes
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+    <!-- Paginação -->
+    {% if motoristas.pages > 1 %}
+    <div class="card-footer">
+      <nav aria-label="Paginação de motoristas">
+        <ul class="pagination justify-content-center mb-0">
+          {% if motoristas.has_prev %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('portaria.listar_motoristas', page=motoristas.prev_num) }}">
+                <i class="fas fa-chevron-left"></i> Anterior
+              </a>
+            </li>
+          {% endif %}
+          
+          {% for page_num in motoristas.iter_pages() %}
+            {% if page_num %}
+              {% if page_num != motoristas.page %}
+                <li class="page-item">
+                  <a class="page-link" href="{{ url_for('portaria.listar_motoristas', page=page_num) }}">{{ page_num }}</a>
+                </li>
+              {% else %}
+                <li class="page-item active">
+                  <span class="page-link">{{ page_num }}</span>
+                </li>
+              {% endif %}
+            {% else %}
+              <li class="page-item disabled">
+                <span class="page-link">…</span>
+              </li>
+            {% endif %}
+          {% endfor %}
+          
+          {% if motoristas.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('portaria.listar_motoristas', page=motoristas.next_num) }}">
+                Próximo <i class="fas fa-chevron-right"></i>
+              </a>
+            </li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+  </div>
+  
+  {% else %}
+  <!-- Estado vazio -->
+  <div class="card">
+    <div class="card-body text-center py-5">
+      <i class="fas fa-users fa-3x text-muted mb-3"></i>
+      <h5 class="text-muted">Nenhum motorista cadastrado</h5>
+      <p class="text-muted">Comece cadastrando um motorista para usar o controle de portaria.</p>
+      <a href="{{ url_for('portaria.cadastrar_motorista') }}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Cadastrar Primeiro Motorista
+      </a>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Modal de Detalhes do Motorista -->
+<div class="modal fade" id="modalDetalhesMotorista" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-user me-2"></i>Detalhes do Motorista
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="conteudo-detalhes-motorista">
+        <div class="text-center">
+          <div class="spinner-border" role="status">
+            <span class="visually-hidden">Carregando...</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Filtro de busca
+  const filtroInput = document.getElementById('filtro-motoristas');
+  const linhasMotorista = document.querySelectorAll('.linha-motorista');
+  
+  filtroInput.addEventListener('input', function() {
+    const termo = this.value.toLowerCase();
+    
+    linhasMotorista.forEach(linha => {
+      const nome = linha.querySelector('.nome-motorista').textContent.toLowerCase();
+      const cpf = linha.querySelector('.cpf-motorista').textContent.toLowerCase();
+      const telefone = linha.querySelector('.telefone-motorista').textContent.toLowerCase();
+      
+      const matches = nome.includes(termo) || cpf.includes(termo) || telefone.includes(termo);
+      linha.style.display = matches ? '' : 'none';
+    });
+  });
+});
+
+function limparFiltro() {
+  document.getElementById('filtro-motoristas').value = '';
+  document.querySelectorAll('.linha-motorista').forEach(linha => {
+    linha.style.display = '';
+  });
+}
+
+function confirmarExclusao(nomeMotorista) {
+  return confirm(`Tem certeza que deseja excluir o motorista "${nomeMotorista}"?\n\nEsta ação não pode ser desfeita.`);
+}
+
+function verDetalhesMotorista(motoristaId) {
+  const modal = new bootstrap.Modal(document.getElementById('modalDetalhesMotorista'));
+  const conteudo = document.getElementById('conteudo-detalhes-motorista');
+  
+  // Mostra loading
+  conteudo.innerHTML = `
+    <div class="text-center">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Carregando...</span>
+      </div>
+      <p class="mt-2">Carregando detalhes do motorista...</p>
+    </div>
+  `;
+  
+  modal.show();
+  
+  // Simula carregamento de detalhes (implementar endpoint se necessário)
+  setTimeout(() => {
+    conteudo.innerHTML = `
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        Funcionalidade de detalhes em desenvolvimento.
+        <br>Por enquanto, use o botão "Editar" para ver/alterar dados do motorista.
+      </div>
+    `;
+  }, 1000);
+}
+</script>
+{% endblock %} 

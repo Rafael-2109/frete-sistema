@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Frete Sistema</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+{% if current_user.is_authenticated %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="{{ url_for('main.dashboard') }}">Logistica Nacom Goya</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto">
+
+        <!-- OPERACIONAL - Fluxo principal do dia a dia -->
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="menuOperacional" role="button" data-bs-toggle="dropdown">
+            <i class="fas fa-tasks"></i> Operacional
+          </a>
+          <ul class="dropdown-menu">
+            <li><h6 class="dropdown-header">📦 Pedidos e Separação</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('pedidos.lista_pedidos') }}">
+              <i class="fas fa-list-alt"></i> Lista de Pedidos
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('separacao.listar') }}">
+              <i class="fas fa-boxes"></i> Separação
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('separacao.importar') }}">
+              <i class="fas fa-upload"></i> Importar Separação
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">🚛 Embarques</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('embarques.listar_embarques') }}">
+              <i class="fas fa-shipping-fast"></i> Listar Embarques
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('portaria.dashboard') }}">
+              <i class="fas fa-truck"></i> Controle de Portaria
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">📋 Monitoramento</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('monitoramento.listar_entregas') }}">
+              <i class="fas fa-eye"></i> Entregas Monitoradas
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('portaria.historico') }}">
+              <i class="fas fa-history"></i> Histórico da Portaria
+            </a></li>
+          </ul>
+        </li>
+
+        <!-- FINANCEIRO - Gestão financeira -->
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="menuFinanceiro" role="button" data-bs-toggle="dropdown">
+            <i class="fas fa-dollar-sign"></i> Financeiro
+          </a>
+          <ul class="dropdown-menu">
+            <li><h6 class="dropdown-header">💰 Fretes</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('fretes.index') }}">
+              <i class="fas fa-tachometer-alt"></i> Dashboard Fretes
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('fretes.lancar_cte') }}">
+              <i class="fas fa-plus-circle"></i> Lançar CTe
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('fretes.listar_fretes') }}">
+              <i class="fas fa-list"></i> Listar Fretes
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('fretes.listar_aprovacoes') }}">
+              <i class="fas fa-check-circle"></i> Aprovações
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('fretes.listar_faturas') }}">
+              <i class="fas fa-file-pdf"></i> Faturas de Frete
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">💼 Financeiro</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('faturamento.listar_relatorios') }}">
+              <i class="fas fa-chart-line"></i> Relatório de Faturamento
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('financeiro.consultar_pendencias') }}">
+              <i class="fas fa-exclamation-triangle"></i> Pendências Financeiras
+            </a></li>
+          </ul>
+        </li>
+
+        <!-- CADASTROS - Dados mestres -->
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="menuCadastros" role="button" data-bs-toggle="dropdown">
+            <i class="fas fa-database"></i> Cadastros
+          </a>
+          <ul class="dropdown-menu">
+            <li><h6 class="dropdown-header">⚙️ Cadastros</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('transportadoras.cadastrar_transportadora') }}">
+              <i class="fas fa-truck"></i> Transportadoras
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('portaria.cadastrar_motorista') }}">
+              <i class="fas fa-user-plus"></i> Cadastrar Motorista
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('portaria.listar_motoristas') }}">
+              <i class="fas fa-users"></i> Listar Motoristas
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('localidades.cadastrar_cidade') }}">
+              <i class="fas fa-map-marker-alt"></i> Cidades
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('cadastros_agendamento.listar_contatos') }}">
+              <i class="fas fa-calendar-alt"></i> Agendamento
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">📊 Tabelas de Frete</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('tabelas.cadastrar_tabela_frete') }}">
+              <i class="fas fa-table"></i> Cadastro de Tabelas
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('tabelas.importar_tabela_frete') }}">
+              <i class="fas fa-upload"></i> Importar Tabelas
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('tabelas.listar_todas_tabelas') }}">
+              <i class="fas fa-eye"></i> Consulta de Tabelas
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('tabelas.historico_tabelas') }}">
+              <i class="fas fa-history"></i> Histórico de Tabelas
+            </a></li>
+          </ul>
+        </li>
+
+        <!-- CONSULTAS - Informações e análises -->
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="menuConsultas" role="button" data-bs-toggle="dropdown">
+            <i class="fas fa-search"></i> Consultas
+          </a>
+          <ul class="dropdown-menu">
+            <li><h6 class="dropdown-header">🔍 Consultas</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('fretes.listar_fretes') }}">
+              <i class="fas fa-search"></i> Buscar Fretes
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('veiculos.consulta_veiculos') }}">
+              <i class="fas fa-car"></i> Consulta de Veículos
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('vinculos.consulta_vinculos') }}">
+              <i class="fas fa-link"></i> Consulta de Vínculos
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">📥 Importações</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('cadastros_agendamento.importar_contatos') }}">
+              <i class="fas fa-calendar-plus"></i> Agendamento
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('vinculos.importar_vinculos') }}">
+              <i class="fas fa-link"></i> Vínculos
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('financeiro.importar_pendencias') }}">
+              <i class="fas fa-file-import"></i> Pendências Financeiras
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('faturamento.importar_relatorio') }}">
+              <i class="fas fa-file-upload"></i> Relatório de Faturamento
+            </a></li>
+          </ul>
+        </li>
+
+        <!-- USUÁRIOS - Gestão de usuários (apenas para admins e gerentes comerciais) -->
+        {% if current_user.is_authenticated and current_user.pode_aprovar_usuarios() %}
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="menuUsuarios" role="button" data-bs-toggle="dropdown">
+            <i class="fas fa-users"></i> Usuários
+          </a>
+          <ul class="dropdown-menu">
+            <li><h6 class="dropdown-header">👤 Gestão de Usuários</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('auth.usuarios_pendentes') }}">
+              <i class="fas fa-user-clock text-warning"></i> Pendentes de Aprovação
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('auth.listar_usuarios') }}">
+              <i class="fas fa-users"></i> Todos os Usuários
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{{ url_for('auth.registro') }}" target="_blank">
+              <i class="fas fa-external-link-alt"></i> Link de Registro Público
+            </a></li>
+          </ul>
+        </li>
+        {% endif %}
+        
+        <!-- Logout -->
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('auth.logout') }}">Sair</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+{% endif %}
+
+<div class="container mt-3">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+</div>
+
+{% block content %}{% endblock %}
+
+<!-- seus scripts atuais -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+<script>
+  $(document).ready(function(){
+    $('input[name="data_embarque"]').mask('00/00/0000');
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- ✅ Inclua claramente aqui o HTMX -->
+<script src="https://unpkg.com/htmx.org@1.9.11"></script>
+<script>
+  document.addEventListener("htmx:configRequest", function(event) {
+    const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    if (token) {
+      event.detail.headers['X-CSRFToken'] = token;
+    }
+  });
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>
+

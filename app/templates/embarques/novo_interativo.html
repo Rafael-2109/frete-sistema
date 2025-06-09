@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container my-4">
+  <h2>Novo Embarque - Rascunho</h2>
+
+  <!-- Um único form POST -->
+  <form method="POST">
+    {{ form.hidden_tag() }}
+
+    <!-- Linha principal - Data e Transportadora -->
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label class="form-label">{{ form.data_embarque.label }}</label>
+        {{ form.data_embarque(class="form-control") }}
+      </div>
+      <div class="col-md-8">
+        <label class="form-label">{{ form.transportadora.label }}</label>
+        {{ form.transportadora(class="form-control") }}
+      </div>
+    </div>
+
+    <!-- Placa, checkboxes, etc. -->
+    <div class="row mb-2">
+      <div class="col">
+        <strong>Placa do Veículo:</strong>
+        {{ form.placa_veiculo(class="form-control d-inline-block w-auto") }}
+      </div>
+      <div class="col">
+        <strong>Paletizado:</strong>
+        {{ form.paletizado() }}
+      </div>
+      <div class="col">
+        <strong>Laudo Anexado:</strong>
+        {{ form.laudo_anexado() }}
+      </div>
+    </div>
+
+    <div class="row mb-2">
+      <div class="col">
+        <strong>Embalagem Aprovada:</strong>
+        {{ form.embalagem_aprovada() }}
+      </div>
+      <div class="col">
+        <strong>Transporte Aprovado:</strong>
+        {{ form.transporte_aprovado() }}
+      </div>
+      <div class="col">
+        <strong>Responsável Carregamento:</strong>
+        {{ form.responsavel_carregamento(class="form-control d-inline-block w-auto") }}
+      </div>
+      <div class="col">
+        <strong>Horário:</strong>
+        {{ form.horario_carregamento(class="form-control d-inline-block w-auto") }}
+      </div>
+    </div>
+
+    <!-- Observações -->
+    <div class="mb-3">
+      <label class="form-label">{{ form.observacoes.label }}</label>
+      {{ form.observacoes(class="form-control") }}
+    </div>
+
+    <!-- Tabela de Itens (FieldList) -->
+    <h4 class="mt-4">Itens do Embarque</h4>
+    <table class="table table-bordered table-sm">
+      <thead class="table-light">
+        <tr>
+          <th>Cliente</th>
+          <th>Pedido</th>
+          <th>Nota Fiscal</th>
+          <th>Protocolo</th>
+          <th>Data Agenda</th>
+          <th>Volumes</th>
+          <th>UF</th>
+          <th>Cidade</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item_form in form.itens %}
+        <tr>
+          {{ item_form.id }}  <!-- ✅ CORREÇÃO CRÍTICA: Campo ID oculto OBRIGATÓRIO para identificar itens -->
+          <td>{{ item_form.cliente(class="form-control") }}</td>
+          <td>{{ item_form.pedido(class="form-control") }}</td>
+          <td>{{ item_form.nota_fiscal(class="form-control") }}</td>
+          <td>{{ item_form.protocolo_agendamento(class="form-control") }}</td>
+          <td>{{ item_form.data_agenda(class="form-control") }}</td>
+          <td>{{ item_form.volumes(class="form-control") }}</td>
+          <td>{{ item_form.uf_destino(class="form-control uf-select") }}</td>
+          <td>{{ item_form.cidade_destino(class="form-control city-select") }}</td>
+          <td>
+            <button type="submit" name="action" value="remove_line_{{ loop.index0 }}" class="btn btn-danger btn-sm">
+              Excluir
+            </button>
+          </td>          
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Botão para adicionar linha -->
+    <div class="mb-3">
+      <button type="submit" name="action" value="add_line" class="btn btn-secondary">
+        + Adicionar Linha
+      </button>
+    </div>
+
+    <!-- Campo Motorista -->
+    <div class="mt-5 p-3 border rounded">
+      <h6 class="text-center fw-bold">CAMPO MOTORISTA</h6>
+      <p>
+        Eu,
+        {{ form.nome_motorista(class="form-control d-inline-block mx-1", style="width: 200px;") }},
+        CPF nº
+        {{ form.cpf_motorista(class="form-control d-inline-block mx-1", style="width: 160px;") }},
+        responsável pela retirada de
+        {{ form.qtd_pallets(class="form-control d-inline-block mx-1", style="width: 50px;") }} pallets PBR...
+      </p>
+      <p class="text-center fw-bold">
+        Estou ciente de minha responsabilidade por quaisquer danos ou extravios ocorridos durante o transporte.
+      </p>
+      <div class="row mt-4">
+        <div class="col-md-6 text-center">
+          <label>Assinatura:</label><br>
+          <input type="text" style="border: none; border-bottom: 1px solid #000; width: 80%;">
+        </div>
+        <div class="col-md-6 text-center">
+          <label>Data:</label><br>
+          <input type="text" style="border: none; border-bottom: 1px solid #000; width: 50%;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Botão Finalizar Embarque -->
+    <div class="mt-4">
+      <button type="submit" name="action" value="finalizar" class="btn btn-primary">
+        Finalizar Embarque
+      </button>
+      <a href="{{ url_for('embarques.listar_embarques') }}" class="btn btn-light">Voltar</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+    
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+  // Ao mudar .uf-select, carrega cidades via AJAX
+  $(document).on('change', '.uf-select', function() {
+    var ufValue = $(this).val();
+    var $cidadeSelect = $(this).closest('tr').find('.city-select');
+    $cidadeSelect.empty().append('<option value="">Carregando...</option>');
+
+    // Ajuste p/ seu endpoint real:
+    // /localidades/ajax/cidades_por_uf/<uf>
+    $.getJSON('/localidades/ajax/cidades_por_uf/' + ufValue, function(data) {
+      $cidadeSelect.empty().append('<option value="">--Selecione--</option>');
+      $.each(data, function(i, city) {
+        $cidadeSelect.append('<option value="'+ city +'">'+ city +'</option>');
+      });
+    });
+  });
+  document.addEventListener("htmx:configRequest", function(event) {
+  const token = document.querySelector('meta[name="csrf-token"]');
+  if (token) {
+    event.detail.headers['X-CSRFToken'] = token.getAttribute('content');
+  }
+});
+</script>
+{% endblock %}

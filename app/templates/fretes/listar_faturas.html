@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}Faturas de Frete{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-file-pdf"></i> Faturas de Frete
+            </h1>
+        </div>
+    </div>
+
+    <!-- Ações -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <a href="{{ url_for('fretes.nova_fatura') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Nova Fatura
+            </a>
+            <a href="{{ url_for('fretes.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Lista de faturas -->
+    <div class="card">
+        <div class="card-body">
+            {% if faturas.items %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Número Fatura</th>
+                                <th>Transportadora</th>
+                                <th>Data Emissão</th>
+                                <th>Valor Total</th>
+                                <th>Vencimento</th>
+                                <th>Status</th>
+                                <th>Fretes</th>
+                                <th>Arquivo</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fatura in faturas.items %}
+                            <tr>
+                                <td>{{ fatura.id }}</td>
+                                <td>{{ fatura.numero_fatura }}</td>
+                                <td title="{{ fatura.transportadora.razao_social }}">
+                                    {{ fatura.transportadora.razao_social[:30] }}...
+                                </td>
+                                <td>{{ fatura.data_emissao.strftime('%d/%m/%Y') if fatura.data_emissao else '-' }}</td>
+                                <td>R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}</td>
+                                <td>{{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else '-' }}</td>
+                                <td>
+                                    {% if fatura.status_conferencia == 'PENDENTE' %}
+                                        <span class="badge badge-warning" style="color: #212529; background-color: #ffc107;">{{ fatura.status_conferencia }}</span>
+                                    {% elif fatura.status_conferencia == 'CONFERIDO' %}
+                                        <span class="badge badge-success" style="color: white; background-color: #28a745;">{{ fatura.status_conferencia }}</span>
+                                    {% else %}
+                                        <span class="badge badge-info" style="color: white; background-color: #17a2b8;">{{ fatura.status_conferencia }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge badge-primary" style="color: white; background-color: #007bff;">
+                                        {{ fatura.total_fretes() }} frete(s)
+                                    </span>
+                                    {% if fatura.total_fretes() > 0 %}
+                                        <br><small class="text-muted">
+                                            R$ {{ "%.2f"|format(fatura.valor_total_fretes()) }}
+                                        </small>
+                                    {% endif %}
+                                    <!-- ✅ DESPESAS EXTRAS USANDO MÉTODOS DO MODEL -->
+                                    {% if fatura.total_despesas_extras() > 0 %}
+                                        <br><span class="badge badge-warning" style="color: #212529; background-color: #ffc107;">
+                                            {{ fatura.total_despesas_extras() }} despesa(s)
+                                        </span>
+                                        <br><small class="text-muted">
+                                            R$ {{ "%.2f"|format(fatura.valor_total_despesas_extras()) }}
+                                        </small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <!-- ✅ ANEXO ACESSÍVEL -->
+                                    {% if fatura.arquivo_pdf %}
+                                        <a href="{{ url_for('static', filename=fatura.arquivo_pdf) }}" 
+                                           target="_blank" 
+                                           class="btn btn-sm btn-outline-primary" 
+                                           title="Visualizar Anexo">
+                                            <i class="fas fa-file-pdf"></i> PDF
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted small">Sem anexo</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group-vertical" role="group">
+                                        <!-- Botão Lançar CTe -->
+                                        <a href="{{ url_for('fretes.lancar_cte') }}?fatura_id={{ fatura.id }}" 
+                                           class="btn btn-sm btn-outline-primary mb-1" title="Lançar CTe nesta fatura">
+                                            <i class="fas fa-plus"></i> CTe
+                                        </a>
+                                        
+                                        {% if fatura.status_conferencia == 'PENDENTE' %}
+                                            <!-- Botão Conferir Fatura -->
+                                            <a href="{{ url_for('fretes.conferir_fatura', fatura_id=fatura.id) }}" 
+                                               class="btn btn-sm btn-outline-success mb-1" title="Conferir fatura">
+                                                <i class="fas fa-check-double"></i> Conferir
+                                            </a>
+                                            
+                                            <!-- Botão Editar Fatura -->
+                                            <a href="{{ url_for('fretes.editar_fatura', fatura_id=fatura.id) }}" 
+                                               class="btn btn-sm btn-outline-warning mb-1" title="Editar fatura">
+                                                <i class="fas fa-edit"></i> Editar
+                                            </a>
+                                            
+                                            <!-- Botão Excluir Fatura (só se não tiver fretes/despesas) -->
+                                            {% if fatura.total_fretes() == 0 %}
+                                            <form method="POST" action="{{ url_for('fretes.excluir_fatura', fatura_id=fatura.id) }}" 
+                                                  style="display: inline-block;"
+                                                  onsubmit="return confirm('Confirma a exclusão desta fatura?')">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir fatura">
+                                                    <i class="fas fa-trash"></i> Excluir
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                            
+                                        {% elif fatura.status_conferencia == 'CONFERIDO' %}
+                                            <!-- Fatura Conferida - Botão para Reabrir -->
+                                            <span class="badge badge-success mb-1" style="color: white; background-color: #28a745;">
+                                                <i class="fas fa-lock"></i> CONFERIDA
+                                            </span>
+                                            <a href="{{ url_for('fretes.conferir_fatura', fatura_id=fatura.id) }}" 
+                                               class="btn btn-sm btn-outline-warning" title="Reabrir fatura">
+                                                <i class="fas fa-unlock"></i> Reabrir
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Paginação -->
+                {% if faturas.pages > 1 %}
+                <nav aria-label="Paginação de faturas">
+                    <ul class="pagination justify-content-center">
+                        {% if faturas.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('fretes.listar_faturas', page=faturas.prev_num) }}">Anterior</a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for page_num in faturas.iter_pages() %}
+                            {% if page_num %}
+                                {% if page_num != faturas.page %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('fretes.listar_faturas', page=page_num) }}">{{ page_num }}</a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                {% endif %}
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if faturas.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('fretes.listar_faturas', page=faturas.next_num) }}">Próxima</a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+
+            {% else %}
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle"></i>
+                    Nenhuma fatura encontrada.
+                    <br><br>
+                    <a href="{{ url_for('fretes.nova_fatura') }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Cadastrar primeira fatura
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

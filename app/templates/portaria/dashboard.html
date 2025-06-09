@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-truck me-2"></i>Controle de Portaria</h1>
+    <div>
+      <a href="{{ url_for('portaria.listar_motoristas') }}" class="btn btn-outline-primary me-2">
+        <i class="fas fa-users"></i> Motoristas
+      </a>
+      <a href="{{ url_for('portaria.historico') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-history"></i> Histórico
+      </a>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Formulário de Busca/Cadastro de Motorista -->
+    <div class="col-md-6">
+      <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0"><i class="fas fa-user me-2"></i>Motorista</h5>
+        </div>
+        <div class="card-body">
+          <form id="form-buscar-motorista">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="row mb-3">
+              <div class="col-8">
+                {{ form_buscar.cpf.label(class="form-label") }}
+                {{ form_buscar.cpf(class="form-control", id="cpf-buscar") }}
+              </div>
+              <div class="col-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                  <i class="fas fa-search"></i> Buscar
+                </button>
+                <a href="{{ url_for('portaria.cadastrar_motorista', from='portaria') }}" class="btn btn-outline-success">
+                  <i class="fas fa-plus"></i> Cadastrar
+                </a>
+              </div>
+            </div>
+          </form>
+
+          <!-- Dados do motorista preenchidos após busca -->
+          <div class="row">
+            <div class="col-md-6">
+              {{ form_controle.nome_completo.label(class="form-label") }}
+              {{ form_controle.nome_completo(class="form-control", id="nome_completo") }}
+            </div>
+            <div class="col-md-6">
+              {{ form_controle.rg.label(class="form-label") }}
+              {{ form_controle.rg(class="form-control", id="rg") }}
+            </div>
+          </div>
+          <div class="row mt-2">
+            <div class="col-md-6">
+              {{ form_controle.telefone.label(class="form-label") }}
+              {{ form_controle.telefone(class="form-control", id="telefone") }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulário de Controle -->
+    <div class="col-md-6">
+      <form method="POST" action="{{ url_for('portaria.registrar_movimento') }}" id="form-controle">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        {{ form_controle.motorista_id(id="motorista_id") }}
+        
+        <!-- Dados do Veículo -->
+        <div class="card mb-4">
+          <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="fas fa-car me-2"></i>Veículo</h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6">
+                {{ form_controle.placa.label(class="form-label") }}
+                {{ form_controle.placa(class="form-control") }}
+              </div>
+              <div class="col-md-6">
+                {{ form_controle.tipo_veiculo_id.label(class="form-label") }}
+                {{ form_controle.tipo_veiculo_id(class="form-control") }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dados da Carga -->
+        <div class="card mb-4">
+          <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0"><i class="fas fa-boxes me-2"></i>Carga</h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6">
+                {{ form_controle.tipo_carga.label(class="form-label") }}
+                {{ form_controle.tipo_carga(class="form-control") }}
+              </div>
+              <div class="col-md-6">
+                {{ form_controle.empresa.label(class="form-label") }}
+                {{ form_controle.empresa(class="form-control") }}
+              </div>
+            </div>
+            <div class="row mt-2">
+              <div class="col-md-12">
+                {{ form_controle.embarque_id.label(class="form-label") }}
+                {{ form_controle.embarque_id(class="form-control") }}
+                <small class="form-text text-muted">Opcional - vincule a um embarque existente</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Botões de Ação -->
+        <div class="card">
+          <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Horários</h5>
+          </div>
+          <div class="card-body">
+            <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+              <input type="hidden" name="acao" value="chegada" id="acao">
+              <button type="submit" class="btn btn-primary btn-lg me-md-2" onclick="document.getElementById('acao').value='chegada'">
+                <i class="fas fa-sign-in-alt"></i> Registrar Chegada
+              </button>
+            </div>
+            <small class="form-text text-muted text-center d-block mt-2">
+              Preencha todos os campos obrigatórios antes de registrar a chegada
+            </small>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Card dos Veículos do Dia -->
+  <div class="card mt-4">
+    <div class="card-header bg-dark text-white">
+      <h5 class="mb-0"><i class="fas fa-list me-2"></i>Veículos de Hoje</h5>
+    </div>
+    <div class="card-body p-0">
+      {% if veiculos_hoje %}
+      <div class="table-responsive">
+        <table class="table table-striped table-hover mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>Nome do Motorista</th>
+              <th>Empresa</th>
+              <th>Tipo da Carga</th>
+              <th>Embarque</th>
+              <th>Data Chegada</th>
+              <th>Hora Chegada</th>
+              <th>Hora Entrada</th>
+              <th>Hora Saída</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for registro in veiculos_hoje %}
+            <tr class="
+              {% if registro.status == 'DENTRO' %}table-success
+              {% elif registro.status == 'AGUARDANDO' %}table-warning
+              {% elif registro.status == 'SAIU' %}table-secondary
+              {% else %}table-light{% endif %}
+            ">
+              <td>{{ registro.motorista_obj.nome_completo }}</td>
+              <td>{{ registro.empresa }}</td>
+              <td>{{ registro.tipo_carga }}</td>
+              <td>
+                {% if registro.embarque %}
+                  <a href="{{ url_for('embarques.visualizar_embarque', id=registro.embarque.id) }}" 
+                     class="btn btn-sm btn-outline-primary">
+                    #{{ registro.embarque.numero }}
+                  </a>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td>{{ registro.data_chegada.strftime('%d/%m/%Y') if registro.data_chegada else '-' }}</td>
+              <td>{{ registro.hora_chegada.strftime('%H:%M') if registro.hora_chegada else '-' }}</td>
+              <td>{{ registro.hora_entrada.strftime('%H:%M') if registro.hora_entrada else '-' }}</td>
+              <td>{{ registro.hora_saida.strftime('%H:%M') if registro.hora_saida else '-' }}</td>
+              <td>
+                <span class="badge 
+                  {% if registro.status == 'DENTRO' %}bg-success
+                  {% elif registro.status == 'AGUARDANDO' %}bg-warning text-dark
+                  {% elif registro.status == 'SAIU' %}bg-secondary
+                  {% else %}bg-light text-dark{% endif %}
+                ">
+                  {{ registro.status }}
+                </span>
+              </td>
+              <td>
+                <form method="POST" action="{{ url_for('portaria.registrar_movimento') }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <input type="hidden" name="registro_id" value="{{ registro.id }}">
+                  
+                  {% if registro.pode_registrar_entrada %}
+                    <input type="hidden" name="acao" value="entrada">
+                    <button type="submit" class="btn btn-sm btn-success me-1">
+                      <i class="fas fa-arrow-right"></i> Entrada
+                    </button>
+                  {% elif registro.pode_registrar_saida %}
+                    <input type="hidden" name="acao" value="saida">
+                    <button type="submit" class="btn btn-sm btn-danger me-1">
+                      <i class="fas fa-arrow-left"></i> Saída
+                    </button>
+                  {% endif %}
+                  
+                  <a href="{{ url_for('portaria.detalhes_veiculo', registro_id=registro.id) }}" 
+                     class="btn btn-sm btn-outline-info">
+                    <i class="fas fa-eye"></i> Ver
+                  </a>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-4">
+        <i class="fas fa-truck fa-3x text-muted mb-3"></i>
+        <p class="text-muted">Nenhum veículo registrado hoje.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Busca motorista por CPF
+  document.getElementById('form-buscar-motorista').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const cpf = document.getElementById('cpf-buscar').value;
+    const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+    
+    if (!cpf.trim()) {
+      alert('Digite um CPF para buscar');
+      return;
+    }
+    
+    fetch('{{ url_for("portaria.buscar_motorista") }}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': csrfToken
+      },
+      body: `cpf=${encodeURIComponent(cpf)}&csrf_token=${encodeURIComponent(csrfToken)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // Preenche dados do motorista
+        const motorista = data.motorista;
+        document.getElementById('motorista_id').value = motorista.id;
+        document.getElementById('nome_completo').value = motorista.nome_completo;
+        document.getElementById('rg').value = motorista.rg;
+        document.getElementById('telefone').value = motorista.telefone;
+        
+        // Destaca o formulário
+        document.querySelector('#form-controle .card').scrollIntoView({ behavior: 'smooth' });
+      } else {
+        alert(data.message);
+        if (data.redirect_cadastro) {
+          if (confirm('Motorista não encontrado. Deseja cadastrar?')) {
+            window.location.href = '{{ url_for("portaria.cadastrar_motorista", from="portaria") }}';
+          }
+        }
+      }
+    })
+    .catch(error => {
+      console.error('Erro:', error);
+      alert('Erro ao buscar motorista');
+    });
+  });
+  
+  // Máscara para CPF
+  const cpfInput = document.getElementById('cpf-buscar');
+  cpfInput.addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    value = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    e.target.value = value;
+  });
+  
+  // Máscara para placa
+  const placaInput = document.querySelector('input[name="placa"]');
+  if (placaInput) {
+    placaInput.addEventListener('input', function(e) {
+      let value = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      if (value.length <= 7) {
+        // Formato ABC-1234
+        value = value.replace(/(\w{3})(\w{1,4})/, '$1-$2');
+      }
+      e.target.value = value;
+    });
+  }
+});
+</script>
+{% endblock %} 

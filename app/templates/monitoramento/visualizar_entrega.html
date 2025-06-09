@@ -1,0 +1,286 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex flex-column mb-3">
+      <h2>Entrega NF {{ entrega.numero_nf }} - {{ entrega.cliente }}</h2>
+      <h6>Vendedor: {{ entrega.vendedor or '—' }}</h6>
+  
+      {% if entrega.transportadora and entrega.transportadora != '-' %}
+        <h6>
+          Transportadora: {{ entrega.transportadora }}
+          {% if entrega.lead_time is not none %}
+            - Lead Time {{ entrega.lead_time }} Dias Úteis
+          {% endif %}
+        </h6>
+      {% else %}
+        <h6>Transportadora: —</h6>
+      {% endif %}
+    </div>
+
+    <div>
+      <a href="{{ url_for('monitoramento.listar_entregas', **request.args) }}" class="btn btn-secondary">Voltar</a>
+      <a href="{{ url_for('monitoramento.visualizar_historico', id=entrega.id) }}" class="btn btn-outline-info">Histórico</a>
+      <a href="{{ url_for('monitoramento.visualizar_arquivos', id=entrega.id) }}" class="btn btn-outline-dark">Arquivos</a>
+    </div>
+
+  <ul class="nav nav-tabs mb-4" id="tabs-entrega" role="tablist">
+    <li class="nav-item"><a class="nav-link active" id="log-tab" data-bs-toggle="tab" href="#log" role="tab">Acompanhamento</a></li>
+    <li class="nav-item"><a class="nav-link" id="evento-tab" data-bs-toggle="tab" href="#evento" role="tab">Eventos</a></li>
+    <li class="nav-item"><a class="nav-link" id="custo-tab" data-bs-toggle="tab" href="#custo" role="tab">Custos</a></li>
+    <li class="nav-item"><a class="nav-link" id="agenda-tab" data-bs-toggle="tab" href="#agenda" role="tab">Agendamentos</a></li>
+    <li class="nav-item"><a class="nav-link" id="finalizacao-tab" data-bs-toggle="tab" href="#finalizacao" role="tab">Finalização</a></li>
+    <li class="nav-item"><a class="nav-link" id="comentarios-tab" data-bs-toggle="tab" href="#comentarios" role="tab">💬 Comentários</a></li>
+
+  </ul>
+
+  <div class="tab-content">
+
+    <div class="tab-pane fade" id="comentarios" role="tabpanel">
+      <h5>Comentários da Entrega</h5>
+    
+      <!-- Formulário comentário -->
+      <form method="POST" 
+            action="{{ url_for('monitoramento.adicionar_comentario', id=entrega.id) }}"
+            enctype="multipart/form-data">  <!-- IMPORTANTE -->
+          {{ form.hidden_tag() }}
+          {{ form.texto(class="form-control", placeholder="Novo comentário") }}
+          {{ form.resposta_a_id }}
+
+          <!-- Campo para arquivo -->
+          {{ form.arquivo(class="form-control mt-2") }}
+
+          <button class="btn btn-primary mt-2">Enviar</button>
+      </form>
+
+    
+      <hr>
+    
+      {% for comentario in comentarios %}
+      <div class="card mb-2">
+        <div class="card-body">
+          <strong>{{ comentario.autor }}</strong> ({{ comentario.criado_em.strftime('%d/%m %H:%M') }}):<br>
+          {{ comentario.texto }}
+    
+          <!-- Aqui, se houver "arquivo" associado ao comentário, mostre link para download -->
+          {% if comentario.arquivo %}
+            <br><br>
+            <strong>Anexo:</strong>
+            <a href="{{ url_for('monitoramento.baixar_arquivo_comentario', filename=comentario.arquivo) }}" target="_blank">
+              {{ comentario.arquivo }}
+            </a>
+          {% endif %}
+    
+          <button class="btn btn-sm btn-link" onclick="responder({{ comentario.id }})">Responder</button>
+          
+          {% for resposta in comentario.respostas %}
+            <div class="card mt-2 ms-4 bg-light">
+              <div class="card-body">
+                <strong>{{ resposta.autor }}</strong> ({{ resposta.criado_em.strftime('%d/%m %H:%M') }}):<br>
+                {{ resposta.texto }}
+    
+                {% if resposta.arquivo %}
+                  <br><br>
+                  <strong>Anexo:</strong>
+                  <a href="{{ url_for('monitoramento.baixar_arquivo_comentario', filename=resposta.arquivo) }}" target="_blank">
+                    {{ resposta.arquivo }}
+                  </a>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+    
+    </div>
+    
+    <script>
+      function responder(comentario_id) {
+        document.querySelector('input[name="resposta_a_id"]').value = comentario_id;
+        document.querySelector('textarea[name="texto"]').placeholder = 'Responder comentário...';
+        document.querySelector('textarea[name="texto"]').focus();
+      }
+    </script>
+
+    <!-- LOG -->
+    <div class="tab-pane fade show active" id="log" role="tabpanel">
+      {% if feedback == 'log' %}<div class="alert alert-success">✔️ Log registrado com sucesso.</div>{% endif %}
+      <h5>Registros de Acompanhamento</h5>
+      <ul class="list-group mb-3">
+        {% for log in entrega.logs %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <strong>{{ log.tipo|capitalize }}</strong> por {{ log.autor }} em {{ log.data_hora.strftime('%d/%m %H:%M') }}<br>
+            {{ log.descricao }}
+            {% if log.lembrete_para %}<br><span class="badge bg-warning text-dark">Lembrete: {{ log.lembrete_para.strftime('%d/%m') }}</span>{% endif %}
+          </div>
+          <form method="POST" action="{{ url_for('monitoramento.excluir_log', log_id=log.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger">Excluir</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      <form method="POST" action="{{ url_for('monitoramento.adicionar_log', id=entrega.id) }}">
+        {{ form_log.hidden_tag() }}
+        {{ form_log.descricao.label }} {{ form_log.descricao(class="form-control") }}
+        {{ form_log.tipo.label }} {{ form_log.tipo(class="form-select mt-2") }}
+        {{ form_log.lembrete_para.label }} {{ form_log.lembrete_para(class="form-control mt-2") }}
+        {{ form_log.submit_log(class="btn btn-primary mt-3") }}
+      </form>
+    </div>
+
+    <!-- Repita essa estrutura claramente para EVENTOS, CUSTOS e AGENDAMENTOS -->
+      <!-- EVENTOS -->
+      <div class="tab-pane fade" id="evento" role="tabpanel">
+        {% if feedback == 'evento' %}<div class="alert alert-success">✔️ Evento registrado com sucesso.</div>{% endif %}
+
+        <h5>Eventos registrados</h5>
+        <ul class="list-group mb-3">
+          {% for ev in entrega.eventos %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <strong>{{ ev.tipo_evento|capitalize }}</strong> | Motorista: {{ ev.motorista }}<br>
+              Chegada: {{ ev.data_hora_chegada }} | Saída: {{ ev.data_hora_saida }}<br>
+              {{ ev.observacao|safe }}
+            </div>
+            <form method="POST" action="{{ url_for('monitoramento.excluir_evento', evento_id=ev.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger">Excluir</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+
+        <form method="POST" action="{{ url_for('monitoramento.adicionar_evento', id=entrega.id) }}">
+          {{ form_evento.hidden_tag() }}
+          <div class="row">
+            <div class="col-md-6">{{ form_evento.data_hora_chegada.label }} {{ form_evento.data_hora_chegada(class="form-control") }}</div>
+            <div class="col-md-6">{{ form_evento.hora_chegada.label }} {{ form_evento.hora_chegada(class="form-control") }}</div>
+            <div class="col-md-6">{{ form_evento.data_hora_saida.label }} {{ form_evento.data_hora_saida(class="form-control") }}</div>
+            <div class="col-md-6">{{ form_evento.hora_saida.label }} {{ form_evento.hora_saida(class="form-control") }}</div>
+          </div>
+          {{ form_evento.motorista.label }} {{ form_evento.motorista(class="form-control mt-2") }}
+          {{ form_evento.tipo_evento.label }} {{ form_evento.tipo_evento(class="form-select mt-2") }}
+          {{ form_evento.observacao.label }} {{ form_evento.observacao(class="form-control mt-2") }}
+          {{ form_evento.submit_evento(class="btn btn-primary mt-3") }}
+        </form>
+      </div>
+      <!-- CUSTOS -->
+      <div class="tab-pane fade" id="custo" role="tabpanel">
+        {% if feedback == 'custo' %}<div class="alert alert-success">✔️ Custo registrado com sucesso.</div>{% endif %}
+
+        <h5>Custos associados</h5>
+        <ul class="list-group mb-3">
+          {% for custo in entrega.custos_extras %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <strong>{{ custo.tipo }}</strong>: R$ {{ '%.2f' | format(custo.valor) }}<br>{{ custo.motivo }}
+            </div>
+            <form method="POST" action="{{ url_for('monitoramento.excluir_custo', custo_id=custo.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger">Excluir</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+
+        <form method="POST" action="{{ url_for('monitoramento.adicionar_custo', id=entrega.id) }}">
+          {{ form_custo.hidden_tag() }}
+          {{ form_custo.tipo.label }} {{ form_custo.tipo(class="form-select") }}
+          {{ form_custo.valor.label }} {{ form_custo.valor(class="form-control") }}
+          {{ form_custo.motivo.label }} {{ form_custo.motivo(class="form-control") }}
+          {{ form_custo.submit_custo(class="btn btn-primary mt-3") }}
+        </form>
+      </div>
+      <!-- AGENDAMENTOS -->
+      <div class="tab-pane fade" id="agenda" role="tabpanel">
+        {% if feedback == 'agendamento' %}<div class="alert alert-success">✔️ Agendamento registrado com sucesso.</div>{% endif %}
+
+        <h5>Agendamentos realizados</h5>
+        <ul class="list-group mb-3">
+          {% for ag in entrega.agendamentos %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <strong>{{ ag.data_agendada.strftime('%d/%m') if ag.data_agendada else '-' }} 
+              {{ ag.hora_agendada.strftime('%H:%M') if ag.hora_agendada else '' }}</strong><br>
+              {{ ag.forma_agendamento }}: {{ ag.contato_agendamento }}<br>
+              Protocolo: {{ ag.protocolo_agendamento }}<br>
+              Motivo: {{ ag.motivo }}<br>
+              Observação: {{ ag.observacao or '-' }}<br>
+              <em>Por {{ ag.autor }} em {{ ag.criado_em.strftime('%d/%m %H:%M') }}</em>
+            </div>
+            <form method="POST" action="{{ url_for('monitoramento.excluir_agendamento', agendamento_id=ag.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger">Excluir</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+
+        <form method="POST" action="{{ url_for('monitoramento.adicionar_agendamento', id=entrega.id) }}">
+          {{ form_agendamento.hidden_tag() }}
+          <input type="hidden" name="form_type" value="agendamento">
+          <div class="row">
+            <div class="col-md-6">{{ form_agendamento.data_agendada.label }} {{ form_agendamento.data_agendada(class="form-control") }}</div>
+            <div class="col-md-6">{{ form_agendamento.hora_agendada.label }} {{ form_agendamento.hora_agendada(class="form-control") }}</div>
+          </div>
+          {{ form_agendamento.forma_agendamento.label }} {{ form_agendamento.forma_agendamento(class="form-select mt-2") }}
+          {{ form_agendamento.contato_agendamento.label }} {{ form_agendamento.contato_agendamento(class="form-control") }}
+          {{ form_agendamento.protocolo_agendamento.label }} {{ form_agendamento.protocolo_agendamento(class="form-control") }}
+          {{ form_agendamento.motivo.label }} {{ form_agendamento.motivo(class="form-control") }}
+          {{ form_agendamento.observacao.label }} {{ form_agendamento.observacao(class="form-control") }}
+          {{ form_agendamento.submit_agendamento(class="btn btn-primary mt-3") }}
+        </form>
+        
+      </div>
+
+    <!-- FINALIZAÇÃO -->
+    <div class="tab-pane fade" id="finalizacao" role="tabpanel">
+      <h5>Finalizar entrega</h5>
+{% if entrega.finalizado_em %}
+<div class="alert alert-info">
+  <strong>Finalizada em:</strong> {{ entrega.data_hora_entrega_realizada.strftime('%d/%m/%Y %H:%M') if entrega.data_hora_entrega_realizada else entrega.finalizado_em.strftime('%d/%m/%Y %H:%M') }}<br>
+  <strong>Status:</strong> {{ entrega.status_finalizacao }}<br>
+  <strong>Por:</strong> {{ entrega.finalizado_por }}<br>
+  <strong>Registrado em:</strong> {{ entrega.finalizado_em.strftime('%d/%m/%Y %H:%M') }}<br>
+  <form method="post" action="{{ url_for('monitoramento.remover_finalizacao', id=entrega.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm btn-outline-danger">Excluir Finalização</button>
+  </form>
+</div>
+      {% else %}
+      <form method="POST" action="{{ url_for('monitoramento.finalizar_entrega', id=entrega.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    
+        <!-- Campo original (necessário) -->
+        <div class="mb-3">
+            <label>Data e Hora da Entrega</label>
+            <input type="datetime-local" name="data_hora_entrega" class="form-control">
+        </div>
+    
+        <!-- Novos campos -->
+        <div class="mb-3">
+            <label>Status Finalização</label>
+            <select name="status_finalizacao" class="form-control">
+                <option value="">Selecione o Status</option>
+                <option value="Cancelada">Cancelada</option>
+                <option value="Devolvida">Devolvida</option>
+                <option value="Troca de NF">Troca de NF</option>
+            </select>
+        </div>
+    
+        <div class="mb-3">
+            <label>Nova NF (apenas se houver troca)</label>
+            <input type="text" name="nova_nf" class="form-control" placeholder="Nova NF (se houver)">
+        </div>
+    
+        <button type="submit" class="btn btn-success">Finalizar Entrega</button>
+    </form>
+    
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}

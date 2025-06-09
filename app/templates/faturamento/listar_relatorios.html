@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid mt-4">
+  <h2>Relatórios de Faturamento Importados</h2>
+
+  <!-- =========== FILTROS =========== -->
+  <form method="GET" class="row g-3 mb-4">
+    <div class="col-md-3">
+      <input type="text"
+             name="numero_nf"
+             class="form-control"
+             placeholder="Número NF"
+             value="{{ request.args.get('numero_nf', '') }}">
+    </div>
+    <div class="col-md-3">
+      <input type="text"
+             name="cnpj_cliente"
+             class="form-control"
+             placeholder="CNPJ Cliente"
+             value="{{ request.args.get('cnpj_cliente', '') }}">
+    </div>
+    <div class="col-md-3">
+      <input type="text"
+             name="nome_cliente"
+             class="form-control"
+             placeholder="Nome Cliente"
+             value="{{ request.args.get('nome_cliente', '') }}">
+    </div>
+    <div class="col-md-3">
+      <input type="text"
+             name="vendedor"
+             class="form-control"
+             placeholder="Vendedor"
+             value="{{ request.args.get('vendedor', '') }}">
+    </div>
+
+    <div class="col-md-3">
+      <button type="submit" class="btn btn-primary w-100">
+        Filtrar
+      </button>
+    </div>
+  </form>
+
+  <!-- =========== TABELA COM ORDENAÇÃO =========== -->
+  <table class="table table-bordered table-hover table-striped">
+    <thead>
+      <tr>
+        {# Para cada coluna ordenável, definimos a lógica do "next_dir" #}
+
+        {# NF #}
+        {% set next_dir = 'desc' if sort=='numero_nf' and direction=='asc' else 'asc' %}
+        <th>
+          <a href="?sort=numero_nf&direction={{ next_dir }}">
+            NF
+            {% if sort=='numero_nf' %}
+              <span class="badge text-secondary">
+                {{ '↑' if direction=='asc' else '↓' }}
+              </span>
+            {% endif %}
+          </a>
+        </th>
+
+        {# CNPJ #}
+        {% set next_dir = 'desc' if sort=='cnpj_cliente' and direction=='asc' else 'asc' %}
+        <th>
+          <a href="?sort=cnpj_cliente&direction={{ next_dir }}">
+            CNPJ
+            {% if sort=='cnpj_cliente' %}
+              <span class="badge text-secondary">
+                {{ '↑' if direction=='asc' else '↓' }}
+              </span>
+            {% endif %}
+          </a>
+        </th>
+
+        {# Data Fatura #}
+        {% set next_dir = 'desc' if sort=='data_fatura' and direction=='asc' else 'asc' %}
+        <th>
+          <a href="?sort=data_fatura&direction={{ next_dir }}">
+            Data Fatura
+            {% if sort=='data_fatura' %}
+              <span class="badge text-secondary">
+                {{ '↑' if direction=='asc' else '↓' }}
+              </span>
+            {% endif %}
+          </a>
+        </th>
+
+        {# Nome Cliente #}
+        {% set next_dir = 'desc' if sort=='nome_cliente' and direction=='asc' else 'asc' %}
+        <th>
+          <a href="?sort=nome_cliente&direction={{ next_dir }}">
+            Cliente
+            {% if sort=='nome_cliente' %}
+              <span class="badge text-secondary">
+                {{ '↑' if direction=='asc' else '↓' }}
+              </span>
+            {% endif %}
+          </a>
+        </th>
+
+        {# Valor Total #}
+        {% set next_dir = 'desc' if sort=='valor_total' and direction=='asc' else 'asc' %}
+        <th>
+          <a href="?sort=valor_total&direction={{ next_dir }}">
+            Valor Total
+            {% if sort=='valor_total' %}
+              <span class="badge text-secondary">
+                {{ '↑' if direction=='asc' else '↓' }}
+              </span>
+            {% endif %}
+          </a>
+        </th>
+
+        {# Transportadora #}
+        {% set next_dir = 'desc' if sort=='nome_transportadora' and direction=='asc' else 'asc' %}
+        <th>
+          <a href="?sort=nome_transportadora&direction={{ next_dir }}">
+            Transportadora
+            {% if sort=='nome_transportadora' %}
+              <span class="badge text-secondary">
+                {{ '↑' if direction=='asc' else '↓' }}
+              </span>
+            {% endif %}
+          </a>
+        </th>
+
+        {# Município #}
+        {% set next_dir = 'desc' if sort=='municipio' and direction=='asc' else 'asc' %}
+        <th>
+          <a href="?sort=municipio&direction={{ next_dir }}">
+            Município
+            {% if sort=='municipio' %}
+              <span class="badge text-secondary">
+                {{ '↑' if direction=='asc' else '↓' }}
+              </span>
+            {% endif %}
+          </a>
+        </th>
+
+        {# UF #}
+        {% set next_dir = 'desc' if sort=='estado' and direction=='asc' else 'asc' %}
+        <th>
+          <a href="?sort=estado&direction={{ next_dir }}">
+            UF
+            {% if sort=='estado' %}
+              <span class="badge text-secondary">
+                {{ '↑' if direction=='asc' else '↓' }}
+              </span>
+            {% endif %}
+          </a>
+        </th>
+
+        {# Incoterm #}
+        {% set next_dir = 'desc' if sort=='incoterm' and direction=='asc' else 'asc' %}
+        <th>
+          <a href="?sort=incoterm&direction={{ next_dir }}">
+            Incoterm
+            {% if sort=='incoterm' %}
+              <span class="badge text-secondary">
+                {{ '↑' if direction=='asc' else '↓' }}
+              </span>
+            {% endif %}
+          </a>
+        </th>
+
+        {# Vendedor #}
+        {% set next_dir = 'desc' if sort=='vendedor' and direction=='asc' else 'asc' %}
+        <th>
+          <a href="?sort=vendedor&direction={{ next_dir }}">
+            Vendedor
+            {% if sort=='vendedor' %}
+              <span class="badge text-secondary">
+                {{ '↑' if direction=='asc' else '↓' }}
+              </span>
+            {% endif %}
+          </a>
+        </th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for r in relatorios %}
+      <tr>
+        <td>{{ r.numero_nf }}</td>
+        <td>{{ r.cnpj_cliente }}</td>
+        <td>{{ r.data_fatura.strftime('%d/%m/%Y') if r.data_fatura else '' }}</td>
+        <td>{{ r.nome_cliente }}</td>
+        <td>R$ {{ '%.2f'|format(r.valor_total or 0) }}</td>
+        <td>{{ r.nome_transportadora }}</td>
+        <td>{{ r.municipio }}</td>
+        <td>{{ r.estado }}</td>
+        <td>{{ r.incoterm }}</td>
+        <td>{{ r.vendedor }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- =========== PAGINAÇÃO =========== -->
+  {% if paginacao.pages > 1 %}
+  <nav>
+    <ul class="pagination pagination-sm">
+
+      {% set args_no_page = request.args.copy() %}
+      {% if 'page' in args_no_page %}
+        {% set _ = args_no_page.pop('page') %}
+      {% endif %}
+
+      <!-- Primeira -->
+      <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('faturamento.listar_relatorios',
+          page=1, **args_no_page) }}">«</a>
+      </li>
+
+      <!-- Anterior -->
+      <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('faturamento.listar_relatorios',
+          page=paginacao.prev_num, **args_no_page) }}">‹</a>
+      </li>
+
+      <!-- Páginas ao redor -->
+      {% for p in range(paginacao.page - 2, paginacao.page + 3) if p>0 and p<=paginacao.pages %}
+        <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+          <a class="page-link" href="{{ url_for('faturamento.listar_relatorios',
+            page=p, **args_no_page) }}">
+            {{ p }}
+          </a>
+        </li>
+      {% endfor %}
+
+      <!-- Próxima -->
+      <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('faturamento.listar_relatorios',
+          page=paginacao.next_num, **args_no_page) }}">›</a>
+      </li>
+
+      <!-- Última -->
+      <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('faturamento.listar_relatorios',
+          page=paginacao.pages, **args_no_page) }}">»</a>
+      </li>
+    </ul>
+  </nav>
+  <div class="text-center">
+    Exibindo
+    {{ (paginacao.page - 1) * paginacao.per_page + 1 }}
+    –
+    {{ (paginacao.page - 1) * paginacao.per_page + paginacao.items|length }}
+    de
+    {{ paginacao.total }}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

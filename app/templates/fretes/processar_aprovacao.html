@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Processar Aprovação - Frete #{{ aprovacao.frete_id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-check-circle"></i> Processar Aprovação - Frete #{{ aprovacao.frete_id }}
+            </h1>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.listar_aprovacoes') }}">Aprovações</a></li>
+            <li class="breadcrumb-item active">Processar</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Dados da aprovação -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-circle"></i> Detalhes da Solicitação
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Dados do frete -->
+                    {% set frete = aprovacao.frete %}
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Cliente</h6>
+                            <p>{{ frete.nome_cliente }}</p>
+                            <h6 class="text-muted">CNPJ</h6>
+                            <p>{{ frete.cnpj_cliente }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Transportadora</h6>
+                            <p>{{ frete.transportadora.razao_social }}</p>
+                            <h6 class="text-muted">Embarque</h6>
+                            <p>#{{ frete.embarque.numero }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Valores do frete -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted">Valor Cotado</h6>
+                                    <h4 class="text-primary">R$ {{ "%.2f"|format(frete.valor_cotado) }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted">Valor CTe</h6>
+                                    <h4 class="text-info">
+                                        {% if frete.valor_cte %}
+                                            R$ {{ "%.2f"|format(frete.valor_cte) }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted">Valor Considerado</h6>
+                                    <h4 class="text-warning">
+                                        {% if frete.valor_considerado %}
+                                            R$ {{ "%.2f"|format(frete.valor_considerado) }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted">Valor Pago</h6>
+                                    <h4 class="text-dark">
+                                        {% if frete.valor_pago %}
+                                            R$ {{ "%.2f"|format(frete.valor_pago) }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Motivo da solicitação -->
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Motivo da Solicitação</h6>
+                        <p class="mb-0">{{ aprovacao.motivo_solicitacao or "Não informado" }}</p>
+                        <small class="text-muted">
+                            Solicitado por {{ aprovacao.solicitado_por }} em {{ aprovacao.solicitado_em.strftime('%d/%m/%Y %H:%M') }}
+                        </small>
+                    </div>
+
+                    <!-- Formulário de aprovação -->
+                    <form method="POST">
+                        {{ form.hidden_tag() }}
+
+                        <div class="form-group">
+                            {{ form.status.label(class="form-label") }}
+                            {{ form.status(class="form-control") }}
+                        </div>
+
+                        <div class="form-group">
+                            {{ form.observacoes_aprovacao.label(class="form-label") }}
+                            {{ form.observacoes_aprovacao(class="form-control", rows="3") }}
+                            <small class="text-muted">Justificativa da decisão tomada</small>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('fretes.listar_aprovacoes') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            <div>
+                                <button type="submit" class="btn btn-success btn-lg me-2" 
+                                        onclick="document.getElementById('status').value='APROVADO'">
+                                    <i class="fas fa-check"></i> Aprovar
+                                </button>
+                                <button type="submit" class="btn btn-danger btn-lg" 
+                                        onclick="document.getElementById('status').value='REJEITADO'">
+                                    <i class="fas fa-times"></i> Rejeitar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações adicionais -->
+        <div class="col-md-4">
+            <!-- Classificações -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-tags"></i> Classificações
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if frete.valor_cte and frete.valor_cotado %}
+                        <p><strong>CTe vs Cotado:</strong><br>
+                        <span class="badge badge-info">{{ frete.classificacao_valor_cte_cotado() }}</span></p>
+                    {% endif %}
+                    
+                    {% if frete.valor_pago and frete.valor_considerado %}
+                        <p><strong>Pago vs Considerado:</strong><br>
+                        <span class="badge badge-warning">{{ frete.classificacao_valor_pago_considerado() }}</span></p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Diferenças -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-calculator"></i> Diferenças
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if frete.valor_cte and frete.valor_cotado %}
+                        {% set diff_cte = frete.diferenca_cotado_cte() %}
+                        <p><strong>CTe - Cotado:</strong><br>
+                        <span class="{% if diff_cte > 0 %}text-danger{% elif diff_cte < 0 %}text-success{% endif %}">
+                            {% if diff_cte > 0 %}+{% endif %}R$ {{ "%.2f"|format(diff_cte) }}
+                        </span></p>
+                    {% endif %}
+                    
+                    {% if frete.valor_pago and frete.valor_considerado %}
+                        {% set diff_pago = frete.diferenca_considerado_pago() %}
+                        <p><strong>Pago - Considerado:</strong><br>
+                        <span class="{% if diff_pago > 0 %}text-danger{% elif diff_pago < 0 %}text-success{% endif %}">
+                            {% if diff_pago > 0 %}+{% endif %}R$ {{ "%.2f"|format(diff_pago) }}
+                        </span></p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Define o status quando clicar nos botões
+    $('.btn-success').click(function() {
+        $('#status').val('APROVADO');
+    });
+    
+    $('.btn-danger').click(function() {
+        $('#status').val('REJEITADO');
+    });
+});
+</script>
+{% endblock %} 

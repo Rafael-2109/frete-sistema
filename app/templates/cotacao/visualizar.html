@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Visualizar Cotação{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h3 class="mb-0">Cotação #{{ cotacao.id }}</h3>
+          <div>
+            <a href="{{ url_for('cotacao.tela_cotacao') }}" class="btn btn-secondary">
+              <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            {% if cotacao.status == 'Aberta' %}
+            <form method="POST" style="display: inline;" onsubmit="return confirm('Confirma o fechamento desta cotação?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <button type="submit" class="btn btn-success">
+                <i class="fas fa-check"></i> Fechar Cotação
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+        <div class="card-body">
+          <!-- Informações da Cotação -->
+          <div class="row">
+            <div class="col-md-6">
+              <p><strong>Transportadora:</strong> {{ cotacao.transportadora.razao_social }}</p>
+              <p><strong>Data de Criação:</strong> {{ cotacao.data_criacao|formatar_data('%d/%m/%Y %H:%M') }}</p>
+              <p><strong>Data de Fechamento:</strong> {{ cotacao.data_fechamento|formatar_data('%d/%m/%Y %H:%M') if cotacao.data_fechamento else 'N/A' }}</p>
+            </div>
+            <div class="col-md-6">
+              <p><strong>Valor Total:</strong> R$ {{ "%.2f"|format(cotacao.valor_total) }}</p>
+              <p><strong>Status:</strong> 
+                <span class="badge bg-{{ 'success' if cotacao.status == 'Fechada' else 'warning' }}">
+                  {{ cotacao.status }}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <!-- Lista de Itens -->
+          <h5 class="mt-4">Itens da Cotação</h5>
+          <div class="table-responsive">
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th>Pedido</th>
+                  <th>Cliente</th>
+                  <th>Cidade/UF</th>
+                  <th>Peso (kg)</th>
+                  <th>Valor (R$)</th>
+                  <th>Valor Frete (R$)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in cotacao.itens %}
+                <tr>
+                  <td>{{ item.pedido.num_pedido }}</td>
+                  <td>{{ item.pedido.raz_social_red }}</td>
+                  <td>{{ item.pedido.nome_cidade }}/{{ item.pedido.cod_uf }}</td>
+                  <td>{{ "%.2f"|format(item.peso) }}</td>
+                  <td>{{ "%.2f"|format(item.valor) }}</td>
+                  <td>{{ "%.2f"|format(item.valor_frete) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 

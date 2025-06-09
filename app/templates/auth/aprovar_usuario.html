@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 800px;">
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <h4 class="card-title mb-0">
+                <i class="fas fa-user-check"></i> Aprovar Usuário
+            </h4>
+        </div>
+        <div class="card-body">
+            <!-- Dados do usuário -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <h5 class="text-muted">Dados da Solicitação</h5>
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Nome:</strong> {{ usuario.nome }}</p>
+                                    <p><strong>E-mail:</strong> {{ usuario.email }}</p>
+                                    <p><strong>Telefone:</strong> {{ usuario.telefone or '-' }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Empresa:</strong> {{ usuario.empresa or '-' }}</p>
+                                    <p><strong>Cargo:</strong> {{ usuario.cargo or '-' }}</p>
+                                    <p><strong>Tipo Solicitado:</strong> 
+                                        <span class="{{ usuario.perfil_badge_class }}">
+                                            {{ usuario.perfil_nome }}
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+                            <p><strong>Data da Solicitação:</strong> 
+                                {{ usuario.criado_em.strftime('%d/%m/%Y às %H:%M') if usuario.criado_em else '-' }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulário de aprovação -->
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.perfil.label(class="form-label") }}
+                        {{ form.perfil(class="form-select", id="perfilSelect") }}
+                        {% if form.perfil.errors %}
+                            <div class="text-danger small">{{ form.perfil.errors[0] }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            <small class="text-muted">
+                                Você pode alterar o tipo de acesso se necessário
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3" id="vendedorVinculadoDiv" style="display: none;">
+                        {{ form.vendedor_vinculado.label(class="form-label") }}
+                        {{ form.vendedor_vinculado(class="form-select") }}
+                        {% if form.vendedor_vinculado.errors %}
+                            <div class="text-danger small">{{ form.vendedor_vinculado.errors[0] }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            <small class="text-muted">
+                                <strong>Obrigatório para vendedores:</strong> Selecione o nome do vendedor 
+                                que aparece nos relatórios de faturamento
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    {{ form.observacoes.label(class="form-label") }}
+                    {{ form.observacoes(class="form-control", rows="3", placeholder="Observações sobre a aprovação (opcional)") }}
+                    {% if form.observacoes.errors %}
+                        <div class="text-danger small">{{ form.observacoes.errors[0] }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Informações sobre permissões -->
+                <div class="alert alert-info mb-4">
+                    <h6><i class="fas fa-info-circle"></i> Permissões dos Perfis:</h6>
+                    <ul class="mb-0 small">
+                        <li><strong>Vendedor:</strong> Acesso apenas ao monitoramento de suas vendas + envio de comentários</li>
+                        <li><strong>Portaria:</strong> Acesso aos embarques e módulos de portaria</li>
+                        <li><strong>Financeiro/Logística:</strong> Acesso e edição geral</li>
+                        <li><strong>Gerente Comercial:</strong> Aprovação de vendedores + acesso geral</li>
+                        <li><strong>Administrador:</strong> Acesso irrestrito</li>
+                    </ul>
+                </div>
+
+                <div class="d-flex gap-2">
+                    {{ form.submit(class="btn btn-success") }}
+                    <a href="{{ url_for('auth.usuarios_pendentes') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const perfilSelect = document.getElementById('perfilSelect');
+    const vendedorDiv = document.getElementById('vendedorVinculadoDiv');
+    
+    function toggleVendedorField() {
+        if (perfilSelect.value === 'vendedor') {
+            vendedorDiv.style.display = 'block';
+        } else {
+            vendedorDiv.style.display = 'none';
+        }
+    }
+    
+    // Verificar inicialmente
+    toggleVendedorField();
+    
+    // Verificar quando mudar
+    perfilSelect.addEventListener('change', toggleVendedorField);
+});
+</script>
+{% endblock %} 

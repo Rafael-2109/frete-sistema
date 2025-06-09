@@ -1,0 +1,606 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-redo"></i> Redespachar para SP/Guarulhos</h1>
+    <div>
+      <a href="{{ url_for('cotacao.tela_cotacao') }}" class="btn btn-outline-secondary me-2">
+        <i class="fas fa-arrow-left"></i> Voltar à Cotação Original
+      </a>
+      <a href="{{ url_for('pedidos.lista_pedidos') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-list"></i> Lista de Pedidos
+      </a>
+    </div>
+  </div>
+
+  {# Alerta informativo sobre o redespacho #}
+  <div class="alert alert-info mb-4">
+    <div class="d-flex align-items-center">
+      <i class="fas fa-info-circle me-2"></i>
+      <div>
+        <strong>Redespacho Ativo:</strong> Os pedidos estão sendo cotados considerando destino <strong>SP/Guarulhos</strong> para análise de transportadoras que fazem este tipo de operação.
+        <br>
+        <small class="text-muted">
+          Esta cotação não altera os dados originais dos pedidos. É apenas uma simulação para comparação.
+        </small>
+      </div>
+    </div>
+  </div>
+
+  <hr>
+
+  {# 1) Cabeçalho: Pedidos em Redespacho #}
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+      <span><i class="fas fa-redo"></i> Pedidos em Redespacho (SP/Guarulhos)</span>
+      <span class="badge bg-dark text-light">Total: {{ pedidos_selecionados|length }} pedido(s)</span>
+    </div>
+    <div class="card-body p-2">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-2 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Pedido</th>
+              <th>Cliente</th>
+              <th>Cidade Original</th>
+              <th>UF Original</th>
+              <th>Destino Redespacho</th>
+              <th>Rota</th>
+              <th class="text-end">Valor</th>
+              <th class="text-end">Pallet</th>
+              <th class="text-end">Peso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for i in range(pedidos_selecionados|length) %}
+            {% set ped_original = pedidos[i] %}
+            {% set ped_redespacho = pedidos_selecionados[i] %}
+            <tr>
+              <td>{{ ped_redespacho.num_pedido }}</td>
+              <td>{{ ped_redespacho.raz_social_red }}</td>
+              <td class="text-muted">{{ ped_original.nome_cidade }}</td>
+              <td class="text-muted">{{ ped_original.cod_uf }}</td>
+              <td class="fw-bold text-warning">
+                <i class="fas fa-arrow-right me-1"></i>
+                GUARULHOS/SP
+              </td>
+              <td>{{ ped_redespacho.rota }}</td>
+              <td class="text-end">R$ {{ "%.0f"|format(ped_redespacho.valor_saldo_total or 0) }}</td>
+              <td class="text-end">{{ "%.1f"|format(ped_redespacho.pallet_total or 0) }}</td>
+              <td class="text-end">{{ "%.0f"|format(ped_redespacho.peso_total or 0) }} kg</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot class="table-warning fw-bold">
+            <tr>
+              <td colspan="6">Totais para Redespacho:</td>
+              <td class="text-end">R$ {{ "%.0f"|format(pedidos_selecionados|sum(attribute='valor_saldo_total') or 0) }}</td>
+              <td class="text-end">{{ "%.1f"|format(pedidos_selecionados|sum(attribute='pallet_total') or 0) }}</td>
+              <td class="text-end">{{ "%.0f"|format(pedidos_selecionados|sum(attribute='peso_total') or 0) }} kg</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# 2) Seções: Carga Direta / Carga Fracionada para Redespacho #}
+  <div class="accordion" id="accordionFretes">
+    <!-- Seção Carga Direta -->
+    <div class="accordion-item shadow-sm">
+      <h2 class="accordion-header" id="headingDireta">
+        <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseDireta" aria-expanded="true"
+                aria-controls="collapseDireta">
+          <div class="d-flex align-items-center">
+            <i class="fas fa-truck me-2"></i>
+            <strong class="me-2">Carga Direta para SP/Guarulhos</strong>
+            <span class="badge bg-secondary">{{ opcoes_transporte.direta|length }} opções</span>
+          </div>
+        </button>
+      </h2>
+      <div id="collapseDireta" class="accordion-collapse collapse show"
+           aria-labelledby="headingDireta" data-bs-parent="#accordionFretes">
+        <div class="accordion-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Transportadora</th>
+                  <th>Tipo</th>
+                  <th>Veículo</th>
+                  <th>Tabela</th>
+                  <th class="text-end">Frete Bruto</th>
+                  <th class="text-end">Frete Líquido</th>
+                  <th class="text-end">Frete/kg</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for opcao in opcoes_transporte.direta %}
+                <tr>
+                  <td>{{ opcao.transportadora }}</td>
+                  <td>{{ opcao.tipo_carga }}</td>
+                  <td>{{ opcao.modalidade }}</td>
+                  <td>{{ opcao.nome_tabela }}</td>
+                  <td class="text-end">R$ {{ "%.0f"|format(opcao.valor_total) }}</td>
+                  <td class="text-end">R$ {{ "%.0f"|format(opcao.valor_liquido) }}</td>
+                  <td class="text-end">R$ {{ "%.2f"|format(opcao.valor_liquido / peso_total) }}</td>
+                  <td>
+                    <button class="btn btn-success btn-sm fechar-frete-redespacho" 
+                            data-opcao-id="{{ opcao.indice }}"
+                            data-tipo="direta"
+                            data-indice="{{ opcao.indice_original }}"
+                            data-transportadora-id="{{ opcao.transportadora_id }}"
+                            data-modalidade="{{ opcao.modalidade }}"
+                            data-nome-tabela="{{ opcao.nome_tabela }}">
+                      <i class="fas fa-check"></i> Fechar Redespacho
+                    </button>
+                    <a href="{{ url_for('cotacao.otimizar', opcao_id=opcao.indice, tipo='direta', indice=opcao.indice_original) }}" 
+                       class="btn btn-info btn-sm">
+                      <i class="fas fa-chart-line"></i> Otimizador
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seção Carga Fracionada -->
+    <div class="accordion-item shadow-sm">
+      <h2 class="accordion-header" id="headingFracionada">
+        <button class="accordion-button {% if not todos_mesmo_uf %}active{% else %}collapsed{% endif %}" 
+                type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseFracionada" 
+                aria-expanded="{% if not todos_mesmo_uf %}true{% else %}false{% endif %}"
+                aria-controls="collapseFracionada">
+          <div class="d-flex align-items-center">
+            <i class="fas fa-boxes me-2"></i>
+            <strong class="me-2">Carga Fracionada para SP/Guarulhos</strong>
+            <span class="badge bg-secondary">{{ opcoes_transporte.fracionada|length }} opções</span>
+          </div>
+        </button>
+      </h2>
+      <div id="collapseFracionada" 
+           class="accordion-collapse collapse {% if not todos_mesmo_uf %}show{% endif %}"
+           aria-labelledby="headingFracionada" 
+           data-bs-parent="#accordionFretes">
+        <div class="accordion-body">
+          {# Botão para abrir modal de escolha por CNPJ #}
+          <div class="mb-3">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalEscolhaCNPJ">
+              <i class="fas fa-shopping-cart me-2"></i>
+              Escolher Transportadora por CNPJ (Redespacho)
+            </button>
+          </div>
+
+          {# Lista de transportadoras com suas melhores opções #}
+          {% for transportadora_id, transportadora in opcoes_transporte.fracionada.items() %}
+          <div class="card mb-3">
+            <div class="card-header bg-light">
+              <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">{{ transportadora.razao_social }}</h5>
+                <button class="btn btn-success btn-sm fechar-frete-grupo-redespacho" 
+                        data-transportadora-id="{{ transportadora_id }}"
+                        data-cnpjs='{{ transportadora.cnpjs|map(attribute="cnpj")|list|tojson|safe }}'>
+                  <i class="fas fa-check me-1"></i>
+                  Fechar Redespacho ({{ transportadora.cnpjs|length }} CNPJs)
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                  <thead>
+                    <tr>
+                      <th>CNPJ</th>
+                      <th>Razão Social</th>
+                      <th>Destino</th>
+                      <th>Pallets</th>
+                      <th>Peso</th>
+                      <th>Valor Carga</th>
+                      <th>Frete Bruto</th>
+                      <th>Frete Líquido</th>
+                      <th>R$/kg</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for opcao in transportadora.cnpjs %}
+                    <tr>
+                      <td>{{ opcao.cnpj }}</td>
+                      <td>{{ opcao.razao_social }}</td>
+                      <td class="fw-bold text-warning">{{ opcao.cidade }}/{{ opcao.uf }}</td>
+                      <td>{{ "%.1f"|format(opcao.pallets_grupo) }}</td>
+                      <td>{{ "%.0f"|format(opcao.peso_grupo) }}kg</td>
+                      <td>R$ {{ "%.0f"|format(opcao.valor_grupo) }}</td>
+                      <td>R$ {{ "%.0f"|format(opcao.valor_total) }}</td>
+                      <td>R$ {{ "%.0f"|format(opcao.valor_liquido) }}</td>
+                      <td>R$ {{ "%.2f"|format(opcao.frete_kg) }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                  <tfoot>
+                    <tr class="table-light">
+                      <td colspan="3"><strong>Total</strong></td>
+                      <td><strong>{{ "%.1f"|format(transportadora.cnpjs|sum(attribute="pallets_grupo")) }}</strong></td>
+                      <td><strong>{{ "%.0f"|format(transportadora.cnpjs|sum(attribute="peso_grupo")) }} kg</strong></td>
+                      <td><strong>R$ {{ "%.0f"|format(transportadora.cnpjs|sum(attribute="valor_grupo")) }}</strong></td>
+                      <td><strong>R$ {{ "%.0f"|format(transportadora.cnpjs|sum(attribute="valor_total")) }}</strong></td>
+                      <td><strong>R$ {{ "%.0f"|format(transportadora.cnpjs|sum(attribute="valor_liquido")) }}</strong></td>
+                      <td><strong>R$ {{ "%.2f"|format(transportadora.cnpjs|sum(attribute="valor_liquido") / transportadora.cnpjs|sum(attribute="peso_grupo")) }}</strong></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal de escolha por CNPJ - Adaptado para redespacho #}
+<div class="modal fade" id="modalEscolhaCNPJ" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-redo me-2"></i>
+          Escolher Transportadora por CNPJ (Redespacho SP/Guarulhos)
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        {# Card da transportadora selecionada #}
+        <div class="card mb-4" id="cardTransportadoraSelecionada">
+          <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+            <div id="transportadoraInfo">
+              <h6 class="mb-0">Selecione uma transportadora para redespacho</h6>
+            </div>
+            <button type="button" class="btn btn-success btn-sm" id="btnFecharCotacaoRedespacho" style="display: none;">
+              <i class="fas fa-check me-1"></i>
+              Fechar Redespacho
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="pedidosSelecionados" style="display: none;">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                  <thead class="table-light">
+                    <tr>
+                      <th>CNPJ</th>
+                      <th>Cliente</th>
+                      <th>Destino</th>
+                      <th class="text-end">Valor</th>
+                      <th class="text-end">Peso</th>
+                      <th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="listaPedidosSelecionados">
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {% for cnpj, pedidos in pedidos_por_cnpj.items() %}
+        <div class="card mb-3">
+          <div class="card-header bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+              <h6 class="mb-0">
+                <strong>CNPJ:</strong> {{ cnpj }}
+                <span class="ms-3"><strong>Cliente:</strong> {{ pedidos[0].raz_social_red }}</span>
+                <span class="ms-3"><strong>Destino:</strong> <span class="text-warning fw-bold">GUARULHOS/SP</span></span>
+                <span class="ms-3"><strong>Peso:</strong> {{ "%.0f"|format(pedidos|sum(attribute="peso_total")) }}kg</span>
+                <span class="ms-3"><strong>Valor:</strong> R$ {{ "%.0f"|format(pedidos|sum(attribute="valor_saldo_total")) }}</span>
+              </h6>
+              <span class="badge bg-secondary">{{ pedidos|length }} pedido(s)</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-sm table-hover">
+                <thead>
+                  <tr>
+                    <th>Transportadora</th>
+                    <th>Tabela</th>
+                    <th class="text-end">Frete Bruto</th>
+                    <th class="text-end">Frete Líquido</th>
+                    <th class="text-end">R$/kg</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% if opcoes_por_cnpj.get(cnpj) %}
+                    {% for opcao in opcoes_por_cnpj[cnpj] %}
+                      <tr>
+                        <td>{{ opcao.transportadora }}</td>
+                        <td>{{ opcao.nome_tabela|default('') }}</td>
+                        <td class="text-end">R$ {{ "%.0f"|format(opcao.valor_total) }}</td>
+                        <td class="text-end">R$ {{ "%.0f"|format(opcao.valor_liquido) }}</td>
+                        <td class="text-end">R$ {{ "%.2f"|format(opcao.frete_kg) }}</td>
+                        <td class="text-end">
+                          <div class="btn-group">
+                            <button class="btn btn-primary btn-sm escolher-transportadora-redespacho"
+                                    data-transportadora-id="{{ opcao.transportadora_id }}"
+                                    data-transportadora-nome="{{ opcao.transportadora }}">
+                              <i class="fas fa-check me-1"></i>
+                              Escolher
+                            </button>
+                            <button class="btn btn-success btn-sm adicionar-cotacao-redespacho"
+                                    style="display: none;"
+                                    data-cnpj="{{ cnpj }}"
+                                    data-transportadora-id="{{ opcao.transportadora_id }}">
+                              <i class="fas fa-plus me-1"></i>
+                              Adicionar ao Redespacho
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  {% else %}
+                    <tr>
+                      <td colspan="6" class="text-center text-muted">Nenhuma opção de frete disponível para este CNPJ</td>
+                    </tr>
+                  {% endif %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+$(document).ready(function() {
+  // Adiciona o CSRF token em todas as requisições AJAX
+  $.ajaxSetup({
+    beforeSend: function(xhr, settings) {
+      if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+        xhr.setRequestHeader("X-CSRFToken", "{{ csrf_token() }}");
+      }
+    }
+  });
+
+  // Variáveis globais para redespacho
+  let pedidosSelecionados = [];
+  let transportadoraSelecionada = null;
+
+  // ✅ REDESPACHAR: Quando selecionar uma transportadora no modal
+  $('.escolher-transportadora-redespacho').click(function() {
+    const $btn = $(this);
+    const transportadoraId = $btn.data('transportadora-id');
+    const transportadoraNome = $btn.data('transportadora-nome');
+    transportadoraSelecionada = transportadoraId;
+
+    console.log('[DEBUG] Transportadora selecionada para redespacho:', transportadoraNome, 'ID:', transportadoraId);
+
+    // Atualiza o cabeçalho com a transportadora selecionada
+    $('#transportadoraInfo').html(`
+      <h6 class="mb-0">Transportadora: ${transportadoraNome} (Redespacho SP/Guarulhos)</h6>
+    `);
+
+    // Mostra o botão de fechar cotação
+    $('#btnFecharCotacaoRedespacho').show();
+
+    // Mostra a seção de pedidos selecionados
+    $('#pedidosSelecionados').show();
+
+    // Esconde todos os botões "Escolher" e mostra "Adicionar" para a transportadora selecionada
+    $('.escolher-transportadora-redespacho').hide();
+    $('.adicionar-cotacao-redespacho').hide();
+    
+    // Mostra os botões "Adicionar ao Redespacho" apenas para a transportadora selecionada
+    $(`.adicionar-cotacao-redespacho[data-transportadora-id="${transportadoraId}"]`).show();
+  });
+
+  // ✅ REDESPACHAR: Quando clicar em "Adicionar ao Redespacho"
+  $('.adicionar-cotacao-redespacho').click(function() {
+    const $btn = $(this);
+    const cnpj = $btn.data('cnpj');
+    const transportadoraId = $btn.data('transportadora-id');
+    
+    console.log('[DEBUG] Adicionando CNPJ ao redespacho:', cnpj, 'para transportadora:', transportadoraId);
+    
+    // Verifica se é a transportadora selecionada
+    if (transportadoraId != transportadoraSelecionada) {
+      alert('Este CNPJ não pertence à transportadora selecionada!');
+      return;
+    }
+    
+    const pedidosDesteCnpj = JSON.parse('{{ pedidos_por_cnpj_json|tojson|safe }}')[cnpj];
+    
+    if (!pedidosDesteCnpj) {
+      console.error('[DEBUG] Pedidos não encontrados para CNPJ:', cnpj);
+      return;
+    }
+    
+    // Adiciona os pedidos à lista
+    pedidosDesteCnpj.forEach(pedido => {
+      if (!pedidosSelecionados.find(p => p.id === pedido.id)) {
+        pedidosSelecionados.push(pedido);
+        
+        // Adiciona a linha na tabela
+        $('#listaPedidosSelecionados').append(`
+          <tr data-pedido-id="${pedido.id}" data-cnpj="${cnpj}">
+            <td>${cnpj}</td>
+            <td>${pedido.raz_social_red}</td>
+            <td class="fw-bold text-warning">GUARULHOS/SP</td>
+            <td class="text-end">R$ ${parseFloat(pedido.valor_saldo_total).toFixed(2)}</td>
+            <td class="text-end">${parseFloat(pedido.peso_total).toFixed(2)} kg</td>
+            <td>
+              <button class="btn btn-danger btn-sm remover-pedido-redespacho" data-cnpj="${cnpj}">
+                <i class="fas fa-times"></i>
+              </button>
+            </td>
+          </tr>
+        `);
+      }
+    });
+
+    // Desabilita o botão após adicionar
+    $btn.prop('disabled', true).text('Adicionado');
+    
+    console.log('[DEBUG] Pedidos selecionados para redespacho:', pedidosSelecionados.length);
+  });
+
+  // ✅ REDESPACHAR: Quando clicar em "Remover" um pedido
+  $(document).on('click', '.remover-pedido-redespacho', function() {
+    const $row = $(this).closest('tr');
+    const pedidoId = $row.data('pedido-id');
+    const cnpj = $(this).data('cnpj');
+    
+    console.log('[DEBUG] Removendo pedido do redespacho ID:', pedidoId, 'CNPJ:', cnpj);
+    
+    // Remove o pedido da lista
+    pedidosSelecionados = pedidosSelecionados.filter(p => p.id !== pedidoId);
+    
+    // Remove a linha da tabela
+    $row.remove();
+
+    // Habilita novamente o botão "Adicionar" correspondente
+    $(`.adicionar-cotacao-redespacho[data-cnpj="${cnpj}"][data-transportadora-id="${transportadoraSelecionada}"]`)
+      .prop('disabled', false)
+      .html('<i class="fas fa-plus me-1"></i> Adicionar ao Redespacho');
+  });
+
+  // ✅ REDESPACHAR: Quando clicar em "Fechar Redespacho" no modal
+  $('#btnFecharCotacaoRedespacho').click(function() {
+    if (!transportadoraSelecionada || pedidosSelecionados.length === 0) {
+      alert('Selecione uma transportadora e pelo menos um pedido.');
+      return;
+    }
+
+    console.log('[DEBUG] Fechando redespacho com:', pedidosSelecionados.length, 'pedidos');
+
+    // Prepara os dados para envio (com flag de redespacho)
+    const payload = {
+      tipo: 'FRACIONADA',
+      transportadora_id: transportadoraSelecionada,
+      redespacho: true,  // ✅ Flag especial para redespacho
+      pedidos: pedidosSelecionados.map(function(pedido) {
+        return {
+          id: pedido.id,
+          cnpj: pedido.cnpj_cpf,
+          valor: pedido.valor_saldo_total,
+          peso: pedido.peso_total
+        };
+      })
+    };
+
+    console.log('[DEBUG] Payload de redespacho enviado:', payload);
+
+    // Envia a requisição
+    $.ajax({
+      url: "{{ url_for('cotacao.fechar_frete_grupo') }}",
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(payload),
+      success: function(response) {
+        if (response.success) {
+          window.location.href = response.redirect_url;
+        } else {
+          alert('Erro ao fechar redespacho: ' + response.message);
+        }
+      },
+      error: function(xhr) {
+        console.error('[DEBUG] Erro AJAX no redespacho:', xhr.responseText);
+        alert('Erro ao processar redespacho: ' + xhr.responseText);
+      }
+    });
+  });
+
+  // ✅ REDESPACHAR: Quando clicar em "Fechar" na carga direta
+  $('.fechar-frete-redespacho').click(function() {
+    const $btn = $(this);
+    const transportadoraId = $btn.data('transportadora-id');
+    const tipo = $btn.data('tipo');
+    const indiceOriginal = $btn.data('indice');
+    
+    console.log('[DEBUG] Fechando frete direto de redespacho');
+    
+    // Prepara os dados para envio (com flag de redespacho)
+    const payload = {
+      tipo: tipo.toUpperCase(),
+      transportadora_id: transportadoraId,
+      indice_original: indiceOriginal,
+      redespacho: true,  // ✅ Flag especial para redespacho
+      pedidos: {{ pedidos_selecionados|tojson|safe }}.map(function(pedido) {
+        return {
+          id: pedido.id,
+          cnpj: pedido.cnpj_cpf,
+          valor: pedido.valor_saldo_total,
+          peso: pedido.peso_total
+        };
+      })
+    };
+
+    console.log('[DEBUG] Payload de redespacho direto enviado:', payload);
+
+    // Envia a requisição
+    $.ajax({
+      url: "{{ url_for('cotacao.fechar_frete') }}",
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(payload),
+      success: function(response) {
+        if (response.success) {
+          window.location.href = response.redirect_url;
+        } else {
+          alert('Erro ao fechar redespacho: ' + response.message);
+        }
+      },
+      error: function(xhr) {
+        alert('Erro ao processar redespacho: ' + xhr.responseText);
+      }
+    });
+  });
+
+  // ✅ REDESPACHAR: Quando clicar em "Fechar" na carga fracionada
+  $('.fechar-frete-grupo-redespacho').click(function() {
+    const $btn = $(this);
+    const transportadora_id = $btn.data('transportadora-id');
+    const cnpjs = $btn.data('cnpjs');
+    
+    // Prepara os dados para envio (com flag de redespacho)
+    const payload = {
+      transportadora_id: transportadora_id,
+      cnpjs: cnpjs,
+      redespacho: true  // ✅ Flag especial para redespacho
+    };
+
+    // Envia a requisição
+    $.ajax({
+      url: "{{ url_for('cotacao.fechar_frete_grupo') }}",
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(payload),
+      success: function(response) {
+        if (response.success) {
+          window.location.href = response.redirect_url;
+        } else {
+          alert('Erro ao fechar redespacho: ' + response.message);
+        }
+      },
+      error: function(xhr) {
+        alert('Erro ao processar redespacho: ' + xhr.responseText);
+      }
+    });
+  });
+});
+</script>
+{% endblock %} 

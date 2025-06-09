@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <h3 class="mb-4">{{ 'Editar Tabela de Frete' if tabela else 'Cadastrar Tabela de Frete' }}</h3>
+
+
+    <div class="card p-4 shadow-sm">
+        <form method="POST">
+            {{ form.csrf_token }} 
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    {{ form.transportadora.label(class="form-label") }}
+                    {{ form.transportadora(class="form-select") }}
+                </div>
+                <div class="col-md-2">
+                    {{ form.uf_origem.label(class="form-label") }}
+                    {{ form.uf_origem(class="form-select") }}
+                </div>
+                <div class="col-md-2">
+                    {{ form.uf_destino.label(class="form-label") }}
+                    {{ form.uf_destino(class="form-select") }}
+                </div>
+                <div class="col-md-2">
+                    {{ form.nome_tabela.label(class="form-label") }}
+                    {{ form.nome_tabela(class="form-control") }}
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    {{ form.tipo_carga.label(class="form-label") }}
+                    {{ form.tipo_carga(class="form-select") }}
+                </div>
+                <div class="col-md-4">
+                    {{ form.modalidade.label(class="form-label") }}
+                    {{ form.modalidade(class="form-control") }}
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <div class="form-check">
+                        {{ form.icms_incluso(class="form-check-input") }}
+                        {{ form.icms_incluso.label(class="form-check-label") }}
+                    </div>
+                </div>
+            </div>
+
+            <h5 class="mt-4">Parâmetros de Cálculo</h5>
+            <div class="row mb-3">
+                <div class="col-md-3">{{ form.valor_kg.label(class="form-label") }}{{ form.valor_kg(class="form-control") }}</div>
+                <div class="col-md-3">{{ form.frete_minimo_peso.label(class="form-label") }}{{ form.frete_minimo_peso(class="form-control") }}</div>
+                <div class="col-md-3">{{ form.percentual_valor.label(class="form-label") }}{{ form.percentual_valor(class="form-control") }}</div>
+                <div class="col-md-3">{{ form.frete_minimo_valor.label(class="form-label") }}{{ form.frete_minimo_valor(class="form-control") }}</div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">{{ form.percentual_gris.label(class="form-label") }}{{ form.percentual_gris(class="form-control") }}</div>
+                <div class="col-md-4">{{ form.percentual_adv.label(class="form-label") }}{{ form.percentual_adv(class="form-control") }}</div>
+                <div class="col-md-4">{{ form.percentual_rca.label(class="form-label") }}{{ form.percentual_rca(class="form-control") }}</div>
+                <div class="col-md-4">{{ form.pedagio_por_100kg.label(class="form-label") }}{{ form.pedagio_por_100kg(class="form-control") }}</div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-4">{{ form.valor_despacho.label(class="form-label") }}{{ form.valor_despacho(class="form-control") }}</div>
+                <div class="col-md-4">{{ form.valor_cte.label(class="form-label") }}{{ form.valor_cte(class="form-control") }}</div>
+                <div class="col-md-4">{{ form.valor_tas.label(class="form-label") }}{{ form.valor_tas(class="form-control") }}</div>
+            </div>
+
+            <div>
+                <button type="submit" class="btn btn-primary">{{ 'Atualizar' if tabela else 'Cadastrar' }}</button>
+            </div>
+        </form>
+    </div>
+
+    <hr class="my-5">
+
+    <h3>Tabelas já cadastradas</h3>
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered">
+          <thead class="table-dark">
+            <tr>
+              <th>Transportadora</th>
+              <th>UF Origem</th>
+              <th>UF Destino</th>
+              <th style="min-width:150px;">Nome Tabela</th>
+              <th>Tipo Carga</th>
+              <th>Modalidade</th>
+              <th>Frete Mín. Valor</th>
+              <th>Frete Mín. Peso</th>
+              <th>Valor KG</th>
+              <th>% Valor</th>
+              <th>% GRIS</th>
+              <th>% ADV</th>
+              <th>% RCA</th>
+              <th>Despacho</th>
+              <th>CTE</th>
+              <th>TAS</th>
+              <th>Pedágio 100kg</th>
+              <th>ICMS Incluso</th>
+              <th>Criado Por</th>
+              <th>Criado Em</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for tabela in tabelas %}
+            <tr>
+              <td>{{ tabela.transportadora.razao_social }}</td>
+              <td>{{ tabela.uf_origem }}</td>
+              <td>{{ tabela.uf_destino }}</td>
+              <td>{{ tabela.nome_tabela }}</td>
+              <td>{{ tabela.tipo_carga }}</td>
+              <td>{{ tabela.modalidade }}</td>
+              <td>{{ tabela.frete_minimo_valor }}</td>
+              <td>{{ tabela.frete_minimo_peso }}</td>
+              <td>{{ tabela.valor_kg }}</td>
+              <td>{{ tabela.percentual_valor }}</td>
+              <td>{{ tabela.percentual_gris }}</td>
+              <td>{{ tabela.percentual_adv }}</td>
+              <td>{{ tabela.percentual_rca }}</td>
+              <td>{{ tabela.valor_despacho }}</td>
+              <td>{{ tabela.valor_cte }}</td>
+              <td>{{ tabela.valor_tas }}</td>
+              <td>{{ tabela.pedagio_por_100kg }}</td>
+              <td>{{ 'Sim' if tabela.icms_incluso else 'Não' }}</td>
+              <td>{{ tabela.criado_por }}</td>
+              <td>{{ tabela.criado_em.strftime("%d/%m/%Y %H:%M") }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+</div>
+{% endblock %}

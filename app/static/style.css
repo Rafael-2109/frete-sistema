@@ -1,0 +1,106 @@
+.entregue-popup {
+    transition: all 0.2s ease-in-out;
+}
+
+.entregue-popup:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.6); /* Azul chamativo */
+}
+.table td, .table th {
+    white-space: nowrap;        /* impede quebra de linha */
+    overflow: hidden;           /* esconde conteúdo excedente claramente */
+    text-overflow: ellipsis;    /* mostra reticências (...) claramente quando ultrapassar a largura */
+    max-width: 280px;           /* ajuste essa largura conforme necessário */
+}
+.reagendar-btn {
+    position: relative;
+    width: 85px; /* largura curta padrão */
+    overflow: hidden;
+    white-space: nowrap;
+    transition: width 0.3s ease;
+    text-align: center;
+}
+
+.reagendar-btn span.text-completo {
+    display: none;
+}
+
+.reagendar-btn:hover {
+    width: 85px; /* largura expandida ao passar mouse */
+}
+
+.reagendar-btn:hover span.text-curto {
+    display: none;
+}
+
+.reagendar-btn:hover span.text-completo {
+    display: inline;
+}
+/* Quebra automática de texto somente na coluna Descrição */
+.table td.descricao {
+    white-space: normal;    /* permite quebra automática */
+    word-wrap: break-word;  /* quebra palavras grandes */
+    max-width: 400px;       /* ajuste conforme necessário */
+}
+.dropdown-menu {
+    display: none; /* escondido por padrão */
+    position: absolute;
+    z-index: 1000;
+    min-width: 10rem;
+    padding: 0.5rem 0;
+    margin: 0;
+    font-size: 1rem;
+    color: #212529;
+    text-align: left;
+    list-style: none;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid rgba(0,0,0,.15);
+    border-radius: 0.375rem;
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,.175);
+}
+/* Correção específica para o popover funcionar corretamente */
+.popover {
+    max-width: none !important;
+    min-width: 320px !important;
+    white-space: normal !important;
+  }
+  
+  .popover-body {
+    white-space: normal !important;
+    overflow: visible !important;
+  }
+  
+  .table-responsive {
+    /* Força a barra de rolagem horizontal se exceder a largura */
+    overflow-x: auto;
+    /* Evita que as colunas quebrem e causem “empilhamento” */
+    white-space: nowrap;
+  }
+  
+  .sticky-col {
+    position: sticky;
+    left: 0;          /* primeiríssima coluna */
+    background: #fff; /* fundo pra não vazar texto ao rolar */
+    z-index: 10;
+    min-width: 100px; /* ou algo que não permita “atropelar” o texto */
+  }
+  
+  .sticky-col-2 {
+    position: sticky;
+    left: 100px;      /* igual ao min-width da 1ª col. Ajuste conforme sua tabela */
+    background: #fff;
+    z-index: 10;
+    min-width: 120px; /* ou outra largura */
+  }
+  
+  .sticky-col-3 {
+    position: sticky;
+    left: 220px; /* some a largura das duas anteriores */
+    background: #fff;
+    z-index: 10;
+    min-width: 150px;
+  }
+  /* etc. */
+  
+

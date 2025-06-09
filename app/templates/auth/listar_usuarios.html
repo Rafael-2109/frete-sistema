@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-users text-primary"></i> Gestão de Usuários</h2>
+        <div>
+            <a href="{{ url_for('auth.usuarios_pendentes') }}" class="btn btn-warning">
+                <i class="fas fa-user-clock"></i> Pendentes
+            </a>
+            <a href="{{ url_for('auth.registro') }}" target="_blank" class="btn btn-outline-primary">
+                <i class="fas fa-external-link-alt"></i> Link Público
+            </a>
+        </div>
+    </div>
+
+    {% if usuarios %}
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-users"></i>
+            <strong>{{ usuarios|length }}</strong> usuário(s) no sistema
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nome</th>
+                            <th>E-mail</th>
+                            <th>Empresa</th>
+                            <th>Perfil</th>
+                            <th>Status</th>
+                            <th>Vendedor Vinculado</th>
+                            <th>Último Login</th>
+                            <th width="120">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for usuario in usuarios %}
+                        <tr>
+                            <td>
+                                <i class="fas fa-user text-muted me-2"></i>
+                                {{ usuario.nome }}
+                            </td>
+                            <td>
+                                <i class="fas fa-envelope text-muted me-2"></i>
+                                {{ usuario.email }}
+                            </td>
+                            <td>
+                                <i class="fas fa-building text-muted me-2"></i>
+                                {{ usuario.empresa or '-' }}
+                            </td>
+                            <td>
+                                <span class="{{ usuario.perfil_badge_class }}">
+                                    {{ usuario.perfil_nome }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="{{ usuario.status_badge_class }}">
+                                    {{ usuario.status.title() }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if usuario.vendedor_vinculado %}
+                                    <i class="fas fa-link text-success me-1"></i>
+                                    {{ usuario.vendedor_vinculado }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if usuario.ultimo_login %}
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>
+                                        {{ usuario.ultimo_login.strftime('%d/%m/%Y %H:%M') }}
+                                    </small>
+                                {% else %}
+                                    <span class="text-muted">Nunca</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{{ url_for('auth.editar_usuario', user_id=usuario.id) }}" 
+                                       class="btn btn-outline-primary" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mt-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="fas fa-user-clock fa-2x text-warning mb-2"></i>
+                    <h5>{{ usuarios|selectattr('status', 'equalto', 'pendente')|list|length }}</h5>
+                    <small class="text-muted">Pendentes</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="fas fa-user-check fa-2x text-success mb-2"></i>
+                    <h5>{{ usuarios|selectattr('status', 'equalto', 'ativo')|list|length }}</h5>
+                    <small class="text-muted">Ativos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="fas fa-user-shield fa-2x text-primary mb-2"></i>
+                    <h5>{{ usuarios|selectattr('perfil', 'equalto', 'vendedor')|list|length }}</h5>
+                    <small class="text-muted">Vendedores</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="fas fa-user-cog fa-2x text-danger mb-2"></i>
+                    <h5>{{ usuarios|selectattr('perfil', 'equalto', 'administrador')|list|length }}</h5>
+                    <small class="text-muted">Administradores</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="fas fa-user-plus text-muted fa-3x mb-3"></i>
+            <h5>Nenhum usuário cadastrado</h5>
+            <p class="text-muted">Inicie compartilhando o link público de registro.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

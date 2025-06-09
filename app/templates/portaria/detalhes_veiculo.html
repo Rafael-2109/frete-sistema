@@ -1,0 +1,510 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>
+      <i class="fas fa-truck me-2"></i>
+      Detalhes do Registro #{{ registro.id }}
+    </h1>
+    <div>
+      <a href="{{ url_for('portaria.dashboard') }}" class="btn btn-outline-primary me-2">
+        <i class="fas fa-home"></i> Dashboard
+      </a>
+      <a href="{{ url_for('portaria.historico') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left"></i> Voltar para Histórico
+      </a>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Informações do Motorista -->
+    <div class="col-md-6">
+      <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">
+            <i class="fas fa-user me-2"></i>Motorista
+          </h5>
+        </div>
+        <div class="card-body">
+          {% if registro.motorista_obj.foto_documento %}
+          <div class="text-center mb-3">
+            <img src="{{ url_for('static', filename=registro.motorista_obj.foto_documento) }}" 
+                 alt="Foto do documento" 
+                 class="img-thumbnail"
+                 style="max-width: 200px; max-height: 150px;">
+          </div>
+          {% endif %}
+          
+          <table class="table table-borderless">
+            <tr>
+              <td><strong>Nome:</strong></td>
+              <td>{{ registro.motorista_obj.nome_completo }}</td>
+            </tr>
+            <tr>
+              <td><strong>CPF:</strong></td>
+              <td>{{ registro.motorista_obj.cpf }}</td>
+            </tr>
+            <tr>
+              <td><strong>RG:</strong></td>
+              <td>{{ registro.motorista_obj.rg }}</td>
+            </tr>
+            <tr>
+              <td><strong>Telefone:</strong></td>
+              <td>{{ registro.motorista_obj.telefone }}</td>
+            </tr>
+          </table>
+          
+          <div class="text-end">
+            <a href="{{ url_for('portaria.editar_motorista', id=registro.motorista_obj.id) }}" 
+               class="btn btn-sm btn-outline-primary">
+              <i class="fas fa-edit"></i> Editar Motorista
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Informações do Veículo -->
+    <div class="col-md-6">
+      <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+          <h5 class="mb-0">
+            <i class="fas fa-car me-2"></i>Veículo
+          </h5>
+        </div>
+        <div class="card-body">
+          <table class="table table-borderless">
+            <tr>
+              <td><strong>Placa:</strong></td>
+              <td>
+                <span class="badge bg-dark fs-6">{{ registro.placa }}</span>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Tipo:</strong></td>
+              <td>
+                {% if registro.tipo_veiculo %}
+                  {{ registro.tipo_veiculo.nome }}
+                {% else %}
+                  <span class="text-muted">Não informado</span>
+                {% endif %}
+              </td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Informações da Carga -->
+    <div class="col-md-6">
+      <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+          <h5 class="mb-0">
+            <i class="fas fa-boxes me-2"></i>Carga
+          </h5>
+        </div>
+        <div class="card-body">
+          <table class="table table-borderless">
+            <tr>
+              <td><strong>Tipo:</strong></td>
+              <td>
+                <span class="badge 
+                  {% if registro.tipo_carga == 'Coleta' %}bg-primary
+                  {% elif registro.tipo_carga == 'Entrega' %}bg-success
+                  {% elif registro.tipo_carga == 'Devolução' %}bg-warning text-dark
+                  {% else %}bg-info{% endif %}
+                ">
+                  {{ registro.tipo_carga }}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Empresa:</strong></td>
+              <td>{{ registro.empresa }}</td>
+            </tr>
+            <tr>
+              <td><strong>Embarque:</strong></td>
+              <td>
+                {% if registro.embarque %}
+                  <div class="d-flex align-items-center">
+                    <a href="{{ url_for('embarques.visualizar_embarque', id=registro.embarque.id) }}" 
+                       class="btn btn-sm btn-outline-primary">
+                      <i class="fas fa-shipping-fast"></i> Embarque #{{ registro.embarque.numero }}
+                    </a>
+                    <!-- Botão para excluir embarque -->
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" 
+                            data-registro-id="{{ registro.id }}" 
+                            data-embarque-numero="{{ registro.embarque.numero }}"
+                            id="btn-excluir-embarque">
+                      <i class="fas fa-times"></i> Excluir embarque
+                    </button>
+                  </div>
+                {% else %}
+                  <span class="text-muted">Não vinculado</span>
+                  <a href="#" class="btn btn-sm btn-success ms-2" data-bs-toggle="modal" data-bs-target="#modalAdicionarEmbarque">
+                    <i class="fas fa-plus"></i> Adicionar embarque
+                  </a>
+                {% endif %}
+              </td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status e Horários -->
+    <div class="col-md-6">
+      <div class="card mb-4">
+        <div class="card-header 
+          {% if registro.status == 'SAIU' %}bg-secondary text-white
+          {% elif registro.status == 'DENTRO' %}bg-success text-white
+          {% elif registro.status == 'AGUARDANDO' %}bg-warning text-dark
+          {% else %}bg-light text-dark{% endif %}
+        ">
+          <h5 class="mb-0">
+            <i class="fas fa-clock me-2"></i>Status: {{ registro.status }}
+          </h5>
+        </div>
+        <div class="card-body">
+          <table class="table table-borderless">
+            <tr>
+              <td><strong>Chegada:</strong></td>
+              <td>
+                {% if registro.data_chegada and registro.hora_chegada %}
+                  <i class="fas fa-calendar-alt text-primary me-1"></i>
+                  {{ registro.data_chegada.strftime('%d/%m/%Y') }}
+                  <br>
+                  <i class="fas fa-clock text-primary me-1"></i>
+                  {{ registro.hora_chegada.strftime('%H:%M') }}
+                {% else %}
+                  <span class="text-muted">Não registrado</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Entrada:</strong></td>
+              <td>
+                {% if registro.data_entrada and registro.hora_entrada %}
+                  <i class="fas fa-calendar-alt text-success me-1"></i>
+                  {{ registro.data_entrada.strftime('%d/%m/%Y') }}
+                  <br>
+                  <i class="fas fa-clock text-success me-1"></i>
+                  {{ registro.hora_entrada.strftime('%H:%M') }}
+                {% else %}
+                  <span class="text-muted">Não registrado</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Saída:</strong></td>
+              <td>
+                {% if registro.data_saida and registro.hora_saida %}
+                  <i class="fas fa-calendar-alt text-danger me-1"></i>
+                  {{ registro.data_saida.strftime('%d/%m/%Y') }}
+                  <br>
+                  <i class="fas fa-clock text-danger me-1"></i>
+                  {{ registro.hora_saida.strftime('%H:%M') }}
+                {% else %}
+                  <span class="text-muted">Não registrado</span>
+                {% endif %}
+              </td>
+            </tr>
+          </table>
+          
+          <!-- Tempo de permanência -->
+          {% if registro.data_chegada and registro.hora_chegada %}
+          <div class="mt-3 p-3 bg-light rounded">
+            <h6 class="text-muted mb-2">
+              <i class="fas fa-stopwatch me-1"></i>Tempo de Permanência
+            </h6>
+            {% set chegada_datetime = registro.data_chegada.strftime('%Y-%m-%d') + ' ' + registro.hora_chegada.strftime('%H:%M:%S') %}
+            {% if registro.data_saida and registro.hora_saida %}
+              {% set saida_datetime = registro.data_saida.strftime('%Y-%m-%d') + ' ' + registro.hora_saida.strftime('%H:%M:%S') %}
+              <span class="badge bg-info">Finalizado</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">Em andamento</span>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ações Disponíveis -->
+  <div class="card">
+    <div class="card-header bg-info text-white">
+      <h5 class="mb-0">
+        <i class="fas fa-cogs me-2"></i>Ações Disponíveis
+      </h5>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-8">
+          <form method="POST" action="{{ url_for('portaria.registrar_movimento') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="registro_id" value="{{ registro.id }}">
+            
+            {% if registro.pode_registrar_entrada %}
+              <input type="hidden" name="acao" value="entrada">
+              <button type="submit" class="btn btn-success me-2" onclick="return confirm('Registrar entrada do veículo?')">
+                <i class="fas fa-arrow-right"></i> Registrar Entrada
+              </button>
+            {% elif registro.pode_registrar_saida %}
+              <input type="hidden" name="acao" value="saida">
+              <button type="submit" class="btn btn-danger me-2" onclick="return confirm('Registrar saída do veículo?')">
+                <i class="fas fa-arrow-left"></i> Registrar Saída
+              </button>
+            {% else %}
+              <div class="alert alert-info mb-0">
+                <i class="fas fa-info-circle me-2"></i>
+                {% if registro.status == 'SAIU' %}
+                  Este veículo já completou todo o processo (chegada → entrada → saída).
+                {% elif registro.status == 'PENDENTE' %}
+                  Este registro ainda não tem chegada registrada.
+                {% else %}
+                  Não há ações disponíveis no momento.
+                {% endif %}
+              </div>
+            {% endif %}
+          </form>
+        </div>
+        
+        <div class="col-md-4 text-end">
+          <small class="text-muted">
+            <i class="fas fa-clock me-1"></i>
+            Registrado em {{ registro.criado_em.strftime('%d/%m/%Y às %H:%M') }}
+            {% if registro.atualizado_em != registro.criado_em %}
+              <br>
+              <i class="fas fa-edit me-1"></i>
+              Atualizado em {{ registro.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}
+            {% endif %}
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para Adicionar Embarque -->
+<div class="modal fade" id="modalAdicionarEmbarque" tabindex="-1" aria-labelledby="modalAdicionarEmbarqueLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('portaria.adicionar_embarque') }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalAdicionarEmbarqueLabel">
+            <i class="fas fa-shipping-fast me-2"></i>Adicionar Embarque ao Veículo
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <input type="hidden" name="registro_id" value="{{ registro.id }}">
+          <input type="hidden" name="substituir_veiculo" id="substituir_veiculo" value="false">
+          
+          <div class="mb-3">
+            <label for="embarque_id" class="form-label">Selecionar Embarque:</label>
+            <select name="embarque_id" id="embarque_id" class="form-control" required>
+              <option value="">Selecione um embarque...</option>
+            </select>
+            <div class="form-text">
+              A data de embarque será atualizada automaticamente quando o veículo registrar saída.
+            </div>
+          </div>
+          
+          <!-- Informações do embarque selecionado -->
+          <div id="info_embarque_selecionado" class="d-none">
+            <div class="card bg-light">
+              <div class="card-body">
+                <h6 class="card-title">📋 Informações do Embarque</h6>
+                <div class="row">
+                  <div class="col-md-4">
+                    <small><strong>Transportadora:</strong> <span id="embarque_transportadora">-</span></small>
+                  </div>
+                  <div class="col-md-4">
+                    <small><strong>Data Embarque:</strong> <span id="embarque_data">-</span></small>
+                  </div>
+                  <div class="col-md-4">
+                    <small><strong>Status:</strong> <span id="embarque_status">-</span></small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Aviso se embarque já está vinculado -->
+          <div id="aviso_veiculo_vinculado" class="d-none mt-3">
+            <div class="alert alert-warning">
+              <h6><i class="fas fa-exclamation-triangle me-2"></i>Atenção!</h6>
+              <p class="mb-2">Este embarque já está vinculado ao veículo:</p>
+              <ul class="mb-2">
+                <li><strong>Placa:</strong> <span id="veiculo_placa">-</span></li>
+                <li><strong>Motorista:</strong> <span id="veiculo_motorista">-</span></li>
+                <li><strong>Status:</strong> <span id="veiculo_status">-</span></li>
+              </ul>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="confirmar_substituicao">
+                <label class="form-check-label" for="confirmar_substituicao">
+                  <strong>Sim, desejo substituir o veículo atual pelo veículo {{ registro.placa }}</strong>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="fas fa-times"></i> Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary" id="btn_adicionar_embarque" disabled>
+            <i class="fas fa-plus"></i> <span id="texto_botao">Adicionar Embarque</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  
+  // Carrega embarques quando modal é aberto
+  const modalElement = document.getElementById('modalAdicionarEmbarque');
+  if (modalElement) {
+    modalElement.addEventListener('show.bs.modal', function() {
+      const select = document.getElementById('embarque_id');
+      
+      // Limpa opções anteriores
+      select.innerHTML = '<option value="">Carregando...</option>';
+      
+      // Busca embarques disponíveis
+      fetch('/portaria/api/embarques_disponiveis')
+        .then(response => response.json())
+        .then(data => {
+          select.innerHTML = '<option value="">Selecione um embarque...</option>';
+          
+          if (data.embarques && data.embarques.length > 0) {
+            data.embarques.forEach(embarque => {
+              const option = document.createElement('option');
+              option.value = embarque.id;
+              
+              // Monta texto da opção com informações detalhadas
+              let texto = 'Embarque #' + embarque.numero;
+              if (embarque.transportadora) {
+                texto += ' - ' + embarque.transportadora;
+              }
+              if (embarque.veiculo_vinculado) {
+                texto += ' [VINCULADO: ' + embarque.veiculo_vinculado.placa + ']';
+              }
+              
+              option.textContent = texto;
+              option.dataset.embarque = JSON.stringify(embarque);
+              select.appendChild(option);
+            });
+          } else {
+            select.innerHTML = '<option value="">Nenhum embarque disponível</option>';
+          }
+        })
+        .catch(error => {
+          console.error('Erro ao carregar embarques:', error);
+          select.innerHTML = '<option value="">Erro ao carregar embarques</option>';
+        });
+    });
+  }
+  
+  // Evento para quando embarque é selecionado
+  const embarqueSelect = document.getElementById('embarque_id');
+  if (embarqueSelect) {
+    embarqueSelect.addEventListener('change', function() {
+      const selectedOption = this.options[this.selectedIndex];
+      const btnAdicionar = document.getElementById('btn_adicionar_embarque');
+      const infoEmbarque = document.getElementById('info_embarque_selecionado');
+      const avisoVeiculo = document.getElementById('aviso_veiculo_vinculado');
+      const textoBotao = document.getElementById('texto_botao');
+      const checkboxSubstituir = document.getElementById('confirmar_substituicao');
+      const inputSubstituir = document.getElementById('substituir_veiculo');
+      
+      if (this.value && selectedOption.dataset.embarque) {
+        const embarque = JSON.parse(selectedOption.dataset.embarque);
+        
+        // Mostra informações do embarque
+        document.getElementById('embarque_transportadora').textContent = embarque.transportadora || 'Não informada';
+        document.getElementById('embarque_data').textContent = embarque.data_embarque || 'Não preenchida';
+        document.getElementById('embarque_status').textContent = embarque.data_embarque ? 'Com data' : 'Sem data';
+        infoEmbarque.classList.remove('d-none');
+        
+        // Verifica se já tem veículo vinculado
+        if (embarque.veiculo_vinculado) {
+          document.getElementById('veiculo_placa').textContent = embarque.veiculo_vinculado.placa;
+          document.getElementById('veiculo_motorista').textContent = embarque.veiculo_vinculado.motorista;
+          document.getElementById('veiculo_status').textContent = embarque.veiculo_vinculado.status;
+          avisoVeiculo.classList.remove('d-none');
+          
+          btnAdicionar.disabled = true;
+          textoBotao.textContent = 'Substituir Veículo';
+          
+          // Evento para checkbox de confirmação
+          checkboxSubstituir.addEventListener('change', function() {
+            if (this.checked) {
+              btnAdicionar.disabled = false;
+              inputSubstituir.value = 'true';
+            } else {
+              btnAdicionar.disabled = true;
+              inputSubstituir.value = 'false';
+            }
+          });
+          
+        } else {
+          avisoVeiculo.classList.add('d-none');
+          btnAdicionar.disabled = false;
+          textoBotao.textContent = 'Adicionar Embarque';
+          inputSubstituir.value = 'false';
+        }
+        
+      } else {
+        infoEmbarque.classList.add('d-none');
+        avisoVeiculo.classList.add('d-none');
+        btnAdicionar.disabled = true;
+        textoBotao.textContent = 'Adicionar Embarque';
+      }
+    });
+  }
+  
+  // Event listener para botão de excluir embarque
+  const btnExcluir = document.getElementById('btn-excluir-embarque');
+  if (btnExcluir) {
+    btnExcluir.addEventListener('click', function() {
+      const registroId = this.getAttribute('data-registro-id');
+      const embarqueNumero = this.getAttribute('data-embarque-numero');
+      
+      if (confirm('Tem certeza que deseja excluir o vínculo com o Embarque #' + embarqueNumero + '?\n\nEsta ação não irá excluir o embarque, apenas remover a vinculação com este veículo.')) {
+        // Cria formulário para enviar requisição
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/portaria/excluir_embarque';
+        
+        // CSRF Token
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        form.appendChild(csrfInput);
+        
+        // Registro ID
+        const registroInput = document.createElement('input');
+        registroInput.type = 'hidden';
+        registroInput.name = 'registro_id';
+        registroInput.value = registroId;
+        form.appendChild(registroInput);
+        
+        // Submete o formulário
+        document.body.appendChild(form);
+        form.submit();
+      }
+    });
+  }
+});
+</script>
+{% endblock %} 

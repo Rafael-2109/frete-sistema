@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Transportadoras</h2>
+    <hr>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                {% if category == 'danger' and 'ERROS ENCONTRADOS' in message %}
+                    <div class="card mb-4">
+                        <div class="card-header bg-danger text-white">
+                            <h5 class="mb-0">Erros na Importação</h5>
+                        </div>
+                        <div class="card-body">
+                            {% for linha in message.split('\n') %}
+                                {% if 'ERROS ENCONTRADOS' not in linha and linha.strip() %}
+                                    <div class="alert alert-danger mb-2">{{ linha }}</div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% elif category == 'success' and 'TRANSPORTADORAS IMPORTADAS' in message %}
+                    <div class="card mb-4">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">Transportadoras Importadas</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group">
+                            {% for linha in message.split('\n') %}
+                                {% if 'TRANSPORTADORAS IMPORTADAS' not in linha and linha.strip() %}
+                                    <div class="list-group-item">{{ linha }}</div>
+                                {% endif %}
+                            {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                {% elif category == 'info' and 'TRANSPORTADORAS ATUALIZADAS' in message %}
+                    <div class="card mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Transportadoras Atualizadas</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group">
+                            {% for linha in message.split('\n') %}
+                                {% if 'TRANSPORTADORAS ATUALIZADAS' not in linha and linha.strip() %}
+                                    <div class="list-group-item">{{ linha }}</div>
+                                {% endif %}
+                            {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                {% elif category == 'primary' and message.startswith('Total:') %}
+                    <div class="alert alert-primary">
+                        <strong>{{ message }}</strong>
+                    </div>
+                {% else %}
+                    <div class="alert alert-{{ category }}">
+                        {{ message }}
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            Cadastrar Nova Transportadora
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            {{ form.cnpj.label(class="form-label") }}
+                            {{ form.cnpj(class="form-control") }}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            {{ form.razao_social.label(class="form-label") }}
+                            {{ form.razao_social(class="form-control") }}
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            {{ form.cidade.label(class="form-label") }}
+                            {{ form.cidade(class="form-control") }}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            {{ form.uf.label(class="form-label") }}
+                            {{ form.uf(class="form-control") }}
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            {{ form.optante.label(class="form-label") }}
+                            {{ form.optante(class="form-control") }}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            {{ form.condicao_pgto.label(class="form-label") }}
+                            {{ form.condicao_pgto(class="form-control") }}
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Cadastrar</button>
+                <a href="{{ url_for('transportadoras.importar') }}" class="btn btn-success">Importar Transportadoras</a>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Lista de Transportadoras</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>CNPJ</th>
+                            <th>Razão Social</th>
+                            <th>Cidade</th>
+                            <th>UF</th>
+                            <th>Optante</th>
+                            <th>Condição Pgto</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transportadora in transportadoras %}
+                        <tr>
+                            <td>{{ transportadora.cnpj }}</td>
+                            <td>{{ transportadora.razao_social }}</td>
+                            <td>{{ transportadora.cidade }}</td>
+                            <td>{{ transportadora.uf }}</td>
+                            <td>{{ 'Sim' if transportadora.optante else 'Não' }}</td>
+                            <td>{{ transportadora.condicao_pgto or '-' }}</td>
+                            <td>
+                                <a href="{{ url_for('transportadoras.editar_transportadora', id=transportadora.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                                    <i class="fas fa-edit"></i> Editar
+                                </a>
+                                <a href="{{ url_for('transportadoras.excluir_transportadora', id=transportadora.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Tem certeza que deseja excluir esta transportadora?')" title="Excluir">
+                                    <i class="fas fa-trash"></i> Excluir
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

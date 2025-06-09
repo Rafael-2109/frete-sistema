@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}Confirmar Despesa Extra{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-check-circle"></i> Confirmar Despesa Extra
+                <small class="text-muted">Frete #{{ frete.id }}</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}">Nova Despesa Extra</a></li>
+            <li class="breadcrumb-item active">Confirmar</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Dados da despesa -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-eye"></i> Revisão dos Dados
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-primary">Informações da Despesa</h6>
+                            <p><strong>Tipo:</strong> {{ despesa_data.tipo_despesa }}</p>
+                            <p><strong>Setor Responsável:</strong> {{ despesa_data.setor_responsavel }}</p>
+                            <p><strong>Motivo:</strong> {{ despesa_data.motivo_despesa }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-primary">Documento e Valores</h6>
+                            <p><strong>Tipo Documento:</strong> {{ despesa_data.tipo_documento }}</p>
+                            <p><strong>Número Documento:</strong> {{ despesa_data.numero_documento }}</p>
+                            <p><strong>Valor:</strong> R$ {{ "%.2f"|format(despesa_data.valor_despesa) }}</p>
+                            {% if despesa_data.vencimento_despesa %}
+                                <p><strong>Vencimento:</strong> {{ despesa_data.vencimento_despesa }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% if despesa_data.observacoes %}
+                    <div class="mt-3">
+                        <h6 class="text-primary">Observações</h6>
+                        <p>{{ despesa_data.observacoes }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Pergunta sobre fatura -->
+            <div class="card mt-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-question-circle"></i> Existe Fatura para esta Despesa?
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="form-group">
+                            <p class="mb-3">
+                                <strong>Pergunta importante:</strong> Esta despesa extra possui uma fatura emitida pela transportadora para cobrança?
+                            </p>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card border-success">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-success">
+                                                <i class="fas fa-check-circle fa-2x mb-2"></i><br>
+                                                SIM, existe fatura
+                                            </h6>
+                                            <p class="small text-muted">
+                                                A transportadora emitiu uma fatura (CTe, NF Serviço, Recibo) para esta despesa
+                                            </p>
+                                            <button type="submit" name="tem_fatura" value="sim" class="btn btn-success btn-lg">
+                                                <i class="fas fa-arrow-right"></i> Selecionar Fatura
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card border-info">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-info">
+                                                <i class="fas fa-times-circle fa-2x mb-2"></i><br>
+                                                NÃO existe fatura
+                                            </h6>
+                                            <p class="small text-muted">
+                                                A despesa será registrada sem vinculação a fatura (cobrança futura)
+                                            </p>
+                                            <button type="submit" name="tem_fatura" value="nao" class="btn btn-info btn-lg">
+                                                <i class="fas fa-save"></i> Salvar sem Fatura
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Faturas disponíveis (preview) -->
+            {% if faturas_disponiveis %}
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-file-invoice"></i> Faturas Disponíveis da Transportadora
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        Faturas pendentes de {{ frete.transportadora.razao_social }} disponíveis para vinculação:
+                    </p>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Número</th>
+                                    <th>Data Emissão</th>
+                                    <th>Valor Total</th>
+                                    <th>Vencimento</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for fatura in faturas_disponiveis[:3] %}
+                                <tr>
+                                    <td>{{ fatura.numero_fatura }}</td>
+                                    <td>{{ fatura.data_emissao.strftime('%d/%m/%Y') if fatura.data_emissao else 'N/A' }}</td>
+                                    <td>R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}</td>
+                                    <td>{{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                                {% if faturas_disponiveis|length > 3 %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">
+                                        ... e mais {{ faturas_disponiveis|length - 3 }} fatura(s)
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Informações do frete -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-truck"></i> Dados do Frete
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Frete:</strong> #{{ frete.id }}</p>
+                    <p><strong>Cliente:</strong> {{ frete.nome_cliente[:30] }}{% if frete.nome_cliente|length > 30 %}...{% endif %}</p>
+                    <p><strong>CNPJ:</strong> {{ frete.cnpj_cliente }}</p>
+                    <p><strong>Transportadora:</strong> {{ frete.transportadora.razao_social[:25] }}{% if frete.transportadora.razao_social|length > 25 %}...{% endif %}</p>
+                    <p><strong>Embarque:</strong> 
+                        <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque.id) }}">#{{ frete.embarque.numero }}</a>
+                    </p>
+                    <p><strong>Valor Cotado:</strong> R$ {{ "%.2f"|format(frete.valor_cotado) }}</p>
+                    <p><strong>Status:</strong> 
+                        <span class="badge 
+                            {% if frete.status == 'APROVADO' %}badge-success
+                            {% elif frete.status == 'EM_TRATATIVA' %}badge-warning
+                            {% elif frete.status == 'REJEITADO' %}badge-danger
+                            {% elif frete.status == 'PAGO' %}badge-primary
+                            {% elif frete.status == 'CANCELADO' %}badge-secondary
+                            {% else %}badge-info{% endif %}">
+                            {{ frete.status }}
+                        </span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Explicação das opções -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Diferenças entre as Opções
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <small>
+                        <div class="mb-3">
+                            <strong class="text-success">COM Fatura:</strong><br>
+                            • Permite ajustar tipo de documento<br>
+                            • Permite ajustar valor da cobrança<br>
+                            • Vincula à fatura para controle<br>
+                            • Vai para processo de cobrança
+                        </div>
+                        
+                        <div class="mb-3">
+                            <strong class="text-info">SEM Fatura:</strong><br>
+                            • Registra apenas o fato gerador<br>
+                            • Mantém dados originais<br>
+                            • Não vai para cobrança ainda<br>
+                            • Pode ser vinculada depois
+                        </div>
+                        
+                        <div class="alert alert-warning small">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Importante:</strong> Escolha "COM fatura" apenas se a transportadora já emitiu documento para esta despesa.
+                        </div>
+                    </small>
+                </div>
+            </div>
+
+            <!-- Botões de ação -->
+            <div class="card mt-3">
+                <div class="card-body text-center">
+                    <a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-arrow-left"></i> Recomeçar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

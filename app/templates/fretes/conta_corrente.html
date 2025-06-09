@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Conta Corrente - {{ transportadora.razao_social }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-exchange-alt"></i> Conta Corrente - {{ transportadora.razao_social }}
+            </h1>
+        </div>
+    </div>
+
+    <!-- Resumo dos saldos -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">R$ {{ "%.2f"|format(total_creditos) }}</h4>
+                            <span class="small">Total Créditos</span>
+                            <br>
+                            <span class="small">(dívida da transportadora)</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-minus-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">R$ {{ "%.2f"|format(total_debitos) }}</h4>
+                            <span class="small">Total Débitos</span>
+                            <br>
+                            <span class="small">(favor da transportadora)</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-plus-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card bg-{% if saldo_atual > 0 %}success{% elif saldo_atual < 0 %}danger{% else %}secondary{% endif %} text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">R$ {{ "%.2f"|format(saldo_atual|abs) }}</h4>
+                            <span class="small">Saldo Atual</span>
+                            <br>
+                            <span class="small">{% if saldo_atual > 0 %}(transportadora tem a receber){% elif saldo_atual < 0 %}(transportadora deve){% else %}(sem saldo){% endif %}</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-balance-scale fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <a href="{{ url_for('fretes.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Lista de movimentações -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-list"></i> Movimentações
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if movimentacoes %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Frete</th>
+                                        <th>Tipo</th>
+                                        <th>Descrição</th>
+                                        <th>Valor</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for mov in movimentacoes %}
+                                    <tr>
+                                        <td>{{ mov.criado_em.strftime('%d/%m/%Y %H:%M') if mov.criado_em else '-' }}</td>
+                                        <td>
+                                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=mov.frete_id) }}">
+                                                Frete #{{ mov.frete_id }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            {% if mov.tipo_movimentacao %}
+                                                <span class="badge {% if mov.tipo_movimentacao == 'CREDITO' %}bg-danger text-white{% elif mov.tipo_movimentacao == 'DEBITO' %}bg-success text-white{% else %}bg-info text-white{% endif %}">
+                                                    {{ mov.tipo_movimentacao or '-' }}
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-secondary text-white">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if mov.frete and mov.frete.numero_cte %}
+                                                CTe {{ mov.frete.numero_cte }}
+                                                {% if mov.frete.fatura_frete and mov.frete.fatura_frete.numero_fatura %}
+                                                    - Fatura {{ mov.frete.fatura_frete.numero_fatura }}
+                                                {% endif %}
+                                            {% else %}
+                                                Frete {{ mov.frete_id }}
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if mov.tipo_movimentacao == 'CREDITO' %}
+                                                <span class="text-success">+R$ {{ "%.2f"|format(mov.valor_credito) }}</span>
+                                            {% elif mov.tipo_movimentacao == 'DEBITO' %}
+                                                <span class="text-danger">-R$ {{ "%.2f"|format(mov.valor_debito) }}</span>
+                                            {% else %}
+                                                R$ {{ "%.2f"|format(mov.valor_diferenca) }}
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if mov.status %}
+                                                <span class="badge {% if mov.status == 'ATIVO' %}bg-warning text-dark{% elif mov.status == 'COMPENSADO' %}bg-success text-white{% else %}bg-secondary text-white{% endif %}">
+                                                    {{ mov.status }}
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-secondary text-white">-</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">Nenhuma movimentação encontrada.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

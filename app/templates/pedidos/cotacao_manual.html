@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Cotação Manual</h1>
+    <a href="{{ url_for('pedidos.lista_pedidos') }}" class="btn btn-outline-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+  </div>
+  <hr>
+
+  {# 1) Cabeçalho: Pedidos Selecionados #}
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+      <span><i class="fas fa-edit"></i> Pedidos para Cotação Manual</span>
+      <span class="badge bg-dark text-light">Total: {{ pedidos|length }} pedido(s)</span>
+    </div>
+    <div class="card-body p-2">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-2 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Pedido</th>
+              <th>Cliente</th>
+              <th>Cidade</th>
+              <th>UF</th>
+              <th>Rota</th>
+              <th>Sub-Rota</th>
+              <th class="text-end">Valor</th>
+              <th class="text-end">Pallet</th>
+              <th class="text-end">Peso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ped in pedidos %}
+            <tr>
+              <td>{{ ped.num_pedido }}</td>
+              <td>{{ ped.raz_social_red }}</td>
+              <td>{{ ped.cidade_normalizada or ped.nome_cidade }}</td>
+              <td>{{ ped.uf_normalizada or ped.cod_uf }}</td>
+              <td>{{ ped.rota}}</td>
+              <td>{{ped.sub_rota}}</td>
+              <td class="text-end">R$ {{ "%.0f"|format(ped.valor_saldo_total or 0) }}</td>
+              <td class="text-end">{{ "%.1f"|format(ped.pallet_total or 0) }}</td>
+              <td class="text-end">{{ "%.0f"|format(ped.peso_total or 0) }} kg</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot class="table-secondary fw-bold">
+            <tr>
+              <td colspan="6">Totais:</td>
+              <td class="text-end">R$ {{ "%.0f"|format(pedidos|sum(attribute='valor_saldo_total') or 0) }}</td>
+              <td class="text-end">{{ "%.1f"|format(pedidos|sum(attribute='pallet_total') or 0) }}</td>
+              <td class="text-end">{{ "%.0f"|format(pedidos|sum(attribute='peso_total') or 0) }} kg</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# 2) Formulário de Cotação Manual #}
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0">
+        <i class="fas fa-cogs"></i> Configurar Cotação Manual
+      </h5>
+    </div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('pedidos.processar_cotacao_manual') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        
+        <div class="row">
+          {# Seleção da Transportadora #}
+          <div class="col-md-6">
+            <div class="mb-3">
+              <label for="transportadora_id" class="form-label">
+                <i class="fas fa-truck"></i> Transportadora <span class="text-danger">*</span>
+              </label>
+              <select class="form-select" id="transportadora_id" name="transportadora_id" required>
+                <option value="">Selecione uma transportadora...</option>
+                {% for transportadora in transportadoras %}
+                  <option value="{{ transportadora.id }}">{{ transportadora.razao_social }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          {# Seleção da Modalidade (Veículos) #}
+          <div class="col-md-6">
+            <div class="mb-3">
+              <label for="modalidade" class="form-label">
+                <i class="fas fa-car"></i> Modalidade <span class="text-danger">*</span>
+              </label>
+              <select class="form-select" id="modalidade" name="modalidade" required>
+                <option value="">Selecione uma modalidade...</option>
+                <option value="FRETE PESO">FRETE PESO</option>
+                <option value="FRETE VALOR">FRETE VALOR</option>
+                {% for veiculo in veiculos %}
+                  <option value="{{ veiculo.nome }}">{{ veiculo.nome }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          {# Valor do Frete #}
+          <div class="col-md-6">
+            <div class="mb-3">
+              <label for="valor_frete" class="form-label">
+                <i class="fas fa-dollar-sign"></i> Valor do Frete <span class="text-danger">*</span>
+              </label>
+              <div class="input-group">
+                <span class="input-group-text">R$</span>
+                <input type="text" class="form-control" id="valor_frete" name="valor_frete" 
+                       placeholder="0,00" required 
+                       pattern="[0-9]+([,\.][0-9]{1,2})?" 
+                       title="Digite um valor válido (ex: 1500,00)">
+              </div>
+              <div class="form-text">
+                Este valor será usado como "frete_minimo_valor" nas etapas posteriores
+              </div>
+            </div>
+          </div>
+
+          {# Informações Calculadas #}
+          <div class="col-md-6">
+            <div class="mb-3">
+              <label class="form-label">
+                <i class="fas fa-calculator"></i> Informações Calculadas
+              </label>
+              <div class="alert alert-info">
+                <div class="row">
+                  <div class="col-6">
+                    <strong>Peso Total:</strong><br>
+                    <span class="fs-5">{{ "%.0f"|format(pedidos|sum(attribute='peso_total') or 0) }} kg</span>
+                  </div>
+                  <div class="col-6">
+                    <strong>Valor/kg:</strong><br>
+                    <span class="fs-5" id="valor_por_kg">-</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# Botões de Ação #}
+        <div class="row">
+          <div class="col-12">
+            <div class="d-flex justify-content-end gap-2">
+              <a href="{{ url_for('pedidos.lista_pedidos') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-times"></i> Cancelar
+              </a>
+              <button type="submit" class="btn btn-success">
+                <i class="fas fa-check"></i> Processar Cotação Manual
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const valorFreteInput = document.getElementById('valor_frete');
+    const valorPorKgSpan = document.getElementById('valor_por_kg');
+    const pesoTotal = {{ pedidos|sum(attribute='peso_total') or 0 }};
+
+    // Função para calcular valor por kg
+    function calcularValorPorKg() {
+        const valorFrete = parseFloat(valorFreteInput.value.replace(',', '.')) || 0;
+        
+        if (valorFrete > 0 && pesoTotal > 0) {
+            const valorPorKg = valorFrete / pesoTotal;
+            valorPorKgSpan.textContent = `R$ ${valorPorKg.toFixed(3)}/kg`;
+        } else {
+            valorPorKgSpan.textContent = '-';
+        }
+    }
+
+    // Atualiza valor/kg quando o valor do frete é alterado
+    valorFreteInput.addEventListener('input', calcularValorPorKg);
+    valorFreteInput.addEventListener('change', calcularValorPorKg);
+
+    // Formatação do input de valor
+    valorFreteInput.addEventListener('blur', function() {
+        let valor = this.value.replace(',', '.');
+        if (valor && !isNaN(parseFloat(valor))) {
+            this.value = parseFloat(valor).toFixed(2).replace('.', ',');
+            calcularValorPorKg();
+        }
+    });
+
+    // Validação do formulário
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const transportadora = document.getElementById('transportadora_id').value;
+        const modalidade = document.getElementById('modalidade').value;
+        const valorFrete = document.getElementById('valor_frete').value;
+
+        if (!transportadora || !modalidade || !valorFrete) {
+            e.preventDefault();
+            alert('Por favor, preencha todos os campos obrigatórios.');
+            return false;
+        }
+
+        const valor = parseFloat(valorFrete.replace(',', '.'));
+        if (isNaN(valor) || valor <= 0) {
+            e.preventDefault();
+            alert('Por favor, insira um valor de frete válido e maior que zero.');
+            return false;
+        }
+
+        // Confirmação final
+        const confirmacao = confirm(`Confirma a cotação manual?\n\nTransportadora: ${document.getElementById('transportadora_id').selectedOptions[0].text}\nModalidade: ${modalidade}\nValor: R$ ${valor.toFixed(2).replace('.', ',')}\nPedidos: {{ pedidos|length }}`);
+        
+        if (!confirmacao) {
+            e.preventDefault();
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Importar Contatos de Agendamento</h2>
+  <form method="POST" enctype="multipart/form-data">
+    <div class="mb-3">
+      <label for="arquivo" class="form-label">Selecione o arquivo Excel (.xlsx)</label>
+      <input class="form-control" type="file" name="arquivo" accept=".xlsx" required>
+    </div>
+    <button type="submit" class="btn btn-primary">Importar</button>
+  </form>
+</div>
+{% endblock %}

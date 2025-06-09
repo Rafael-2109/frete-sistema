@@ -1,0 +1,522 @@
+{% extends "base.html" %}
+
+{% block title %}Frete #{{ frete.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-file-invoice"></i> Frete #{{ frete.id }}
+                {% if frete.status == 'PENDENTE' %}
+                    <span class="badge badge-warning ml-2" style="color: #212529; background-color: #ffc107;">{{ frete.status }}</span>
+                {% elif frete.status == 'EM_TRATATIVA' %}
+                    <span class="badge badge-info ml-2" style="color: white; background-color: #17a2b8;">EM TRATATIVA</span>
+                {% elif frete.status == 'APROVADO' %}
+                    <span class="badge badge-success ml-2" style="color: white; background-color: #28a745;">{{ frete.status }}</span>
+                {% elif frete.status == 'REJEITADO' %}
+                    <span class="badge badge-danger ml-2" style="color: white; background-color: #dc3545;">{{ frete.status }}</span>
+                {% elif frete.status == 'PAGO' %}
+                    <span class="badge badge-primary ml-2" style="color: white; background-color: #007bff;">{{ frete.status }}</span>
+                {% elif frete.status == 'LANCADO' %}
+                    <span class="badge badge-dark ml-2" style="color: white; background-color: #343a40;">{{ frete.status }}</span>
+                {% else %}
+                    <span class="badge badge-secondary ml-2" style="color: white; background-color: #6c757d;">{{ frete.status }}</span>
+                {% endif %}
+            </h1>
+        </div>
+    </div>
+
+    <!-- Ações -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <a href="{{ url_for('fretes.listar_fretes') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar à Lista
+            </a>
+            
+            {% if not frete.fatura_frete or frete.fatura_frete.status_conferencia != 'CONFERIDO' %}
+                <a href="{{ url_for('fretes.editar_frete', frete_id=frete.id) }}" class="btn btn-primary">
+                    <i class="fas fa-edit"></i> Editar Frete
+                </a>
+            {% else %}
+                <button class="btn btn-primary" disabled title="Frete bloqueado - fatura conferida">
+                    <i class="fas fa-lock"></i> Frete Bloqueado
+                </button>
+            {% endif %}
+            
+            <div class="btn-group">
+                <a href="{{ url_for('fretes.nova_despesa_extra', frete_id=frete.id) }}" class="btn btn-warning">
+                    <i class="fas fa-plus"></i> Adicionar Despesa Extra
+                </a>
+                <button type="button" class="btn btn-warning dropdown-toggle dropdown-toggle-split" data-toggle="dropdown">
+                    <span class="sr-only">Toggle Dropdown</span>
+                </button>
+                <div class="dropdown-menu">
+                    <a class="dropdown-item" href="{{ url_for('fretes.nova_despesa_extra', frete_id=frete.id) }}">
+                        <i class="fas fa-plus"></i> Adicionar (Fluxo Direto)
+                    </a>
+                    <a class="dropdown-item" href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}">
+                        <i class="fas fa-search"></i> Buscar por NF (Fluxo Completo)
+                    </a>
+                </div>
+            </div>
+            
+            <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}" class="btn btn-info">
+                <i class="fas fa-truck"></i> Ver Embarque
+            </a>
+            
+            {% if not frete.fatura_frete or frete.fatura_frete.status_conferencia != 'CONFERIDO' %}
+                <!-- Botão Excluir CTe/Frete -->
+                <form method="POST" action="{{ url_for('fretes.excluir_frete', frete_id=frete.id) }}" 
+                      style="display: inline-block;"
+                      onsubmit="return confirm('ATENÇÃO: Esta ação irá excluir PERMANENTEMENTE este CTe/Frete e todas as suas movimentações de conta corrente. Tem certeza que deseja continuar?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Excluir CTe
+                    </button>
+                </form>
+            {% else %}
+                <button class="btn btn-danger" disabled title="Não é possível excluir CTe de fatura conferida">
+                    <i class="fas fa-lock"></i> CTe Protegido
+                </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Dados principais do frete -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Dados do Frete
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-building"></i> Cliente</h6>
+                            <p><strong>CNPJ:</strong> {{ frete.cnpj_cliente }}</p>
+                            <p><strong>Razão Social:</strong> {{ frete.nome_cliente }}</p>
+                            <p><strong>UF/Cidade Destino:</strong> {{ frete.uf_destino }}/{{ frete.cidade_destino }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-truck"></i> Transporte</h6>
+                            <p><strong>Transportadora:</strong> {{ frete.transportadora.razao_social }}</p>
+                            <p><strong>Embarque:</strong> 
+                                <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}">
+                                    #{{ frete.embarque.numero }}
+                                </a>
+                            </p>
+                            <p><strong>Tipo de Carga:</strong> 
+                                {% if frete.tipo_carga == 'DIRETA' %}
+                                    <span class="badge badge-info" style="color: white; background-color: #17a2b8;">{{ frete.tipo_carga }}</span>
+                                {% else %}
+                                    <span class="badge badge-warning" style="color: #212529; background-color: #ffc107;">{{ frete.tipo_carga }}</span>
+                                {% endif %}
+                            </p>
+                            <p><strong>Modalidade:</strong> {{ frete.modalidade }}</p>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-weight"></i> Totais das NFs</h6>
+                            <p><strong>Peso Total:</strong> {{ "%.2f"|format(frete.peso_total) }} kg</p>
+                            <p><strong>Valor Total:</strong> R$ {{ "%.2f"|format(frete.valor_total_nfs) }}</p>
+                            <p><strong>Quantidade de NFs:</strong> {{ frete.quantidade_nfs }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-file-alt"></i> CTe e Fatura</h6>
+                            {% if frete.numero_cte %}
+                                <p><strong>Número CTe:</strong> {{ frete.numero_cte }}</p>
+                                <p><strong>Data Emissão:</strong> {{ frete.data_emissao_cte.strftime('%d/%m/%Y') if frete.data_emissao_cte else 'N/A' }}</p>
+                                <p><strong>Vencimento:</strong> {{ frete.vencimento.strftime('%d/%m/%Y') if frete.vencimento else 'N/A' }}</p>
+                            {% else %}
+                                <p class="text-muted">CTe não lançado</p>
+                            {% endif %}
+                            
+                            {% if frete.fatura_frete %}
+                                <p><strong>Fatura:</strong> 
+                                    <a href="{{ url_for('fretes.listar_faturas') }}" title="Ver todas as faturas">
+                                        {{ frete.fatura_frete.numero_fatura }}
+                                    </a>
+                                </p>
+                                <p><strong>Valor Fatura:</strong> R$ {{ "%.2f"|format(frete.fatura_frete.valor_total_fatura) }}</p>
+                            {% else %}
+                                <p class="text-muted">Não vinculado a fatura</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h6><i class="fas fa-list"></i> Notas Fiscais Incluídas</h6>
+                    <div class="bg-light p-3 rounded">
+                        {% if frete.numeros_nfs %}
+                            {% set nfs_list = frete.numeros_nfs.split(',') %}
+                            {% for nf in nfs_list %}
+                                {% if nf.strip() %}
+                                    <span class="badge badge-primary mr-1 mb-1" style="color: white; background-color: #007bff;">{{ nf.strip() }}</span>
+                                {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            <span class="text-muted">Nenhuma nota fiscal informada</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dados da tabela utilizada -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-table"></i> Tabela de Frete Utilizada
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Nome da Tabela:</strong> {{ frete.tabela_nome_tabela or 'N/A' }}</p>
+                            <p><strong>Valor por Kg:</strong> R$ {{ "%.4f"|format(frete.tabela_valor_kg) if frete.tabela_valor_kg else 'N/A' }}</p>
+                            <p><strong>Percentual Valor:</strong> {{ "%.2f"|format(frete.tabela_percentual_valor) if frete.tabela_percentual_valor else 'N/A' }}%</p>
+                            <p><strong>Frete Mínimo Peso:</strong> R$ {{ "%.2f"|format(frete.tabela_frete_minimo_peso) if frete.tabela_frete_minimo_peso else 'N/A' }}</p>
+                            <p><strong>Frete Mínimo Valor:</strong> R$ {{ "%.2f"|format(frete.tabela_frete_minimo_valor) if frete.tabela_frete_minimo_valor else 'N/A' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>GRIS:</strong> {{ "%.2f"|format(frete.tabela_percentual_gris) if frete.tabela_percentual_gris else 'N/A' }}%</p>
+                            <p><strong>ADV:</strong> {{ "%.2f"|format(frete.tabela_percentual_adv) if frete.tabela_percentual_adv else 'N/A' }}%</p>
+                            <p><strong>RCA:</strong> {{ "%.2f"|format(frete.tabela_percentual_rca) if frete.tabela_percentual_rca else 'N/A' }}%</p>
+                            <p><strong>Pedágio/100kg:</strong> R$ {{ "%.2f"|format(frete.tabela_pedagio_por_100kg) if frete.tabela_pedagio_por_100kg else 'N/A' }}</p>
+                            <p><strong>Valor Despacho:</strong> R$ {{ "%.2f"|format(frete.tabela_valor_despacho) if frete.tabela_valor_despacho else 'N/A' }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Valores do frete -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-dollar-sign"></i> Valores do Frete
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="font-weight-bold text-primary">Valor Cotado</label>
+                        <div class="h4 text-primary">R$ {{ "%.2f"|format(frete.valor_cotado) }}</div>
+                        <small class="text-muted">Calculado pela tabela</small>
+                    </div>
+
+                    {% if frete.valor_cte %}
+                    <div class="mb-3">
+                        <label class="font-weight-bold text-info">Valor CTe</label>
+                        <div class="h4 text-info">R$ {{ "%.2f"|format(frete.valor_cte) }}</div>
+                        <small class="text-muted">Cobrado pela transportadora</small>
+                        {% if frete.valor_cotado %}
+                            {% set diferenca_cte = frete.diferenca_cotado_cte() %}
+                            {% if diferenca_cte != 0 %}
+                                <div class="mt-1">
+                                    {% if diferenca_cte > 0 %}
+                                        <span class="badge badge-danger" style="color: white; background-color: #dc3545;">+R$ {{ "%.2f"|format(diferenca_cte) }}</span>
+                                    {% else %}
+                                        <span class="badge badge-success" style="color: white; background-color: #28a745;">R$ {{ "%.2f"|format(diferenca_cte) }}</span>
+                                    {% endif %}
+                                    <small class="text-muted d-block">
+                                        {% if diferenca_cte > 0 %}Acima{% else %}Abaixo{% endif %} do cotado
+                                    </small>
+                                </div>
+                            {% endif %}
+                            {% set classificacao_cte = frete.classificacao_valor_cte_cotado() %}
+                            {% if classificacao_cte %}
+                                <div class="mt-1">
+                                    <small class="badge badge-info" style="color: white; background-color: #17a2b8;">{{ classificacao_cte }}</small>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if frete.valor_considerado %}
+                    <div class="mb-3">
+                        <label class="font-weight-bold text-success">Valor Considerado</label>
+                        <div class="h4 text-success">R$ {{ "%.2f"|format(frete.valor_considerado) }}</div>
+                        <small class="text-muted">Valor válido definido</small>
+                    </div>
+                    {% endif %}
+
+                    {% if frete.valor_pago %}
+                    <div class="mb-3">
+                        <label class="font-weight-bold text-dark">Valor Pago</label>
+                        <div class="h4 text-dark">R$ {{ "%.2f"|format(frete.valor_pago) }}</div>
+                        <small class="text-muted">Valor efetivamente pago</small>
+                        {% if frete.valor_considerado %}
+                            {% set diferenca_pago = frete.diferenca_considerado_pago() %}
+                            {% if diferenca_pago != 0 %}
+                                <div class="mt-1">
+                                    {% if diferenca_pago > 0 %}
+                                        <span class="badge badge-warning" style="color: #212529; background-color: #ffc107;">+R$ {{ "%.2f"|format(diferenca_pago) }}</span>
+                                    {% else %}
+                                        <span class="badge badge-info" style="color: white; background-color: #17a2b8;">R$ {{ "%.2f"|format(diferenca_pago) }}</span>
+                                    {% endif %}
+                                    <small class="text-muted d-block">
+                                        Diferença para conta corrente
+                                    </small>
+                                </div>
+                            {% endif %}
+                            {% set classificacao_pago = frete.classificacao_valor_pago_considerado() %}
+                            {% if classificacao_pago %}
+                                <div class="mt-1">
+                                    {% if 'abaixo' in classificacao_pago %}
+                                        <small class="badge badge-success" style="color: white; background-color: #28a745;">{{ classificacao_pago }}</small>
+                                    {% elif 'deve' in classificacao_pago %}
+                                        <small class="badge badge-warning" style="color: #212529; background-color: #ffc107;">{{ classificacao_pago }}</small>
+                                    {% else %}
+                                        <small class="badge badge-secondary" style="color: white; background-color: #6c757d;">{{ classificacao_pago }}</small>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if frete.desconsiderar_diferenca %}
+                    <div class="alert alert-warning">
+                        <small><i class="fas fa-exclamation-triangle"></i> Diferença desconsiderada</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Status e aprovação -->
+            {% if frete.requer_aprovacao or (frete.aprovacao and frete.aprovacao|length > 0) %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-check-circle"></i> Aprovação
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if frete.aprovacao and frete.aprovacao|length > 0 %}
+                        {% set aprovacao = frete.aprovacao[0] %}
+                        <p><strong>Status:</strong> 
+                            {% if aprovacao.status == 'PENDENTE' %}
+                                <span class="badge badge-warning" style="color: #212529; background-color: #ffc107;">{{ aprovacao.status }}</span>
+                            {% elif aprovacao.status == 'APROVADO' %}
+                                <span class="badge badge-success" style="color: white; background-color: #28a745;">{{ aprovacao.status }}</span>
+                            {% else %}
+                                <span class="badge badge-danger" style="color: white; background-color: #dc3545;">{{ aprovacao.status }}</span>
+                            {% endif %}
+                        </p>
+                        <p><strong>Solicitado por:</strong> {{ aprovacao.solicitado_por }}</p>
+                        <p><strong>Em:</strong> {{ aprovacao.solicitado_em.strftime('%d/%m/%Y %H:%M') }}</p>
+                        {% if aprovacao.motivo_solicitacao %}
+                            <p><strong>Motivo:</strong> {{ aprovacao.motivo_solicitacao }}</p>
+                        {% endif %}
+                        {% if aprovacao.aprovador %}
+                            <p><strong>Aprovador:</strong> {{ aprovacao.aprovador }}</p>
+                            <p><strong>Aprovado em:</strong> {{ aprovacao.aprovado_em.strftime('%d/%m/%Y %H:%M') if aprovacao.aprovado_em else 'N/A' }}</p>
+                        {% endif %}
+                        {% if aprovacao.observacoes_aprovacao %}
+                            <p><strong>Observações:</strong> {{ aprovacao.observacoes_aprovacao }}</p>
+                        {% endif %}
+                    {% elif frete.requer_aprovacao %}
+                        <div class="alert alert-warning">
+                            <small>Este frete requer aprovação</small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Despesas extras -->
+    {% if despesas_extras %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-circle"></i> Despesas Extras
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Setor Responsável</th>
+                                    <th>Motivo</th>
+                                    <th>Documento</th>
+                                    <th>Número</th>
+                                    <th>Valor</th>
+                                    <th>Vencimento</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for despesa in despesas_extras %}
+                                <tr>
+                                    <td>{{ despesa.tipo_despesa }}</td>
+                                    <td>{{ despesa.setor_responsavel }}</td>
+                                    <td>{{ despesa.motivo_despesa }}</td>
+                                    <td>{{ despesa.tipo_documento }}</td>
+                                    <td>
+                                        {% if despesa.numero_documento == 'PENDENTE_FATURA' %}
+                                            <span class="badge badge-warning text-dark">
+                                                <i class="fas fa-clock"></i>
+                                                PENDENTE
+                                            </span>
+                                        {% else %}
+                                            {{ despesa.numero_documento }}
+                                        {% endif %}
+                                    </td>
+                                    <td>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</td>
+                                    <td>{{ despesa.vencimento_despesa.strftime('%d/%m/%Y') if despesa.vencimento_despesa else 'N/A' }}</td>
+                                    <td>
+                                        <div class="btn-group-vertical" role="group">
+                                            {% if frete.fatura_frete_id %}
+                                                <!-- ✅ Fatura vinculada: PERMITE editar documento -->
+                                                {% if despesa.numero_documento == 'PENDENTE_FATURA' %}
+                                                    <a href="{{ url_for('fretes.editar_documento_despesa', despesa_id=despesa.id) }}" 
+                                                       class="btn btn-sm btn-warning text-dark mb-1" 
+                                                       title="Preencher número do documento">
+                                                        <i class="fas fa-edit"></i>
+                                                        Preencher CTe
+                                                    </a>
+                                                {% else %}
+                                                    <a href="{{ url_for('fretes.editar_documento_despesa', despesa_id=despesa.id) }}" 
+                                                       class="btn btn-sm btn-outline-primary mb-1" 
+                                                       title="Editar número do documento">
+                                                        <i class="fas fa-edit"></i>
+                                                        Editar
+                                                    </a>
+                                                {% endif %}
+                                            {% else %}
+                                                <!-- ⚠️ Fatura NÃO vinculada: NÃO permite editar documento -->
+                                                <button class="btn btn-sm btn-secondary mb-1" 
+                                                        disabled 
+                                                        title="Vincule uma fatura primeiro para preencher o documento">
+                                                    <i class="fas fa-lock"></i>
+                                                    Fatura Requerida
+                                                </button>
+                                            {% endif %}
+                                            
+                                            <!-- Botão Excluir Despesa -->
+                                            {% if not frete.fatura_frete or frete.fatura_frete.status_conferencia != 'CONFERIDO' %}
+                                                <form method="POST" action="{{ url_for('fretes.excluir_despesa_extra', despesa_id=despesa.id) }}" 
+                                                      style="display: inline-block;"
+                                                      onsubmit="return confirm('Confirma a exclusão desta despesa extra {{ despesa.tipo_despesa }}?')">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir despesa extra">
+                                                        <i class="fas fa-trash"></i> Excluir
+                                                    </button>
+                                                </form>
+                                            {% else %}
+                                                <button class="btn btn-sm btn-outline-danger" disabled title="Não é possível excluir despesa de fatura conferida">
+                                                    <i class="fas fa-lock"></i> Protegida
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="font-weight-bold">
+                                    <td colspan="5">Total Despesas Extras:</td>
+                                    <td>R$ {{ "%.2f"|format(despesas_extras|sum(attribute='valor_despesa')) }}</td>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Movimentações da conta corrente -->
+    {% if movimentacoes_conta %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exchange-alt"></i> Movimentações da Conta Corrente
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Descrição</th>
+                                    <th>Valor</th>
+                                    <th>Status</th>
+                                    <th>Data</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for mov in movimentacoes_conta %}
+                                <tr>
+                                    <td>
+                                        {% if mov.tipo_movimentacao == 'CREDITO' %}
+                                            <span class="badge badge-success" style="color: white; background-color: #28a745;">{{ mov.tipo_movimentacao }}</span>
+                                        {% elif mov.tipo_movimentacao == 'DEBITO' %}
+                                            <span class="badge badge-danger" style="color: white; background-color: #dc3545;">{{ mov.tipo_movimentacao }}</span>
+                                        {% else %}
+                                            <span class="badge badge-info" style="color: white; background-color: #17a2b8;">{{ mov.tipo_movimentacao }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ mov.descricao }}</td>
+                                    <td>R$ {{ "%.2f"|format(mov.valor_diferenca) }}</td>
+                                    <td>
+                                        {% if mov.status == 'ATIVO' %}
+                                            <span class="badge badge-warning" style="color: #212529; background-color: #ffc107;">{{ mov.status }}</span>
+                                        {% elif mov.status == 'COMPENSADO' %}
+                                            <span class="badge badge-success" style="color: white; background-color: #28a745;">{{ mov.status }}</span>
+                                        {% else %}
+                                            <span class="badge badge-secondary" style="color: white; background-color: #6c757d;">{{ mov.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ mov.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Observações -->
+    {% if frete.observacoes_aprovacao %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-comment"></i> Observações
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {{ frete.observacoes_aprovacao }}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

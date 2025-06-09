@@ -1,0 +1,558 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<style>
+  /* ======================================================================== */
+  /* CONFIGURAÇÃO DO TAMANHO DAS COLUNAS DOS ITENS DO EMBARQUE               */
+  /* Ajuste os valores abaixo para alterar a largura das colunas             */
+  /* ======================================================================== */
+  .itens-embarque-table th:nth-child(1),  /* Cliente */
+  .itens-embarque-table td:nth-child(1) {
+    width: 20%;
+    min-width: 150px;
+  }
+  
+  .itens-embarque-table th:nth-child(2),  /* Pedido */
+  .itens-embarque-table td:nth-child(2) {
+    width: 8%;
+    min-width: 80px;
+  }
+  
+  .itens-embarque-table th:nth-child(3),  /* Nota Fiscal */
+  .itens-embarque-table td:nth-child(3) {
+    width: 10%;
+    min-width: 100px;
+  }
+  
+  .itens-embarque-table th:nth-child(4),  /* Protocolo */
+  .itens-embarque-table td:nth-child(4) {
+    width: 10%;
+    min-width: 100px;
+  }
+  
+  .itens-embarque-table th:nth-child(5),  /* Data Agenda */
+  .itens-embarque-table td:nth-child(5) {
+    width: 10%;
+    min-width: 90px;
+  }
+  
+  .itens-embarque-table th:nth-child(6),  /* Volumes */
+  .itens-embarque-table td:nth-child(6) {
+    width: 6%;
+    min-width: 70px;
+  }
+  
+  .itens-embarque-table th:nth-child(7),  /* UF */
+  .itens-embarque-table td:nth-child(7) {
+    width: 4%;
+    min-width: 50px;
+  }
+  
+  .itens-embarque-table th:nth-child(8),  /* Cidade */
+  .itens-embarque-table td:nth-child(8) {
+    width: 18%;
+    min-width: 120px;
+  }
+  
+  .itens-embarque-table th:nth-child(9),  /* Status */
+  .itens-embarque-table td:nth-child(9) {
+    width: 7%;
+    min-width: 70px;
+  }
+  
+  .itens-embarque-table th:nth-child(10), /* Ações */
+  .itens-embarque-table td:nth-child(10) {
+    width: 7%;
+    min-width: 70px;
+  }
+  
+  /* Configurações gerais da tabela */
+  .itens-embarque-table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  
+  .itens-embarque-table input,
+  .itens-embarque-table select {
+    width: 100%;
+    font-size: 12px;
+    padding: 4px 6px;
+  }
+  /* ======================================================================== */
+  
+  @media print {
+    body { font-size: 11px; }
+    .btn, .no-print, nav, .navbar { display: none !important; }
+    .card, .container { box-shadow: none; border: none; padding: 0; max-width: 100%; }
+    input, select, textarea { font-size: 11px !important; padding: 2px !important; }
+    h1, h2, h3, h4, h5, h6 { font-size: 14px; }
+    .item-form { page-break-inside: avoid; }
+  }
+</style>
+
+<div class="container my-4">
+  
+
+
+  <!-- Informações da Portaria (se houver) -->
+  {% if dados_portaria %}
+  <div class="card mb-4 border-info">
+    <div class="card-header bg-info text-white">
+      <h5 class="mb-0">
+        <i class="fas fa-truck"></i> Informações da Portaria
+      </h5>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-3">
+          <strong>Motorista:</strong><br>
+          <span class="text-primary">{{ dados_portaria.motorista_nome }}</span>
+        </div>
+        <div class="col-md-3">
+          <strong>Transportadora:</strong><br>
+          <span class="text-info">{{ embarque.transportadora.razao_social if embarque.transportadora else 'Não informada' }}</span>
+        </div>
+        <div class="col-md-2">
+          <strong>Veículo:</strong><br>
+          {{ dados_portaria.placa }} ({{ dados_portaria.tipo_veiculo }})
+        </div>
+        <div class="col-md-1">
+          <strong>Chegada:</strong><br>
+          {% if dados_portaria.data_chegada %}
+            {{ dados_portaria.data_chegada.strftime('%d/%m/%Y') }}<br>
+            <small class="text-muted">{{ dados_portaria.hora_chegada.strftime('%H:%M') if dados_portaria.hora_chegada else '-' }}</small>
+          {% else %}
+            <span class="text-muted">-</span>
+          {% endif %}
+        </div>
+        <div class="col-md-1">
+          <strong>Entrada:</strong><br>
+          {% if dados_portaria.data_entrada %}
+            {{ dados_portaria.data_entrada.strftime('%d/%m/%Y') }}<br>
+            <small class="text-muted">{{ dados_portaria.hora_entrada.strftime('%H:%M') if dados_portaria.hora_entrada else '-' }}</small>
+          {% else %}
+            <span class="text-muted">-</span>
+          {% endif %}
+        </div>
+        <div class="col-md-1">
+          <strong>Saída:</strong><br>
+          {% if dados_portaria.data_saida %}
+            {{ dados_portaria.data_saida.strftime('%d/%m/%Y') }}<br>
+            <small class="text-muted">{{ dados_portaria.hora_saida.strftime('%H:%M') if dados_portaria.hora_saida else '-' }}</small>
+          {% else %}
+            <span class="text-muted">-</span>
+          {% endif %}
+        </div>
+        <div class="col-md-1">
+          <strong>Status:</strong><br>
+          <span class="badge bg-{% if dados_portaria.status == 'SAIU' %}success{% elif dados_portaria.status == 'DENTRO' %}warning{% elif dados_portaria.status == 'AGUARDANDO' %}info{% else %}secondary{% endif %}">
+            {{ dados_portaria.status }}
+          </span>
+        </div>
+      </div>
+      <div class="row mt-3">
+        <div class="col-12">
+          <a href="{{ url_for('portaria.detalhes_veiculo', registro_id=dados_portaria.registro_id) }}" 
+             class="btn btn-outline-info btn-sm">
+            <i class="fas fa-clipboard-check"></i> Verificar Portaria
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Informações de Cancelamento (se cancelado) -->
+  {% if embarque.status == 'cancelado' %}
+  <div class="card mb-4 border-danger">
+    <div class="card-header bg-danger text-white">
+      <h5 class="mb-0">
+        <i class="fas fa-ban"></i> Embarque Cancelado
+      </h5>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-6">
+          <p><strong>Cancelado em:</strong> {{ embarque.cancelado_em.strftime('%d/%m/%Y às %H:%M') if embarque.cancelado_em else 'N/A' }}</p>
+          <p><strong>Cancelado por:</strong> {{ embarque.cancelado_por or 'N/A' }}</p>
+        </div>
+        <div class="col-md-6">
+          <p><strong>Motivo:</strong></p>
+          <div class="bg-light p-2 rounded">
+            <small>{{ embarque.motivo_cancelamento or 'Motivo não informado.' }}</small>
+          </div>
+        </div>
+      </div>
+      <div class="mt-2">
+        <a href="{{ url_for('embarques.motivo_cancelamento', id=embarque.id) }}" 
+           class="btn btn-outline-warning btn-sm">
+          <i class="fas fa-info-circle"></i> Ver Detalhes do Cancelamento
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h2 class="card-title mb-0">Embarque #{{ embarque.numero }}</h2>
+      <span class="badge bg-{% if embarque.status == 'ativo' %}success{% elif embarque.status == 'cancelado' %}danger{% else %}secondary{% endif %} fs-6">
+        {{ (embarque.status or 'draft').upper() }}
+      </span>
+    </div>
+
+    <div class="card-body">
+      <!-- Form principal para atualizar embarque -->
+  <form method="POST"{% if embarque.status == 'cancelado' %} style="pointer-events: none; opacity: 0.6;"{% endif %}>
+    {{ form.hidden_tag() }}
+
+    <!-- Cabeçalho -->
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label>{{ form.data_embarque.label }}</label>
+        {{ form.data_embarque(class="form-control") }}
+      </div>
+      <div class="col-md-8">
+        <label>{{ form.transportadora.label }}</label>
+        {{ form.transportadora(class="form-control") }}
+      </div>
+    </div>
+
+    <!-- Checkboxes e etc -->
+    <div class="row mb-2">
+      <div class="col">
+        <strong>Placa do Veículo:</strong>
+        {{ form.placa_veiculo(class="form-control d-inline-block w-auto") }}
+      </div>
+      <div class="col">
+        <strong>Paletizado:</strong>
+        {{ form.paletizado() }}
+      </div>
+      <div class="col">
+        <strong>Laudo Anexado:</strong>
+        {{ form.laudo_anexado() }}
+      </div>
+    </div>
+        <div class="row mb-2">
+          <div class="col">
+            <strong>Embalagem Aprovada:</strong>
+            {{ form.embalagem_aprovada() }}
+          </div>
+          <div class="col">
+            <strong>Transporte Aprovado:</strong>
+            {{ form.transporte_aprovado() }}
+          </div>
+          <div class="col">
+            <strong>Responsável pelo Carregamento:</strong>
+            {{ form.responsavel_carregamento(class="form-control d-inline-block w-auto") }}
+          </div>
+          <div class="col">
+            <strong>Horário:</strong>
+            {{ form.horario_carregamento(class="form-control d-inline-block w-auto") }}
+          </div>
+        </div>
+
+    <!-- Observacoes -->
+    <div class="mb-3">
+          <label class="form-label">{{ form.observacoes.label.text }}</label>
+      {{ form.observacoes(class="form-control") }}
+    </div>
+
+    <!-- FieldList de Itens -->
+    <h4>Itens do Embarque</h4>
+    </div>
+    <div class="card-body">
+      <!-- ============================================================ -->
+      <!-- TABELA DOS ITENS - Para ajustar larguras das colunas,       -->
+      <!-- edite a seção CSS no topo do arquivo (linhas 5-72)          -->
+      <!-- ============================================================ -->
+      <table class="table table-bordered table-sm itens-embarque-table">
+        <thead class="table-light">
+        <tr>
+          <th>Cliente</th>
+          <th>Pedido</th>
+          <th>Nota Fiscal</th>
+          <th>Protocolo</th>
+          <th>Data Agenda</th>
+          <th>Volumes</th>
+          <th>UF</th>
+          <th>Cidade</th>
+          <th>Status</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item_form in form.itens %}
+        <tr>
+          {{ item_form.id }}  <!-- ✅ CORREÇÃO CRÍTICA: Campo ID oculto OBRIGATÓRIO para identificar itens -->
+          <td>{{ item_form.cliente(class="form-control") }}</td>
+          <td>{{ item_form.pedido(class="form-control") }}</td>
+          <td>{{ item_form.nota_fiscal(class="form-control") }}</td>
+          <td>{{ item_form.protocolo_agendamento(class="form-control") }}</td>
+          <td>{{ item_form.data_agenda(class="form-control") }}</td>
+          <td>{{ item_form.volumes(class="form-control") }}</td>
+          <td>{{ item_form.uf_destino(class="form-control uf-select") }}</td>
+          <td>{{ item_form.cidade_destino(class="form-control city-select") }}</td>
+          <td>
+            {% if loop.index0 < embarque.itens|length %}
+              {% set item_embarque = embarque.itens[loop.index0] %}
+              {% if item_embarque.erro_validacao %}
+                {% if 'NF_DIVERGENTE' in item_embarque.erro_validacao %}
+                  <span class="badge bg-danger" title="{{ item_embarque.erro_validacao }}">
+                    <i class="fas fa-exclamation-triangle"></i> NF Divergente
+                  </span>
+                {% elif 'NF_PENDENTE_FATURAMENTO' in item_embarque.erro_validacao %}
+                  <span class="badge bg-info" title="{{ item_embarque.erro_validacao }}">
+                    <i class="fas fa-clock"></i> NF Pendente
+                  </span>
+                {% elif 'CNPJ_DIFERENTE' in item_embarque.erro_validacao %}
+                  <span class="badge bg-danger" title="{{ item_embarque.erro_validacao }}">
+                    <i class="fas fa-exclamation-triangle"></i> CNPJ Divergente
+                  </span>
+                {% else %}
+                  <span class="badge bg-warning" title="{{ item_embarque.erro_validacao }}">
+                    <i class="fas fa-exclamation-circle"></i> Erro
+                  </span>
+                {% endif %}
+              {% elif item_embarque.nota_fiscal %}
+                <span class="badge bg-success">
+                  <i class="fas fa-check"></i> OK
+                </span>
+              {% else %}
+                <span class="badge bg-secondary">
+                  <i class="fas fa-minus"></i> Sem NF
+                </span>
+              {% endif %}
+            {% else %}
+              <span class="badge bg-light text-dark">
+                <i class="fas fa-plus"></i> Novo
+              </span>
+            {% endif %}
+          </td>
+          <td class="no-print">
+            <!-- Botão excluir a linha (sem recarregar parcial) -->
+            <button type="submit"
+                    name="action"
+                    value="remove_line_{{ loop.index0 }}"
+                    class="btn btn-danger btn-sm">
+              Excluir
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="mb-3 no-print">
+      <!-- Botão para adicionar linha -->
+      <button type="submit" name="action" value="add_line" class="btn btn-secondary">
+        + Adicionar Linha
+      </button>
+    </div>
+
+    <!-- Motorista etc -->
+    <div class="mt-5 p-3 border rounded">
+      <h6 class="text-center fw-bold">CAMPO MOTORISTA</h6>
+      <p>
+        Eu,
+        {{ form.nome_motorista(class="form-control d-inline-block mx-1", style="width: 200px;") }},
+        CPF nº
+        {{ form.cpf_motorista(class="form-control d-inline-block mx-1", style="width: 160px;") }},
+        responsável pela retirada de
+        {{ form.qtd_pallets(class="form-control d-inline-block mx-1", style="width: 50px;") }} pallets PBR...
+      </p>
+    <p class="text-center fw-bold">
+      Estou ciente de minha responsabilidade por quaisquer danos ou extravios ocorridos durante o transporte.
+    </p>
+    <div class="row mt-4">
+      <div class="col-md-6 text-center">
+        <label>Assinatura:</label><br>
+        <input type="text" style="border: none; border-bottom: 1px solid #000; width: 80%;">
+      </div>
+      <div class="col-md-6 text-center">
+        <label>Data:</label><br>
+        <input type="text" style="border: none; border-bottom: 1px solid #000; width: 50%;">
+      </div>
+    </div>
+
+    <!-- Botão Final -->
+    <div class="mt-4 no-print">
+      {% if embarque.status != 'cancelado' %}
+      <button type="submit" name="action" value="save" class="btn btn-primary">
+        Salvar Embarque
+      </button>
+      {% else %}
+      <button type="button" class="btn btn-secondary" disabled>
+        <i class="fas fa-ban"></i> Embarque Cancelado - Edição Bloqueada
+      </button>
+      {% endif %}
+      <a href="{{ url_for('embarques.listar_embarques') }}" class="btn btn-light">
+        Voltar
+      </a>
+      <!-- Botão Imprimir -->
+      <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id) }}" 
+         class="btn btn-outline-secondary" target="_blank">
+        <i class="fas fa-print"></i> Imprimir
+      </a>
+      <!-- Botão Ver Dados da Tabela -->
+      <a href="{{ url_for('embarques.dados_tabela_embarque', id=embarque.id) }}" class="btn btn-info">
+        Ver Dados da Tabela
+      </a>
+      <!-- Botão Imprimir Completo -->
+      <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id) }}" 
+         class="btn btn-success" target="_blank">
+        <i class="fas fa-print"></i> Imprimir Completo
+      </a>
+      
+      <!-- Botão Corrigir NFs (aparece apenas se há erros) -->
+      {% set itens_com_erro_nf = [] %}
+      {% set itens_pendentes_nf = [] %}
+      {% for item in embarque.itens %}
+        {% if item.erro_validacao and 'NF_DIVERGENTE' in item.erro_validacao %}
+          {% set _ = itens_com_erro_nf.append(item) %}
+        {% elif item.erro_validacao and 'NF_PENDENTE_FATURAMENTO' in item.erro_validacao %}
+          {% set _ = itens_pendentes_nf.append(item) %}
+        {% endif %}
+      {% endfor %}
+      
+      {% if itens_com_erro_nf %}
+      <div class="alert alert-danger">
+        <i class="fas fa-exclamation-triangle"></i> 
+        <strong>{{ itens_com_erro_nf|length }} NF(s) divergente(s) detectada(s)!</strong><br>
+        As NFs que não pertencem ao cliente foram automaticamente removidas. 
+        Preencha as NFs corretas e salve novamente.
+      </div>
+      {% endif %}
+      
+      {% if itens_pendentes_nf %}
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> 
+        <strong>{{ itens_pendentes_nf|length }} NF(s) ainda não importada(s) no faturamento.</strong><br>
+        Estas NFs serão validadas automaticamente quando o faturamento for importado.
+      </div>
+      {% endif %}
+      
+      <!-- Botões de Separação (se houver itens com separacao_lote_id) -->
+      {% set lotes_separacao = embarque.itens | selectattr('separacao_lote_id') | map(attribute='separacao_lote_id') | unique | list %}
+      {% if lotes_separacao %}
+        <div class="btn-group" role="group">
+          <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown">
+            <i class="fas fa-boxes"></i> Separação
+          </button>
+          <ul class="dropdown-menu">
+            {% for lote_id in lotes_separacao %}
+              {% set item_com_lote = embarque.itens | selectattr('separacao_lote_id', 'equalto', lote_id) | first %}
+              {% if item_com_lote %}
+                <li><h6 class="dropdown-header">{{ item_com_lote.pedido }} - {{ item_com_lote.cliente }}</h6></li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('embarques.acessar_separacao', embarque_id=embarque.id, separacao_lote_id=lote_id) }}">
+                    <i class="fas fa-eye"></i> Acessar Dados
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('embarques.imprimir_separacao', embarque_id=embarque.id, separacao_lote_id=lote_id) }}" target="_blank">
+                    <i class="fas fa-print"></i> Imprimir
+                  </a>
+                </li>
+                {% if not loop.last %}<li><hr class="dropdown-divider"></li>{% endif %}
+              {% endif %}
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+      </div>
+    </form>
+    </div>
+
+      <div class="text-end no-print mt-3">
+        <!-- Área de verificação de CTe -->
+        <div id="area-verificacao-cte" class="alert alert-info d-none mb-3">
+          <h6><i class="fas fa-info-circle"></i> Verificação de CTe</h6>
+          <div id="resultado-verificacao"></div>
+        </div>
+
+        <!-- FORM SEPARADO para cancelar. 
+             *NÃO* use o <form hidden_tag>, pois ele submete todos os campos obrigatórios. 
+        -->
+        {% if embarque.status != 'cancelado' %}
+        <button type="button" class="btn btn-warning me-2" id="btn-verificar-cte" data-embarque-id="{{ embarque.id }}">
+          <i class="fas fa-search"></i> Verificar CTe
+        </button>
+        
+        <a href="{{ url_for('embarques.cancelar_embarque', id=embarque.id) }}" 
+           class="btn btn-danger" id="btn-cancelar" disabled>
+          <i class="fas fa-times"></i> Cancelar Embarque
+        </a>
+        {% else %}
+        <div class="alert alert-danger">
+          <i class="fas fa-ban"></i> Este embarque foi cancelado
+        </div>
+        {% endif %}
+      </div>
+
+      
+  </div>
+{% endblock %}
+{% block scripts %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+$(document).ready(function() {
+  // Ao mudar UF, buscar cidades e repopular
+  $(document).on('change', '.uf-select', function() {
+    var ufValue = $(this).val();
+    var $cidadeSelect = $(this).closest('tr').find('.city-select');
+    $cidadeSelect.empty().append('<option value="">Carregando...</option>');
+
+    $.getJSON('/localidades/ajax/cidades_por_uf/' + ufValue, function(data) {
+      $cidadeSelect.empty().append('<option value="">--Selecione--</option>');
+      $.each(data, function(i, city) {
+        $cidadeSelect.append('<option value="'+ city +'">'+ city +'</option>');
+      });
+    });
+  });
+
+  // Verificação de CTe
+  $('#btn-verificar-cte').click(function() {
+    var embarqueId = $(this).data('embarque-id');
+    var $btn = $(this);
+    var $area = $('#area-verificacao-cte');
+    var $resultado = $('#resultado-verificacao');
+    var $btnCancelar = $('#btn-cancelar');
+
+    $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Verificando...');
+
+    $.get('/fretes/verificar_cte_embarque/' + embarqueId)
+      .done(function(data) {
+        $area.removeClass('d-none alert-info alert-warning alert-danger').addClass('alert-info');
+        
+        if (data.tem_cte) {
+          $area.removeClass('alert-info').addClass('alert-danger');
+          var html = '<p><strong>' + data.mensagem + '</strong></p><ul class="mb-0">';
+          
+          for (var i = 0; i < data.fretes.length; i++) {
+            var frete = data.fretes[i];
+            html += '<li>Frete #' + frete.id + ' - ' + frete.nome_cliente + ' (' + frete.cnpj_cliente + ') - CTe: ' + frete.numero_cte + ' - Status: ' + frete.status + '</li>';
+          }
+          
+          html += '</ul><p class="mt-2 mb-0"><small><i class="fas fa-exclamation-triangle"></i> <strong>Não é possível cancelar este embarque.</strong></small></p>';
+          $resultado.html(html);
+          $btnCancelar.addClass('disabled').removeClass('btn-danger').addClass('btn-secondary').attr('href', '#');
+        } else {
+          $area.removeClass('alert-info').addClass('alert-success');
+          $resultado.html('<p class="mb-0"><i class="fas fa-check-circle"></i> ' + data.mensagem + '. <strong>Embarque pode ser cancelado.</strong></p>');
+          $btnCancelar.removeClass('disabled btn-secondary').addClass('btn-danger').attr('href', '/embarques/' + embarqueId + '/cancelar');
+        }
+      })
+      .fail(function() {
+        $area.removeClass('d-none alert-info').addClass('alert-warning');
+        $resultado.html('<p class="mb-0"><i class="fas fa-exclamation-triangle"></i> Erro ao verificar CTe. Tente novamente.</p>');
+      })
+      .always(function() {
+        $btn.prop('disabled', false).html('<i class="fas fa-search"></i> Verificar CTe');
+      });
+  });
+
+  // O cancelamento agora é feito através de uma página separada com formulário próprio
+});
+</script>
+{% endblock %}

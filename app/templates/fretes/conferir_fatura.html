@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+
+{% block title %}Conferir Fatura - {{ fatura.numero_fatura }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-check-double"></i> Conferir Fatura - {{ fatura.numero_fatura }}</h2>
+        <a href="{{ url_for('fretes.listar_faturas') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar às Faturas
+        </a>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.listar_faturas') }}">Faturas</a></li>
+            <li class="breadcrumb-item active">Conferir {{ fatura.numero_fatura }}</li>
+        </ol>
+    </nav>
+
+    <!-- Informações da Fatura -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-file-invoice"></i> Informações da Fatura</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Número:</strong><br>
+                    {{ fatura.numero_fatura }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Transportadora:</strong><br>
+                    {{ fatura.transportadora.razao_social if fatura.transportadora else 'N/A' }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Valor Fatura:</strong><br>
+                    <span class="h5 text-primary">R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Status:</strong><br>
+                    {% if fatura.status_conferencia == 'CONFERIDO' %}
+                        <span class="badge badge-success" style="color: white; background-color: #28a745;">CONFERIDO</span>
+                    {% else %}
+                        <span class="badge badge-warning" style="color: black; background-color: #ffc107;">PENDENTE</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Análise de Valores -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="fas fa-calculator"></i> Análise de Valores</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <h6>Valor da Fatura</h6>
+                    <h4 class="text-primary">R$ {{ "%.2f"|format(analise_valores.valor_fatura) }}</h4>
+                </div>
+                <div class="col-md-3">
+                    <h6>Total CTe</h6>
+                    <h4 class="text-secondary">R$ {{ "%.2f"|format(analise_valores.valor_total_cte) }}</h4>
+                </div>
+                <div class="col-md-3">
+                    <h6>Total Considerado</h6>
+                    <h4 class="text-warning">R$ {{ "%.2f"|format(analise_valores.valor_total_considerado) }}</h4>
+                </div>
+                <div class="col-md-3">
+                    <h6>Total Pago <small>(Prioridade)</small></h6>
+                    <h4 class="text-success">R$ {{ "%.2f"|format(analise_valores.valor_total_pago) }}</h4>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Diferença Fatura vs CTe:</h6>
+                    {% if analise_valores.fatura_dentro_tolerancia %}
+                        <span class="badge badge-success badge-lg" style="color: white; background-color: #28a745;">
+                            R$ {{ "%.2f"|format(analise_valores.diferenca_fatura_cte) }} (Dentro da tolerância ≤ R$ 1,00)
+                        </span>
+                    {% else %}
+                        <span class="badge badge-danger badge-lg" style="color: white; background-color: #dc3545;">
+                            R$ {{ "%.2f"|format(analise_valores.diferenca_fatura_cte) }} (Acima da tolerância > R$ 1,00)
+                        </span>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <strong style="color: black;">Diferença Considerado vs Pago:</strong><br>
+                    <span class="h5" style="color: black;">R$ {{ "%.2f"|format(analise_valores.diferenca_considerado_pago) }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status dos Documentos -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0"><i class="fas fa-list-check"></i> Status dos Documentos</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Número/Descrição</th>
+                            <th class="text-right">Valor CTe</th>
+                            <th class="text-right">Valor Considerado</th>
+                            <th class="text-right">Valor Pago</th>
+                            <th class="text-center">Status</th>
+                            <th>Cliente/Obs</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for doc in documentos_status %}
+                        <tr>
+                            <td>
+                                {% if doc.tipo == 'CTe' %}
+                                    <span class="badge badge-primary" style="color: white; background-color: #007bff;">CTe</span>
+                                {% else %}
+                                    <span class="badge badge-secondary" style="color: white; background-color: #6c757d;">Despesa</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ doc.numero }}</strong>
+                                {% if doc.tipo == 'Despesa' %}
+                                    <br><small class="text-muted">{{ doc.descricao }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">R$ {{ "%.2f"|format(doc.valor_cte) }}</td>
+                            <td class="text-right">R$ {{ "%.2f"|format(doc.valor_considerado) }}</td>
+                            <td class="text-right">
+                                <strong>R$ {{ "%.2f"|format(doc.valor_pago) }}</strong>
+                            </td>
+                            <td class="text-center">
+                                {% if doc.status == 'LANÇADO' %}
+                                    <span class="badge badge-success" style="color: white; background-color: #28a745;">LANÇADO</span>
+                                {% elif doc.status == 'APROVADO' %}
+                                    <span class="badge badge-success" style="color: white; background-color: #28a745;">APROVADO</span>
+                                {% else %}
+                                    <span class="badge badge-danger" style="color: white; background-color: #dc3545;">PENDENTE</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if doc.tipo == 'CTe' %}
+                                    {{ doc.cliente }}
+                                {% else %}
+                                    <small class="text-muted">Despesa Extra</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="bg-light">
+                        <tr>
+                            <th colspan="2">TOTAIS:</th>
+                            <th class="text-right">R$ {{ "%.2f"|format(analise_valores.valor_total_cte) }}</th>
+                            <th class="text-right">R$ {{ "%.2f"|format(analise_valores.valor_total_considerado) }}</th>
+                            <th class="text-right"><strong>R$ {{ "%.2f"|format(analise_valores.valor_total_pago) }}</strong></th>
+                            <th colspan="2"></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Validações -->
+    <div class="card mb-4">
+        <div class="card-header {% if pode_aprovar %}bg-success{% else %}bg-danger{% endif %} text-white">
+            <h5 class="mb-0"><i class="fas fa-shield-alt"></i> Validações para Aprovação</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>1. Status dos Documentos:</h6>
+                    {% if todos_aprovados %}
+                        <span class="badge badge-success" style="color: white; background-color: #28a745;">✅ Todos os documentos estão APROVADOS/LANÇADOS</span>
+                    {% else %}
+                        <span class="badge badge-danger" style="color: white; background-color: #dc3545;">❌ Há documentos PENDENTES</span>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <h6>2. Tolerância de Valores:</h6>
+                    {% if analise_valores.fatura_dentro_tolerancia %}
+                        <span class="badge badge-success" style="color: white; background-color: #28a745;">✅ Diferença dentro da tolerância (≤ R$ 1,00)</span>
+                    {% else %}
+                        <span class="badge badge-danger" style="color: white; background-color: #dc3545;">❌ Diferença acima da tolerância (> R$ 1,00)</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário de Aprovação -->
+    {% if pode_aprovar and fatura.status_conferencia != 'CONFERIDO' %}
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="fas fa-check-circle"></i> Aprovar Conferência da Fatura</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('fretes.aprovar_conferencia_fatura', fatura_id=fatura.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="valor_final">Valor Final da Fatura:</label>
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">R$</span>
+                                </div>
+                                <input type="text" class="form-control" id="valor_final" name="valor_final" 
+                                       value="{{ "%.2f"|format(analise_valores.valor_total_pago) }}" required>
+                            </div>
+                            <small class="form-text text-muted">
+                                Sugerido: R$ {{ "%.2f"|format(analise_valores.valor_total_pago) }} (Total Pago)
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="observacoes">Observações da Conferência:</label>
+                            <textarea class="form-control" id="observacoes" name="observacoes" rows="3" 
+                                      placeholder="Observações sobre a conferência (opcional)"></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <h6><i class="fas fa-exclamation-triangle"></i> Atenção:</h6>
+                    <p class="mb-0">
+                        Ao aprovar a conferência:
+                        <br>• A fatura será marcada como CONFERIDA
+                        <br>• Todos os CTes e despesas serão BLOQUEADOS para edição
+                        <br>• O valor da fatura será atualizado conforme informado
+                    </p>
+                </div>
+                
+                <button type="submit" class="btn btn-success btn-lg" 
+                        onclick="return confirm('Confirma a aprovação da conferência desta fatura?')">
+                    <i class="fas fa-check-double"></i> Aprovar Conferência
+                </button>
+            </form>
+        </div>
+    </div>
+    {% elif fatura.status_conferencia == 'CONFERIDO' %}
+    <!-- Fatura já conferida - opção para reabrir -->
+    <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="fas fa-lock"></i> Fatura Conferida</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-success">
+                <h6><i class="fas fa-check-circle"></i> Esta fatura já foi conferida!</h6>
+                <p class="mb-0">
+                    Conferida por: <strong>{{ fatura.conferido_por }}</strong><br>
+                    Data: {{ fatura.conferido_em.strftime('%d/%m/%Y %H:%M') if fatura.conferido_em }}<br>
+                    {% if fatura.observacoes_conferencia %}
+                        Observações: {{ fatura.observacoes_conferencia }}
+                    {% endif %}
+                </p>
+            </div>
+            
+            <!-- Botão para reabrir -->
+            <form method="POST" action="{{ url_for('fretes.reabrir_fatura', fatura_id=fatura.id) }}" 
+                  style="display: inline-block;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group">
+                    <label for="motivo_reabertura">Motivo da Reabertura:</label>
+                    <input type="text" class="form-control" id="motivo_reabertura" name="motivo_reabertura" 
+                           placeholder="Informe o motivo para reabrir a fatura" required>
+                </div>
+                <button type="submit" class="btn btn-warning" 
+                        onclick="return confirm('Confirma a reabertura desta fatura? Isso liberará todos os CTes e despesas para edição novamente.')">
+                    <i class="fas fa-unlock"></i> Reabrir Fatura
+                </button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <!-- Não pode aprovar -->
+    <div class="card mb-4">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0"><i class="fas fa-times-circle"></i> Não Pode Aprovar</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-danger">
+                <h6>Esta fatura não pode ser aprovada pelos seguintes motivos:</h6>
+                <ul class="mb-0">
+                    {% if not todos_aprovados %}
+                        <li>Há documentos com status PENDENTE</li>
+                    {% endif %}
+                    {% if not analise_valores.fatura_dentro_tolerancia %}
+                        <li>Diferença entre valor da fatura e CTes acima da tolerância de R$ 1,00</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Formatar valor monetário
+document.getElementById('valor_final').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/[^\d,]/g, '');
+    e.target.value = value;
+});
+</script>
+{% endblock %} 

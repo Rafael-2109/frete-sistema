@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Cadastro de Formas de Agendamento</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="row">
+      <div class="col-md-3">{{ form.cnpj.label }} {{ form.cnpj(class="form-control") }}</div>
+      <div class="col-md-3">{{ form.forma.label }} {{ form.forma(class="form-select") }}</div>
+      <div class="col-md-3">{{ form.contato.label }} {{ form.contato(class="form-control") }}</div>
+      <div class="col-md-3">{{ form.observacao.label }} {{ form.observacao(class="form-control") }}</div>
+    </div>
+    <button type="submit" class="btn btn-success mt-3">Salvar</button>
+  </form>
+
+  <h4 class="mt-5">Contatos Cadastrados</h4>
+  <table class="table table-striped mt-3">
+    <thead>
+      <tr>
+        <th>CNPJ</th>
+        <th>Forma</th>
+        <th>Contato</th>
+        <th>Observação</th>
+        <th>Atualizado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in contatos %}
+      <tr>
+        <td>{{ c.cnpj }}</td>
+        <td>{{ c.forma }}</td>
+        <td>{{ c.contato }}</td>
+        <td>{{ c.observacao }}</td>
+        <td>{{ c.atualizado_em.strftime('%d/%m/%Y') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

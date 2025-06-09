@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Sistema de Fretes - Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-truck"></i> Sistema de Fretes
+            </h1>
+        </div>
+    </div>
+
+    <!-- Estatísticas gerais -->
+    <div class="row mb-4">
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ total_fretes }}</h4>
+                            <span class="small">Total de Fretes</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-file-invoice fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ fretes_pendentes }}</h4>
+                            <span class="small">Fretes Pendentes</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-clock fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ aprovacoes_pendentes }}</h4>
+                            <span class="small">Aprovações Pendentes</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-check-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ faturas_conferir }}</h4>
+                            <span class="small">Faturas a Conferir</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-receipt fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card {% if fretes_sem_nfs > 0 %}bg-danger{% else %}bg-success{% endif %} text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ fretes_sem_nfs }}</h4>
+                            <span class="small">Fretes sem NFs</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações rápidas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4>Ações Rápidas</h4>
+        </div>
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('fretes.lancar_cte') }}" class="btn btn-success btn-lg btn-block">
+                <i class="fas fa-plus"></i><br>
+                Lançar CTe
+            </a>
+        </div>
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('fretes.listar_fretes') }}" class="btn btn-primary btn-lg btn-block">
+                <i class="fas fa-list"></i><br>
+                Listar Fretes
+            </a>
+        </div>
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('fretes.listar_aprovacoes') }}" class="btn btn-warning btn-lg btn-block text-dark">
+                <i class="fas fa-check"></i><br>
+                Aprovações
+            </a>
+        </div>
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('fretes.listar_faturas') }}" class="btn btn-info btn-lg btn-block">
+                <i class="fas fa-file-pdf"></i><br>
+                Faturas
+            </a>
+        </div>
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}" class="btn btn-warning btn-lg btn-block text-dark">
+                <i class="fas fa-plus-circle"></i><br>
+                Nova Despesa
+            </a>
+        </div>
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('fretes.gerenciar_despesas_extras') }}" class="btn btn-secondary btn-lg btn-block">
+                <i class="fas fa-cogs"></i><br>
+                Gerenciar Despesas
+            </a>
+        </div>
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('fretes.listar_contas_correntes') }}" class="btn btn-dark btn-lg btn-block">
+                <i class="fas fa-balance-scale"></i><br>
+                Contas Correntes
+            </a>
+        </div>
+        
+        {% if fretes_sem_nfs > 0 %}
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('fretes.corrigir_nfs_fretes') }}" 
+               class="btn btn-danger btn-lg btn-block"
+               onclick="return confirm('Deseja corrigir {{ fretes_sem_nfs }} frete(s) que não possuem NFs preenchidas?')">
+                <i class="fas fa-tools"></i><br>
+                Corrigir NFs
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Fretes recentes -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-history"></i> Fretes Recentes
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if fretes_recentes %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Frete</th>
+                                        <th>Cliente</th>
+                                        <th>Embarque</th>
+                                        <th>Transportadora</th>
+                                        <th>Valor Cotado</th>
+                                        <th>Status</th>
+                                        <th>Criado em</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for frete in fretes_recentes %}
+                                    <tr>
+                                        <td>
+                                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}">
+                                                #{{ frete.id }}
+                                            </a>
+                                        </td>
+                                        <td>{{ frete.nome_cliente[:30] }}...</td>
+                                        <td>
+                                            <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}">
+                                                #{{ frete.embarque.numero }}
+                                            </a>
+                                        </td>
+                                        <td>{{ frete.transportadora.razao_social[:20] }}...</td>
+                                        <td>R$ {{ "%.2f"|format(frete.valor_cotado) }}</td>
+                                        <td>
+                                            {% if frete.status == 'PENDENTE' %}
+                                                <span class="badge" style="background-color: #ffc107; color: #212529;">Pendente</span>
+                                            {% elif frete.status == 'EM_TRATATIVA' %}
+                                                <span class="badge" style="background-color: #17a2b8; color: white;">Em Tratativa</span>
+                                            {% elif frete.status == 'APROVADO' %}
+                                                <span class="badge" style="background-color: #28a745; color: white;">Aprovado</span>
+                                            {% elif frete.status == 'REJEITADO' %}
+                                                <span class="badge" style="background-color: #dc3545; color: white;">Rejeitado</span>
+                                            {% elif frete.status == 'PAGO' %}
+                                                <span class="badge" style="background-color: #007bff; color: white;">Pago</span>
+                                            {% elif frete.status == 'LANCADO' %}
+                                                <span class="badge" style="background-color: #343a40; color: white;">Lançado</span>
+                                            {% elif frete.status == 'CANCELADO' %}
+                                                <span class="badge" style="background-color: #6c757d; color: white;">Cancelado</span>
+                                            {% else %}
+                                                <span class="badge" style="background-color: #6c757d; color: white;">{{ frete.status }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ frete.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                                        <td>
+                                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}" 
+                                               class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">Nenhum frete encontrado.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,144 @@
+from app import db
+from flask_login import current_user
+from datetime import datetime
+
+class EntregaMonitorada(db.Model):
+    __tablename__ = 'entregas_monitoradas'
+
+    id = db.Column(db.Integer, primary_key=True)
+    numero_nf = db.Column(db.String(20), nullable=False, index=True)
+    cliente = db.Column(db.String(255), nullable=False)
+    transportadora = db.Column(db.String(255), nullable=True)
+    municipio = db.Column(db.String(100), nullable=True)
+    uf = db.Column(db.String(2), nullable=True)
+    vendedor = db.Column(db.String(100), nullable=True)
+    cnpj_cliente = db.Column(db.String(20), nullable=True, index=True)
+
+    valor_nf = db.Column(db.Float, nullable=True)
+    data_faturamento = db.Column(db.Date, nullable=True)
+    data_embarque = db.Column(db.Date, nullable=True)
+    data_entrega_prevista = db.Column(db.Date, nullable=True)
+    data_hora_entrega_realizada = db.Column(db.DateTime, nullable=True)
+    entregue = db.Column(db.Boolean, default=False)
+    lead_time = db.Column(db.Integer, nullable=True)
+
+
+    reagendar = db.Column(db.Boolean, default=False)
+    motivo_reagendamento = db.Column(db.String(255), nullable=True)
+    data_agenda = db.Column(db.Date, nullable=True)  # <--- AQU
+
+    observacao_operacional = db.Column(db.Text, nullable=True)
+    pendencia_financeira = db.Column(db.Boolean, default=False)
+    resposta_financeiro = db.Column(db.Text, nullable=True)
+
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.String(100), nullable=True)
+    nf_cd = db.Column(db.Boolean, default=False)  # Indica se está no CD
+
+    finalizado_por = db.Column(db.String(100))
+    finalizado_em = db.Column(db.DateTime)
+    comentarios = db.relationship('ComentarioNF', backref='entrega', lazy='dynamic')
+    status_finalizacao = db.Column(db.String(50), nullable=True)
+    nova_nf = db.Column(db.String(20), nullable=True)
+    substituida_por_nf_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'), nullable=True)
+    substituida_por_nf = db.relationship('EntregaMonitorada', remote_side=[id], backref='substituicoes')
+
+    @property
+    def possui_comentarios(self):
+        return self.comentarios.count() > 0
+
+    def __repr__(self):
+        return f"<Entrega NF {self.numero_nf} - {self.cliente}>"
+    
+
+    def comentarios_pendentes(self, current_username):
+        return self.comentarios.filter(
+            ComentarioNF.autor != current_username, 
+            ~ComentarioNF.respostas.any()
+        ).count()
+    
+    @property
+    def data_agendamento_mais_recente(self):
+        # Se 'agendamentos' for uma lista
+        if len(self.agendamentos) == 0:
+            return None
+
+        ag_recente = sorted(self.agendamentos, key=lambda ag: ag.criado_em, reverse=True)[0]
+        return ag_recente.data_agendada
+
+
+class AgendamentoEntrega(db.Model):
+    __tablename__ = 'agendamentos_entrega'
+
+    id = db.Column(db.Integer, primary_key=True)
+    entrega_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'))
+    data_agendada = db.Column(db.Date)
+    hora_agendada = db.Column(db.Time)
+
+    forma_agendamento = db.Column(db.String(50))  # Portal, Telefone, etc.
+    contato_agendamento = db.Column(db.String(255))  # login, telefone, e-mail
+    protocolo_agendamento = db.Column(db.String(100))  # número ou código
+
+    motivo = db.Column(db.String(255))
+    observacao = db.Column(db.Text)  # ← NOVO CAMPO
+    autor = db.Column(db.String(100))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    entrega = db.relationship('EntregaMonitorada', backref='agendamentos')
+
+class EventoEntrega(db.Model):
+    __tablename__ = 'eventos_entrega'
+
+    id = db.Column(db.Integer, primary_key=True)
+    entrega_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'))
+    data_hora_chegada = db.Column(db.DateTime)
+    data_hora_saida = db.Column(db.DateTime)
+    motorista = db.Column(db.String(100))
+    tipo_evento = db.Column(db.String(50))  # entrega, reentrega, tentativa, NF no CD
+    observacao = db.Column(db.Text)
+    autor = db.Column(db.String(100))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+    entrega = db.relationship('EntregaMonitorada', backref='eventos')
+
+class CustoExtraEntrega(db.Model):
+    __tablename__ = 'custos_extra_entrega'
+
+    id = db.Column(db.Integer, primary_key=True)
+    entrega_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'))
+    tipo = db.Column(db.String(50))  # TDE, Diária, Reentrega
+    valor = db.Column(db.Float)
+    motivo = db.Column(db.String(255))
+    autor = db.Column(db.String(100))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+    entrega = db.relationship('EntregaMonitorada', backref='custos_extras')
+
+class RegistroLogEntrega(db.Model):
+    __tablename__ = 'logs_entrega'
+
+    id = db.Column(db.Integer, primary_key=True)
+    entrega_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'))
+    autor = db.Column(db.String(100))
+    data_hora = db.Column(db.DateTime, default=datetime.utcnow)
+    descricao = db.Column(db.Text)
+    tipo = db.Column(db.String(50))  # ação, contato, info
+    lembrete_para = db.Column(db.DateTime, nullable=True)
+
+    entrega = db.relationship('EntregaMonitorada', backref='logs')
+
+
+class ComentarioNF(db.Model):
+    __tablename__ = 'comentarios_nf'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    entrega_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'), nullable=False)
+    autor = db.Column(db.String(150), nullable=False)
+    texto = db.Column(db.Text, nullable=False)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    arquivo = db.Column(db.String(255), nullable=True)
+    resposta_a_id = db.Column(db.Integer, db.ForeignKey('comentarios_nf.id'), nullable=True)
+    
+    respostas = db.relationship('ComentarioNF', backref=db.backref('comentario_pai', remote_side=[id]))

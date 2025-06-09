@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 800px;">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="card-title mb-0">
+                <i class="fas fa-user-edit"></i> Editar Usuário
+            </h4>
+        </div>
+        <div class="card-body">
+            <!-- Dados atuais do usuário -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <h5 class="text-muted">Dados Atuais</h5>
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>ID:</strong> {{ usuario.id }}</p>
+                                    <p><strong>Status Atual:</strong> 
+                                        <span class="{{ usuario.status_badge_class }}">
+                                            {{ usuario.status.title() if usuario.status else 'Não definido' }}
+                                        </span>
+                                    </p>
+                                    <p><strong>Perfil Atual:</strong> 
+                                        <span class="{{ usuario.perfil_badge_class }}">
+                                            {{ usuario.perfil_nome if usuario.perfil else 'Não definido' }}
+                                        </span>
+                                    </p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Cadastrado em:</strong> 
+                                        {{ usuario.criado_em.strftime('%d/%m/%Y às %H:%M') if usuario.criado_em else '-' }}
+                                    </p>
+                                    <p><strong>Último Login:</strong> 
+                                        {{ usuario.ultimo_login.strftime('%d/%m/%Y às %H:%M') if usuario.ultimo_login else 'Nunca' }}
+                                    </p>
+                                    <p><strong>Vendedor Vinculado:</strong> 
+                                        {{ usuario.vendedor_vinculado or '-' }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulário de edição -->
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.nome.label(class="form-label") }}
+                        {{ form.nome(class="form-control") }}
+                        {% if form.nome.errors %}
+                            <div class="text-danger small">{{ form.nome.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        {{ form.email.label(class="form-label") }}
+                        {{ form.email(class="form-control") }}
+                        {% if form.email.errors %}
+                            <div class="text-danger small">{{ form.email.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.empresa.label(class="form-label") }}
+                        {{ form.empresa(class="form-control") }}
+                        {% if form.empresa.errors %}
+                            <div class="text-danger small">{{ form.empresa.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        {{ form.cargo.label(class="form-label") }}
+                        {{ form.cargo(class="form-control") }}
+                        {% if form.cargo.errors %}
+                            <div class="text-danger small">{{ form.cargo.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.telefone.label(class="form-label") }}
+                        {{ form.telefone(class="form-control") }}
+                        {% if form.telefone.errors %}
+                            <div class="text-danger small">{{ form.telefone.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        {{ form.status.label(class="form-label") }}
+                        {{ form.status(class="form-select") }}
+                        {% if form.status.errors %}
+                            <div class="text-danger small">{{ form.status.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.perfil.label(class="form-label") }}
+                        {{ form.perfil(class="form-select", id="perfilSelect") }}
+                        {% if form.perfil.errors %}
+                            <div class="text-danger small">{{ form.perfil.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-6 mb-3" id="vendedorVinculadoDiv">
+                        {{ form.vendedor_vinculado.label(class="form-label") }}
+                        {{ form.vendedor_vinculado(class="form-select") }}
+                        {% if form.vendedor_vinculado.errors %}
+                            <div class="text-danger small">{{ form.vendedor_vinculado.errors[0] }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            <small class="text-muted">
+                                <strong>Para vendedores:</strong> Selecione o nome que aparece nos relatórios de faturamento
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    {{ form.observacoes.label(class="form-label") }}
+                    {{ form.observacoes(class="form-control", rows="3", placeholder="Observações sobre o usuário (opcional)") }}
+                    {% if form.observacoes.errors %}
+                        <div class="text-danger small">{{ form.observacoes.errors[0] }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Informações sobre permissões -->
+                <div class="alert alert-info mb-4">
+                    <h6><i class="fas fa-info-circle"></i> Permissões dos Perfis:</h6>
+                    <ul class="mb-0 small">
+                        <li><strong>Vendedor:</strong> Acesso apenas ao monitoramento de suas vendas + envio de comentários</li>
+                        <li><strong>Portaria:</strong> Acesso aos embarques e módulos de portaria</li>
+                        <li><strong>Financeiro/Logística:</strong> Acesso e edição geral</li>
+                        <li><strong>Gerente Comercial:</strong> Aprovação de vendedores + acesso geral</li>
+                        <li><strong>Administrador:</strong> Acesso irrestrito</li>
+                    </ul>
+                </div>
+
+                <!-- Alertas de segurança -->
+                {% if usuario.perfil == 'administrador' %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Atenção:</strong> Você está editando um usuário administrador. 
+                    Tenha cuidado ao alterar permissões para não comprometer a segurança do sistema.
+                </div>
+                {% endif %}
+
+                <div class="d-flex gap-2">
+                    {{ form.submit(class="btn btn-primary") }}
+                    <a href="{{ url_for('auth.listar_usuarios') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                    
+                    {% if usuario.status == 'ativo' %}
+                    <button type="button" class="btn btn-warning ms-auto" onclick="confirmarBloqueio()">
+                        <i class="fas fa-user-lock"></i> Bloquear Usuário
+                    </button>
+                    {% elif usuario.status == 'bloqueado' %}
+                    <button type="button" class="btn btn-success ms-auto" onclick="confirmarDesbloqueio()">
+                        <i class="fas fa-user-check"></i> Desbloquear Usuário
+                    </button>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const perfilSelect = document.getElementById('perfilSelect');
+    const vendedorDiv = document.getElementById('vendedorVinculadoDiv');
+    
+    function toggleVendedorField() {
+        if (perfilSelect.value === 'vendedor') {
+            vendedorDiv.style.display = 'block';
+        } else {
+            vendedorDiv.style.display = 'none';
+        }
+    }
+    
+    // Verificar inicialmente
+    toggleVendedorField();
+    
+    // Verificar quando mudar
+    perfilSelect.addEventListener('change', toggleVendedorField);
+});
+
+function confirmarBloqueio() {
+    if (confirm('Tem certeza que deseja bloquear este usuário? Ele não conseguirá mais acessar o sistema.')) {
+        // Criar formulário para bloquear
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="acao" value="bloquear">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function confirmarDesbloqueio() {
+    if (confirm('Tem certeza que deseja desbloquear este usuário?')) {
+        // Criar formulário para desbloquear
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="acao" value="desbloquear">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %} 

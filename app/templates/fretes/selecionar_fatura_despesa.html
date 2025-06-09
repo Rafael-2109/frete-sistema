@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block title %}Selecionar Fatura - Despesa Extra{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-file-invoice"></i> Selecionar Fatura
+                <small class="text-muted">Finalizar Despesa Extra</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}">Nova Despesa Extra</a></li>
+            <li class="breadcrumb-item active">Selecionar Fatura</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Formulário principal -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-check-circle"></i> Vincular à Fatura e Finalizar
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <!-- Seleção da fatura -->
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-file-invoice"></i> Selecione a Fatura
+                            </label>
+                            {% if faturas_disponiveis %}
+                                <select name="fatura_id" class="form-control" required>
+                                    <option value="">Selecione uma fatura...</option>
+                                    {% for fatura in faturas_disponiveis %}
+                                        <option value="{{ fatura.id }}">
+                                            {{ fatura.numero_fatura }} - 
+                                            {{ fatura.data_emissao.strftime('%d/%m/%Y') if fatura.data_emissao else 'S/Data' }} - 
+                                            R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">
+                                    Faturas pendentes de conferência de {{ frete.transportadora.razao_social }}
+                                </small>
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <strong>Nenhuma fatura disponível</strong> para {{ frete.transportadora.razao_social }}.
+                                    <br>
+                                    <a href="{{ url_for('fretes.nova_fatura') }}" target="_blank">Criar nova fatura</a>
+                                </div>
+                                <input type="hidden" name="fatura_id" value="">
+                            {% endif %}
+                        </div>
+
+                        <!-- Ajustes do documento de cobrança -->
+                        <h6 class="border-bottom pb-2 mb-3 mt-4">
+                            <i class="fas fa-edit"></i> Ajustar Dados da Cobrança
+                        </h6>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Tipo do Documento de Cobrança</label>
+                                    <select name="tipo_documento_cobranca" class="form-control" required>
+                                        <option value="CTE" {% if despesa_data.tipo_documento == 'CTE' %}selected{% endif %}>CTe</option>
+                                        <option value="NFS" {% if despesa_data.tipo_documento == 'NFS' %}selected{% endif %}>Nota Fiscal de Serviço</option>
+                                        <option value="RECIBO" {% if despesa_data.tipo_documento == 'RECIBO' %}selected{% endif %}>Recibo</option>
+                                        <option value="OUTROS" {% if despesa_data.tipo_documento == 'OUTROS' %}selected{% endif %}>Outros</option>
+                                    </select>
+                                    <small class="text-muted">
+                                        Tipo do documento que a transportadora emitiu para esta despesa
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Valor da Cobrança</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">R$</span>
+                                        </div>
+                                        <input type="text" 
+                                               name="valor_cobranca" 
+                                               class="form-control" 
+                                               value="{{ '%.2f'|format(despesa_data.valor_despesa)|replace('.', ',') }}"
+                                               placeholder="0,00">
+                                    </div>
+                                    <small class="text-muted">
+                                        Valor que a transportadora está cobrando (pode ser diferente do valor original)
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resumo da despesa original -->
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-info-circle"></i> Dados Originais da Despesa</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <small>
+                                        <strong>Tipo:</strong> {{ despesa_data.tipo_despesa }}<br>
+                                        <strong>Motivo:</strong> {{ despesa_data.motivo_despesa }}<br>
+                                        <strong>Setor Responsável:</strong> {{ despesa_data.setor_responsavel }}
+                                    </small>
+                                </div>
+                                <div class="col-md-6">
+                                    <small>
+                                        <strong>Documento Original:</strong> {{ despesa_data.numero_documento }}<br>
+                                        <strong>Valor Original:</strong> R$ {{ "%.2f"|format(despesa_data.valor_despesa) }}<br>
+                                        {% if despesa_data.vencimento_despesa %}
+                                            <strong>Vencimento:</strong> {{ despesa_data.vencimento_despesa }}
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('fretes.confirmar_despesa_extra') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            {% if faturas_disponiveis %}
+                                <button type="submit" class="btn btn-success btn-lg">
+                                    <i class="fas fa-check"></i> Finalizar Despesa Extra
+                                </button>
+                            {% else %}
+                                <a href="{{ url_for('fretes.confirmar_despesa_extra') }}" class="btn btn-warning">
+                                    <i class="fas fa-arrow-left"></i> Salvar sem Fatura
+                                </a>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações laterais -->
+        <div class="col-md-4">
+            <!-- Dados do frete -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-truck"></i> Dados do Frete
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Frete:</strong> #{{ frete.id }}</p>
+                    <p><strong>Cliente:</strong> {{ frete.nome_cliente[:30] }}{% if frete.nome_cliente|length > 30 %}...{% endif %}</p>
+                    <p><strong>CNPJ:</strong> {{ frete.cnpj_cliente }}</p>
+                    <p><strong>Transportadora:</strong> {{ frete.transportadora.razao_social[:25] }}{% if frete.transportadora.razao_social|length > 25 %}...{% endif %}</p>
+                    <p><strong>Embarque:</strong> 
+                        <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque.id) }}">#{{ frete.embarque.numero }}</a>
+                    </p>
+                    <p><strong>Valor Cotado:</strong> R$ {{ "%.2f"|format(frete.valor_cotado) }}</p>
+                </div>
+            </div>
+
+            <!-- Detalhes das faturas -->
+            {% if faturas_disponiveis %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-list"></i> Faturas Disponíveis
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Fatura</th>
+                                    <th>Valor</th>
+                                    <th>Vencimento</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for fatura in faturas_disponiveis %}
+                                <tr>
+                                    <td>{{ fatura.numero_fatura }}</td>
+                                    <td>R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}</td>
+                                    <td>{{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Explicações -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-question-circle"></i> Entenda os Ajustes
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <small>
+                        <div class="mb-3">
+                            <strong>Tipo do Documento:</strong><br>
+                            Refere-se ao documento que a transportadora emitiu para cobrar esta despesa (CTe, NF Serviço, etc.)
+                        </div>
+                        
+                        <div class="mb-3">
+                            <strong>Valor da Cobrança:</strong><br>
+                            Pode ser diferente do valor original da despesa. Por exemplo, se a despesa custou R$ 100 mas a transportadora está cobrando R$ 120.
+                        </div>
+                        
+                        <div class="alert alert-warning small">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Importante:</strong> Os dados originais serão preservados para histórico e controle.
+                        </div>
+                    </small>
+                </div>
+            </div>
+
+            <!-- Fluxo concluído -->
+            <div class="card mt-3">
+                <div class="card-header bg-success text-white">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-check-circle"></i> Quase Pronto!
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <small>
+                        <strong>Após finalizar:</strong><br>
+                        • Despesa extra será vinculada ao frete<br>
+                        • Fatura será associada para controle<br>
+                        • Dados de cobrança serão registrados<br>
+                        • Histórico completo será mantido
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

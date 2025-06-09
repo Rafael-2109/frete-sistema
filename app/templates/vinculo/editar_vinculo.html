@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+  <h4>✏️ Editar Vínculo</h4>
+
+  <!-- Form principal: salva alterações -->
+  <form method="POST">
+    <div class="mb-3">
+      <label class="form-label">Nome da Tabela</label>
+      <input type="text" name="nome_tabela" value="{{ vinculo.nome_tabela }}" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Lead Time (dias)</label>
+      <input type="number" name="lead_time" value="{{ vinculo.lead_time }}" class="form-control">
+    </div>
+
+    <div class="text-end">
+      <button type="submit" class="btn btn-success">Salvar Alterações</button>
+      <!-- Corrigido para 'consulta_vinculos' -->
+      <a href="{{ url_for('vinculos.consulta_vinculos') }}" class="btn btn-secondary">Cancelar</a>
+    </div>
+  </form>
+
+  <!-- Form separado para excluir -->
+  <div class="mt-3 text-end">
+    <form method="POST" action="{{ url_for('vinculos.excluir_vinculo', id=vinculo.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-danger" 
+              onclick="return confirm('Tem certeza que deseja excluir este vínculo?');">
+        Excluir Este Vínculo
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
