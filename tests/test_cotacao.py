@@ -78,7 +78,7 @@ class TestCotacao(unittest.TestCase):
 
         # 4. Criar tabelas de frete
         self.tabelas = []
-        modalidades = ["FIORINO", "VAN/HR", "3/4", "TOCO", "TRUCK", "CARRETA"]
+        modalidades = ["FIORINO", "VAN/HR", "MASTER", "IVECO", "3/4", "TOCO", "TRUCK", "CARRETA"]
         
         for modalidade in modalidades:
             # Tabela para carga direta

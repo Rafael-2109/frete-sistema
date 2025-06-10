@@ -72,7 +72,7 @@ def confirmar_importacao_vinculos():
             transportadora_id=linha['transportadora_id'],
             codigo_ibge=linha['codigo_ibge'],
             uf=linha['uf'],
-            nome_tabela=linha['nome_tabela'],
+            nome_tabela=linha['nome_tabela'].upper(),  # ✅ NORMALIZADO PARA MAIÚSCULA
             lead_time=linha['lead_time']
         )
         db.session.add(novo)
@@ -263,7 +263,7 @@ def editar_vinculo():
     vinculo.cidade_id = cidade.id
     vinculo.codigo_ibge = cidade.codigo_ibge
     vinculo.uf = cidade.uf
-    vinculo.nome_tabela = form.nome_tabela.data.strip()
+    vinculo.nome_tabela = form.nome_tabela.data.strip().upper()  # ✅ NORMALIZADO PARA MAIÚSCULA
 
     try:
         vinculo.lead_time = int(form.lead_time.data) if form.lead_time.data else None

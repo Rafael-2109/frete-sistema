@@ -82,7 +82,7 @@ def cadastrar_tabela_frete():
 
 # Ajuste conforme suas choices reais do sistema
 TIPOS_CARGA_VALIDOS = ['FRACIONADA', 'DIRETA']
-MODALIDADES_VALIDAS = ['FRETE VALOR', 'FRETE PESO','FIORINO', 'VAN/HR', 'IVECO', '3/4', 'TOCO', 'TRUCK', 'CARRETA']
+MODALIDADES_VALIDAS = ['FRETE VALOR', 'FRETE PESO','FIORINO', 'VAN/HR', 'MASTER', 'IVECO', '3/4', 'TOCO', 'TRUCK', 'CARRETA']
 
 @tabelas_bp.route('/importar_tabela_frete', methods=['GET', 'POST'])
 @login_required
@@ -154,6 +154,7 @@ def importar_tabela_frete():
                     'FRETE VALOR': 'FRETE VALOR',
                     'FIORINO': 'FIORINO',
                     'VAN/HR': 'VAN/HR',
+                    'MASTER': 'MASTER',
                     'IVECO': 'IVECO',
                     '3/4': '3/4',
                     'TOCO': 'TOCO',
@@ -268,7 +269,7 @@ def importar_tabela_frete():
 def historico_tabelas():
     transportadoras = Transportadora.query.order_by(Transportadora.razao_social).all()
     uf_list = UF_LIST  # seu array/lista de (UF, NomeUF)
-    modalidades = ['FRETE PESO', 'FRETE VALOR', 'FIORINO', 'VAN/HR', 'IVECO', '3/4', 'TOCO', 'TRUCK', 'CARRETA']
+    modalidades = ['FRETE PESO', 'FRETE VALOR', 'FIORINO', 'VAN/HR', 'MASTER', 'IVECO', '3/4', 'TOCO', 'TRUCK', 'CARRETA']
 
     # ==========================
     # 1) Captura filtros
@@ -400,7 +401,7 @@ def historico_tabelas():
 def listar_todas_tabelas():
     transportadoras = Transportadora.query.order_by(Transportadora.razao_social).all()
     uf_list = UF_LIST  # seu array/lista de (UF, NomeUF)
-    modalidades = ['FRETE PESO', 'FRETE VALOR', 'FIORINO', 'VAN/HR', 'IVECO', '3/4', 'TOCO', 'TRUCK', 'CARRETA']
+    modalidades = ['FRETE PESO', 'FRETE VALOR', 'FIORINO', 'VAN/HR', 'MASTER', 'IVECO', '3/4', 'TOCO', 'TRUCK', 'CARRETA']
 
     query = TabelaFrete.query.join(Transportadora)
 

@@ -17,7 +17,7 @@ def validar_vinculos(caminho):
         cidade_nome = str(row['CIDADE']).strip()
         uf = str(row['UF']).strip()
         codigo_ibge = str(row['CODIGO IBGE']).strip()
-        nome_tabela = str(row['TABELA']).strip()
+        nome_tabela = str(row['TABELA']).strip().upper()  # ✅ NORMALIZADO PARA MAIÚSCULA
         lead_time = row.get('LEAD TIME', None)
 
         transportadora = Transportadora.query.filter(

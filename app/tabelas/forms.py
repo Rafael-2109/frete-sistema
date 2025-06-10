@@ -23,6 +23,7 @@ class TabelaFreteForm(FlaskForm):
         ('FRETE VALOR','Frete Valor'),
         ('FIORINO','Fiorino'),
         ('VAN/HR','Van/HR'),
+        ('MASTER','Master'),
         ('IVECO','Iveco'),
         ('3/4','3/4'),
         ('TOCO','Toco'),

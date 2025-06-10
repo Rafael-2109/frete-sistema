@@ -130,7 +130,7 @@ def importar_vinculos_seguro():
                         cidade_nome = str(row.get('CIDADE', '')).strip()
                         uf = str(row.get('UF', '')).strip().upper()
                         codigo_ibge = str(row.get('CODIGO IBGE', '')).strip()
-                        nome_tabela = str(row.get('TABELA', '')).strip()
+                        nome_tabela = str(row.get('TABELA', '')).strip().upper()  # ✅ NORMALIZADO PARA MAIÚSCULA
                         lead_time = row.get('LEAD TIME', None)
                         
                         # Validação básica

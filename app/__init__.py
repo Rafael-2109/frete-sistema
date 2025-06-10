@@ -151,12 +151,7 @@ def create_app(config_name=None):
         app.cli.add_command(corrigir_vinculos_grupo)
         app.cli.add_command(importar_cidades_cli)
         
-        # Tenta importar criar_vinculos_faltantes se existir
-        try:
-            from app.cli import criar_vinculos_faltantes
-            app.cli.add_command(criar_vinculos_faltantes)
-        except ImportError:
-            pass  # Se não existir, apenas ignora
+        # REMOVIDO: criar_vinculos_faltantes (função perigosa que criava vínculos automaticamente)
     except ImportError as e:
         print(f"Aviso: Não foi possível importar alguns comandos CLI: {e}")
 

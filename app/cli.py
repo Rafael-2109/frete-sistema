@@ -210,61 +210,13 @@ def corrigir_vinculos_grupo():
         print(f"❌ Erro ao salvar: {str(e)}")
 
 
-@click.command('criar-vinculos-faltantes')
-@with_appcontext
-def criar_vinculos_faltantes():
-    """Cria vínculos para tabelas órfãs baseado em cidades existentes"""
-    print("🔧 Criando vínculos para tabelas órfãs...")
-    
-    from app.vinculos.models import CidadeAtendida
-    from app.tabelas.models import TabelaFrete
-    from app.localidades.models import Cidade
-    
-    # Busca tabelas órfãs
-    tabelas_orfas = []
-    tabelas = TabelaFrete.query.all()
-    
-    for tabela in tabelas:
-        vinculo_existe = CidadeAtendida.query.filter_by(
-            transportadora_id=tabela.transportadora_id,
-            nome_tabela=tabela.nome_tabela
-        ).first()
-        
-        if not vinculo_existe:
-            tabelas_orfas.append(tabela)
-    
-    print(f"📊 Encontradas {len(tabelas_orfas)} tabelas órfãs")
-    
-    criados = 0
-    for tabela in tabelas_orfas:
-        # Busca cidades do UF de destino da tabela
-        cidades_uf = Cidade.query.filter_by(uf=tabela.uf_destino).all()
-        
-        if cidades_uf:
-            # Cria vínculo para a primeira cidade encontrada (pode ser refinado)
-            cidade = cidades_uf[0]
-            
-            novo_vinculo = CidadeAtendida(
-                cidade_id=cidade.id,
-                codigo_ibge=cidade.codigo_ibge,
-                uf=cidade.uf,
-                transportadora_id=tabela.transportadora_id,
-                nome_tabela=tabela.nome_tabela,
-                lead_time=None
-            )
-            
-            db.session.add(novo_vinculo)
-            criados += 1
-            
-            print(f"➕ Criando vínculo para tabela {tabela.nome_tabela} → {cidade.nome}/{cidade.uf}")
-    
-    if criados > 0:
-        db.session.commit()
-        print(f"✅ {criados} vínculos criados com sucesso!")
-    else:
-        print("ℹ️ Nenhuma tabela órfã encontrada para criar vínculos")
-    
-    print("🏁 Criação concluída!")
+# FUNÇÃO REMOVIDA: criar_vinculos_faltantes()
+# 
+# Esta função foi removida porque criava vínculos automaticamente,
+# o que é incorreto do ponto de vista de negócio.
+# 
+# Vínculos representam quais cidades cada transportadora REALMENTE atende,
+# e isso deve ser definido manualmente através da importação de vínculos.
 
 @click.command()
 @click.argument('arquivo_excel')
