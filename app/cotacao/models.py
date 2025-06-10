@@ -53,7 +53,7 @@ class CotacaoItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cotacao_id = db.Column(db.Integer, db.ForeignKey('cotacoes.id'), nullable=False)
     pedido_id = db.Column(db.Integer, db.ForeignKey('pedidos.id'), nullable=False)
-    cnpj_cliente = db.Column(db.String(14), nullable=False)
+    cnpj_cliente = db.Column(db.String(20), nullable=False)
     cliente = db.Column(db.String(100), nullable=False)
     peso = db.Column(db.Float, nullable=False)
     valor = db.Column(db.Float, nullable=False)
