@@ -20,51 +20,36 @@ migrate = Migrate()
 
 def formatar_data_segura(data, formato='%d/%m/%Y'):
     """
-    Filtro Jinja2 para formatar datas de forma segura, evitando o erro 'None has no attribute strftime'
+    Filtro Jinja2 para formatar datas de forma segura no timezone brasileiro
     """
-    if data is None or data == '' or str(data).lower() in ['none', 'null']:
-        return ''
-    
-    try:
-        # Se já for datetime.date ou datetime.datetime e não for None
-        if hasattr(data, 'strftime'):
-            return data.strftime(formato)
-        
-        # Se for string, tenta converter
-        if isinstance(data, str):
-            data = data.strip()
-            if not data or data.lower() in ['none', 'null', '']:
-                return ''
-                
-            # Tenta vários formatos comuns
-            formatos = [
-                '%Y-%m-%d',      # 2025-05-29
-                '%d/%m/%Y',      # 29/05/2025
-                '%Y-%m-%d %H:%M:%S',  # 2025-05-29 10:30:00
-                '%d/%m/%Y %H:%M:%S',  # 29/05/2025 10:30:00
-                '%d-%m-%Y',      # 29-05-2025
-                '%m/%d/%Y',      # 05/29/2025 (formato americano)
-            ]
-            for formato_origem in formatos:
-                try:
-                    data_obj = datetime.strptime(data, formato_origem)
-                    return data_obj.strftime(formato)
-                except ValueError:
-                    continue
-        
-        # Se for número (timestamp)
-        if isinstance(data, (int, float)):
-            try:
-                data_obj = datetime.fromtimestamp(data)
-                return data_obj.strftime(formato)
-            except:
-                pass
-        
-        # Retorna string vazia para valores inválidos
-        return ''
-        
-    except Exception:
-        return ''  # Sempre retorna string vazia em caso de erro
+    from app.utils.timezone import formatar_data_brasil
+    return formatar_data_brasil(data, formato)
+
+
+def formatar_data_hora_brasil(data, formato='%d/%m/%Y %H:%M'):
+    """
+    Filtro Jinja2 para formatar data e hora no timezone brasileiro
+    """
+    from app.utils.timezone import formatar_data_hora_brasil
+    return formatar_data_hora_brasil(data, formato)
+
+
+def formatar_hora_brasil(data, formato='%H:%M'):
+    """
+    Filtro Jinja2 para formatar apenas hora no timezone brasileiro
+    """
+    from app.utils.timezone import formatar_data_hora_brasil
+    return formatar_data_hora_brasil(data, formato)
+
+
+def diferenca_timezone():
+    """
+    Filtro para mostrar diferença de timezone Brasil vs UTC
+    """
+    from app.utils.timezone import diferenca_horario_brasil
+    diff = diferenca_horario_brasil()
+    horas = int(diff.total_seconds() / 3600)
+    return f"UTC{horas:+d}"
 
 def date_format_safe(data, formato='%d/%m/%Y'):
     """
@@ -116,16 +101,39 @@ def create_app(config_name=None):
     login_manager.login_message = "Faça login para acessar esta página."
     login_manager.login_message_category = "info"
 
-    # Registra os filtros personalizados para formatação de datas
+    # Registra os filtros personalizados para formatação de datas e timezone brasileiro
     app.jinja_env.filters['formatar_data'] = formatar_data_segura
     app.jinja_env.filters['date_format'] = date_format_safe
     app.jinja_env.filters['fmt_date'] = date_format_safe
+    app.jinja_env.filters['formatar_data_hora_brasil'] = formatar_data_hora_brasil
+    app.jinja_env.filters['formatar_hora_brasil'] = formatar_hora_brasil
+    app.jinja_env.filters['diferenca_timezone'] = diferenca_timezone
 
-    # Registra uma função global para templates que detecta uso inseguro de strftime
+    # Registra funções globais para templates
     @app.template_global()
     def safe_strftime(obj, formato='%d/%m/%Y'):
         """Função global segura para formatação de datas em templates"""
         return formatar_data_segura(obj, formato)
+    
+    @app.template_global()
+    def agora_brasil():
+        """Função global para obter datetime atual no timezone brasileiro"""
+        from app.utils.timezone import agora_brasil
+        return agora_brasil()
+    
+    @app.template_global()
+    def timezone_info():
+        """Função global para exibir informações de timezone"""
+        from app.utils.timezone import diferenca_horario_brasil, eh_horario_verao_brasil
+        diff = diferenca_horario_brasil()
+        horas = int(diff.total_seconds() / 3600)
+        verao = eh_horario_verao_brasil()
+        return {
+            'nome': 'America/Sao_Paulo',
+            'diferenca_utc': f"UTC{horas:+d}",
+            'horario_verao': verao,
+            'sigla': 'BRST' if verao else 'BRT'
+        }
 
     @login_manager.user_loader
     def load_user(user_id):

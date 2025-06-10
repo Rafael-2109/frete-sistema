@@ -1,0 +1,9 @@
+{% set tz = timezone_info() %}
+<div class="timezone-info text-muted small" style="font-size: 0.8em;">
+    <i class="fas fa-clock"></i>
+    <span title="Horário atual no Brasil">{{ agora_brasil() | formatar_data_hora_brasil }}</span>
+    <span class="badge badge-info ms-1" title="Timezone: {{ tz.nome }}">{{ tz.sigla }}</span>
+    {% if tz.horario_verao %}
+    <span class="badge badge-warning ms-1" title="Horário de verão ativo">☀️</span>
+    {% endif %}
+</div> 
