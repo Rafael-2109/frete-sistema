@@ -299,7 +299,7 @@
           <td>{{ p.num_pedido }}</td>
           <td>
             {% if p.data_pedido %}
-              {{ p.data_pedido.strftime('%d/%m/%Y') }}
+              {{ p.data_pedido | formatar_data_segura }}
             {% else %}
               -
             {% endif %}
@@ -345,14 +345,14 @@
           <td>{{ p.roteirizacao or '-' }}</td>
           <td>
             {% if p.expedicao %}
-              {{ p.expedicao.strftime('%d/%m/%Y') }}
+              {{ p.expedicao | formatar_data_segura }}
             {% else %}
               -
             {% endif %}
           </td>
           <td>
             {% if p.agendamento %}
-              {{ p.agendamento.strftime('%d/%m/%Y') }}
+              {{ p.agendamento | formatar_data_segura }}
             {% else %}
               -
             {% endif %}

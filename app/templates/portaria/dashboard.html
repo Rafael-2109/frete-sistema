@@ -177,10 +177,10 @@
                   <span class="text-muted">-</span>
                 {% endif %}
               </td>
-              <td>{{ registro.data_chegada.strftime('%d/%m/%Y') if registro.data_chegada else '-' }}</td>
-              <td>{{ registro.hora_chegada.strftime('%H:%M') if registro.hora_chegada else '-' }}</td>
-              <td>{{ registro.hora_entrada.strftime('%H:%M') if registro.hora_entrada else '-' }}</td>
-              <td>{{ registro.hora_saida.strftime('%H:%M') if registro.hora_saida else '-' }}</td>
+              <td>{{ registro.data_chegada | formatar_data_segura if registro.data_chegada else '-' }}</td>
+              <td>{{ registro.hora_chegada | formatar_hora_brasil if registro.hora_chegada else '-' }}</td>
+              <td>{{ registro.hora_entrada | formatar_hora_brasil if registro.hora_entrada else '-' }}</td>
+              <td>{{ registro.hora_saida | formatar_hora_brasil if registro.hora_saida else '-' }}</td>
               <td>
                 <span class="badge 
                   {% if registro.status == 'DENTRO' %}bg-success

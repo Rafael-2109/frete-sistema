@@ -58,7 +58,7 @@
       {% for comentario in comentarios %}
       <div class="card mb-2">
         <div class="card-body">
-          <strong>{{ comentario.autor }}</strong> ({{ comentario.criado_em.strftime('%d/%m %H:%M') }}):<br>
+          <strong>{{ comentario.autor }}</strong> ({{ comentario.criado_em | formatar_data_hora_brasil }}):<br>
           {{ comentario.texto }}
     
           <!-- Aqui, se houver "arquivo" associado ao comentário, mostre link para download -->
@@ -75,7 +75,7 @@
           {% for resposta in comentario.respostas %}
             <div class="card mt-2 ms-4 bg-light">
               <div class="card-body">
-                <strong>{{ resposta.autor }}</strong> ({{ resposta.criado_em.strftime('%d/%m %H:%M') }}):<br>
+                <strong>{{ resposta.autor }}</strong> ({{ resposta.criado_em | formatar_data_hora_brasil }}):<br>
                 {{ resposta.texto }}
     
                 {% if resposta.arquivo %}
@@ -110,9 +110,9 @@
         {% for log in entrega.logs %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
           <div>
-            <strong>{{ log.tipo|capitalize }}</strong> por {{ log.autor }} em {{ log.data_hora.strftime('%d/%m %H:%M') }}<br>
+            <strong>{{ log.tipo|capitalize }}</strong> por {{ log.autor }} em {{ log.data_hora | formatar_data_hora_brasil }}<br>
             {{ log.descricao }}
-            {% if log.lembrete_para %}<br><span class="badge bg-warning text-dark">Lembrete: {{ log.lembrete_para.strftime('%d/%m') }}</span>{% endif %}
+            {% if log.lembrete_para %}<br><span class="badge bg-warning text-dark">Lembrete: {{ log.lembrete_para | formatar_data_hora_brasil }}</span>{% endif %}
           </div>
           <form method="POST" action="{{ url_for('monitoramento.excluir_log', log_id=log.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -202,13 +202,13 @@
           {% for ag in entrega.agendamentos %}
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <div>
-              <strong>{{ ag.data_agendada.strftime('%d/%m') if ag.data_agendada else '-' }} 
-              {{ ag.hora_agendada.strftime('%H:%M') if ag.hora_agendada else '' }}</strong><br>
+              <strong>{{ ag.data_agendada | formatar_data_hora_brasil if ag.data_agendada else '-' }} 
+              {{ ag.hora_agendada | formatar_hora_brasil if ag.hora_agendada else '' }}</strong><br>
               {{ ag.forma_agendamento }}: {{ ag.contato_agendamento }}<br>
               Protocolo: {{ ag.protocolo_agendamento }}<br>
               Motivo: {{ ag.motivo }}<br>
               Observação: {{ ag.observacao or '-' }}<br>
-              <em>Por {{ ag.autor }} em {{ ag.criado_em.strftime('%d/%m %H:%M') }}</em>
+              <em>Por {{ ag.autor }} em {{ ag.criado_em | formatar_data_hora_brasil }}</em>
             </div>
             <form method="POST" action="{{ url_for('monitoramento.excluir_agendamento', agendamento_id=ag.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -240,10 +240,10 @@
       <h5>Finalizar entrega</h5>
 {% if entrega.finalizado_em %}
 <div class="alert alert-info">
-  <strong>Finalizada em:</strong> {{ entrega.data_hora_entrega_realizada.strftime('%d/%m/%Y %H:%M') if entrega.data_hora_entrega_realizada else entrega.finalizado_em.strftime('%d/%m/%Y %H:%M') }}<br>
+  <strong>Finalizada em:</strong> {{ entrega.data_hora_entrega_realizada | formatar_data_hora_brasil if entrega.data_hora_entrega_realizada else entrega.finalizado_em | formatar_data_hora_brasil }}<br>
   <strong>Status:</strong> {{ entrega.status_finalizacao }}<br>
   <strong>Por:</strong> {{ entrega.finalizado_por }}<br>
-  <strong>Registrado em:</strong> {{ entrega.finalizado_em.strftime('%d/%m/%Y %H:%M') }}<br>
+  <strong>Registrado em:</strong> {{ entrega.finalizado_em | formatar_data_hora_brasil }}<br>
   <form method="post" action="{{ url_for('monitoramento.remover_finalizacao', id=entrega.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-sm btn-outline-danger">Excluir Finalização</button>

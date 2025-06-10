@@ -175,10 +175,10 @@
               <td>
                 {% if registro.data_chegada and registro.hora_chegada %}
                   <i class="fas fa-calendar-alt text-primary me-1"></i>
-                  {{ registro.data_chegada.strftime('%d/%m/%Y') }}
+                  {{ registro.data_chegada | formatar_data_segura }}
                   <br>
                   <i class="fas fa-clock text-primary me-1"></i>
-                  {{ registro.hora_chegada.strftime('%H:%M') }}
+                  {{ registro.hora_chegada | formatar_hora_brasil }}
                 {% else %}
                   <span class="text-muted">Não registrado</span>
                 {% endif %}
@@ -189,10 +189,10 @@
               <td>
                 {% if registro.data_entrada and registro.hora_entrada %}
                   <i class="fas fa-calendar-alt text-success me-1"></i>
-                  {{ registro.data_entrada.strftime('%d/%m/%Y') }}
+                  {{ registro.data_entrada | formatar_data_segura }}
                   <br>
                   <i class="fas fa-clock text-success me-1"></i>
-                  {{ registro.hora_entrada.strftime('%H:%M') }}
+                  {{ registro.hora_entrada | formatar_hora_brasil }}
                 {% else %}
                   <span class="text-muted">Não registrado</span>
                 {% endif %}
@@ -203,10 +203,10 @@
               <td>
                 {% if registro.data_saida and registro.hora_saida %}
                   <i class="fas fa-calendar-alt text-danger me-1"></i>
-                  {{ registro.data_saida.strftime('%d/%m/%Y') }}
+                  {{ registro.data_saida | formatar_data_segura }}
                   <br>
                   <i class="fas fa-clock text-danger me-1"></i>
-                  {{ registro.hora_saida.strftime('%H:%M') }}
+                  {{ registro.hora_saida | formatar_hora_brasil }}
                 {% else %}
                   <span class="text-muted">Não registrado</span>
                 {% endif %}
@@ -220,9 +220,9 @@
             <h6 class="text-muted mb-2">
               <i class="fas fa-stopwatch me-1"></i>Tempo de Permanência
             </h6>
-            {% set chegada_datetime = registro.data_chegada.strftime('%Y-%m-%d') + ' ' + registro.hora_chegada.strftime('%H:%M:%S') %}
+            {% set chegada_datetime = registro.data_chegada | formatar_data_hora_brasil + ' ' + registro.hora_chegada | formatar_hora_brasil %}
             {% if registro.data_saida and registro.hora_saida %}
-              {% set saida_datetime = registro.data_saida.strftime('%Y-%m-%d') + ' ' + registro.hora_saida.strftime('%H:%M:%S') %}
+              {% set saida_datetime = registro.data_saida | formatar_data_hora_brasil + ' ' + registro.hora_saida | formatar_hora_brasil %}
               <span class="badge bg-info">Finalizado</span>
             {% else %}
               <span class="badge bg-warning text-dark">Em andamento</span>
@@ -276,11 +276,11 @@
         <div class="col-md-4 text-end">
           <small class="text-muted">
             <i class="fas fa-clock me-1"></i>
-            Registrado em {{ registro.criado_em.strftime('%d/%m/%Y às %H:%M') }}
+            Registrado em {{ registro.criado_em | formatar_data_hora_brasil }}
             {% if registro.atualizado_em != registro.criado_em %}
               <br>
               <i class="fas fa-edit me-1"></i>
-              Atualizado em {{ registro.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}
+              Atualizado em {{ registro.atualizado_em | formatar_data_hora_brasil }}
             {% endif %}
           </small>
         </div>

@@ -28,7 +28,7 @@
                             <strong>Embarque:</strong> #{{ frete_data.embarque.numero }}
                         </div>
                         <div class="col-md-3">
-                            <strong>Data:</strong> {{ frete_data.embarque.data_embarque.strftime('%d/%m/%Y') if frete_data.embarque.data_embarque else 'N/A' }}
+                            <strong>Data:</strong> {{ frete_data.embarque.data_embarque | formatar_data_segura if frete_data.embarque.data_embarque else 'N/A' }}
                         </div>
                         <div class="col-md-3">
                             <strong>Transportadora:</strong> {{ frete_data.embarque.transportadora.razao_social }}

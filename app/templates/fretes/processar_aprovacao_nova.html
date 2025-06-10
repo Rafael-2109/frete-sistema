@@ -54,7 +54,7 @@
                 <div class="card-body">
                     <p>{{ aprovacao.motivo_solicitacao or "Não informado" }}</p>
                     <small class="text-muted">
-                        Solicitado por {{ aprovacao.solicitado_por }} em {{ aprovacao.solicitado_em.strftime('%d/%m/%Y %H:%M') }}
+                        Solicitado por {{ aprovacao.solicitado_por }} em {{ aprovacao.solicitado_em | formatar_data_hora_brasil }}
                     </small>
                 </div>
             </div>

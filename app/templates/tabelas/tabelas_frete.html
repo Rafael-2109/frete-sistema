@@ -122,7 +122,7 @@
               <td>{{ tabela.pedagio_por_100kg }}</td>
               <td>{{ 'Sim' if tabela.icms_incluso else 'Não' }}</td>
               <td>{{ tabela.criado_por }}</td>
-              <td>{{ tabela.criado_em.strftime("%d/%m/%Y %H:%M") }}</td>
+              <td>{{ tabela.criado_em | formatar_data_hora_brasil }}</td>
             </tr>
             {% endfor %}
           </tbody>

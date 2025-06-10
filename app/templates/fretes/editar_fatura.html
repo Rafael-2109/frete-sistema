@@ -59,7 +59,7 @@
                         <div class="form-group">
                             <label for="data_emissao">Data de Emissão *</label>
                             <input type="date" class="form-control" id="data_emissao" name="data_emissao" 
-                                   value="{{ fatura.data_emissao.strftime('%Y-%m-%d') if fatura.data_emissao }}" required>
+                                   value="{{ fatura.data_emissao | formatar_data_hora_brasil if fatura.data_emissao }}" required>
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -78,7 +78,7 @@
                         <div class="form-group">
                             <label for="vencimento">Vencimento</label>
                             <input type="date" class="form-control" id="vencimento" name="vencimento" 
-                                   value="{{ fatura.vencimento.strftime('%Y-%m-%d') if fatura.vencimento }}">
+                                   value="{{ fatura.vencimento | formatar_data_hora_brasil if fatura.vencimento }}">
                         </div>
                     </div>
                 </div>
@@ -216,7 +216,7 @@
                             </td>
                             <td>{{ despesa.numero_documento or 'Pendente' }}</td>
                             <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
-                            <td>{{ despesa.vencimento_despesa.strftime('%d/%m/%Y') if despesa.vencimento_despesa else 'N/A' }}</td>
+                            <td>{{ despesa.vencimento_despesa | formatar_data_segura if despesa.vencimento_despesa else 'N/A' }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

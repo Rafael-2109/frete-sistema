@@ -388,7 +388,7 @@
           <td>R$ {{ "%.2f"|format(historico.pedagio_por_100kg or 0) }}</td>
           <td>{{ 'Sim' if historico.icms_incluso else 'Não' }}</td>
           <td>{{ historico.criado_por }}</td>
-          <td>{{ historico.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ historico.criado_em | formatar_data_hora_brasil }}</td>
         </tr>
         {% endfor %}
       </tbody>

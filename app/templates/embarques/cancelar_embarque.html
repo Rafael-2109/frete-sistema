@@ -21,7 +21,7 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <p><strong>Número:</strong> {{ embarque.numero }}</p>
-                                <p><strong>Data:</strong> {{ embarque.data_embarque.strftime('%d/%m/%Y') if embarque.data_embarque else 'Não definida' }}</p>
+                                <p><strong>Data:</strong> {{ embarque.data_embarque | formatar_data_segura if embarque.data_embarque else 'Não definida' }}</p>
                                 <p><strong>Status Atual:</strong> 
                                     <span class="badge bg-primary">{{ embarque.status.title() }}</span>
                                 </p>
@@ -29,7 +29,7 @@
                             <div class="col-md-6">
                                 <p><strong>Transportadora:</strong> {{ embarque.transportadora.razao_social if embarque.transportadora else 'Não definida' }}</p>
                                 <p><strong>Total de Itens:</strong> {{ embarque.itens|length }}</p>
-                                <p><strong>Criado em:</strong> {{ embarque.criado_em.strftime('%d/%m/%Y %H:%M') if embarque.criado_em else 'N/A' }}</p>
+                                <p><strong>Criado em:</strong> {{ embarque.criado_em | formatar_data_hora_brasil if embarque.criado_em else 'N/A' }}</p>
                             </div>
                         </div>
                     </div>

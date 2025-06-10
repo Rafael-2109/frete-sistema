@@ -31,10 +31,10 @@
                                 </div>
                                 <div class="col-md-6">
                                     <p><strong>Cadastrado em:</strong> 
-                                        {{ usuario.criado_em.strftime('%d/%m/%Y às %H:%M') if usuario.criado_em else '-' }}
+                                        {{ usuario.criado_em | formatar_data_hora_brasil if usuario.criado_em else '-' }}
                                     </p>
                                     <p><strong>Último Login:</strong> 
-                                        {{ usuario.ultimo_login.strftime('%d/%m/%Y às %H:%M') if usuario.ultimo_login else 'Nunca' }}
+                                        {{ usuario.ultimo_login | formatar_data_hora_brasil if usuario.ultimo_login else 'Nunca' }}
                                     </p>
                                     <p><strong>Vendedor Vinculado:</strong> 
                                         {{ usuario.vendedor_vinculado or '-' }}

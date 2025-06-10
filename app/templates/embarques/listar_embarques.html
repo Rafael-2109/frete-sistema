@@ -126,7 +126,7 @@
         {% for embarque in embarques %}
         <tr>
           <td>{{ embarque.numero }}</td>
-          <td>{{ embarque.data_embarque.strftime('%d/%m/%Y') if embarque.data_embarque else '-' }}</td>
+          <td>{{ embarque.data_embarque | formatar_data_segura if embarque.data_embarque else '-' }}</td>
           <td>{{ embarque.transportadora.razao_social if embarque.transportadora else '' }}</td>
           <td>
             <span class="badge bg-{% if embarque.status == 'ativo' %}success{% elif embarque.status == 'cancelado' %}danger{% else %}secondary{% endif %}">

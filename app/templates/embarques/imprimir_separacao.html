@@ -142,7 +142,7 @@
         <div class="info-left">
             <div class="info-row">
                 <span class="info-label">Data Pedido:</span>
-                {{ resumo_separacao.data_pedido.strftime('%d/%m/%Y') if resumo_separacao.data_pedido else 'N/A' }}
+                {{ resumo_separacao.data_pedido | formatar_data_segura if resumo_separacao.data_pedido else 'N/A' }}
             </div>
             <div class="info-row">
                 <span class="info-label">Pedido:</span>
@@ -164,11 +164,11 @@
         <div class="info-right">
             <div class="info-row">
                 <span class="info-label">Data Expedição:</span>
-                {{ itens_separacao[0].expedicao.strftime('%d/%m/%Y') if itens_separacao[0].expedicao else 'N/A' }}
+                {{ itens_separacao[0].expedicao | formatar_data_segura if itens_separacao[0].expedicao else 'N/A' }}
             </div>
             <div class="info-row">
                 <span class="info-label">Data Agendamento:</span>
-                {{ itens_separacao[0].agendamento.strftime('%d/%m/%Y') if itens_separacao[0].agendamento else 'N/A' }}
+                {{ itens_separacao[0].agendamento | formatar_data_segura if itens_separacao[0].agendamento else 'N/A' }}
             </div>
             <div class="info-row">
                 <span class="info-label">Protocolo:</span>
@@ -256,7 +256,7 @@
         <div style="display: flex; justify-content: space-between;">
             <span>Sistema de Frete - Relatório de Separação</span>
             <span>
-                Impresso em: {{ data_impressao.strftime('%d/%m/%Y %H:%M') }}
+                Impresso em: {{ data_impressao | formatar_data_hora_brasil }}
                 {% if current_user and current_user.is_authenticated %}
                   | Impresso por: {{ current_user.nome or current_user.email or 'Usuário' }}
                 {% else %}

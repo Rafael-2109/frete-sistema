@@ -87,7 +87,7 @@
                 <strong class="nome-motorista">{{ motorista.nome_completo }}</strong>
                 {% if motorista.atualizado_em != motorista.criado_em %}
                   <br><small class="text-muted">
-                    <i class="fas fa-edit"></i> Atualizado em {{ motorista.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}
+                    <i class="fas fa-edit"></i> Atualizado em {{ motorista.atualizado_em | formatar_data_hora_brasil }}
                   </small>
                 {% endif %}
               </td>
@@ -98,8 +98,8 @@
               <td class="telefone-motorista">{{ motorista.telefone }}</td>
               <td>
                 <small class="text-muted">
-                  {{ motorista.criado_em.strftime('%d/%m/%Y') }}<br>
-                  às {{ motorista.criado_em.strftime('%H:%M') }}
+                  {{ motorista.criado_em | formatar_data_segura }}<br>
+                  às {{ motorista.criado_em | formatar_hora_brasil }}
                 </small>
               </td>
               <td class="text-center">

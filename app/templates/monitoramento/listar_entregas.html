@@ -250,18 +250,18 @@
                   <td>{{ e.transportadora }}</td>
                   <td>{{ e.uf }}</td>
                   <td>{{ e.municipio }}</td>
-                  <td>{{ e.data_faturamento.strftime('%d/%m/%Y') if e.data_faturamento else '-' }}</td>
-                  <td>{{ e.data_embarque.strftime('%d/%m/%Y') if e.data_embarque else '-' }}</td>
-                  <td>{{ e.data_agendamento.strftime('%d/%m/%Y') if e.data_agendamento else '-' }}</td>
+                  <td>{{ e.data_faturamento | formatar_data_segura if e.data_faturamento else '-' }}</td>
+                  <td>{{ e.data_embarque | formatar_data_segura if e.data_embarque else '-' }}</td>
+                  <td>{{ e.data_agendamento | formatar_data_segura if e.data_agendamento else '-' }}</td>
                   <td>
                     {% if e.data_entrega_prevista %}
-                      {{ e.data_entrega_prevista.strftime('%d/%m/%Y') }}
+                      {{ e.data_entrega_prevista | formatar_data_segura }}
                     {% else %}-{% endif %}
                   </td>
                   <td>
                     {% if e.entregue and e.data_hora_entrega_realizada %}
                       <span class="badge bg-success entregue-popup"
-                            data-entrega="{{ e.data_hora_entrega_realizada.strftime('%d/%m/%Y %H:%M') }}">
+                            data-entrega="{{ e.data_hora_entrega_realizada | formatar_data_hora_brasil }}">
                         Entregue
                       </span>
                     {% elif e.entregue %}
@@ -480,18 +480,18 @@
           <td>{{ e.transportadora }}</td>
           <td>{{ e.uf }}</td>
           <td>{{ e.municipio }}</td>
-          <td>{{ e.data_faturamento.strftime('%d/%m/%Y') if e.data_faturamento else '-' }}</td>
-          <td>{{ e.data_embarque.strftime('%d/%m/%Y') if e.data_embarque else '-' }}</td>
+          <td>{{ e.data_faturamento | formatar_data_segura if e.data_faturamento else '-' }}</td>
+          <td>{{ e.data_embarque | formatar_data_segura if e.data_embarque else '-' }}</td>
           <td>
             {% if e.data_agenda %}
-              {{ e.data_agenda.strftime('%d/%m/%Y') }}
+              {{ e.data_agenda | formatar_data_segura }}
             {% else %}
               -
             {% endif %}
           </td>
           <td>
             {% if e.data_entrega_prevista %}
-              {{ e.data_entrega_prevista.strftime('%d/%m/%Y') }}
+              {{ e.data_entrega_prevista | formatar_data_segura }}
             {% else %}-{% endif %}
           </td>
           <td>
@@ -504,7 +504,7 @@
                 </a>
             {% elif e.entregue %}
             <span class="badge bg-success entregue-popup" 
-                  data-entrega={{ e.data_hora_entrega_realizada.strftime('%d/%m/%Y-%H:%M') if e.data_hora_entrega_realizada else '-' }}
+                  data-entrega={{ e.data_hora_entrega_realizada | formatar_data_hora_brasil if e.data_hora_entrega_realizada else '-' }}
                   style="cursor:pointer;"
                   tabindex="0">
               Entregue

@@ -132,8 +132,8 @@
                             <h6><i class="fas fa-file-alt"></i> CTe e Fatura</h6>
                             {% if frete.numero_cte %}
                                 <p><strong>Número CTe:</strong> {{ frete.numero_cte }}</p>
-                                <p><strong>Data Emissão:</strong> {{ frete.data_emissao_cte.strftime('%d/%m/%Y') if frete.data_emissao_cte else 'N/A' }}</p>
-                                <p><strong>Vencimento:</strong> {{ frete.vencimento.strftime('%d/%m/%Y') if frete.vencimento else 'N/A' }}</p>
+                                <p><strong>Data Emissão:</strong> {{ frete.data_emissao_cte | formatar_data_segura if frete.data_emissao_cte else 'N/A' }}</p>
+                                <p><strong>Vencimento:</strong> {{ frete.vencimento | formatar_data_segura if frete.vencimento else 'N/A' }}</p>
                             {% else %}
                                 <p class="text-muted">CTe não lançado</p>
                             {% endif %}
@@ -313,13 +313,13 @@
                             {% endif %}
                         </p>
                         <p><strong>Solicitado por:</strong> {{ aprovacao.solicitado_por }}</p>
-                        <p><strong>Em:</strong> {{ aprovacao.solicitado_em.strftime('%d/%m/%Y %H:%M') }}</p>
+                        <p><strong>Em:</strong> {{ aprovacao.solicitado_em | formatar_data_hora_brasil }}</p>
                         {% if aprovacao.motivo_solicitacao %}
                             <p><strong>Motivo:</strong> {{ aprovacao.motivo_solicitacao }}</p>
                         {% endif %}
                         {% if aprovacao.aprovador %}
                             <p><strong>Aprovador:</strong> {{ aprovacao.aprovador }}</p>
-                            <p><strong>Aprovado em:</strong> {{ aprovacao.aprovado_em.strftime('%d/%m/%Y %H:%M') if aprovacao.aprovado_em else 'N/A' }}</p>
+                            <p><strong>Aprovado em:</strong> {{ aprovacao.aprovado_em | formatar_data_hora_brasil if aprovacao.aprovado_em else 'N/A' }}</p>
                         {% endif %}
                         {% if aprovacao.observacoes_aprovacao %}
                             <p><strong>Observações:</strong> {{ aprovacao.observacoes_aprovacao }}</p>
@@ -378,7 +378,7 @@
                                         {% endif %}
                                     </td>
                                     <td>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</td>
-                                    <td>{{ despesa.vencimento_despesa.strftime('%d/%m/%Y') if despesa.vencimento_despesa else 'N/A' }}</td>
+                                    <td>{{ despesa.vencimento_despesa | formatar_data_segura if despesa.vencimento_despesa else 'N/A' }}</td>
                                     <td>
                                         <div class="btn-group-vertical" role="group">
                                             {% if frete.fatura_frete_id %}
@@ -489,7 +489,7 @@
                                             <span class="badge badge-secondary" style="color: white; background-color: #6c757d;">{{ mov.status }}</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ mov.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                                    <td>{{ mov.criado_em | formatar_data_hora_brasil }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

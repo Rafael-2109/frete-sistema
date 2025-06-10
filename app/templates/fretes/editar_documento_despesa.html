@@ -40,8 +40,8 @@
                             <h5 class="text-muted">Fatura Vinculada</h5>
                             <p><strong>Número:</strong> {{ fatura.numero_fatura }}</p>
                             <p><strong>Transportadora:</strong> {{ fatura.transportadora.nome }}</p>
-                            <p><strong>Emissão:</strong> {{ fatura.data_emissao.strftime('%d/%m/%Y') if fatura.data_emissao else 'N/A' }}</p>
-                            <p><strong>Vencimento:</strong> {{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else 'N/A' }}</p>
+                            <p><strong>Emissão:</strong> {{ fatura.data_emissao | formatar_data_segura if fatura.data_emissao else 'N/A' }}</p>
+                            <p><strong>Vencimento:</strong> {{ fatura.vencimento | formatar_data_segura if fatura.vencimento else 'N/A' }}</p>
                         </div>
                     </div>
                     

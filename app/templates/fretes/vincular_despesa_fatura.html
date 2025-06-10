@@ -44,7 +44,7 @@
                             <p><strong>Documento Atual:</strong> {{ despesa.tipo_documento }}</p>
                             <p><strong>Número:</strong> {{ despesa.numero_documento }}</p>
                             <p><strong>Valor Atual:</strong> R$ {{ "%.2f"|format(despesa.valor_despesa) }}</p>
-                            <p><strong>Vencimento Atual:</strong> {{ despesa.vencimento_despesa.strftime('%d/%m/%Y') if despesa.vencimento_despesa else 'N/A' }}</p>
+                            <p><strong>Vencimento Atual:</strong> {{ despesa.vencimento_despesa | formatar_data_segura if despesa.vencimento_despesa else 'N/A' }}</p>
                         </div>
                     </div>
                     
@@ -78,9 +78,9 @@
                                     {% for fatura in faturas_disponiveis %}
                                         <option value="{{ fatura.id }}">
                                             {{ fatura.numero_fatura }} - 
-                                            {{ fatura.data_emissao.strftime('%d/%m/%Y') if fatura.data_emissao else 'S/Data' }} - 
+                                            {{ fatura.data_emissao | formatar_data_segura if fatura.data_emissao else 'S/Data' }} - 
                                             R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}
-                                            {% if fatura.vencimento %} - Venc: {{ fatura.vencimento.strftime('%d/%m/%Y') }}{% endif %}
+                                            {% if fatura.vencimento %} - Venc: {{ fatura.vencimento | formatar_data_segura }}{% endif %}
                                         </option>
                                     {% endfor %}
                                 </select>
@@ -215,7 +215,7 @@
                                 <tr>
                                     <td>{{ fatura.numero_fatura }}</td>
                                     <td>R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}</td>
-                                    <td>{{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else 'N/A' }}</td>
+                                    <td>{{ fatura.vencimento | formatar_data_segura if fatura.vencimento else 'N/A' }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

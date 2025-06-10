@@ -85,7 +85,7 @@
 <body>
     <!-- CABEÇALHO DO EMBARQUE -->
     <div class="embarque-header">
-        <h1>EMBARQUE #{{ embarque.numero }} - {{ embarque.data_embarque.strftime('%d/%m/%Y') if embarque.data_embarque else '___/___/_____' }}</h1>
+        <h1>EMBARQUE #{{ embarque.numero }} - {{ embarque.data_embarque | formatar_data_segura if embarque.data_embarque else '___/___/_____' }}</h1>
     </div>
 
     <!-- Informações do Embarque (formato formulário) -->
@@ -199,7 +199,7 @@
         <div style="display: flex; justify-content: space-between;">
             <span>Sistema de Frete - Relatório de Embarque</span>
             <span>
-                Impresso em: {{ data_impressao.strftime('%d/%m/%Y %H:%M') }}
+                Impresso em: {{ data_impressao | formatar_data_hora_brasil }}
                 {% if current_user and current_user.is_authenticated %}
                   | Impresso por: {{ current_user.nome or current_user.email or 'Usuário' }}
                 {% else %}

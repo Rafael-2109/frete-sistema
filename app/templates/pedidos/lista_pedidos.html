@@ -392,10 +392,10 @@
                 
                 <td class="text-center">
                   {% if p.expedicao %}
-                    {{ p.expedicao.strftime("%d/%m") }}
+                    {{ p.expedicao | formatar_data_hora_brasil }}
                   {% endif %}
                   {% if p.agendamento and p.agendamento != p.expedicao %}
-                    <br><small class="text-success">Agend: {{ p.agendamento.strftime("%d/%m") }}</small>
+                    <br><small class="text-success">Agend: {{ p.agendamento | formatar_data_hora_brasil }}</small>
                   {% endif %}
                 </td>
                 
@@ -406,7 +406,7 @@
                     <span class="text-muted">-</span>
                   {% endif %}
                   {% if p.data_embarque %}
-                    <br><small class="text-primary">Emb: {{ p.data_embarque.strftime("%d/%m") }}</small>
+                    <br><small class="text-primary">Emb: {{ p.data_embarque | formatar_data_hora_brasil }}</small>
                   {% endif %}
                 </td>
 

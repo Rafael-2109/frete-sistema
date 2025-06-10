@@ -161,7 +161,7 @@
                   -
                 {% endif %}
               </td>
-              <td>{{ c.atualizado_em.strftime('%d/%m/%Y') }}</td>
+              <td>{{ c.atualizado_em | formatar_data_hora_brasil }}</td>
               <td>
                 <div class="btn-group" role="group">
                   <a href="{{ url_for('cadastros_agendamento.editar_contato', id=c.id) }}" 
@@ -279,5 +279,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+  <!-- Informações de timezone -->
+  <div class="text-center mt-4">
+    {% include '_timezone_info.html' %}
+  </div>
+</div>
 
 {% endblock %}

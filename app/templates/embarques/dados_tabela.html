@@ -47,7 +47,7 @@
           <p><strong>Status:</strong> 
             <span class="badge badge-success">{{ embarque.status or 'N/A' }}</span>
           </p>
-          <p><strong>Data de Criação:</strong> {{ embarque.criado_em.strftime('%d/%m/%Y %H:%M') if embarque.criado_em else 'N/A' }}</p>
+          <p><strong>Data de Criação:</strong> {{ embarque.criado_em | formatar_data_hora_brasil if embarque.criado_em else 'N/A' }}</p>
         </div>
       </div>
 

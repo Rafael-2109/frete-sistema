@@ -61,7 +61,7 @@
                                     <td>
                                         <strong>#{{ frete.id }}</strong>
                                         <br>
-                                        <small class="text-muted">{{ frete.criado_em.strftime('%d/%m/%Y') }}</small>
+                                        <small class="text-muted">{{ frete.criado_em | formatar_data_segura }}</small>
                                     </td>
                                     <td>
                                         <strong>{{ frete.nome_cliente[:30] }}{% if frete.nome_cliente|length > 30 %}...{% endif %}</strong>

@@ -67,7 +67,7 @@
               <div class="col-md-6">
                 <small class="text-muted">
                   <i class="fas fa-info-circle"></i> 
-                  Criado/Atualizado em: {{ contato.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}
+                  Criado/Atualizado em: {{ contato.atualizado_em | formatar_data_hora_brasil }}
                 </small>
               </div>
             </div>
@@ -112,7 +112,7 @@
             </div>
             <div class="col-md-4">
               <strong>Última Atualização:</strong><br>
-              <span class="text-muted">{{ contato.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}</span>
+              <span class="text-muted">{{ contato.atualizado_em | formatar_data_hora_brasil }}</span>
             </div>
           </div>
         </div>

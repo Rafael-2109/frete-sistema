@@ -96,7 +96,7 @@
                             <strong>Embarque:</strong> #{{ embarque_encontrado.numero }}
                         </div>
                         <div class="col-md-3">
-                            <strong>Data:</strong> {{ embarque_encontrado.data_embarque.strftime('%d/%m/%Y') if embarque_encontrado.data_embarque else 'N/A' }}
+                            <strong>Data:</strong> {{ embarque_encontrado.data_embarque | formatar_data_segura if embarque_encontrado.data_embarque else 'N/A' }}
                         </div>
                         <div class="col-md-3">
                             <strong>Transportadora:</strong> {{ embarque_encontrado.transportadora.razao_social }}

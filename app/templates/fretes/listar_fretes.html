@@ -173,7 +173,7 @@
                                         <span class="badge badge-secondary" style="background-color: #6c757d; color: white;">{{ frete.status }}</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ frete.criado_em.strftime('%d/%m/%Y') }}</td>
+                                <td>{{ frete.criado_em | formatar_data_segura }}</td>
                                 <td>
                                     <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}" 
                                        class="btn btn-sm btn-outline-primary">

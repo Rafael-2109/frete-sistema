@@ -55,7 +55,7 @@
                             <td>
                                 <small class="text-muted">
                                     <i class="fas fa-clock me-1"></i>
-                                    {{ usuario.criado_em.strftime('%d/%m/%Y %H:%M') if usuario.criado_em else '-' }}
+                                    {{ usuario.criado_em | formatar_data_hora_brasil if usuario.criado_em else '-' }}
                                 </small>
                             </td>
                             <td>

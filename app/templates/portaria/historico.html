@@ -20,11 +20,11 @@
       <form method="GET" class="row g-3">
         <div class="col-md-4">
           {{ form.data_inicio.label(class="form-label") }}
-          {{ form.data_inicio(class="form-control", value=data_inicio.strftime('%Y-%m-%d') if data_inicio else '') }}
+          {{ form.data_inicio(class="form-control", value=data_inicio | formatar_data_hora_brasil if data_inicio else '') }}
         </div>
         <div class="col-md-4">
           {{ form.data_fim.label(class="form-label") }}
-          {{ form.data_fim(class="form-control", value=data_fim.strftime('%Y-%m-%d') if data_fim else '') }}
+          {{ form.data_fim(class="form-control", value=data_fim | formatar_data_hora_brasil if data_fim else '') }}
         </div>
         <div class="col-md-4 d-flex align-items-end">
           <div class="btn-group w-100">
@@ -111,7 +111,7 @@
               {% elif registro.status == 'AGUARDANDO' %}table-warning
               {% else %}table-secondary{% endif %}
             ">
-              <td>{{ registro.data_chegada.strftime('%d/%m/%Y') if registro.data_chegada else '-' }}</td>
+              <td>{{ registro.data_chegada | formatar_data_segura if registro.data_chegada else '-' }}</td>
               <td>
                 <strong>{{ registro.motorista_obj.nome_completo }}</strong>
                 <br>
@@ -144,12 +144,12 @@
                   <span class="text-muted">-</span>
                 {% endif %}
               </td>
-              <td>{{ registro.data_chegada.strftime('%d/%m/%Y') if registro.data_chegada else '-' }}</td>
-              <td>{{ registro.hora_chegada.strftime('%H:%M') if registro.hora_chegada else '-' }}</td>
-              <td>{{ registro.data_entrada.strftime('%d/%m/%Y') if registro.data_entrada else '-' }}</td>
-              <td>{{ registro.hora_entrada.strftime('%H:%M') if registro.hora_entrada else '-' }}</td>
-              <td>{{ registro.data_saida.strftime('%d/%m/%Y') if registro.data_saida else '-' }}</td>
-              <td>{{ registro.hora_saida.strftime('%H:%M') if registro.hora_saida else '-' }}</td>
+              <td>{{ registro.data_chegada | formatar_data_segura if registro.data_chegada else '-' }}</td>
+              <td>{{ registro.hora_chegada | formatar_hora_brasil if registro.hora_chegada else '-' }}</td>
+              <td>{{ registro.data_entrada | formatar_data_segura if registro.data_entrada else '-' }}</td>
+              <td>{{ registro.hora_entrada | formatar_hora_brasil if registro.hora_entrada else '-' }}</td>
+              <td>{{ registro.data_saida | formatar_data_segura if registro.data_saida else '-' }}</td>
+              <td>{{ registro.hora_saida | formatar_hora_brasil if registro.hora_saida else '-' }}</td>
               <td>
                 <span class="badge 
                   {% if registro.status == 'SAIU' %}bg-secondary
@@ -195,11 +195,11 @@
               {% if data_inicio or data_fim %}
                 filtrados
                 {% if data_inicio and data_fim %}
-                  de {{ data_inicio.strftime('%d/%m/%Y') }} até {{ data_fim.strftime('%d/%m/%Y') }}
+                  de {{ data_inicio | formatar_data_segura }} até {{ data_fim | formatar_data_segura }}
                 {% elif data_inicio %}
-                  a partir de {{ data_inicio.strftime('%d/%m/%Y') }}
+                  a partir de {{ data_inicio | formatar_data_segura }}
                 {% elif data_fim %}
-                  até {{ data_fim.strftime('%d/%m/%Y') }}
+                  até {{ data_fim | formatar_data_segura }}
                 {% endif %}
               {% endif %}
             </small>

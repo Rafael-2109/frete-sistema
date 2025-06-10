@@ -184,7 +184,7 @@
       <tr>
         <td>{{ r.numero_nf }}</td>
         <td>{{ r.cnpj_cliente }}</td>
-        <td>{{ r.data_fatura.strftime('%d/%m/%Y') if r.data_fatura else '' }}</td>
+        <td>{{ r.data_fatura | formatar_data_segura if r.data_fatura else '' }}</td>
         <td>{{ r.nome_cliente }}</td>
         <td>R$ {{ '%.2f'|format(r.valor_total or 0) }}</td>
         <td>{{ r.nome_transportadora }}</td>

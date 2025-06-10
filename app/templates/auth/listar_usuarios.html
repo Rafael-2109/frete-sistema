@@ -72,7 +72,7 @@
                                 {% if usuario.ultimo_login %}
                                     <small class="text-muted">
                                         <i class="fas fa-clock me-1"></i>
-                                        {{ usuario.ultimo_login.strftime('%d/%m/%Y %H:%M') }}
+                                        {{ usuario.ultimo_login | formatar_data_hora_brasil }}
                                     </small>
                                 {% else %}
                                     <span class="text-muted">Nunca</span>

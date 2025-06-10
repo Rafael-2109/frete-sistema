@@ -168,7 +168,7 @@
 <body>
     <!-- PÁGINA 1: EMBARQUE -->
     <div class="embarque-header">
-        <h1>EMBARQUE #{{ embarque.numero }} - {{ embarque.data_embarque.strftime('%d/%m/%Y') if embarque.data_embarque else '___/___/_____' }}</h1>
+        <h1>EMBARQUE #{{ embarque.numero }} - {{ embarque.data_embarque | formatar_data_segura if embarque.data_embarque else '___/___/_____' }}</h1>
     </div>
 
     <!-- Informações do Embarque (formato formulário) -->
@@ -305,7 +305,7 @@
             <div class="info-left">
                 <div class="info-row">
                     <span class="info-label">Data Pedido:</span>
-                    {{ separacao_data.resumo.data_pedido.strftime('%d/%m/%Y') if separacao_data.resumo.data_pedido else 'N/A' }}
+                    {{ separacao_data.resumo.data_pedido | formatar_data_segura if separacao_data.resumo.data_pedido else 'N/A' }}
                 </div>
                 <div class="info-row">
                     <span class="info-label">Pedido:</span>
@@ -328,11 +328,11 @@
             <div class="info-right">
                 <div class="info-row">
                     <span class="info-label">Data Expedição:</span>
-                    {{ separacao_data.itens[0].expedicao.strftime('%d/%m/%Y') if separacao_data.itens[0].expedicao else 'N/A' }}
+                    {{ separacao_data.itens[0].expedicao | formatar_data_segura if separacao_data.itens[0].expedicao else 'N/A' }}
                 </div>
                 <div class="info-row">
                     <span class="info-label">Data Agendamento:</span>
-                    {{ separacao_data.itens[0].agendamento.strftime('%d/%m/%Y') if separacao_data.itens[0].agendamento else 'N/A' }}
+                    {{ separacao_data.itens[0].agendamento | formatar_data_segura if separacao_data.itens[0].agendamento else 'N/A' }}
                 </div>
                 <div class="info-row">
                     <span class="info-label">Protocolo:</span>
@@ -422,7 +422,7 @@
         <div style="display: flex; justify-content: space-between;">
             <span>Sistema de Frete - Relatório Completo</span>
             <span>
-                Impresso em: {{ data_impressao.strftime('%d/%m/%Y %H:%M') }}
+                Impresso em: {{ data_impressao | formatar_data_hora_brasil }}
                 {% if current_user and current_user.is_authenticated %}
                   | Impresso por: {{ current_user.nome or current_user.email or 'Usuário' }}
                 {% else %}

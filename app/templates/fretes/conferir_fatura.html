@@ -263,7 +263,7 @@
                 <h6><i class="fas fa-check-circle"></i> Esta fatura já foi conferida!</h6>
                 <p class="mb-0">
                     Conferida por: <strong>{{ fatura.conferido_por }}</strong><br>
-                    Data: {{ fatura.conferido_em.strftime('%d/%m/%Y %H:%M') if fatura.conferido_em }}<br>
+                    Data: {{ fatura.conferido_em | formatar_data_hora_brasil if fatura.conferido_em }}<br>
                     {% if fatura.observacoes_conferencia %}
                         Observações: {{ fatura.observacoes_conferencia }}
                     {% endif %}

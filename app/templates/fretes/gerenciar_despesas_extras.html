@@ -114,8 +114,8 @@
                                             <span class="badge badge-info" style="color: white; background-color: #17a2b8;">{{ despesa.tipo_despesa }}</span>
                                         </td>
                                         <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
-                                        <td>{{ despesa.vencimento_despesa.strftime('%d/%m/%Y') if despesa.vencimento_despesa else 'N/A' }}</td>
-                                        <td>{{ despesa.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                                        <td>{{ despesa.vencimento_despesa | formatar_data_segura if despesa.vencimento_despesa else 'N/A' }}</td>
+                                        <td>{{ despesa.criado_em | formatar_data_hora_brasil }}</td>
                                         <td class="text-center">
                                             <a href="{{ url_for('fretes.vincular_despesa_fatura', despesa_id=despesa.id) }}" 
                                                class="btn btn-success btn-sm" 
@@ -189,7 +189,7 @@
                                                 <span class="text-muted">N/A</span>
                                             {% endif %}
                                         </td>
-                                        <td>{{ despesa.vencimento_despesa.strftime('%d/%m/%Y') if despesa.vencimento_despesa else 'N/A' }}</td>
+                                        <td>{{ despesa.vencimento_despesa | formatar_data_segura if despesa.vencimento_despesa else 'N/A' }}</td>
                                         <td class="text-center">
                                             <form method="POST" action="{{ url_for('fretes.desvincular_despesa_fatura', despesa_id=despesa.id) }}" 
                                                   style="display: inline-block;"

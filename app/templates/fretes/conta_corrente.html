@@ -104,7 +104,7 @@
                                 <tbody>
                                     {% for mov in movimentacoes %}
                                     <tr>
-                                        <td>{{ mov.criado_em.strftime('%d/%m/%Y %H:%M') if mov.criado_em else '-' }}</td>
+                                        <td>{{ mov.criado_em | formatar_data_hora_brasil if mov.criado_em else '-' }}</td>
                                         <td>
                                             <a href="{{ url_for('fretes.visualizar_frete', frete_id=mov.frete_id) }}">
                                                 Frete #{{ mov.frete_id }}

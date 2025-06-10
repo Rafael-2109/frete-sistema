@@ -24,13 +24,13 @@
                                     <span class="badge bg-danger">CANCELADO</span>
                                 </p>
                                 <p><strong>Cancelado em:</strong> 
-                                    {{ embarque.cancelado_em.strftime('%d/%m/%Y às %H:%M') if embarque.cancelado_em else 'N/A' }}
+                                    {{ embarque.cancelado_em | formatar_data_hora_brasil if embarque.cancelado_em else 'N/A' }}
                                 </p>
                             </div>
                             <div class="col-md-6">
                                 <p><strong>Cancelado por:</strong> {{ embarque.cancelado_por or 'N/A' }}</p>
                                 <p><strong>Embarque criado em:</strong> 
-                                    {{ embarque.criado_em.strftime('%d/%m/%Y às %H:%M') if embarque.criado_em else 'N/A' }}
+                                    {{ embarque.criado_em | formatar_data_hora_brasil if embarque.criado_em else 'N/A' }}
                                 </p>
                             </div>
                         </div>
@@ -60,7 +60,7 @@
                                     </tr>
                                     <tr>
                                         <td><strong>Data do Embarque:</strong></td>
-                                        <td>{{ embarque.data_embarque.strftime('%d/%m/%Y') if embarque.data_embarque else 'Não definida' }}</td>
+                                        <td>{{ embarque.data_embarque | formatar_data_segura if embarque.data_embarque else 'Não definida' }}</td>
                                     </tr>
                                     <tr>
                                         <td><strong>Transportadora:</strong></td>

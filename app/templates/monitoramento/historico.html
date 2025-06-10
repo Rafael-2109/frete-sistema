@@ -21,7 +21,7 @@
         {% for data, tipo, autor, descricao in historico %}
         <tr>
           <td>{{ tipo }}</td>
-          <td>{{ data.strftime('%d/%m/%Y %H:%M') if data else '-' }}</td>
+          <td>{{ data | formatar_data_hora_brasil if data else '-' }}</td>
           <td>{{ autor or '-' }}</td>
           <td class="descricao">{{ descricao }}</td>
         </tr>

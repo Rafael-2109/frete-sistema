@@ -119,8 +119,8 @@
         <div class="col-md-1">
           <strong>Chegada:</strong><br>
           {% if dados_portaria.data_chegada %}
-            {{ dados_portaria.data_chegada.strftime('%d/%m/%Y') }}<br>
-            <small class="text-muted">{{ dados_portaria.hora_chegada.strftime('%H:%M') if dados_portaria.hora_chegada else '-' }}</small>
+            {{ dados_portaria.data_chegada | formatar_data_segura }}<br>
+            <small class="text-muted">{{ dados_portaria.hora_chegada | formatar_hora_brasil if dados_portaria.hora_chegada else '-' }}</small>
           {% else %}
             <span class="text-muted">-</span>
           {% endif %}
@@ -128,8 +128,8 @@
         <div class="col-md-1">
           <strong>Entrada:</strong><br>
           {% if dados_portaria.data_entrada %}
-            {{ dados_portaria.data_entrada.strftime('%d/%m/%Y') }}<br>
-            <small class="text-muted">{{ dados_portaria.hora_entrada.strftime('%H:%M') if dados_portaria.hora_entrada else '-' }}</small>
+            {{ dados_portaria.data_entrada | formatar_data_segura }}<br>
+            <small class="text-muted">{{ dados_portaria.hora_entrada | formatar_hora_brasil if dados_portaria.hora_entrada else '-' }}</small>
           {% else %}
             <span class="text-muted">-</span>
           {% endif %}
@@ -137,8 +137,8 @@
         <div class="col-md-1">
           <strong>Saída:</strong><br>
           {% if dados_portaria.data_saida %}
-            {{ dados_portaria.data_saida.strftime('%d/%m/%Y') }}<br>
-            <small class="text-muted">{{ dados_portaria.hora_saida.strftime('%H:%M') if dados_portaria.hora_saida else '-' }}</small>
+            {{ dados_portaria.data_saida | formatar_data_segura }}<br>
+            <small class="text-muted">{{ dados_portaria.hora_saida | formatar_hora_brasil if dados_portaria.hora_saida else '-' }}</small>
           {% else %}
             <span class="text-muted">-</span>
           {% endif %}
@@ -173,7 +173,7 @@
     <div class="card-body">
       <div class="row">
         <div class="col-md-6">
-          <p><strong>Cancelado em:</strong> {{ embarque.cancelado_em.strftime('%d/%m/%Y às %H:%M') if embarque.cancelado_em else 'N/A' }}</p>
+          <p><strong>Cancelado em:</strong> {{ embarque.cancelado_em | formatar_data_hora_brasil if embarque.cancelado_em else 'N/A' }}</p>
           <p><strong>Cancelado por:</strong> {{ embarque.cancelado_por or 'N/A' }}</p>
         </div>
         <div class="col-md-6">

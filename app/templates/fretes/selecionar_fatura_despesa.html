@@ -45,7 +45,7 @@
                                     {% for fatura in faturas_disponiveis %}
                                         <option value="{{ fatura.id }}">
                                             {{ fatura.numero_fatura }} - 
-                                            {{ fatura.data_emissao.strftime('%d/%m/%Y') if fatura.data_emissao else 'S/Data' }} - 
+                                            {{ fatura.data_emissao | formatar_data_segura if fatura.data_emissao else 'S/Data' }} - 
                                             R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}
                                         </option>
                                     {% endfor %}
@@ -191,7 +191,7 @@
                                 <tr>
                                     <td>{{ fatura.numero_fatura }}</td>
                                     <td>R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}</td>
-                                    <td>{{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else 'N/A' }}</td>
+                                    <td>{{ fatura.vencimento | formatar_data_segura if fatura.vencimento else 'N/A' }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

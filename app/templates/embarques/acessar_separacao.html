@@ -53,11 +53,11 @@
                 </div>
                 <div class="col-sm-4">
                   <strong>Data do Pedido:</strong><br>
-                  {{ resumo_separacao.data_pedido.strftime('%d/%m/%Y') if resumo_separacao.data_pedido else 'N/A' }}
+                  {{ resumo_separacao.data_pedido | formatar_data_segura if resumo_separacao.data_pedido else 'N/A' }}
                 </div>
                 <div class="col-sm-4">
                   <strong>Data Expedição:</strong><br>
-                  {{ itens_separacao[0].expedicao.strftime('%d/%m/%Y') if itens_separacao[0].expedicao else 'N/A' }}
+                  {{ itens_separacao[0].expedicao | formatar_data_segura if itens_separacao[0].expedicao else 'N/A' }}
                 </div>
               </div>
               <div class="row mb-3">
@@ -82,7 +82,7 @@
                 </div>
                 <div class="col-sm-6">
                   <strong>Data Agendamento:</strong><br>
-                  {{ itens_separacao[0].agendamento.strftime('%d/%m/%Y') if itens_separacao[0].agendamento else 'N/A' }}
+                  {{ itens_separacao[0].agendamento | formatar_data_segura if itens_separacao[0].agendamento else 'N/A' }}
                 </div>
               </div>
               <div class="row mt-2">

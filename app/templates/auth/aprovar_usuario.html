@@ -32,7 +32,7 @@
                                 </div>
                             </div>
                             <p><strong>Data da Solicitação:</strong> 
-                                {{ usuario.criado_em.strftime('%d/%m/%Y às %H:%M') if usuario.criado_em else '-' }}
+                                {{ usuario.criado_em | formatar_data_hora_brasil if usuario.criado_em else '-' }}
                             </p>
                         </div>
                     </div>

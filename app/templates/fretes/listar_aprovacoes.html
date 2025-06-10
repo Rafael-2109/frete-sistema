@@ -93,7 +93,7 @@
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ aprovacao.solicitado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td>{{ aprovacao.solicitado_em | formatar_data_hora_brasil }}</td>
                                 <td>
                                     <a href="{{ url_for('fretes.processar_aprovacao', aprovacao_id=aprovacao.id) }}" 
                                        class="btn btn-sm btn-primary">
