@@ -56,6 +56,7 @@
                 </div>
                 <div class="card-body">
                     <form action="{{ url_for('fretes.processar_lancamento_frete') }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <input type="hidden" name="embarque_id" value="{{ frete_data.embarque.id }}">
                         <input type="hidden" name="cnpj_cliente" value="{{ frete_data.cnpj_cliente }}">
                         <input type="hidden" name="nome_cliente" value="{{ frete_data.nome_cliente }}">

@@ -15,7 +15,8 @@
                         <i class="fas fa-arrow-left"></i> Voltar
                     </a>
                     <form method="POST" action="{{ url_for('monitoramento.sincronizar_todas_entregas_manual') }}" class="d-inline">
-                        <button type="submit" class="btn btn-primary" onclick="return confirm('Confirma a sincronização de todas as entregas? Esta operação pode demorar alguns minutos.')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="btn btn-primary" onclick="return confirm('Confirma a sincronização de todas as entregas? Esta operação pode demorar alguns minutos.')"
                             <i class="fas fa-sync"></i> Sincronizar Todas
                         </button>
                     </form>
@@ -277,6 +278,7 @@
                                     <h6>Sincronização Completa</h6>
                                     <p class="small text-muted">Sincroniza todas as entregas com dados do faturamento e embarques</p>
                                     <form method="POST" action="{{ url_for('monitoramento.sincronizar_todas_entregas_manual') }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                         <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Confirma a sincronização? Esta operação pode demorar.')">
                                             Executar
                                         </button>
