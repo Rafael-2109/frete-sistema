@@ -102,6 +102,16 @@ def importar_tabela_frete():
         
         try:
             df = pd.read_excel(arquivo)
+            
+            # ✅ LIMPEZA PRÉVIA: Substitui valores NaN por 0 em campos numéricos
+            campos_numericos = ['VALOR', 'PESO', 'FRETE PESO', 'FRETE VALOR', 'GRIS', 'ADV', 
+                              'RCA SEGURO FLUVIAL %', 'DESPACHO / CTE / TAS', 'CTE', 'TAS', 
+                              'PEDAGIO FRAÇÃO 100 KGS']
+            for campo in campos_numericos:
+                if campo in df.columns:
+                    df[campo] = df[campo].fillna(0)
+                    # Substitui valores 'nan' como string também
+                    df[campo] = df[campo].replace(['nan', 'NaN', 'None', 'null', ''], 0)
 
             colunas_obrigatorias = [
                 'ATIVO', 'CÓD. TRANSP', 'DESTINO', 'NOME TABELA',
@@ -183,17 +193,26 @@ def importar_tabela_frete():
                 ).first()
 
                 if tabela_frete:
-                    tabela_frete.frete_minimo_valor = round(float(row.get('VALOR') or 0), 2)
-                    tabela_frete.frete_minimo_peso = round(float(row.get('PESO') or 0), 2)
-                    tabela_frete.valor_kg = round(float(row.get('FRETE PESO') or 0), 6)
-                    tabela_frete.percentual_valor = round(float(row.get('FRETE VALOR') or 0) * 100, 4)
-                    tabela_frete.percentual_gris = round(float(row.get('GRIS') or 0) * 100, 4)
-                    tabela_frete.percentual_adv = round(float(row.get('ADV') or 0) * 100, 4)
-                    tabela_frete.percentual_rca = round(float(row.get('RCA SEGURO FLUVIAL %') or 0) * 100, 4)
-                    tabela_frete.valor_despacho = round(float(row.get('DESPACHO / CTE / TAS') or 0), 2)
-                    tabela_frete.valor_cte = round(float(row.get('CTE') or 0), 2)
-                    tabela_frete.valor_tas = round(float(row.get('TAS') or 0), 2)
-                    tabela_frete.pedagio_por_100kg = round(float(row.get('PEDAGIO FRAÇÃO 100 KGS') or 0), 2)
+                    # Função para limpar valores nan/vazios
+                    def limpar_valor(valor):
+                        if pd.isna(valor) or str(valor).lower() in ['nan', 'none', '', 'null']:
+                            return 0
+                        try:
+                            return float(valor)
+                        except (ValueError, TypeError):
+                            return 0
+                    
+                    tabela_frete.frete_minimo_valor = round(limpar_valor(row.get('VALOR')), 2)
+                    tabela_frete.frete_minimo_peso = round(limpar_valor(row.get('PESO')), 2)
+                    tabela_frete.valor_kg = round(limpar_valor(row.get('FRETE PESO')), 6)
+                    tabela_frete.percentual_valor = round(limpar_valor(row.get('FRETE VALOR')) * 100, 4)
+                    tabela_frete.percentual_gris = round(limpar_valor(row.get('GRIS')) * 100, 4)
+                    tabela_frete.percentual_adv = round(limpar_valor(row.get('ADV')) * 100, 4)
+                    tabela_frete.percentual_rca = round(limpar_valor(row.get('RCA SEGURO FLUVIAL %')) * 100, 4)
+                    tabela_frete.valor_despacho = round(limpar_valor(row.get('DESPACHO / CTE / TAS')), 2)
+                    tabela_frete.valor_cte = round(limpar_valor(row.get('CTE')), 2)
+                    tabela_frete.valor_tas = round(limpar_valor(row.get('TAS')), 2)
+                    tabela_frete.pedagio_por_100kg = round(limpar_valor(row.get('PEDAGIO FRAÇÃO 100 KGS')), 2)
                     tabela_frete.icms_incluso = True if str(row.get('INC.')).strip().upper() == 'S' else False
                     tabela_frete.criado_por = current_user.nome    
                 else:
@@ -204,17 +223,17 @@ def importar_tabela_frete():
                         nome_tabela=nome_tabela,
                         tipo_carga=tipo_carga,
                         modalidade=modalidade,
-                        frete_minimo_valor=round(float(row.get('VALOR') or 0), 2),
-                        frete_minimo_peso=round(float(row.get('PESO') or 0), 2),
-                        valor_kg=round(float(row.get('FRETE PESO') or 0), 6),
-                        percentual_valor=round(float(row.get('FRETE VALOR') or 0) * 100, 4),
-                        percentual_gris=round(float(row.get('GRIS') or 0) * 100, 4),
-                        percentual_adv=round(float(row.get('ADV') or 0) * 100, 4),
-                        percentual_rca=round(float(row.get('RCA SEGURO FLUVIAL %') or 0) * 100, 4),
-                        valor_despacho=round(float(row.get('DESPACHO / CTE / TAS') or 0), 2),
-                        valor_cte=round(float(row.get('CTE') or 0), 2),
-                        valor_tas=round(float(row.get('TAS') or 0), 2),
-                        pedagio_por_100kg=round(float(row.get('PEDAGIO FRAÇÃO 100 KGS') or 0), 2),
+                        frete_minimo_valor=round(limpar_valor(row.get('VALOR')), 2),
+                        frete_minimo_peso=round(limpar_valor(row.get('PESO')), 2),
+                        valor_kg=round(limpar_valor(row.get('FRETE PESO')), 6),
+                        percentual_valor=round(limpar_valor(row.get('FRETE VALOR')) * 100, 4),
+                        percentual_gris=round(limpar_valor(row.get('GRIS')) * 100, 4),
+                        percentual_adv=round(limpar_valor(row.get('ADV')) * 100, 4),
+                        percentual_rca=round(limpar_valor(row.get('RCA SEGURO FLUVIAL %')) * 100, 4),
+                        valor_despacho=round(limpar_valor(row.get('DESPACHO / CTE / TAS')), 2),
+                        valor_cte=round(limpar_valor(row.get('CTE')), 2),
+                        valor_tas=round(limpar_valor(row.get('TAS')), 2),
+                        pedagio_por_100kg=round(limpar_valor(row.get('PEDAGIO FRAÇÃO 100 KGS')), 2),
                         icms_incluso=True if str(row.get('INC.')).strip().upper() == 'S' else False,
                         criado_por=current_user.nome
                     )
@@ -227,17 +246,17 @@ def importar_tabela_frete():
                     nome_tabela=nome_tabela,
                     tipo_carga=tipo_carga,
                     modalidade=modalidade,
-                    frete_minimo_valor=round(float(row.get('VALOR') or 0), 2),
-                    frete_minimo_peso=round(float(row.get('PESO') or 0), 2),
-                    valor_kg=round(float(row.get('FRETE PESO') or 0), 6),
-                    percentual_valor=round(float(row.get('FRETE VALOR') or 0) * 100, 4),
-                    percentual_gris=round(float(row.get('GRIS') or 0) * 100, 4),
-                    percentual_adv=round(float(row.get('ADV') or 0) * 100, 4),
-                    percentual_rca=round(float(row.get('RCA SEGURO FLUVIAL %') or 0) * 100, 4),
-                    valor_despacho=round(float(row.get('DESPACHO / CTE / TAS') or 0), 2),
-                    valor_cte=round(float(row.get('CTE') or 0), 2),
-                    valor_tas=round(float(row.get('TAS') or 0), 2),
-                    pedagio_por_100kg=round(float(row.get('PEDAGIO FRAÇÃO 100 KGS') or 0), 2),
+                    frete_minimo_valor=round(limpar_valor(row.get('VALOR')), 2),
+                    frete_minimo_peso=round(limpar_valor(row.get('PESO')), 2),
+                    valor_kg=round(limpar_valor(row.get('FRETE PESO')), 6),
+                    percentual_valor=round(limpar_valor(row.get('FRETE VALOR')) * 100, 4),
+                    percentual_gris=round(limpar_valor(row.get('GRIS')) * 100, 4),
+                    percentual_adv=round(limpar_valor(row.get('ADV')) * 100, 4),
+                    percentual_rca=round(limpar_valor(row.get('RCA SEGURO FLUVIAL %')) * 100, 4),
+                    valor_despacho=round(limpar_valor(row.get('DESPACHO / CTE / TAS')), 2),
+                    valor_cte=round(limpar_valor(row.get('CTE')), 2),
+                    valor_tas=round(limpar_valor(row.get('TAS')), 2),
+                    pedagio_por_100kg=round(limpar_valor(row.get('PEDAGIO FRAÇÃO 100 KGS')), 2),
                     icms_incluso=True if str(row.get('INC.')).strip().upper() == 'S' else False,
                     criado_por=current_user.nome
                 )
