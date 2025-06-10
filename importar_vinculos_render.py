@@ -61,28 +61,24 @@ def importar_vinculos_seguro():
             total_vinculos = CidadeAtendida.query.count()
             print(f"✅ Conexão OK. Vínculos atuais: {total_vinculos}")
             
-            # 2. Verificar se arquivo existe no GitHub
+            # 2. Baixar arquivo diretamente (sem verificação HEAD que dá redirect)
             github_url = "https://github.com/Rafael-2109/frete-sistema/raw/main/vinculos.xlsx"
-            print(f"📥 Verificando arquivo: {github_url}")
+            print(f"📥 Baixando arquivo: {github_url}")
             
-            response = requests.head(github_url, timeout=30)
-            if response.status_code != 200:
-                print(f"❌ Arquivo não encontrado no GitHub (Status: {response.status_code})")
-                print("💡 Certifique-se de que vinculos.xlsx está no repositório")
+            try:
+                response = requests.get(github_url, timeout=60, allow_redirects=True)
+                response.raise_for_status()
+                
+                # Salvar temporariamente
+                temp_file = '/tmp/vinculos.xlsx'
+                with open(temp_file, 'wb') as f:
+                    f.write(response.content)
+                print(f"✅ Arquivo baixado: {len(response.content):,} bytes")
+                
+            except requests.RequestException as e:
+                print(f"❌ Erro ao baixar arquivo: {e}")
+                print("💡 Verifique se vinculos.xlsx está no repositório")
                 return False
-            
-            print("✅ Arquivo encontrado no GitHub!")
-            
-            # 3. Baixar arquivo
-            print("📥 Baixando arquivo...")
-            response = requests.get(github_url, timeout=60)
-            response.raise_for_status()
-            
-            # Salvar temporariamente
-            temp_file = '/tmp/vinculos.xlsx'
-            with open(temp_file, 'wb') as f:
-                f.write(response.content)
-            print(f"✅ Arquivo baixado: {len(response.content):,} bytes")
             
             # 4. Ler arquivo Excel
             print("📖 Lendo arquivo Excel...")
