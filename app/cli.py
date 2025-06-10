@@ -1,6 +1,8 @@
 import click
 from flask.cli import with_appcontext
 from app import db
+import os
+import pandas as pd
 
 @click.command('normalizar-dados')
 @with_appcontext
@@ -262,4 +264,50 @@ def criar_vinculos_faltantes():
     else:
         print("ℹ️ Nenhuma tabela órfã encontrada para criar vínculos")
     
-    print("🏁 Criação concluída!") 
+    print("🏁 Criação concluída!")
+
+@click.command()
+@click.argument('arquivo_excel')
+@with_appcontext
+def importar_cidades_cli(arquivo_excel):
+    """Importa cidades de arquivo Excel (uso único)"""
+    from app.localidades.models import Cidade
+    
+    if not os.path.exists(arquivo_excel):
+        click.echo(f"❌ Arquivo não encontrado: {arquivo_excel}")
+        return
+    
+    # Verificar se já existem cidades
+    total_existentes = Cidade.query.count()
+    if total_existentes > 0:
+        if not click.confirm(f"⚠️ Já existem {total_existentes} cidades. Continuar?"):
+            click.echo("❌ Importação cancelada.")
+            return
+    
+    try:
+        df = pd.read_excel(arquivo_excel, dtype=str)
+        df.columns = df.columns.str.strip().str.upper()
+        
+        cidades_importadas = 0
+        for _, row in df.iterrows():
+            if pd.isna(row.get('CIDADE')) or pd.isna(row.get('UF')):
+                continue
+                
+            cidade = Cidade(
+                nome=row['CIDADE'].strip(),
+                uf=row['UF'].strip().upper(),
+                codigo_ibge=row.get('IBGE', '').strip(),
+                icms=float(row.get('ICMS', '0').replace('%', '').replace(',', '.')) / 100,
+                substitui_icms_por_iss=str(row.get('ISS', '')).upper() == 'SIM',
+                microrregiao=row.get('MICRORREGIAO', '').strip() if not pd.isna(row.get('MICRORREGIAO')) else None,
+                mesorregiao=row.get('MESORREGIAO', '').strip() if not pd.isna(row.get('MESORREGIAO')) else None
+            )
+            db.session.add(cidade)
+            cidades_importadas += 1
+        
+        db.session.commit()
+        click.echo(f"✅ {cidades_importadas} cidades importadas com sucesso!")
+        
+    except Exception as e:
+        db.session.rollback()
+        click.echo(f"❌ Erro na importação: {e}") 

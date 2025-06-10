@@ -134,13 +134,14 @@ def create_app(config_name=None):
 
     # Registra comandos CLI apenas se existirem
     try:
-        from app.cli import normalizar_dados, atualizar_ibge, limpar_cache_localizacao, validar_localizacao, diagnosticar_vinculos, corrigir_vinculos_grupo
+        from app.cli import normalizar_dados, atualizar_ibge, limpar_cache_localizacao, validar_localizacao, diagnosticar_vinculos, corrigir_vinculos_grupo, importar_cidades_cli
         app.cli.add_command(normalizar_dados)
         app.cli.add_command(atualizar_ibge)
         app.cli.add_command(limpar_cache_localizacao)
         app.cli.add_command(validar_localizacao)
         app.cli.add_command(diagnosticar_vinculos)
         app.cli.add_command(corrigir_vinculos_grupo)
+        app.cli.add_command(importar_cidades_cli)
         
         # Tenta importar criar_vinculos_faltantes se existir
         try:
