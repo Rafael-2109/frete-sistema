@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory
 from flask_login import login_required
 from werkzeug.utils import secure_filename
 from app import db
@@ -66,3 +66,14 @@ def importar_contatos():
         return redirect(url_for('cadastros_agendamento.importar_contatos'))
 
     return render_template('cadastros_agendamento/importar_contatos.html')
+
+@cadastros_agendamento_bp.route('/modelo-agendamentos')
+@login_required
+def baixar_modelo_agendamentos():
+    """Download do modelo Excel para importação de agendamentos"""
+    return send_from_directory(
+        directory=os.path.join(os.getcwd(), 'app', 'static', 'modelos'),
+        path='modelo_agendamentos.xlsx',
+        as_attachment=True,
+        download_name='modelo_agendamentos.xlsx'
+    )

@@ -57,6 +57,17 @@ def importar_pendencias():
 
     return render_template('financeiro/importar_pendencias.html', form=form)
 
+@financeiro_bp.route('/modelo-pendencias')
+@login_required
+def baixar_modelo_pendencias():
+    """Download do modelo Excel para importação de pendências financeiras"""
+    return send_from_directory(
+        directory=os.path.join(os.getcwd(), 'app', 'static', 'modelos'),
+        path='modelo_pendencias_financeiras.xlsx',
+        as_attachment=True,
+        download_name='modelo_pendencias_financeiras.xlsx'
+    )
+
 
 
 from flask import jsonify
