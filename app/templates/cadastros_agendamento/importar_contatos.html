@@ -13,7 +13,10 @@
       <ul class="mb-3">
         <li>Baixe o modelo Excel oficial abaixo</li>
         <li>Preencha com seus dados seguindo o exemplo</li>
-        <li>Formas aceitas: <span class="badge bg-secondary">PORTAL</span> <span class="badge bg-secondary">TELEFONE</span> <span class="badge bg-secondary">E-MAIL</span> <span class="badge bg-secondary">COMERCIAL</span> <span class="badge bg-secondary">SEM AGENDAMENTO</span></li>
+        <li><strong>Campos obrigatórios:</strong> <span class="badge bg-danger">CNPJ</span></li>
+        <li><strong>Campos opcionais:</strong> <span class="badge bg-success">Forma</span> <span class="badge bg-success">Contato</span> <span class="badge bg-success">Observação</span></li>
+        <li><strong>Formas aceitas:</strong> <span class="badge bg-secondary">PORTAL</span> <span class="badge bg-secondary">TELEFONE</span> <span class="badge bg-secondary">E-MAIL</span> <span class="badge bg-secondary">COMERCIAL</span> <span class="badge bg-secondary">SEM AGENDAMENTO</span></li>
+        <li><strong>Importante:</strong> Campos vazios são permitidos (exceto CNPJ)</li>
       </ul>
       <a href="{{ url_for('cadastros_agendamento.baixar_modelo_agendamentos') }}" class="btn btn-success btn-sm">
         <i class="fas fa-download"></i> Baixar Modelo Excel
@@ -28,15 +31,22 @@
     </div>
     <div class="card-body">
       <form method="POST" enctype="multipart/form-data">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        {{ form.hidden_tag() }}
         <div class="mb-3">
-          <label for="arquivo" class="form-label">Selecione o arquivo Excel (.xlsx)</label>
-          <input class="form-control" type="file" name="arquivo" accept=".xlsx" required>
-          <div class="form-text">Arquivo deve estar no formato do modelo oficial.</div>
+          {{ form.arquivo.label(class="form-label") }}
+          {{ form.arquivo(class="form-control") }}
+          {% if form.arquivo.errors %}
+            <div class="text-danger small mt-1">
+              {% for error in form.arquivo.errors %}
+                <div>{{ error }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+          <div class="form-text">Arquivo deve estar no formato do modelo oficial (.xlsx).</div>
         </div>
-        <button type="submit" class="btn btn-primary">
-          <i class="fas fa-upload"></i> Importar Agendamentos
-        </button>
+        
+        {{ form.submit(class="btn btn-primary") }}
+        
         <a href="{{ url_for('cadastros_agendamento.listar_contatos') }}" class="btn btn-secondary ms-2">
           <i class="fas fa-list"></i> Ver Lista
         </a>
