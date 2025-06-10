@@ -109,6 +109,9 @@
             <li><a class="dropdown-item" href="{{ url_for('localidades.cadastrar_cidade') }}">
               <i class="fas fa-map-marker-alt"></i> Cidades
             </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('veiculos.admin_veiculos') }}">
+              <i class="fas fa-truck"></i> Administrar Veículos
+            </a></li>
             <li><a class="dropdown-item" href="{{ url_for('cadastros_agendamento.listar_contatos') }}">
               <i class="fas fa-calendar-alt"></i> Agendamento
             </a></li>
@@ -139,9 +142,7 @@
             <li><a class="dropdown-item" href="{{ url_for('fretes.listar_fretes') }}">
               <i class="fas fa-search"></i> Buscar Fretes
             </a></li>
-            <li><a class="dropdown-item" href="{{ url_for('veiculos.consulta_veiculos') }}">
-              <i class="fas fa-car"></i> Consulta de Veículos
-            </a></li>
+
             <li><a class="dropdown-item" href="{{ url_for('vinculos.consulta_vinculos') }}">
               <i class="fas fa-link"></i> Consulta de Vínculos
             </a></li>

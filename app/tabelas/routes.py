@@ -98,7 +98,7 @@ def importar_tabela_frete():
         # Processa o arquivo Excel
         sucesso = 0
         erros = 0
-        vinculos_criados = 0
+        rejeitadas_sem_vinculo = []
         
         try:
             df = pd.read_excel(arquivo)
@@ -127,31 +127,23 @@ def importar_tabela_frete():
                     flash(f"Transportadora {cnpj} não cadastrada (linha {index+2}). Por favor, cadastre a transportadora primeiro.", "danger")
                     continue
 
+                # ✅ VALIDAÇÃO: Só importa tabelas que JÁ TÊM vínculos
                 vinculo_existente = CidadeAtendida.query.filter_by(
                     transportadora_id=transportadora.id,
                     uf=uf_destino,
                     nome_tabela=nome_tabela
                 ).first()
 
-                # Se o vínculo não existe, vamos criar
                 if not vinculo_existente:
-                    # Busca uma cidade qualquer do UF para vincular (geralmente a capital)
-                    cidade = Cidade.query.filter_by(uf=uf_destino).first()
-                    if not cidade:
-                        erros += 1
-                        flash(f"UF {uf_destino} não encontrada no banco de dados (linha {index+2})", "danger")
-                        continue
-                        
-                    vinculo = CidadeAtendida(
-                        transportadora_id=transportadora.id,
-                        cidade_id=cidade.id,
-                        codigo_ibge=cidade.codigo_ibge,
-                        uf=uf_destino,
-                        nome_tabela=nome_tabela,
-                        lead_time=1  # valor padrão
-                    )
-                    db.session.add(vinculo)
-                    vinculos_criados += 1
+                    # ❌ REJEITA: Tabela sem vínculo correspondente
+                    rejeitadas_sem_vinculo.append({
+                        'linha': index + 2,
+                        'transportadora': transportadora.razao_social,
+                        'uf_destino': uf_destino,
+                        'nome_tabela': nome_tabela,
+                        'modalidade': str(row['FRETE']).upper()
+                    })
+                    continue  # Pula esta linha - NÃO importa
 
                 tipo_carga = str(row['CARGA']).upper()
                 modalidade = str(row['FRETE']).upper()
@@ -253,10 +245,15 @@ def importar_tabela_frete():
 
             db.session.commit()
             
-            if vinculos_criados > 0:
-                flash(f"Foram criados {vinculos_criados} novos vínculos automaticamente", "info")
-                
-            flash(f"Importação finalizada com sucesso: {sucesso} inseridos/atualizados, Erros: {erros}", "info")
+            # Relatório final da importação
+            if rejeitadas_sem_vinculo:
+                flash(f"❌ {len(rejeitadas_sem_vinculo)} tabela(s) REJEITADA(S) por não terem vínculos correspondentes:", "danger")
+                for rejeitada in rejeitadas_sem_vinculo[:10]:  # Mostra apenas as primeiras 5
+                    flash(f"• Linha {rejeitada['linha']}: {rejeitada['transportadora']} → {rejeitada['uf_destino']} → {rejeitada['nome_tabela']} → {rejeitada['modalidade']}", "warning")
+                if len(rejeitadas_sem_vinculo) > 10:
+                    flash(f"... e mais {len(rejeitadas_sem_vinculo) - 10} tabela(s). Importe os vínculos primeiro!", "warning")
+            
+            flash(f"Importação finalizada: {sucesso} inseridos/atualizados, {erros} erros, {len(rejeitadas_sem_vinculo)} rejeitadas", "info")
             
             return redirect(url_for('tabelas.listar_todas_tabelas'))
             

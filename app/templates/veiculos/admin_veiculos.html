@@ -1,0 +1,377 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>
+      <i class="fas fa-truck me-2"></i>
+      Administração de Veículos
+    </h2>
+    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNovoVeiculo">
+      <i class="fas fa-plus"></i> Novo Veículo
+    </button>
+  </div>
+
+  <!-- Cards de Estatísticas -->
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="card bg-primary text-white">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <h6 class="card-title">Total de Veículos</h6>
+              <h3>{{ veiculos|length }}</h3>
+            </div>
+            <div class="align-self-center">
+              <i class="fas fa-truck fa-2x"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-success text-white">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <h6 class="card-title">Menor Capacidade</h6>
+              <h3>{{ veiculos|min(attribute='peso_maximo')|round|int if veiculos else 0 }} kg</h3>
+            </div>
+            <div class="align-self-center">
+              <i class="fas fa-weight-hanging fa-2x"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-warning text-dark">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <h6 class="card-title">Maior Capacidade</h6>
+              <h3>{{ (veiculos|max(attribute='peso_maximo')|round|int) if veiculos else 0 }} kg</h3>
+            </div>
+            <div class="align-self-center">
+              <i class="fas fa-weight fa-2x"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-info text-white">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <h6 class="card-title">Capacidade Total</h6>
+              <h3>{{ (veiculos|sum(attribute='peso_maximo')|round|int) if veiculos else 0 }} kg</h3>
+            </div>
+            <div class="align-self-center">
+              <i class="fas fa-calculator fa-2x"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabela de Veículos -->
+  <div class="card">
+    <div class="card-header bg-light">
+      <h5 class="mb-0">
+        <i class="fas fa-list me-2"></i>
+        Lista de Veículos Cadastrados
+      </h5>
+    </div>
+    <div class="card-body p-0">
+      {% if veiculos %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th width="5%">#</th>
+              <th width="30%">
+                <i class="fas fa-truck me-1"></i>
+                Nome do Veículo
+              </th>
+              <th width="25%">
+                <i class="fas fa-weight-hanging me-1"></i>
+                Peso Máximo
+              </th>
+              <th width="20%">
+                <i class="fas fa-chart-bar me-1"></i>
+                Visualização
+              </th>
+              <th width="20%" class="text-center">
+                <i class="fas fa-cogs me-1"></i>
+                Ações
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for veiculo in veiculos %}
+            <tr>
+              <td class="align-middle">
+                <span class="badge bg-secondary">{{ loop.index }}</span>
+              </td>
+              <td class="align-middle">
+                <strong>{{ veiculo.nome }}</strong>
+                {% if veiculo.nome == 'MASTER' %}
+                  <span class="badge bg-warning text-dark ms-2">NOVO</span>
+                {% endif %}
+              </td>
+              <td class="align-middle">
+                <div class="d-flex align-items-center">
+                  <span class="fw-bold me-2">{{ "{:,.0f}".format(veiculo.peso_maximo).replace(",", ".") }} kg</span>
+                  {% if veiculo.peso_maximo >= 20000 %}
+                    <span class="badge bg-danger">PESADO</span>
+                  {% elif veiculo.peso_maximo >= 10000 %}
+                    <span class="badge bg-warning text-dark">MÉDIO</span>
+                  {% else %}
+                    <span class="badge bg-success">LEVE</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td class="align-middle">
+                <div class="progress" style="height: 20px;">
+                  {% set max_peso = veiculos|max(attribute='peso_maximo') %}
+                  {% set percentual = (veiculo.peso_maximo / max_peso * 100) if max_peso > 0 else 0 %}
+                  <div class="progress-bar 
+                    {% if percentual >= 80 %}bg-danger
+                    {% elif percentual >= 50 %}bg-warning
+                    {% else %}bg-success{% endif %}"
+                    role="progressbar" 
+                    style="width: {{ percentual }}%">
+                    {{ "%.0f"|format(percentual) }}%
+                  </div>
+                </div>
+              </td>
+              <td class="align-middle text-center">
+                <div class="btn-group" role="group">
+                  <button type="button" 
+                          class="btn btn-sm btn-outline-primary" 
+                          data-bs-toggle="modal" 
+                          data-bs-target="#modalEditarVeiculo"
+                          data-veiculo-id="{{ veiculo.id }}"
+                          data-veiculo-nome="{{ veiculo.nome }}"
+                          data-veiculo-peso="{{ veiculo.peso_maximo }}"
+                          title="Editar Veículo">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button type="button" 
+                          class="btn btn-sm btn-outline-danger" 
+                          data-bs-toggle="modal" 
+                          data-bs-target="#modalExcluirVeiculo"
+                          data-veiculo-id="{{ veiculo.id }}"
+                          data-veiculo-nome="{{ veiculo.nome }}"
+                          title="Excluir Veículo">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-truck fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">Nenhum veículo cadastrado</h5>
+        <p class="text-muted">Clique em "Novo Veículo" para começar</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Modal Novo Veículo -->
+<div class="modal fade" id="modalNovoVeiculo" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('veiculos.criar_veiculo') }}">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title">
+            <i class="fas fa-plus me-2"></i>
+            Novo Veículo
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          
+          <div class="mb-3">
+            <label for="nome" class="form-label">
+              <i class="fas fa-truck me-1"></i>
+              Nome do Veículo <span class="text-danger">*</span>
+            </label>
+            <input type="text" 
+                   class="form-control" 
+                   id="nome" 
+                   name="nome" 
+                   placeholder="Ex: MASTER, IVECO, etc."
+                   required
+                   maxlength="50">
+            <div class="form-text">Digite o nome do veículo (até 50 caracteres)</div>
+          </div>
+          
+          <div class="mb-3">
+            <label for="peso_maximo" class="form-label">
+              <i class="fas fa-weight-hanging me-1"></i>
+              Peso Máximo (kg) <span class="text-danger">*</span>
+            </label>
+            <input type="number" 
+                   class="form-control" 
+                   id="peso_maximo" 
+                   name="peso_maximo" 
+                   placeholder="Ex: 8000"
+                   required
+                   min="1"
+                   max="100000"
+                   step="1">
+            <div class="form-text">Peso máximo suportado pelo veículo em quilogramas</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="fas fa-times"></i> Cancelar
+          </button>
+          <button type="submit" class="btn btn-success">
+            <i class="fas fa-save"></i> Salvar Veículo
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar Veículo -->
+<div class="modal fade" id="modalEditarVeiculo" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('veiculos.editar_veiculo') }}">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title">
+            <i class="fas fa-edit me-2"></i>
+            Editar Veículo
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <input type="hidden" id="edit_veiculo_id" name="veiculo_id" value="">
+          
+          <div class="mb-3">
+            <label for="edit_nome" class="form-label">
+              <i class="fas fa-truck me-1"></i>
+              Nome do Veículo <span class="text-danger">*</span>
+            </label>
+            <input type="text" 
+                   class="form-control" 
+                   id="edit_nome" 
+                   name="nome" 
+                   required
+                   maxlength="50">
+            <div class="form-text">Digite o nome do veículo (até 50 caracteres)</div>
+          </div>
+          
+          <div class="mb-3">
+            <label for="edit_peso_maximo" class="form-label">
+              <i class="fas fa-weight-hanging me-1"></i>
+              Peso Máximo (kg) <span class="text-danger">*</span>
+            </label>
+            <input type="number" 
+                   class="form-control" 
+                   id="edit_peso_maximo" 
+                   name="peso_maximo" 
+                   required
+                   min="1"
+                   max="100000"
+                   step="1">
+            <div class="form-text">Peso máximo suportado pelo veículo em quilogramas</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="fas fa-times"></i> Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save"></i> Salvar Alterações
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Excluir Veículo -->
+<div class="modal fade" id="modalExcluirVeiculo" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('veiculos.excluir_veiculo') }}">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title">
+            <i class="fas fa-trash me-2"></i>
+            Excluir Veículo
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <input type="hidden" id="delete_veiculo_id" name="veiculo_id" value="">
+          
+          <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Atenção!</strong> Esta ação não pode ser desfeita.
+          </div>
+          
+          <p>Tem certeza que deseja excluir o veículo <strong><span id="delete_veiculo_nome"></span></strong>?</p>
+          
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Nota:</strong> Registros já criados com este veículo não serão afetados.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="fas fa-times"></i> Cancelar
+          </button>
+          <button type="submit" class="btn btn-danger">
+            <i class="fas fa-trash"></i> Confirmar Exclusão
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Modal Editar Veículo
+  const modalEditar = document.getElementById('modalEditarVeiculo');
+  modalEditar.addEventListener('show.bs.modal', function(event) {
+    const button = event.relatedTarget;
+    const veiculoId = button.getAttribute('data-veiculo-id');
+    const veiculoNome = button.getAttribute('data-veiculo-nome');
+    const veiculoPeso = button.getAttribute('data-veiculo-peso');
+    
+    document.getElementById('edit_veiculo_id').value = veiculoId;
+    document.getElementById('edit_nome').value = veiculoNome;
+    document.getElementById('edit_peso_maximo').value = veiculoPeso;
+  });
+  
+  // Modal Excluir Veículo
+  const modalExcluir = document.getElementById('modalExcluirVeiculo');
+  modalExcluir.addEventListener('show.bs.modal', function(event) {
+    const button = event.relatedTarget;
+    const veiculoId = button.getAttribute('data-veiculo-id');
+    const veiculoNome = button.getAttribute('data-veiculo-nome');
+    
+    document.getElementById('delete_veiculo_id').value = veiculoId;
+    document.getElementById('delete_veiculo_nome').textContent = veiculoNome;
+  });
+});
+</script>
+
+{% endblock %} 
