@@ -192,6 +192,4 @@ def obter_lista_vendedores():
 
 
 
-@auth_bp.route('/teste')
-def teste():
-    return render_template('teste.html')
+
