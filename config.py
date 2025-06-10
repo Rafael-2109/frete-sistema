@@ -11,13 +11,15 @@ class Config:
     # Configurações para melhorar estabilidade PostgreSQL no Render
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
-        'pool_recycle': 300,
-        'pool_timeout': 20,
+        'pool_recycle': 200,  # Recicla conexões mais frequentemente
+        'pool_timeout': 30,   # Timeout maior para operações pesadas
         'max_overflow': 0,
+        'pool_size': 5,       # Pool menor mas mais estável
         'connect_args': {
             'sslmode': 'require',
-            'connect_timeout': 10,
-            'options': '-c statement_timeout=30000'
+            'connect_timeout': 15,
+            'application_name': 'frete_sistema',
+            'options': '-c statement_timeout=60000 -c idle_in_transaction_session_timeout=300000'
         }
     }
     
