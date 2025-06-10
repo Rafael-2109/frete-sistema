@@ -5,10 +5,11 @@ from wtforms.validators import DataRequired, Optional
 class ContatoAgendamentoForm(FlaskForm):
     cnpj = StringField('CNPJ', validators=[DataRequired()])
     forma = SelectField('Forma de Agendamento', choices=[
-        ('Portal', 'Portal'),
-        ('Telefone', 'Telefone'),
-        ('E-mail', 'E-mail'),
-        ('WhatsApp', 'WhatsApp')
+        ('PORTAL', 'PORTAL'),
+        ('TELEFONE', 'TELEFONE'),
+        ('E-MAIL', 'E-MAIL'),
+        ('COMERCIAL', 'COMERCIAL'),
+        ('SEM AGENDAMENTO', 'SEM AGENDAMENTO')
     ])
     contato = StringField('Contato', validators=[DataRequired()])
     observacao = TextAreaField('Observação', validators=[Optional()])
