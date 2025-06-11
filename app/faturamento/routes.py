@@ -84,9 +84,24 @@ def importar_relatorio():
                 )
 
                 nfs_importadas = []
+                linhas_ignoradas = 0
 
                 for _, row in df.iterrows():
-                    numero_nf = str(row["Número da Nota Fiscal"])
+                    # Validação 1: Número da NF não pode estar vazio
+                    numero_nf_raw = row.get("Número da Nota Fiscal")
+                    if pd.isna(numero_nf_raw) or str(numero_nf_raw).strip() == '' or str(numero_nf_raw).lower() == 'nan':
+                        linhas_ignoradas += 1
+                        continue
+                        
+                    numero_nf = str(numero_nf_raw).strip()
+                    
+                    # Validação 2: Origem (pedido) não pode estar vazio - campo crítico
+                    origem = row.get("Origem")
+                    if pd.isna(origem) or str(origem).strip() == '' or str(origem).lower() == 'nan':
+                        linhas_ignoradas += 1
+                        continue
+                    
+                    # Verifica se NF já existe
                     existe = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).first()
                     if existe:
                         continue
@@ -146,7 +161,12 @@ def importar_relatorio():
                 for nf in nfs_importadas:
                     sincronizar_entrega_por_nf(nf)
 
-                flash('Relatório importado e entregas sincronizadas com sucesso.', 'success')
+                # Mensagens de resultado
+                flash(f'✅ Relatório importado com sucesso! {len(nfs_importadas)} NFs processadas.', 'success')
+                
+                if linhas_ignoradas > 0:
+                    flash(f'⚠️ {linhas_ignoradas} linhas foram ignoradas (NF ou Origem vazios).', 'warning')
+                
                 return redirect(url_for('faturamento.importar_relatorio'))
 
             except Exception as e:
