@@ -439,11 +439,25 @@ def listar_todas_tabelas():
         query = query.filter(TabelaFrete.uf_destino == uf_destino)
 
     if cidade:
-        # Exemplo: filtra via join com CidadeAtendida, etc. Ajuste se for necessário
-        query = query.join(CidadeAtendida).join(Cidade).filter(
-            Cidade.nome.ilike(f"%{cidade}%"),
-            TabelaFrete.nome_tabela == CidadeAtendida.nome_tabela,
-            TabelaFrete.uf_destino == CidadeAtendida.uf
+        # Filtra tabelas que atendem à cidade através dos vínculos
+        from app.vinculos.models import CidadeAtendida
+        from app.localidades.models import Cidade
+        
+        # Subconsulta para encontrar tabelas que atendem a cidade especificada
+        subquery_cidades = db.session.query(CidadeAtendida.nome_tabela, CidadeAtendida.transportadora_id).join(
+            Cidade, CidadeAtendida.cidade_id == Cidade.id
+        ).filter(
+            Cidade.nome.ilike(f"%{cidade}%")
+        ).distinct().subquery()
+        
+        # Aplica o filtro na query principal
+        query = query.filter(
+            db.session.query(literal(True)).filter(
+                and_(
+                    subquery_cidades.c.transportadora_id == TabelaFrete.transportadora_id,
+                    subquery_cidades.c.nome_tabela == TabelaFrete.nome_tabela
+                )
+            ).exists()
         )
 
     if nome_tabela:
