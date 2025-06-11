@@ -96,8 +96,18 @@ class LocalizacaoService:
         if codigo_ibge in LocalizacaoService._cache_cidades_ibge:
             return LocalizacaoService._cache_cidades_ibge[codigo_ibge]
         
-        # Busca no banco
+        # Busca no banco com eager loading
         cidade = Cidade.query.filter_by(codigo_ibge=codigo_ibge).first()
+        
+        # Se encontrou a cidade, força o carregamento dos atributos na sessão atual
+        if cidade:
+            try:
+                # Força o carregamento dos atributos principais
+                _ = cidade.nome
+                _ = cidade.uf
+                _ = cidade.icms
+            except Exception as e:
+                logger.warning(f"Problema ao carregar atributos da cidade IBGE {codigo_ibge}: {e}")
         
         # Salva no cache
         LocalizacaoService._cache_cidades_ibge[codigo_ibge] = cidade
@@ -130,10 +140,20 @@ class LocalizacaoService:
         # Compara nomes normalizados
         cidade_encontrada = None
         for cidade in cidades_uf:
-            cidade_nome_normalizado = remover_acentos(cidade.nome.strip()).upper()
-            if cidade_nome_normalizado == nome_normalizado:
-                cidade_encontrada = cidade
-                break
+            try:
+                # Força o carregamento dos atributos na sessão ativa
+                nome_db = cidade.nome
+                uf_db = cidade.uf
+                icms_db = cidade.icms
+                
+                cidade_nome_normalizado = remover_acentos(nome_db.strip()).upper()
+                if cidade_nome_normalizado == nome_normalizado:
+                    cidade_encontrada = cidade
+                    break
+            except Exception as e:
+                # Se não conseguir acessar o nome, pula esta cidade
+                logger.warning(f"Erro ao acessar dados da cidade {cidade.id}: {e}")
+                continue
         
         # Salva no cache
         LocalizacaoService._cache_cidades_nome[cache_key] = cidade_encontrada
@@ -145,7 +165,19 @@ class LocalizacaoService:
         """
         Busca cidade especial FOB.
         """
-        return Cidade.query.filter(func.upper(Cidade.nome) == 'FOB').first()
+        cidade = Cidade.query.filter(func.upper(Cidade.nome) == 'FOB').first()
+        
+        # Se encontrou a cidade, força o carregamento dos atributos na sessão atual
+        if cidade:
+            try:
+                # Força o carregamento dos atributos principais
+                _ = cidade.nome
+                _ = cidade.uf
+                _ = cidade.icms
+            except Exception as e:
+                logger.warning(f"Problema ao carregar atributos da cidade FOB: {e}")
+        
+        return cidade
     
     @staticmethod
     def buscar_cidade_unificada(pedido=None, nome=None, uf=None, codigo_ibge=None, rota=None):
@@ -172,14 +204,22 @@ class LocalizacaoService:
         if codigo_ibge:
             cidade = LocalizacaoService.buscar_cidade_por_ibge(codigo_ibge)
             if cidade:
-                logger.debug(f"✅ Cidade encontrada por IBGE: {cidade.nome}")
+                try:
+                    nome_cidade = cidade.nome  # Carrega o nome dentro da sessão
+                    logger.debug(f"✅ Cidade encontrada por IBGE: {nome_cidade}")
+                except Exception as e:
+                    logger.debug(f"✅ Cidade encontrada por IBGE (IBGE: {codigo_ibge})")
                 return cidade
         
         # ESTRATÉGIA 2: Casos especiais
         if rota and rota.upper() == 'FOB':
             cidade = LocalizacaoService.buscar_cidade_especial_fob()
             if cidade:
-                logger.debug(f"✅ Cidade FOB encontrada: {cidade.nome}")
+                try:
+                    nome_cidade = cidade.nome  # Carrega o nome dentro da sessão
+                    logger.debug(f"✅ Cidade FOB encontrada: {nome_cidade}")
+                except Exception as e:
+                    logger.debug(f"✅ Cidade FOB encontrada")
                 return cidade
         
         # ESTRATÉGIA 3: Normaliza cidade e UF com regras de negócio
@@ -190,7 +230,11 @@ class LocalizacaoService:
             if nome_normalizado and uf_normalizado:
                 cidade = LocalizacaoService.buscar_cidade_por_nome(nome_normalizado, uf_normalizado)
                 if cidade:
-                    logger.debug(f"✅ Cidade encontrada por nome: {cidade.nome}")
+                    try:
+                        nome_cidade = cidade.nome  # Carrega o nome dentro da sessão
+                        logger.debug(f"✅ Cidade encontrada por nome: {nome_cidade}")
+                    except Exception as e:
+                        logger.debug(f"✅ Cidade encontrada por nome normalizado")
                     return cidade
         
         logger.debug(f"❌ Cidade não encontrada")

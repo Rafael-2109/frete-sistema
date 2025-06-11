@@ -281,6 +281,7 @@
                     <th style="width: 80px;">Rota</th>
                     <th style="width: 100px;">Expedição</th>
                     <th style="width: 80px;">NF</th>
+                    <th style="width: 120px;">Ações</th>
 
                 </tr>
             </thead>
@@ -409,13 +410,38 @@
                     <br><small class="text-primary">Emb: {{ p.data_embarque | formatar_data_hora_brasil }}</small>
                   {% endif %}
                 </td>
+                
+                <!-- ✅ NOVA COLUNA: Ações -->
+                <td class="text-center">
+                  {% if p.status_calculado == 'ABERTO' %}
+                    <!-- Botões para pedidos com status ABERTO -->
+                    <div class="btn-group-vertical btn-group-sm" role="group">
+                      <a href="{{ url_for('pedidos.editar_pedido', pedido_id=p.id) }}" 
+                         class="btn btn-outline-primary btn-sm" 
+                         title="Editar pedido">
+                        <i class="fas fa-edit"></i>
+                      </a>
+                      <button type="button" 
+                              class="btn btn-outline-danger btn-sm" 
+                              title="Excluir pedido"
+                              onclick="confirmarExclusao({{ p.id }}, '{{ p.num_pedido }}')">
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </div>
+                  {% else %}
+                    <!-- Pedidos processados não podem ser editados/excluídos -->
+                    <span class="text-muted" title="Pedido já processado - não pode ser editado">
+                      <i class="fas fa-lock"></i>
+                    </span>
+                  {% endif %}
+                </td>
 
               </tr>
             {% endfor %}
             
             {% if not pedidos %}
               <tr>
-                <td colspan="14" class="text-center py-4">
+                <td colspan="15" class="text-center py-4">
                   <div class="text-muted">
                     <i class="fas fa-search fa-2x mb-2"></i>
                     <br>Nenhum pedido encontrado com os filtros aplicados.
@@ -670,6 +696,31 @@ function abrirEmbarqueFOB() {
     // Adiciona o formulário ao body e submete
     document.body.appendChild(form);
     form.submit();
+}
+
+// ✅ NOVA FUNÇÃO: Confirmar exclusão de pedido
+function confirmarExclusao(pedidoId, numeroPedido) {
+    const mensagem = `Tem certeza que deseja excluir o pedido ${numeroPedido}?\n\n` +
+                    `⚠️ ATENÇÃO: Esta ação também removerá todos os itens de separação relacionados e NÃO PODE SER DESFEITA!`;
+    
+    if (confirm(mensagem)) {
+        // Cria formulário para excluir via POST
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/pedidos/excluir/${pedidoId}`;
+        
+        // Adiciona o token CSRF
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+        
+        // Adiciona o formulário ao body e submete
+        document.body.appendChild(form);
+        form.submit();
+    }
 }
 </script>
 {% endblock %}

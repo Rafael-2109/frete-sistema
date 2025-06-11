@@ -103,6 +103,7 @@ def create_app(config_name=None):
 
     # Registra os filtros personalizados para formatação de datas e timezone brasileiro
     app.jinja_env.filters['formatar_data'] = formatar_data_segura
+    app.jinja_env.filters['formatar_data_segura'] = formatar_data_segura  # ✅ CORRIGIDO: Filtro que faltava
     app.jinja_env.filters['date_format'] = date_format_safe
     app.jinja_env.filters['fmt_date'] = date_format_safe
     app.jinja_env.filters['formatar_data_hora_brasil'] = formatar_data_hora_brasil

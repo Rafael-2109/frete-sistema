@@ -2,7 +2,7 @@ from flask import render_template, request, redirect, url_for, Blueprint, flash,
 from flask_login import login_required
 from app import db
 from app.pedidos.models import Pedido
-from app.pedidos.forms import FiltroPedidosForm, CotarFreteForm
+from app.pedidos.forms import FiltroPedidosForm, CotarFreteForm, EditarPedidoForm
 from app.separacao.models import Separacao
 from app.transportadoras.models import Transportadora
 from app.veiculos.models import Veiculo
@@ -135,6 +135,154 @@ def lista_pedidos():
         cotar_form=cotar_form,
         pedidos=pedidos
     )
+
+@pedidos_bp.route('/editar/<int:pedido_id>', methods=['GET', 'POST'])
+@login_required
+def editar_pedido(pedido_id):
+    """
+    Edita campos específicos de um pedido (agenda, protocolo, expedição)
+    e sincroniza as alterações com a separação relacionada.
+    Permite alterações apenas em pedidos com status "ABERTO".
+    """
+    pedido = Pedido.query.get_or_404(pedido_id)
+    
+    # ✅ VALIDAÇÃO: Só permite editar pedidos com status ABERTO
+    if pedido.status_calculado != 'ABERTO':
+        flash(f"Não é possível editar o pedido {pedido.num_pedido}. Apenas pedidos com status 'ABERTO' podem ser editados. Status atual: {pedido.status_calculado}", "error")
+        return redirect(url_for('pedidos.lista_pedidos'))
+    
+    form = EditarPedidoForm()
+    
+    if form.validate_on_submit():
+        try:
+            # ✅ BACKUP dos valores originais para log
+            valores_originais = {
+                'expedicao': pedido.expedicao,
+                'agendamento': pedido.agendamento,
+                'protocolo': pedido.protocolo
+            }
+            
+            # ✅ ATUALIZA OS CAMPOS DO PEDIDO
+            pedido.expedicao = form.expedicao.data
+            pedido.agendamento = form.agendamento.data
+            pedido.protocolo = form.protocolo.data
+            
+            # ✅ SINCRONIZA COM SEPARAÇÃO
+            # Busca todas as separações relacionadas ao pedido através do lote
+            separacoes_relacionadas = []
+            if pedido.separacao_lote_id:
+                separacoes_relacionadas = Separacao.query.filter_by(
+                    separacao_lote_id=pedido.separacao_lote_id
+                ).all()
+            
+            # Se não encontrou por lote, busca por chave composta
+            if not separacoes_relacionadas:
+                separacoes_relacionadas = Separacao.query.filter_by(
+                    num_pedido=pedido.num_pedido,
+                    expedicao=valores_originais['expedicao'],
+                    agendamento=valores_originais['agendamento'],
+                    protocolo=valores_originais['protocolo']
+                ).all()
+            
+            # Atualiza as separações encontradas
+            separacoes_atualizadas = 0
+            for separacao in separacoes_relacionadas:
+                separacao.expedicao = form.expedicao.data
+                separacao.agendamento = form.agendamento.data
+                separacao.protocolo = form.protocolo.data
+                separacoes_atualizadas += 1
+            
+            # ✅ COMMIT das alterações
+            db.session.commit()
+            
+            # ✅ MENSAGEM DE SUCESSO com detalhes
+            flash(f"Pedido {pedido.num_pedido} atualizado com sucesso! {separacoes_atualizadas} item(ns) de separação também foram atualizados.", "success")
+            
+            # ✅ LOG das alterações (opcional)
+            print(f"[EDIT] Pedido {pedido.num_pedido} editado:")
+            print(f"  - Expedição: {valores_originais['expedicao']} → {form.expedicao.data}")
+            print(f"  - Agendamento: {valores_originais['agendamento']} → {form.agendamento.data}")
+            print(f"  - Protocolo: {valores_originais['protocolo']} → {form.protocolo.data}")
+            print(f"  - Separações atualizadas: {separacoes_atualizadas}")
+            
+            return redirect(url_for('pedidos.lista_pedidos'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Erro ao atualizar pedido: {str(e)}", "error")
+            
+    else:
+        # ✅ PRÉ-PREENCHE o formulário com dados atuais
+        form.expedicao.data = pedido.expedicao
+        form.agendamento.data = pedido.agendamento
+        form.protocolo.data = pedido.protocolo
+    
+    return render_template('pedidos/editar_pedido.html', form=form, pedido=pedido)
+
+@pedidos_bp.route('/excluir/<int:pedido_id>', methods=['POST'])
+@login_required
+def excluir_pedido(pedido_id):
+    """
+    Exclui um pedido e todas as separações relacionadas.
+    Permite exclusão apenas de pedidos com status "ABERTO".
+    """
+    pedido = Pedido.query.get_or_404(pedido_id)
+    
+    # ✅ VALIDAÇÃO: Só permite excluir pedidos com status ABERTO
+    if pedido.status_calculado != 'ABERTO':
+        flash(f"Não é possível excluir o pedido {pedido.num_pedido}. Apenas pedidos com status 'ABERTO' podem ser excluídos. Status atual: {pedido.status_calculado}", "error")
+        return redirect(url_for('pedidos.lista_pedidos'))
+    
+    try:
+        # ✅ BACKUP de informações para log
+        num_pedido = pedido.num_pedido
+        lote_id = pedido.separacao_lote_id
+        
+        # ✅ BUSCA E EXCLUI SEPARAÇÕES RELACIONADAS
+        separacoes_excluidas = 0
+        
+        # Primeiro busca por lote
+        if lote_id:
+            separacoes_relacionadas = Separacao.query.filter_by(
+                separacao_lote_id=lote_id
+            ).all()
+            
+            for separacao in separacoes_relacionadas:
+                db.session.delete(separacao)
+                separacoes_excluidas += 1
+        
+        # Se não encontrou por lote, busca por chave composta
+        if separacoes_excluidas == 0:
+            separacoes_relacionadas = Separacao.query.filter_by(
+                num_pedido=pedido.num_pedido,
+                expedicao=pedido.expedicao,
+                agendamento=pedido.agendamento,
+                protocolo=pedido.protocolo
+            ).all()
+            
+            for separacao in separacoes_relacionadas:
+                db.session.delete(separacao)
+                separacoes_excluidas += 1
+        
+        # ✅ EXCLUI O PEDIDO
+        db.session.delete(pedido)
+        
+        # ✅ COMMIT das exclusões
+        db.session.commit()
+        
+        # ✅ MENSAGEM DE SUCESSO
+        flash(f"Pedido {num_pedido} excluído com sucesso! {separacoes_excluidas} item(ns) de separação também foram removidos.", "success")
+        
+        # ✅ LOG da exclusão
+        print(f"[DELETE] Pedido {num_pedido} excluído:")
+        print(f"  - Lote de separação: {lote_id}")
+        print(f"  - Separações removidas: {separacoes_excluidas}")
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao excluir pedido: {str(e)}", "error")
+    
+    return redirect(url_for('pedidos.lista_pedidos'))
 
 def gerar_lote_id():
     """Gera um ID único para o lote de separação"""

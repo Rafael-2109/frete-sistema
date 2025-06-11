@@ -32,3 +32,27 @@ class CotarFreteForm(FlaskForm):
     # Se quiser adicionar campo oculto, por exemplo:
     dummy = HiddenField()
     pass
+
+class EditarPedidoForm(FlaskForm):
+    """
+    Formulário para editar campos específicos do pedido:
+    - Data de expedição
+    - Data de agendamento  
+    - Protocolo
+    """
+    expedicao = DateField(
+        "Data de Expedição", 
+        validators=[Optional()],
+        description="Data prevista para expedição do pedido"
+    )
+    agendamento = DateField(
+        "Data de Agendamento", 
+        validators=[Optional()],
+        description="Data agendada para entrega/coleta"
+    )
+    protocolo = StringField(
+        "Protocolo", 
+        validators=[Optional()],
+        description="Número do protocolo de agendamento"
+    )
+    submit = SubmitField("Salvar Alterações")
