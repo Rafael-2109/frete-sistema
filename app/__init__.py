@@ -118,6 +118,38 @@ def create_app(config_name=None):
         return valor_str
     
     app.jinja_env.filters['formatar_protocolo'] = formatar_protocolo
+    
+    # Filtro para formatar datas (flexível para Date, DateTime ou string)
+    def formatar_data_brasil(data):
+        """Formata campo de data para exibição brasileira (suporta Date, DateTime ou string)"""
+        if data is None:
+            return ''
+        
+        try:
+            # Se é um objeto Date/DateTime
+            if hasattr(data, 'strftime'):
+                return data.strftime('%d/%m/%Y')
+            
+            # Se é string, retorna como está (pode conter texto adicional)
+            elif isinstance(data, str):
+                data_str = data.strip()
+                if data_str:
+                    return data_str
+                else:
+                    return ''
+            
+            # Se é outro tipo, converte para string
+            else:
+                return str(data) if data else ''
+                
+        except Exception as e:
+            # Em caso de erro, retorna o valor original como string
+            try:
+                return str(data) if data else ''
+            except:
+                return ''
+    
+    app.jinja_env.filters['formatar_data_brasil'] = formatar_data_brasil
     app.jinja_env.filters['formatar_hora_brasil'] = formatar_hora_brasil
     app.jinja_env.filters['diferenca_timezone'] = diferenca_timezone
 

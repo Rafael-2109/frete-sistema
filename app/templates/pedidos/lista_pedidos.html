@@ -279,7 +279,7 @@
                     <th style="width: 100px;">Valor Total</th>
                     <th style="width: 80px;">Peso (kg)</th>
                     <th style="width: 80px;">Rota</th>
-                    <th style="width: 100px;">Expedição</th>
+                    <th style="width: 100px;"><i class="fas fa-truck"></i> Expedição</th>
                     <th style="width: 80px;">NF</th>
                     <th style="width: 120px;">Ações</th>
 
@@ -324,7 +324,9 @@
                 <td>
                   <strong>{{ p.num_pedido }}</strong>
                   {% if p.protocolo %}
-                    <br><small class="text-muted">Prot: {{ p.protocolo | formatar_protocolo }}</small>
+                    <br><small class="text-muted"><i class="fas fa-barcode"></i> {{ p.protocolo | formatar_protocolo }}</small>
+                  {% else %}
+                    <br><small class="text-muted">Sem protocolo</small>
                   {% endif %}
                 </td>
                 
@@ -393,10 +395,14 @@
                 
                 <td class="text-center">
                   {% if p.expedicao %}
-                    {{ p.expedicao | formatar_data_hora_brasil }}
+                    <strong>{{ p.expedicao | formatar_data_brasil }}</strong>
+                  {% else %}
+                    <span class="text-muted">-</span>
                   {% endif %}
                   {% if p.agendamento and p.agendamento != p.expedicao %}
-                    <br><small class="text-success">Agend: {{ p.agendamento | formatar_data_hora_brasil }}</small>
+                    <br><small class="text-success"><i class="fas fa-calendar-alt"></i> {{ p.agendamento | formatar_data_brasil }}</small>
+                  {% elif p.agendamento and not p.expedicao %}
+                    <small class="text-success"><i class="fas fa-calendar-alt"></i> {{ p.agendamento | formatar_data_brasil }}</small>
                   {% endif %}
                 </td>
                 
