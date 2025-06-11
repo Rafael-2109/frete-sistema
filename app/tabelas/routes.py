@@ -5,7 +5,7 @@ from sqlalchemy import literal, and_
 
 from app import db
 import pandas as pd
-from datetime import timedelta, datetime
+from datetime import datetime
 
 from app.tabelas.forms import TabelaFreteForm, ImportarTabelaFreteForm
 from app.tabelas.models import TabelaFrete, HistoricoTabelaFrete

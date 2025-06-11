@@ -7,7 +7,6 @@ from app import db
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.cadastros_agendamento.forms import ContatoAgendamentoForm, ImportarAgendamentosForm, EditarContatoAgendamentoForm, PesquisarAgendamentoForm
 from datetime import datetime
-from sqlalchemy import or_
 
 cadastros_agendamento_bp = Blueprint('cadastros_agendamento', __name__, url_prefix='/cadastros-agendamento')
 

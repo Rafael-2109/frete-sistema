@@ -8,7 +8,6 @@ from app.embarques.models import EmbarqueItem, Embarque
 from app.vinculos.models import CidadeAtendida
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.transportadoras.models import Transportadora
-from app.localidades.models import Cidade
 
 def sincronizar_entrega_por_nf(numero_nf):
     fat = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).first()

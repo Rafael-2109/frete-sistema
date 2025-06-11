@@ -1,14 +1,10 @@
-from flask import flash, request, url_for, redirect, render_template, Blueprint, send_file, jsonify
+from flask import request, render_template, Blueprint, send_file, jsonify
 
 from flask_login import login_required
-
-from app import db
 
 from app.localidades.forms import CidadeForm
 
 from app.localidades.models import Cidade
-
-import pandas as pd
 
 from io import BytesIO
 

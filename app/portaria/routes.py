@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
-from flask_login import login_required, current_user
+from flask_login import login_required
 from werkzeug.utils import secure_filename
-from datetime import datetime, date
+from datetime import datetime
 import os
 
 from app import db

@@ -17,8 +17,6 @@ from app.monitoramento.models import EntregaMonitorada
 
 from app.localidades.models import Cidade
 
-from app.utils.ufs import UF_LIST
-
 from datetime import datetime
 
 from app.pedidos.models import Pedido

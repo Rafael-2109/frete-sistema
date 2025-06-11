@@ -1,14 +1,12 @@
-from datetime import datetime
 from collections import defaultdict
 
-from sqlalchemy import func, text
+from sqlalchemy import func
 
 from app.localidades.models import Cidade
 from app.tabelas.models import TabelaFrete
 from app.vinculos.models import CidadeAtendida
-from app.transportadoras.models import Transportadora
 from app.veiculos.models import Veiculo
-from app.utils.string_utils import normalizar_nome_cidade, remover_acentos
+from app.utils.string_utils import normalizar_nome_cidade
 from app.utils.vehicle_utils import normalizar_nome_veiculo
 from app.utils.grupo_empresarial import grupo_service
 from app import db
@@ -19,7 +17,6 @@ def calcular_fretes_possiveis(
     peso_utilizado=None,
     valor_carga=None,
     uf_origem=None,
-    cidade_origem=None,
     uf_destino=None,
     cidade_destino=None,
     peso=None,

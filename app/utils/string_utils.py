@@ -1,5 +1,4 @@
 import unicodedata
-import re
 
 def remover_acentos(texto):
     """

@@ -4,7 +4,6 @@ from datetime import datetime, date
 import os
 from werkzeug.utils import secure_filename
 from sqlalchemy import func
-from sqlalchemy.orm import aliased
 
 from collections import defaultdict
 

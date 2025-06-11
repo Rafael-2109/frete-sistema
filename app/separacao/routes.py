@@ -1,10 +1,8 @@
 import os
 import numpy as np
 import pandas as pd
-from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, redirect, url_for, flash
 from werkzeug.utils import secure_filename
-from sqlalchemy import func
 
 from app import db
 from app.separacao.models import Separacao

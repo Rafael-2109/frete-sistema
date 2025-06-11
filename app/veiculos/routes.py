@@ -2,7 +2,6 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from app.veiculos.models import Veiculo
 from app import db
 from flask_login import login_required
-from sqlalchemy.exc import IntegrityError
 
 veiculos_bp = Blueprint('veiculos', __name__, url_prefix='/veiculos')
 

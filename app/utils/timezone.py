@@ -4,7 +4,7 @@ Utilitários para gerenciamento de timezone brasileiro
 """
 
 import pytz
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 
 
 # Timezone do Brasil (Brasília)

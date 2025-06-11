@@ -1,5 +1,5 @@
 from flask import render_template, redirect, url_for, flash, request, session
-from flask_login import login_required, current_user
+from flask_login import login_required
 from app import db
 from app.transportadoras.forms import TransportadoraForm, ImportarTransportadorasForm
 from app.transportadoras.models import Transportadora

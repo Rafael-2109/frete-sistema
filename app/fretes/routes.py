@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app, session
 from flask_login import login_required, current_user
-from datetime import datetime, date
+from datetime import datetime
 from sqlalchemy import and_, or_, desc, func
 import os
 import re
@@ -15,17 +15,12 @@ from app.fretes.models import (
     ContaCorrenteTransportadora, AprovacaoFrete
 )
 from app.fretes.forms import (
-    FreteForm, FaturaFreteForm,
-    ConferenciaFaturaForm, DespesaExtraForm, AprovacaoFreteForm,
-    ContaCorrenteForm, FiltroFretesForm, LancamentoCteForm,
-    CompensacaoContaCorrenteForm, RelatorioFretesForm
+    FreteForm, FaturaFreteForm, DespesaExtraForm,
+    FiltroFretesForm, LancamentoCteForm
 )
 
 from app.transportadoras.models import Transportadora
-from app.localidades.models import Cidade
 
-# Imports para cálculo de frete
-from app.utils.frete_simulador import calcular_fretes_possiveis
 from app.utils.calculadora_frete import calcular_valor_frete_pela_tabela
 
 fretes_bp = Blueprint('fretes', __name__, url_prefix='/fretes')
@@ -82,7 +77,6 @@ def listar_fretes():
     if form.numero_cte.data:
         query = query.filter(Frete.numero_cte.ilike(f'%{form.numero_cte.data}%'))
     
-    # NOVO FILTRO: Busca por número de fatura
     if form.numero_fatura.data:
         query = query.join(FaturaFrete).filter(FaturaFrete.numero_fatura.ilike(f'%{form.numero_fatura.data}%'))
     

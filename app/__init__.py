@@ -1,13 +1,12 @@
 from dotenv import load_dotenv
 from flask_session import Session
 import os
-from flask import Flask, request, abort, session
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
-from flask_wtf.csrf import CSRFProtect, validate_csrf, CSRFError
+from flask_wtf.csrf import CSRFProtect
 from flask_migrate import Migrate
 from config import Config, TestConfig
-from datetime import datetime
 
 # 🔄 Carrega as variáveis de ambiente do .env
 load_dotenv()

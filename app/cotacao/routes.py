@@ -1,8 +1,8 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_login import login_required, current_user
 from app import db
 from app.cotacao.forms import CotarFreteForm
-from app.cotacao.models import Cotacao, CotacaoItem
+from app.cotacao.models import Cotacao
 from app.pedidos.models import Pedido
 from app.utils.localizacao import LocalizacaoService  
 from app.utils.frete_simulador import calcular_frete_por_cnpj
@@ -11,7 +11,6 @@ from app.utils.calculadora_frete import CalculadoraFrete
 from app.utils.frete_simulador import calcular_frete_por_cnpj
 from app.transportadoras.models import Transportadora
 from datetime import datetime
-from sqlalchemy import func
 from app.embarques.models import Embarque, EmbarqueItem
 from app.embarques.routes import obter_proximo_numero_embarque
 
