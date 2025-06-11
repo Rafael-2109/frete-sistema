@@ -418,6 +418,13 @@ def historico_tabelas():
 @tabelas_bp.route('/listar_todas_tabelas', methods=['GET'])
 @login_required
 def listar_todas_tabelas():
+    try:
+        from app.utils.logging_config import log_performance, log_database_query
+        import time
+        
+        start_time = time.time()
+    except ImportError:
+        pass
     transportadoras = Transportadora.query.order_by(Transportadora.razao_social).all()
     uf_list = UF_LIST  # seu array/lista de (UF, NomeUF)
     modalidades = ['FRETE PESO', 'FRETE VALOR', 'FIORINO', 'VAN/HR', 'MASTER', 'IVECO', '3/4', 'TOCO', 'TRUCK', 'CARRETA']

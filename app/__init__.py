@@ -1,12 +1,13 @@
 from dotenv import load_dotenv
 from flask_session import Session
 import os
-from flask import Flask
+from flask import Flask, request, g
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 from flask_migrate import Migrate
 from config import Config, TestConfig
+import time
 
 # 🔄 Carrega as variáveis de ambiente do .env
 load_dotenv()
@@ -81,12 +82,23 @@ def create_app(config_name=None):
     # 🔧 Configurar tamanho máximo do arquivo (16MB)
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
     
-    # 🔧 Configurar session
+    # 🔧 Configurar session - CORRIGIDO para evitar logout automático
+    from datetime import timedelta
+    
+    # Configurações de sessão para produção estável
     app.config['SESSION_TYPE'] = 'filesystem'
-    app.config['SESSION_PERMANENT'] = False
+    app.config['SESSION_PERMANENT'] = True  # ✅ CORRIGIDO: Habilita sessões permanentes
     app.config['SESSION_USE_SIGNER'] = True
     app.config['SESSION_FILE_DIR'] = './flask_session'
     app.config['SESSION_KEY_PREFIX'] = 'frete_sistema:'
+    
+    # ✅ NOVO: Define tempo de vida da sessão (4 horas)
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=4)
+    
+    # ✅ NOVO: Configurações adicionais de sessão
+    app.config['SESSION_COOKIE_SECURE'] = True if app.config.get('ENVIRONMENT') == 'production' else False
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
     # 🚀 Inicializa extensões
     db.init_app(app)
@@ -99,6 +111,64 @@ def create_app(config_name=None):
     login_manager.login_view = "auth.login"
     login_manager.login_message = "Faça login para acessar esta página."
     login_manager.login_message_category = "info"
+    
+    # ✅ NOVO: Configurar duração da sessão de login
+    login_manager.refresh_view = "auth.login"
+    login_manager.needs_refresh_message = "Sua sessão expirou. Faça login novamente."
+    login_manager.needs_refresh_message_category = "info"
+
+    # 📊 Sistema de monitoramento e logging
+    try:
+        from app.utils.logging_config import log_request_info, log_system_status, log_error, logger
+        
+        @app.before_request
+        def before_request():
+            """Monitora o início das requisições"""
+            g.start_time = time.time()
+            
+            # Log básico da requisição (só para rotas importantes)
+            if not request.path.startswith('/static') and not request.path.endswith('.ico'):
+                log_request_info(request)
+        
+        @app.after_request
+        def after_request(response):
+            """Monitora o fim das requisições"""
+            if hasattr(g, 'start_time'):
+                duration = time.time() - g.start_time
+                
+                # Log apenas para rotas que não são estáticas
+                if not request.path.startswith('/static') and not request.path.endswith('.ico'):
+                    logger.info(f"⏱️ {request.method} {request.path} | "
+                               f"Status: {response.status_code} | "
+                               f"Tempo: {duration:.3f}s")
+                    
+                    # Alerta para requisições lentas
+                    if duration > 3:
+                        logger.warning(f"🐌 REQUISIÇÃO LENTA: {request.path} em {duration:.3f}s")
+                        
+            return response
+        
+        @app.errorhandler(500)
+        def handle_500(error):
+            """Captura erros 500 e faz log detalhado"""
+            log_error(error, f"Erro 500 em {request.path}")
+            return "Erro interno do servidor", 500
+            
+        @app.errorhandler(Exception)
+        def handle_exception(error):
+            """Captura qualquer exceção não tratada"""
+            if isinstance(error, Exception) and not isinstance(error, (KeyboardInterrupt, SystemExit)):
+                log_error(error, f"Exceção não tratada em {request.path}")
+            raise error
+        
+        # Log do status inicial do sistema
+        logger.info("🚀 Sistema de Fretes iniciado com monitoramento ativo")
+        log_system_status()
+        
+    except ImportError as e:
+        print(f"Aviso: Sistema de logging não disponível: {e}")
+    except Exception as e:
+        print(f"Erro ao configurar logging: {e}")
 
     # Registra os filtros personalizados para formatação de datas e timezone brasileiro
     app.jinja_env.filters['formatar_data'] = formatar_data_segura

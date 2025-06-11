@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
 from datetime import datetime
 
@@ -18,7 +18,11 @@ def login():
                 # Atualizar último login
                 usuario.ultimo_login = datetime.utcnow()
                 db.session.commit()
-                login_user(usuario)
+                
+                # ✅ CORREÇÃO: Configura sessão permanente (4 horas)
+                session.permanent = True
+                login_user(usuario, remember=True)
+                
                 return redirect(url_for('main.dashboard'))
             else:
                 flash('Sua conta ainda não foi aprovada ou está bloqueada.', 'warning')
