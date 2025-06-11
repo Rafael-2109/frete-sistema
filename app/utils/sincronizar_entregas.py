@@ -115,6 +115,7 @@ def sincronizar_entrega_por_nf(numero_nf):
 
     data_final = None
     lead_time_dias = None
+    assoc = None  # ✅ Inicializa a variável
 
     if item_mais_recente and embarque and embarque.transportadora:
         cnpj_transp   = embarque.transportadora.cnpj
