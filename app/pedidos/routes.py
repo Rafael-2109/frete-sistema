@@ -97,17 +97,21 @@ def lista_pedidos():
             )
         if filtro_form.uf.data:
             if filtro_form.uf.data == 'FOB':
-                # Para FOB, buscar apenas pedidos com rota FOB
+                # ✅ Para FOB, buscar apenas pedidos com rota FOB
                 query = query.filter(Pedido.rota == 'FOB')
             elif filtro_form.uf.data == 'SP':
-                # Para SP, incluir também pedidos com rota RED
+                # ✅ Para SP, incluir UF SP + pedidos com rota RED (excluindo FOB)
                 query = query.filter(
                     (Pedido.cod_uf == 'SP') | 
-                    ((Pedido.rota == 'RED'))
-                )
+                    (Pedido.rota == 'RED')
+                ).filter(Pedido.rota != 'FOB')  # Exclui FOB
             else:
-                # Para outras UFs, filtro normal
-                query = query.filter(Pedido.cod_uf == filtro_form.uf.data)
+                # ✅ Para outras UFs, filtro normal EXCLUINDO RED e FOB
+                query = query.filter(
+                    Pedido.cod_uf == filtro_form.uf.data,
+                    Pedido.rota != 'RED',
+                    Pedido.rota != 'FOB'
+                )
         if filtro_form.rota.data:
             query = query.filter(Pedido.rota == filtro_form.rota.data)
         if filtro_form.sub_rota.data:

@@ -819,3 +819,4 @@ def buscar_cidade(pedido):
     Mantida para não quebrar código existente.
     """
     return buscar_cidade_unificada(pedido=pedido)
+

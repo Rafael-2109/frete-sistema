@@ -121,6 +121,7 @@ def formatar_data_brasileira(data):
 def calcular_otimizacoes_pedido_adicional(pedido, pedidos_atuais, transportadora, modalidade, peso_total, veiculos, frete_atual_kg):
     """
     Calcula as otimizações possíveis para um pedido que pode ser adicionado
+    ✅ NOVO: Agora considera a tabela mais cara (destino mais distante)
     """
     otimizacoes = {}
     
@@ -178,6 +179,7 @@ def calcular_otimizacoes_pedido_adicional(pedido, pedidos_atuais, transportadora
 def calcular_otimizacoes_pedido(pedido, pedidos_atuais, modalidade, veiculos, frete_atual_kg):
     """
     Calcula as otimizações possíveis removendo um pedido específico
+    ✅ NOVO: Agora considera a tabela mais cara (destino mais distante)
     """
     otimizacoes = {}
     
@@ -1266,24 +1268,43 @@ def otimizar():
             uf_principal = 'SP'
             print(f"[DEBUG] 🔄 MODO REDESPACHO ATIVO: Buscando pedidos de SP para otimização")
             
-            pedidos_mesmo_uf = (Pedido.query
-                               .filter(
-                                   (Pedido.cod_uf == 'SP') |
-                                   (Pedido.rota == 'RED')  # RED também vai para SP/Guarulhos
-                               )
-                               .filter(~Pedido.id.in_(lista_ids))
-                               .filter(Pedido.status == 'ABERTO')  # ✅ Apenas pedidos abertos
-                               .limit(200)  # ✅ Aumenta limite para otimizações
-                               .all())
+            # ✅ NOVO: Verifica sub_rotas dos pedidos atuais
+            sub_rotas_atuais = set()
+            for p in pedidos:
+                if p.sub_rota:
+                    sub_rotas_atuais.add(p.sub_rota)
+            
+            query_redespacho = Pedido.query.filter(
+                (Pedido.cod_uf == 'SP') |
+                (Pedido.rota == 'RED')  # RED também vai para SP/Guarulhos
+            ).filter(~Pedido.id.in_(lista_ids)).filter(
+                Pedido.status == 'ABERTO'
+            ).filter(
+                Pedido.rota != 'FOB'  # ✅ NOVO: Exclui FOB
+            )
+            
+            # ✅ NOVO: Filtra por sub_rota se todos os pedidos atuais têm a mesma
+            if len(sub_rotas_atuais) == 1:
+                sub_rota_filtro = list(sub_rotas_atuais)[0]
+                query_redespacho = query_redespacho.filter(Pedido.sub_rota == sub_rota_filtro)
+                print(f"[DEBUG] ✅ Filtro por sub_rota: {sub_rota_filtro}")
+            
+            pedidos_mesmo_uf = query_redespacho.limit(200).all()
         else:
             # 📍 MODO NORMAL: Busca pedidos do mesmo UF original
             uf_principal = None
             pedidos_ufs = set()
             
+            # ✅ NOVO: Verifica sub_rotas dos pedidos atuais
+            sub_rotas_atuais = set()
             for pedido in pedidos:
                 # Aplica regras de UF e cidade
                 uf_efetivo = 'SP' if pedido.rota and pedido.rota.upper().strip() == 'RED' else pedido.cod_uf
                 pedidos_ufs.add(uf_efetivo)
+                
+                # Coleta sub_rotas
+                if pedido.sub_rota:
+                    sub_rotas_atuais.add(pedido.sub_rota)
             
             # Usa o UF mais comum ou o primeiro encontrado
             uf_principal = pedidos_ufs.pop() if pedidos_ufs else 'SP'
@@ -1291,15 +1312,22 @@ def otimizar():
 
             pedidos_mesmo_uf = []
             if uf_principal:
-                pedidos_mesmo_uf = (Pedido.query
-                                   .filter(
-                                       (Pedido.cod_uf == uf_principal) |
-                                       ((Pedido.rota == 'RED') & (uf_principal == 'SP'))
-                                   )
-                                   .filter(~Pedido.id.in_(lista_ids))
-                                   .filter(Pedido.status == 'ABERTO')  # ✅ Apenas pedidos abertos
-                                   .limit(200)  # ✅ Aumenta limite para mais otimizações
-                                   .all())
+                query_normal = Pedido.query.filter(
+                    (Pedido.cod_uf == uf_principal) |
+                    ((Pedido.rota == 'RED') & (uf_principal == 'SP'))
+                ).filter(~Pedido.id.in_(lista_ids)).filter(
+                    Pedido.status == 'ABERTO'
+                ).filter(
+                    Pedido.rota != 'FOB'  # ✅ NOVO: Exclui FOB
+                )
+                
+                # ✅ NOVO: Filtra por sub_rota se todos os pedidos atuais têm a mesma
+                if len(sub_rotas_atuais) == 1:
+                    sub_rota_filtro = list(sub_rotas_atuais)[0]
+                    query_normal = query_normal.filter(Pedido.sub_rota == sub_rota_filtro)
+                    print(f"[DEBUG] ✅ Filtro por sub_rota: {sub_rota_filtro}")
+                
+                pedidos_mesmo_uf = query_normal.limit(200).all()
 
         # ✅ PREPARAÇÃO DE DADOS CORRETOS
         transportadora = opcao_atual.get('transportadora', 'N/A')

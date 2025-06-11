@@ -568,6 +568,34 @@ def cancelar_embarque(id):
         embarque.cancelado_em = datetime.now()
         embarque.cancelado_por = current_user.nome if current_user.is_authenticated else 'Sistema'
         
+        # ✅ NOVO: Resetar pedidos para status "Aberto" usando lote_separacao
+        try:
+            from app.pedidos.models import Pedido
+            
+            # Busca todos os lotes de separação vinculados aos itens deste embarque
+            lotes_vinculados = set()
+            for item in embarque.itens:
+                if hasattr(item, 'separacao_lote_id') and item.separacao_lote_id:
+                    lotes_vinculados.add(item.separacao_lote_id)
+            
+            # Reseta os pedidos para status "Aberto" usando os lotes
+            pedidos_atualizados = 0
+            for lote_id in lotes_vinculados:
+                pedidos_lote = Pedido.query.filter_by(separacao_lote_id=lote_id).all()
+                for pedido in pedidos_lote:
+                    # Remove vinculação com cotação (volta ao estado inicial)
+                    pedido.cotacao_id = None
+                    pedido.transportadora = None
+                    pedido.nf_cd = False
+                    # Status será calculado automaticamente como "Aberto"
+                    pedidos_atualizados += 1
+            
+            if pedidos_atualizados > 0:
+                flash(f"✅ {pedidos_atualizados} pedidos retornaram ao status 'Aberto'", "info")
+                
+        except Exception as e:
+            flash(f"⚠️ Erro ao resetar pedidos: {str(e)}", "warning")
+        
         db.session.commit()
         
         flash(f"Embarque #{embarque.numero} cancelado com sucesso!", "success")
