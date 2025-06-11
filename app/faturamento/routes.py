@@ -158,6 +158,56 @@ def importar_relatorio():
 
     return render_template('faturamento/importar_relatorio.html', form=form)
 
+@faturamento_bp.route('/sincronizar-orphas')
+@login_required
+def sincronizar_orphas():
+    """Sincroniza NFs órfãs - ROTA SIMPLES PARA USO ÚNICO"""
+    try:
+        from app.monitoramento.models import EntregaMonitorada
+        
+        # Busca NFs do faturamento
+        nfs_faturamento = RelatorioFaturamentoImportado.query.all()
+        nfs_fat_set = {nf.numero_nf for nf in nfs_faturamento}
+        
+        # Busca NFs do monitoramento
+        nfs_monitoramento = EntregaMonitorada.query.all()
+        nfs_mon_set = {nf.numero_nf for nf in nfs_monitoramento}
+        
+        # Identifica órfãs
+        nfs_orphas = nfs_fat_set - nfs_mon_set
+        
+        if not nfs_orphas:
+            flash('✅ Todas as NFs já estão sincronizadas!', 'success')
+            return redirect(url_for('faturamento.listar_relatorios'))
+        
+        # Sincroniza as órfãs
+        sucesso = 0
+        erros = 0
+        
+        for numero_nf in nfs_orphas:
+            try:
+                sincronizar_entrega_por_nf(numero_nf)
+                sucesso += 1
+            except Exception as e:
+                print(f"Erro ao sincronizar NF {numero_nf}: {e}")
+                erros += 1
+        
+        db.session.commit()
+        
+        # Mensagem de resultado
+        if sucesso > 0:
+            flash(f'✅ Sincronização concluída! {sucesso} NFs sincronizadas com sucesso!', 'success')
+        
+        if erros > 0:
+            flash(f'⚠️ {erros} NFs tiveram erro na sincronização (verifique os logs)', 'warning')
+        
+        # Redireciona para monitoramento para ver resultado
+        return redirect(url_for('monitoramento.listar_entregas'))
+        
+    except Exception as e:
+        flash(f'❌ Erro durante sincronização: {str(e)}', 'danger')
+        return redirect(url_for('faturamento.listar_relatorios'))
+
 @faturamento_bp.route('/listar', methods=['GET'])
 def listar_relatorios():
     query = RelatorioFaturamentoImportado.query
