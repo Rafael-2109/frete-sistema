@@ -66,7 +66,7 @@
                 <td>{{ item.pedido }}</td>
                 <td>{{ item.cliente }}</td>
                 <td>{{ item.cidade_destino }}/{{ item.uf_destino }}</td>
-                <td>{{ item.protocolo_agendamento or '-' }}</td>
+                <td>{{ (item.protocolo_agendamento | formatar_protocolo) or '-' }}</td>
                 <td>{{ item.data_agenda or '-' }}</td>
                 <td class="text-end">{{ "%.0f"|format(item.peso) }}kg</td>
                 <td class="text-end">R$ {{ "%.2f"|format(item.valor) }}</td>
@@ -78,7 +78,7 @@
                 <td>{{ item.pedido.num_pedido }}</td>
                 <td>{{ item.cliente }}</td>
                 <td>{{ item.pedido.nome_cidade }}/{{ item.pedido.cod_uf }}</td>
-                <td>{{ item.pedido.protocolo or '-' }}</td>
+                <td>{{ (item.pedido.protocolo | formatar_protocolo) or '-' }}</td>
                 <td>{{ item.pedido.agendamento or '-' }}</td>
                 <td class="text-end">{{ "%.0f"|format(item.peso) }}kg</td>
                 <td class="text-end">R$ {{ "%.2f"|format(item.valor) }}</td>
@@ -155,7 +155,7 @@
             <tr>
               <td>{{ item.pedido }}</td>
               <td>{{ item.cidade_destino }}/{{ item.uf_destino }}</td>
-              <td>{{ item.protocolo_agendamento or '-' }}</td>
+                              <td>{{ (item.protocolo_agendamento | formatar_protocolo) or '-' }}</td>
               <td>{{ item.data_agenda or '-' }}</td>
               <td class="text-end">{{ "%.0f"|format(item.peso) }}kg</td>
               <td class="text-end">R$ {{ "%.2f"|format(item.valor) }}</td>

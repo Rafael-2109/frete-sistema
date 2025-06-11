@@ -324,7 +324,7 @@
                 <td>
                   <strong>{{ p.num_pedido }}</strong>
                   {% if p.protocolo %}
-                    <br><small class="text-muted">Prot: {{ p.protocolo }}</small>
+                    <br><small class="text-muted">Prot: {{ p.protocolo | formatar_protocolo }}</small>
                   {% endif %}
                 </td>
                 

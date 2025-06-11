@@ -106,6 +106,18 @@ def create_app(config_name=None):
     app.jinja_env.filters['date_format'] = date_format_safe
     app.jinja_env.filters['fmt_date'] = date_format_safe
     app.jinja_env.filters['formatar_data_hora_brasil'] = formatar_data_hora_brasil
+    
+    # Filtro customizado para formatar protocolos (remove .0)
+    def formatar_protocolo(valor):
+        """Remove .0 do final do protocolo se existir"""
+        if valor is None:
+            return ''
+        valor_str = str(valor)
+        if valor_str.endswith('.0'):
+            return valor_str[:-2]
+        return valor_str
+    
+    app.jinja_env.filters['formatar_protocolo'] = formatar_protocolo
     app.jinja_env.filters['formatar_hora_brasil'] = formatar_hora_brasil
     app.jinja_env.filters['diferenca_timezone'] = diferenca_timezone
 

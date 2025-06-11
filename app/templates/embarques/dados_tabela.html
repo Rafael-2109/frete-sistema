@@ -226,7 +226,7 @@
               <p><strong>Valor:</strong> R$ {{ "%.2f"|format(item.valor) if item.valor else 'N/A' }}</p>
             </div>
             <div class="col-md-6">
-              <p><strong>Protocolo:</strong> {{ item.protocolo_agendamento or 'N/A' }}</p>
+              <p><strong>Protocolo:</strong> {{ (item.protocolo_agendamento | formatar_protocolo) or 'N/A' }}</p>
               <p><strong>Data Agenda:</strong> {{ item.data_agenda or 'N/A' }}</p>
               <p><strong>NFe:</strong> {{ item.nota_fiscal or 'N/A' }}</p>
             </div>

@@ -357,7 +357,7 @@
               -
             {% endif %}
           </td>
-          <td>{{ p.protocolo or '-' }}</td>
+                          <td>{{ (p.protocolo | formatar_protocolo) or '-' }}</td>
 
         </tr>
         {% endfor %}

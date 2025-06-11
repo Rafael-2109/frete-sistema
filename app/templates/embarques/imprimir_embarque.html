@@ -159,7 +159,7 @@
                 <td class="text-center">{{ item.volumes or ' ' }}</td>
                 <td>{{ item.uf_destino }}/{{ item.cidade_destino }}</td>
                 <td>{{ item.data_agenda }}</td>
-                <td>{{ item.protocolo_agendamento or '-' }}</td>
+                <td>{{ (item.protocolo_agendamento | formatar_protocolo) or '-' }}</td>
             </tr>
             {% endfor %}
         </tbody>

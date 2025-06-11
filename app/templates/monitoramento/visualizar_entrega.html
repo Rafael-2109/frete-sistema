@@ -205,7 +205,7 @@
               <strong>{{ ag.data_agendada | formatar_data_hora_brasil if ag.data_agendada else '-' }} 
               {{ ag.hora_agendada | formatar_hora_brasil if ag.hora_agendada else '' }}</strong><br>
               {{ ag.forma_agendamento }}: {{ ag.contato_agendamento }}<br>
-              Protocolo: {{ ag.protocolo_agendamento }}<br>
+                                  Protocolo: {{ ag.protocolo_agendamento | formatar_protocolo }}<br>
               Motivo: {{ ag.motivo }}<br>
               Observação: {{ ag.observacao or '-' }}<br>
               <em>Por {{ ag.autor }} em {{ ag.criado_em | formatar_data_hora_brasil }}</em>
