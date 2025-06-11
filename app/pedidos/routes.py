@@ -661,12 +661,12 @@ def processar_cotacao_manual():
                 data_agenda=pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
                 peso=pedido.peso_total or 0,
                 valor=pedido.valor_saldo_total or 0,
-                uf_destino=uf_correto,  # ✅ NOVO: Usa UF correto da cidade encontrada
-                cidade_destino=nome_cidade_correto,  # ✅ NOVO: Usa nome correto da cidade
+                uf_destino=uf_correto,
+                cidade_destino=nome_cidade_correto,
                 cotacao_id=cotacao.id,
-                volumes=None,  # ✅ NOVO: Deixa volumes em branco para preenchimento manual
-                # ✅ CORRIGIDO: Na carga direta, dados da tabela ficam apenas no Embarque
-                # Removendo campos de tabela dos itens
+                volumes=None,  # Deixa volumes em branco para preenchimento manual
+                # ✅ CORRIGIDO: Cotação manual é DIRETA - dados da tabela ficam apenas no Embarque
+                # EmbarqueItem não precisa dos campos de tabela
                 modalidade=None,
                 tabela_nome_tabela=None,
                 tabela_frete_minimo_valor=None,
@@ -682,9 +682,8 @@ def processar_cotacao_manual():
                 tabela_valor_despacho=None,
                 tabela_valor_cte=None,
                 tabela_icms_incluso=None,
-                icms_destino=None,
-                transportadora_optante=None,
-                criado_por='Sistema'
+                icms_destino=None
+                # ✅ REMOVIDO: transportadora_optante (campo não existe em EmbarqueItem)
             )
             db.session.add(embarque_item)
 
@@ -838,9 +837,9 @@ def embarque_fob():
                 valor=pedido.valor_saldo_total or 0,
                 uf_destino=uf_correto,
                 cidade_destino=nome_cidade_correto,
-                cotacao_id=None,  # ✅ SEM COTAÇÃO
-                volumes=None,  # ✅ NOVO: Deixa volumes em branco para preenchimento manual
-                # ✅ SEM DADOS DE TABELA (todos None)
+                cotacao_id=None,  # SEM COTAÇÃO para FOB
+                volumes=None,  # Deixa volumes em branco para preenchimento manual
+                # ✅ SEM DADOS DE TABELA (FOB não usa tabelas)
                 modalidade=None,
                 tabela_nome_tabela=None,
                 tabela_frete_minimo_valor=None,
@@ -856,9 +855,8 @@ def embarque_fob():
                 tabela_valor_despacho=None,
                 tabela_valor_cte=None,
                 tabela_icms_incluso=None,
-                icms_destino=None,
-                transportadora_optante=None,
-                criado_por='Sistema'
+                icms_destino=None
+                # ✅ REMOVIDO: transportadora_optante (campo não existe em EmbarqueItem)
             )
             db.session.add(embarque_item)
 

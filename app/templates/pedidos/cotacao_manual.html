@@ -95,12 +95,13 @@
               </label>
               <select class="form-select" id="modalidade" name="modalidade" required>
                 <option value="">Selecione uma modalidade...</option>
-                <option value="FRETE PESO">FRETE PESO</option>
-                <option value="FRETE VALOR">FRETE VALOR</option>
                 {% for veiculo in veiculos %}
                   <option value="{{ veiculo.nome }}">{{ veiculo.nome }}</option>
                 {% endfor %}
               </select>
+              <div class="form-text">
+                <small><i class="fas fa-info-circle"></i> Para cotações manuais (carga DIRETA), use apenas veículos específicos.</small>
+              </div>
             </div>
           </div>
         </div>
