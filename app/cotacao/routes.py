@@ -2341,3 +2341,257 @@ def redespachar():
         print(f"[DEBUG] ❌ Erro no redespachar: {str(e)}")
         flash(f"Erro ao calcular redespacho: {str(e)}", "error")
         return redirect(url_for("cotacao.tela_cotacao"))
+
+
+@cotacao_bp.route("/redespachar_sao_paulo")
+@login_required
+def redespachar_sao_paulo():
+    """
+    Rota do Redespachar para São Paulo - Cota pedidos considerando UF=SP e cidade=São Paulo
+    """
+    try:
+        # Recupera pedidos da sessão
+        lista_ids = session.get("cotacao_pedidos", [])
+        if not lista_ids:
+            flash("Nenhum pedido na cotação!", "warning")
+            return redirect(url_for("pedidos.lista_pedidos"))
+
+        # Carrega os pedidos originais do banco
+        pedidos_originais = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
+        if not pedidos_originais:
+            flash("Nenhum pedido encontrado!", "warning")
+            return redirect(url_for("pedidos.lista_pedidos"))
+
+        print(f"[DEBUG] 📦 REDESPACHAR SÃO PAULO: Iniciando para {len(pedidos_originais)} pedidos")
+        
+        # ✅ CRIA CÓPIAS DOS PEDIDOS COM ALTERAÇÕES TEMPORÁRIAS
+        pedidos_redespacho = []
+        for pedido_original in pedidos_originais:
+            # Cria uma cópia do pedido com os dados alterados para SP/São Paulo
+            pedido_copia = Pedido()
+            
+            # Copia todos os atributos do pedido original
+            for attr in dir(pedido_original):
+                if not attr.startswith('_') and hasattr(Pedido, attr):
+                    try:
+                        valor = getattr(pedido_original, attr)
+                        if not callable(valor):
+                            setattr(pedido_copia, attr, valor)
+                    except:
+                        pass
+            
+            # ✅ ALTERAÇÃO PRINCIPAL: Força UF=SP e cidade=São Paulo
+            pedido_copia.cod_uf = 'SP'
+            pedido_copia.nome_cidade = 'SAO PAULO'
+            pedido_copia.rota = 'CIF'  # Força para não ser RED
+            
+            print(f"[DEBUG] 📍 Pedido {pedido_original.num_pedido}: {pedido_original.nome_cidade}/{pedido_original.cod_uf} → SÃO PAULO/SP")
+            
+            pedidos_redespacho.append(pedido_copia)
+
+        # ✅ NORMALIZA OS DADOS DOS PEDIDOS ALTERADOS
+        for pedido in pedidos_redespacho:
+            LocalizacaoService.normalizar_dados_pedido(pedido)
+
+        # ✅ CALCULA FRETES COM OS DADOS ALTERADOS
+        print("[DEBUG] 🚛 Calculando fretes para redespacho (SP/São Paulo)...")
+        resultados = calcular_frete_por_cnpj(pedidos_redespacho)
+        
+        if not resultados:
+            flash("Não foi possível calcular fretes para redespacho", "warning")
+            return redirect(url_for("cotacao.tela_cotacao"))
+
+        # ✅ ORGANIZA DADOS PARA O TEMPLATE (mesmo formato da cotação normal)
+        pedidos_json = []
+        pedidos_por_cnpj = {}
+        pedidos_por_cnpj_json = {}
+        opcoes_por_cnpj = {}
+        
+        # Calcula totais
+        peso_total = sum(p.peso_total or 0 for p in pedidos_redespacho)
+        valor_total = sum(p.valor_saldo_total or 0 for p in pedidos_redespacho)
+        
+        # Organiza pedidos por CNPJ
+        for i, pedido in enumerate(pedidos_redespacho):
+            pedido_dict = {
+                'id': pedidos_originais[i].id,  # Mantém ID original para referências
+                'num_pedido': pedido.num_pedido,
+                'data_pedido': pedido.data_pedido.strftime('%Y-%m-%d') if pedido.data_pedido else None,
+                'cnpj_cpf': pedido.cnpj_cpf,
+                'raz_social_red': pedido.raz_social_red,
+                'nome_cidade': 'SAO PAULO',  # Mostra cidade alterada
+                'cod_uf': 'SP',  # Mostra UF alterada
+                'valor_saldo_total': float(pedido.valor_saldo_total) if pedido.valor_saldo_total else 0,
+                'pallet_total': float(pedido.pallet_total) if pedido.pallet_total else 0,
+                'peso_total': float(pedido.peso_total) if pedido.peso_total else 0,
+                'rota': 'CIF',  # Mostra rota alterada
+                'sub_rota': getattr(pedido, 'sub_rota', '')
+            }
+            
+            pedidos_json.append(pedido_dict)
+            
+            # Organiza por CNPJ
+            cnpj = pedido.cnpj_cpf
+            if cnpj not in pedidos_por_cnpj:
+                pedidos_por_cnpj[cnpj] = []
+                pedidos_por_cnpj_json[cnpj] = []
+            pedidos_por_cnpj[cnpj].append(pedidos_originais[i])  # Objetos originais para cálculos
+            pedidos_por_cnpj_json[cnpj].append(pedido_dict)  # Dados alterados para display
+
+        # ✅ PROCESSA RESULTADOS (mesmo formato da cotação normal)
+        opcoes_transporte = {
+            'direta': [],
+            'fracionada': {}
+        }
+        
+        # Todos são SP/São Paulo agora, então permite carga direta
+        todos_mesmo_uf = True
+        
+        # Processa cargas diretas
+        if 'diretas' in resultados:
+            for i, opcao in enumerate(resultados['diretas']):
+                if isinstance(opcao, dict):
+                    opcao['indice_original'] = i
+                    opcao['valor_por_kg'] = opcao['valor_liquido'] / peso_total if peso_total > 0 else float('inf')
+            
+            resultados['diretas'].sort(key=lambda x: x['valor_por_kg'] if isinstance(x, dict) else float('inf'))
+            
+            for i, opcao in enumerate(resultados['diretas']):
+                if isinstance(opcao, dict):
+                    opcao['indice'] = i
+            
+            opcoes_transporte['direta'] = resultados['diretas']
+
+        # Processa cargas fracionadas (melhor opção por CNPJ)
+        if 'fracionadas' in resultados:
+            print("[DEBUG] 🎯 IMPLEMENTANDO MELHOR OPÇÃO PARA REDESPACHO SÃO PAULO")
+            
+            melhores_opcoes_por_cnpj = {}
+            
+            for cnpj, opcoes_cnpj in resultados['fracionadas'].items():
+                pedidos_cnpj = [p for p in pedidos_redespacho if p.cnpj_cpf == cnpj]
+                peso_grupo = sum(p.peso_total or 0 for p in pedidos_cnpj)
+                
+                melhor_opcao = None
+                melhor_valor_kg = float('inf')
+                
+                for opcao in opcoes_cnpj:
+                    valor_kg = opcao['valor_liquido'] / peso_grupo if peso_grupo > 0 else float('inf')
+                    if valor_kg < melhor_valor_kg:
+                        melhor_valor_kg = valor_kg
+                        melhor_opcao = opcao
+                
+                if melhor_opcao:
+                    melhores_opcoes_por_cnpj[cnpj] = melhor_opcao
+            
+            # Agrupa por transportadora
+            for cnpj, melhor_opcao in melhores_opcoes_por_cnpj.items():
+                transportadora_id = melhor_opcao['transportadora_id']
+                
+                if transportadora_id not in opcoes_transporte['fracionada']:
+                    opcoes_transporte['fracionada'][transportadora_id] = {
+                        'razao_social': melhor_opcao['transportadora'],
+                        'cnpjs': []
+                    }
+                
+                pedidos_cnpj = [p for p in pedidos_redespacho if p.cnpj_cpf == cnpj]
+                peso_grupo = sum(p.peso_total or 0 for p in pedidos_cnpj)
+                valor_grupo = sum(p.valor_saldo_total or 0 for p in pedidos_cnpj)
+                pallets_grupo = sum(p.pallet_total or 0 for p in pedidos_cnpj)
+                
+                opcao_completa = {
+                    'cnpj': cnpj,
+                    'razao_social': pedidos_cnpj[0].raz_social_red if pedidos_cnpj else '',
+                    'cidade': 'SAO PAULO',  # Cidade alterada
+                    'uf': 'SP',  # UF alterada
+                    'peso_grupo': peso_grupo,
+                    'valor_grupo': valor_grupo,
+                    'pallets_grupo': pallets_grupo,
+                    'valor_total': melhor_opcao['valor_total'],
+                    'valor_liquido': melhor_opcao['valor_liquido'],
+                    'frete_kg': melhor_opcao['valor_liquido'] / peso_grupo if peso_grupo > 0 else float('inf'),
+                    'nome_tabela': melhor_opcao.get('nome_tabela', ''),
+                    'modalidade': melhor_opcao.get('modalidade', 'FRETE PESO')
+                }
+                opcoes_transporte['fracionada'][transportadora_id]['cnpjs'].append(opcao_completa)
+            
+            # Prepara todas as opções para o modal
+            for cnpj, todas_opcoes in resultados['fracionadas'].items():
+                opcoes_por_cnpj[cnpj] = []
+                
+                pedidos_cnpj = [p for p in pedidos_redespacho if p.cnpj_cpf == cnpj]
+                peso_grupo = sum(p.peso_total or 0 for p in pedidos_cnpj)
+                
+                for opcao in todas_opcoes:
+                    opcao_completa = {
+                        'cnpj': cnpj,
+                        'transportadora_id': opcao.get('transportadora_id'),
+                        'transportadora': opcao.get('transportadora'),
+                        'nome_tabela': opcao.get('nome_tabela', ''),
+                        'modalidade': opcao.get('modalidade', 'FRETE PESO'),
+                        'valor_total': opcao.get('valor_total', 0),
+                        'valor_liquido': opcao.get('valor_liquido', 0),
+                        'frete_kg': opcao.get('valor_liquido', 0) / peso_grupo if peso_grupo > 0 else 0,
+                        'peso_grupo': peso_grupo,
+                        'cidade': 'SAO PAULO',  # Cidade alterada
+                        'uf': 'SP',  # UF alterada
+                        'razao_social': pedidos_cnpj[0].raz_social_red if pedidos_cnpj else ''
+                    }
+                    opcoes_por_cnpj[cnpj].append(opcao_completa)
+
+        # ✅ BUSCA PEDIDOS DO MESMO UF (SP) PARA OTIMIZADOR
+        pedidos_mesmo_uf = (Pedido.query
+                           .filter(Pedido.cod_uf == 'SP')
+                           .filter(~Pedido.id.in_(lista_ids))
+                           .filter(Pedido.status == 'ABERTO')  # ✅ Apenas pedidos abertos
+                           .limit(200)  # ✅ Aumenta limite para mais otimizações
+                           .all())
+
+        # Serializa pedidos_mesmo_uf
+        pedidos_mesmo_estado_json = []
+        for p in pedidos_mesmo_uf:
+            pedidos_mesmo_estado_json.append({
+                'id': p.id,
+                'num_pedido': p.num_pedido,
+                'data_pedido': p.data_pedido.strftime('%Y-%m-%d') if p.data_pedido else None,
+                'cnpj_cpf': p.cnpj_cpf,
+                'raz_social_red': p.raz_social_red,
+                'nome_cidade': p.nome_cidade,
+                'cod_uf': p.cod_uf,
+                'valor_saldo_total': float(p.valor_saldo_total) if p.valor_saldo_total else 0,
+                'pallet_total': float(p.pallet_total) if p.pallet_total else 0,
+                'peso_total': float(p.peso_total) if p.peso_total else 0,
+                'rota': getattr(p, 'rota', ''),
+                'sub_rota': getattr(p, 'sub_rota', '')
+            })
+
+        # ✅ ARMAZENA RESULTADOS ALTERADOS NA SESSÃO
+        session['resultados'] = resultados
+        session['redespacho_ativo'] = True  # Flag para indicar que está em modo redespacho
+        session['redespacho_tipo'] = 'SAO_PAULO'  # Flag específica para São Paulo
+
+        print(f"[DEBUG] ✅ REDESPACHAR SÃO PAULO: {len(opcoes_transporte['direta'])} opções diretas, {len(opcoes_transporte['fracionada'])} transportadoras fracionadas")
+
+        # ✅ RENDERIZA O TEMPLATE COM DADOS ALTERADOS
+        return render_template(
+            "cotacao/redespachar_sao_paulo.html",  # Template específico para redespacho São Paulo
+            pedidos=pedidos_originais,  # Objetos originais para compatibilidade
+            pedidos_selecionados=pedidos_json,  # Dados alterados para exibição
+            pedidos_json=pedidos_json,
+            pedidos_mesmo_estado=pedidos_mesmo_uf,
+            pedidos_mesmo_estado_json=pedidos_mesmo_estado_json,
+            resultados=resultados,
+            opcoes_transporte=opcoes_transporte,
+            pedidos_por_cnpj=pedidos_por_cnpj_json,
+            pedidos_por_cnpj_json=pedidos_por_cnpj_json,
+            opcoes_por_cnpj=opcoes_por_cnpj,
+            peso_total=peso_total,
+            todos_mesmo_uf=todos_mesmo_uf,
+            redespacho=True,  # Flag para o template saber que é redespacho
+            cidade_redespacho='SAO PAULO'  # Flag específica da cidade
+        )
+
+    except Exception as e:
+        print(f"[DEBUG] ❌ Erro no redespacho São Paulo: {str(e)}")
+        flash(f"Erro ao calcular redespacho para São Paulo: {str(e)}", "error")
+        return redirect(url_for("cotacao.tela_cotacao"))

@@ -56,7 +56,9 @@ def lista_pedidos():
         abertos_data = Pedido.query.filter(
             func.date(Pedido.expedicao) == data_filtro,
             Pedido.cotacao_id.is_(None),
-            Pedido.nf_cd == False
+            Pedido.nf_cd == False,
+            (Pedido.nf.is_(None)) | (Pedido.nf == ""),  # ✅ CORRIGIDO: Exclui pedidos com NF
+            Pedido.data_embarque.is_(None)  # ✅ CORRIGIDO: Exclui pedidos embarcados
         ).count()
         
         contadores_data[f'd{i}'] = {
@@ -70,7 +72,9 @@ def lista_pedidos():
         'todos': Pedido.query.count(),
         'abertos': Pedido.query.filter(
             Pedido.cotacao_id.is_(None),
-            Pedido.nf_cd == False
+            Pedido.nf_cd == False,
+            (Pedido.nf.is_(None)) | (Pedido.nf == ""),  # ✅ CORRIGIDO: Exclui pedidos com NF
+            Pedido.data_embarque.is_(None)  # ✅ CORRIGIDO: Exclui pedidos embarcados
         ).count(),
         'cotados': Pedido.query.filter(
             Pedido.cotacao_id.isnot(None),
@@ -86,7 +90,9 @@ def lista_pedidos():
         if filtro_status == 'abertos':
             query = query.filter(
                 Pedido.cotacao_id.is_(None),
-                Pedido.nf_cd == False
+                Pedido.nf_cd == False,
+                (Pedido.nf.is_(None)) | (Pedido.nf == ""),  # ✅ CORRIGIDO: Exclui pedidos com NF
+                Pedido.data_embarque.is_(None)  # ✅ CORRIGIDO: Exclui pedidos embarcados
             )
         elif filtro_status == 'cotados':
             query = query.filter(
@@ -111,7 +117,9 @@ def lista_pedidos():
         # Já aplicou o filtro de data acima, só precisa do status aberto
         query = query.filter(
             Pedido.cotacao_id.is_(None),
-            Pedido.nf_cd == False
+            Pedido.nf_cd == False,
+            (Pedido.nf.is_(None)) | (Pedido.nf == ""),  # ✅ CORRIGIDO: Exclui pedidos com NF
+            Pedido.data_embarque.is_(None)  # ✅ CORRIGIDO: Exclui pedidos embarcados
         )
 
     # Se for POST do filtro_form, rodamos 'validate_on_submit' nele.

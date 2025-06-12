@@ -197,47 +197,49 @@
                 <!-- Contador de pedidos selecionados -->
                 <span id="selected-count" class="badge bg-primary me-2" style="display: none;"></span>
                 
-                <!-- ✅ NOVOS BOTÕES: Filtros rápidos por data e status -->
-                <div class="d-flex gap-2">
-                    <!-- Filtros por data (D+0, D+1, D+2, D+3) -->
-                    <div class="btn-group btn-group-sm" role="group">
-                        {% for key, dados in contadores_data.items() %}
-                            <div class="btn-group-vertical btn-group-sm">
-                                <!-- Botão principal da data -->
-                                <a href="{{ url_for('pedidos.lista_pedidos', data=dados.data.strftime('%Y-%m-%d')) }}" 
-                                   class="btn {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d') %}btn-primary{% else %}btn-outline-primary{% endif %} btn-sm">
-                                    {{ dados.data.strftime('%d/%m/%Y') }} <span class="badge bg-secondary">{{ dados.total }}</span>
-                                </a>
-                                <!-- Botão "Aberto" para cada data -->
-                                <a href="{{ url_for('pedidos.lista_pedidos', data=dados.data.strftime('%Y-%m-%d'), status='abertos') }}" 
-                                   class="btn {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d') and filtro_status_ativo == 'abertos' %}btn-warning{% else %}btn-outline-warning{% endif %} btn-sm">
-                                    Aberto <span class="badge bg-secondary">{{ dados.abertos }}</span>
-                                </a>
-                            </div>
-                        {% endfor %}
+                <!-- ✅ LAYOUT MELHORADO: Filtros centralizados e compactos -->
+                <div class="d-flex flex-column align-items-center gap-3">
+                    <!-- 📅 FILTROS POR DATA - CENTRALIZADOS -->
+                    <div class="d-flex justify-content-center">
+                        <div class="btn-group btn-group-sm" role="group">
+                            {% for key, dados in contadores_data.items() %}
+                                <div class="btn-group-vertical btn-group-sm">
+                                    <!-- Botão principal da data -->
+                                    <a href="{{ url_for('pedidos.lista_pedidos', data=dados.data.strftime('%Y-%m-%d')) }}" 
+                                       class="btn {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d') %}btn-primary{% else %}btn-outline-primary{% endif %} btn-sm px-3">
+                                        <strong>{{ dados.data.strftime('%d/%m/%Y') }}</strong> 
+                                        <span class="badge bg-light text-dark ms-1">{{ dados.total }}</span>
+                                    </a>
+                                    <!-- Botão "Aberto" para cada data -->
+                                    <a href="{{ url_for('pedidos.lista_pedidos', data=dados.data.strftime('%Y-%m-%d'), status='abertos') }}" 
+                                       class="btn {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d') and filtro_status_ativo == 'abertos' %}btn-warning{% else %}btn-outline-warning{% endif %} btn-sm px-3">
+                                        Aberto <span class="badge bg-light text-dark ms-1">{{ dados.abertos }}</span>
+                                    </a>
+                                </div>
+                            {% endfor %}
+                        </div>
                     </div>
                     
-                    <!-- Separador visual -->
-                    <div class="vr"></div>
-                    
-                    <!-- Filtros gerais por status -->
-                    <div class="btn-group btn-group-sm" role="group">
-                        <a href="{{ url_for('pedidos.lista_pedidos') }}" 
-                           class="btn {% if not filtro_status_ativo %}btn-secondary{% else %}btn-outline-secondary{% endif %} btn-sm">
-                            <i class="fas fa-list"></i> Todos <span class="badge bg-secondary">{{ contadores_status.todos }}</span>
-                        </a>
-                        <a href="{{ url_for('pedidos.lista_pedidos', status='abertos') }}" 
-                           class="btn {% if filtro_status_ativo == 'abertos' %}btn-warning{% else %}btn-outline-warning{% endif %} btn-sm">
-                            <i class="fas fa-clock"></i> Abertos <span class="badge bg-secondary">{{ contadores_status.abertos }}</span>
-                        </a>
-                        <a href="{{ url_for('pedidos.lista_pedidos', status='cotados') }}" 
-                           class="btn {% if filtro_status_ativo == 'cotados' %}btn-info{% else %}btn-outline-info{% endif %} btn-sm">
-                            <i class="fas fa-calculator"></i> Cotados <span class="badge bg-secondary">{{ contadores_status.cotados }}</span>
-                        </a>
-                        <a href="{{ url_for('pedidos.lista_pedidos', status='nf_cd') }}" 
-                           class="btn {% if filtro_status_ativo == 'nf_cd' %}btn-danger{% else %}btn-outline-danger{% endif %} btn-sm">
-                            <i class="fas fa-undo"></i> NF no CD <span class="badge bg-secondary">{{ contadores_status.nf_cd }}</span>
-                        </a>
+                    <!-- 🏷️ FILTROS POR STATUS - COMPACTOS -->
+                    <div class="d-flex justify-content-center">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <a href="{{ url_for('pedidos.lista_pedidos') }}" 
+                               class="btn {% if not filtro_status_ativo %}btn-secondary{% else %}btn-outline-secondary{% endif %} btn-sm px-2">
+                                <i class="fas fa-list"></i> <small>{{ contadores_status.todos }}</small>
+                            </a>
+                            <a href="{{ url_for('pedidos.lista_pedidos', status='abertos') }}" 
+                               class="btn {% if filtro_status_ativo == 'abertos' %}btn-warning{% else %}btn-outline-warning{% endif %} btn-sm px-2">
+                                <i class="fas fa-clock"></i> <small>{{ contadores_status.abertos }}</small>
+                            </a>
+                            <a href="{{ url_for('pedidos.lista_pedidos', status='cotados') }}" 
+                               class="btn {% if filtro_status_ativo == 'cotados' %}btn-info{% else %}btn-outline-info{% endif %} btn-sm px-2">
+                                <i class="fas fa-calculator"></i> <small>{{ contadores_status.cotados }}</small>
+                            </a>
+                            <a href="{{ url_for('pedidos.lista_pedidos', status='nf_cd') }}" 
+                               class="btn {% if filtro_status_ativo == 'nf_cd' %}btn-danger{% else %}btn-outline-danger{% endif %} btn-sm px-2">
+                                <i class="fas fa-undo"></i> <small>{{ contadores_status.nf_cd }}</small>
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
