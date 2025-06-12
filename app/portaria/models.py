@@ -70,9 +70,15 @@ class ControlePortaria(db.Model):
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # ✅ NOVOS CAMPOS: Auditoria de usuários
+    registrado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    atualizado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    
     # Relacionamentos
     tipo_veiculo = db.relationship('Veiculo', backref='registros_portaria')
     embarque = db.relationship('Embarque', backref='registros_portaria')
+    registrado_por = db.relationship('Usuario', foreign_keys=[registrado_por_id], backref='registros_portaria_criados')
+    atualizado_por = db.relationship('Usuario', foreign_keys=[atualizado_por_id], backref='registros_portaria_atualizados')
     
     def __repr__(self):
         return f'<ControlePortaria {self.motorista_obj.nome_completo} - {self.placa}>'
@@ -102,24 +108,27 @@ class ControlePortaria(db.Model):
                 not (self.data_saida and self.hora_saida))
     
     def registrar_chegada(self):
-        """Registra data e hora de chegada"""
-        agora = datetime.now()
+        """Registra data e hora de chegada no timezone brasileiro"""
+        from app.utils.timezone import agora_brasil
+        agora = agora_brasil()
         self.data_chegada = agora.date()
         self.hora_chegada = agora.time()
     
     def registrar_entrada(self):
-        """Registra data e hora de entrada"""
+        """Registra data e hora de entrada no timezone brasileiro"""
         if not self.pode_registrar_entrada:
             raise ValueError("Não é possível registrar entrada sem chegada")
-        agora = datetime.now()
+        from app.utils.timezone import agora_brasil
+        agora = agora_brasil()
         self.data_entrada = agora.date()
         self.hora_entrada = agora.time()
     
     def registrar_saida(self):
-        """Registra data e hora de saída"""
+        """Registra data e hora de saída no timezone brasileiro"""
         if not self.pode_registrar_saida:
             raise ValueError("Não é possível registrar saída sem entrada")
-        agora = datetime.now()
+        from app.utils.timezone import agora_brasil
+        agora = agora_brasil()
         self.data_saida = agora.date()
         self.hora_saida = agora.time()
     

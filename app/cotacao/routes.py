@@ -1,18 +1,37 @@
+# ✅ IMPORTS REORGANIZADOS - Todos os imports necessários no topo
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_login import login_required, current_user
+from sqlalchemy import func
+from datetime import datetime
+
+# Database
 from app import db
+
+# Models
 from app.cotacao.forms import CotarFreteForm
 from app.cotacao.models import Cotacao
 from app.pedidos.models import Pedido
-from app.utils.localizacao import LocalizacaoService  
-from app.utils.frete_simulador import calcular_frete_por_cnpj
+from app.transportadoras.models import Transportadora
+from app.embarques.models import Embarque, EmbarqueItem
+from app.tabelas.models import TabelaFrete
+from app.localidades.models import Cidade
+from app.veiculos.models import Veiculo
+from app.vinculos.models import CidadeAtendida
+
+# Utils
+from app.utils.localizacao import LocalizacaoService
+from app.utils.frete_simulador import calcular_frete_por_cnpj, buscar_cidade_unificada
 from app.utils.vehicle_utils import normalizar_nome_veiculo
 from app.utils.calculadora_frete import CalculadoraFrete
-from app.utils.frete_simulador import calcular_frete_por_cnpj
-from app.transportadoras.models import Transportadora
-from datetime import datetime
-from app.embarques.models import Embarque, EmbarqueItem
+
+# Routes
 from app.embarques.routes import obter_proximo_numero_embarque
+
+# Conditional imports (só quando necessário)
+try:
+    from dateutil import parser as date_parser
+except ImportError:
+    date_parser = None
 
 cotacao_bp = Blueprint("cotacao", __name__, url_prefix="/cotacao")
 
@@ -73,35 +92,35 @@ def formatar_data_brasileira(data):
         if data is not None and hasattr(data, 'strftime'):
             return data.strftime('%d/%m/%Y')
         
-        # Se for string, tenta converter
-        if isinstance(data, str):
-            data = data.strip()
-            if not data or data.lower() in ['none', 'null', '']:
-                return ''
-                
-            # Tenta vários formatos comuns
-            formatos = [
-                '%Y-%m-%d',      # 2025-05-29
-                '%d/%m/%Y',      # 2025/05/29
-                '%Y-%m-%d %H:%M:%S',  # 2025-05-29 10:30:00
-                '%d/%m/%Y %H:%M:%S',  # 2025/05/29 10:30:00
-                '%d-%m-%Y',      # 29-05-2025
-                '%m/%d/%Y',      # 05/29/2025 (formato americano)
-            ]
-            for formato in formatos:
-                try:
-                    data_obj = datetime.strptime(data, formato)
-                    return data_obj.strftime('%d/%m/%Y')
-                except ValueError:
-                    continue
+                    # Se for string, tenta converter
+            if isinstance(data, str):
+                data = data.strip()
+                if not data or data.lower() in ['none', 'null', '']:
+                    return ''
                     
-            # Se não conseguiu converter com formatos conhecidos, tenta parsing mais flexível
-            try:
-                from dateutil import parser
-                data_obj = parser.parse(data)
-                return data_obj.strftime('%d/%m/%Y')
-            except:
-                pass
+                # Tenta vários formatos comuns
+                formatos = [
+                    '%Y-%m-%d',      # 2025-05-29
+                    '%d/%m/%Y',      # 2025/05/29
+                    '%Y-%m-%d %H:%M:%S',  # 2025-05-29 10:30:00
+                    '%d/%m/%Y %H:%M:%S',  # 2025/05/29 10:30:00
+                    '%d-%m-%Y',      # 29-05-2025
+                    '%m/%d/%Y',      # 05/29/2025 (formato americano)
+                ]
+                for formato in formatos:
+                    try:
+                        data_obj = datetime.strptime(data, formato)
+                        return data_obj.strftime('%d/%m/%Y')
+                    except ValueError:
+                        continue
+                        
+                # Se não conseguiu converter com formatos conhecidos, tenta parsing mais flexível
+                if date_parser:
+                    try:
+                        data_obj = date_parser.parse(data)
+                        return data_obj.strftime('%d/%m/%Y')
+                    except:
+                        pass
         
         # Se for número (timestamp)
         if isinstance(data, (int, float)):
@@ -121,7 +140,7 @@ def formatar_data_brasileira(data):
 def calcular_otimizacoes_pedido_adicional(pedido, pedidos_atuais, transportadora, modalidade, peso_total, veiculos, frete_atual_kg):
     """
     Calcula as otimizações possíveis para um pedido que pode ser adicionado
-    ✅ NOVO: Agora considera a tabela mais cara (destino mais distante)
+    ✅ NOVO: Usa TABELA MAIS CARA para cenário conservador
     """
     otimizacoes = {}
     
@@ -135,41 +154,42 @@ def calcular_otimizacoes_pedido_adicional(pedido, pedidos_atuais, transportadora
         for p in pedidos_com:
             LocalizacaoService.normalizar_dados_pedido(p)
         
-        # Calcula frete usando simulador
-        resultados = calcular_frete_por_cnpj(pedidos_com)
+        # ✅ LÓGICA TABELA MAIS CARA: Calcula com pior cenário
+        resultados = calcular_frete_otimizacao_conservadora(pedidos_com)
         
-        # Se tem resultados diretos, ordena por valor/kg e pega o melhor
+        # Se tem resultados diretos, pega a PIOR opção (mais cara)
         if resultados and resultados.get('diretas'):
-            # Ordena opções por valor/kg (do menor para o maior)
+            # ✅ MUDANÇA: Ordena do MAIOR para MENOR valor/kg (pior cenário)
             opcoes_ordenadas = sorted(
                 resultados['diretas'], 
-                key=lambda x: x['valor_liquido'] / peso_com if peso_com > 0 else float('inf')
+                key=lambda x: x['valor_liquido'] / peso_com if peso_com > 0 else 0,
+                reverse=True  # Pior primeiro (mais caro)
             )
             
-            melhor_opcao = opcoes_ordenadas[0]
-            novo_frete_kg = melhor_opcao['valor_liquido'] / peso_com if peso_com > 0 else float('inf')
+            pior_opcao = opcoes_ordenadas[0]  # Tabela mais cara
+            novo_frete_kg = pior_opcao['valor_liquido'] / peso_com if peso_com > 0 else float('inf')
             reducao_rota = frete_atual_kg - novo_frete_kg
             
-            # Se houve redução significativa (mais de R$ 0.01/kg)
+            # ✅ CRITÉRIO CONSERVADOR: Se mesmo com tabela mais cara houve redução
             if reducao_rota > 0.01:
                 otimizacoes['nova_rota_diff'] = reducao_rota
                 otimizacoes['reducao_por_kg_rota'] = reducao_rota
-                otimizacoes['nova_tabela'] = melhor_opcao['nome_tabela']
-                otimizacoes['frete_bruto_novo'] = melhor_opcao['valor_total']
-                otimizacoes['frete_liquido_novo'] = melhor_opcao['valor_liquido']
+                otimizacoes['nova_tabela'] = pior_opcao['nome_tabela']
+                otimizacoes['frete_bruto_novo'] = pior_opcao['valor_total']
+                otimizacoes['frete_liquido_novo'] = pior_opcao['valor_liquido']
                 otimizacoes['frete_kg_novo'] = novo_frete_kg
                 otimizacoes['frete_kg_atual'] = frete_atual_kg
                 otimizacoes['peso_atual'] = peso_total
                 otimizacoes['peso_novo'] = peso_com
                 otimizacoes['reducao_total'] = reducao_rota * peso_com
-                otimizacoes['nova_transportadora'] = melhor_opcao['transportadora']
-                otimizacoes['nova_modalidade'] = melhor_opcao['modalidade']
+                otimizacoes['nova_transportadora'] = pior_opcao['transportadora']
+                otimizacoes['nova_modalidade'] = pior_opcao['modalidade']
                 
-                print(f"[DEBUG] 💡 OTIMIZAÇÃO ENCONTRADA para adicionar {pedido.num_pedido}:")
+                print(f"[DEBUG] 💡 OTIMIZAÇÃO CONSERVADORA para adicionar {pedido.num_pedido}:")
                 print(f"[DEBUG]   - Frete atual: R${frete_atual_kg:.3f}/kg")
-                print(f"[DEBUG]   - Novo frete: R${novo_frete_kg:.3f}/kg")
+                print(f"[DEBUG]   - Novo frete (PIOR): R${novo_frete_kg:.3f}/kg")
                 print(f"[DEBUG]   - Redução: R${reducao_rota:.3f}/kg")
-                print(f"[DEBUG]   - Nova tabela: {melhor_opcao['nome_tabela']}")
+                print(f"[DEBUG]   - Tabela mais cara: {pior_opcao['nome_tabela']}")
                 
     except Exception as e:
         print(f"[DEBUG] Erro ao calcular otimização para adicionar {pedido.num_pedido}: {str(e)}")
@@ -179,7 +199,7 @@ def calcular_otimizacoes_pedido_adicional(pedido, pedidos_atuais, transportadora
 def calcular_otimizacoes_pedido(pedido, pedidos_atuais, modalidade, veiculos, frete_atual_kg):
     """
     Calcula as otimizações possíveis removendo um pedido específico
-    ✅ NOVO: Agora considera a tabela mais cara (destino mais distante)
+    ✅ NOVO: Usa TABELA MAIS CARA para cenário conservador
     """
     otimizacoes = {}
     
@@ -198,41 +218,42 @@ def calcular_otimizacoes_pedido(pedido, pedidos_atuais, modalidade, veiculos, fr
         for p in pedidos_sem:
             LocalizacaoService.normalizar_dados_pedido(p)
         
-        # Calcula frete usando simulador
-        resultados = calcular_frete_por_cnpj(pedidos_sem)
+        # ✅ LÓGICA TABELA MAIS CARA: Calcula com pior cenário
+        resultados = calcular_frete_otimizacao_conservadora(pedidos_sem)
         
-        # Se tem resultados diretos, ordena por valor/kg e pega o melhor
+        # Se tem resultados diretos, pega a PIOR opção (mais cara)
         if resultados and resultados.get('diretas'):
-            # Ordena opções por valor/kg (do menor para o maior)
+            # ✅ MUDANÇA: Ordena do MAIOR para MENOR valor/kg (pior cenário)
             opcoes_ordenadas = sorted(
                 resultados['diretas'], 
-                key=lambda x: x['valor_liquido'] / peso_sem if peso_sem > 0 else float('inf')
+                key=lambda x: x['valor_liquido'] / peso_sem if peso_sem > 0 else 0,
+                reverse=True  # Pior primeiro (mais caro)
             )
             
-            melhor_opcao = opcoes_ordenadas[0]
-            novo_frete_kg = melhor_opcao['valor_liquido'] / peso_sem if peso_sem > 0 else float('inf')
+            pior_opcao = opcoes_ordenadas[0]  # Tabela mais cara
+            novo_frete_kg = pior_opcao['valor_liquido'] / peso_sem if peso_sem > 0 else float('inf')
             reducao_rota = frete_atual_kg - novo_frete_kg
             
-            # Se houve redução significativa (mais de R$ 0.01/kg)
+            # ✅ CRITÉRIO CONSERVADOR: Se mesmo com tabela mais cara houve redução
             if reducao_rota > 0.01:
                 otimizacoes['nova_rota_diff'] = reducao_rota
                 otimizacoes['reducao_por_kg_rota'] = reducao_rota
-                otimizacoes['nova_tabela'] = melhor_opcao['nome_tabela']
-                otimizacoes['frete_bruto_novo'] = melhor_opcao['valor_total']
-                otimizacoes['frete_liquido_novo'] = melhor_opcao['valor_liquido']
+                otimizacoes['nova_tabela'] = pior_opcao['nome_tabela']
+                otimizacoes['frete_bruto_novo'] = pior_opcao['valor_total']
+                otimizacoes['frete_liquido_novo'] = pior_opcao['valor_liquido']
                 otimizacoes['frete_kg_novo'] = novo_frete_kg
                 otimizacoes['frete_kg_atual'] = frete_atual_kg
                 otimizacoes['peso_atual'] = peso_total
                 otimizacoes['peso_novo'] = peso_sem
                 otimizacoes['reducao_total'] = reducao_rota * peso_sem
-                otimizacoes['nova_transportadora'] = melhor_opcao['transportadora']
-                otimizacoes['nova_modalidade'] = melhor_opcao['modalidade']
+                otimizacoes['nova_transportadora'] = pior_opcao['transportadora']
+                otimizacoes['nova_modalidade'] = pior_opcao['modalidade']
                 
-                print(f"[DEBUG] 💡 OTIMIZAÇÃO ENCONTRADA removendo {pedido.num_pedido}:")
+                print(f"[DEBUG] 💡 OTIMIZAÇÃO CONSERVADORA removendo {pedido.num_pedido}:")
                 print(f"[DEBUG]   - Frete atual: R${frete_atual_kg:.3f}/kg")
-                print(f"[DEBUG]   - Novo frete: R${novo_frete_kg:.3f}/kg")
+                print(f"[DEBUG]   - Novo frete (PIOR): R${novo_frete_kg:.3f}/kg")
                 print(f"[DEBUG]   - Redução: R${reducao_rota:.3f}/kg")
-                print(f"[DEBUG]   - Nova tabela: {melhor_opcao['nome_tabela']}")
+                print(f"[DEBUG]   - Tabela mais cara: {pior_opcao['nome_tabela']}")
                 
     except Exception as e:
         print(f"[DEBUG] Erro ao calcular otimização para remover {pedido.num_pedido}: {str(e)}")
@@ -752,8 +773,7 @@ def fechar_frete():
         nome_tabela = opcao_escolhida.get('nome_tabela')
         modalidade_escolhida = opcao_escolhida.get('modalidade')
         
-        from app.tabelas.models import TabelaFrete
-        from sqlalchemy import func
+        # Imports já estão no topo do arquivo
         
         tabela = TabelaFrete.query.filter(
             TabelaFrete.transportadora_id == transportadora_id,
@@ -767,7 +787,7 @@ def fechar_frete():
         print(f"[DEBUG] Tabela no banco: {'✅ Encontrada' if tabela else '❌ Não encontrada'}")
 
         # ✅ BUSCA ICMS CORRETO
-        from app.localidades.models import Cidade
+        # Import já está no topo do arquivo
         icms_destino = 0
         
         if redespacho_ativo:
@@ -1344,7 +1364,7 @@ def otimizar():
         print(f"[DEBUG] - Frete atual/kg: R${frete_atual_kg:.2f}")
 
         # ✅ CARREGA VEÍCULOS DISPONÍVEIS
-        from app.veiculos.models import Veiculo
+        # Import já está no topo do arquivo
         veiculos_query = Veiculo.query.all()
         veiculos = {normalizar_nome_veiculo(v.nome): v.peso_maximo for v in veiculos_query}
         
@@ -1813,6 +1833,263 @@ def resumo_frete(cotacao_id):
     )
 
 # ❌ FUNÇÃO REMOVIDA - Usar CalculadoraFrete.calcular_frete_unificado() de app/utils/calculadora_frete.py
+
+def calcular_frete_otimizacao_conservadora(pedidos):
+    """
+    ✅ FUNÇÃO REFORMULADA: Implementa EXATAMENTE as regras especificadas para otimizações conservadoras
+    
+    REGRAS IMPLEMENTADAS:
+    1- Considera os pedidos com rota "RED" como se fosse UF = "SP" e cidade = "Guarulhos"
+    2- Verifica se todos os pedidos tem o mesmo UF (considere a conversão de rota "RED" para UF = SP e cidade = Guarulhos)
+    3- Verifica se todos os pedidos da cotação tem a mesma subrota
+    4- Traz todos os pedidos do mesmo UF (Considere a conversão de subrota = "RED") e mesma subrota
+    5- Se tiver na seção de remover pedidos, considere sem o pedido da linha, se tiver na seção de adicionar considere com o pedido da linha
+    6- Soma todos os pesos
+    7- Soma todos os valores
+    8- Lista todas as cidades dos pedidos cotados (Considere a conversão de subrota = "RED")
+    9- Busca nos vinculos todas os nome_tabela / transportadora / UF que atenda as cidades cotadas
+    10- Busca nas tabelas as modalidades que atendam aos resultados dos vinculos (transportadora / nome_tabela / uf_destino ).
+    11- Descarta as opções de transportadora / modalidade que atendam a apenas uma parte dos pedidos. (caso de transportadora / modalidade que não atenda a todas as cidades dos pedidos)
+    12 - Descarta as modalidades que o peso_maximo (link entre veiculos.nome e tabelas.modalidade) não atenda ao total de peso dos pedidos cotados.
+    13- Considera a opção mais cara
+    """
+    # ✅ Todos os imports já estão no topo do arquivo
+    
+    # Fallback para resultados normais em caso de erro
+    try:
+        # REGRA 1 e 2: Normalização e validação de UF
+        print("[DEBUG] 🎯 OTIMIZAÇÃO CONSERVADORA: Iniciando...")
+        
+        for pedido in pedidos:
+            LocalizacaoService.normalizar_dados_pedido(pedido)
+        
+        # Verifica se todos são do mesmo UF (considerando RED -> SP)
+        ufs_encontrados = set()
+        for pedido in pedidos:
+            if hasattr(pedido, 'rota') and pedido.rota and pedido.rota.upper().strip() == 'RED':
+                ufs_encontrados.add('SP')
+            else:
+                ufs_encontrados.add(pedido.cod_uf)
+        
+        if len(ufs_encontrados) > 1:
+            print(f"[DEBUG] ❌ Pedidos de UFs diferentes: {ufs_encontrados}")
+            return {'diretas': [], 'fracionadas': {}}
+        
+        uf_comum = list(ufs_encontrados)[0]
+        print(f"[DEBUG] ✅ Todos pedidos do UF: {uf_comum}")
+        
+        # REGRA 3: Verifica se todos têm a mesma sub_rota
+        sub_rotas_encontradas = set()
+        for pedido in pedidos:
+            if hasattr(pedido, 'sub_rota') and pedido.sub_rota:
+                sub_rotas_encontradas.add(pedido.sub_rota)
+            else:
+                sub_rotas_encontradas.add(None)  # Pedidos sem sub_rota
+        
+        if len(sub_rotas_encontradas) > 1:
+            print(f"[DEBUG] ❌ Pedidos de sub_rotas diferentes: {sub_rotas_encontradas}")
+            return {'diretas': [], 'fracionadas': {}}
+        
+        sub_rota_comum = list(sub_rotas_encontradas)[0]
+        print(f"[DEBUG] ✅ Todos pedidos da sub_rota: {sub_rota_comum}")
+        
+        # REGRA 6 e 7: Soma todos os pesos e valores
+        peso_total = sum(p.peso_total or 0 for p in pedidos)
+        valor_total = sum(p.valor_saldo_total or 0 for p in pedidos)
+        
+        print(f"[DEBUG] ✅ Peso total: {peso_total}kg, Valor total: R${valor_total:.2f}")
+        
+        if peso_total <= 0 or valor_total <= 0:
+            print("[DEBUG] ❌ Peso ou valor inválido")
+            return {'diretas': [], 'fracionadas': {}}
+        
+        # REGRA 8: Lista todas as cidades dos pedidos cotados
+        cidades_cotadas = set()
+        for pedido in pedidos:
+            # Considera conversão RED -> Guarulhos/SP
+            if hasattr(pedido, 'rota') and pedido.rota and pedido.rota.upper().strip() == 'RED':
+                cidade = buscar_cidade_unificada(cidade='GUARULHOS', uf='SP', rota='RED')
+            else:
+                cidade = buscar_cidade_unificada(pedido=pedido)
+            
+            if cidade:
+                cidades_cotadas.add(cidade.id)
+        
+        if not cidades_cotadas:
+            print("[DEBUG] ❌ Nenhuma cidade encontrada")
+            return {'diretas': [], 'fracionadas': {}}
+        
+        print(f"[DEBUG] ✅ Cidades cotadas: {len(cidades_cotadas)} cidades")
+        
+        # REGRA 9: Busca nos vínculos todas as opções que atendem as cidades cotadas
+        vinculos = CidadeAtendida.query.filter(
+            CidadeAtendida.cidade_id.in_(cidades_cotadas)
+        ).all()
+        
+        if not vinculos:
+            print("[DEBUG] ❌ Nenhum vínculo encontrado")
+            return {'diretas': [], 'fracionadas': {}}
+        
+        print(f"[DEBUG] ✅ Vínculos encontrados: {len(vinculos)}")
+        
+        # REGRA 10: Busca nas tabelas as modalidades que atendam aos vínculos
+        # ✅ NOVO: Filtro por tipo_carga = "DIRETA"
+        # Agrupa vínculos por transportadora + modalidade
+        combinacoes_transporte = {}  # (transportadora_id, modalidade) -> [tabelas]
+        
+        for vinculo in vinculos:
+            tabelas = TabelaFrete.query.filter(
+                TabelaFrete.transportadora_id == vinculo.transportadora_id,
+                TabelaFrete.nome_tabela == vinculo.nome_tabela,
+                TabelaFrete.tipo_carga == 'DIRETA'  # ✅ FILTRO: Apenas tabelas DIRETA
+            ).all()
+            
+            for tabela in tabelas:
+                modalidade = tabela.modalidade or 'FRETE PESO'
+                chave = (tabela.transportadora_id, modalidade)
+                
+                if chave not in combinacoes_transporte:
+                    combinacoes_transporte[chave] = []
+                combinacoes_transporte[chave].append({
+                    'tabela': tabela,
+                    'cidade_id': vinculo.cidade_id
+                })
+        
+        print(f"[DEBUG] ✅ Combinações transportadora/modalidade: {len(combinacoes_transporte)}")
+        
+        # REGRA 11: Descarta opções que não atendem TODAS as cidades
+        combinacoes_validas = {}
+        
+        for (transportadora_id, modalidade), dados in combinacoes_transporte.items():
+            # Verifica se esta combinação atende TODAS as cidades cotadas
+            cidades_atendidas = set(item['cidade_id'] for item in dados)
+            
+            if cidades_atendidas.issuperset(cidades_cotadas):
+                combinacoes_validas[(transportadora_id, modalidade)] = dados
+                print(f"[DEBUG] ✅ Combinação válida: Transp {transportadora_id}, Modal {modalidade}")
+            else:
+                print(f"[DEBUG] ❌ Combinação descartada: Transp {transportadora_id}, Modal {modalidade} - não atende todas as cidades")
+        
+        if not combinacoes_validas:
+            print("[DEBUG] ❌ Nenhuma combinação atende todas as cidades")
+            return {'diretas': [], 'fracionadas': {}}
+        
+        # REGRA 12: Descarta modalidades que excedem peso máximo
+        veiculos = {v.nome: v.peso_maximo for v in Veiculo.query.all()}
+        combinacoes_com_peso_ok = {}
+        
+        for (transportadora_id, modalidade), dados in combinacoes_validas.items():
+            peso_maximo = veiculos.get(modalidade, 0)
+            
+            if peso_maximo >= peso_total:
+                combinacoes_com_peso_ok[(transportadora_id, modalidade)] = dados
+                print(f"[DEBUG] ✅ Peso OK: Modal {modalidade} suporta {peso_maximo}kg >= {peso_total}kg")
+            else:
+                print(f"[DEBUG] ❌ Peso excedido: Modal {modalidade} suporta {peso_maximo}kg < {peso_total}kg")
+        
+        if not combinacoes_com_peso_ok:
+            print("[DEBUG] ❌ Nenhuma modalidade suporta o peso total")
+            return {'diretas': [], 'fracionadas': {}}
+        
+        # REGRA 13: Calcula fretes e pega a opção MAIS CARA
+        opcoes_calculadas = []
+        
+        for (transportadora_id, modalidade), dados in combinacoes_com_peso_ok.items():
+            # Para cada combinação válida, pega a tabela MAIS CARA entre as que atendem as cidades
+            tabelas_da_combinacao = []
+            
+            for item in dados:
+                tabela = item['tabela']
+                cidade_id = item['cidade_id']
+                cidade = Cidade.query.get(cidade_id)
+                
+                if not cidade:
+                    continue
+                
+                # Calcula frete com esta tabela
+                try:
+                    dados_tabela = {
+                        'modalidade': modalidade,
+                        'valor_kg': tabela.valor_kg or 0,
+                        'percentual_valor': tabela.percentual_valor or 0,
+                        'frete_minimo_valor': tabela.frete_minimo_valor or 0,
+                        'frete_minimo_peso': tabela.frete_minimo_peso or 0,
+                        'percentual_gris': tabela.percentual_gris or 0,
+                        'pedagio_por_100kg': tabela.pedagio_por_100kg or 0,
+                        'valor_tas': tabela.valor_tas or 0,
+                        'percentual_adv': tabela.percentual_adv or 0,
+                        'percentual_rca': tabela.percentual_rca or 0,
+                        'valor_despacho': tabela.valor_despacho or 0,
+                        'valor_cte': tabela.valor_cte or 0,
+                        'icms_destino': cidade.icms or 0,
+                        'icms_incluso': tabela.icms_incluso or False
+                    }
+                    
+                    resultado = CalculadoraFrete.calcular_frete_unificado(
+                        peso=peso_total,
+                        valor_mercadoria=valor_total,
+                        tabela_dados=dados_tabela,
+                        transportadora_optante=tabela.transportadora.optante if tabela.transportadora else False
+                    )
+                    
+                    tabelas_da_combinacao.append({
+                        'tabela': tabela,
+                        'cidade': cidade,
+                        'valor_liquido': resultado['valor_liquido'],
+                        'valor_total': resultado['valor_com_icms'],
+                        'resultado': resultado
+                    })
+                    
+                except Exception as e:
+                    print(f"[DEBUG] Erro ao calcular tabela {tabela.nome_tabela}: {str(e)}")
+                    continue
+            
+            # Pega a tabela MAIS CARA desta combinação
+            if tabelas_da_combinacao:
+                tabela_mais_cara = max(tabelas_da_combinacao, key=lambda x: x['valor_liquido'])
+                
+                opcao_final = {
+                    'transportadora_id': transportadora_id,
+                    'transportadora': tabela_mais_cara['tabela'].transportadora.razao_social if tabela_mais_cara['tabela'].transportadora else 'N/A',
+                    'modalidade': modalidade,
+                    'tipo_carga': 'DIRETA',
+                    'valor_total': tabela_mais_cara['valor_total'],
+                    'valor_liquido': tabela_mais_cara['valor_liquido'],
+                    'nome_tabela': f"{tabela_mais_cara['tabela'].nome_tabela} (CONSERVADOR)",
+                    'valor_kg': tabela_mais_cara['tabela'].valor_kg or 0,
+                    'percentual_valor': tabela_mais_cara['tabela'].percentual_valor or 0,
+                    'icms': tabela_mais_cara['cidade'].icms or 0,
+                    'frete_por_kg': tabela_mais_cara['valor_liquido'] / peso_total
+                }
+                
+                opcoes_calculadas.append(opcao_final)
+                print(f"[DEBUG] ✅ Opção calculada: {opcao_final['transportadora']} {modalidade} - R${opcao_final['valor_liquido']:.2f}")
+        
+        if not opcoes_calculadas:
+            print("[DEBUG] ❌ Nenhuma opção foi calculada com sucesso")
+            return {'diretas': [], 'fracionadas': {}}
+        
+        # ✅ LÓGICA FINAL: Entre todas as "tabelas mais caras", pega a opção MAIS BARATA
+        print(f"[DEBUG] 🎯 COMPARANDO {len(opcoes_calculadas)} OPÇÕES CONSERVADORAS:")
+        for opcao in opcoes_calculadas:
+            print(f"[DEBUG]   → {opcao['transportadora']} {opcao['modalidade']} - R${opcao['valor_liquido']:.2f} (tabela mais cara)")
+        
+        # Ordena por valor líquido e pega a MAIS BARATA entre as tabelas mais caras
+        opcao_final = min(opcoes_calculadas, key=lambda x: x['valor_liquido'])
+        
+        print(f"[DEBUG] 🏆 OPÇÃO FINAL CONSERVADORA: {opcao_final['transportadora']} {opcao_final['modalidade']} - R${opcao_final['valor_liquido']:.2f}")
+        print(f"[DEBUG]     → Tabela: {opcao_final['nome_tabela']}")
+        print(f"[DEBUG]     → Tipo: {opcao_final['tipo_carga']}")
+        
+        return {
+            'diretas': [opcao_final],  # ✅ Apenas a opção mais barata entre as tabelas mais caras
+            'fracionadas': {}
+        }
+        
+    except Exception as e:
+        print(f"[DEBUG] ❌ Erro na otimização conservadora: {str(e)}")
+        return {'diretas': [], 'fracionadas': {}}
+
 
 @cotacao_bp.route("/redespachar")
 @login_required

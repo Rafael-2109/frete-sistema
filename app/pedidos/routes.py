@@ -19,6 +19,8 @@ pedidos_bp = Blueprint('pedidos', __name__, url_prefix='/pedidos')
 @pedidos_bp.route('/lista_pedidos', methods=['GET','POST'])
 @login_required
 def lista_pedidos():
+    from datetime import datetime, timedelta
+    
     # Form para filtrar:
     filtro_form = FiltroPedidosForm()
 
@@ -34,6 +36,83 @@ def lista_pedidos():
     cotar_form = CotarFreteForm()
 
     query = Pedido.query
+
+    # ✅ NOVO: Filtros de atalho por GET parameters
+    filtro_status = request.args.get('status')
+    filtro_data = request.args.get('data')
+    
+    # ✅ NOVO: Contadores para os botões de atalho por data
+    hoje = datetime.now().date()
+    contadores_data = {}
+    for i in range(4):  # D+0, D+1, D+2, D+3
+        data_filtro = hoje + timedelta(days=i)
+        
+        # Conta total de pedidos da data
+        total_data = Pedido.query.filter(
+            func.date(Pedido.expedicao) == data_filtro
+        ).count()
+        
+        # Conta pedidos ABERTOS da data
+        abertos_data = Pedido.query.filter(
+            func.date(Pedido.expedicao) == data_filtro,
+            Pedido.cotacao_id.is_(None),
+            Pedido.nf_cd == False
+        ).count()
+        
+        contadores_data[f'd{i}'] = {
+            'data': data_filtro,
+            'total': total_data,
+            'abertos': abertos_data
+        }
+    
+    # ✅ NOVO: Contadores para os botões de status
+    contadores_status = {
+        'todos': Pedido.query.count(),
+        'abertos': Pedido.query.filter(
+            Pedido.cotacao_id.is_(None),
+            Pedido.nf_cd == False
+        ).count(),
+        'cotados': Pedido.query.filter(
+            Pedido.cotacao_id.isnot(None),
+            Pedido.data_embarque.is_(None),
+            (Pedido.nf.is_(None)) | (Pedido.nf == ""),
+            Pedido.nf_cd == False
+        ).count(),
+        'nf_cd': Pedido.query.filter(Pedido.nf_cd == True).count()
+    }
+
+    # ✅ NOVO: Aplicar filtros de atalho
+    if filtro_status:
+        if filtro_status == 'abertos':
+            query = query.filter(
+                Pedido.cotacao_id.is_(None),
+                Pedido.nf_cd == False
+            )
+        elif filtro_status == 'cotados':
+            query = query.filter(
+                Pedido.cotacao_id.isnot(None),
+                Pedido.data_embarque.is_(None),
+                (Pedido.nf.is_(None)) | (Pedido.nf == ""),
+                Pedido.nf_cd == False
+            )
+        elif filtro_status == 'nf_cd':
+            query = query.filter(Pedido.nf_cd == True)
+        # 'todos' não aplica filtro
+    
+    if filtro_data:
+        try:
+            data_selecionada = datetime.strptime(filtro_data, '%Y-%m-%d').date()
+            query = query.filter(func.date(Pedido.expedicao) == data_selecionada)
+        except ValueError:
+            pass  # Ignora data inválida
+    
+    # Combina filtros de atalho com status se ambos estiverem presentes
+    if filtro_data and filtro_status == 'abertos':
+        # Já aplicou o filtro de data acima, só precisa do status aberto
+        query = query.filter(
+            Pedido.cotacao_id.is_(None),
+            Pedido.nf_cd == False
+        )
 
     # Se for POST do filtro_form, rodamos 'validate_on_submit' nele.
     # Dependendo de como você quer, pode checar se "request.form" veio do filtro_form ou do outro.
@@ -137,7 +216,11 @@ def lista_pedidos():
         'pedidos/lista_pedidos.html',
         filtro_form=filtro_form,
         cotar_form=cotar_form,
-        pedidos=pedidos
+        pedidos=pedidos,
+        contadores_data=contadores_data,
+        contadores_status=contadores_status,
+        filtro_status_ativo=filtro_status,
+        filtro_data_ativo=filtro_data
     )
 
 @pedidos_bp.route('/editar/<int:pedido_id>', methods=['GET', 'POST'])
@@ -868,7 +951,7 @@ def embarque_fob():
         for pedido in pedidos:
             # FOB não tem cotação, mas reseta flag NF no CD se estava marcado
             pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao criar embarque FOB
-            # Status será calculado automaticamente
+            pedido.status = 'COTADO'  # ✅ NOVO: Define status como COTADO para FOB
 
         # Commit final
         db.session.commit()

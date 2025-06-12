@@ -222,6 +222,66 @@ def create_app(config_name=None):
     app.jinja_env.filters['formatar_data_brasil'] = formatar_data_brasil
     app.jinja_env.filters['formatar_hora_brasil'] = formatar_hora_brasil
     app.jinja_env.filters['diferenca_timezone'] = diferenca_timezone
+    
+    # ✅ NOVOS FILTROS: Formatação brasileira de números
+    def formatar_valor_brasileiro(valor, decimais=2):
+        """Formata valores monetários em padrão brasileiro (R$ 1.234,56)"""
+        if valor is None or valor == '':
+            return 'R$ 0,00'
+        
+        try:
+            valor_float = float(valor)
+            if decimais == 0:
+                return f"R$ {valor_float:,.0f}".replace(',', '.')
+            else:
+                valor_formatado = f"{valor_float:,.{decimais}f}"
+                # Converte para padrão brasileiro
+                partes = valor_formatado.split('.')
+                if len(partes) == 2:
+                    inteira = partes[0].replace(',', '.')
+                    decimal = partes[1]
+                    return f"R$ {inteira},{decimal}"
+                else:
+                    return f"R$ {valor_formatado.replace(',', '.')}"
+        except (ValueError, TypeError):
+            return 'R$ 0,00'
+    
+    def formatar_numero_brasileiro(valor, decimais=0):
+        """Formata números em padrão brasileiro (1.234,56 ou 1.234)"""
+        if valor is None or valor == '':
+            return '0'
+        
+        try:
+            valor_float = float(valor)
+            if decimais == 0:
+                return f"{valor_float:,.0f}".replace(',', '.')
+            else:
+                valor_formatado = f"{valor_float:,.{decimais}f}"
+                # Converte para padrão brasileiro
+                partes = valor_formatado.split('.')
+                if len(partes) == 2:
+                    inteira = partes[0].replace(',', '.')
+                    decimal = partes[1]
+                    return f"{inteira},{decimal}"
+                else:
+                    return valor_formatado.replace(',', '.')
+        except (ValueError, TypeError):
+            return '0'
+    
+    def formatar_peso_brasileiro(valor):
+        """Formata peso em padrão brasileiro (1.234 kg)"""
+        if valor is None or valor == '':
+            return '0 kg'
+        
+        try:
+            valor_float = float(valor)
+            return f"{valor_float:,.0f} kg".replace(',', '.')
+        except (ValueError, TypeError):
+            return '0 kg'
+    
+    app.jinja_env.filters['valor_br'] = formatar_valor_brasileiro
+    app.jinja_env.filters['numero_br'] = formatar_numero_brasileiro
+    app.jinja_env.filters['peso_br'] = formatar_peso_brasileiro
 
     # Registra funções globais para templates
     @app.template_global()

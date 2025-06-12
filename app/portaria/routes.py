@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
-from flask_login import login_required
+from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from datetime import datetime
 import os
@@ -158,6 +158,11 @@ def registrar_movimento():
                 print(f"[DEBUG] Registro criado")
                 form.populate_obj(registro)
                 print(f"[DEBUG] Dados populados no registro")
+                
+                # ✅ NOVO: Registra usuário que criou
+                registro.registrado_por_id = current_user.id
+                registro.atualizado_por_id = current_user.id
+                
                 registro.registrar_chegada()
                 print(f"[DEBUG] Chegada registrada")
                 
@@ -193,6 +198,8 @@ def registrar_movimento():
                     flash('Não é possível registrar entrada sem chegada ou entrada já foi registrada!', 'warning')
                 else:
                     print(f"[DEBUG] Registrando entrada...")
+                    # ✅ NOVO: Registra usuário que fez a atualização
+                    registro.atualizado_por_id = current_user.id
                     registro.registrar_entrada()
                     db.session.commit()
                     flash('Entrada registrada com sucesso!', 'success')
@@ -206,6 +213,8 @@ def registrar_movimento():
                     flash('Não é possível registrar saída sem entrada ou saída já foi registrada!', 'warning')
                 else:
                     print(f"[DEBUG] Registrando saída...")
+                    # ✅ NOVO: Registra usuário que fez a atualização
+                    registro.atualizado_por_id = current_user.id
                     registro.registrar_saida()
                     
                     # Atualiza data_embarque do embarque vinculado automaticamente
