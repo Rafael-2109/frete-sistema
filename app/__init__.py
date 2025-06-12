@@ -148,6 +148,16 @@ def create_app(config_name=None):
                         
             return response
         
+        @app.errorhandler(404)
+        def handle_404(error):
+            """Captura erros 404 - não loga favicon e outros recursos estáticos"""
+            if request.path.endswith('.ico') or request.path.startswith('/static'):
+                # Não loga erros para favicon e arquivos estáticos
+                return "Not Found", 404
+            else:
+                logger.warning(f"🔍 404 - Página não encontrada: {request.path}")
+                return "Página não encontrada", 404
+            
         @app.errorhandler(500)
         def handle_500(error):
             """Captura erros 500 e faz log detalhado"""
@@ -157,6 +167,10 @@ def create_app(config_name=None):
         @app.errorhandler(Exception)
         def handle_exception(error):
             """Captura qualquer exceção não tratada"""
+            # Evita logar erros 404 como exceções críticas
+            if hasattr(error, 'code') and error.code == 404:
+                return handle_404(error)
+            
             if isinstance(error, Exception) and not isinstance(error, (KeyboardInterrupt, SystemExit)):
                 log_error(error, f"Exceção não tratada em {request.path}")
             raise error
