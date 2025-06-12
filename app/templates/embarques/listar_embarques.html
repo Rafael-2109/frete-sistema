@@ -33,6 +33,18 @@
               {{ form_filtros.data_fim(id="data_fim") }}
             </div>
             
+            <!-- Filtros de Data Prevista -->
+            <div class="col-md-3">
+              <label for="data_prevista_inicio" class="form-label">Data Prevista Início</label>
+              {{ form_filtros.data_prevista_inicio(id="data_prevista_inicio") }}
+            </div>
+            <div class="col-md-3">
+              <label for="data_prevista_fim" class="form-label">Data Prevista Fim</label>
+              {{ form_filtros.data_prevista_fim(id="data_prevista_fim") }}
+            </div>
+          </div>
+          
+          <div class="row mt-3">
             <!-- Filtros de Documentos -->
             <div class="col-md-3">
               <label for="nota_fiscal" class="form-label">Nota Fiscal</label>
@@ -42,9 +54,7 @@
               <label for="pedido" class="form-label">Pedido</label>
               {{ form_filtros.pedido(id="pedido") }}
             </div>
-          </div>
-          
-          <div class="row mt-3">
+            
             <!-- Transportadora -->
             <div class="col-md-3">
               <label for="transportadora_id" class="form-label">Transportadora</label>
@@ -56,7 +66,9 @@
               <label for="status" class="form-label">Status do Embarque</label>
               {{ form_filtros.status(id="status") }}
             </div>
-            
+          </div>
+          
+          <div class="row mt-3">
             <!-- Status da Portaria -->
             <div class="col-md-3">
               <label for="status_portaria" class="form-label">Status da Portaria</label>
@@ -68,9 +80,7 @@
               <label for="status_nfs" class="form-label">Status das NFs</label>
               {{ form_filtros.status_nfs(id="status_nfs") }}
             </div>
-          </div>
-          
-          <div class="row mt-3">
+            
             <!-- Status dos Fretes -->
             <div class="col-md-3">
               <label for="status_fretes" class="form-label">Status dos Fretes</label>
@@ -78,7 +88,7 @@
             </div>
             
             <!-- Busca Geral -->
-            <div class="col-md-9">
+            <div class="col-md-3">
               <label for="buscar_texto" class="form-label">Busca Geral</label>
               {{ form_filtros.buscar_texto(id="buscar_texto") }}
             </div>
@@ -113,19 +123,21 @@
       <thead class="table-dark">
         <tr>
           <th style="width: 6%;">Número</th>
+          <th style="width: 10%;">Data Prevista</th>
           <th style="width: 10%;">Data</th>
-          <th style="width: 25%;">Transportadora</th>
-          <th style="width: 10%;">Status</th>
-          <th style="width: 12%;">Portaria</th>
-          <th style="width: 12%;">Status NFs</th>
-          <th style="width: 10%;">Fretes</th>
-          <th style="width: 15%;">Ações</th>
+          <th style="width: 20%;">Transportadora</th>
+          <th style="width: 8%;">Status</th>
+          <th style="width: 10%;">Portaria</th>
+          <th style="width: 10%;">Status NFs</th>
+          <th style="width: 8%;">Fretes</th>
+          <th style="width: 18%;">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for embarque in embarques %}
         <tr>
           <td>{{ embarque.numero }}</td>
+          <td>{{ embarque.data_prevista_embarque | formatar_data_segura if embarque.data_prevista_embarque else '-' }}</td>
           <td>{{ embarque.data_embarque | formatar_data_segura if embarque.data_embarque else '-' }}</td>
           <td>{{ embarque.transportadora.razao_social if embarque.transportadora else '' }}</td>
           <td>
@@ -209,7 +221,7 @@
 // Máscaras para campos de data
 document.addEventListener('DOMContentLoaded', function() {
     // Máscara para data DD/MM/AAAA
-    const dataInputs = document.querySelectorAll('#data_inicio, #data_fim');
+    const dataInputs = document.querySelectorAll('#data_inicio, #data_fim, #data_prevista_inicio, #data_prevista_fim');
     dataInputs.forEach(input => {
         input.addEventListener('input', function(e) {
             let value = e.target.value.replace(/\D/g, '');

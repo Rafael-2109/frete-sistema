@@ -61,6 +61,9 @@ class EmbarqueItemForm(FlaskForm):
                 raise ValidationError('Use o formato dd/mm/aaaa')
 
 class EmbarqueForm(FlaskForm):
+    # ✅ CAMPOS EDITÁVEIS pelo usuário
+    data_prevista_embarque = StringField('Data Prevista de Embarque', validators=[Optional()], render_kw={'placeholder': 'DD/MM/AAAA', 'class': 'form-control'})
+    
     # ✅ CAMPOS READONLY - Dados da cotação não editáveis
     data_embarque = StringField('Data do Embarque', validators=[Optional()], render_kw={'readonly': True, 'class': 'form-control'})
     transportadora = StringField('Transportadora', validators=[Optional()], render_kw={'readonly': True, 'class': 'form-control'})
@@ -83,6 +86,13 @@ class EmbarqueForm(FlaskForm):
     # Esses dados ficam preservados automaticamente no banco!
 
     def validate_data_embarque(self, field):
+        if field.data:
+            try:
+                datetime.strptime(field.data, '%d/%m/%Y')
+            except ValueError:
+                raise ValidationError('Use o formato dd/mm/aaaa')
+
+    def validate_data_prevista_embarque(self, field):
         if field.data:
             try:
                 datetime.strptime(field.data, '%d/%m/%Y')
@@ -129,6 +139,18 @@ class FiltrosEmbarqueExpandidoForm(FlaskForm):
         render_kw={'placeholder': 'DD/MM/AAAA', 'class': 'form-control'}
     )
     
+    data_prevista_inicio = StringField(
+        'Data Prevista Início',
+        validators=[Optional()],
+        render_kw={'placeholder': 'DD/MM/AAAA', 'class': 'form-control'}
+    )
+    
+    data_prevista_fim = StringField(
+        'Data Prevista Fim', 
+        validators=[Optional()],
+        render_kw={'placeholder': 'DD/MM/AAAA', 'class': 'form-control'}
+    )
+    
     nota_fiscal = StringField(
         'Nota Fiscal',
         validators=[Optional()],
@@ -153,7 +175,6 @@ class FiltrosEmbarqueExpandidoForm(FlaskForm):
         'Status do Embarque',
         choices=[
             ('', 'Todos os status'),
-            ('draft', 'Rascunho'),
             ('ativo', 'Ativo'),
             ('cancelado', 'Cancelado')
         ],
@@ -168,8 +189,8 @@ class FiltrosEmbarqueExpandidoForm(FlaskForm):
             ('Sem Registro', 'Sem Registro'),
             ('PENDENTE', 'Pendente'),
             ('AGUARDANDO', 'Aguardando'),
-            ('DENTRO', 'Na Portaria'),
-            ('SAIU', 'Saiu')
+            ('DENTRO', 'Carregando'),
+            ('SAIU', 'Saiu para entrega')
         ],
         validators=[Optional()],
         render_kw={'class': 'form-control'}
@@ -213,6 +234,20 @@ class FiltrosEmbarqueExpandidoForm(FlaskForm):
                 raise ValidationError('Use o formato DD/MM/AAAA')
     
     def validate_data_fim(self, field):
+        if field.data:
+            try:
+                datetime.strptime(field.data, '%d/%m/%Y')
+            except ValueError:
+                raise ValidationError('Use o formato DD/MM/AAAA')
+
+    def validate_data_prevista_inicio(self, field):
+        if field.data:
+            try:
+                datetime.strptime(field.data, '%d/%m/%Y')
+            except ValueError:
+                raise ValidationError('Use o formato DD/MM/AAAA')
+    
+    def validate_data_prevista_fim(self, field):
         if field.data:
             try:
                 datetime.strptime(field.data, '%d/%m/%Y')

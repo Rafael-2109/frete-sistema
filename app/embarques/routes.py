@@ -1,4 +1,4 @@
-from flask import request, flash, url_for, redirect, render_template, Blueprint
+from flask import request, flash, url_for, redirect, render_template, Blueprint, jsonify
 
 from sqlalchemy import or_, cast, String
 
@@ -80,6 +80,12 @@ def visualizar_embarque(id):
                     embarque.data_embarque = datetime.strptime(form.data_embarque.data, '%d/%m/%Y').date()
                 else:
                     embarque.data_embarque = None
+
+                # Adicionar campo data_prevista_embarque
+                if form.data_prevista_embarque.data:
+                    embarque.data_prevista_embarque = datetime.strptime(form.data_prevista_embarque.data, '%d/%m/%Y').date()
+                else:
+                    embarque.data_prevista_embarque = None
 
                 # ✅ READONLY: Transportadora não é mais editável - mantém valor existente
                 embarque.observacoes = form.observacoes.data
@@ -227,6 +233,9 @@ def visualizar_embarque(id):
         form.data_embarque.data = (
             embarque.data_embarque.strftime('%d/%m/%Y') if embarque.data_embarque else ''
         )
+        form.data_prevista_embarque.data = (
+            embarque.data_prevista_embarque.strftime('%d/%m/%Y') if embarque.data_prevista_embarque else ''
+        )
         form.transportadora.data = (
             embarque.transportadora.razao_social if embarque.transportadora else ''
         )
@@ -329,6 +338,28 @@ def listar_embarques():
             filtros_aplicados = True
         except ValueError:
             flash('Data de fim inválida. Use o formato DD/MM/AAAA', 'warning')
+
+    # Filtro por data prevista início
+    data_prevista_inicio = request.args.get('data_prevista_inicio', '').strip()
+    if data_prevista_inicio:
+        try:
+            data_prevista_inicio_obj = datetime.strptime(data_prevista_inicio, '%d/%m/%Y').date()
+            query = query.filter(Embarque.data_prevista_embarque >= data_prevista_inicio_obj)
+            form_filtros.data_prevista_inicio.data = data_prevista_inicio
+            filtros_aplicados = True
+        except ValueError:
+            flash('Data prevista de início inválida. Use o formato DD/MM/AAAA', 'warning')
+
+    # Filtro por data prevista fim
+    data_prevista_fim = request.args.get('data_prevista_fim', '').strip()
+    if data_prevista_fim:
+        try:
+            data_prevista_fim_obj = datetime.strptime(data_prevista_fim, '%d/%m/%Y').date()
+            query = query.filter(Embarque.data_prevista_embarque <= data_prevista_fim_obj)
+            form_filtros.data_prevista_fim.data = data_prevista_fim
+            filtros_aplicados = True
+        except ValueError:
+            flash('Data prevista de fim inválida. Use o formato DD/MM/AAAA', 'warning')
 
     # Filtro por nota fiscal
     nota_fiscal = request.args.get('nota_fiscal', '').strip()
@@ -494,6 +525,9 @@ def editar_embarque(id):
 
         # ✅ READONLY: Preencher campos como string
         form.data_embarque.data = embarque.data_embarque.strftime('%d/%m/%Y') if embarque.data_embarque else ''
+        form.data_prevista_embarque.data = (
+            embarque.data_prevista_embarque.strftime('%d/%m/%Y') if embarque.data_prevista_embarque else ''
+        )
         form.transportadora.data = embarque.transportadora.razao_social if embarque.transportadora else ''
         form.observacoes.data = embarque.observacoes
         form.placa_veiculo.data = embarque.placa_veiculo
@@ -696,6 +730,9 @@ def novo_interativo(embarque_id):
         form.data_embarque.data = (
             embarque.data_embarque.strftime('%d/%m/%Y') if embarque.data_embarque else ''
         )
+        form.data_prevista_embarque.data = (
+            embarque.data_prevista_embarque.strftime('%d/%m/%Y') if embarque.data_prevista_embarque else ''
+        )
         form.transportadora.data = (
             embarque.transportadora.razao_social if embarque.transportadora else ''
         )
@@ -769,6 +806,12 @@ def novo_interativo(embarque_id):
                     embarque.data_embarque = datetime.strptime(form.data_embarque.data, '%d/%m/%Y').date()
                 else:
                     embarque.data_embarque = None
+
+                # Adicionar campo data_prevista_embarque
+                if form.data_prevista_embarque.data:
+                    embarque.data_prevista_embarque = datetime.strptime(form.data_prevista_embarque.data, '%d/%m/%Y').date()
+                else:
+                    embarque.data_prevista_embarque = None
 
                 # ✅ READONLY: Transportadora não é mais editável - mantém valor existente
                 embarque.observacoes = form.observacoes.data
@@ -1073,6 +1116,11 @@ def imprimir_embarque_completo(embarque_id):
     
     embarque = Embarque.query.get_or_404(embarque_id)
     
+    # Verificar se a data prevista de embarque está preenchida
+    if not embarque.data_prevista_embarque:
+        flash('⚠️ A Data Prevista de Embarque deve ser preenchida antes de imprimir o relatório completo.', 'warning')
+        return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
+    
     # Busca todos os lotes únicos de separação vinculados a este embarque
     lotes_separacao = db.session.query(EmbarqueItem.separacao_lote_id).filter(
         EmbarqueItem.embarque_id == embarque_id,
@@ -1120,6 +1168,31 @@ def imprimir_embarque_completo(embarque_id):
     response = make_response(html)
     response.headers['Content-Type'] = 'text/html; charset=utf-8'
     return response
+
+@embarques_bp.route('/<int:embarque_id>/registrar_impressao', methods=['POST'])
+@login_required
+def registrar_impressao(embarque_id):
+    """
+    Registra que o embarque foi impresso
+    """
+    from flask import jsonify
+    
+    embarque = Embarque.query.get_or_404(embarque_id)
+    
+    # Verificar se a data prevista de embarque está preenchida
+    if not embarque.data_prevista_embarque:
+        return jsonify({'success': False, 'message': 'A Data Prevista de Embarque deve ser preenchida antes de imprimir.'})
+    
+    # Registrar a impressão (você pode criar uma tabela específica para isso ou usar um campo no embarque)
+    # Por enquanto, vamos apenas retornar os dados para exibir
+    usuario_nome = current_user.nome if current_user.is_authenticated and hasattr(current_user, 'nome') and current_user.nome else (current_user.email if current_user.is_authenticated else 'Sistema')
+    data_impressao = datetime.now()
+    
+    return jsonify({
+        'success': True, 
+        'usuario': usuario_nome,
+        'data_impressao': data_impressao.strftime('%d/%m/%Y às %H:%M:%S')
+    })
 
 @embarques_bp.route('/<int:embarque_id>/corrigir_cnpj', methods=['POST'])
 @login_required

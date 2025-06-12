@@ -168,7 +168,7 @@
 <body>
     <!-- PÁGINA 1: EMBARQUE -->
     <div class="embarque-header">
-        <h1>EMBARQUE #{{ embarque.numero }} - {{ embarque.data_embarque | formatar_data_segura if embarque.data_embarque else '___/___/_____' }}</h1>
+        <h1>EMBARQUE #{{ embarque.numero }} - {{ embarque.data_prevista_embarque | formatar_data_segura if embarque.data_prevista_embarque else '___/___/_____' }}</h1>
     </div>
 
     <!-- Informações do Embarque (formato formulário) -->
@@ -250,8 +250,9 @@
 
     <!-- Totalizadores do Embarque -->
     <div style="margin-top: 20px; text-align: center; font-weight: bold; font-size: 14px;">
-        Total de Notas: {{ embarque.total_notas() }} | 
-        Total de Volumes: {{ embarque.total_volumes() }}
+        Total - Valor: R$ {{ "%.2f"|format(embarque.total_valor_pedidos()) }} | 
+        Pallet: {{ "%.2f"|format(embarque.total_pallet_pedidos()) }} | 
+        Peso: {{ "%.0f"|format(embarque.total_peso_pedidos()) }} kg
     </div>
 
     <!-- Campo Motorista (semelhante ao template original) -->
@@ -273,6 +274,120 @@
             <div style="text-align: center;">
                 <label style="font-weight: bold;">Data:</label><br>
                 <div style="border-bottom: 1px solid #000; height: 30px; margin-top: 10px; width: 60%; margin-left: auto; margin-right: auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEGUNDA VIA DO EMBARQUE -->
+    <div class="page-break">
+        <div class="embarque-header">
+            <h1>EMBARQUE #{{ embarque.numero }} - {{ embarque.data_prevista_embarque | formatar_data_segura if embarque.data_prevista_embarque else '___/___/_____' }} (2ª VIA)</h1>
+        </div>
+
+        <!-- Informações do Embarque (formato formulário) -->
+        <div style="margin-bottom: 12px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 12px;">
+                <div>
+                    <h3 style="border-bottom: 2px solid #007bff; padding-bottom: 3px; margin-bottom: 8px;">Informações Gerais</h3>
+                    <div style="margin-bottom: 8px;">
+                        <strong>Transportadora:</strong> {{ embarque.transportadora.razao_social if embarque.transportadora else 'Não informada' }}
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <strong>Placa do Veículo:</strong> ________________________________
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <strong>Responsável pelo Carregamento:</strong> ________________________________
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <strong>Horário de Carregamento:</strong> ________________
+                    </div>
+                </div>
+                <div>
+                    <h3 style="border-bottom: 2px solid #007bff; padding-bottom: 3px; margin-bottom: 8px;">Status do Embarque</h3>
+                    <div style="margin-bottom: 6px;">
+                        <input type="checkbox" style="margin-right: 8px;"> <strong>Paletizado</strong>
+                    </div>
+                    <div style="margin-bottom: 6px;">
+                        <input type="checkbox" style="margin-right: 8px;"> <strong>Laudo Anexado</strong>
+                    </div>
+                    <div style="margin-bottom: 6px;">
+                        <input type="checkbox" style="margin-right: 8px;"> <strong>Embalagem Aprovada</strong>
+                    </div>
+                    <div style="margin-bottom: 6px;">
+                        <input type="checkbox" style="margin-right: 8px;"> <strong>Transporte Aprovado</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Observações do Embarque -->
+        <div style="border: 1px solid #ddd; padding: 8px; margin-bottom: 15px;">
+            <h3 style="margin: 0 0 8px 0;">Observações</h3>
+            {% if embarque.observacoes %}
+                <p style="margin: 0;">{{ embarque.observacoes }}</p>
+            {% else %}
+                <div style="border-bottom: 1px solid #ccc; height: 18px; margin-bottom: 4px;"></div>
+                <div style="border-bottom: 1px solid #ccc; height: 18px; margin-bottom: 4px;"></div>
+                <div style="border-bottom: 1px solid #ccc; height: 18px;"></div>
+            {% endif %}
+        </div>
+
+        <!-- Itens do Embarque -->
+        <h3 style="border-bottom: 2px solid #007bff; padding-bottom: 2px; margin-bottom: 3px;">Itens do Embarque</h3>
+        <table class="embarque-items">
+            <thead>
+                <tr>
+                    <th style="width: 23%;">Cliente</th>
+                    <th style="width: 9%;">Pedido</th>
+                    <th style="width: 15%;">NF</th>
+                    <th style="width: 6%;">Volumes</th>
+                    <th style="width: 25%;">UF/Cidade</th>
+                    <th style="width: 9%;">Agenda</th>
+                    <th style="width: 13%;">Protocolo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in embarque.itens %}
+                <tr>
+                    <td>{{ item.cliente }}</td>
+                    <td>{{ item.pedido }}</td>
+                    <td>{{ item.nota_fiscal or ' ' }}</td>
+                    <td class="text-center">{{ item.volumes or ' ' }}</td>
+                    <td>{{ item.uf_destino }}/{{ item.cidade_destino }}</td>
+                    <td>{{ item.data_agenda }}</td>
+                    <td>{{ (item.protocolo_agendamento | formatar_protocolo) or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Totalizadores do Embarque -->
+        <div style="margin-top: 20px; text-align: center; font-weight: bold; font-size: 14px;">
+            Total - Valor: R$ {{ "%.2f"|format(embarque.total_valor_pedidos()) }} | 
+            Pallet: {{ "%.2f"|format(embarque.total_pallet_pedidos()) }} | 
+            Peso: {{ "%.0f"|format(embarque.total_peso_pedidos()) }} kg
+        </div>
+
+        <!-- Campo Motorista (semelhante ao template original) -->
+        <div style="margin-top: 30px; padding: 15px; border: 2px solid #000;">
+            <h3 style="text-align: center; font-weight: bold; margin: 0 0 15px 0;">CAMPO MOTORISTA</h3>
+            <p style="font-size: 14px; line-height: 1.8;">
+                Eu, <span style="border-bottom: 1px solid #000; display: inline-block; width: 250px; margin: 0 5px;"></span>,
+                CPF nº <span style="border-bottom: 1px solid #000; display: inline-block; width: 150px; margin: 0 5px;"></span>,
+                responsável pela retirada de <span style="border-bottom: 1px solid #000; display: inline-block; width: 50px; margin: 0 5px;"></span> pallets PBR...
+            </p>
+            <p style="text-align: center; font-weight: bold; margin: 15px 0;">
+                Estou ciente de minha responsabilidade por quaisquer danos ou extravios ocorridos durante o transporte.
+            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 50px; margin-top: 30px;">
+                <div style="text-align: center;">
+                    <label style="font-weight: bold;">Assinatura:</label><br>
+                    <div style="border-bottom: 1px solid #000; height: 30px; margin-top: 10px;"></div>
+                </div>
+                <div style="text-align: center;">
+                    <label style="font-weight: bold;">Data:</label><br>
+                    <div style="border-bottom: 1px solid #000; height: 30px; margin-top: 10px; width: 60%; margin-left: auto; margin-right: auto;"></div>
+                </div>
             </div>
         </div>
     </div>

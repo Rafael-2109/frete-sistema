@@ -195,7 +195,14 @@
 
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <h2 class="card-title mb-0">Embarque #{{ embarque.numero }}</h2>
+      <h2 class="card-title mb-0">
+        Embarque #{{ embarque.numero }}
+        <small class="text-muted">
+          | Peso: {{ "%.0f"|format(embarque.total_peso_pedidos()) }} kg 
+          | Valor: R$ {{ "%.2f"|format(embarque.total_valor_pedidos()) }} 
+          | Pallet: {{ "%.2f"|format(embarque.total_pallet_pedidos()) }}
+        </small>
+      </h2>
       <span class="badge bg-{% if embarque.status == 'ativo' %}success{% elif embarque.status == 'cancelado' %}danger{% else %}secondary{% endif %} fs-6">
         {{ (embarque.status or 'draft').upper() }}
       </span>
@@ -209,10 +216,14 @@
     <!-- Cabeçalho -->
     <div class="row mb-3">
       <div class="col-md-4">
+        <label>{{ form.data_prevista_embarque.label }}</label>
+        {{ form.data_prevista_embarque(class="form-control") }}
+      </div>
+      <div class="col-md-4">
         <label>{{ form.data_embarque.label }}</label>
         {{ form.data_embarque(class="form-control") }}
       </div>
-      <div class="col-md-8">
+      <div class="col-md-4">
         <label>{{ form.transportadora.label }}</label>
         {{ form.transportadora(class="form-control") }}
       </div>
@@ -399,10 +410,24 @@
         Ver Dados da Tabela
       </a>
       <!-- Botão Imprimir Completo -->
-      <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id) }}" 
-         class="btn btn-success" target="_blank">
-        <i class="fas fa-print"></i> Imprimir Completo
-      </a>
+      {% if embarque.data_prevista_embarque %}
+        <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id) }}" 
+           class="btn btn-success" target="_blank" id="btn-imprimir-completo">
+          <i class="fas fa-print"></i> Imprimir Completo
+        </a>
+      {% else %}
+        <button type="button" class="btn btn-secondary" disabled title="Preencha a Data Prevista de Embarque para habilitar">
+          <i class="fas fa-print"></i> Imprimir Completo
+        </button>
+      {% endif %}
+      
+      <!-- Registro de Impressão -->
+      <div id="registro-impressao" class="mt-2" style="display: none;">
+        <small class="text-muted">
+          <strong>Impresso por:</strong> <span id="usuario-impressao"></span><br>
+          <strong>Impresso em:</strong> <span id="data-impressao"></span>
+        </small>
+      </div>
       
       <!-- Botão Corrigir NFs (aparece apenas se há erros) -->
       {% set itens_com_erro_nf = [] %}
@@ -553,6 +578,60 @@ $(document).ready(function() {
   });
 
   // O cancelamento agora é feito através de uma página separada com formulário próprio
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Registrar impressão quando clicar em "Imprimir Completo"
+    const btnImprimirCompleto = document.getElementById('btn-imprimir-completo');
+    if (btnImprimirCompleto) {
+        btnImprimirCompleto.addEventListener('click', function(e) {
+            // Registrar a impressão
+            fetch('{{ url_for("embarques.registrar_impressao", embarque_id=embarque.id) }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Mostrar registro de impressão
+                    document.getElementById('usuario-impressao').textContent = data.usuario;
+                    document.getElementById('data-impressao').textContent = data.data_impressao;
+                    document.getElementById('registro-impressao').style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao registrar impressão:', error);
+            });
+        });
+    }
+
+    // Aviso para botão desabilitado
+    const btnDesabilitado = document.querySelector('button[title*="Data Prevista"]');
+    if (btnDesabilitado) {
+        btnDesabilitado.addEventListener('click', function() {
+            alert('⚠️ A Data Prevista de Embarque deve ser preenchida antes de imprimir o relatório completo.');
+        });
+    }
+
+    // Máscara para data prevista de embarque
+    const dataPrevistalInput = document.getElementById('data_prevista_embarque');
+    if (dataPrevistalInput) {
+        dataPrevistalInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length >= 3) {
+                value = value.substring(0,2) + '/' + value.substring(2);
+            }
+            if (value.length >= 6) {
+                value = value.substring(0,5) + '/' + value.substring(5,9);
+            }
+            e.target.value = value;
+        });
+    }
 });
 </script>
 {% endblock %}
