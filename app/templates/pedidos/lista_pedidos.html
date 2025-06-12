@@ -238,8 +238,8 @@
                                     class="btn btn-sm filtro-aberto mt-1
                                         {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d')
                                             and filtro_status_ativo == 'abertos' %}
-                                        btn-warning
-                                        {% else %}btn-outline-warning{% endif %}">
+                                        btn-info
+                                        {% else %}btn-outline-info{% endif %}">
                                     <i class="fas fa-clock"></i> Aberto
                                     <span class="badge bg-light text-dark">{{ dados.abertos }}</span>
                                     </a>
@@ -259,15 +259,15 @@
                             </a>
                             <a href="{{ url_for('pedidos.lista_pedidos', status='abertos') }}"
                                 class="btn btn-sm filtro-status
-                                {% if filtro_status_ativo == 'abertos' %}btn-warning
-                                {% else %}btn-outline-warning{% endif %}">
+                                {% if filtro_status_ativo == 'abertos' %}btn-info
+                                {% else %}btn-outline-info{% endif %}">
                                 <i class="fas fa-clock"></i> Abertos
                                 <span class="badge bg-light text-dark">{{ contadores_status.abertos }}</span>
                             </a>
                             <a href="{{ url_for('pedidos.lista_pedidos', status='cotados') }}"
                                 class="btn btn-sm filtro-status
-                                {% if filtro_status_ativo == 'cotados' %}btn-info
-                                {% else %}btn-outline-info{% endif %}">
+                                {% if filtro_status_ativo == 'cotados' %}btn-warning
+                                {% else %}btn-outline-warning{% endif %}">
                                 <i class="fas fa-calculator"></i> Cotados
                                 <span class="badge bg-light text-dark">{{ contadores_status.cotados }}</span>
                             </a>
