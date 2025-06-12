@@ -73,6 +73,23 @@ class Embarque(db.Model):
     def total_volumes(self):
         return sum(i.volumes or 0 for i in self.itens)
 
+    def total_peso_pedidos(self):
+        """Retorna o peso total dos pedidos contidos no embarque"""
+        return sum(i.peso or 0 for i in self.itens)
+
+    def total_valor_pedidos(self):
+        """Retorna o valor total dos pedidos contidos no embarque"""
+        return sum(i.valor or 0 for i in self.itens)
+
+    def total_pallet_pedidos(self):
+        """Retorna o total de pallets dos pedidos contidos no embarque"""
+        # Como o campo pallet não existe no EmbarqueItem, vamos calcular baseado no peso
+        # Assumindo uma média de 500kg por pallet (você pode ajustar conforme necessário)
+        peso_total = self.total_peso_pedidos()
+        if peso_total > 0:
+            return round(peso_total / 500, 2)  # 500kg por pallet
+        return 0
+
     @property
     def status_nfs(self):
         """
