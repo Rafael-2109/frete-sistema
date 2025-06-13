@@ -183,7 +183,10 @@ class FiltroFretesForm(FlaskForm):
     cnpj_cliente = StringField('CNPJ do Cliente')
     nome_cliente = StringField('Nome do Cliente')
     numero_cte = StringField('Número CTe')
-    numero_fatura = StringField('Número da Fatura')  # NOVO CAMPO
+    numero_fatura = StringField('Número da Fatura')
+    transportadora_id = SelectField('Transportadora', 
+                                  choices=[],  # Será populado dinamicamente
+                                  coerce=lambda x: x if x else None)
     status = SelectField('Status',
                         choices=[
                             ('', 'Todos'),

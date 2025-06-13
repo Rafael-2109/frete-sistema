@@ -1073,7 +1073,11 @@ def fechar_frete():
                 uf=pedido.cod_uf,
                 rota=getattr(pedido, 'rota', None)
             )
-            cidade_formatada = cidade_obj.nome if cidade_obj else pedido.nome_cidade
+            # ✅ PADRONIZAÇÃO: Usa cidade normalizada para consistência
+            cidade_formatada = LocalizacaoService.normalizar_nome_cidade_com_regras(
+                pedido.nome_cidade, 
+                getattr(pedido, 'rota', None)
+            ) or (cidade_obj.nome if cidade_obj else pedido.nome_cidade)
             protocolo_formatado = formatar_protocolo(pedido.protocolo)
             data_formatada = formatar_data_brasileira(pedido.agendamento)
             
@@ -1287,7 +1291,11 @@ def fechar_frete_grupo():
                 uf=pedido.cod_uf,
                 rota=getattr(pedido, 'rota', None)
             )
-            cidade_formatada = cidade_obj.nome if cidade_obj else pedido.nome_cidade
+            # ✅ PADRONIZAÇÃO: Usa cidade normalizada para consistência
+            cidade_formatada = LocalizacaoService.normalizar_nome_cidade_com_regras(
+                pedido.nome_cidade, 
+                getattr(pedido, 'rota', None)
+            ) or (cidade_obj.nome if cidade_obj else pedido.nome_cidade)
             
             item = EmbarqueItem(
                 embarque_id=embarque.id,

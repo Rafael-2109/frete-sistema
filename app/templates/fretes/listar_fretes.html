@@ -49,6 +49,10 @@
                             {{ form.numero_fatura(class="form-control") }}
                         </div>
                         <div class="col-md-3">
+                            {{ form.transportadora_id.label(class="form-label") }}
+                            {{ form.transportadora_id(class="form-control") }}
+                        </div>
+                        <div class="col-md-3">
                             {{ form.status.label(class="form-label") }}
                             {{ form.status(class="form-control") }}
                         </div>
@@ -56,6 +60,8 @@
                             {{ form.data_inicio.label(class="form-label") }}
                             {{ form.data_inicio(class="form-control") }}
                         </div>
+                    </div>
+                    <div class="row mt-3">
                         <div class="col-md-3">
                             {{ form.data_fim.label(class="form-label") }}
                             {{ form.data_fim(class="form-control") }}

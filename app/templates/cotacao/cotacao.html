@@ -142,75 +142,58 @@
                     </div>
                   </td>
                 </tr>
+                <!-- Embarques compatíveis para esta cotação específica -->
+                {% if embarques_compativeis_direta %}
+                  {% for embarque_info in embarques_compativeis_direta %}
+                    {% if embarque_info.embarque.transportadora_id == opcao.transportadora_id and embarque_info.embarque.modalidade == opcao.modalidade %}
+                    <tr class="table-light border-start border-primary border-3">
+                      <td colspan="2" class="ps-4">
+                        <small class="text-muted">
+                          <i class="fas fa-arrow-right me-1"></i>
+                          Embarque #{{ embarque_info.embarque.numero }}
+                        </small>
+                      </td>
+                      <td><small>{{ embarque_info.embarque.data_prevista_embarque | formatar_data_segura if embarque_info.embarque.data_prevista_embarque else '-' }}</small></td>
+                      <td><small>{{ embarque_info.qtd_cnpjs }} CNPJs</small></td>
+                      <td class="text-end"><small>{{ "%.0f"|format(embarque_info.embarque.total_peso_pedidos()) }} kg</small></td>
+                      <td class="text-end">
+                        <small>
+                          {% if embarque_info.capacidade_restante >= 0 %}
+                            <span class="text-success">{{ "%.0f"|format(embarque_info.capacidade_restante) }} kg restante</span>
+                          {% else %}
+                            <span class="text-danger">{{ "%.0f"|format(embarque_info.capacidade_restante) }} kg</span>
+                          {% endif %}
+                        </small>
+                      </td>
+                      <td class="text-end">
+                        <small>
+                          {% if embarque_info.acrescimo_valor > 0 %}
+                            <span class="text-warning">+R$ {{ "%.2f"|format(embarque_info.acrescimo_valor) }}</span>
+                          {% else %}
+                            <span class="text-success">R$ 0,00</span>
+                          {% endif %}
+                        </small>
+                      </td>
+                      <td>
+                        {% if embarque_info.tem_capacidade %}
+                          <button class="btn btn-outline-primary btn-sm" onclick="incluirEmEmbarque({{ embarque_info.embarque.id }}, 'DIRETA')">
+                            <i class="fas fa-plus"></i> Incluir
+                          </button>
+                        {% else %}
+                          <span class="badge bg-warning text-dark">
+                            <i class="fas fa-exclamation-triangle"></i> Sem Capacidade
+                          </span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
                 {% endfor %}
               </tbody>
             </table>
           </div>
-          
-          <!-- Seção de Embarques Compatíveis para Carga Direta -->
-          {% if embarques_compativeis_direta %}
-          <div class="mt-4">
-            <h6 class="text-primary"><i class="fas fa-plus-circle"></i> Embarques Compatíveis para Inclusão</h6>
-            <div class="table-responsive">
-              <table class="table table-sm table-hover">
-                <thead class="table-light">
-                  <tr>
-                    <th>Embarque</th>
-                    <th>Transportadora</th>
-                    <th>Data Prevista</th>
-                    <th>Valor Total</th>
-                    <th>Peso Total</th>
-                    <th>Capacidade Restante</th>
-                    <th>Qtd CNPJs</th>
-                    <th>Acréscimo</th>
-                    <th>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for embarque_info in embarques_compativeis_direta %}
-                  <tr class="{% if not embarque_info.tem_capacidade %}table-warning{% endif %}">
-                    <td>
-                      <a href="{{ url_for('embarques.visualizar_embarque', id=embarque_info.embarque.id) }}" target="_blank">
-                        #{{ embarque_info.embarque.numero }}
-                      </a>
-                    </td>
-                    <td>{{ embarque_info.embarque.transportadora.razao_social[:20] if embarque_info.embarque.transportadora else '-' }}</td>
-                    <td>{{ embarque_info.embarque.data_prevista_embarque | formatar_data_segura if embarque_info.embarque.data_prevista_embarque else '-' }}</td>
-                    <td>R$ {{ "%.2f"|format(embarque_info.embarque.total_valor_pedidos()) }}</td>
-                    <td>{{ "%.0f"|format(embarque_info.embarque.total_peso_pedidos()) }} kg</td>
-                    <td>
-                      {% if embarque_info.capacidade_restante >= 0 %}
-                        {{ "%.0f"|format(embarque_info.capacidade_restante) }} kg
-                      {% else %}
-                        <span class="text-danger">{{ "%.0f"|format(embarque_info.capacidade_restante) }} kg</span>
-                      {% endif %}
-                    </td>
-                    <td>{{ embarque_info.qtd_cnpjs }} CNPJs</td>
-                    <td>
-                      {% if embarque_info.acrescimo_valor > 0 %}
-                        <span class="text-warning">+R$ {{ "%.2f"|format(embarque_info.acrescimo_valor) }}</span>
-                      {% else %}
-                        <span class="text-success">R$ 0,00</span>
-                      {% endif %}
-                    </td>
-                    <td>
-                      {% if embarque_info.tem_capacidade %}
-                        <button class="btn btn-primary btn-sm" onclick="incluirEmEmbarque({{ embarque_info.embarque.id }}, 'DIRETA')">
-                          <i class="fas fa-plus"></i> Incluir ao Embarque
-                        </button>
-                      {% else %}
-                        <span class="badge bg-warning text-dark">
-                          <i class="fas fa-exclamation-triangle"></i> Sem Capacidade
-                        </span>
-                      {% endif %}
-                    </td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          {% endif %}
+
         </div>
       </div>
     </div>

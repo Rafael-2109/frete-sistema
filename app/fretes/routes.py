@@ -61,12 +61,20 @@ def index():
 @login_required
 def listar_fretes():
     """Lista todos os fretes com filtros"""
+    from app.transportadoras.models import Transportadora
+    from sqlalchemy import cast, String
+    
     form = FiltroFretesForm(request.args)
+    
+    # Popular choices de transportadoras no formulário
+    transportadoras = Transportadora.query.all()
+    form.transportadora_id.choices = [('', 'Todas as transportadoras')] + [(t.id, t.razao_social) for t in transportadoras]
     
     query = Frete.query
     
+    # ✅ CORREÇÃO: Filtro por número do embarque usando cast para string
     if form.embarque_numero.data:
-        query = query.join(Embarque).filter(Embarque.numero.ilike(f'%{form.embarque_numero.data}%'))
+        query = query.join(Embarque).filter(cast(Embarque.numero, String).ilike(f'%{form.embarque_numero.data}%'))
     
     if form.cnpj_cliente.data:
         query = query.filter(Frete.cnpj_cliente.ilike(f'%{form.cnpj_cliente.data}%'))
@@ -79,6 +87,14 @@ def listar_fretes():
     
     if form.numero_fatura.data:
         query = query.join(FaturaFrete).filter(FaturaFrete.numero_fatura.ilike(f'%{form.numero_fatura.data}%'))
+    
+    # ✅ NOVO: Filtro por transportadora
+    if form.transportadora_id.data:
+        try:
+            transportadora_id = int(form.transportadora_id.data)
+            query = query.filter(Frete.transportadora_id == transportadora_id)
+        except (ValueError, TypeError):
+            pass
     
     if form.status.data:
         query = query.filter(Frete.status == form.status.data)
