@@ -136,72 +136,95 @@ def visualizar_embarque(id):
                 messages_fretes = []
                 messages_entregas = []
 
-                # ✅ SINCRONIZAÇÃO COMPLETA: Sincronizar NFs com pedidos (bidirecional)
+                # ✅ SINCRONIZAÇÃO OTIMIZADA: Só executa se houve mudanças nas NFs
                 try:
-                    sucesso_sync, resultado_sync = sincronizar_nf_embarque_pedido_completa(embarque.id)
-                    if sucesso_sync:
-                        messages_sync.append(f"🔄 {resultado_sync}")
+                    # Verifica se houve mudanças nas NFs antes de sincronizar
+                    nfs_alteradas = False
+                    for i, item_form in enumerate(form.itens.entries):
+                        if i < len(embarque.itens):
+                            item_atual = embarque.itens[i]
+                            nf_nova = item_form.nota_fiscal.data or ''
+                            nf_atual = item_atual.nota_fiscal or ''
+                            if nf_nova.strip() != nf_atual.strip():
+                                nfs_alteradas = True
+                                break
+                    
+                    if nfs_alteradas:
+                        sucesso_sync, resultado_sync = sincronizar_nf_embarque_pedido_completa(embarque.id)
+                        if sucesso_sync:
+                            messages_sync.append(f"🔄 {resultado_sync}")
+                        else:
+                            messages_sync.append(f"⚠️ Erro na sincronização: {resultado_sync}")
                     else:
-                        messages_sync.append(f"⚠️ Erro na sincronização: {resultado_sync}")
+                        print("[DEBUG] ⚡ Sincronização pulada - nenhuma NF alterada")
                 except Exception as e:
                     print(f"Erro na sincronização de NFs: {e}")
                     messages_sync.append(f"⚠️ Erro na sincronização de NFs: {e}")
 
-                # Validação de CNPJ entre embarque e faturamento
-                try:
-                    from app.fretes.routes import validar_cnpj_embarque_faturamento
-                    sucesso_validacao, resultado_validacao = validar_cnpj_embarque_faturamento(embarque.id)
-                    if not sucesso_validacao:
-                        messages_validacao.append(f"⚠️ {resultado_validacao}")
-                except Exception as e:
-                    print(f"Erro na validação de CNPJ: {e}")
-                    messages_validacao.append(f"⚠️ Erro na validação de CNPJ: {e}")
-
-                # Lançamento automático de fretes após salvar embarque
-                try:
-                    from app.fretes.routes import processar_lancamento_automatico_fretes
-                    sucesso, resultado = processar_lancamento_automatico_fretes(
-                        embarque_id=embarque.id,
-                        usuario=current_user.nome if current_user.is_authenticated else 'Sistema'
-                    )
-                    if sucesso and "lançado(s) automaticamente" in resultado:
-                        messages_fretes.append(f"✅ {resultado}")
-                except Exception as e:
-                    print(f"Erro no lançamento automático de fretes: {e}")
-                    messages_fretes.append(f"⚠️ Erro no lançamento de fretes: {e}")
-
-                # Sincronização de entregas
-                for item in embarque.itens:
-                    if not item.nota_fiscal:
-                        continue
-
+                # Validação de CNPJ otimizada - só executa se houve mudanças nas NFs
+                if nfs_alteradas:
                     try:
-                        # Recupera a entrega pra verificar se está com nf_cd=True
-                        entrega = EntregaMonitorada.query.filter_by(numero_nf=item.nota_fiscal).first()
-
-                        if entrega and entrega.nf_cd:
-                            # ✅ IMPLEMENTAÇÃO DO ITEM 2-d: NF no CD
-                            # Atualiza status do pedido quando NF volta para CD
-                            # ✅ CORREÇÃO: Passa separacao_lote_id para maior precisão
-                            sucesso_cd, resultado_cd = atualizar_status_pedido_nf_cd(
-                                numero_pedido=item.pedido,
-                                separacao_lote_id=item.separacao_lote_id
-                            )
-                            if sucesso_cd:
-                                messages_entregas.append(f"📦 {resultado_cd}")
-                            
-                            # Se nf_cd=True, chamamos o script especial
-                            sincronizar_nova_entrega_por_nf(
-                                numero_nf=item.nota_fiscal,
-                                embarque=embarque,
-                                item_embarque=item
-                            )
-                        else:
-                            # Caso contrário, script normal
-                            sincronizar_entrega_por_nf(item.nota_fiscal)
+                        from app.fretes.routes import validar_cnpj_embarque_faturamento
+                        sucesso_validacao, resultado_validacao = validar_cnpj_embarque_faturamento(embarque.id)
+                        if not sucesso_validacao:
+                            messages_validacao.append(f"⚠️ {resultado_validacao}")
                     except Exception as e:
-                        print(f"Erro na sincronização de entrega {item.nota_fiscal}: {e}")
-                        messages_entregas.append(f"⚠️ Erro na entrega {item.nota_fiscal}: {e}")
+                        print(f"Erro na validação de CNPJ: {e}")
+                        messages_validacao.append(f"⚠️ Erro na validação de CNPJ: {e}")
+                else:
+                    print("[DEBUG] ⚡ Validação CNPJ pulada - nenhuma NF alterada")
+
+                # Lançamento automático de fretes otimizado - só executa se houve mudanças nas NFs
+                if nfs_alteradas:
+                    try:
+                        from app.fretes.routes import processar_lancamento_automatico_fretes
+                        sucesso, resultado = processar_lancamento_automatico_fretes(
+                            embarque_id=embarque.id,
+                            usuario=current_user.nome if current_user.is_authenticated else 'Sistema'
+                        )
+                        if sucesso and "lançado(s) automaticamente" in resultado:
+                            messages_fretes.append(f"✅ {resultado}")
+                    except Exception as e:
+                        print(f"Erro no lançamento automático de fretes: {e}")
+                        messages_fretes.append(f"⚠️ Erro no lançamento de fretes: {e}")
+                else:
+                    print("[DEBUG] ⚡ Lançamento de fretes pulado - nenhuma NF alterada")
+
+                # Sincronização de entregas otimizada - só executa se houve mudanças nas NFs
+                if nfs_alteradas:
+                    for item in embarque.itens:
+                        if not item.nota_fiscal:
+                            continue
+
+                        try:
+                            # Recupera a entrega pra verificar se está com nf_cd=True
+                            entrega = EntregaMonitorada.query.filter_by(numero_nf=item.nota_fiscal).first()
+
+                            if entrega and entrega.nf_cd:
+                                # ✅ IMPLEMENTAÇÃO DO ITEM 2-d: NF no CD
+                                # Atualiza status do pedido quando NF volta para CD
+                                # ✅ CORREÇÃO: Passa separacao_lote_id para maior precisão
+                                sucesso_cd, resultado_cd = atualizar_status_pedido_nf_cd(
+                                    numero_pedido=item.pedido,
+                                    separacao_lote_id=item.separacao_lote_id
+                                )
+                                if sucesso_cd:
+                                    messages_entregas.append(f"📦 {resultado_cd}")
+                                
+                                # Se nf_cd=True, chamamos o script especial
+                                sincronizar_nova_entrega_por_nf(
+                                    numero_nf=item.nota_fiscal,
+                                    embarque=embarque,
+                                    item_embarque=item
+                                )
+                            else:
+                                # Caso contrário, script normal
+                                sincronizar_entrega_por_nf(item.nota_fiscal)
+                        except Exception as e:
+                            print(f"Erro na sincronização de entrega {item.nota_fiscal}: {e}")
+                            messages_entregas.append(f"⚠️ Erro na entrega {item.nota_fiscal}: {e}")
+                else:
+                    print("[DEBUG] ⚡ Sincronização de entregas pulada - nenhuma NF alterada")
 
                 # ✅ CORREÇÃO: Commit ÚNICO após TODAS as operações
                 db.session.commit()
