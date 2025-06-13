@@ -2,13 +2,8 @@ from flask_wtf import FlaskForm
 
 from wtforms.validators import DataRequired
 
-from wtforms import StringField
-from wtforms import SubmitField
-from wtforms import BooleanField
-from wtforms import SelectField
-from wtforms import FileField
-from wtforms import IntegerField
-from wtforms.validators import NumberRange
+from wtforms import StringField, SubmitField, BooleanField, SelectField, FileField, IntegerField
+from wtforms.validators import DataRequired, NumberRange
 
 
 
