@@ -957,9 +957,48 @@ def embarque_fob():
 
         # ✅ CORRIGIDO: Atualiza todos os pedidos após criar os itens FOB
         for pedido in pedidos:
-            # FOB não tem cotação, mas reseta flag NF no CD se estava marcado
+            # FOB não tem cotação, mas precisa de cotacao_id para ficar como COTADO
+            # Vamos criar uma cotação fictícia para FOB
+            if not pedido.cotacao_id:
+                # Cria uma cotação FOB fictícia se não existir
+                from app.cotacao.models import Cotacao
+                cotacao_fob = Cotacao(
+                    usuario_id=1,  # Sistema
+                    transportadora_id=transportadora_fob.id,
+                    status='Fechado',
+                    data_criacao=datetime.now(),
+                    data_fechamento=datetime.now(),
+                    tipo_carga='FOB',
+                    valor_total=sum(p.valor_saldo_total or 0 for p in pedidos),
+                    peso_total=sum(p.peso_total or 0 for p in pedidos),
+                    modalidade='FOB',
+                    nome_tabela='FOB - COLETA',
+                    frete_minimo_valor=0,
+                    valor_kg=0,
+                    percentual_valor=0,
+                    frete_minimo_peso=0,
+                    icms=0,
+                    percentual_gris=0,
+                    pedagio_por_100kg=0,
+                    valor_tas=0,
+                    percentual_adv=0,
+                    percentual_rca=0,
+                    valor_despacho=0,
+                    valor_cte=0,
+                    icms_incluso=False,
+                    icms_destino=0
+                )
+                db.session.add(cotacao_fob)
+                db.session.flush()
+                
+                # Atualiza o embarque com a cotação FOB
+                embarque.cotacao_id = cotacao_fob.id
+            
+            # Atualiza o pedido
+            pedido.cotacao_id = embarque.cotacao_id or cotacao_fob.id
+            pedido.transportadora = transportadora_fob.razao_social
             pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao criar embarque FOB
-            pedido.status = 'COTADO'  # ✅ NOVO: Define status como COTADO para FOB
+            # O status será calculado automaticamente como COTADO pelo trigger
 
         # Commit final
         db.session.commit()

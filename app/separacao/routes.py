@@ -1,7 +1,8 @@
 import os
 import numpy as np
 import pandas as pd
-from flask import Blueprint, render_template, redirect, url_for, flash
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
+from flask_login import login_required
 from werkzeug.utils import secure_filename
 
 from app import db
@@ -155,6 +156,118 @@ def importar():
 
 @separacao_bp.route('/listar')
 def listar():
-    pedidos = Separacao.query.order_by(Separacao.id.desc()).all()
-    return render_template("separacao/listar.html", pedidos=pedidos)
+    from app.pedidos.models import Pedido
+    
+    separacoes = Separacao.query.order_by(Separacao.id.desc()).all()
+    
+    # Enriquece as separações com informações do pedido relacionado
+    separacoes_com_status = []
+    for separacao in separacoes:
+        # Busca o pedido correspondente
+        pedido = Pedido.query.filter_by(
+            separacao_lote_id=separacao.separacao_lote_id
+        ).first()
+        
+        # Adiciona informações do status
+        separacao.pedido_relacionado = pedido
+        separacao.status_pedido = pedido.status_calculado if pedido else 'SEM PEDIDO'
+        separacao.pode_excluir = pedido.status_calculado == 'ABERTO' if pedido else False
+        
+        separacoes_com_status.append(separacao)
+    
+    return render_template("separacao/listar.html", pedidos=separacoes_com_status)
+
+
+@separacao_bp.route('/excluir/<int:separacao_id>', methods=['POST'])
+@login_required
+def excluir_separacao(separacao_id):
+    """Exclui uma separação específica - apenas se o pedido estiver com status 'Aberto'"""
+    try:
+        separacao = Separacao.query.get_or_404(separacao_id)
+        
+        # Verifica se existe um pedido correspondente e seu status
+        from app.pedidos.models import Pedido
+        pedido = Pedido.query.filter_by(
+            separacao_lote_id=separacao.separacao_lote_id
+        ).first()
+        
+        if pedido:
+            status_pedido = pedido.status_calculado
+            if status_pedido != 'ABERTO':
+                return jsonify({
+                    'success': False, 
+                    'message': f'Não é possível excluir! Pedido {separacao.num_pedido} está com status "{status_pedido}". Apenas pedidos com status "ABERTO" podem ter separações excluídas.'
+                }), 400
+        
+        # Salva informações para log
+        num_pedido = separacao.num_pedido
+        lote_id = separacao.separacao_lote_id
+        
+        db.session.delete(separacao)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Separação ID {separacao_id} (Pedido: {num_pedido}) excluída com sucesso!'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False, 
+            'message': f'Erro ao excluir separação: {str(e)}'
+        }), 500
+
+
+@separacao_bp.route('/excluir_lote/<lote_id>', methods=['POST'])
+@login_required
+def excluir_lote_separacao(lote_id):
+    """Exclui todas as separações de um lote específico - apenas se o pedido estiver com status 'Aberto'"""
+    try:
+        separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
+        
+        if not separacoes:
+            return jsonify({
+                'success': False, 
+                'message': f'Nenhuma separação encontrada para o lote {lote_id}'
+            }), 404
+        
+        # Verifica se existe um pedido correspondente e seu status
+        from app.pedidos.models import Pedido
+        primeira_separacao = separacoes[0]
+        pedido = Pedido.query.filter_by(
+            separacao_lote_id=primeira_separacao.separacao_lote_id
+        ).first()
+        
+        if pedido:
+            status_pedido = pedido.status_calculado
+            if status_pedido != 'ABERTO':
+                return jsonify({
+                    'success': False, 
+                    'message': f'Não é possível excluir! Pedido {primeira_separacao.num_pedido} está com status "{status_pedido}". Apenas pedidos com status "ABERTO" podem ter separações excluídas.'
+                }), 400
+        
+        count = len(separacoes)
+        num_pedido = primeira_separacao.num_pedido
+        
+        # Exclui todas as separações do lote
+        for separacao in separacoes:
+            db.session.delete(separacao)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Lote {lote_id} excluído com sucesso! ({count} itens do pedido {num_pedido})'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False, 
+            'message': f'Erro ao excluir lote: {str(e)}'
+        }), 500
+
+
+
 

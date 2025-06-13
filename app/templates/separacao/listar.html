@@ -2,7 +2,16 @@
 {% block content %}
 <div class="container-fluid my-4">
 
-  <h2>Pedidos Importados (Separação)</h2>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Pedidos Importados (Separação)</h2>
+    
+    <!-- Botões de Ação -->
+    <div class="btn-group">
+      <a href="{{ url_for('separacao.importar') }}" class="btn btn-primary">
+        <i class="fas fa-upload"></i> Importar Separações
+      </a>
+    </div>
+  </div>
 
   <!-- FILTROS -->
   <form method="GET" class="row g-2 align-items-end mb-3">
@@ -290,6 +299,8 @@
           <th>Embarque</th>
           <th>Agenda</th>
           <th>Protocolo</th>
+          <th>Status Pedido</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -357,8 +368,60 @@
               -
             {% endif %}
           </td>
-                          <td>{{ (p.protocolo | formatar_protocolo) or '-' }}</td>
-
+          <td>{{ (p.protocolo | formatar_protocolo) or '-' }}</td>
+          
+          <!-- Coluna Status do Pedido -->
+          <td class="text-center">
+            {% if p.status_pedido == 'ABERTO' %}
+              <span class="badge bg-secondary">
+                <i class="fas fa-clock"></i> Aberto
+              </span>
+            {% elif p.status_pedido == 'COTADO' %}
+              <span class="badge bg-warning text-dark">
+                <i class="fas fa-calculator"></i> Cotado
+              </span>
+            {% elif p.status_pedido == 'FATURADO' %}
+              <span class="badge bg-success">
+                <i class="fas fa-check-circle"></i> Faturado
+              </span>
+            {% elif p.status_pedido == 'EMBARCADO' %}
+              <span class="badge bg-primary">
+                <i class="fas fa-truck"></i> Embarcado
+              </span>
+            {% elif p.status_pedido == 'NF no CD' %}
+              <span class="badge bg-danger">
+                <i class="fas fa-undo"></i> NF no CD
+              </span>
+            {% else %}
+              <span class="badge bg-light text-dark">
+                <i class="fas fa-question"></i> {{ p.status_pedido }}
+              </span>
+            {% endif %}
+          </td>
+          
+          <!-- Coluna de Ações -->
+          <td>
+            <div class="btn-group btn-group-sm">
+              {% if p.pode_excluir %}
+                {% if p.separacao_lote_id %}
+                  <button type="button" class="btn btn-warning btn-sm" 
+                          onclick="excluirLoteSeparacao('{{ p.separacao_lote_id }}')"
+                          title="Excluir todo o lote {{ p.separacao_lote_id }}">
+                    <i class="fas fa-boxes"></i>
+                  </button>
+                {% endif %}
+                <button type="button" class="btn btn-danger btn-sm" 
+                        onclick="excluirSeparacao({{ p.id }})"
+                        title="Excluir esta separação">
+                  <i class="fas fa-trash"></i>
+                </button>
+              {% else %}
+                <span class="text-muted" title="Não é possível excluir - Pedido com status '{{ p.status_pedido }}'">
+                  <i class="fas fa-lock"></i>
+                </span>
+              {% endif %}
+            </div>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -422,4 +485,63 @@
   {% endif %}
 
 </div>
+
+<script>
+// Função para excluir uma separação específica
+function excluirSeparacao(separacaoId) {
+    if (!confirm('Tem certeza que deseja excluir esta separação?')) {
+        return;
+    }
+    
+    fetch(`/separacao/excluir/${separacaoId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload(); // Recarrega a página
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao excluir separação');
+    });
+}
+
+// Função para excluir um lote completo
+function excluirLoteSeparacao(loteId) {
+    if (!confirm(`Tem certeza que deseja excluir TODAS as separações do lote ${loteId}?`)) {
+        return;
+    }
+    
+    fetch(`/separacao/excluir_lote/${loteId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload(); // Recarrega a página
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao excluir lote');
+    });
+}
+
+
+</script>
+
 {% endblock %}

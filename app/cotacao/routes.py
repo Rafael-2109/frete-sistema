@@ -1017,8 +1017,8 @@ def fechar_frete():
             if pedido:
                 pedido.cotacao_id = cotacao.id
                 pedido.transportadora = transportadora.razao_social
-                pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao criar nova cotação
-                # ✅ Status será atualizado automaticamente pela property status_calculado
+                pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
+                # O status será calculado automaticamente como COTADO pelo trigger
 
         # ✅ CRIA EMBARQUE
         embarque = Embarque(
@@ -1219,8 +1219,8 @@ def fechar_frete_grupo():
         for pedido in todos_pedidos:
             pedido.cotacao_id = cotacao.id
             pedido.transportadora = transportadora.razao_social
-            pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao criar nova cotação
-            # Status será atualizado automaticamente pelo trigger
+            pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete grupo
+            # O status será calculado automaticamente como COTADO pelo trigger
 
         # ✅ BUSCA DADOS DA TABELA PARA GRUPO
         resultados = session.get('resultados', {})
@@ -2150,6 +2150,17 @@ def calcular_frete_otimizacao_conservadora(pedidos):
                 if not cidade:
                     continue
                 
+                # ✅ CARREGA DADOS DA CIDADE IMEDIATAMENTE PARA EVITAR PROBLEMAS DE SESSÃO
+                try:
+                    cidade_icms = cidade.icms or 0
+                    cidade_nome = cidade.nome
+                    cidade_uf = cidade.uf
+                except Exception as e:
+                    print(f"[DEBUG] ⚠️ Erro ao acessar dados da cidade {cidade_id}: {e}")
+                    cidade_icms = 0
+                    cidade_nome = "N/A"
+                    cidade_uf = "N/A"
+                
                 # Calcula frete com esta tabela
                 try:
                     dados_tabela = {
@@ -2165,7 +2176,7 @@ def calcular_frete_otimizacao_conservadora(pedidos):
                         'percentual_rca': tabela.percentual_rca or 0,
                         'valor_despacho': tabela.valor_despacho or 0,
                         'valor_cte': tabela.valor_cte or 0,
-                        'icms_destino': cidade.icms or 0,
+                        'icms_destino': cidade_icms,
                         'icms_incluso': tabela.icms_incluso or False
                     }
                     
@@ -2178,7 +2189,9 @@ def calcular_frete_otimizacao_conservadora(pedidos):
                     
                     tabelas_da_combinacao.append({
                         'tabela': tabela,
-                        'cidade': cidade,
+                        'cidade_icms': cidade_icms,
+                        'cidade_nome': cidade_nome,
+                        'cidade_uf': cidade_uf,
                         'valor_liquido': resultado['valor_liquido'],
                         'valor_total': resultado['valor_com_icms'],
                         'resultado': resultado
@@ -2202,7 +2215,7 @@ def calcular_frete_otimizacao_conservadora(pedidos):
                     'nome_tabela': f"{tabela_mais_cara['tabela'].nome_tabela} (CONSERVADOR)",
                     'valor_kg': tabela_mais_cara['tabela'].valor_kg or 0,
                     'percentual_valor': tabela_mais_cara['tabela'].percentual_valor or 0,
-                    'icms': tabela_mais_cara['cidade'].icms or 0,
+                    'icms': tabela_mais_cara['cidade_icms'],
                     'frete_por_kg': tabela_mais_cara['valor_liquido'] / peso_total
                 }
                 
@@ -2864,8 +2877,19 @@ def incluir_em_embarque():
             
             db.session.add(novo_item)
             
-            # Atualizar status do pedido para "Em Embarque"
-            pedido.status = 'Em Embarque'
+            # ✅ CORRIGIDO: Atualizar status do pedido para "COTADO"
+            # Define cotacao_id se o embarque tiver uma cotação
+            if embarque.cotacao_id:
+                pedido.cotacao_id = embarque.cotacao_id
+            
+            # Define transportadora
+            if embarque.transportadora:
+                pedido.transportadora = embarque.transportadora.razao_social
+            
+            # Reseta flag NF no CD
+            pedido.nf_cd = False
+            
+            # O status será calculado automaticamente como COTADO pelo trigger
             
             pedidos_adicionados += 1
         

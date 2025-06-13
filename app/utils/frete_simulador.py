@@ -57,9 +57,19 @@ def calcular_fretes_possiveis(
         cidade = Cidade.query.get(cidade_destino_id)
         if not cidade:
             return []
+        # ✅ CARREGA DADOS DA CIDADE IMEDIATAMENTE PARA EVITAR PROBLEMAS DE SESSÃO
+        try:
+            cidade_nome = cidade.nome
+            cidade_uf = cidade.uf
+            cidade_icms = cidade.icms or 0
+            cidade_codigo_ibge = cidade.codigo_ibge
+        except Exception as e:
+            print(f"[DEBUG] ⚠️ Erro ao acessar dados da cidade {cidade_destino_id}: {e}")
+            return []
+        
         # Se não foi passado uf_destino, usa o da cidade
         if not uf_destino:
-            uf_destino = cidade.uf
+            uf_destino = cidade_uf
     else:
         cidade = buscar_cidade_unificada(
             cidade=cidade_destino,
@@ -68,9 +78,19 @@ def calcular_fretes_possiveis(
         )
         if not cidade:
             return []
+        
+        # ✅ CARREGA DADOS DA CIDADE IMEDIATAMENTE PARA EVITAR PROBLEMAS DE SESSÃO
+        try:
+            cidade_nome = cidade.nome
+            cidade_uf = cidade.uf
+            cidade_icms = cidade.icms or 0
+            cidade_codigo_ibge = cidade.codigo_ibge
+        except Exception as e:
+            print(f"[DEBUG] ⚠️ Erro ao acessar dados da cidade: {e}")
+            return []
 
     # Se for FOB, retorna vazio
-    if cidade.nome.upper() == 'FOB':
+    if cidade_nome.upper() == 'FOB':
         return []
 
     # Carrega capacidades dos veículos uma única vez
@@ -88,7 +108,7 @@ def calcular_fretes_possiveis(
     # Pega todas as transportadoras/tabelas que atendem a cidade destino
     # CORREÇÃO CRÍTICA: Busca por código IBGE ao invés de cidade_id
     atendimentos = CidadeAtendida.query.filter(
-        CidadeAtendida.codigo_ibge == cidade.codigo_ibge
+        CidadeAtendida.codigo_ibge == cidade_codigo_ibge
     ).all()
     
     if not atendimentos:
@@ -102,7 +122,7 @@ def calcular_fretes_possiveis(
         tabelas = TabelaFrete.query.filter(
             TabelaFrete.transportadora_id.in_(grupo_ids),  # ✅ MUDANÇA: Busca em todo o grupo!
             TabelaFrete.uf_origem == (uf_origem or "SP"),
-            TabelaFrete.uf_destino == (uf_destino or cidade.uf),
+            TabelaFrete.uf_destino == (uf_destino or cidade_uf),
             func.upper(func.trim(TabelaFrete.nome_tabela)) == func.upper(func.trim(at.nome_tabela))
         ).all()
 
@@ -157,18 +177,16 @@ def calcular_fretes_possiveis(
             # 8. CORREÇÃO: Aplicar ICMS apenas no final (se não estiver incluso)
             frete_com_icms = frete_final_liquido
             if not tf.icms_incluso:
-                icms_decimal = cidade.icms or 0
-                if icms_decimal < 1 and icms_decimal > 0:
-                    frete_com_icms = frete_final_liquido / (1 - icms_decimal)
+                if cidade_icms < 1 and cidade_icms > 0:
+                    frete_com_icms = frete_final_liquido / (1 - cidade_icms)
 
             # Só inclui se tiver algum valor
             if frete_com_icms > 0:
                 # 9. Calcular valor líquido - se não for optante, desconta ICMS
                 valor_liquido = frete_com_icms
                 if not at.transportadora.optante:
-                    icms_decimal = cidade.icms or 0
-                    if icms_decimal < 1 and icms_decimal > 0:
-                        valor_liquido = frete_com_icms * (1 - icms_decimal)
+                    if cidade_icms < 1 and cidade_icms > 0:
+                        valor_liquido = frete_com_icms * (1 - cidade_icms)
                 
                 resultados.append(
                     {
@@ -192,9 +210,9 @@ def calcular_fretes_possiveis(
                         "valor_despacho": tf.valor_despacho or 0,
                         "valor_cte": tf.valor_cte or 0,
                         "icms_incluso": tf.icms_incluso or False,
-                        "icms_destino": cidade.icms or 0,
-                        "cidade": cidade.nome,
-                        "uf": cidade.uf
+                        "icms_destino": cidade_icms,
+                        "cidade": cidade_nome,
+                        "uf": cidade_uf
                     }
                 )
 
