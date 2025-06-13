@@ -84,7 +84,8 @@ def main():
                 print(f"   🔄 Pedidos que seriam resetados para 'Aberto':")
                 
                 for lote_id in lotes_separacao:
-                    pedidos_lote = Pedido.query.filter_by(separacao_lote_id=lote_id).all()
+                    # Busca pedidos do lote (lote_id pode ser string ou int)
+                    pedidos_lote = Pedido.query.filter_by(separacao_lote_id=str(lote_id)).all()
                     
                     for pedido in pedidos_lote:
                         status_atual = "COM COTAÇÃO" if pedido.cotacao_id else "SEM COTAÇÃO"

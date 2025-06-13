@@ -24,8 +24,8 @@ def main():
         print(f"Executado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
         print()
         
-        # Busca o pedido 56451
-        pedido = Pedido.query.filter_by(num_pedido=56451).first()
+        # Busca o pedido 56451 (converte para string pois num_pedido é VARCHAR)
+        pedido = Pedido.query.filter_by(num_pedido='56451').first()
         
         if not pedido:
             print("❌ Pedido 56451 não encontrado!")

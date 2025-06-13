@@ -90,7 +90,8 @@ def main():
                 print(f"   🔄 Resetando pedidos de {len(lotes_separacao)} lotes de separação...")
                 
                 for lote_id in lotes_separacao:
-                    pedidos_lote = Pedido.query.filter_by(separacao_lote_id=lote_id).all()
+                    # Busca pedidos do lote (lote_id pode ser string ou int)
+                    pedidos_lote = Pedido.query.filter_by(separacao_lote_id=str(lote_id)).all()
                     
                     for pedido in pedidos_lote:
                         # Remove vinculação com cotação (volta ao estado inicial)

@@ -26,8 +26,8 @@ def resetar_pedido(numero_pedido):
         print(f"Iniciado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
         print()
         
-        # Busca o pedido
-        pedido = Pedido.query.filter_by(num_pedido=numero_pedido).first()
+        # Busca o pedido (converte para string pois num_pedido é VARCHAR)
+        pedido = Pedido.query.filter_by(num_pedido=str(numero_pedido)).first()
         
         if not pedido:
             print(f"❌ Pedido {numero_pedido} não encontrado!")
@@ -128,12 +128,9 @@ def main():
         print("❌ Número do pedido não informado!")
         return
     
-    try:
-        # Tenta converter para inteiro se necessário
-        if numero_pedido.isdigit():
-            numero_pedido = int(numero_pedido)
-    except:
-        pass
+    # Garante que o número do pedido seja tratado como string
+    # pois o campo num_pedido no banco é VARCHAR
+    numero_pedido = str(numero_pedido).strip()
     
     print(f"\n🎯 Processando pedido: {numero_pedido}")
     print()
