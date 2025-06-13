@@ -125,15 +125,21 @@
                   <td class="text-end">R$ {{ "%.0f"|format(opcao.valor_liquido) }}</td>
                   <td class="text-end">R$ {{ "%.2f"|format(opcao.valor_liquido / peso_total) }}</td>
                   <td>
-                    <form action="{{ url_for('cotacao.fechar_frete') }}" method="POST" class="d-inline">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <input type="hidden" name="transportadora_id" value="{{ opcao.transportadora_id }}">
-                      <input type="hidden" name="tipo_carga" value="DIRETA">
-                      <input type="hidden" name="modalidade" value="{{ opcao.modalidade }}">
-                      <button class="btn btn-success btn-sm">
-                        <i class="fas fa-check"></i> Fechar Frete
+                    <div class="btn-group">
+                      <button class="btn btn-success btn-sm fechar-frete" 
+                              data-opcao-id="{{ loop.index0 }}"
+                              data-tipo="direta"
+                              data-indice="{{ opcao.indice_original }}"
+                              data-transportadora-id="{{ opcao.transportadora_id }}"
+                              data-modalidade="{{ opcao.modalidade }}"
+                              data-nome-tabela="{{ opcao.nome_tabela }}">
+                        <i class="fas fa-check"></i> Fechar
                       </button>
-                    </form>
+                      <a href="{{ url_for('cotacao.otimizar', opcao_id=loop.index0, tipo='direta', indice=opcao.indice_original) }}" 
+                         class="btn btn-info btn-sm">
+                        <i class="fas fa-chart-line"></i> Otimizador
+                      </a>
+                    </div>
                   </td>
                 </tr>
                 {% endfor %}
@@ -150,33 +156,55 @@
                 <thead class="table-light">
                   <tr>
                     <th>Embarque</th>
+                    <th>Transportadora</th>
                     <th>Data Prevista</th>
                     <th>Valor Total</th>
-                    <th>Pallet Total</th>
                     <th>Peso Total</th>
                     <th>Capacidade Restante</th>
-                    <th>Valor Sugerido</th>
+                    <th>Qtd CNPJs</th>
+                    <th>Acréscimo</th>
                     <th>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for embarque_info in embarques_compativeis_direta %}
-                  <tr>
+                  <tr class="{% if not embarque_info.tem_capacidade %}table-warning{% endif %}">
                     <td>
                       <a href="{{ url_for('embarques.visualizar_embarque', id=embarque_info.embarque.id) }}" target="_blank">
                         #{{ embarque_info.embarque.numero }}
                       </a>
                     </td>
+                    <td>{{ embarque_info.embarque.transportadora.razao_social[:20] if embarque_info.embarque.transportadora else '-' }}</td>
                     <td>{{ embarque_info.embarque.data_prevista_embarque | formatar_data_segura if embarque_info.embarque.data_prevista_embarque else '-' }}</td>
                     <td>R$ {{ "%.2f"|format(embarque_info.embarque.total_valor_pedidos()) }}</td>
-                    <td>{{ "%.2f"|format(embarque_info.embarque.total_pallet_pedidos()) }}</td>
                     <td>{{ "%.0f"|format(embarque_info.embarque.total_peso_pedidos()) }} kg</td>
-                    <td>{{ "%.0f"|format(embarque_info.capacidade_restante) }} kg</td>
-                    <td>R$ {{ "%.2f"|format(embarque_info.valor_sugerido) }}</td>
                     <td>
-                      <button class="btn btn-primary btn-sm" onclick="incluirEmEmbarque({{ embarque_info.embarque.id }}, 'DIRETA')">
-                        <i class="fas fa-plus"></i> Incluir ao Embarque
-                      </button>
+                      {% if embarque_info.capacidade_restante >= 0 %}
+                        {{ "%.0f"|format(embarque_info.capacidade_restante) }} kg
+                      {% else %}
+                        <span class="text-danger">{{ "%.0f"|format(embarque_info.capacidade_restante) }} kg</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ embarque_info.qtd_cnpjs }} CNPJs</td>
+                    <td>
+                      {% if embarque_info.acrescimo_valor > 0 %}
+                        <span class="text-danger">+R$ {{ "%.2f"|format(embarque_info.acrescimo_valor) }}</span>
+                      {% elif embarque_info.acrescimo_valor < 0 %}
+                        <span class="text-success">R$ {{ "%.2f"|format(embarque_info.acrescimo_valor) }}</span>
+                      {% else %}
+                        <span class="text-muted">R$ 0,00</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if embarque_info.tem_capacidade %}
+                        <button class="btn btn-primary btn-sm" onclick="incluirEmEmbarque({{ embarque_info.embarque.id }}, 'DIRETA')">
+                          <i class="fas fa-plus"></i> Incluir ao Embarque
+                        </button>
+                      {% else %}
+                        <span class="badge bg-warning text-dark">
+                          <i class="fas fa-exclamation-triangle"></i> Sem Capacidade
+                        </span>
+                      {% endif %}
                     </td>
                   </tr>
                   {% endfor %}
@@ -349,6 +377,7 @@
               <th>Valor Total</th>
               <th>Pallet Total</th>
               <th>Peso Total</th>
+              <th>Qtd CNPJs</th>
               <th>Ações</th>
             </tr>
           </thead>
@@ -365,6 +394,7 @@
               <td>R$ {{ "%.2f"|format(embarque_info.embarque.total_valor_pedidos()) }}</td>
               <td>{{ "%.2f"|format(embarque_info.embarque.total_pallet_pedidos()) }}</td>
               <td>{{ "%.0f"|format(embarque_info.embarque.total_peso_pedidos()) }} kg</td>
+              <td>{{ embarque_info.qtd_cnpjs }} CNPJs</td>
               <td>
                 <button class="btn btn-primary btn-sm" onclick="incluirEmEmbarque({{ embarque_info.embarque.id }}, 'FRACIONADA')">
                   <i class="fas fa-plus"></i> Incluir ao Embarque

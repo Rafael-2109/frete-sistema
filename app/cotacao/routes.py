@@ -641,66 +641,97 @@ def tela_cotacao():
     try:
         from app.embarques.models import Embarque
         from app.veiculos.models import Veiculo
+        from sqlalchemy.orm import joinedload
         
-        # Para CARGA DIRETA - buscar embarques compatíveis
-        if todos_mesmo_uf and len(ufs_normalizados) == 1:
+        # ✅ OTIMIZAÇÃO: Para CARGA DIRETA - buscar embarques compatíveis com melhor performance
+        if todos_mesmo_uf and len(ufs_normalizados) == 1 and opcoes_transporte.get('direta'):
             uf_destino = list(ufs_normalizados)[0]
             
-            # Buscar embarques ativos da mesma UF, mesmo tipo de carga e com capacidade
-            embarques_direta = Embarque.query.filter(
-                Embarque.status == 'ativo',
-                Embarque.tipo_carga == 'DIRETA'
-            ).all()
-            
-            for embarque in embarques_direta:
-                if embarque.itens_ativos:
-                    # Verificar se é mesmo UF
-                    uf_embarque = embarque.itens_ativos[0].uf_destino
-                    if uf_embarque == uf_destino:
-                        # Verificar capacidade do veículo
-                        if embarque.modalidade:  # modalidade é o nome do veículo
-                            veiculo = Veiculo.query.filter_by(nome=embarque.modalidade).first()
-                            if veiculo and veiculo.peso_maximo:
-                                peso_atual = embarque.total_peso_pedidos()
-                                capacidade_restante = veiculo.peso_maximo - peso_atual
-                                
-                                if capacidade_restante >= peso_total:
-                                    # Calcular valor sugerido (maior entre tabela do embarque e nova cotação)
-                                    valor_sugerido = max(
-                                        embarque.tabela_valor_kg * peso_total if embarque.tabela_valor_kg else 0,
-                                        opcoes_transporte['direta'][0]['valor_liquido'] if opcoes_transporte['direta'] else 0
-                                    )
-                                    
-                                    embarques_compativeis_direta.append({
-                                        'embarque': embarque,
-                                        'capacidade_restante': capacidade_restante,
-                                        'valor_sugerido': valor_sugerido
-                                    })
-        
-        # Para CARGA FRACIONADA - buscar embarques compatíveis
-        for cnpj, pedidos_cnpj in pedidos_por_cnpj.items():
-            if pedidos_cnpj:
-                cidade = pedidos_cnpj[0].nome_cidade
-                uf = pedidos_cnpj[0].cod_uf
+            # ✅ NOVA LÓGICA: Busca embarques da mesma transportadora/modalidade das cotações
+            for opcao_direta in opcoes_transporte['direta']:
+                transportadora_id = opcao_direta.get('transportadora_id')
+                modalidade = opcao_direta.get('modalidade')
                 
-                # Buscar cidades atendidas para esta cidade/UF
-                cidades_atendidas = CidadeAtendida.query.filter_by(uf=uf).all()
-                
-                for cidade_atendida in cidades_atendidas:
-                    # Buscar embarques ativos desta transportadora
-                    embarques_frac = Embarque.query.filter(
+                if transportadora_id and modalidade:
+                    # Buscar embarques ativos da mesma transportadora, modalidade e sem data de embarque
+                    embarques_query = Embarque.query.options(
+                        joinedload(Embarque.itens),
+                        joinedload(Embarque.transportadora)
+                    ).filter(
                         Embarque.status == 'ativo',
-                        Embarque.tipo_carga == 'FRACIONADA',
-                        Embarque.transportadora_id == cidade_atendida.transportadora_id
-                    ).all()
+                        Embarque.tipo_carga == 'DIRETA',
+                        Embarque.transportadora_id == transportadora_id,
+                        Embarque.modalidade == modalidade,
+                        Embarque.data_embarque.is_(None)  # ✅ Sem data de embarque
+                    ).limit(50)  # ✅ Limita para performance
                     
-                    for embarque in embarques_frac:
+                    for embarque in embarques_query:
                         if embarque.itens_ativos:
-                            # Adicionar à lista se não estiver já
-                            if not any(e['embarque'].id == embarque.id for e in embarques_compativeis_fracionada):
-                                embarques_compativeis_fracionada.append({
-                                    'embarque': embarque
-                                })
+                            # Verificar se é mesmo UF
+                            uf_embarque = embarque.itens_ativos[0].uf_destino
+                            if uf_embarque == uf_destino:
+                                # Verificar capacidade do veículo
+                                veiculo = Veiculo.query.filter_by(nome=modalidade).first()
+                                if veiculo and veiculo.peso_maximo:
+                                    peso_atual = embarque.total_peso_pedidos()
+                                    capacidade_restante = veiculo.peso_maximo - peso_atual
+                                    
+                                    # ✅ NOVA LÓGICA: Calcula diferença de valor
+                                    valor_embarque_atual = embarque.tabela_valor_kg * peso_atual if embarque.tabela_valor_kg else 0
+                                    valor_cotacao = opcao_direta.get('valor_liquido', 0)
+                                    valor_embarque_com_cotacao = embarque.tabela_valor_kg * (peso_atual + peso_total) if embarque.tabela_valor_kg else 0
+                                    acrescimo_valor = valor_embarque_com_cotacao - valor_embarque_atual - valor_cotacao
+                                    
+                                    # ✅ CONTA CNPJs ÚNICOS NO EMBARQUE
+                                    cnpjs_embarque = set(item.cnpj_cliente for item in embarque.itens_ativos if item.cnpj_cliente)
+                                    
+                                    if capacidade_restante >= peso_total:
+                                        embarques_compativeis_direta.append({
+                                            'embarque': embarque,
+                                            'capacidade_restante': capacidade_restante,
+                                            'valor_sugerido': valor_cotacao,
+                                            'acrescimo_valor': acrescimo_valor,
+                                            'qtd_cnpjs': len(cnpjs_embarque),
+                                            'tem_capacidade': True
+                                        })
+                                    else:
+                                        # ✅ MOSTRA TAMBÉM OS SEM CAPACIDADE
+                                        embarques_compativeis_direta.append({
+                                            'embarque': embarque,
+                                            'capacidade_restante': capacidade_restante,
+                                            'valor_sugerido': valor_cotacao,
+                                            'acrescimo_valor': acrescimo_valor,
+                                            'qtd_cnpjs': len(cnpjs_embarque),
+                                            'tem_capacidade': False
+                                        })
+        
+        # ✅ OTIMIZAÇÃO: Para CARGA FRACIONADA - buscar embarques compatíveis com melhor performance
+        transportadoras_fracionada = set()
+        for cnpj, pedidos_cnpj in pedidos_por_cnpj.items():
+            if pedidos_cnpj and cnpj in opcoes_por_cnpj:
+                for opcao in opcoes_por_cnpj[cnpj][:3]:  # ✅ Limita para performance
+                    transportadoras_fracionada.add(opcao.get('transportadora_id'))
+        
+        if transportadoras_fracionada:
+            embarques_frac_query = Embarque.query.options(
+                joinedload(Embarque.itens),
+                joinedload(Embarque.transportadora)
+            ).filter(
+                Embarque.status == 'ativo',
+                Embarque.tipo_carga == 'FRACIONADA',
+                Embarque.transportadora_id.in_(list(transportadoras_fracionada)),
+                Embarque.data_embarque.is_(None)  # ✅ Sem data de embarque
+            ).limit(20)  # ✅ Limita para performance
+            
+            for embarque in embarques_frac_query:
+                if embarque.itens_ativos:
+                    # ✅ CONTA CNPJs ÚNICOS NO EMBARQUE
+                    cnpjs_embarque = set(item.cnpj_cliente for item in embarque.itens_ativos if item.cnpj_cliente)
+                    
+                    embarques_compativeis_fracionada.append({
+                        'embarque': embarque,
+                        'qtd_cnpjs': len(cnpjs_embarque)
+                    })
         
         print(f"[DEBUG] 🚛 Embarques compatíveis - Direta: {len(embarques_compativeis_direta)}, Fracionada: {len(embarques_compativeis_fracionada)}")
         
@@ -787,7 +818,19 @@ def fechar_frete():
     Fechar frete - versão corrigida com dados da tabela nos locais corretos
     """
     try:
-        data = request.get_json()
+        # ✅ CORREÇÃO: Aceita tanto JSON quanto form data
+        if request.is_json:
+            data = request.get_json()
+        else:
+            data = request.form.to_dict()
+            # Converte strings para listas quando necessário
+            if 'pedidos' in data and isinstance(data['pedidos'], str):
+                import json
+                try:
+                    data['pedidos'] = json.loads(data['pedidos'])
+                except:
+                    data['pedidos'] = []
+        
         if not data:
             return jsonify({'success': False, 'message': 'Dados inválidos'}), 400
 
@@ -1097,7 +1140,19 @@ def fechar_frete_grupo():
     Fechar fretes por grupo - versão corrigida com dados da tabela nos locais corretos
     """
     try:
-        data = request.get_json()
+        # ✅ CORREÇÃO: Aceita tanto JSON quanto form data
+        if request.is_json:
+            data = request.get_json()
+        else:
+            data = request.form.to_dict()
+            # Converte strings para listas quando necessário
+            if 'cnpjs' in data and isinstance(data['cnpjs'], str):
+                import json
+                try:
+                    data['cnpjs'] = json.loads(data['cnpjs'])
+                except:
+                    data['cnpjs'] = [data['cnpjs']]
+        
         if not data:
             return jsonify({'success': False, 'message': 'Dados inválidos'}), 400
         
