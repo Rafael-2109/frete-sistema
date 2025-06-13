@@ -188,11 +188,9 @@
                     <td>{{ embarque_info.qtd_cnpjs }} CNPJs</td>
                     <td>
                       {% if embarque_info.acrescimo_valor > 0 %}
-                        <span class="text-danger">+R$ {{ "%.2f"|format(embarque_info.acrescimo_valor) }}</span>
-                      {% elif embarque_info.acrescimo_valor < 0 %}
-                        <span class="text-success">R$ {{ "%.2f"|format(embarque_info.acrescimo_valor) }}</span>
+                        <span class="text-warning">+R$ {{ "%.2f"|format(embarque_info.acrescimo_valor) }}</span>
                       {% else %}
-                        <span class="text-muted">R$ 0,00</span>
+                        <span class="text-success">R$ 0,00</span>
                       {% endif %}
                     </td>
                     <td>

@@ -676,11 +676,13 @@ def tela_cotacao():
                                     peso_atual = embarque.total_peso_pedidos()
                                     capacidade_restante = veiculo.peso_maximo - peso_atual
                                     
-                                    # ✅ NOVA LÓGICA: Calcula diferença de valor
+                                    # ✅ NOVA LÓGICA: Calcula acréscimo de valor (sempre positivo ou zero)
                                     valor_embarque_atual = embarque.tabela_valor_kg * peso_atual if embarque.tabela_valor_kg else 0
                                     valor_cotacao = opcao_direta.get('valor_liquido', 0)
                                     valor_embarque_com_cotacao = embarque.tabela_valor_kg * (peso_atual + peso_total) if embarque.tabela_valor_kg else 0
-                                    acrescimo_valor = valor_embarque_com_cotacao - valor_embarque_atual - valor_cotacao
+                                    
+                                    # Acréscimo = diferença entre valor total com inclusão vs valor atual + valor da cotação separada
+                                    acrescimo_valor = max(0, valor_embarque_com_cotacao - valor_embarque_atual - valor_cotacao)
                                     
                                     # ✅ CONTA CNPJs ÚNICOS NO EMBARQUE
                                     cnpjs_embarque = set(item.cnpj_cliente for item in embarque.itens_ativos if item.cnpj_cliente)
