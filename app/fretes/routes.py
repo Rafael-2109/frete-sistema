@@ -1692,18 +1692,18 @@ def verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente):
     if frete_existente:
         return False, f"Já existe frete para CNPJ {cnpj_cliente} no embarque {embarque_id}"
     
-    # Busca TODOS os itens do embarque
-    itens_embarque = EmbarqueItem.query.filter_by(embarque_id=embarque_id).all()
+    # ✅ CORREÇÃO: Busca APENAS os itens ATIVOS do embarque
+    itens_embarque = EmbarqueItem.query.filter_by(embarque_id=embarque_id, status='ativo').all()
     
     if not itens_embarque:
-        return False, "Nenhum item encontrado no embarque"
+        return False, "Nenhum item ativo encontrado no embarque"
     
-    # REQUISITO 1: TODAS as NFs do embarque devem estar preenchidas
+    # REQUISITO 1: TODAS as NFs dos itens ATIVOS devem estar preenchidas
     itens_sem_nf = [item for item in itens_embarque if not item.nota_fiscal or item.nota_fiscal.strip() == '']
     if itens_sem_nf:
-        return False, f"Existem {len(itens_sem_nf)} item(ns) sem NF preenchida no embarque"
+        return False, f"Existem {len(itens_sem_nf)} item(ns) ativo(s) sem NF preenchida no embarque"
     
-    # REQUISITO 2: TODAS as NFs do embarque devem estar no faturamento
+    # REQUISITO 2: TODAS as NFs dos itens ATIVOS devem estar no faturamento
     nfs_embarque = [item.nota_fiscal for item in itens_embarque]
     from app.faturamento.models import RelatorioFaturamentoImportado
     
@@ -1720,7 +1720,7 @@ def verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente):
     if nfs_nao_encontradas:
         return False, f"NFs não encontradas no faturamento: {', '.join(nfs_nao_encontradas)}"
     
-    # REQUISITO 3: TODOS os CNPJs devem coincidir entre embarque e faturamento
+    # REQUISITO 3: TODOS os CNPJs dos itens ATIVOS devem coincidir entre embarque e faturamento
     erros_cnpj = []
     
     for item in itens_embarque:
@@ -1739,10 +1739,10 @@ def verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente):
     if erros_cnpj:
         return False, f"CNPJs divergentes: {'; '.join(erros_cnpj)}"
     
-    # REQUISITO 4: Verifica se há itens com erro de validação
+    # REQUISITO 4: Verifica se há itens ATIVOS com erro de validação
     itens_com_erro = [item for item in itens_embarque if item.erro_validacao]
     if itens_com_erro:
-        return False, f"Existem {len(itens_com_erro)} item(ns) com erro de validação no embarque"
+        return False, f"Existem {len(itens_com_erro)} item(ns) ativo(s) com erro de validação no embarque"
     
     # REQUISITO 5: Verifica se há pelo menos uma NF do CNPJ específico
     itens_cnpj = [item for item in itens_embarque if item.cnpj_cliente == cnpj_cliente]
@@ -1785,10 +1785,10 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario='Sistema'):
         if not nf_faturamento:
             return False, "Dados do CNPJ não encontrados no faturamento"
         
-        # Busca itens do embarque para este CNPJ
+        # ✅ CORREÇÃO: Busca itens ATIVOS do embarque para este CNPJ
         itens_embarque_cnpj = []
         for item in embarque.itens:
-            if item.nota_fiscal:
+            if item.status == 'ativo' and item.nota_fiscal:
                 nf_fat = RelatorioFaturamentoImportado.query.filter_by(
                     numero_nf=item.nota_fiscal,
                     cnpj_cliente=cnpj_cliente
@@ -1837,10 +1837,10 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario='Sistema'):
                 'icms_destino': embarque.icms_destino or 0
             }
             
-            # Calcula totais do embarque inteiro
+            # ✅ CORREÇÃO: Calcula totais do embarque inteiro (apenas itens ATIVOS)
             todas_nfs_embarque = []
             for item in embarque.itens:
-                if item.nota_fiscal:
+                if item.status == 'ativo' and item.nota_fiscal:
                     nf_fat = RelatorioFaturamentoImportado.query.filter_by(numero_nf=item.nota_fiscal).first()
                     if nf_fat:
                         todas_nfs_embarque.append(nf_fat)
@@ -2048,11 +2048,12 @@ def corrigir_nfs_fretes():
         fretes_corrigidos = 0
         
         for frete in fretes_para_corrigir:
-            # Busca itens do embarque deste CNPJ
+            # ✅ CORREÇÃO: Busca itens ATIVOS do embarque deste CNPJ
             itens_embarque = EmbarqueItem.query.filter(
                 and_(
                     EmbarqueItem.embarque_id == frete.embarque_id,
                     EmbarqueItem.cnpj_cliente == frete.cnpj_cliente,
+                    EmbarqueItem.status == 'ativo',
                     EmbarqueItem.nota_fiscal.isnot(None)
                 )
             ).all()
@@ -2099,7 +2100,11 @@ def validar_cnpj_embarque_faturamento(embarque_id):
         itens_sem_nf = 0
         
         for item in embarque.itens:
-            # REQUISITO: Todas as NFs devem estar preenchidas
+            # ✅ CORREÇÃO: Só valida itens ATIVOS
+            if item.status != 'ativo':
+                continue
+                
+            # REQUISITO: Todas as NFs dos itens ATIVOS devem estar preenchidas
             if not item.nota_fiscal or item.nota_fiscal.strip() == '':
                 item.erro_validacao = "NF_NAO_PREENCHIDA"
                 erros_encontrados.append(f"Item {item.cliente} - {item.pedido}: NF não preenchida")
@@ -2196,8 +2201,10 @@ def processar_lancamento_automatico_fretes(embarque_id=None, cnpj_cliente=None, 
             
             # ✅ Todas as NFs estão validadas - procede com lançamento
             # Busca todos os CNPJs únicos deste embarque
+            # ✅ CORREÇÃO: Busca CNPJs únicos deste embarque (apenas itens ATIVOS)
             cnpjs_embarque = db.session.query(EmbarqueItem.cnpj_cliente)\
                 .filter(EmbarqueItem.embarque_id == embarque_id)\
+                .filter(EmbarqueItem.status == 'ativo')\
                 .filter(EmbarqueItem.nota_fiscal.isnot(None))\
                 .filter(EmbarqueItem.cnpj_cliente.isnot(None))\
                 .filter(EmbarqueItem.erro_validacao.is_(None))\
@@ -2211,9 +2218,10 @@ def processar_lancamento_automatico_fretes(embarque_id=None, cnpj_cliente=None, 
         
         elif cnpj_cliente:
             # Cenário 2: Faturamento foi importado
-            # Busca embarques que têm NFs deste CNPJ preenchidas
+            # ✅ CORREÇÃO: Busca embarques que têm NFs deste CNPJ preenchidas (apenas itens ATIVOS)
             embarques_com_cnpj = db.session.query(EmbarqueItem.embarque_id)\
                 .filter(EmbarqueItem.cnpj_cliente == cnpj_cliente)\
+                .filter(EmbarqueItem.status == 'ativo')\
                 .filter(EmbarqueItem.nota_fiscal.isnot(None))\
                 .distinct().all()
             

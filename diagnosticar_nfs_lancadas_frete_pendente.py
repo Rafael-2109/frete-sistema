@@ -53,9 +53,10 @@ def diagnosticar_nfs_lancadas_frete_pendente():
             print(f"   Tipo Carga: {embarque.tipo_carga}")
             print(f"   Transportadora: {embarque.transportadora.razao_social if embarque.transportadora else 'N/A'}")
             
-            # Busca CNPJs únicos do embarque
+            # ✅ CORREÇÃO: Busca CNPJs únicos do embarque (apenas itens ATIVOS)
             cnpjs_embarque = db.session.query(EmbarqueItem.cnpj_cliente)\
                 .filter(EmbarqueItem.embarque_id == embarque.id)\
+                .filter(EmbarqueItem.status == 'ativo')\
                 .filter(EmbarqueItem.nota_fiscal.isnot(None))\
                 .filter(EmbarqueItem.cnpj_cliente.isnot(None))\
                 .distinct().all()
@@ -96,10 +97,11 @@ def diagnosticar_nfs_lancadas_frete_pendente():
                             print(f"         ❌ Campo {campo} está None")
                             dados_tabela_ok = False
                 else:
-                    # FRACIONADA - verifica item
+                    # FRACIONADA - verifica item ATIVO
                     item_ref = EmbarqueItem.query.filter(
                         EmbarqueItem.embarque_id == embarque.id,
-                        EmbarqueItem.cnpj_cliente == cnpj
+                        EmbarqueItem.cnpj_cliente == cnpj,
+                        EmbarqueItem.status == 'ativo'
                     ).first()
                     
                     if item_ref:
@@ -114,11 +116,12 @@ def diagnosticar_nfs_lancadas_frete_pendente():
                     print(f"      ❌ Dados da tabela incompletos")
                     continue
                 
-                # 3. Verifica peso e valor no faturamento
+                # 3. Verifica peso e valor no faturamento (apenas itens ATIVOS)
                 print(f"      💰 Verificando peso/valor no faturamento...")
                 itens_cnpj = EmbarqueItem.query.filter(
                     EmbarqueItem.embarque_id == embarque.id,
                     EmbarqueItem.cnpj_cliente == cnpj,
+                    EmbarqueItem.status == 'ativo',
                     EmbarqueItem.nota_fiscal.isnot(None)
                 ).all()
                 
