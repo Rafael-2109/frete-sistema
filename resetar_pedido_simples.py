@@ -41,11 +41,13 @@ def resetar_pedido_simples(numero_pedido):
         print(f"🔍 CAMPOS ATUAIS:")
         print(f"   • cotacao_id: {pedido.cotacao_id}")
         print(f"   • transportadora: '{pedido.transportadora}'")
+        print(f"   • nf: '{pedido.nf}'")
+        print(f"   • data_embarque: {pedido.data_embarque}")
         print()
         
         # Verifica se já está "aberto"
-        if not pedido.cotacao_id and not pedido.transportadora:
-            print("✅ Pedido já está com status 'Aberto' (sem cotação e sem transportadora)")
+        if not pedido.cotacao_id and not pedido.transportadora and not pedido.nf and not pedido.data_embarque:
+            print("✅ Pedido já está com status 'Aberto' (todos os campos limpos)")
             return True
         
         # Mostra o que será alterado
@@ -54,6 +56,10 @@ def resetar_pedido_simples(numero_pedido):
             print(f"   • cotacao_id: {pedido.cotacao_id} → None")
         if pedido.transportadora:
             print(f"   • transportadora: '{pedido.transportadora}' → None")
+        if pedido.nf:
+            print(f"   • nf: '{pedido.nf}' → None")
+        if pedido.data_embarque:
+            print(f"   • data_embarque: {pedido.data_embarque} → None")
         print()
         
         # Confirma a operação
@@ -66,14 +72,20 @@ def resetar_pedido_simples(numero_pedido):
         # Salva valores antigos para log
         cotacao_antiga = pedido.cotacao_id
         transportadora_antiga = pedido.transportadora
+        nf_antiga = pedido.nf
+        data_embarque_antiga = pedido.data_embarque
         
-        # Executa o reset - APENAS os campos essenciais
+        # Executa o reset - TODOS os campos que afetam o status
         print(f"\n🔄 Executando reset...")
         pedido.cotacao_id = None
         pedido.transportadora = None
+        pedido.nf = None
+        pedido.data_embarque = None
         
         print(f"   ✅ cotacao_id: {cotacao_antiga} → None")
         print(f"   ✅ transportadora: '{transportadora_antiga}' → None")
+        print(f"   ✅ nf: '{nf_antiga}' → None")
+        print(f"   ✅ data_embarque: {data_embarque_antiga} → None")
         
         # Confirma salvamento
         confirma = input(f"\n💾 Salvar alterações? (digite 'SALVAR'): ")
@@ -91,11 +103,13 @@ def resetar_pedido_simples(numero_pedido):
                     print(f"📊 Status: Campos básicos limpos (cotacao_id=None, transportadora=None)")
                 
                 # Log simples
-                log_msg = (f"RESET SIMPLES - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
+                log_msg = (f"RESET COMPLETO - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
                           f"Pedido: {numero_pedido}\n"
                           f"Cliente: {pedido.raz_social_red}\n"
                           f"cotacao_id: {cotacao_antiga} → None\n"
-                          f"transportadora: '{transportadora_antiga}' → None\n\n")
+                          f"transportadora: '{transportadora_antiga}' → None\n"
+                          f"nf: '{nf_antiga}' → None\n"
+                          f"data_embarque: {data_embarque_antiga} → None\n\n")
                 
                 with open('log_reset_pedidos.txt', 'a', encoding='utf-8') as f:
                     f.write(log_msg)
