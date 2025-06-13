@@ -54,16 +54,10 @@
     min-width: 120px;
   }
   
-  .itens-embarque-table th:nth-child(9),  /* Status */
+  .itens-embarque-table th:nth-child(9),  /* Status/Ações */
   .itens-embarque-table td:nth-child(9) {
-    width: 7%;
-    min-width: 70px;
-  }
-  
-  .itens-embarque-table th:nth-child(10), /* Ações */
-  .itens-embarque-table td:nth-child(10) {
-    width: 7%;
-    min-width: 70px;
+    width: 15%;
+    min-width: 140px;
   }
   
   /* Configurações gerais da tabela */
@@ -78,6 +72,72 @@
     font-size: 12px;
     padding: 4px 6px;
   }
+  
+  /* ======================================================================== */
+  /* ESTILOS ESPECÍFICOS PARA ITENS CANCELADOS                               */
+  /* ======================================================================== */
+  
+  /* Linha cancelada - fundo vermelho claro e borda vermelha */
+  .table-danger {
+    background-color: #f8d7da !important;
+    border: 2px solid #dc3545 !important;
+  }
+  
+  /* Inputs desabilitados em itens cancelados */
+  .table-danger input, 
+  .table-danger select, 
+  .table-danger textarea {
+    background-color: #f5c6cb !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+    pointer-events: none;
+  }
+  
+  /* Badge cancelado com animação pulsante */
+  .badge-cancelado-pulsante {
+    animation: pulse-red 3s infinite;
+    font-size: 0.75rem !important;
+    padding: 0.25rem 0.5rem !important;
+    font-weight: bold !important;
+  }
+  
+  /* Badge removido menor */
+  .badge-removido {
+    font-size: 0.7rem !important;
+    padding: 0.2rem 0.4rem !important;
+  }
+  
+  /* Coluna Status/Ações mesclada */
+  .status-acoes-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  
+  .status-acoes-container .badge {
+    flex-shrink: 0;
+  }
+  
+  .status-acoes-container .btn {
+    flex-shrink: 0;
+  }
+  
+  @keyframes pulse-red {
+    0% { 
+      background-color: #dc3545; 
+      box-shadow: 0 0 3px rgba(220, 53, 69, 0.3);
+    }
+    50% { 
+      background-color: #b02a37; 
+      box-shadow: 0 0 8px rgba(220, 53, 69, 0.6);
+    }
+    100% { 
+      background-color: #dc3545; 
+      box-shadow: 0 0 3px rgba(220, 53, 69, 0.3);
+    }
+  }
+  
   /* ======================================================================== */
   
   @media print {
@@ -193,6 +253,27 @@
   </div>
   {% endif %}
 
+  <!-- Alerta de Itens Cancelados -->
+  {% set itens_cancelados = embarque.itens | selectattr('status', 'equalto', 'cancelado') | list %}
+  {% if itens_cancelados %}
+  <div class="alert alert-warning border-warning">
+    <div class="d-flex align-items-center">
+      <i class="fas fa-exclamation-triangle fa-2x text-warning me-3"></i>
+      <div>
+        <h5 class="alert-heading mb-1">
+          <i class="fas fa-ban"></i> Atenção: Itens Cancelados
+        </h5>
+        <p class="mb-1">
+          <strong>{{ itens_cancelados|length }} item(ns)</strong> foi(ram) cancelado(s) deste embarque.
+        </p>
+        <small class="text-muted">
+          Os itens cancelados aparecem em <strong>vermelho</strong> na tabela abaixo e não são contabilizados nos totais.
+        </small>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
       <h2 class="card-title mb-0">
@@ -289,59 +370,85 @@
               <th>Volumes</th>
               <th>UF</th>
               <th>Cidade</th>
-              <th>Status</th>
-              <th>Ações</th>
+              <th>Status/Ações</th>
             </tr>
           </thead>
           <tbody>
-            {% for item in embarque.itens_ativos %}
-            <tr>
-              <td title="{{ item.cliente }}">{{ item.cliente[:25] }}{% if item.cliente|length > 25 %}...{% endif %}</td>
-              <td>{{ item.pedido }}</td>
-              <td>
-                {% if item.nota_fiscal %}
-                  {{ item.nota_fiscal }}
-                {% else %}
-                  <span class="text-muted">-</span>
-                {% endif %}
-              </td>
-              <td>{{ (item.protocolo_agendamento | formatar_protocolo) or '-' }}</td>
-              <td>{{ item.data_agenda or '-' }}</td>
-              <td class="text-center">{{ item.volumes or '-' }}</td>
-              <td class="text-center">{{ item.uf_destino }}</td>
-              <td title="{{ item.cidade_destino }}">{{ item.cidade_destino[:15] }}{% if item.cidade_destino|length > 15 %}...{% endif %}</td>
-              <td>
-                {% if item.erro_validacao %}
-                  {% if 'NF_PENDENTE_FATURAMENTO' in item.erro_validacao %}
-                    <span class="badge bg-warning text-dark">Pendente</span>
-                  {% elif 'NF_DIVERGENTE' in item.erro_validacao %}
-                    <span class="badge bg-danger">Divergente</span>
-                  {% elif 'CLIENTE_NAO_DEFINIDO' in item.erro_validacao %}
-                    <span class="badge bg-secondary">Sem Cliente</span>
+            {% for loop_index in range(form.itens|length) %}
+              {% set item_form = form.itens[loop_index] %}
+              {% set item = embarque.itens[loop_index] if loop_index < embarque.itens|length else none %}
+              <tr class="item-form{% if item and item.status == 'cancelado' %} table-danger{% endif %}"{% if item and item.status == 'cancelado' %} style="opacity: 0.6; text-decoration: line-through;"{% endif %}>
+                {{ item_form.id }}
+                <td title="{{ item.cliente if item else '' }}">
+                  {{ item_form.cliente(style="border: none; background: transparent;" if item else "form-control") }}
+                </td>
+                <td>
+                  {{ item_form.pedido(style="border: none; background: transparent;" if item else "form-control") }}
+                </td>
+                <td>
+                  {{ item_form.nota_fiscal(class="form-control form-control-sm") }}
+                </td>
+                <td>
+                  {{ item_form.protocolo_agendamento(class="form-control form-control-sm") }}
+                </td>
+                <td>
+                  {{ item_form.data_agenda(class="form-control form-control-sm", placeholder="DD/MM/AAAA") }}
+                </td>
+                <td>
+                  {{ item_form.volumes(class="form-control form-control-sm text-center") }}
+                </td>
+                <td>
+                  {{ item_form.uf_destino(style="border: none; background: transparent; text-align: center;" if item else "form-control") }}
+                </td>
+                <td title="{{ item.cidade_destino if item else '' }}">
+                  {{ item_form.cidade_destino(style="border: none; background: transparent;" if item else "form-control") }}
+                </td>
+                <td>
+                  {% if item and item.status == 'cancelado' %}
+                    <!-- Item cancelado: apenas badge cancelado -->
+                    <span class="badge bg-danger badge-cancelado-pulsante">
+                      <i class="fas fa-ban"></i> CANCELADO
+                    </span>
                   {% else %}
-                    <span class="badge bg-info">Validando</span>
+                    <!-- Item ativo: status + ações -->
+                    <div class="status-acoes-container">
+                      <!-- Badge de status -->
+                                             {% if item and item.erro_validacao %}
+                         {% if 'NF_PENDENTE_FATURAMENTO' in item.erro_validacao %}
+                           <span class="badge bg-warning text-dark">Pendente</span>
+                         {% elif 'NF_DIVERGENTE' in item.erro_validacao %}
+                           <span class="badge bg-danger">Divergente</span>
+
+                         {% elif 'CLIENTE_NAO_DEFINIDO' in item.erro_validacao %}
+                           <span class="badge bg-secondary">Sem Cliente</span>
+                         {% else %}
+                           <span class="badge bg-info">Validando</span>
+                         {% endif %}
+                      {% elif item %}
+                        <span class="badge bg-success">OK</span>
+                      {% else %}
+                        <span class="badge bg-secondary">Novo</span>
+                      {% endif %}
+                      
+                      <!-- Botões de ação -->
+                      {% if embarque.status != 'cancelado' and item %}
+                        <button type="button" class="btn btn-sm btn-outline-danger" 
+                                onclick="confirmarRemocaoItem('{{ item.id }}', '{{ item.pedido }}', '{{ item.cliente }}')"
+                                title="Remover pedido do embarque">
+                          <i class="fas fa-times"></i>
+                        </button>
+                      {% endif %}
+                      
+                      {% if item and item.separacao_lote_id %}
+                        <a href="{{ url_for('embarques.acessar_separacao', embarque_id=embarque.id, separacao_lote_id=item.separacao_lote_id) }}" 
+                           class="btn btn-sm btn-outline-info" title="Ver separação">
+                          <i class="fas fa-list"></i>
+                        </a>
+                      {% endif %}
+                    </div>
                   {% endif %}
-                {% else %}
-                  <span class="badge bg-success">OK</span>
-                {% endif %}
-              </td>
-              <td>
-                {% if embarque.status != 'cancelado' %}
-                  <button type="button" class="btn btn-sm btn-outline-danger" 
-                          onclick="confirmarRemocaoItem('{{ item.id }}', '{{ item.pedido }}', '{{ item.cliente }}')"
-                          title="Remover pedido do embarque">
-                    <i class="fas fa-times"></i>
-                  </button>
-                {% endif %}
-                
-                {% if item.separacao_lote_id %}
-                  <a href="{{ url_for('embarques.acessar_separacao', embarque_id=embarque.id, separacao_lote_id=item.separacao_lote_id) }}" 
-                     class="btn btn-sm btn-outline-info" title="Ver separação">
-                    <i class="fas fa-list"></i>
-                  </a>
-                {% endif %}
-              </td>
-            </tr>
+                </td>
+              </tr>
             {% endfor %}
           </tbody>
         </table>
@@ -425,7 +532,7 @@
       <!-- Botão Corrigir NFs (aparece apenas se há erros) -->
       {% set itens_com_erro_nf = [] %}
       {% set itens_pendentes_nf = [] %}
-      {% for item in embarque.itens %}
+      {% for item in embarque.itens_ativos %}
         {% if item.erro_validacao and 'NF_DIVERGENTE' in item.erro_validacao %}
           {% set _ = itens_com_erro_nf.append(item) %}
         {% elif item.erro_validacao and 'NF_PENDENTE_FATURAMENTO' in item.erro_validacao %}
@@ -451,7 +558,7 @@
       {% endif %}
       
       <!-- Botões de Separação (se houver itens com separacao_lote_id) -->
-      {% set lotes_separacao = embarque.itens | selectattr('separacao_lote_id') | map(attribute='separacao_lote_id') | unique | list %}
+      {% set lotes_separacao = embarque.itens_ativos | selectattr('separacao_lote_id') | map(attribute='separacao_lote_id') | unique | list %}
       {% if lotes_separacao %}
         <div class="btn-group" role="group">
           <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown">
@@ -459,7 +566,7 @@
           </button>
           <ul class="dropdown-menu">
             {% for lote_id in lotes_separacao %}
-              {% set item_com_lote = embarque.itens | selectattr('separacao_lote_id', 'equalto', lote_id) | first %}
+              {% set item_com_lote = embarque.itens_ativos | selectattr('separacao_lote_id', 'equalto', lote_id) | first %}
               {% if item_com_lote %}
                 <li><h6 class="dropdown-header">{{ item_com_lote.pedido }} - {{ item_com_lote.cliente }}</h6></li>
                 <li>

@@ -587,9 +587,10 @@ function updateCotarButton() {
     const cotacaoManualButton = document.getElementById('btnCotacaoManual');
     const embarqueFOBButton = document.getElementById('btnEmbarqueFOB');
     
-    console.log('[DEBUG] updateCotarButton executada');
-    console.log('[DEBUG] Checkboxes selecionados:', selectedCheckboxes.length);
-    console.log('[DEBUG] Botão encontrado:', cotarButton ? 'SIM' : 'NÃO');
+    // Debug básico para identificar problemas
+    if (selectedCheckboxes.length > 0) {
+        console.log(`[DEBUG] ${selectedCheckboxes.length} pedidos selecionados`);
+    }
     
     if (cotarButton) {
         if (selectedCheckboxes.length > 0) {
@@ -597,13 +598,11 @@ function updateCotarButton() {
             cotarButton.innerHTML = `<i class="fas fa-calculator"></i> Cotar Frete (${selectedCheckboxes.length})`;
             cotarButton.classList.remove('btn-secondary');
             cotarButton.classList.add('btn-success');
-            console.log('[DEBUG] Botão HABILITADO com', selectedCheckboxes.length, 'pedidos');
         } else {
             cotarButton.disabled = true;
             cotarButton.innerHTML = '<i class="fas fa-calculator"></i> Cotar Frete';
             cotarButton.classList.remove('btn-success');
             cotarButton.classList.add('btn-secondary');
-            console.log('[DEBUG] Botão DESABILITADO');
         }
     } else {
         console.error('[ERROR] Botão de cotar frete não encontrado!');
@@ -804,7 +803,9 @@ function confirmarExclusao(pedidoId, numeroPedido) {
         form.submit();
     }
 }
+</script>
 
+<style>
 /* ---- BOTÕES DE FILTRO (cores e espaçamento) ---- */
 .filtro-pair {                     /* agrupa Data+Aberto */
     border-radius: 6px;            /* cantos suaves */
@@ -847,7 +848,5 @@ function confirmarExclusao(pedidoId, numeroPedido) {
 @media (max-width: 576px) {
   .filtros-container .ms-auto { margin-left: 0 !important; } /* status abaixo */
 }
-
-
-</script>
+</style>
 {% endblock %}

@@ -47,24 +47,35 @@
             font-weight: bold;
         }
         
-        .embarque-items {
+        .table-embarque {
             width: 100%;
             border-collapse: collapse;
             margin-top: 5px;
         }
         
-        .embarque-items th,
-        .embarque-items td {
+        .table-embarque th,
+        .table-embarque td {
             border: 1px solid #000;
-            padding: 8px;
-            font-size: 12px;
+            padding: 6px;
+            font-size: 11px;
+            vertical-align: top;
         }
         
-        .embarque-items th {
+        .table-embarque th {
             background-color: #f0f0f0;
             text-align: center;
             font-weight: bold;
         }
+        
+        /* Larguras específicas das colunas */
+        .table-embarque th:nth-child(1), .table-embarque td:nth-child(1) { width: 25%; } /* Cliente */
+        .table-embarque th:nth-child(2), .table-embarque td:nth-child(2) { width: 10%; } /* Pedido */
+        .table-embarque th:nth-child(3), .table-embarque td:nth-child(3) { width: 10%; } /* NF */
+        .table-embarque th:nth-child(4), .table-embarque td:nth-child(4) { width: 12%; } /* Protocolo */
+        .table-embarque th:nth-child(5), .table-embarque td:nth-child(5) { width: 10%; } /* Data Agenda */
+        .table-embarque th:nth-child(6), .table-embarque td:nth-child(6) { width: 8%; text-align: center; } /* Volumes */
+        .table-embarque th:nth-child(7), .table-embarque td:nth-child(7) { width: 5%; text-align: center; } /* UF */
+        .table-embarque th:nth-child(8), .table-embarque td:nth-child(8) { width: 20%; } /* Cidade */
         
         /* Estilos para campos de preenchimento */
         .campo-preenchimento {
@@ -136,6 +147,9 @@
         {% endif %}
     </div>
 
+    <!-- Cabeçalho dos Itens -->
+    <h3 style="border-bottom: 2px solid #007bff; padding-bottom: 3px; margin-bottom: 8px;">Itens do Embarque</h3>
+    
     <!-- Tabela de Itens do Embarque -->
     <table class="table-embarque">
         <thead>

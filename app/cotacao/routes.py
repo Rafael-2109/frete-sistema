@@ -330,14 +330,14 @@ def tela_cotacao():
     # Verifica se todos são do mesmo UF usando LocalizacaoService
     ufs_normalizados = set()
     for pedido in pedidos:
-        # Normaliza localização usando LocalizacaoService
-        cidade = LocalizacaoService.buscar_cidade_unificada(
-            nome=pedido.nome_cidade,
+        # ✅ CORREÇÃO: Usa o LocalizacaoService para normalizar o UF diretamente
+        uf_normalizado = LocalizacaoService.normalizar_uf_com_regras(
             uf=pedido.cod_uf,
+            cidade=pedido.nome_cidade,
             rota=getattr(pedido, 'rota', None)
         )
-        if cidade:
-            ufs_normalizados.add(cidade.uf)
+        if uf_normalizado:
+            ufs_normalizados.add(uf_normalizado)
     
     todos_mesmo_uf = len(ufs_normalizados) == 1
     print(f"[DEBUG] UFs encontrados: {ufs_normalizados}")
@@ -1035,7 +1035,7 @@ def fechar_frete():
             item = EmbarqueItem(
                 embarque_id=embarque.id,
                 separacao_lote_id=pedido.separacao_lote_id,  # ✅ CORRIGE: copia separacao_lote_id do pedido
-                cnpj_cliente=pedido_data.get('cnpj'),
+                cnpj_cliente=pedido.cnpj_cpf,  # ✅ CORREÇÃO: Usa CNPJ do banco, não do frontend
                 cliente=pedido.raz_social_red,
                 pedido=pedido.num_pedido,
                 peso=pedido.peso_total,

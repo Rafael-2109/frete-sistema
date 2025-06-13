@@ -48,6 +48,13 @@
             <span class="badge badge-success">{{ embarque.status or 'N/A' }}</span>
           </p>
           <p><strong>Data de Criação:</strong> {{ embarque.criado_em | formatar_data_hora_brasil if embarque.criado_em else 'N/A' }}</p>
+          <p><strong>Itens Ativos:</strong> {{ embarque.itens_ativos|length }}</p>
+          {% set itens_cancelados = embarque.itens | selectattr('status', 'equalto', 'cancelado') | list %}
+          {% if itens_cancelados %}
+            <p><strong>Itens Cancelados:</strong> 
+              <span class="badge badge-danger">{{ itens_cancelados|length }}</span>
+            </p>
+          {% endif %}
         </div>
       </div>
 
@@ -208,6 +215,16 @@
           <h4 class="border-bottom pb-2">📦 Dados dos Itens do Embarque</h4>
         </div>
       </div>
+      
+      <!-- Alerta sobre itens cancelados (se houver) -->
+      {% set itens_cancelados = embarque.itens | selectattr('status', 'equalto', 'cancelado') | list %}
+      {% if itens_cancelados %}
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> 
+        <strong>Nota:</strong> Este embarque possui {{ itens_cancelados|length }} item(ns) cancelado(s) que não aparecem na lista abaixo.
+        <br><small>Apenas itens ativos são exibidos nesta visualização.</small>
+      </div>
+      {% endif %}
 
       {% for item in itens %}
       <div class="card mb-3">

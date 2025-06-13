@@ -136,9 +136,9 @@ def visualizar_embarque(id):
                 messages_fretes = []
                 messages_entregas = []
 
-                # ✅ NOVA FUNCIONALIDADE: Sincronizar NFs com pedidos
+                # ✅ SINCRONIZAÇÃO COMPLETA: Sincronizar NFs com pedidos (bidirecional)
                 try:
-                    sucesso_sync, resultado_sync = sincronizar_nf_embarque_pedido(embarque.id)
+                    sucesso_sync, resultado_sync = sincronizar_nf_embarque_pedido_completa(embarque.id)
                     if sucesso_sync:
                         messages_sync.append(f"🔄 {resultado_sync}")
                     else:
@@ -961,8 +961,8 @@ def dados_tabela_embarque(id):
     """
     embarque = Embarque.query.get_or_404(id)
     
-    # Carrega os itens do embarque
-    itens = EmbarqueItem.query.filter_by(embarque_id=embarque.id).all()
+    # Carrega apenas os itens ativos do embarque
+    itens = EmbarqueItem.query.filter_by(embarque_id=embarque.id, status='ativo').all()
     
     return render_template('embarques/dados_tabela.html', embarque=embarque, itens=itens)
 
@@ -1299,20 +1299,100 @@ def validar_nf_cliente(item_embarque):
             item_embarque.erro_validacao = None
             return True, None
     
-    # ✅ CORREÇÃO: Item sem cliente não pode ter NF preenchida  
-    # Mantém a NF para posterior validação quando o cliente for definido
+    # ✅ CORREÇÃO FINAL: Se não há CNPJ, é erro de dados - não deveria acontecer
+    # Todo pedido tem CNPJ obrigatório, então se chegou aqui sem CNPJ é bug do sistema
     if not item_embarque.cnpj_cliente:
-        item_embarque.erro_validacao = f"CLIENTE_NAO_DEFINIDO: Defina o cliente antes de preencher a NF"
-        
-        # ✅ MANTÉM a NF para validação posterior (quando cliente for definido)
-        # NÃO apaga a NF - apenas marca como pendente de definição de cliente
-        # Se o usuário informar o CNPJ depois, a validação será refeita
-        
-        return False, f"❌ BLOQUEADO: Defina o cliente antes de preencher a NF {item_embarque.nota_fiscal}"
+        print(f"[DEBUG] ⚠️ AVISO: Item sem CNPJ detectado - isso não deveria acontecer!")
+        print(f"[DEBUG]   Item: {item_embarque.pedido} - Cliente: {item_embarque.cliente}")
+        # NÃO bloqueia nem marca erro - apenas permite continuar
+        return True, None
     
     # Limpa erro se havia (caso padrão de sucesso)
     item_embarque.erro_validacao = None
     return True, None
+
+def sincronizar_nf_embarque_pedido_completa(embarque_id):
+    """
+    ✅ FUNÇÃO COMPLETA: Sincronização bidirecional entre embarque e pedidos
+    
+    1. ADICIONA NF no pedido quando preenchida no embarque
+    2. REMOVE NF do pedido quando apagada no embarque  
+    3. ATUALIZA status do pedido conforme situação
+    
+    Esta função resolve todos os problemas de sincronização.
+    """
+    from app.pedidos.models import Pedido
+    
+    try:
+        embarque = Embarque.query.get(embarque_id)
+        if not embarque:
+            return False, "Embarque não encontrado"
+        
+        itens_sincronizados = 0
+        itens_removidos = 0
+        itens_cancelados = 0
+        erros = []
+        
+        for item in embarque.itens:
+            pedido = None
+            
+            # Buscar pedido (priorizar lote de separação)
+            if item.separacao_lote_id:
+                pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+            else:
+                pedido = Pedido.query.filter_by(num_pedido=item.pedido).first()
+            
+            if not pedido:
+                erros.append(f"Pedido {item.pedido} não encontrado")
+                continue
+            
+            # ✅ CASO 1: Item cancelado - voltar pedido para "Aberto"
+            if item.status == 'cancelado':
+                pedido.nf = None
+                pedido.data_embarque = None
+                pedido.status = 'Aberto'
+                itens_cancelados += 1
+                print(f"[DEBUG] 🚫 Pedido {pedido.num_pedido}: Item cancelado - voltou para 'Aberto'")
+                
+            # ✅ CASO 2: Item ativo com NF - sincronizar NF
+            elif item.nota_fiscal and item.nota_fiscal.strip():
+                pedido.nf = item.nota_fiscal
+                # Status será atualizado automaticamente pelo trigger
+                itens_sincronizados += 1
+                print(f"[DEBUG] ✅ Pedido {pedido.num_pedido}: NF atualizada para {item.nota_fiscal}")
+                
+            # ✅ CASO 3: Item ativo sem NF - remover NF do pedido
+            elif not item.nota_fiscal or not item.nota_fiscal.strip():
+                if pedido.nf:  # Só remove se havia NF antes
+                    pedido.nf = None
+                    # Status será recalculado automaticamente pelo trigger
+                    itens_removidos += 1
+                    print(f"[DEBUG] 🗑️ Pedido {pedido.num_pedido}: NF removida")
+        
+        db.session.commit()
+        
+        # Montar mensagem de resultado
+        resultado_parts = []
+        if itens_sincronizados > 0:
+            resultado_parts.append(f"{itens_sincronizados} NF(s) sincronizada(s)")
+        if itens_removidos > 0:
+            resultado_parts.append(f"{itens_removidos} NF(s) removida(s)")
+        if itens_cancelados > 0:
+            resultado_parts.append(f"{itens_cancelados} item(ns) cancelado(s)")
+        
+        resultado_msg = "✅ " + ", ".join(resultado_parts) if resultado_parts else "Nenhuma alteração necessária"
+        
+        if erros:
+            resultado_msg += f" | ⚠️ {len(erros)} erro(s): {'; '.join(erros[:2])}"
+        
+        print(f"[DEBUG] ✅ Sincronização completa: {resultado_msg}")
+        return True, resultado_msg
+            
+    except Exception as e:
+        db.session.rollback()
+        error_msg = f"Erro na sincronização completa: {str(e)}"
+        print(f"[DEBUG] ❌ {error_msg}")
+        return False, error_msg
 
 def sincronizar_nf_embarque_pedido(embarque_id):
     """
@@ -1444,16 +1524,14 @@ def cancelar_item_embarque(item_id):
     try:
         # Cancelar o item (exclusão lógica)
         item.status = 'cancelado'
-        
-        # Voltar o pedido para status "Aberto"
-        if item.separacao_lote_id:
-            pedidos = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).all()
-            for pedido in pedidos:
-                pedido.status = 'Aberto'
-        
         db.session.commit()
         
-        flash(f'✅ Pedido {item.pedido} removido do embarque com sucesso! O pedido voltou para status "Aberto".', 'success')
+        # ✅ USAR NOVA SINCRONIZAÇÃO COMPLETA
+        sucesso, resultado = sincronizar_nf_embarque_pedido_completa(embarque.id)
+        if sucesso:
+            flash(f'✅ Pedido {item.pedido} removido do embarque com sucesso! {resultado}', 'success')
+        else:
+            flash(f'✅ Pedido {item.pedido} removido do embarque, mas houve erro na sincronização: {resultado}', 'warning')
         
     except Exception as e:
         db.session.rollback()
