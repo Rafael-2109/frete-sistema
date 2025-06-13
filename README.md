@@ -151,4 +151,6 @@ Sistema proprietário desenvolvido exclusivamente para NACOM GOYA.
 ---
 
 **🎉 Sistema de Fretes - Versão Produção**  
-*Desenvolvido com ❤️ para otimizar sua operação logística* 
+*Desenvolvido com ❤️ para otimizar sua operação logística*
+
+**Última atualização**: Sistema de adicionar/remover pedidos em embarques implementado 
