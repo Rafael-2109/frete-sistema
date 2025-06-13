@@ -37,17 +37,22 @@
         </div>
 
         <div class="row mb-3">
-          <div class="col-md-4">
+          <div class="col-md-3">
             {{ form.tipo_carga.label(class="form-label") }}
             {{ form.tipo_carga(class="form-select") }}
             <div class="form-text">Todas as linhas terão este tipo de carga</div>
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             {{ form.modalidade.label(class="form-label") }}
             {{ form.modalidade(class="form-select") }}
             <div class="form-text">Todas as linhas terão esta modalidade</div>
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
+            {{ form.icms_incluso.label(class="form-label") }}
+            {{ form.icms_incluso(class="form-select") }}
+            <div class="form-text">ICMS incluso no valor do frete</div>
+          </div>
+          <div class="col-md-3">
             {{ form.quantidade_linhas.label(class="form-label") }}
             {{ form.quantidade_linhas(class="form-control", min="1", max="1000") }}
             <div class="form-text">Número de linhas no template (máx: 1000)</div>
@@ -79,7 +84,7 @@
             <li class="list-group-item"><strong>DESTINO:</strong> UF de destino selecionada</li>
             <li class="list-group-item"><strong>CARGA:</strong> Tipo de carga selecionado</li>
             <li class="list-group-item"><strong>FRETE:</strong> Modalidade selecionada</li>
-            <li class="list-group-item"><strong>INC.:</strong> 'N' (ICMS não incluso)</li>
+            <li class="list-group-item"><strong>INC.:</strong> ICMS incluso selecionado (S/N)</li>
           </ul>
         </div>
         <div class="col-md-6">

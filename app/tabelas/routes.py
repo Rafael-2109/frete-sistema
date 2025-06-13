@@ -124,36 +124,50 @@ def importar_tabela_frete():
                     return redirect(request.url)
 
             for index, row in df.iterrows():
+                print(f"📊 Processando linha {index + 2}: {dict(row)}")
+                
                 if str(row['ATIVO']).strip().upper() != 'A':
+                    print(f"⏭️ Linha {index + 2} ignorada - ATIVO = {row['ATIVO']}")
                     continue  # Ignorar tabelas inativas
 
                 cnpj = str(row['CÓD. TRANSP']).strip()
                 uf_destino = str(row['DESTINO']).strip()
                 nome_tabela = str(row['NOME TABELA']).strip()
+                
+                print(f"🔍 Dados extraídos - CNPJ: {cnpj}, UF: {uf_destino}, Tabela: '{nome_tabela}'")
 
                 transportadora = Transportadora.query.filter_by(cnpj=cnpj).first()
                 if not transportadora:
                     erros += 1
+                    print(f"❌ Transportadora {cnpj} não encontrada (linha {index+2})")
                     flash(f"Transportadora {cnpj} não cadastrada (linha {index+2}). Por favor, cadastre a transportadora primeiro.", "danger")
                     continue
+                
+                print(f"✅ Transportadora encontrada: {transportadora.razao_social}")
 
-                # ✅ VALIDAÇÃO: Só importa tabelas que JÁ TÊM vínculos
-                vinculo_existente = CidadeAtendida.query.filter_by(
-                    transportadora_id=transportadora.id,
-                    uf=uf_destino,
-                    nome_tabela=nome_tabela
-                ).first()
+                # ✅ VALIDAÇÃO: Verifica vínculos apenas se NOME TABELA estiver preenchido
+                # Se NOME TABELA estiver vazio, permite importação (template)
+                if nome_tabela:  # Só valida vínculos se nome da tabela estiver preenchido
+                    vinculo_existente = CidadeAtendida.query.filter_by(
+                        transportadora_id=transportadora.id,
+                        uf=uf_destino,
+                        nome_tabela=nome_tabela
+                    ).first()
 
-                if not vinculo_existente:
-                    # ❌ REJEITA: Tabela sem vínculo correspondente
-                    rejeitadas_sem_vinculo.append({
-                        'linha': index + 2,
-                        'transportadora': transportadora.razao_social,
-                        'uf_destino': uf_destino,
-                        'nome_tabela': nome_tabela,
-                        'modalidade': str(row['FRETE']).upper()
-                    })
-                    continue  # Pula esta linha - NÃO importa
+                    if not vinculo_existente:
+                        # ❌ REJEITA: Tabela sem vínculo correspondente
+                        rejeitadas_sem_vinculo.append({
+                            'linha': index + 2,
+                            'transportadora': transportadora.razao_social,
+                            'uf_destino': uf_destino,
+                            'nome_tabela': nome_tabela,
+                            'modalidade': str(row['FRETE']).upper()
+                        })
+                        continue  # Pula esta linha - NÃO importa
+                else:
+                    # Template sem nome de tabela - gera nome automático
+                    nome_tabela = f"TEMPLATE_{transportadora.razao_social}_{uf_destino}_{modalidade}"
+                    print(f"📋 Template detectado - gerando nome automático: {nome_tabela}")
 
                 tipo_carga = str(row['CARGA']).upper()
                 modalidade = str(row['FRETE']).upper()
@@ -262,8 +276,10 @@ def importar_tabela_frete():
                 )
                 db.session.add(historico)
                 sucesso += 1
+                print(f"✅ Tabela criada/atualizada com sucesso (linha {index + 2})")
 
             db.session.commit()
+            print(f"💾 Commit realizado - {sucesso} tabelas processadas")
             
             # Relatório final da importação
             if rejeitadas_sem_vinculo:
@@ -716,10 +732,10 @@ def gerar_template_frete():
                     'ORIGEM': form.uf_origem.data,
                     'DESTINO': form.uf_destino.data,
                     'NOME TABELA': '',  # Usuário deve preencher
-                    'CARGA': form.tipo_carga.data,
-                    'FRETE': form.modalidade.data,
-                    'INC.': '',  # Usuário deve preencher
-                    'VALOR': 0,
+                     'CARGA': form.tipo_carga.data,
+                     'FRETE': form.modalidade.data,
+                     'INC.': form.icms_incluso.data,
+                     'VALOR': 0,
                     'PESO': 0,
                     'FRETE PESO': 0,
                     'FRETE VALOR': 0,
@@ -762,20 +778,37 @@ def gerar_template_frete():
             
             output.seek(0)
             
-            # Nome do arquivo
-            nome_arquivo = f"template_frete_{transportadora.razao_social.replace(' ', '_')}_{form.uf_origem.data}_{form.uf_destino.data}_{form.tipo_carga.data}_{form.modalidade.data.replace('/', '_')}.xlsx"
+            # Nome do arquivo (sanitizado)
+            nome_transportadora = transportadora.razao_social.replace(' ', '_').replace('/', '_').replace('\\', '_')
+            modalidade_sanitizada = form.modalidade.data.replace('/', '_').replace('\\', '_')
+            nome_arquivo = f"template_frete_{nome_transportadora}_{form.uf_origem.data}_{form.uf_destino.data}_{form.tipo_carga.data}_{modalidade_sanitizada}.xlsx"
             
             # Cria resposta para download
             response = make_response(output.getvalue())
             response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             response.headers['Content-Disposition'] = f'attachment; filename="{nome_arquivo}"'
             
+            # Log para debug
+            print(f"📊 Template gerado: {nome_arquivo}")
+            print(f"📋 Dados: {form.quantidade_linhas.data} linhas, Transportadora: {transportadora.razao_social}")
+            print(f"🔧 Configurações: {form.tipo_carga.data}, {form.modalidade.data}, ICMS: {form.icms_incluso.data}")
+            
             flash(f'✅ Template gerado com sucesso! {form.quantidade_linhas.data} linhas pré-preenchidas.', 'success')
             return response
             
         except Exception as e:
+            print(f"❌ Erro ao gerar template: {str(e)}")
+            import traceback
+            traceback.print_exc()
             flash(f'Erro ao gerar template: {str(e)}', 'error')
             return render_template('tabelas/gerar_template_frete.html', form=form)
+    
+    # Se chegou aqui, o formulário não foi validado
+    if form.errors:
+        print(f"❌ Erros de validação do formulário: {form.errors}")
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'Erro no campo {field}: {error}', 'error')
     
     return render_template('tabelas/gerar_template_frete.html', form=form)
 

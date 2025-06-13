@@ -71,5 +71,8 @@ class GerarTemplateFreteForm(FlaskForm):
                            ], validators=[DataRequired()])
     uf_origem = SelectField('UF Origem', validators=[DataRequired()])
     uf_destino = SelectField('UF Destino', validators=[DataRequired()])
+    icms_incluso = SelectField('ICMS Incluso', 
+                             choices=[('N', 'N - Não Incluso'), ('S', 'S - Incluso')], 
+                             validators=[DataRequired()], default='N')
     quantidade_linhas = IntegerField('Quantidade de Linhas', validators=[DataRequired(), NumberRange(min=1, max=1000)], default=50)
     submit = SubmitField("Gerar Template")
