@@ -198,6 +198,15 @@ def importar_tabela_frete():
                     flash(f"Tipo carga inválido '{tipo_carga}' (linha {index+2})", "danger")
                     continue
 
+                # Função para limpar valores nan/vazios
+                def limpar_valor(valor):
+                    if pd.isna(valor) or str(valor).lower() in ['nan', 'none', '', 'null']:
+                        return 0
+                    try:
+                        return float(valor)
+                    except (ValueError, TypeError):
+                        return 0
+
                 tabela_frete = TabelaFrete.query.filter_by(
                     transportadora_id=transportadora.id,
                     uf_origem=row['ORIGEM'],
@@ -207,14 +216,6 @@ def importar_tabela_frete():
                 ).first()
 
                 if tabela_frete:
-                    # Função para limpar valores nan/vazios
-                    def limpar_valor(valor):
-                        if pd.isna(valor) or str(valor).lower() in ['nan', 'none', '', 'null']:
-                            return 0
-                        try:
-                            return float(valor)
-                        except (ValueError, TypeError):
-                            return 0
                     
                     tabela_frete.frete_minimo_valor = round(limpar_valor(row.get('VALOR')), 2)
                     tabela_frete.frete_minimo_peso = round(limpar_valor(row.get('PESO')), 2)
