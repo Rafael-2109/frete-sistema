@@ -2802,22 +2802,37 @@ def incluir_em_embarque():
                 flash(f'⚠️ Pedido {pedido.num_pedido} já está no embarque #{item_existente.embarque.numero}', 'warning')
                 continue
             
+            # ✅ CORREÇÃO: Busca cidade normalizada para consistência
+            cidade_obj = LocalizacaoService.buscar_cidade_unificada(
+                nome=pedido.nome_cidade,
+                uf=pedido.cod_uf,
+                rota=getattr(pedido, 'rota', None)
+            )
+            cidade_formatada = LocalizacaoService.normalizar_nome_cidade_com_regras(
+                pedido.nome_cidade, 
+                getattr(pedido, 'rota', None)
+            ) or (cidade_obj.nome if cidade_obj else pedido.nome_cidade)
+            
+            # ✅ CORREÇÃO: Formatar protocolo e data corretamente
+            protocolo_formatado = formatar_protocolo(getattr(pedido, 'protocolo', None))
+            data_formatada = formatar_data_brasileira(getattr(pedido, 'agendamento', None))
+            
             # Criar novo item do embarque
             novo_item = EmbarqueItem(
                 embarque_id=embarque.id,
-                separacao_lote_id=f"LOTE_{pedido.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                separacao_lote_id=pedido.separacao_lote_id,  # ✅ CORREÇÃO: Usa o lote real do pedido
                 cnpj_cliente=pedido.cnpj_cpf,
                 cliente=pedido.raz_social_red,
                 pedido=pedido.num_pedido,
-                protocolo_agendamento=getattr(pedido, 'protocolo_agendamento', ''),
-                data_agenda=getattr(pedido, 'data_agenda', ''),
+                protocolo_agendamento=protocolo_formatado,
+                data_agenda=data_formatada,
                 nota_fiscal='',  # Será preenchida posteriormente
                 volumes=getattr(pedido, 'volumes', 0),
                 peso=pedido.peso_total,
                 valor=pedido.valor_saldo_total,
                 status='ativo',
                 uf_destino=pedido.cod_uf,
-                cidade_destino=pedido.nome_cidade
+                cidade_destino=cidade_formatada  # ✅ CORREÇÃO: Usa cidade normalizada
             )
             
             # Para carga fracionada, copiar dados da tabela do embarque
