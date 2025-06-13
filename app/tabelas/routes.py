@@ -7,7 +7,7 @@ from app import db
 import pandas as pd
 from datetime import datetime
 
-from app.tabelas.forms import TabelaFreteForm, ImportarTabelaFreteForm
+from app.tabelas.forms import TabelaFreteForm, ImportarTabelaFreteForm, GerarTemplateFreteForm
 from app.tabelas.models import TabelaFrete, HistoricoTabelaFrete
 from app.transportadoras.models import Transportadora
 from app.localidades.models import Cidade
@@ -675,6 +675,109 @@ def excluir_tabela(tabela_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Erro interno: {e}'}), 500
+
+
+@tabelas_bp.route('/gerar_template_frete', methods=['GET', 'POST'])
+@login_required
+def gerar_template_frete():
+    """Gera um template Excel pré-preenchido para importação de tabelas de frete"""
+    form = GerarTemplateFreteForm()
+    
+    # Preenche as opções do formulário
+    form.transportadora.choices = [(t.id, t.razao_social) for t in Transportadora.query.all()]
+    form.uf_origem.choices = UF_LIST
+    form.uf_destino.choices = UF_LIST
+    
+    if form.validate_on_submit():
+        try:
+            from flask import make_response
+            import io
+            
+            # Busca dados da transportadora
+            transportadora = Transportadora.query.get(form.transportadora.data)
+            if not transportadora:
+                flash('Transportadora não encontrada', 'error')
+                return render_template('tabelas/gerar_template_frete.html', form=form)
+            
+            # Cria DataFrame com as colunas necessárias
+            colunas = [
+                'ATIVO', 'CÓD. TRANSP', 'ORIGEM', 'DESTINO', 'NOME TABELA',
+                'CARGA', 'FRETE', 'INC.', 'VALOR', 'PESO', 'FRETE PESO', 
+                'FRETE VALOR', 'GRIS', 'ADV', 'RCA SEGURO FLUVIAL %',
+                'DESPACHO / CTE / TAS', 'CTE', 'TAS', 'PEDAGIO FRAÇÃO 100 KGS'
+            ]
+            
+            # Cria dados pré-preenchidos
+            dados = []
+            for i in range(form.quantidade_linhas.data):
+                linha = {
+                    'ATIVO': 'A',
+                    'CÓD. TRANSP': transportadora.cnpj,
+                    'ORIGEM': form.uf_origem.data,
+                    'DESTINO': form.uf_destino.data,
+                    'NOME TABELA': '',  # Usuário deve preencher
+                    'CARGA': form.tipo_carga.data,
+                    'FRETE': form.modalidade.data,
+                    'INC.': '',  # Usuário deve preencher
+                    'VALOR': 0,
+                    'PESO': 0,
+                    'FRETE PESO': 0,
+                    'FRETE VALOR': 0,
+                    'GRIS': 0,
+                    'ADV': 0,
+                    'RCA SEGURO FLUVIAL %': 0,
+                    'DESPACHO / CTE / TAS': 0,
+                    'CTE': 0,
+                    'TAS': 0,
+                    'PEDAGIO FRAÇÃO 100 KGS': 0
+                }
+                dados.append(linha)
+            
+            # Cria DataFrame
+            df = pd.DataFrame(dados, columns=colunas)
+            
+            # Cria arquivo Excel em memória
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Tabela_Frete', index=False)
+                
+                # Acessa a planilha para formatação
+                worksheet = writer.sheets['Tabela_Frete']
+                
+                # Ajusta largura das colunas
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
+                
+                # Congela primeira linha (cabeçalho)
+                worksheet.freeze_panes = 'A2'
+            
+            output.seek(0)
+            
+            # Nome do arquivo
+            nome_arquivo = f"template_frete_{transportadora.razao_social.replace(' ', '_')}_{form.uf_origem.data}_{form.uf_destino.data}_{form.tipo_carga.data}_{form.modalidade.data.replace('/', '_')}.xlsx"
+            
+            # Cria resposta para download
+            response = make_response(output.getvalue())
+            response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            response.headers['Content-Disposition'] = f'attachment; filename="{nome_arquivo}"'
+            
+            flash(f'✅ Template gerado com sucesso! {form.quantidade_linhas.data} linhas pré-preenchidas.', 'success')
+            return response
+            
+        except Exception as e:
+            flash(f'Erro ao gerar template: {str(e)}', 'error')
+            return render_template('tabelas/gerar_template_frete.html', form=form)
+    
+    return render_template('tabelas/gerar_template_frete.html', form=form)
 
 
 

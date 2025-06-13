@@ -625,17 +625,24 @@ def cancelar_embarque(id):
         embarque.cancelado_em = datetime.now()
         embarque.cancelado_por = current_user.nome if current_user.is_authenticated else 'Sistema'
         
-        # ✅ NOVO: Resetar pedidos para status "Aberto" usando lote_separacao
+        # ✅ NOVO: Remover NFs dos itens e resetar pedidos para status "Aberto"
         try:
             from app.pedidos.models import Pedido
             
-            # Busca todos os lotes de separação vinculados aos itens deste embarque
+            # 1. Remove as NFs de todos os itens do embarque
+            nfs_removidas = 0
+            for item in embarque.itens:
+                if item.nota_fiscal and item.nota_fiscal.strip():
+                    item.nota_fiscal = None  # Remove a NF
+                    nfs_removidas += 1
+            
+            # 2. Busca todos os lotes de separação vinculados aos itens deste embarque
             lotes_vinculados = set()
             for item in embarque.itens:
                 if hasattr(item, 'separacao_lote_id') and item.separacao_lote_id:
                     lotes_vinculados.add(item.separacao_lote_id)
             
-            # Reseta os pedidos para status "Aberto" usando os lotes
+            # 3. Reseta os pedidos para status "Aberto" usando os lotes
             pedidos_atualizados = 0
             for lote_id in lotes_vinculados:
                 pedidos_lote = Pedido.query.filter_by(separacao_lote_id=lote_id).all()
@@ -647,11 +654,31 @@ def cancelar_embarque(id):
                     # Status será calculado automaticamente como "Aberto"
                     pedidos_atualizados += 1
             
+            if nfs_removidas > 0:
+                flash(f"✅ {nfs_removidas} NF(s) removida(s) dos itens do embarque", "info")
+            
             if pedidos_atualizados > 0:
                 flash(f"✅ {pedidos_atualizados} pedidos retornaram ao status 'Aberto'", "info")
                 
         except Exception as e:
-            flash(f"⚠️ Erro ao resetar pedidos: {str(e)}", "warning")
+            flash(f"⚠️ Erro ao resetar pedidos e remover NFs: {str(e)}", "warning")
+        
+        # ✅ NOVO: Cancelar fretes vinculados ao embarque
+        try:
+            from app.fretes.routes import cancelar_frete_por_embarque
+            
+            sucesso, mensagem = cancelar_frete_por_embarque(
+                embarque_id=embarque.id,
+                usuario=current_user.nome if current_user.is_authenticated else 'Sistema'
+            )
+            
+            if sucesso:
+                flash(f"✅ Fretes cancelados: {mensagem}", "info")
+            else:
+                flash(f"⚠️ Erro ao cancelar fretes: {mensagem}", "warning")
+                
+        except Exception as e:
+            flash(f"⚠️ Erro ao cancelar fretes: {str(e)}", "warning")
         
         db.session.commit()
         

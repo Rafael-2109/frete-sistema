@@ -1090,6 +1090,7 @@ def fechar_frete():
                 pedido=pedido.num_pedido,
                 peso=pedido.peso_total,
                 valor=pedido.valor_saldo_total,
+                pallets=pedido.pallet_total,  # ✅ NOVO: Adiciona pallets reais do pedido
                 uf_destino=uf_correto,
                 cidade_destino=cidade_formatada,
                 volumes=None,  # ✅ ALTERADO: Deixa volumes em branco também na cotação normal
@@ -1307,6 +1308,7 @@ def fechar_frete_grupo():
                 pedido=pedido.num_pedido,
                 peso=pedido.peso_total,
                 valor=pedido.valor_saldo_total,
+                pallets=pedido.pallet_total,  # ✅ NOVO: Adiciona pallets reais do pedido
                 uf_destino=uf_correto,
                 cidade_destino=cidade_formatada,
                 volumes=None,  # ✅ ALTERADO: Deixa volumes em branco também na cotação por grupo
@@ -2834,6 +2836,7 @@ def incluir_em_embarque():
                 volumes=getattr(pedido, 'volumes', 0),
                 peso=pedido.peso_total,
                 valor=pedido.valor_saldo_total,
+                pallets=pedido.pallet_total,  # ✅ NOVO: Adiciona pallets reais do pedido
                 status='ativo',
                 uf_destino=pedido.cod_uf,
                 cidade_destino=cidade_formatada  # ✅ CORREÇÃO: Usa cidade normalizada

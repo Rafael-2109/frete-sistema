@@ -83,12 +83,16 @@ class Embarque(db.Model):
 
     def total_pallet_pedidos(self):
         """Retorna o total de pallets dos pedidos contidos no embarque"""
-        # Como o campo pallet não existe no EmbarqueItem, vamos calcular baseado no peso
-        # Assumindo uma média de 500kg por pallet (você pode ajustar conforme necessário)
-        peso_total = self.total_peso_pedidos()
-        if peso_total > 0:
-            return round(peso_total / 500, 2)  # 500kg por pallet
-        return 0
+        # Soma os pallets reais dos itens ativos
+        total_pallets = sum(i.pallets or 0 for i in self.itens if i.status == 'ativo')
+        
+        # Se não há pallets informados, calcula baseado no peso (fallback)
+        if total_pallets == 0:
+            peso_total = self.total_peso_pedidos()
+            if peso_total > 0:
+                return round(peso_total / 500, 2)  # 500kg por pallet
+        
+        return total_pallets
 
     @property
     def itens_ativos(self):
@@ -172,6 +176,7 @@ class EmbarqueItem(db.Model):
     volumes = db.Column(db.Integer, nullable=True)
     peso = db.Column(db.Float)  # Peso do item
     valor = db.Column(db.Float)  # Valor do item
+    pallets = db.Column(db.Float, nullable=True)  # Quantidade de pallets do item
     status = db.Column(db.String(20), nullable=False, default='ativo')  # 'ativo' ou 'cancelado'
 
     uf_destino = db.Column(db.String(2), nullable=False)
