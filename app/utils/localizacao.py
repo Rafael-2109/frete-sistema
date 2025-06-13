@@ -43,13 +43,13 @@ class LocalizacaoService:
             if rota == 'FOB':
                 return None  # FOB será tratado separadamente
             if rota == 'RED':
-                return 'GUARULHOS'
+                return 'Guarulhos'
         
         # Casos especiais de cidade
         if nome in ['SP', 'SAO PAULO', 'SÃO PAULO', 'S PAULO', 'S. PAULO']:
-            return 'SAO PAULO'
+            return 'São Paulo'  # ✅ CORRIGIDO: Mantém o acento
         if nome in ['RJ', 'RIO DE JANEIRO', 'R JANEIRO', 'R. JANEIRO']:
-            return 'RIO DE JANEIRO'
+            return 'Rio de Janeiro'  # ✅ CORRIGIDO: Mantém o acento
         
         # Para outros casos, remove acentos e retorna em maiúsculo
         return remover_acentos(nome)
@@ -106,8 +106,20 @@ class LocalizacaoService:
                 _ = cidade.nome
                 _ = cidade.uf
                 _ = cidade.icms
+                _ = cidade.codigo_ibge
             except Exception as e:
                 logger.warning(f"Problema ao carregar atributos da cidade IBGE {codigo_ibge}: {e}")
+                # Tenta recarregar na sessão atual
+                try:
+                    cidade = db.session.merge(cidade)
+                    if cidade:
+                        _ = cidade.nome
+                        _ = cidade.uf
+                        _ = cidade.icms
+                        _ = cidade.codigo_ibge
+                except Exception as e2:
+                    logger.warning(f"Erro ao recarregar cidade IBGE {codigo_ibge}: {e2}")
+                    cidade = None
         
         # Salva no cache
         LocalizacaoService._cache_cidades_ibge[codigo_ibge] = cidade
@@ -145,15 +157,26 @@ class LocalizacaoService:
                 nome_db = cidade.nome
                 uf_db = cidade.uf
                 icms_db = cidade.icms
+                codigo_ibge_db = cidade.codigo_ibge
                 
                 cidade_nome_normalizado = remover_acentos(nome_db.strip()).upper()
                 if cidade_nome_normalizado == nome_normalizado:
                     cidade_encontrada = cidade
                     break
             except Exception as e:
-                # Se não conseguir acessar o nome, pula esta cidade
-                logger.warning(f"Erro ao acessar dados da cidade {cidade.id}: {e}")
-                continue
+                # Se não conseguir acessar o nome, tenta recarregar
+                logger.warning(f"Erro ao acessar dados da cidade {getattr(cidade, 'id', 'N/A')}: {e}")
+                try:
+                    cidade_recarregada = db.session.merge(cidade)
+                    if cidade_recarregada:
+                        nome_db = cidade_recarregada.nome
+                        cidade_nome_normalizado = remover_acentos(nome_db.strip()).upper()
+                        if cidade_nome_normalizado == nome_normalizado:
+                            cidade_encontrada = cidade_recarregada
+                            break
+                except Exception as e2:
+                    logger.warning(f"Erro ao recarregar cidade: {e2}")
+                    continue
         
         # Salva no cache
         LocalizacaoService._cache_cidades_nome[cache_key] = cidade_encontrada
@@ -174,8 +197,20 @@ class LocalizacaoService:
                 _ = cidade.nome
                 _ = cidade.uf
                 _ = cidade.icms
+                _ = cidade.codigo_ibge
             except Exception as e:
                 logger.warning(f"Problema ao carregar atributos da cidade FOB: {e}")
+                # Tenta recarregar na sessão atual
+                try:
+                    cidade = db.session.merge(cidade)
+                    if cidade:
+                        _ = cidade.nome
+                        _ = cidade.uf
+                        _ = cidade.icms
+                        _ = cidade.codigo_ibge
+                except Exception as e2:
+                    logger.warning(f"Erro ao recarregar cidade FOB: {e2}")
+                    cidade = None
         
         return cidade
     
@@ -264,7 +299,7 @@ class LocalizacaoService:
                 pedido.uf_normalizada = uf_original
             elif rota and rota.upper() == 'RED':
                 # Para RED, força GUARULHOS/SP
-                pedido.cidade_normalizada = 'GUARULHOS'
+                pedido.cidade_normalizada = 'Guarulhos'
                 pedido.uf_normalizada = 'SP'
             else:
                 # Para outros casos, aplica normalização
@@ -279,9 +314,23 @@ class LocalizacaoService:
                     rota=rota
                 )
                 
-                if cidade and cidade.codigo_ibge:
-                    pedido.codigo_ibge = cidade.codigo_ibge
-                    logger.debug(f"✅ Código IBGE {cidade.codigo_ibge} salvo no pedido")
+                if cidade:
+                    try:
+                        # ✅ CARREGA DADOS DA CIDADE IMEDIATAMENTE PARA EVITAR PROBLEMAS DE SESSÃO
+                        codigo_ibge = cidade.codigo_ibge
+                        if codigo_ibge:
+                            pedido.codigo_ibge = codigo_ibge
+                            logger.debug(f"✅ Código IBGE {codigo_ibge} salvo no pedido")
+                    except Exception as e:
+                        logger.warning(f"Erro ao acessar código IBGE da cidade: {e}")
+                        # Tenta recarregar a cidade na sessão atual
+                        try:
+                            cidade_recarregada = db.session.merge(cidade)
+                            if cidade_recarregada and cidade_recarregada.codigo_ibge:
+                                pedido.codigo_ibge = cidade_recarregada.codigo_ibge
+                                logger.debug(f"✅ Código IBGE {cidade_recarregada.codigo_ibge} salvo após recarregar")
+                        except Exception as e2:
+                            logger.warning(f"Erro ao recarregar cidade: {e2}")
             
             logger.debug(f"Dados normalizados: {pedido.cidade_normalizada}/{pedido.uf_normalizada} (IBGE: {getattr(pedido, 'codigo_ibge', 'N/A')})")
             return True
@@ -305,7 +354,17 @@ class LocalizacaoService:
         )
         
         if cidade:
-            return cidade.icms or 0
+            try:
+                return cidade.icms or 0
+            except Exception as e:
+                logger.warning(f"Erro ao acessar ICMS da cidade: {e}")
+                # Tenta recarregar a cidade
+                try:
+                    cidade_recarregada = db.session.merge(cidade)
+                    if cidade_recarregada:
+                        return cidade_recarregada.icms or 0
+                except Exception as e2:
+                    logger.warning(f"Erro ao recarregar cidade para ICMS: {e2}")
         return 0
     
     @staticmethod
