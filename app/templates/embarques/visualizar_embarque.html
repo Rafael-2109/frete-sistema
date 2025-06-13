@@ -277,82 +277,75 @@
       <!-- TABELA DOS ITENS - Para ajustar larguras das colunas,       -->
       <!-- edite a seção CSS no topo do arquivo (linhas 5-72)          -->
       <!-- ============================================================ -->
-      <table class="table table-bordered table-sm itens-embarque-table">
-        <thead class="table-light">
-        <tr>
-          <th>Cliente</th>
-          <th>Pedido</th>
-          <th>Nota Fiscal</th>
-          <th>Protocolo</th>
-          <th>Data Agenda</th>
-          <th>Volumes</th>
-          <th>UF</th>
-          <th>Cidade</th>
-          <th>Status</th>
-          <th>Ações</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item_form in form.itens %}
-        <tr>
-          {{ item_form.id }}  <!-- ✅ CORREÇÃO CRÍTICA: Campo ID oculto OBRIGATÓRIO para identificar itens -->
-          <td>{{ item_form.cliente(class="form-control") }}</td>
-          <td>{{ item_form.pedido(class="form-control") }}</td>
-          <td>{{ item_form.nota_fiscal(class="form-control") }}</td>
-          <td>{{ item_form.protocolo_agendamento(class="form-control") }}</td>
-          <td>{{ item_form.data_agenda(class="form-control") }}</td>
-          <td>{{ item_form.volumes(class="form-control") }}</td>
-          <td>{{ item_form.uf_destino(class="form-control uf-select") }}</td>
-          <td>{{ item_form.cidade_destino(class="form-control city-select") }}</td>
-          <td>
-            {% if loop.index0 < embarque.itens|length %}
-              {% set item_embarque = embarque.itens[loop.index0] %}
-              {% if item_embarque.erro_validacao %}
-                {% if 'NF_DIVERGENTE' in item_embarque.erro_validacao %}
-                  <span class="badge bg-danger" title="{{ item_embarque.erro_validacao }}">
-                    <i class="fas fa-exclamation-triangle"></i> NF Divergente
-                  </span>
-                {% elif 'NF_PENDENTE_FATURAMENTO' in item_embarque.erro_validacao %}
-                  <span class="badge bg-info" title="{{ item_embarque.erro_validacao }}">
-                    <i class="fas fa-clock"></i> NF Pendente
-                  </span>
-                {% elif 'CNPJ_DIFERENTE' in item_embarque.erro_validacao %}
-                  <span class="badge bg-danger" title="{{ item_embarque.erro_validacao }}">
-                    <i class="fas fa-exclamation-triangle"></i> CNPJ Divergente
-                  </span>
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered itens-embarque-table">
+          <thead class="table-dark">
+            <tr>
+              <th>Cliente</th>
+              <th>Pedido</th>
+              <th>Nota Fiscal</th>
+              <th>Protocolo</th>
+              <th>Data Agenda</th>
+              <th>Volumes</th>
+              <th>UF</th>
+              <th>Cidade</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in embarque.itens_ativos %}
+            <tr>
+              <td title="{{ item.cliente }}">{{ item.cliente[:25] }}{% if item.cliente|length > 25 %}...{% endif %}</td>
+              <td>{{ item.pedido }}</td>
+              <td>
+                {% if item.nota_fiscal %}
+                  {{ item.nota_fiscal }}
                 {% else %}
-                  <span class="badge bg-warning" title="{{ item_embarque.erro_validacao }}">
-                    <i class="fas fa-exclamation-circle"></i> Erro
-                  </span>
+                  <span class="text-muted">-</span>
                 {% endif %}
-              {% elif item_embarque.nota_fiscal %}
-                <span class="badge bg-success">
-                  <i class="fas fa-check"></i> OK
-                </span>
-              {% else %}
-                <span class="badge bg-secondary">
-                  <i class="fas fa-minus"></i> Sem NF
-                </span>
-              {% endif %}
-            {% else %}
-              <span class="badge bg-light text-dark">
-                <i class="fas fa-plus"></i> Novo
-              </span>
-            {% endif %}
-          </td>
-          <td class="no-print">
-            <!-- Botão excluir a linha (sem recarregar parcial) -->
-            <button type="submit"
-                    name="action"
-                    value="remove_line_{{ loop.index0 }}"
-                    class="btn btn-danger btn-sm">
-              Excluir
-            </button>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+              </td>
+              <td>{{ (item.protocolo_agendamento | formatar_protocolo) or '-' }}</td>
+              <td>{{ item.data_agenda or '-' }}</td>
+              <td class="text-center">{{ item.volumes or '-' }}</td>
+              <td class="text-center">{{ item.uf_destino }}</td>
+              <td title="{{ item.cidade_destino }}">{{ item.cidade_destino[:15] }}{% if item.cidade_destino|length > 15 %}...{% endif %}</td>
+              <td>
+                {% if item.erro_validacao %}
+                  {% if 'NF_PENDENTE_FATURAMENTO' in item.erro_validacao %}
+                    <span class="badge bg-warning text-dark">Pendente</span>
+                  {% elif 'NF_DIVERGENTE' in item.erro_validacao %}
+                    <span class="badge bg-danger">Divergente</span>
+                  {% elif 'CLIENTE_NAO_DEFINIDO' in item.erro_validacao %}
+                    <span class="badge bg-secondary">Sem Cliente</span>
+                  {% else %}
+                    <span class="badge bg-info">Validando</span>
+                  {% endif %}
+                {% else %}
+                  <span class="badge bg-success">OK</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if embarque.status != 'cancelado' %}
+                  <button type="button" class="btn btn-sm btn-outline-danger" 
+                          onclick="confirmarRemocaoItem('{{ item.id }}', '{{ item.pedido }}', '{{ item.cliente }}')"
+                          title="Remover pedido do embarque">
+                    <i class="fas fa-times"></i>
+                  </button>
+                {% endif %}
+                
+                {% if item.separacao_lote_id %}
+                  <a href="{{ url_for('embarques.acessar_separacao', embarque_id=embarque.id, separacao_lote_id=item.separacao_lote_id) }}" 
+                     class="btn btn-sm btn-outline-info" title="Ver separação">
+                    <i class="fas fa-list"></i>
+                  </a>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
 
     <div class="mb-3 no-print">
       <!-- Botão para adicionar linha -->
@@ -633,5 +626,28 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+</script>
+
+<script>
+// Função para confirmar remoção de item
+function confirmarRemocaoItem(itemId, pedido, cliente) {
+    if (confirm(`⚠️ Tem certeza que deseja remover o pedido ${pedido} (${cliente}) do embarque?\n\nO pedido voltará para status "Aberto".`)) {
+        // Criar form para enviar POST
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/embarques/item/${itemId}/cancelar`;
+        
+        // Adicionar CSRF token
+        const csrfToken = document.createElement('input');
+        csrfToken.type = 'hidden';
+        csrfToken.name = 'csrf_token';
+        csrfToken.value = '{{ csrf_token() }}';
+        form.appendChild(csrfToken);
+        
+        // Adicionar ao body e submeter
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
 </script>
 {% endblock %}

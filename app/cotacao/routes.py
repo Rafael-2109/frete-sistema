@@ -634,6 +634,79 @@ def tela_cotacao():
     for cnpj_final, opcoes_final in opcoes_por_cnpj.items():
         print(f"[DEBUG] 🎯 TEMPLATE - CNPJ {cnpj_final}: {len(opcoes_final)} opções")
 
+    # ✅ BUSCAR EMBARQUES COMPATÍVEIS
+    embarques_compativeis_direta = []
+    embarques_compativeis_fracionada = []
+    
+    try:
+        from app.embarques.models import Embarque
+        from app.veiculos.models import Veiculo
+        
+        # Para CARGA DIRETA - buscar embarques compatíveis
+        if todos_mesmo_uf and len(ufs_normalizados) == 1:
+            uf_destino = list(ufs_normalizados)[0]
+            
+            # Buscar embarques ativos da mesma UF, mesmo tipo de carga e com capacidade
+            embarques_direta = Embarque.query.filter(
+                Embarque.status == 'ativo',
+                Embarque.tipo_carga == 'DIRETA'
+            ).all()
+            
+            for embarque in embarques_direta:
+                if embarque.itens_ativos:
+                    # Verificar se é mesmo UF
+                    uf_embarque = embarque.itens_ativos[0].uf_destino
+                    if uf_embarque == uf_destino:
+                        # Verificar capacidade do veículo
+                        if embarque.modalidade:  # modalidade é o nome do veículo
+                            veiculo = Veiculo.query.filter_by(nome=embarque.modalidade).first()
+                            if veiculo and veiculo.peso_maximo:
+                                peso_atual = embarque.total_peso_pedidos()
+                                capacidade_restante = veiculo.peso_maximo - peso_atual
+                                
+                                if capacidade_restante >= peso_total:
+                                    # Calcular valor sugerido (maior entre tabela do embarque e nova cotação)
+                                    valor_sugerido = max(
+                                        embarque.tabela_valor_kg * peso_total if embarque.tabela_valor_kg else 0,
+                                        opcoes_transporte['direta'][0]['valor_liquido'] if opcoes_transporte['direta'] else 0
+                                    )
+                                    
+                                    embarques_compativeis_direta.append({
+                                        'embarque': embarque,
+                                        'capacidade_restante': capacidade_restante,
+                                        'valor_sugerido': valor_sugerido
+                                    })
+        
+        # Para CARGA FRACIONADA - buscar embarques compatíveis
+        for cnpj, pedidos_cnpj in pedidos_por_cnpj.items():
+            if pedidos_cnpj:
+                cidade = pedidos_cnpj[0].nome_cidade
+                uf = pedidos_cnpj[0].cod_uf
+                
+                # Buscar cidades atendidas para esta cidade/UF
+                cidades_atendidas = CidadeAtendida.query.filter_by(uf=uf).all()
+                
+                for cidade_atendida in cidades_atendidas:
+                    # Buscar embarques ativos desta transportadora
+                    embarques_frac = Embarque.query.filter(
+                        Embarque.status == 'ativo',
+                        Embarque.tipo_carga == 'FRACIONADA',
+                        Embarque.transportadora_id == cidade_atendida.transportadora_id
+                    ).all()
+                    
+                    for embarque in embarques_frac:
+                        if embarque.itens_ativos:
+                            # Adicionar à lista se não estiver já
+                            if not any(e['embarque'].id == embarque.id for e in embarques_compativeis_fracionada):
+                                embarques_compativeis_fracionada.append({
+                                    'embarque': embarque
+                                })
+        
+        print(f"[DEBUG] 🚛 Embarques compatíveis - Direta: {len(embarques_compativeis_direta)}, Fracionada: {len(embarques_compativeis_fracionada)}")
+        
+    except Exception as e:
+        print(f"[DEBUG] ❌ Erro ao buscar embarques compatíveis: {str(e)}")
+
     return render_template(
         "cotacao/cotacao.html",
         form=form,
@@ -648,7 +721,9 @@ def tela_cotacao():
         pedidos_por_cnpj_json=pedidos_por_cnpj_json,
         opcoes_por_cnpj=opcoes_por_cnpj,
         peso_total=peso_total,
-        todos_mesmo_uf=todos_mesmo_uf
+        todos_mesmo_uf=todos_mesmo_uf,
+        embarques_compativeis_direta=embarques_compativeis_direta,
+        embarques_compativeis_fracionada=embarques_compativeis_fracionada
     )
 
 @cotacao_bp.route("/excluir_pedido", methods=["POST"])
@@ -2595,3 +2670,133 @@ def redespachar_sao_paulo():
         print(f"[DEBUG] ❌ Erro no redespacho São Paulo: {str(e)}")
         flash(f"Erro ao calcular redespacho para São Paulo: {str(e)}", "error")
         return redirect(url_for("cotacao.tela_cotacao"))
+
+
+@cotacao_bp.route("/incluir_em_embarque", methods=["POST"])
+@login_required
+def incluir_em_embarque():
+    """
+    Inclui os pedidos da cotação atual em um embarque existente
+    """
+    from app.embarques.models import Embarque, EmbarqueItem
+    from app.pedidos.models import Pedido
+    
+    embarque_id = request.form.get('embarque_id')
+    tipo_carga = request.form.get('tipo_carga')
+    
+    if not embarque_id:
+        flash('❌ Embarque não informado.', 'danger')
+        return redirect(url_for('cotacao.tela_cotacao'))
+    
+    # Recuperar pedidos da sessão
+    lista_ids = session.get("cotacao_pedidos", [])
+    if not lista_ids:
+        flash("❌ Nenhum pedido na cotação!", "warning")
+        return redirect(url_for("pedidos.lista_pedidos"))
+    
+    try:
+        embarque = Embarque.query.get_or_404(embarque_id)
+        pedidos = Pedido.query.filter(Pedido.id.in_(lista_ids)).all()
+        
+        if not pedidos:
+            flash("❌ Nenhum pedido encontrado!", "warning")
+            return redirect(url_for("pedidos.lista_pedidos"))
+        
+        # Verificar se o embarque está ativo
+        if embarque.status != 'ativo':
+            flash('❌ Só é possível incluir pedidos em embarques ativos.', 'danger')
+            return redirect(url_for('cotacao.tela_cotacao'))
+        
+        # Verificar compatibilidade por tipo de carga
+        if tipo_carga == 'DIRETA':
+            # Para carga direta, verificar capacidade do veículo
+            from app.veiculos.models import Veiculo
+            
+            if embarque.modalidade:
+                veiculo = Veiculo.query.filter_by(nome=embarque.modalidade).first()
+                if veiculo and veiculo.peso_maximo:
+                    peso_atual = embarque.total_peso_pedidos()
+                    peso_novos_pedidos = sum(p.peso_total or 0 for p in pedidos)
+                    
+                    if (peso_atual + peso_novos_pedidos) > veiculo.peso_maximo:
+                        flash(f'❌ Capacidade do veículo excedida. Capacidade: {veiculo.peso_maximo}kg, Atual: {peso_atual}kg, Tentando adicionar: {peso_novos_pedidos}kg', 'danger')
+                        return redirect(url_for('cotacao.tela_cotacao'))
+        
+        # Adicionar pedidos ao embarque
+        pedidos_adicionados = 0
+        
+        for pedido in pedidos:
+            # Verificar se o pedido já não está em outro embarque ativo
+            item_existente = EmbarqueItem.query.join(Embarque).filter(
+                EmbarqueItem.pedido == pedido.num_pedido,
+                EmbarqueItem.status == 'ativo',
+                Embarque.status == 'ativo'
+            ).first()
+            
+            if item_existente:
+                flash(f'⚠️ Pedido {pedido.num_pedido} já está no embarque #{item_existente.embarque.numero}', 'warning')
+                continue
+            
+            # Criar novo item do embarque
+            novo_item = EmbarqueItem(
+                embarque_id=embarque.id,
+                separacao_lote_id=f"LOTE_{pedido.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                cnpj_cliente=pedido.cnpj_cpf,
+                cliente=pedido.raz_social_red,
+                pedido=pedido.num_pedido,
+                protocolo_agendamento=getattr(pedido, 'protocolo_agendamento', ''),
+                data_agenda=getattr(pedido, 'data_agenda', ''),
+                nota_fiscal='',  # Será preenchida posteriormente
+                volumes=getattr(pedido, 'volumes', 0),
+                peso=pedido.peso_total,
+                valor=pedido.valor_saldo_total,
+                status='ativo',
+                uf_destino=pedido.cod_uf,
+                cidade_destino=pedido.nome_cidade
+            )
+            
+            # Para carga fracionada, copiar dados da tabela do embarque
+            if tipo_carga == 'FRACIONADA' and embarque.itens_ativos:
+                item_referencia = embarque.itens_ativos[0]
+                novo_item.modalidade = item_referencia.modalidade
+                novo_item.tabela_nome_tabela = item_referencia.tabela_nome_tabela
+                novo_item.tabela_valor_kg = item_referencia.tabela_valor_kg
+                novo_item.tabela_percentual_valor = item_referencia.tabela_percentual_valor
+                novo_item.tabela_frete_minimo_valor = item_referencia.tabela_frete_minimo_valor
+                novo_item.tabela_frete_minimo_peso = item_referencia.tabela_frete_minimo_peso
+                novo_item.tabela_icms = item_referencia.tabela_icms
+                novo_item.tabela_percentual_gris = item_referencia.tabela_percentual_gris
+                novo_item.tabela_pedagio_por_100kg = item_referencia.tabela_pedagio_por_100kg
+                novo_item.tabela_valor_tas = item_referencia.tabela_valor_tas
+                novo_item.tabela_percentual_adv = item_referencia.tabela_percentual_adv
+                novo_item.tabela_percentual_rca = item_referencia.tabela_percentual_rca
+                novo_item.tabela_valor_despacho = item_referencia.tabela_valor_despacho
+                novo_item.tabela_valor_cte = item_referencia.tabela_valor_cte
+                novo_item.tabela_icms_incluso = item_referencia.tabela_icms_incluso
+                novo_item.icms_destino = item_referencia.icms_destino
+            
+            db.session.add(novo_item)
+            
+            # Atualizar status do pedido para "Em Embarque"
+            pedido.status = 'Em Embarque'
+            
+            pedidos_adicionados += 1
+        
+        db.session.commit()
+        
+        if pedidos_adicionados > 0:
+            flash(f'✅ {pedidos_adicionados} pedido(s) adicionado(s) ao embarque #{embarque.numero} com sucesso!', 'success')
+            
+            # Limpar sessão da cotação
+            if 'cotacao_pedidos' in session:
+                del session['cotacao_pedidos']
+            
+            return redirect(url_for('embarques.visualizar_embarque', id=embarque.id))
+        else:
+            flash('❌ Nenhum pedido foi adicionado ao embarque.', 'warning')
+            return redirect(url_for('cotacao.tela_cotacao'))
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Erro ao incluir pedidos no embarque: {str(e)}', 'danger')
+        return redirect(url_for('cotacao.tela_cotacao'))

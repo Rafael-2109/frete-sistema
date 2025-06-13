@@ -125,39 +125,66 @@
                   <td class="text-end">R$ {{ "%.0f"|format(opcao.valor_liquido) }}</td>
                   <td class="text-end">R$ {{ "%.2f"|format(opcao.valor_liquido / peso_total) }}</td>
                   <td>
-                    <button class="btn btn-success btn-sm fechar-frete" 
-                            data-opcao-id="{{ opcao.indice }}"
-                            data-tipo="direta"
-                            data-indice="{{ opcao.indice_original }}"
-                            data-transportadora-id="{{ opcao.transportadora_id }}"
-                            data-modalidade="{{ opcao.modalidade }}"
-                            data-nome-tabela="{{ opcao.nome_tabela }}"
-                            data-valor-kg="{{ opcao.valor_kg }}"
-                            data-percentual-valor="{{ opcao.percentual_valor }}"
-                            data-frete-minimo-valor="{{ opcao.frete_minimo_valor }}"
-                            data-frete-minimo-peso="{{ opcao.frete_minimo_peso }}"
-                            data-icms="{{ opcao.icms }}"
-                            data-percentual-gris="{{ opcao.percentual_gris }}"
-                            data-pedagio-por-100kg="{{ opcao.pedagio_por_100kg }}"
-                            data-valor-tas="{{ opcao.valor_tas }}"
-                            data-percentual-adv="{{ opcao.percentual_adv }}"
-                            data-percentual-rca="{{ opcao.percentual_rca }}"
-                            data-valor-despacho="{{ opcao.valor_despacho }}"
-                            data-valor-cte="{{ opcao.valor_cte }}"
-                            data-icms-incluso="{{ opcao.icms_incluso|default(false)|tojson }}"
-                            data-icms-destino="{{ opcao.icms_destino }}">
-                      <i class="fas fa-check"></i> Fechar
-                    </button>
-                    <a href="{{ url_for('cotacao.otimizar', opcao_id=opcao.indice, tipo='direta', indice=opcao.indice_original) }}" 
-                       class="btn btn-info btn-sm">
-                      <i class="fas fa-chart-line"></i> Otimizador
-                    </a>
+                    <form action="{{ url_for('cotacao.fechar_frete') }}" method="POST" class="d-inline">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="transportadora_id" value="{{ opcao.transportadora_id }}">
+                      <input type="hidden" name="tipo_carga" value="DIRETA">
+                      <input type="hidden" name="modalidade" value="{{ opcao.modalidade }}">
+                      <button class="btn btn-success btn-sm">
+                        <i class="fas fa-check"></i> Fechar Frete
+                      </button>
+                    </form>
                   </td>
                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
+          
+          <!-- Seção de Embarques Compatíveis para Carga Direta -->
+          {% if embarques_compativeis_direta %}
+          <div class="mt-4">
+            <h6 class="text-primary"><i class="fas fa-plus-circle"></i> Embarques Compatíveis para Inclusão</h6>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover">
+                <thead class="table-light">
+                  <tr>
+                    <th>Embarque</th>
+                    <th>Data Prevista</th>
+                    <th>Valor Total</th>
+                    <th>Pallet Total</th>
+                    <th>Peso Total</th>
+                    <th>Capacidade Restante</th>
+                    <th>Valor Sugerido</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for embarque_info in embarques_compativeis_direta %}
+                  <tr>
+                    <td>
+                      <a href="{{ url_for('embarques.visualizar_embarque', id=embarque_info.embarque.id) }}" target="_blank">
+                        #{{ embarque_info.embarque.numero }}
+                      </a>
+                    </td>
+                    <td>{{ embarque_info.embarque.data_prevista_embarque | formatar_data_segura if embarque_info.embarque.data_prevista_embarque else '-' }}</td>
+                    <td>R$ {{ "%.2f"|format(embarque_info.embarque.total_valor_pedidos()) }}</td>
+                    <td>{{ "%.2f"|format(embarque_info.embarque.total_pallet_pedidos()) }}</td>
+                    <td>{{ "%.0f"|format(embarque_info.embarque.total_peso_pedidos()) }} kg</td>
+                    <td>{{ "%.0f"|format(embarque_info.capacidade_restante) }} kg</td>
+                    <td>R$ {{ "%.2f"|format(embarque_info.valor_sugerido) }}</td>
+                    <td>
+                      <button class="btn btn-primary btn-sm" onclick="incluirEmEmbarque({{ embarque_info.embarque.id }}, 'DIRETA')">
+                        <i class="fas fa-plus"></i> Incluir ao Embarque
+                      </button>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -304,6 +331,53 @@
       </div>
     </div>
   </div>
+
+  <!-- Seção de Embarques Compatíveis para Carga Fracionada -->
+  {% if embarques_compativeis_fracionada %}
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header bg-info text-white">
+      <h5 class="mb-0"><i class="fas fa-plus-circle"></i> Embarques Compatíveis para Inclusão</h5>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead class="table-light">
+            <tr>
+              <th>Embarque</th>
+              <th>Transportadora</th>
+              <th>Data Prevista</th>
+              <th>Valor Total</th>
+              <th>Pallet Total</th>
+              <th>Peso Total</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for embarque_info in embarques_compativeis_fracionada %}
+            <tr>
+              <td>
+                <a href="{{ url_for('embarques.visualizar_embarque', id=embarque_info.embarque.id) }}" target="_blank">
+                  #{{ embarque_info.embarque.numero }}
+                </a>
+              </td>
+              <td>{{ embarque_info.embarque.transportadora.razao_social if embarque_info.embarque.transportadora else '-' }}</td>
+              <td>{{ embarque_info.embarque.data_prevista_embarque | formatar_data_segura if embarque_info.embarque.data_prevista_embarque else '-' }}</td>
+              <td>R$ {{ "%.2f"|format(embarque_info.embarque.total_valor_pedidos()) }}</td>
+              <td>{{ "%.2f"|format(embarque_info.embarque.total_pallet_pedidos()) }}</td>
+              <td>{{ "%.0f"|format(embarque_info.embarque.total_peso_pedidos()) }} kg</td>
+              <td>
+                <button class="btn btn-primary btn-sm" onclick="incluirEmEmbarque({{ embarque_info.embarque.id }}, 'FRACIONADA')">
+                  <i class="fas fa-plus"></i> Incluir ao Embarque
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 {# Modal de escolha por CNPJ #}
@@ -692,5 +766,40 @@ $(document).ready(function() {
     });
   });
 });
+
+// Função para incluir pedidos em embarque existente
+function incluirEmEmbarque(embarqueId, tipoCarga) {
+    if (confirm(`Confirma a inclusão dos pedidos cotados no embarque #${embarqueId}?`)) {
+        // Criar form para enviar POST
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/cotacao/incluir_em_embarque';
+        
+        // Adicionar CSRF token
+        const csrfToken = document.createElement('input');
+        csrfToken.type = 'hidden';
+        csrfToken.name = 'csrf_token';
+        csrfToken.value = '{{ csrf_token() }}';
+        form.appendChild(csrfToken);
+        
+        // Adicionar embarque_id
+        const embarqueInput = document.createElement('input');
+        embarqueInput.type = 'hidden';
+        embarqueInput.name = 'embarque_id';
+        embarqueInput.value = embarqueId;
+        form.appendChild(embarqueInput);
+        
+        // Adicionar tipo_carga
+        const tipoInput = document.createElement('input');
+        tipoInput.type = 'hidden';
+        tipoInput.name = 'tipo_carga';
+        tipoInput.value = tipoCarga;
+        form.appendChild(tipoInput);
+        
+        // Adicionar ao body e submeter
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
 </script>
 {% endblock %}

@@ -98,7 +98,7 @@ def visualizar_embarque(id):
                 embarque.responsavel_carregamento = form.responsavel_carregamento.data
                 embarque.nome_motorista = form.nome_motorista.data
                 embarque.cpf_motorista = form.cpf_motorista.data
-                embarque.qtd_pallets = int(form.qtd_pallets.data or 0)
+                form.qtd_pallets.data = int(form.qtd_pallets.data or 0)
 
                 # ✅ CORREÇÃO FINAL: Dados da tabela NÃO precisam ser alterados - já estão corretos da cotação!
                 # Atualizar APENAS campos básicos editáveis pelo usuário:
@@ -1424,4 +1424,40 @@ def atualizar_status_pedido_nf_cd(numero_pedido, separacao_lote_id=None):
     except Exception as e:
         db.session.rollback()
         return False, f"Erro ao atualizar pedido: {str(e)}"
+
+@embarques_bp.route('/item/<int:item_id>/cancelar', methods=['POST'])
+@login_required
+def cancelar_item_embarque(item_id):
+    """
+    Cancela um item do embarque (exclusão lógica)
+    """
+    from app.pedidos.models import Pedido
+    
+    item = EmbarqueItem.query.get_or_404(item_id)
+    embarque = item.embarque
+    
+    # Verificar se o embarque não está cancelado
+    if embarque.status == 'cancelado':
+        flash('❌ Não é possível remover itens de um embarque cancelado.', 'danger')
+        return redirect(url_for('embarques.visualizar_embarque', id=embarque.id))
+    
+    try:
+        # Cancelar o item (exclusão lógica)
+        item.status = 'cancelado'
+        
+        # Voltar o pedido para status "Aberto"
+        if item.separacao_lote_id:
+            pedidos = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).all()
+            for pedido in pedidos:
+                pedido.status = 'Aberto'
+        
+        db.session.commit()
+        
+        flash(f'✅ Pedido {item.pedido} removido do embarque com sucesso! O pedido voltou para status "Aberto".', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Erro ao remover pedido do embarque: {str(e)}', 'danger')
+    
+    return redirect(url_for('embarques.visualizar_embarque', id=embarque.id))
 

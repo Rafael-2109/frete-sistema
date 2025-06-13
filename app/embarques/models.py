@@ -68,18 +68,18 @@ class Embarque(db.Model):
     cotacao = db.relationship('Cotacao', backref='embarque_direto', foreign_keys=[cotacao_id])
 
     def total_notas(self):
-        return len(self.itens)
+        return len([i for i in self.itens if i.status == 'ativo'])
 
     def total_volumes(self):
-        return sum(i.volumes or 0 for i in self.itens)
+        return sum(i.volumes or 0 for i in self.itens if i.status == 'ativo')
 
     def total_peso_pedidos(self):
         """Retorna o peso total dos pedidos contidos no embarque"""
-        return sum(i.peso or 0 for i in self.itens)
+        return sum(i.peso or 0 for i in self.itens if i.status == 'ativo')
 
     def total_valor_pedidos(self):
         """Retorna o valor total dos pedidos contidos no embarque"""
-        return sum(i.valor or 0 for i in self.itens)
+        return sum(i.valor or 0 for i in self.itens if i.status == 'ativo')
 
     def total_pallet_pedidos(self):
         """Retorna o total de pallets dos pedidos contidos no embarque"""
@@ -91,6 +91,11 @@ class Embarque(db.Model):
         return 0
 
     @property
+    def itens_ativos(self):
+        """Retorna apenas os itens ativos do embarque"""
+        return [item for item in self.itens if item.status == 'ativo']
+
+    @property
     def status_nfs(self):
         """
         Calcula o status das NFs do embarque:
@@ -98,21 +103,23 @@ class Embarque(db.Model):
         - 'Pendente Import.' - Caso as NFs estejam preenchidas, porém tenha NF ainda não importada
         - 'NFs Lançadas' - Todas as NFs estão lançadas e validadas pelo faturamento
         """
-        if not self.itens:
+        itens_ativos = [item for item in self.itens if item.status == 'ativo']
+        
+        if not itens_ativos:
             return 'NFs pendentes'
         
         # Verifica se há itens sem NF
-        itens_sem_nf = [item for item in self.itens if not item.nota_fiscal or item.nota_fiscal.strip() == '']
+        itens_sem_nf = [item for item in itens_ativos if not item.nota_fiscal or item.nota_fiscal.strip() == '']
         if itens_sem_nf:
             return 'NFs pendentes'
         
         # Verifica se há NFs pendentes de importação
-        itens_pendentes = [item for item in self.itens if item.erro_validacao and 'NF_PENDENTE_FATURAMENTO' in item.erro_validacao]
+        itens_pendentes = [item for item in itens_ativos if item.erro_validacao and 'NF_PENDENTE_FATURAMENTO' in item.erro_validacao]
         if itens_pendentes:
             return 'Pendente Import.'
         
         # Verifica se há NFs divergentes
-        itens_divergentes = [item for item in self.itens if item.erro_validacao and ('NF_DIVERGENTE' in item.erro_validacao or 'CLIENTE_NAO_DEFINIDO' in item.erro_validacao)]
+        itens_divergentes = [item for item in itens_ativos if item.erro_validacao and ('NF_DIVERGENTE' in item.erro_validacao or 'CLIENTE_NAO_DEFINIDO' in item.erro_validacao)]
         if itens_divergentes:
             return 'NFs pendentes'
         
@@ -165,6 +172,7 @@ class EmbarqueItem(db.Model):
     volumes = db.Column(db.Integer, nullable=True)
     peso = db.Column(db.Float)  # Peso do item
     valor = db.Column(db.Float)  # Valor do item
+    status = db.Column(db.String(20), nullable=False, default='ativo')  # 'ativo' ou 'cancelado'
 
     uf_destino = db.Column(db.String(2), nullable=False)
     cidade_destino = db.Column(db.String(100), nullable=False)

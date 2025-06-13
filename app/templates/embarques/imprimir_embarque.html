@@ -136,30 +136,31 @@
         {% endif %}
     </div>
 
-    <!-- Itens do Embarque -->
-    <h3 style="border-bottom: 2px solid #007bff; padding-bottom: 2px; margin-bottom: 3px;">Itens do Embarque</h3>
-    <table class="embarque-items">
+    <!-- Tabela de Itens do Embarque -->
+    <table class="table-embarque">
         <thead>
             <tr>
-                <th style="width: 23%;">Cliente</th>
-                <th style="width: 9%;">Pedido</th>
-                <th style="width: 15%;">NF</th>
-                <th style="width: 6%;">Volumes</th>
-                <th style="width: 25%;">UF/Cidade</th>
-                <th style="width: 9%;">Agenda</th>
-                <th style="width: 13%;">Protocolo</th>
+                <th>Cliente</th>
+                <th>Pedido</th>
+                <th>NF</th>
+                <th>Protocolo</th>
+                <th>Data Agenda</th>
+                <th>Volumes</th>
+                <th>UF</th>
+                <th>Cidade</th>
             </tr>
         </thead>
         <tbody>
-            {% for item in embarque.itens %}
+            {% for item in embarque.itens_ativos %}
             <tr>
                 <td>{{ item.cliente }}</td>
                 <td>{{ item.pedido }}</td>
-                <td>{{ item.nota_fiscal or ' ' }}</td>
-                <td class="text-center">{{ item.volumes or ' ' }}</td>
-                <td>{{ item.uf_destino }}/{{ item.cidade_destino }}</td>
-                <td>{{ item.data_agenda }}</td>
+                <td>{{ item.nota_fiscal or '-' }}</td>
                 <td>{{ (item.protocolo_agendamento | formatar_protocolo) or '-' }}</td>
+                <td>{{ item.data_agenda or '-' }}</td>
+                <td>{{ item.volumes or '-' }}</td>
+                <td>{{ item.uf_destino }}</td>
+                <td>{{ item.cidade_destino }}</td>
             </tr>
             {% endfor %}
         </tbody>
