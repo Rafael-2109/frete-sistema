@@ -254,6 +254,7 @@ def listar_relatorios():
     # 3) Definir mapa de colunas ordenáveis
     sortable_columns = {
         'numero_nf':           RelatorioFaturamentoImportado.numero_nf,
+        'origem':              RelatorioFaturamentoImportado.origem,
         'cnpj_cliente':        RelatorioFaturamentoImportado.cnpj_cliente,
         'data_fatura':         RelatorioFaturamentoImportado.data_fatura,
         'nome_cliente':        RelatorioFaturamentoImportado.nome_cliente,

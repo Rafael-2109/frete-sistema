@@ -25,7 +25,7 @@ def upgrade():
         batch_op.add_column(sa.Column('inativado_por', sa.String(length=100), nullable=True))
     
     # Preenche todos os registros existentes com ativo=True
-    op.execute("UPDATE relatorio_faturamento_importado SET ativo = 1 WHERE ativo IS NULL")
+    op.execute("UPDATE relatorio_faturamento_importado SET ativo = TRUE WHERE ativo IS NULL")
     
     # Agora torna o campo NOT NULL (só funciona no SQLite 3.37+, senão mantém nullable)
     try:

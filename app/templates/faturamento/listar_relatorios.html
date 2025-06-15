@@ -98,6 +98,19 @@
           </a>
         </th>
 
+        {# ORIGEM #}
+        {% set next_dir = 'desc' if sort=='origem' and direction=='asc' else 'asc' %}
+        <th>
+          <a href="?sort=origem&direction={{ next_dir }}">
+            Origem
+            {% if sort=='origem' %}
+              <span class="badge text-secondary">
+                {{ '↑' if direction=='asc' else '↓' }}
+              </span>
+            {% endif %}
+          </a>
+        </th>
+
         {# CNPJ #}
         {% set next_dir = 'desc' if sort=='cnpj_cliente' and direction=='asc' else 'asc' %}
         <th>
@@ -233,6 +246,7 @@
         </td>
         
         <td>{{ r.numero_nf }}</td>
+        <td>{{ r.origem or '-' }}</td>
         <td>{{ r.cnpj_cliente }}</td>
         <td>{{ r.data_fatura | formatar_data_segura if r.data_fatura else '' }}</td>
         <td>{{ r.nome_cliente }}</td>
