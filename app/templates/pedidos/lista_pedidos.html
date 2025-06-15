@@ -201,7 +201,7 @@
                     </div>
                 </div>
 
-                {# -------- LINHA ÚNICA: Ações  ·  Datas/Aberto (centro)  ·  Status -------- #}
+                {# -------- LINHA ÚNICA: Aplicar/Limpar e Datas (mais compacto) -------- #}
             <div class="filtros-container acoes-filtros">
             <div class="row align-items-center gx-2 gy-2">
 
@@ -215,9 +215,9 @@
                 </a>
                 </div>
 
-                            {# ▸ CENTRO – Datas + Aberto empilhado (cresce e centraliza) #}
-                            <div class="col text-center">
-                            <div class="d-inline-flex flex-wrap justify-content-center gap-2">
+                            {# ▸ CENTRO – Datas + Aberto mais compactos #}
+                            <div class="col">
+                            <div class="d-flex flex-wrap justify-content-center gap-1">
                                 {% for key, dados in contadores_data.items() %}
                                 <div class="d-flex flex-column align-items-center filtro-pair">
                                     <!-- DATA -->
@@ -226,9 +226,11 @@
                                     class="btn btn-sm filtro-data
                                         {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d') %}
                                         btn-primary
+                                        {% elif dados.total > 0 %}
+                                        btn-info
                                         {% else %}btn-outline-primary{% endif %}">
                                     <i class="far fa-calendar-check"></i>
-                                    {{ dados.data.strftime('%d/%m/%Y') }}
+                                    {{ dados.data.strftime('%d/%m') }}
                                     <span class="badge bg-light text-dark">{{ dados.total }}</span>
                                     </a>
                                     <!-- ABERTO -->
@@ -238,46 +240,16 @@
                                     class="btn btn-sm filtro-aberto mt-1
                                         {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d')
                                             and filtro_status_ativo == 'abertos' %}
-                                        btn-info
-                                        {% else %}btn-outline-info{% endif %}">
+                                        btn-warning
+                                        {% elif dados.abertos > 0 %}
+                                        btn-danger
+                                        {% else %}btn-outline-warning{% endif %}">
                                     <i class="fas fa-clock"></i> Aberto
                                     <span class="badge bg-light text-dark">{{ dados.abertos }}</span>
                                     </a>
                                 </div>
                                 {% endfor %}
                             </div>
-                            </div>
-
-                            {# ▸ DIREITA – Filtros de Status #}
-                            <div class="col-auto d-flex flex-wrap gap-2 justify-content-end">
-                            <a href="{{ url_for('pedidos.lista_pedidos') }}"
-                                class="btn btn-sm filtro-status
-                                {% if not filtro_status_ativo %}btn-secondary
-                                {% else %}btn-outline-secondary{% endif %}">
-                                <i class="fas fa-list"></i> Todos
-                                <span class="badge bg-light text-dark">{{ contadores_status.todos }}</span>
-                            </a>
-                            <a href="{{ url_for('pedidos.lista_pedidos', status='abertos') }}"
-                                class="btn btn-sm filtro-status
-                                {% if filtro_status_ativo == 'abertos' %}btn-info
-                                {% else %}btn-outline-info{% endif %}">
-                                <i class="fas fa-clock"></i> Abertos
-                                <span class="badge bg-light text-dark">{{ contadores_status.abertos }}</span>
-                            </a>
-                            <a href="{{ url_for('pedidos.lista_pedidos', status='cotados') }}"
-                                class="btn btn-sm filtro-status
-                                {% if filtro_status_ativo == 'cotados' %}btn-warning
-                                {% else %}btn-outline-warning{% endif %}">
-                                <i class="fas fa-calculator"></i> Cotados
-                                <span class="badge bg-light text-dark">{{ contadores_status.cotados }}</span>
-                            </a>
-                            <a href="{{ url_for('pedidos.lista_pedidos', status='nf_cd') }}"
-                                class="btn btn-sm filtro-status
-                                {% if filtro_status_ativo == 'nf_cd' %}btn-danger
-                                {% else %}btn-outline-danger{% endif %}">
-                                <i class="fas fa-undo"></i> NF no CD
-                                <span class="badge bg-light text-dark">{{ contadores_status.nf_cd }}</span>
-                            </a>
                             </div>
 
                         </div>
@@ -291,13 +263,54 @@
 
     <!-- 📋 FORMULÁRIO PARA SELECIONAR PEDIDOS E COTAR FRETE -->
     <div class="card mb-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="card-title mb-0">
-                <i class="fas fa-tasks"></i> Seleção de Pedidos para Cotação
-            </h5>
-            <div>
-                <!-- Contador de pedidos selecionados -->
-                <span id="selected-count" class="badge bg-primary me-2" style="display: none;"></span>
+        <div class="card-header">
+            <div class="row align-items-center">
+                <!-- ▸ ESQUERDA: Título -->
+                <div class="col-md-6">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-tasks"></i> Seleção de Pedidos para Cotação
+                    </h5>
+                </div>
+                
+                <!-- ▸ DIREITA: Filtros de Status + Contador -->
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-end align-items-center gap-2">
+                        <!-- Filtros de Status -->
+                        <a href="{{ url_for('pedidos.lista_pedidos', status='abertos') }}"
+                            class="btn btn-sm filtro-status
+                            {% if filtro_status_ativo == 'abertos' %}
+                                {% if contadores_status.abertos > 0 %}btn-danger{% else %}btn-info{% endif %}
+                            {% else %}
+                                {% if contadores_status.abertos > 0 %}btn-outline-danger{% else %}btn-outline-info{% endif %}
+                            {% endif %}">
+                            <i class="fas fa-clock"></i> Abertos
+                            <span class="badge bg-light text-dark">{{ contadores_status.abertos }}</span>
+                        </a>
+                        <a href="{{ url_for('pedidos.lista_pedidos', status='cotados') }}"
+                            class="btn btn-sm filtro-status
+                            {% if filtro_status_ativo == 'cotados' %}
+                                {% if contadores_status.cotados > 0 %}btn-warning{% else %}btn-outline-warning{% endif %}
+                            {% else %}
+                                {% if contadores_status.cotados > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
+                            {% endif %}">
+                            <i class="fas fa-calculator"></i> Cotados
+                            <span class="badge bg-light text-dark">{{ contadores_status.cotados }}</span>
+                        </a>
+                        <a href="{{ url_for('pedidos.lista_pedidos', status='nf_cd') }}"
+                            class="btn btn-sm filtro-status
+                            {% if filtro_status_ativo == 'nf_cd' %}
+                                {% if contadores_status.nf_cd > 0 %}btn-danger{% else %}btn-outline-danger{% endif %}
+                            {% else %}
+                                {% if contadores_status.nf_cd > 0 %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}
+                            {% endif %}">
+                            <i class="fas fa-undo"></i> NF no CD
+                            <span class="badge bg-light text-dark">{{ contadores_status.nf_cd }}</span>
+                        </a>
+                        
+                        <!-- Contador de pedidos selecionados -->
+                        <span id="selected-count" class="badge bg-success me-2" style="display: none;"></span>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="card-body">
@@ -532,7 +545,8 @@
                     <div class="btn-group-vertical btn-group-sm" role="group">
                       <button type="button" 
                               class="btn btn-outline-primary btn-sm" 
-                              onclick="abrirEdicaoPedido({{ p.id }})"
+                              data-pedido-id="{{ p.id }}"
+                              onclick="abrirEdicaoPedido(this.dataset.pedidoId)"
                               title="Editar pedido">
                         <i class="fas fa-edit"></i>
                       </button>
@@ -973,47 +987,118 @@ function abrirEdicaoPedido(pedidoId) {
 </script>
 
 <style>
-/* ---- BOTÕES DE FILTRO (cores e espaçamento) ---- */
+/* ---- BOTÕES DE FILTRO (cores e espaçamento melhorados) ---- */
 .filtro-pair {                     /* agrupa Data+Aberto */
     border-radius: 6px;            /* cantos suaves */
+    min-width: 85px;               /* base menor para mais compacto */
 }
 
 .filtro-data, .filtro-aberto, .filtro-status {
     font-weight: 600;
     box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    transition: all 0.2s ease;
 }
 
-/* contraste maior no estado outline */
-.btn-outline-primary.filtro-data   { background:#e9f2ff; }
-.btn-outline-warning.filtro-aberto { background:#fff9e6; }
-.btn-outline-secondary.filtro-status { background:#f2f2f2; }
+/* ✨ NOVAS CORES mais chamativos quando há quantidade > 0 */
+/* Datas com pedidos */
+.btn-info.filtro-data {
+    background: linear-gradient(135deg, #17a2b8, #20c997);
+    border-color: #17a2b8;
+    color: white;
+    animation: pulso-suave 2s infinite;
+}
 
+/* Abertos com quantidade > 0 - VERMELHO CHAMATIVO */
+.btn-danger.filtro-aberto {
+    background: linear-gradient(135deg, #dc3545, #fd7e14);
+    border-color: #dc3545;
+    color: white;
+    animation: pulso-urgente 1.5s infinite;
+}
+
+/* Status ativos com gradientes */
+.btn-danger.filtro-status {
+    background: linear-gradient(135deg, #dc3545, #e83e8c);
+    border-color: #dc3545;
+    color: white;
+}
+
+.btn-warning.filtro-status {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+    border-color: #ffc107;
+    color: #212529;
+}
+
+/* Efeitos de hover melhorados */
 .filtro-data:hover,
 .filtro-aberto:hover,
 .filtro-status:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(0,0,0,.15);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 4px 12px rgba(0,0,0,.2);
 }
 
-/* badge um pouquinho menor pra caber bem */
+/* Animações para chamar atenção */
+@keyframes pulso-suave {
+    0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    50% { box-shadow: 0 4px 15px rgba(23, 162, 184, 0.4); }
+}
+
+@keyframes pulso-urgente {
+    0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    50% { box-shadow: 0 4px 20px rgba(220, 53, 69, 0.6); }
+}
+
+/* Badge melhorados */
 .filtro-data .badge,
 .filtro-aberto .badge,
 .filtro-status .badge {
     font-size: .65rem;
-    font-weight: 500;
-    padding: 0 .4em;
+    font-weight: 600;
+    padding: 0.2em 0.5em;
+    border-radius: 12px;
 }
 
-/* remove margem antiga e usa gap do flex   */
-.filtro-btn { margin:0!important; }        /* neutraliza suas antigas margens */
+/* Responsividade melhorada */
+.filtro-pair .btn { 
+    width: 100%; 
+    min-width: 75px;
+    font-size: 0.8rem;
+}
 
-/* empilha Data/Aberto sem estourar largura */
-.filtro-pair { min-width: 120px; }          /* mesma base p/ todos */
-.filtro-pair .btn { width: 100%; }           /* botão ocupa 100%   */
+/* Mobile - layout mais compacto */
+@media (max-width: 768px) {
+    .filtro-pair { 
+        min-width: 70px; 
+    }
+    
+    .filtro-data, .filtro-aberto, .filtro-status {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.4rem;
+    }
+    
+    .filtros-container .col-md-6 {
+        margin-bottom: 10px;
+    }
+    
+    .d-flex.flex-wrap.gap-2 {
+        gap: 0.5rem !important;
+    }
+}
 
-/* alinhar melhor no mobile */
+/* Melhorias para telas pequenas */
 @media (max-width: 576px) {
-  .filtros-container .ms-auto { margin-left: 0 !important; } /* status abaixo */
+    .filtros-container .row {
+        flex-direction: column;
+    }
+    
+    .filtro-pair {
+        min-width: 65px;
+    }
+    
+    .btn-group .btn {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+    }
 }
 </style>
 {% endblock %}
