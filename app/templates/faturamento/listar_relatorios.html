@@ -2,6 +2,36 @@
 {% block content %}
 <div class="container-fluid mt-4">
   <h2>Relatórios de Faturamento Importados</h2>
+  
+  <!-- 🆕 CONTROLES DE INATIVAÇÃO -->
+  <div class="row mb-3">
+    <div class="col-md-8">
+      <div class="btn-group" role="group">
+        <button type="button" id="btnInativar" class="btn btn-warning" onclick="inativarSelecionadas()" disabled>
+          🗑️ Inativar Selecionadas
+        </button>
+        <button type="button" id="btnSelecionarTodos" class="btn btn-outline-secondary" onclick="selecionarTodos()">
+          ☑️ Selecionar Todos
+        </button>
+        <button type="button" id="btnDeselecionarTodos" class="btn btn-outline-secondary" onclick="deselecionarTodos()">
+          ☐ Desmarcar Todos
+        </button>
+      </div>
+    </div>
+    <div class="col-md-4 text-end">
+      <div class="btn-group me-3" role="group">
+        <a href="?mostrar_inativas=false{{ '&' + request.query_string.decode() if request.query_string and 'mostrar_inativas' not in request.query_string.decode() }}" 
+           class="btn {% if not mostrar_inativas %}btn-success{% else %}btn-outline-success{% endif %} btn-sm">
+          ✅ Apenas Ativas
+        </a>
+        <a href="?mostrar_inativas=true{{ '&' + request.query_string.decode() if request.query_string and 'mostrar_inativas' not in request.query_string.decode() }}" 
+           class="btn {% if mostrar_inativas %}btn-secondary{% else %}btn-outline-secondary{% endif %} btn-sm">
+          📋 Todas
+        </a>
+      </div>
+      <span id="contadorSelecionadas" class="badge bg-primary">0 selecionadas</span>
+    </div>
+  </div>
 
   <!-- =========== FILTROS =========== -->
   <form method="GET" class="row g-3 mb-4">
@@ -42,10 +72,18 @@
   </form>
 
   <!-- =========== TABELA COM ORDENAÇÃO =========== -->
-  <table class="table table-bordered table-hover table-striped">
-    <thead>
-      <tr>
-        {# Para cada coluna ordenável, definimos a lógica do "next_dir" #}
+  <form id="formInativacao">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    
+    <table class="table table-bordered table-hover table-striped">
+      <thead>
+        <tr>
+          {# 🆕 COLUNA DE SELEÇÃO #}
+          <th style="width: 50px;">
+            <input type="checkbox" id="checkboxTodos" onchange="toggleTodos()">
+          </th>
+          
+          {# Para cada coluna ordenável, definimos a lógica do "next_dir" #}
 
         {# NF #}
         {% set next_dir = 'desc' if sort=='numero_nf' and direction=='asc' else 'asc' %}
@@ -176,12 +214,24 @@
             {% endif %}
           </a>
         </th>
+        
+        {# 🆕 STATUS #}
+        <th style="width: 100px;">Status</th>
       </tr>
     </thead>
 
     <tbody>
       {% for r in relatorios %}
-      <tr>
+      <tr class="{% if not r.ativo %}table-secondary text-muted{% endif %}">
+        {# 🆕 CHECKBOX DE SELEÇÃO #}
+        <td class="text-center">
+          {% if r.ativo %}
+            <input type="checkbox" class="checkbox-nf" name="nfs_selecionadas" value="{{ r.numero_nf }}" onchange="atualizarContador()">
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        
         <td>{{ r.numero_nf }}</td>
         <td>{{ r.cnpj_cliente }}</td>
         <td>{{ r.data_fatura | formatar_data_segura if r.data_fatura else '' }}</td>
@@ -192,10 +242,23 @@
         <td>{{ r.estado }}</td>
         <td>{{ r.incoterm }}</td>
         <td>{{ r.vendedor }}</td>
+        
+        {# 🆕 STATUS #}
+        <td class="text-center">
+          {% if r.ativo %}
+            <span class="badge bg-success">Ativa</span>
+          {% else %}
+            <span class="badge bg-secondary">Inativa</span>
+            {% if r.inativado_em %}
+              <br><small class="text-muted">{{ r.inativado_em | formatar_data_hora_brasil }}</small>
+            {% endif %}
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  </form>
 
   <!-- =========== PAGINAÇÃO =========== -->
   {% if paginacao.pages > 1 %}
@@ -252,4 +315,109 @@
   </div>
   {% endif %}
 </div>
+
+<!-- 🆕 JAVASCRIPT PARA CONTROLE DOS CHECKBOXES E INATIVAÇÃO -->
+<script>
+function toggleTodos() {
+  const checkboxTodos = document.getElementById('checkboxTodos');
+  const checkboxes = document.querySelectorAll('.checkbox-nf');
+  
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = checkboxTodos.checked;
+  });
+  
+  atualizarContador();
+}
+
+function selecionarTodos() {
+  const checkboxes = document.querySelectorAll('.checkbox-nf');
+  checkboxes.forEach(checkbox => checkbox.checked = true);
+  document.getElementById('checkboxTodos').checked = true;
+  atualizarContador();
+}
+
+function deselecionarTodos() {
+  const checkboxes = document.querySelectorAll('.checkbox-nf');
+  checkboxes.forEach(checkbox => checkbox.checked = false);
+  document.getElementById('checkboxTodos').checked = false;
+  atualizarContador();
+}
+
+function atualizarContador() {
+  const checkboxesSelecionados = document.querySelectorAll('.checkbox-nf:checked');
+  const contador = checkboxesSelecionados.length;
+  
+  document.getElementById('contadorSelecionadas').textContent = `${contador} selecionadas`;
+  document.getElementById('btnInativar').disabled = contador === 0;
+  
+  // Atualiza estado do checkbox "todos"
+  const totalCheckboxes = document.querySelectorAll('.checkbox-nf').length;
+  const checkboxTodos = document.getElementById('checkboxTodos');
+  
+  if (contador === 0) {
+    checkboxTodos.indeterminate = false;
+    checkboxTodos.checked = false;
+  } else if (contador === totalCheckboxes) {
+    checkboxTodos.indeterminate = false;
+    checkboxTodos.checked = true;
+  } else {
+    checkboxTodos.indeterminate = true;
+  }
+}
+
+function inativarSelecionadas() {
+  const checkboxesSelecionados = document.querySelectorAll('.checkbox-nf:checked');
+  
+  if (checkboxesSelecionados.length === 0) {
+    alert('Selecione pelo menos uma NF para inativar!');
+    return;
+  }
+  
+  const nfs = Array.from(checkboxesSelecionados).map(cb => cb.value);
+  const confirmacao = confirm(`Confirma a inativação de ${nfs.length} NF(s)?\n\nNFs: ${nfs.join(', ')}\n\n⚠️ As NFs inativadas serão removidas do monitoramento!`);
+  
+  if (!confirmacao) return;
+  
+  // Bloqueia botão durante processamento
+  const btnInativar = document.getElementById('btnInativar');
+  btnInativar.disabled = true;
+  btnInativar.innerHTML = '⏳ Processando...';
+  
+  // Prepara dados para envio
+  const formData = new FormData();
+  formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
+  
+  nfs.forEach(nf => {
+    formData.append('nfs_selecionadas', nf);
+  });
+  
+  // Envia requisição
+  fetch('{{ url_for("faturamento.inativar_nfs") }}', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert(`✅ ${data.message}`);
+      location.reload();
+    } else {
+      alert(`❌ Erro: ${data.message}`);
+    }
+  })
+  .catch(error => {
+    console.error('Erro:', error);
+    alert('❌ Erro ao processar solicitação!');
+  })
+  .finally(() => {
+    btnInativar.disabled = false;
+    btnInativar.innerHTML = '🗑️ Inativar Selecionadas';
+  });
+}
+
+// Inicializa contador na carga da página
+document.addEventListener('DOMContentLoaded', function() {
+  atualizarContador();
+});
+</script>
 {% endblock %}

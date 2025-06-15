@@ -19,6 +19,9 @@ class RelatorioFaturamentoImportado(db.Model):
     origem = db.Column(db.String(50), nullable=True)
     incoterm = db.Column(db.String(20), nullable=True)
     vendedor= db.Column(db.String(100), nullable=True)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)  # 🆕 Campo para inativação
+    inativado_em = db.Column(db.DateTime, nullable=True)  # 🆕 Data de inativação
+    inativado_por = db.Column(db.String(100), nullable=True)  # 🆕 Quem inativou
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):

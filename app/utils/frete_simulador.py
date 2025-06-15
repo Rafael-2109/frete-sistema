@@ -6,7 +6,7 @@ from app.localidades.models import Cidade
 from app.tabelas.models import TabelaFrete
 from app.vinculos.models import CidadeAtendida
 from app.veiculos.models import Veiculo
-from app.utils.string_utils import normalizar_nome_cidade
+from app.utils.string_utils import normalizar_nome_cidade, remover_acentos
 from app.utils.vehicle_utils import normalizar_nome_veiculo
 from app.utils.grupo_empresarial import grupo_service
 from app import db
@@ -483,7 +483,6 @@ def buscar_cidade_unificada(pedido=None, cidade=None, uf=None, rota=None):
     - Um objeto pedido
     - OU cidade e UF (e opcionalmente rota)
     """
-    from app.utils.string_utils import normalizar_nome_cidade, remover_acentos
     
     # Se recebeu pedido, extrai os dados dele
     if pedido:

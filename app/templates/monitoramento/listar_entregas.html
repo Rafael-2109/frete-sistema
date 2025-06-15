@@ -1,8 +1,250 @@
 {% extends 'base.html' %}
+
+{% block extra_css %}
+<style>
+/* 🎯 PAGINAÇÃO HÍBRIDA - FUNCIONA EM QUALQUER NAVEGADOR */
+#hybrid-pagination {
+  position: relative !important; /* Começa normal */
+  background: #ffffff !important;
+  border-bottom: 2px solid #28a745 !important;
+  box-shadow: 0 3px 15px rgba(0,0,0,0.2) !important;
+  padding: 8px 0 !important;
+  margin: 0 !important;
+  transition: all 0.3s ease !important;
+  z-index: 104 !important; /* ABAIXO do navbar (1050) */
+}
+
+/* 🔒 QUANDO GRUDADO (via JavaScript) */
+#hybrid-pagination.is-stuck {
+  position: fixed !important;
+  top: 56px !important; /* Abaixo do navbar */
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  border: 3px solid #dc3545 !important; /* Borda vermelha quando grudado */
+  background: #f8f9fa !important; /* Fundo ligeiramente diferente */
+  transform: translateY(0) !important;
+  z-index: 104 !important; /* ABAIXO do navbar (1050) */
+}
+
+/* 🎨 Estilos da paginação híbrida */
+#hybrid-pagination .container-fluid {
+  max-width: none !important;
+  padding: 0 15px !important;
+}
+
+#hybrid-pagination .pagination {
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+}
+
+#hybrid-pagination .page-link {
+  color: #28a745 !important;
+  background-color: #ffffff !important;
+  border: 2px solid #28a745 !important;
+  padding: 8px 16px !important;
+  margin: 0 2px !important;
+  font-weight: 600 !important;
+  text-decoration: none !important;
+  border-radius: 6px !important;
+  transition: all 0.2s ease !important;
+}
+
+#hybrid-pagination .page-item.active .page-link {
+  background-color: #28a745 !important;
+  color: #ffffff !important;
+  border-color: #28a745 !important;
+}
+
+#hybrid-pagination .page-link:hover {
+  background-color: #218838 !important;
+  color: #ffffff !important;
+  border-color: #218838 !important;
+  transform: scale(1.05) !important;
+}
+
+/* ✅ ESPAÇAMENTOS NORMAIS - SEM MARGEM FIXA */
+.filters-offset {
+  margin-top: 0 !important; /* Normal, sem espaço fixo */
+  padding-top: 10px !important;
+}
+
+.pagination-offset {
+  margin-top: 20px !important; /* Espaço normal para a tabela */
+  padding-top: 10px !important;
+}
+
+/* FORÇA ESPECÍFICA PARA O BODY */
+body {
+  padding-top: 0 !important;
+}
+
+/* ✅ FILTROS COM POSICIONAMENTO NORMAL */
+.bg-light {
+  margin-top: 0 !important; /* Posição normal no fluxo */
+  position: relative !important;
+  z-index: 103 !important; /* Abaixo da paginação mas acima do conteúdo */
+}
+
+/* ✅ RESPONSIVIDADE PARA HÍBRIDA */
+@media (max-width: 768px) {
+  #hybrid-pagination .col-md-4 {
+    margin-top: 10px !important;
+    text-align: center !important;
+  }
+  
+  #hybrid-pagination .pagination {
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+  }
+  
+  #hybrid-pagination .page-link {
+    font-size: 0.8rem !important;
+    padding: 6px 12px !important;
+  }
+  
+  /* ✅ QUANDO GRUDADO NO MOBILE */
+  #hybrid-pagination.is-stuck {
+    top: 50px !important; /* Um pouco menos no mobile */
+  }
+  
+  .pagination-offset {
+    margin-top: 25px !important;
+    padding-top: 15px !important;
+  }
+}
+
+/* Indicador visual de loading */
+.pagination-loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Melhorias nas colunas sticky da tabela */
+.sticky-col, .sticky-col-2, .sticky-col-3 {
+  position: sticky;
+  background: #fff !important;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+  border-right: 2px solid #e9ecef !important;
+}
+
+.sticky-col {
+  left: 0;
+  z-index: 11;
+  min-width: 120px;
+}
+
+.sticky-col-2 {
+  left: 120px; /* Largura da coluna anterior */
+  z-index: 10;
+  min-width: 140px;
+}
+
+.sticky-col-3 {
+  left: 260px; /* Largura das duas colunas anteriores */
+  z-index: 9;
+  min-width: 200px;
+}
+
+/* Efeitos hover na tabela */
+.table-hover tbody tr:hover {
+  background-color: rgba(0,123,255,0.05) !important;
+  transform: scale(1.001);
+  transition: all 0.2s ease;
+}
+
+/* Loading states */
+.table.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Melhorias nos badges de status */
+.badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+/* Animação suave para mudanças de página */
+.page-transition {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 🔧 CORREÇÃO PARA CONFLITOS DO STYLE.CSS */
+.pagination-container {
+  /* Remove qualquer overflow que possa impedir sticky */
+  overflow: visible !important;
+  /* Remove white-space que pode causar problemas */
+  white-space: normal !important;
+  /* Garante que o container seja relativo */
+  position: relative !important;
+}
+
+.pagination-container .table-responsive {
+  /* Temporariamente remove overflow para esta página */
+  overflow: visible !important;
+}
+
+/* ✅ PAGINAÇÃO SIMPLES - SEM BURACO */
+.sticky-pagination-simple {
+  background: #ffffff !important;
+  border-bottom: 2px solid #28a745 !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* 🎯 INDICADOR VISUAL QUANDO GRUDADA */
+.sticky-pagination-simple.stuck {
+  border-color: #dc3545 !important;
+  background: #ffe6e6 !important;
+  box-shadow: 0 5px 20px rgba(220, 53, 69, 0.3) !important;
+}
+
+/* 📋 CABEÇALHO DA TABELA STICKY */
+.table thead th {
+  position: -webkit-sticky !important; /* Safari */
+  position: sticky !important;
+  top: 90px !important; /* Abaixo da paginação */
+  z-index: 102 !important; /* Abaixo da paginação (1040) mas acima do conteúdo */
+  background: #212529 !important; /* Fundo escuro (table-dark) */
+  color: #ffffff !important;
+  border-bottom: 2px solid #28a745 !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+}
+
+/* 📋 CORREÇÃO PARA COLUNAS STICKY DA TABELA */
+.table thead th.sticky-col,
+.table thead th.sticky-col-2,
+.table thead th.sticky-col-3 {
+  z-index: 102 !important; /* Ligeiramente maior que headers normais */
+  background: #212529 !important;
+}
+
+/* 📋 AJUSTE PARA CÉLULAS DO BODY COM STICKY COLUMNS */
+.table tbody td.sticky-col,
+.table tbody td.sticky-col-2,
+.table tbody td.sticky-col-3 {
+  background: #ffffff !important;
+  /* z-index já definido nas classes acima (1015, 1014, 1013) */
+}
+</style>
+{% endblock %}
+
 {% block content %}
 
+<!-- 🔧 CONTAINER COM CORREÇÕES PARA STICKY -->
+<div class="pagination-container">
+
 <!-- 1) Se quiser um fundo claro só para os filtros, use algo como: -->
-<div class="bg-light py-1">
+<div class="bg-light py-2">
   <div class="container-fluid">
     <!-- Filtros -->
     <form method="get" class="row g-1 align-items-end">
@@ -106,8 +348,78 @@
   </div>
 </div>
 
+<!-- ✅ PAGINAÇÃO STICKY ULTRA-SIMPLES -->
+{% if not agrupar and paginacao and paginacao.pages > 1 %}
+{% set args_no_page = request.args.copy() %}
+{% if 'page' in args_no_page %}
+  {% set _ = args_no_page.pop('page') %}
+{% endif %}
+
+<div id="sticky-pagination" class="sticky-pagination-simple">
+  <div class="container-fluid">
+    <div class="row align-items-center py-1">
+      <div class="col-md-8">
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            <!-- Primeira página -->
+            <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('monitoramento.listar_entregas', page=1, **args_no_page) }}">
+                <i class="fas fa-angle-double-left"></i> Primeira
+              </a>
+            </li>
+
+            <!-- Anterior -->
+            <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('monitoramento.listar_entregas', page=paginacao.prev_num, **args_no_page) }}">
+                <i class="fas fa-angle-left"></i> Anterior
+              </a>
+            </li>
+
+            <!-- Páginas ao redor -->
+            {% for p in range(paginacao.page - 2, paginacao.page + 3) if p > 0 and p <= paginacao.pages %}
+              <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('monitoramento.listar_entregas', page=p, **args_no_page) }}">
+                  {{ p }}
+                </a>
+              </li>
+            {% endfor %}
+
+            <!-- Próxima -->
+            <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('monitoramento.listar_entregas', page=paginacao.next_num, **args_no_page) }}">
+                Próxima <i class="fas fa-angle-right"></i>
+              </a>
+            </li>
+
+            <!-- Última -->
+            <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('monitoramento.listar_entregas', page=paginacao.pages, **args_no_page) }}">
+                Última <i class="fas fa-angle-double-right"></i>
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+      
+      <!-- ✨ INFORMAÇÕES RÁPIDAS -->
+      <div class="col-md-4 text-end">
+        <div class="d-flex flex-column">
+          <small class="text-muted">
+            <i class="fas fa-list"></i>
+            Registros <strong>{{ (paginacao.page - 1) * paginacao.per_page + 1 }}–{{ (paginacao.page - 1) * paginacao.per_page + paginacao.items|length }}</strong>
+            de <strong>{{ paginacao.total }}</strong>
+            <i class="fas fa-file-alt"></i> 
+            Página <strong>{{ paginacao.page }}</strong> de <strong>{{ paginacao.pages }}</strong>
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- TABELA -->
-<div class="container-fluid mt-3">
+<div class="container-fluid mt-1 pagination-offset">
 
   <!-- Exemplo: barra de rolagem horizontal -->
   <div class="table-responsive">
@@ -326,27 +638,6 @@
 
   {% else %}
      <!-- SE NÃO AGRUPAR, tabela normal -->
-      <!-- Sticky col: NF e CNPJ -->
-      <style>
-        .sticky-col {
-          position: sticky;
-          left: 0;
-          background: #fff;
-          z-index: 10;
-        }
-        .sticky-col-2 {
-          position: sticky;
-          left: 5em; /* ou algo relativo à largura da 1ª col */
-          background: #fff;
-          z-index: 10;
-        }
-        .sticky-col-3 {
-          position: sticky;
-          left: 10em; /* ou algo relativo à largura da 1ª col */
-          background: #fff;
-          z-index: 10;
-        }
-      </style>
 
       <table class="table table-hover table-bordered align-middle">
 
@@ -564,81 +855,7 @@
   {% endif %}
 </div>
 
-<!-- PAGINAÇÃO se não estiver agrupado -->
-{% if not agrupar and paginacao.pages > 1 %}
-<div class="d-flex justify-content-center mt-3">
-  <nav>
-    <ul class="pagination pagination-sm">
 
-      {% set args_no_page = request.args.copy() %}
-      {% if 'page' in args_no_page %}
-        {% set _ = args_no_page.pop('page') %}
-      {% endif %}
-
-      <!-- Primeira página -->
-      <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
-        <a class="page-link"
-           href="{{ url_for('monitoramento.listar_entregas',
-                            page=1,
-                            **args_no_page) }}">
-          «
-        </a>
-      </li>
-
-      <!-- Anterior -->
-      <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
-        <a class="page-link"
-           href="{{ url_for('monitoramento.listar_entregas',
-                            page=paginacao.prev_num,
-                            **args_no_page) }}">
-          ‹
-        </a>
-      </li>
-
-      <!-- Páginas ao redor -->
-      {% for p in range(paginacao.page - 2, paginacao.page + 3) if p > 0 and p <= paginacao.pages %}
-        <li class="page-item {% if p == paginacao.page %}active{% endif %}">
-          <a class="page-link"
-             href="{{ url_for('monitoramento.listar_entregas',
-                              page=p,
-                              **args_no_page) }}">
-            {{ p }}
-          </a>
-        </li>
-      {% endfor %}
-
-      <!-- Próxima -->
-      <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
-        <a class="page-link"
-           href="{{ url_for('monitoramento.listar_entregas',
-                            page=paginacao.next_num,
-                            **args_no_page) }}">
-          ›
-        </a>
-      </li>
-
-      <!-- Última -->
-      <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
-        <a class="page-link"
-           href="{{ url_for('monitoramento.listar_entregas',
-                            page=paginacao.pages,
-                            **args_no_page) }}">
-          »
-        </a>
-      </li>
-    </ul>
-  </nav>
-</div>
-
-<div class="text-center">
-  Registros
-  {{ (paginacao.page - 1) * paginacao.per_page + 1 }}
-  –
-  {{ (paginacao.page - 1) * paginacao.per_page + paginacao.items|length }}
-  de
-  {{ paginacao.total }}
-</div>
-{% endif %}
 
 
 
@@ -684,7 +901,72 @@
   </div>
 </div>
 {% endblock %}
+
 {% block scripts %}
+<!-- ✅ SCRIPT BÁSICO -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const stickyPagination = document.getElementById('sticky-pagination');
+  
+  if (stickyPagination) {
+    console.log('✅ Paginação sticky encontrada!');
+    
+    // 🔧 FORÇA estilos para garantir que sticky funcione
+    stickyPagination.style.setProperty('position', 'sticky', 'important');
+    stickyPagination.style.setProperty('top', '0px', 'important');
+    stickyPagination.style.setProperty('z-index', '104', 'important');
+    stickyPagination.style.setProperty('background', '#ffffff', 'important');
+    
+    // Força o parent a ter overflow visible
+    let parent = stickyPagination.parentElement;
+    while (parent && parent !== document.body) {
+      parent.style.setProperty('overflow', 'visible', 'important');
+      parent = parent.parentElement;
+    }
+    
+    console.log('🔧 Estilos forçados aplicados');
+    
+    // Observer para detectar quando a paginação está grudada
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.intersectionRatio < 1) {
+          // Paginação está grudada (não completamente visível)
+          stickyPagination.classList.add('stuck');
+          console.log('🔴 PAGINAÇÃO GRUDADA! Sticky está funcionando!');
+        } else {
+          // Paginação está solta (completamente visível)
+          stickyPagination.classList.remove('stuck');
+          console.log('🟢 PAGINAÇÃO NORMAL');
+        }
+      },
+      { threshold: 1 } // Detecta quando 100% do elemento está visível
+    );
+    
+    observer.observe(stickyPagination);
+    
+    // 🧪 TESTE FINAL: Monitora posição a cada segundo
+    setInterval(() => {
+      const rect = stickyPagination.getBoundingClientRect();
+      const computedStyle = window.getComputedStyle(stickyPagination);
+      
+      console.log('📊 DEBUG STICKY:');
+      console.log('   - Position:', computedStyle.position);
+      console.log('   - Top:', computedStyle.top);
+      console.log('   - Z-index:', computedStyle.zIndex);
+      console.log('   - BoundingRect top:', rect.top);
+      console.log('   - Scroll Y:', window.scrollY);
+      
+      // Testa se deveria estar grudado (scroll passou da posição original)
+      if (window.scrollY > 200 && rect.top > 10) {
+        console.warn('⚠️ STICKY NÃO ESTÁ FUNCIONANDO! Posição deveria ser 10px, mas está em:', rect.top);
+      }
+    }, 3000);
+    
+  } else {
+    console.log('❌ Paginação sticky não encontrada');
+  }
+});
+</script>
 <!-- ===========================
      SCRIPTS ESPECÍFICOS
      =========================== -->
@@ -777,3 +1059,5 @@
   });
 </script>
 {% endblock %}
+
+</div> <!-- fim pagination-container -->

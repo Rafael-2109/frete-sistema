@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from flask import Blueprint, render_template, request, flash, redirect, url_for
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app import db
@@ -233,6 +233,11 @@ def listar_relatorios():
     query = RelatorioFaturamentoImportado.query
 
     # 1) Filtros:
+    # 🆕 FILTRO DE STATUS (padrão: apenas ativas)
+    mostrar_inativas = request.args.get('mostrar_inativas', 'false').lower() == 'true'
+    if not mostrar_inativas:
+        query = query.filter(RelatorioFaturamentoImportado.ativo == True)
+    
     if numero_nf := request.args.get('numero_nf'):
         query = query.filter(RelatorioFaturamentoImportado.numero_nf.ilike(f"%{numero_nf}%"))
     if cnpj_cliente := request.args.get('cnpj_cliente'):
@@ -282,5 +287,88 @@ def listar_relatorios():
         paginacao=paginacao,
         sort=sort,
         direction=direction,
+        mostrar_inativas=mostrar_inativas,
     )
+
+@faturamento_bp.route('/inativar-nfs', methods=['POST'])
+@login_required
+def inativar_nfs():
+    """
+    🗑️ INATIVAR NFs SELECIONADAS
+    
+    Remove as NFs do monitoramento e marca como inativas no faturamento
+    """
+    try:
+        nfs_selecionadas = request.form.getlist('nfs_selecionadas')
+        
+        if not nfs_selecionadas:
+            return jsonify({
+                'success': False,
+                'message': 'Nenhuma NF foi selecionada!'
+            }), 400
+        
+        # Estatísticas
+        nfs_inativadas = 0
+        nfs_removidas_monitoramento = 0
+        erros = []
+        
+        from app.monitoramento.models import EntregaMonitorada
+        from datetime import datetime
+        
+        for numero_nf in nfs_selecionadas:
+            try:
+                # 1. Marca NF como inativa no faturamento
+                nf_faturamento = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).first()
+                
+                if nf_faturamento:
+                    if nf_faturamento.ativo:  # Só inativa se estiver ativa
+                        nf_faturamento.ativo = False
+                        nf_faturamento.inativado_em = datetime.utcnow()
+                        nf_faturamento.inativado_por = current_user.nome if current_user.is_authenticated else 'Sistema'
+                        nfs_inativadas += 1
+                    
+                    # 2. Remove do monitoramento
+                    entrega_monitorada = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
+                    if entrega_monitorada:
+                        db.session.delete(entrega_monitorada)
+                        nfs_removidas_monitoramento += 1
+                else:
+                    erros.append(f"NF {numero_nf} não encontrada no faturamento")
+                    
+            except Exception as e:
+                erros.append(f"NF {numero_nf}: {str(e)}")
+        
+        # Salva alterações
+        db.session.commit()
+        
+        # Prepara mensagem de resultado
+        mensagens = []
+        if nfs_inativadas > 0:
+            mensagens.append(f"{nfs_inativadas} NF(s) inativada(s)")
+        if nfs_removidas_monitoramento > 0:
+            mensagens.append(f"{nfs_removidas_monitoramento} removida(s) do monitoramento")
+        if erros:
+            mensagens.append(f"{len(erros)} erro(s)")
+        
+        sucesso = nfs_inativadas > 0
+        mensagem = "Processamento concluído: " + ", ".join(mensagens)
+        
+        if erros and len(erros) <= 3:  # Mostra erros se poucos
+            mensagem += f"\nErros: {'; '.join(erros)}"
+        
+        return jsonify({
+            'success': sucesso,
+            'message': mensagem,
+            'stats': {
+                'nfs_inativadas': nfs_inativadas,
+                'nfs_removidas_monitoramento': nfs_removidas_monitoramento,
+                'erros': len(erros)
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        }), 500
 

@@ -14,6 +14,15 @@ def sincronizar_entrega_por_nf(numero_nf):
     if not fat:
         # Se a NF não estiver no faturamento, não faz nada
         return
+    
+    # 🆕 NÃO SINCRONIZA NFs INATIVAS
+    if not getattr(fat, 'ativo', True):  # Compatibilidade com NFs antigas sem campo ativo
+        # Se a NF foi inativada, remove do monitoramento se existir
+        entrega_existente = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
+        if entrega_existente:
+            db.session.delete(entrega_existente)
+            db.session.commit()
+        return
 
     entrega = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
     if not entrega:
