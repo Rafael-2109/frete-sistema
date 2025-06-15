@@ -348,11 +348,11 @@
             <thead class="table-dark">
                 <tr>
                     <!-- Checkbox do "selecionar todos" -->
-                    <th style="width: 40px;">
+                    <th style="width: 30px;">
                         <input type="checkbox" onclick="toggleAll(this)" title="Selecionar todos">
                     </th>
                     <!-- ✨ NOVA COLUNA: Status -->
-                    <th style="width: 100px;">
+                    <th style="width: 80px;">
                         <i class="fas fa-flag"></i> Status
                     </th>
                     <th style="width: 70px;"><i class="fas fa-truck"></i> Emb.</th>
@@ -361,13 +361,13 @@
                     <th style="width: 140px;">CNPJ/CPF</th>
                     <th>Razão Social</th>
                     <th style="width: 120px;">Cidade</th>
-                    <th style="width: 60px;">UF</th>
+                    <th style="width: 40px;">UF</th>
                     <th style="width: 100px;">Valor Total</th>
                     <th style="width: 80px;">Peso (kg)</th>
-                    <th style="width: 80px;">Rota</th>
+                    <th style="width: 60x;">Rota</th>
                     <th style="width: 100px;"><i class="fas fa-truck"></i> Expedição</th>
                     <th style="width: 80px;">NF</th>
-                    <th style="width: 120px;">Ações</th>
+                    <th style="width: 70px;">Ações</th>
 
                 </tr>
             </thead>
@@ -455,9 +455,6 @@
                   {% if p.cod_uf %}
                     <span class="badge bg-secondary">{{ p.cod_uf }}</span>
                   {% endif %}
-                  {% if p.rota and p.rota != p.cod_uf %}
-                    <br><small class="text-primary">{{ p.rota }}</small>
-                  {% endif %}
                 </td>
                 
                 <td class="text-end">
@@ -494,10 +491,12 @@
                   {% else %}
                     <span class="text-muted">-</span>
                   {% endif %}
-                  {% if p.agendamento and p.agendamento != p.expedicao %}
-                    <br><small class="text-success"><i class="fas fa-calendar-alt"></i> {{ p.agendamento | formatar_data_brasil }}</small>
-                  {% elif p.agendamento and not p.expedicao %}
-                    <small class="text-success"><i class="fas fa-calendar-alt"></i> {{ p.agendamento | formatar_data_brasil }}</small>
+                  {% if p.agendamento %}
+                    {% if p.expedicao %}
+                      <br><small class="text-success"><i class="fas fa-calendar-alt"></i> {{ p.agendamento | formatar_data_brasil }}</small>
+                    {% else %}
+                      <small class="text-success"><i class="fas fa-calendar-alt"></i> {{ p.agendamento | formatar_data_brasil }}</small>
+                    {% endif %}
                   {% endif %}
                 </td>
                 
