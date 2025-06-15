@@ -8,6 +8,9 @@ from app.transportadoras.models import Transportadora
 from app.veiculos.models import Veiculo
 from sqlalchemy import func, distinct
 from app.utils.localizacao import LocalizacaoService
+from app.cadastros_agendamento.models import ContatoAgendamento
+from app.embarques.models import Embarque, EmbarqueItem
+from flask import jsonify
 import uuid  # ✅ ADICIONADO: Para gerar lotes únicos
 
 
@@ -221,7 +224,6 @@ def lista_pedidos():
     pedidos = query.all()
     
     # ✅ NOVO: Busca o último embarque válido para cada pedido
-    from app.embarques.models import Embarque, EmbarqueItem
     
     # Cria um dicionário para mapear lote_id -> último embarque
     embarques_por_lote = {}
@@ -248,9 +250,22 @@ def lista_pedidos():
             if item.separacao_lote_id not in embarques_por_lote:
                 embarques_por_lote[item.separacao_lote_id] = embarque
     
-    # Adiciona o embarque a cada pedido
+    # ✅ NOVO: Busca contatos de agendamento para os CNPJs dos pedidos
+    contatos_por_cnpj = {}
+    cnpjs_pedidos = [p.cnpj_cpf for p in pedidos if p.cnpj_cpf]
+    
+    if cnpjs_pedidos:
+        contatos_agendamento = ContatoAgendamento.query.filter(
+            ContatoAgendamento.cnpj.in_(cnpjs_pedidos)
+        ).all()
+        
+        for contato in contatos_agendamento:
+            contatos_por_cnpj[contato.cnpj] = contato
+    
+    # Adiciona o embarque e contato de agendamento a cada pedido
     for pedido in pedidos:
         pedido.ultimo_embarque = embarques_por_lote.get(pedido.separacao_lote_id)
+        pedido.contato_agendamento = contatos_por_cnpj.get(pedido.cnpj_cpf)
 
     return render_template(
         'pedidos/lista_pedidos.html',
@@ -270,13 +285,25 @@ def editar_pedido(pedido_id):
     Edita campos específicos de um pedido (agenda, protocolo, expedição)
     e sincroniza as alterações com a separação relacionada.
     Permite alterações apenas em pedidos com status "ABERTO".
+    Suporta requisições AJAX para pop-up.
     """
+    
     pedido = Pedido.query.get_or_404(pedido_id)
     
     # ✅ VALIDAÇÃO: Só permite editar pedidos com status ABERTO
     if pedido.status_calculado != 'ABERTO':
+        if request.args.get('ajax'):
+            return jsonify({
+                'success': False, 
+                'message': f"Não é possível editar o pedido {pedido.num_pedido}. Apenas pedidos com status 'ABERTO' podem ser editados."
+            })
         flash(f"Não é possível editar o pedido {pedido.num_pedido}. Apenas pedidos com status 'ABERTO' podem ser editados. Status atual: {pedido.status_calculado}", "error")
         return redirect(url_for('pedidos.lista_pedidos'))
+    
+    # ✅ NOVO: Busca contato de agendamento para este CNPJ
+    contato_agendamento = None
+    if pedido.cnpj_cpf:
+        contato_agendamento = ContatoAgendamento.query.filter_by(cnpj=pedido.cnpj_cpf).first()
     
     form = EditarPedidoForm()
     
@@ -322,6 +349,13 @@ def editar_pedido(pedido_id):
             # ✅ COMMIT das alterações
             db.session.commit()
             
+            # ✅ RESPOSTA PARA AJAX
+            if request.args.get('ajax') or request.is_json:
+                return jsonify({
+                    'success': True,
+                    'message': f"Pedido {pedido.num_pedido} atualizado com sucesso! {separacoes_atualizadas} item(ns) de separação também foram atualizados."
+                })
+            
             # ✅ MENSAGEM DE SUCESSO com detalhes
             flash(f"Pedido {pedido.num_pedido} atualizado com sucesso! {separacoes_atualizadas} item(ns) de separação também foram atualizados.", "success")
             
@@ -336,15 +370,32 @@ def editar_pedido(pedido_id):
             
         except Exception as e:
             db.session.rollback()
+            if request.args.get('ajax') or request.is_json:
+                return jsonify({
+                    'success': False,
+                    'message': f"Erro ao atualizar pedido: {str(e)}"
+                })
             flash(f"Erro ao atualizar pedido: {str(e)}", "error")
             
     else:
+        # ✅ VALIDAÇÃO DE ERROS PARA AJAX
+        if request.method == 'POST' and (request.args.get('ajax') or request.is_json):
+            return jsonify({
+                'success': False,
+                'errors': form.errors,
+                'message': 'Erros de validação encontrados'
+            })
+        
         # ✅ PRÉ-PREENCHE o formulário com dados atuais
         form.expedicao.data = pedido.expedicao
         form.agendamento.data = pedido.agendamento
         form.protocolo.data = pedido.protocolo
     
-    return render_template('pedidos/editar_pedido.html', form=form, pedido=pedido)
+    # ✅ RESPOSTA PARA AJAX (apenas o conteúdo do formulário)
+    if request.args.get('ajax'):
+        return render_template('pedidos/editar_pedido_ajax.html', form=form, pedido=pedido, contato_agendamento=contato_agendamento)
+    
+    return render_template('pedidos/editar_pedido.html', form=form, pedido=pedido, contato_agendamento=contato_agendamento)
 
 @pedidos_bp.route('/excluir/<int:pedido_id>', methods=['POST'])
 @login_required

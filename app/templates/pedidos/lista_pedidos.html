@@ -355,17 +355,17 @@
                     <th style="width: 80px;">
                         <i class="fas fa-flag"></i> Status
                     </th>
-                    <th style="width: 70px;"><i class="fas fa-truck"></i> Emb.</th>
                     <th style="width: 120px;">Nº Pedido</th>
-                    <th style="width: 100px;">Data Pedido</th>
                     <th style="width: 140px;">CNPJ/CPF</th>
                     <th>Razão Social</th>
                     <th style="width: 120px;">Cidade</th>
                     <th style="width: 40px;">UF</th>
                     <th style="width: 100px;">Valor Total</th>
                     <th style="width: 80px;">Peso (kg)</th>
-                    <th style="width: 60x;">Rota</th>
+                    <th style="width: 70px;">Rota</th>
                     <th style="width: 100px;"><i class="fas fa-truck"></i> Expedição</th>
+                    <th style="width: 100px;"><i class="fas fa-calendar"></i> Agenda</th>
+                    <th style="width: 90px;"><i class="fas fa-phone"></i> Agendamento</th>
                     <th style="width: 80px;">NF</th>
                     <th style="width: 70px;">Ações</th>
 
@@ -386,7 +386,7 @@
                     {% if p.status_calculado not in ['ABERTO', 'COTADO', 'NF no CD'] %}disabled title="Pedido já processado"{% endif %}>
                 </td>
                 
-                <!-- ✨ NOVA COLUNA: Status -->
+                <!-- ✨ COLUNA: Status + Embarque -->
                 <td class="text-center">
                   <span class="{{ p.status_badge_class }}">
                     {% if p.status_calculado == 'NF no CD' %}
@@ -401,33 +401,22 @@
                       <i class="fas fa-clock"></i> Aberto
                     {% endif %}
                   </span>
-                </td>
-                
-                <!-- ✨ NOVA COLUNA: Número do Embarque -->
-                <td class="text-center">
                   {% if p.ultimo_embarque %}
-                    <a href="{{ url_for('embarques.visualizar_embarque', id=p.ultimo_embarque.id) }}" 
-                       class="btn btn-sm btn-outline-primary" 
-                       title="Ver embarque #{{ p.ultimo_embarque.numero }}">
+                    <br><a href="{{ url_for('embarques.visualizar_embarque', id=p.ultimo_embarque.id) }}" 
+                           class="btn btn-xs btn-outline-primary" 
+                           title="Ver embarque #{{ p.ultimo_embarque.numero }}" 
+                           style="font-size: 0.7rem; padding: 1px 4px;">
                       <i class="fas fa-truck"></i> {{ p.ultimo_embarque.numero }}
                     </a>
-                  {% else %}
-                    <span class="text-muted">-</span>
                   {% endif %}
                 </td>
                 
                 <td>
                   <strong>{{ p.num_pedido }}</strong>
-                  {% if p.protocolo %}
-                    <br><small class="text-muted"><i class="fas fa-barcode"></i> {{ p.protocolo | formatar_protocolo }}</small>
-                  {% else %}
-                    <br><small class="text-muted">Sem protocolo</small>
-                  {% endif %}
-                </td>
-                
-                <td>
                   {% if p.data_pedido %}
-                    {{ p.data_pedido|formatar_data("%d/%m/%Y") }}
+                    <br><small class="text-muted"><i class="fas fa-calendar-plus"></i> {{ p.data_pedido|formatar_data("%d/%m/%Y") }}</small>
+                  {% else %}
+                    <br><small class="text-muted">Sem data</small>
                   {% endif %}
                 </td>
                 
@@ -491,12 +480,37 @@
                   {% else %}
                     <span class="text-muted">-</span>
                   {% endif %}
+                </td>
+                
+                <!-- ✨ NOVA COLUNA: Agenda -->
+                <td class="text-center">
                   {% if p.agendamento %}
-                    {% if p.expedicao %}
-                      <br><small class="text-success"><i class="fas fa-calendar-alt"></i> {{ p.agendamento | formatar_data_brasil }}</small>
-                    {% else %}
-                      <small class="text-success"><i class="fas fa-calendar-alt"></i> {{ p.agendamento | formatar_data_brasil }}</small>
-                    {% endif %}
+                    <strong class="text-success">{{ p.agendamento | formatar_data_brasil }}</strong>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                  {% if p.protocolo %}
+                    <br><small class="text-muted"><i class="fas fa-barcode"></i> {{ p.protocolo | formatar_protocolo }}</small>
+                  {% else %}
+                    <br><small class="text-muted">Sem protocolo</small>
+                  {% endif %}
+                </td>
+                
+                <!-- ✨ NOVA COLUNA: Forma de Agendamento -->
+                <td class="text-center">
+                  {% if p.contato_agendamento %}
+                    <button type="button" 
+                            class="btn btn-sm badge bg-primary" 
+                            data-cnpj="{{ p.cnpj_cpf }}"
+                            data-forma="{{ p.contato_agendamento.forma }}"
+                            data-contato="{{ p.contato_agendamento.contato }}"
+                            data-observacao="{{ p.contato_agendamento.observacao or '' }}"
+                            onclick="mostrarContatoAgendamento(this.dataset.cnpj, this.dataset.forma, this.dataset.contato, this.dataset.observacao)"
+                            title="Clique para ver detalhes">
+                      {{ p.contato_agendamento.forma }}
+                    </button>
+                  {% else %}
+                    <span class="text-muted">-</span>
                   {% endif %}
                 </td>
                 
@@ -516,11 +530,12 @@
                   {% if p.status_calculado == 'ABERTO' %}
                     <!-- Botões para pedidos com status ABERTO -->
                     <div class="btn-group-vertical btn-group-sm" role="group">
-                      <a href="{{ url_for('pedidos.editar_pedido', pedido_id=p.id) }}" 
-                         class="btn btn-outline-primary btn-sm" 
-                         title="Editar pedido">
+                      <button type="button" 
+                              class="btn btn-outline-primary btn-sm" 
+                              onclick="abrirEdicaoPedido({{ p.id }})"
+                              title="Editar pedido">
                         <i class="fas fa-edit"></i>
-                      </a>
+                      </button>
                       <button type="button" 
                               class="btn btn-outline-danger btn-sm" 
                               title="Excluir pedido"
@@ -812,6 +827,148 @@ function confirmarExclusao(pedidoId, numeroPedido) {
         document.body.appendChild(form);
         form.submit();
     }
+}
+
+// ✅ NOVA FUNÇÃO: Mostrar pop-up com informações de contato de agendamento
+function mostrarContatoAgendamento(cnpj, forma, contato, observacao) {
+    const modalHtml = `
+        <div class="modal fade" id="modalContatoAgendamento" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-phone"></i> Informações de Agendamento
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-12 mb-3">
+                                <label class="form-label"><strong>CNPJ:</strong></label>
+                                <div class="form-control-plaintext">${cnpj}</div>
+                            </div>
+                            <div class="col-12 mb-3">
+                                <label class="form-label"><strong>Forma de Agendamento:</strong></label>
+                                <div class="form-control-plaintext">
+                                    <span class="badge bg-primary">${forma}</span>
+                                </div>
+                            </div>
+                            <div class="col-12 mb-3">
+                                <label class="form-label"><strong>Contato:</strong></label>
+                                <div class="form-control-plaintext">${contato}</div>
+                            </div>
+                            ${observacao ? `
+                            <div class="col-12 mb-3">
+                                <label class="form-label"><strong>Observação:</strong></label>
+                                <div class="form-control-plaintext">${observacao}</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove modal anterior se existir
+    const modalExistente = document.getElementById('modalContatoAgendamento');
+    if (modalExistente) {
+        modalExistente.remove();
+    }
+    
+    // Adiciona o novo modal ao body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Mostra o modal
+    const modal = new bootstrap.Modal(document.getElementById('modalContatoAgendamento'));
+    modal.show();
+}
+
+// ✅ NOVA FUNÇÃO: Abrir edição de pedido em pop-up
+function abrirEdicaoPedido(pedidoId) {
+    // Faz requisição AJAX para carregar o formulário de edição
+    fetch(`/pedidos/editar/${pedidoId}?ajax=1`)
+        .then(response => response.text())
+        .then(html => {
+            // Remove modal anterior se existir
+            const modalExistente = document.getElementById('modalEdicaoPedido');
+            if (modalExistente) {
+                modalExistente.remove();
+            }
+            
+            // Cria o modal
+            const modalHtml = `
+                <div class="modal fade" id="modalEdicaoPedido" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-edit"></i> Editar Pedido
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                ${html}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Adiciona o modal ao body
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            
+            // Mostra o modal
+            const modal = new bootstrap.Modal(document.getElementById('modalEdicaoPedido'));
+            modal.show();
+            
+            // Intercepta o submit do formulário para enviar via AJAX
+            const form = document.querySelector('#modalEdicaoPedido form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const formData = new FormData(form);
+                    
+                    fetch(form.action, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Fecha o modal
+                            modal.hide();
+                            
+                            // Recarrega a página para atualizar a lista
+                            window.location.reload();
+                        } else {
+                            // Mostra erros no modal
+                            if (data.errors) {
+                                let errorMessage = 'Erros encontrados:\n';
+                                for (let field in data.errors) {
+                                    errorMessage += `- ${field}: ${data.errors[field].join(', ')}\n`;
+                                }
+                                alert(errorMessage);
+                            } else {
+                                alert(data.message || 'Erro ao salvar pedido');
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erro:', error);
+                        alert('Erro ao processar requisição');
+                    });
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar formulário:', error);
+            alert('Erro ao carregar formulário de edição');
+        });
 }
 </script>
 
