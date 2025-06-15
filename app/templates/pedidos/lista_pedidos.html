@@ -355,7 +355,7 @@
                     <th style="width: 100px;">
                         <i class="fas fa-flag"></i> Status
                     </th>
-                    <th style="width: 50px;">#</th>
+                    <th style="width: 70px;"><i class="fas fa-truck"></i> Emb.</th>
                     <th style="width: 120px;">Nº Pedido</th>
                     <th style="width: 100px;">Data Pedido</th>
                     <th style="width: 140px;">CNPJ/CPF</th>
@@ -403,8 +403,17 @@
                   </span>
                 </td>
                 
+                <!-- ✨ NOVA COLUNA: Número do Embarque -->
                 <td class="text-center">
-                  <small class="text-muted">{{ loop.index }}</small>
+                  {% if p.ultimo_embarque %}
+                    <a href="{{ url_for('embarques.visualizar_embarque', id=p.ultimo_embarque.id) }}" 
+                       class="btn btn-sm btn-outline-primary" 
+                       title="Ver embarque #{{ p.ultimo_embarque.numero }}">
+                      <i class="fas fa-truck"></i> {{ p.ultimo_embarque.numero }}
+                    </a>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
                 </td>
                 
                 <td>
@@ -516,7 +525,9 @@
                       <button type="button" 
                               class="btn btn-outline-danger btn-sm" 
                               title="Excluir pedido"
-                              onclick="confirmarExclusao({{ p.id }}, '{{ p.num_pedido }}')">
+                              data-pedido-id="{{ p.id }}"
+                              data-pedido-numero="{{ p.num_pedido }}"
+                              onclick="confirmarExclusao(this.dataset.pedidoId, this.dataset.pedidoNumero)">
                         <i class="fas fa-trash"></i>
                       </button>
                     </div>

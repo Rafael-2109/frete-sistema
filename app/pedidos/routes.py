@@ -219,6 +219,38 @@ def lista_pedidos():
     )
 
     pedidos = query.all()
+    
+    # ✅ NOVO: Busca o último embarque válido para cada pedido
+    from app.embarques.models import Embarque, EmbarqueItem
+    
+    # Cria um dicionário para mapear lote_id -> último embarque
+    embarques_por_lote = {}
+    
+    # Busca todos os lotes únicos dos pedidos
+    lotes_ids = [p.separacao_lote_id for p in pedidos if p.separacao_lote_id]
+    
+    if lotes_ids:
+        # Busca os itens de embarque ativos para esses lotes
+        itens_embarque = (
+            db.session.query(EmbarqueItem, Embarque)
+            .join(Embarque, EmbarqueItem.embarque_id == Embarque.id)
+            .filter(
+                EmbarqueItem.separacao_lote_id.in_(lotes_ids),
+                EmbarqueItem.status == 'ativo',
+                Embarque.status == 'ativo'
+            )
+            .order_by(Embarque.numero.desc())  # Último embarque primeiro
+            .all()
+        )
+        
+        # Mapeia cada lote para seu último embarque
+        for item, embarque in itens_embarque:
+            if item.separacao_lote_id not in embarques_por_lote:
+                embarques_por_lote[item.separacao_lote_id] = embarque
+    
+    # Adiciona o embarque a cada pedido
+    for pedido in pedidos:
+        pedido.ultimo_embarque = embarques_por_lote.get(pedido.separacao_lote_id)
 
     return render_template(
         'pedidos/lista_pedidos.html',
