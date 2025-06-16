@@ -15,7 +15,8 @@ ESTRUTURA DA PLANILHA:
 - data_embarque (opcional)
 - data_entrega_prevista (opcional)
 - data_agenda (opcional)
-- status_finalizacao (opcional: 'Cancelada', 'Devolvida', etc.)
+- status_finalizacao (opcional: 'Cancelada', 'Devolvida', 'Entregue', etc.)
+- data_entrega_realizada (opcional: data real da entrega quando status = 'Entregue')
 - protocolo_agendamento (opcional)
 - data_agendamento (opcional)
 - acompanhamento_descricao (opcional)
@@ -94,6 +95,7 @@ def preparar_atualizacao_entrega_monitorada(arquivo_excel, sheet_name='Sheet1', 
             'data_entrega_prevista': 'data_entrega_prevista', 
             'data_agenda': 'data_agenda',
             'status_finalizacao': 'status_finalizacao',
+            'data_entrega_realizada': 'data_entrega_realizada',
             'protocolo_agendamento': 'protocolo_agendamento',
             'data_agendamento': 'data_agendamento',
             'acompanhamento_descricao': 'acompanhamento_descricao'
@@ -181,10 +183,26 @@ def preparar_atualizacao_entrega_monitorada(arquivo_excel, sheet_name='Sheet1', 
                     if novo_status and novo_status.lower() not in ['nan', 'none', '-'] and novo_status != entrega.status_finalizacao:
                         if not dry_run:
                             entrega.status_finalizacao = novo_status
-                            if novo_status.lower() in ['cancelada', 'devolvida']:
-                                entrega.finalizado_em = datetime.utcnow()
+                            
+                            # Define data de finalização baseada no status
+                            if novo_status.lower() in ['cancelada', 'devolvida', 'entregue']:
+                                data_finalizacao = datetime.utcnow()
+                                
+                                # Para "Entregue", tenta usar a data da planilha
+                                if novo_status.lower() == 'entregue' and 'data_entrega_realizada' in colunas_encontradas:
+                                    data_planilha = converter_data_segura(row[colunas_encontradas['data_entrega_realizada']])
+                                    if data_planilha:
+                                        # Converte date para datetime para compatibilidade
+                                        data_finalizacao = datetime.combine(data_planilha, datetime.min.time())
+                                
+                                entrega.finalizado_em = data_finalizacao
                                 entrega.finalizado_por = 'Planilha'
+                        
                         print(f"   ✏️  Status: {entrega.status_finalizacao} → {novo_status}")
+                        if novo_status.lower() == 'entregue' and 'data_entrega_realizada' in colunas_encontradas:
+                            data_entrega = converter_data_segura(row[colunas_encontradas['data_entrega_realizada']])
+                            if data_entrega:
+                                print(f"   📅 Data entrega: {data_entrega}")
                         entrega_atualizada = True
                 
                 # ATUALIZAÇÃO C: Agendamento
