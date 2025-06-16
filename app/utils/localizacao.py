@@ -15,11 +15,8 @@ logger = logging.getLogger(__name__)
 class LocalizacaoService:
     """
     Serviço centralizado para localização e normalização de cidades.
+    ✅ CORRIGIDO: Removido cache para evitar problemas de sessão SQLAlchemy.
     """
-    
-    # Cache em memória para melhor performance
-    _cache_cidades_ibge = {}
-    _cache_cidades_nome = {}
     
     @staticmethod
     def normalizar_nome_cidade_com_regras(nome, rota=None):
@@ -85,44 +82,46 @@ class LocalizacaoService:
     def buscar_cidade_por_ibge(codigo_ibge):
         """
         Busca cidade por código IBGE (método mais confiável e rápido).
-        Usa cache em memória para melhor performance.
+        ✅ CORRIGIDO: Garante que o objeto sempre esteja vinculado à sessão atual.
         """
         if not codigo_ibge:
             return None
             
         codigo_ibge = str(codigo_ibge).strip()
         
-        # Verifica cache primeiro
-        if codigo_ibge in LocalizacaoService._cache_cidades_ibge:
-            return LocalizacaoService._cache_cidades_ibge[codigo_ibge]
+        # ✅ CORREÇÃO: Não usa cache para evitar problemas de sessão
+        # O cache pode retornar objetos órfãos de sessões anteriores
         
-        # Busca no banco com eager loading
+        # Busca sempre no banco com a sessão atual
         cidade = Cidade.query.filter_by(codigo_ibge=codigo_ibge).first()
         
-        # Se encontrou a cidade, força o carregamento dos atributos na sessão atual
+        # Se encontrou a cidade, garante que está na sessão atual
         if cidade:
             try:
-                # Força o carregamento dos atributos principais
+                # ✅ GARANTE SESSÃO ATIVA: Força carregamento na sessão atual
+                cidade = db.session.merge(cidade)
+                
+                # Teste de acesso aos atributos para garantir que funciona
                 _ = cidade.nome
                 _ = cidade.uf
                 _ = cidade.icms
                 _ = cidade.codigo_ibge
+                
+                logger.debug(f"✅ Cidade IBGE {codigo_ibge} carregada: {cidade.nome}/{cidade.uf}")
+                
             except Exception as e:
-                logger.warning(f"Problema ao carregar atributos da cidade IBGE {codigo_ibge}: {e}")
-                # Tenta recarregar na sessão atual
+                logger.warning(f"Erro ao processar cidade IBGE {codigo_ibge}: {e}")
+                # Se falhou, tenta buscar novamente diretamente
                 try:
-                    cidade = db.session.merge(cidade)
+                    cidade = db.session.query(Cidade).filter_by(codigo_ibge=codigo_ibge).first()
                     if cidade:
-                        _ = cidade.nome
-                        _ = cidade.uf
-                        _ = cidade.icms
-                        _ = cidade.codigo_ibge
+                        _ = cidade.nome  # Teste de acesso
+                        logger.debug(f"✅ Cidade IBGE {codigo_ibge} recarregada: {cidade.nome}/{cidade.uf}")
+                    else:
+                        logger.warning(f"❌ Cidade IBGE {codigo_ibge} não encontrada na segunda tentativa")
                 except Exception as e2:
-                    logger.warning(f"Erro ao recarregar cidade IBGE {codigo_ibge}: {e2}")
+                    logger.error(f"❌ Erro crítico ao buscar cidade IBGE {codigo_ibge}: {e2}")
                     cidade = None
-        
-        # Salva no cache
-        LocalizacaoService._cache_cidades_ibge[codigo_ibge] = cidade
         
         return cidade
     
@@ -130,7 +129,7 @@ class LocalizacaoService:
     def buscar_cidade_por_nome(nome, uf):
         """
         Busca cidade por nome e UF (fallback quando não tem código IBGE).
-        Usa normalização para comparação.
+        ✅ CORRIGIDO: Evita problemas de sessão SQLAlchemy.
         """
         if not nome or not uf:
             return None
@@ -139,80 +138,66 @@ class LocalizacaoService:
         nome_normalizado = remover_acentos(nome.strip()).upper()
         uf_normalizado = uf.strip().upper()
         
-        # Verifica cache
-        cache_key = f"{nome_normalizado}_{uf_normalizado}"
-        if cache_key in LocalizacaoService._cache_cidades_nome:
-            return LocalizacaoService._cache_cidades_nome[cache_key]
-        
-        # Busca todas as cidades do UF
-        cidades_uf = Cidade.query.filter(
-            func.upper(Cidade.uf) == uf_normalizado
-        ).all()
-        
-        # Compara nomes normalizados
-        cidade_encontrada = None
-        for cidade in cidades_uf:
-            try:
-                # Força o carregamento dos atributos na sessão ativa
-                nome_db = cidade.nome
-                uf_db = cidade.uf
-                icms_db = cidade.icms
-                codigo_ibge_db = cidade.codigo_ibge
-                
-                cidade_nome_normalizado = remover_acentos(nome_db.strip()).upper()
-                if cidade_nome_normalizado == nome_normalizado:
-                    cidade_encontrada = cidade
-                    break
-            except Exception as e:
-                # Se não conseguir acessar o nome, tenta recarregar
-                logger.warning(f"Erro ao acessar dados da cidade {getattr(cidade, 'id', 'N/A')}: {e}")
+        # ✅ CORREÇÃO: Busca diretamente no banco sem cache
+        try:
+            # Busca todas as cidades do UF na sessão atual
+            cidades_uf = db.session.query(Cidade).filter(
+                func.upper(Cidade.uf) == uf_normalizado
+            ).all()
+            
+            # Compara nomes normalizados
+            for cidade in cidades_uf:
                 try:
-                    cidade_recarregada = db.session.merge(cidade)
-                    if cidade_recarregada:
-                        nome_db = cidade_recarregada.nome
-                        cidade_nome_normalizado = remover_acentos(nome_db.strip()).upper()
-                        if cidade_nome_normalizado == nome_normalizado:
-                            cidade_encontrada = cidade_recarregada
-                            break
-                except Exception as e2:
-                    logger.warning(f"Erro ao recarregar cidade: {e2}")
+                    # ✅ GARANTE SESSÃO ATIVA: Já está na sessão atual da query
+                    nome_db = cidade.nome
+                    cidade_nome_normalizado = remover_acentos(nome_db.strip()).upper()
+                    
+                    if cidade_nome_normalizado == nome_normalizado:
+                        # Testa acesso a todos os atributos para garantir que funciona
+                        _ = cidade.uf
+                        _ = cidade.icms
+                        _ = cidade.codigo_ibge
+                        
+                        logger.debug(f"✅ Cidade encontrada por nome: {cidade.nome}/{cidade.uf}")
+                        return cidade
+                        
+                except Exception as e:
+                    logger.warning(f"Erro ao acessar dados da cidade {getattr(cidade, 'id', 'N/A')}: {e}")
                     continue
-        
-        # Salva no cache
-        LocalizacaoService._cache_cidades_nome[cache_key] = cidade_encontrada
-        
-        return cidade_encontrada
+            
+            logger.debug(f"❌ Cidade não encontrada: {nome_normalizado}/{uf_normalizado}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao buscar cidade por nome {nome_normalizado}/{uf_normalizado}: {e}")
+            return None
     
     @staticmethod
     def buscar_cidade_especial_fob():
         """
         Busca cidade especial FOB.
+        ✅ CORRIGIDO: Garante sessão ativa.
         """
-        cidade = Cidade.query.filter(func.upper(Cidade.nome) == 'FOB').first()
-        
-        # Se encontrou a cidade, força o carregamento dos atributos na sessão atual
-        if cidade:
-            try:
-                # Força o carregamento dos atributos principais
+        try:
+            # ✅ BUSCA DIRETA NA SESSÃO ATUAL
+            cidade = db.session.query(Cidade).filter(func.upper(Cidade.nome) == 'FOB').first()
+            
+            if cidade:
+                # Testa acesso aos atributos para garantir que funciona
                 _ = cidade.nome
                 _ = cidade.uf
                 _ = cidade.icms
                 _ = cidade.codigo_ibge
-            except Exception as e:
-                logger.warning(f"Problema ao carregar atributos da cidade FOB: {e}")
-                # Tenta recarregar na sessão atual
-                try:
-                    cidade = db.session.merge(cidade)
-                    if cidade:
-                        _ = cidade.nome
-                        _ = cidade.uf
-                        _ = cidade.icms
-                        _ = cidade.codigo_ibge
-                except Exception as e2:
-                    logger.warning(f"Erro ao recarregar cidade FOB: {e2}")
-                    cidade = None
-        
-        return cidade
+                
+                logger.debug(f"✅ Cidade FOB encontrada: {cidade.nome}/{cidade.uf}")
+                return cidade
+            else:
+                logger.debug("❌ Cidade FOB não encontrada")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao buscar cidade FOB: {e}")
+            return None
     
     @staticmethod
     def buscar_cidade_unificada(pedido=None, nome=None, uf=None, codigo_ibge=None, rota=None):
@@ -410,15 +395,7 @@ class LocalizacaoService:
         
         return contador_atualizados, contador_nao_encontrados
     
-    @staticmethod
-    def limpar_cache():
-        """
-        Limpa o cache em memória.
-        Útil quando há atualizações na tabela de cidades.
-        """
-        LocalizacaoService._cache_cidades_ibge.clear()
-        LocalizacaoService._cache_cidades_nome.clear()
-        logger.info("Cache de localização limpo")
+
 
 
 # Função de compatibilidade para não quebrar código existente
