@@ -154,10 +154,16 @@ def registrar_movimento():
             
             if form.validate_on_submit():
                 print(f"[DEBUG] Validação passou")
+                
+                if not form.motorista_id.data:
+                    print(f"[DEBUG] Nenhum motorista_id disponível")
+                    flash('É necessário buscar um motorista antes de registrar a chegada!', 'danger')
+                    return redirect(url_for('portaria.dashboard'))
+                
                 registro = ControlePortaria()
                 print(f"[DEBUG] Registro criado")
                 form.populate_obj(registro)
-                print(f"[DEBUG] Dados populados no registro")
+                print(f"[DEBUG] Dados populados no registro, motorista_id: {registro.motorista_id}")
                 
                 # ✅ NOVO: Registra usuário que criou
                 registro.registrado_por_id = current_user.id

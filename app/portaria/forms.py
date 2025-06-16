@@ -91,7 +91,7 @@ class ControlePortariaForm(FlaskForm):
     Formulário para controle de portaria
     """
     # Campos do motorista (preenchidos após busca)
-    motorista_id = HiddenField()
+    motorista_id = HiddenField(validators=[Optional()])
     nome_completo = StringField('Nome Completo', render_kw={'readonly': True})
     rg = StringField('RG', render_kw={'readonly': True})
     telefone = StringField('Telefone', render_kw={'readonly': True})

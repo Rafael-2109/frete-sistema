@@ -38,8 +38,29 @@ def formatar_hora_brasil(data, formato='%H:%M'):
     """
     Filtro Jinja2 para formatar apenas hora no timezone brasileiro
     """
-    from app.utils.timezone import formatar_data_hora_brasil
-    return formatar_data_hora_brasil(data, formato)
+    if data is None:
+        return ''
+    
+    try:
+        # Se é um objeto time (hora apenas), formata diretamente
+        if hasattr(data, 'hour') and not hasattr(data, 'year'):
+            return data.strftime(formato)
+        
+        # Se é um objeto datetime, usa a função de timezone
+        elif hasattr(data, 'year'):
+            from app.utils.timezone import formatar_data_hora_brasil
+            return formatar_data_hora_brasil(data, formato)
+        
+        # Se é string, retorna como está
+        elif isinstance(data, str):
+            return data
+        
+        else:
+            return str(data) if data else ''
+            
+    except Exception as e:
+        print(f"Erro ao formatar hora: {e}, data: {data}, tipo: {type(data)}")
+        return str(data) if data else ''
 
 
 def diferenca_timezone():
