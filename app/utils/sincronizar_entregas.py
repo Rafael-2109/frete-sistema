@@ -162,7 +162,7 @@ def sincronizar_entrega_por_nf(numero_nf):
     if entrega.data_agenda:
         data_final = entrega.data_agenda
     else:
-        if assoc and assoc.lead_time and item_mais_recente and embarque:
+        if assoc and assoc.lead_time and item_mais_recente and embarque and embarque.data_embarque:
             data_final = embarque.data_embarque + timedelta(days=assoc.lead_time)
 
     entrega.data_entrega_prevista = data_final
@@ -225,7 +225,7 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
                 )
                 .first()
             )
-            if assoc and assoc.lead_time:
+            if assoc and assoc.lead_time and embarque.data_embarque:
                 data_final = embarque.data_embarque + timedelta(days=assoc.lead_time)
 
     entrega.data_entrega_prevista = data_final

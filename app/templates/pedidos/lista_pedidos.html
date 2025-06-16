@@ -441,7 +441,7 @@
                   <strong>{{ p.raz_social_red or '' }}</strong>
                   {% if p.observ_ped_1 %}
                     <br><small class="text-muted" title="{{ p.observ_ped_1 }}">
-                      <i class="fas fa-comment"></i> {{ p.observ_ped_1[:30] }}{% if p.observ_ped_1|length > 30 %}...{% endif %}
+                      <i class="fas fa-comment"></i> {{ p.observ_ped_1[:60] }}{% if p.observ_ped_1|length > 60 %}...{% endif %}
                     </small>
                   {% endif %}
                 </td>
@@ -511,7 +511,7 @@
                 
                 <!-- ✨ NOVA COLUNA: Forma de Agendamento -->
                 <td class="text-center">
-                  {% if p.contato_agendamento %}
+                  {% if p.contato_agendamento and p.contato_agendamento.forma %}
                     <button type="button" 
                             class="btn btn-sm badge bg-primary" 
                             data-cnpj="{{ p.cnpj_cpf }}"
@@ -523,7 +523,7 @@
                       {{ p.contato_agendamento.forma }}
                     </button>
                   {% else %}
-                    <span class="text-muted">-</span>
+                    <span class="badge bg-danger">Não cadastrado</span>
                   {% endif %}
                 </td>
                 

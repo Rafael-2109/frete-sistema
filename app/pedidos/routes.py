@@ -12,6 +12,9 @@ from app.cadastros_agendamento.models import ContatoAgendamento
 from app.embarques.models import Embarque, EmbarqueItem
 from flask import jsonify
 import uuid  # ✅ ADICIONADO: Para gerar lotes únicos
+from app.utils.embarque_numero import obter_proximo_numero_embarque
+from datetime import datetime
+
 
 
 pedidos_bp = Blueprint('pedidos', __name__, url_prefix='/pedidos')
@@ -716,12 +719,8 @@ def processar_cotacao_manual():
         # Importa as classes necessárias
         from app.embarques.models import Embarque, EmbarqueItem
         from app.cotacao.models import Cotacao, CotacaoItem
+        from app.utils.embarque_numero import obter_proximo_numero_embarque
         from datetime import datetime
-
-        # Função para obter próximo número do embarque
-        def obter_proximo_numero_embarque():
-            ultimo_embarque = Embarque.query.order_by(Embarque.numero.desc()).first()
-            return (ultimo_embarque.numero + 1) if ultimo_embarque and ultimo_embarque.numero else 1
 
         # Calcula totais dos pedidos
         peso_total = sum(p.peso_total or 0 for p in pedidos)
@@ -947,13 +946,6 @@ def embarque_fob():
             db.session.flush()  # Para obter o ID
 
         # Importa as classes necessárias
-        from app.embarques.models import Embarque, EmbarqueItem
-        from datetime import datetime
-
-        # Função para obter próximo número do embarque
-        def obter_proximo_numero_embarque():
-            ultimo_embarque = Embarque.query.order_by(Embarque.numero.desc()).first()
-            return (ultimo_embarque.numero + 1) if ultimo_embarque and ultimo_embarque.numero else 1
 
         # Calcula totais dos pedidos
         peso_total = sum(p.peso_total or 0 for p in pedidos)

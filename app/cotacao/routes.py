@@ -25,7 +25,7 @@ from app.utils.vehicle_utils import normalizar_nome_veiculo
 from app.utils.calculadora_frete import CalculadoraFrete
 
 # Routes
-from app.embarques.routes import obter_proximo_numero_embarque
+# Função centralizada importada inline quando necessário
 
 # Conditional imports (só quando necessário)
 try:
@@ -1375,15 +1375,8 @@ def fechar_frete_grupo():
             'message': f'Erro ao criar embarque: {str(e)}'
         }), 500
 
-def obter_proximo_numero_embarque():
-    """Obtém o próximo número de embarque"""
-    try:
-        ultimo_embarque = Embarque.query.order_by(Embarque.id.desc()).first()
-        if ultimo_embarque:
-            return ultimo_embarque.numero + 1
-        return 1
-    except:
-        return 1
+# Importa função centralizada thread-safe
+from app.utils.embarque_numero import obter_proximo_numero_embarque
 
 @cotacao_bp.route("/otimizar")
 @login_required

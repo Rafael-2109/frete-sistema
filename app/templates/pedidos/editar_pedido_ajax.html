@@ -37,7 +37,11 @@
             <div class="row">
                 <div class="col-md-6">
                     <strong>Forma:</strong> 
-                    <span class="badge bg-primary">{{ contato_agendamento.forma }}</span>
+                    {% if contato_agendamento.forma %}
+                        <span class="badge bg-primary">{{ contato_agendamento.forma }}</span>
+                    {% else %}
+                        <span class="badge bg-danger">Não cadastrado</span>
+                    {% endif %}
                 </div>
                 <div class="col-md-6">
                     <strong>Contato:</strong> {{ contato_agendamento.contato }}
