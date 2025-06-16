@@ -8,7 +8,7 @@ from app.faturamento.models import RelatorioFaturamentoImportado
 from app.faturamento.forms import UploadRelatorioForm  # certifique-se de que o caminho está correto
 from app.utils.helpers import limpar_valor
 from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
-from app.embarques.models import EmbarqueItem
+from app.embarques.models import EmbarqueItem, Embarque
 from app.fretes.routes import validar_cnpj_embarque_faturamento
 from app.monitoramento.models import EntregaMonitorada
 from datetime import datetime
@@ -161,9 +161,24 @@ def importar_relatorio():
                 except Exception as e:
                     print(f"Erro no lançamento automático de fretes: {e}")
 
-                # Sincroniza entregas considerando os filtros de monitoramento
+                # ✅ NOVA FUNCIONALIDADE: Sincroniza entregas + NFs pendentes em embarques
+                nfs_sincronizadas = 0
+                nfs_em_embarques_sincronizadas = 0
+                
+                # 1. Sincroniza NFs importadas normalmente
                 for nf in nfs_importadas:
                     sincronizar_entrega_por_nf(nf)
+                    nfs_sincronizadas += 1
+                
+                # 2. CORREÇÃO PRINCIPAL: Busca NFs que estão em embarques mas não foram sincronizadas
+                try:
+                    nfs_em_embarques_sincronizadas = sincronizar_nfs_pendentes_embarques(nfs_importadas)
+                    if nfs_em_embarques_sincronizadas > 0:
+                        flash(f"🔄 {nfs_em_embarques_sincronizadas} NFs de embarques anteriores foram sincronizadas para o monitoramento", "info")
+                except Exception as e:
+                    print(f"Erro ao sincronizar NFs pendentes: {e}")
+                
+                print(f"[DEBUG] Sincronização: {nfs_sincronizadas} NFs normais + {nfs_em_embarques_sincronizadas} NFs de embarques")
 
                 # Mensagens de resultado
                 flash(f'✅ Relatório importado com sucesso! {len(nfs_importadas)} NFs processadas.', 'success')
@@ -293,6 +308,76 @@ def listar_relatorios():
         direction=direction,
         mostrar_inativas=mostrar_inativas,
     )
+
+def sincronizar_nfs_pendentes_embarques(nfs_importadas):
+    """
+    ✅ CORREÇÃO: Sincroniza NFs que estão em embarques mas não estavam no monitoramento
+    
+    Esta função resolve o problema de NFs que foram:
+    1. Adicionadas ao embarque ANTES de serem importadas no faturamento
+    2. Não foram sincronizadas automaticamente porque não existiam no faturamento na época
+    3. Agora que foram importadas, precisam ser sincronizadas retroativamente
+    
+    Args:
+        nfs_importadas (list): Lista das NFs que acabaram de ser importadas
+    
+    Returns:
+        int: Número de NFs de embarques que foram sincronizadas
+    """
+    
+    try:
+        print(f"[DEBUG] 🔍 Buscando NFs de embarques que precisam ser sincronizadas...")
+        
+        # Busca TODAS as NFs que estão em embarques ativos
+        nfs_em_embarques = db.session.query(EmbarqueItem.nota_fiscal).filter(
+            EmbarqueItem.nota_fiscal.isnot(None),
+            EmbarqueItem.nota_fiscal != '',
+            EmbarqueItem.status == 'ativo'
+        ).join(Embarque).filter(
+            Embarque.status == 'ativo'
+        ).distinct().all()
+        
+        nfs_em_embarques_set = {nf[0] for nf in nfs_em_embarques}
+        print(f"[DEBUG] 📦 Total de NFs únicas em embarques ativos: {len(nfs_em_embarques_set)}")
+        
+        # Busca NFs que JÁ estão no monitoramento
+        nfs_no_monitoramento = db.session.query(EntregaMonitorada.numero_nf).distinct().all()
+        nfs_no_monitoramento_set = {nf[0] for nf in nfs_no_monitoramento}
+        print(f"[DEBUG] 📊 Total de NFs no monitoramento: {len(nfs_no_monitoramento_set)}")
+        
+        # Calcula NFs que estão em embarques MAS NÃO estão no monitoramento
+        nfs_pendentes_sincronizacao = nfs_em_embarques_set - nfs_no_monitoramento_set
+        print(f"[DEBUG] ⚠️ NFs pendentes de sincronização: {len(nfs_pendentes_sincronizacao)}")
+        
+        if not nfs_pendentes_sincronizacao:
+            print(f"[DEBUG] ✅ Todas as NFs de embarques já estão sincronizadas")
+            return 0
+        
+        # Filtra apenas as NFs que TÊM faturamento (importadas)
+        nfs_faturadas_pendentes = []
+        for nf in nfs_pendentes_sincronizacao:
+            fat = RelatorioFaturamentoImportado.query.filter_by(numero_nf=nf).first()
+            if fat:
+                nfs_faturadas_pendentes.append(nf)
+        
+        print(f"[DEBUG] 🎯 NFs em embarques COM faturamento que precisam sincronizar: {len(nfs_faturadas_pendentes)}")
+        
+        # Sincroniza as NFs pendentes que têm faturamento
+        contador_sincronizadas = 0
+        for nf in nfs_faturadas_pendentes:
+            try:
+                print(f"[DEBUG] 🔄 Sincronizando NF de embarque: {nf}")
+                sincronizar_entrega_por_nf(nf)
+                contador_sincronizadas += 1
+            except Exception as e:
+                print(f"[DEBUG] ❌ Erro ao sincronizar NF {nf}: {e}")
+        
+        print(f"[DEBUG] ✅ Total de NFs de embarques sincronizadas: {contador_sincronizadas}")
+        return contador_sincronizadas
+        
+    except Exception as e:
+        print(f"[DEBUG] ❌ Erro geral na sincronização de NFs pendentes: {e}")
+        return 0
 
 @faturamento_bp.route('/inativar-nfs', methods=['POST'])
 @login_required

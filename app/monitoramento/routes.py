@@ -463,8 +463,8 @@ def listar_entregas():
     entregas = query.all()
 
     # ------------------------------
-    # Montagem do dicionário cnpjs
-    cnpjs_com_agendamento = {c.cnpj for c in ContatoAgendamento.query.all()}
+    # Montagem do dicionário de contatos de agendamento
+    contatos_agendamento = {c.cnpj: c for c in ContatoAgendamento.query.all()}
 
     agrupar = request.args.get('agrupar') == 'status'
     entregas_agrupadas = defaultdict(list)
@@ -484,7 +484,7 @@ def listar_entregas():
                 entregas_agrupadas['✅ Entregues'].append(e)
             elif e.reagendar:
                 entregas_agrupadas['🔁 Reagendar'].append(e)
-            elif e.cnpj_cliente in cnpjs_com_agendamento and len(e.agendamentos) == 0:
+            elif e.cnpj_cliente in contatos_agendamento and len(e.agendamentos) == 0:
                 entregas_agrupadas['⚠️ Sem Agendamento'].append(e)
             elif e.data_entrega_prevista and e.data_entrega_prevista < date.today():
                 entregas_agrupadas['🔴 Atrasadas'].append(e)
@@ -507,7 +507,7 @@ def listar_entregas():
         entregas_agrupadas=entregas_agrupadas,
         agrupar=agrupar,
         current_date=date.today(),
-        contatos_agendamento=cnpjs_com_agendamento,
+        contatos_agendamento=contatos_agendamento,
         current_user=current_user
     )
 
