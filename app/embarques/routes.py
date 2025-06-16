@@ -306,12 +306,22 @@ def listar_embarques():
     transportadoras = Transportadora.query.all()
     form_filtros.transportadora_id.choices = [('', 'Todas as transportadoras')] + [(t.id, t.razao_social) for t in transportadoras]
 
+    # ✅ NOVO: Pré-filtro - Mostra apenas embarques ativos sem data de embarque (por padrão)
+    mostrar_todos = request.args.get('mostrar_todos', '').lower() == 'true'
+    
     # Query base
     query = Embarque.query.options(db.joinedload(Embarque.transportadora))
     query = query.outerjoin(EmbarqueItem).outerjoin(Transportadora)
+    
+    # ✅ APLICAR PRÉ-FILTRO (apenas se não foi solicitado "mostrar todos")
+    if not mostrar_todos:
+        query = query.filter(
+            Embarque.status == 'ativo',
+            Embarque.data_embarque.is_(None)
+        )
 
     # Aplicar filtros
-    filtros_aplicados = False
+    filtros_aplicados = not mostrar_todos  # Se não está mostrando todos, filtro está aplicado
     
     # Filtro por data de início
     data_inicio = request.args.get('data_inicio', '').strip()
@@ -506,7 +516,8 @@ def listar_embarques():
         'embarques/listar_embarques.html', 
         embarques=embarques, 
         form_filtros=form_filtros,
-        filtros_aplicados=filtros_aplicados
+        filtros_aplicados=filtros_aplicados,
+        mostrar_todos=mostrar_todos
     )
 
 @embarques_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
