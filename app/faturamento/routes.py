@@ -8,6 +8,11 @@ from app.faturamento.models import RelatorioFaturamentoImportado
 from app.faturamento.forms import UploadRelatorioForm  # certifique-se de que o caminho está correto
 from app.utils.helpers import limpar_valor
 from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
+from app.embarques.models import EmbarqueItem
+from app.fretes.routes import validar_cnpj_embarque_faturamento
+from app.monitoramento.models import EntregaMonitorada
+from datetime import datetime
+
 
 faturamento_bp = Blueprint('faturamento', __name__,url_prefix='/faturamento')
 
@@ -23,8 +28,6 @@ def revalidar_embarques_pendentes(nfs_importadas):
     """
     Re-valida embarques que tinham NFs pendentes e agora podem ser validadas
     """
-    from app.embarques.models import EmbarqueItem
-    from app.fretes.routes import validar_cnpj_embarque_faturamento
     
     print(f"\n🔄 RE-VALIDANDO EMBARQUES PENDENTES após importação de {len(nfs_importadas)} NFs")
     
@@ -158,6 +161,7 @@ def importar_relatorio():
                 except Exception as e:
                     print(f"Erro no lançamento automático de fretes: {e}")
 
+                # Sincroniza entregas considerando os filtros de monitoramento
                 for nf in nfs_importadas:
                     sincronizar_entrega_por_nf(nf)
 
@@ -183,7 +187,6 @@ def importar_relatorio():
 def sincronizar_orphas():
     """Sincroniza NFs órfãs - ROTA SIMPLES PARA USO ÚNICO"""
     try:
-        from app.monitoramento.models import EntregaMonitorada
         
         # Busca NFs do faturamento
         nfs_faturamento = RelatorioFaturamentoImportado.query.all()
@@ -313,8 +316,6 @@ def inativar_nfs():
         nfs_removidas_monitoramento = 0
         erros = []
         
-        from app.monitoramento.models import EntregaMonitorada
-        from datetime import datetime
         
         for numero_nf in nfs_selecionadas:
             try:

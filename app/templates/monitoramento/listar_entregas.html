@@ -598,7 +598,7 @@ body {
                     {% if e.possui_comentarios %}
                       <span class="badge bg-info">💬 Comentários</span>
                     {% endif %}
-                    {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 %}
+                    {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' %}
                       <span class="badge bg-danger">⚠️ Sem Agendamento</span>
                     {% endif %}
                     {% if e.reagendar %}
@@ -820,7 +820,7 @@ body {
                 Pend. Financ.
               </button>
             {% endif %}
-            {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 %}
+            {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' %}
               <span class="badge bg-danger">⚠️ Sem Agendamento</span>
             {% endif %}
             {% if e.reagendar %}

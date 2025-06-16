@@ -923,13 +923,22 @@ def fechar_frete():
             for pedido_data in pedidos_data:
                 pedido = Pedido.query.get(pedido_data.get('id'))
                 if pedido:
-                    if hasattr(pedido, 'codigo_ibge') and pedido.codigo_ibge:
+                    # ✅ ESTRATÉGIA CODIGO IBGE: Usa código IBGE se disponível para buscar ICMS
+                    cidade_destino = None
+                    if pedido.codigo_ibge:
                         cidade_destino = Cidade.query.filter_by(codigo_ibge=pedido.codigo_ibge).first()
-                    else:
+                        if cidade_destino:
+                            print(f"[DEBUG] ✅ ICMS encontrado via IBGE {pedido.codigo_ibge}: {cidade_destino.nome}")
+                    
+                    if not cidade_destino:
+                        # Fallback: busca por nome normalizado
                         cidade_destino = Cidade.query.filter_by(
                             nome=pedido.cidade_normalizada,
                             uf=uf_destino
                         ).first()
+                        if cidade_destino:
+                            print(f"[DEBUG] 🔄 ICMS encontrado via nome: {cidade_destino.nome}")
+                    
                     if cidade_destino:
                         icms_destino = cidade_destino.icms or 0
                         print(f"[DEBUG] ✅ ICMS {cidade_destino.nome}/{uf_destino}: {icms_destino}%")
@@ -1068,17 +1077,23 @@ def fechar_frete():
 
             uf_correto = 'SP' if pedido.rota and pedido.rota.upper().strip() == 'RED' else pedido.cod_uf
             
-            cidade_obj = LocalizacaoService.buscar_cidade_unificada(
-                nome=pedido.nome_cidade,
-                uf=pedido.cod_uf,
-                rota=getattr(pedido, 'rota', None)
-            )
-            # ✅ PADRONIZAÇÃO: Prioriza nome da tabela de localidades, senão usa normalização
-            cidade_formatada = (cidade_obj.nome if cidade_obj else 
-                              LocalizacaoService.normalizar_nome_cidade_com_regras(
-                                  pedido.nome_cidade, 
-                                  getattr(pedido, 'rota', None)
-                              ) or pedido.nome_cidade)
+            # ✅ ESTRATÉGIA CODIGO IBGE: Usa código IBGE se disponível, senão usa normalização
+            cidade_formatada = None
+            if pedido.codigo_ibge:
+                # Busca cidade por código IBGE (mais confiável)
+                cidade_obj = LocalizacaoService.buscar_cidade_por_ibge(pedido.codigo_ibge)
+                if cidade_obj:
+                    cidade_formatada = cidade_obj.nome
+                    print(f"[DEBUG] ✅ Cidade encontrada por IBGE {pedido.codigo_ibge}: {cidade_formatada}")
+            
+            if not cidade_formatada:
+                # Fallback: normalização de nome
+                cidade_formatada = LocalizacaoService.normalizar_nome_cidade_com_regras(
+                    pedido.nome_cidade, 
+                    getattr(pedido, 'rota', None)
+                ) or pedido.nome_cidade
+                print(f"[DEBUG] 🔄 Cidade por normalização: {cidade_formatada}")
+            
             protocolo_formatado = formatar_protocolo(pedido.protocolo)
             data_formatada = formatar_data_brasileira(pedido.agendamento)
             
@@ -1288,17 +1303,22 @@ def fechar_frete_grupo():
         for pedido in todos_pedidos:
             uf_correto = 'SP' if pedido.rota and pedido.rota.upper().strip() == 'RED' else pedido.cod_uf
             
-            cidade_obj = LocalizacaoService.buscar_cidade_unificada(
-                nome=pedido.nome_cidade,
-                uf=pedido.cod_uf,
-                rota=getattr(pedido, 'rota', None)
-            )
-            # ✅ PADRONIZAÇÃO: Prioriza nome da tabela de localidades, senão usa normalização
-            cidade_formatada = (cidade_obj.nome if cidade_obj else 
-                              LocalizacaoService.normalizar_nome_cidade_com_regras(
-                                  pedido.nome_cidade, 
-                                  getattr(pedido, 'rota', None)
-                              ) or pedido.nome_cidade)
+            # ✅ ESTRATÉGIA CODIGO IBGE: Usa código IBGE se disponível, senão usa normalização
+            cidade_formatada = None
+            if pedido.codigo_ibge:
+                # Busca cidade por código IBGE (mais confiável)
+                cidade_obj = LocalizacaoService.buscar_cidade_por_ibge(pedido.codigo_ibge)
+                if cidade_obj:
+                    cidade_formatada = cidade_obj.nome
+                    print(f"[DEBUG] ✅ Cidade encontrada por IBGE {pedido.codigo_ibge}: {cidade_formatada}")
+            
+            if not cidade_formatada:
+                # Fallback: normalização de nome
+                cidade_formatada = LocalizacaoService.normalizar_nome_cidade_com_regras(
+                    pedido.nome_cidade, 
+                    getattr(pedido, 'rota', None)
+                ) or pedido.nome_cidade
+                print(f"[DEBUG] 🔄 Cidade por normalização: {cidade_formatada}")
             
             item = EmbarqueItem(
                 embarque_id=embarque.id,

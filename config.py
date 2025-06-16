@@ -12,6 +12,10 @@ class Config:
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
+    # 🆕 CONFIGURAÇÕES DE MONITORAMENTO
+    # Filtrar NFs FOB do monitoramento (True por padrão)
+    FILTRAR_FOB_MONITORAMENTO = os.environ.get('FILTRAR_FOB_MONITORAMENTO', 'True').lower() == 'true'
+    
     # Configurações condicionais baseadas no tipo de banco
     if IS_POSTGRESQL:
         # Configurações para PostgreSQL (Render)

@@ -8,6 +8,7 @@ from werkzeug.utils import secure_filename
 from app import db
 from app.separacao.models import Separacao
 from app.separacao.forms import ImportarExcelForm
+from app.utils.localizacao import LocalizacaoService
 
 separacao_bp = Blueprint('separacao', __name__, url_prefix='/separacao')
 

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from app import db
 from flask_login import current_user
+from flask import current_app
 
 from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
 from app.faturamento.models import RelatorioFaturamentoImportado
@@ -23,6 +24,37 @@ def sincronizar_entrega_por_nf(numero_nf):
             db.session.delete(entrega_existente)
             db.session.commit()
         return
+    
+    # 🚫 FILTRO 1: NFs FOB (frete por conta do cliente)
+    if getattr(current_app.config, 'FILTRAR_FOB_MONITORAMENTO', True):
+        incoterm = getattr(fat, 'incoterm', '') or ''
+        if 'FOB' in incoterm.upper():
+            # Se a NF é FOB, remove do monitoramento se existir
+            entrega_existente = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
+            if entrega_existente:
+                db.session.delete(entrega_existente)
+                db.session.commit()
+            return
+    
+    # 🚫 FILTRO 2: NFs em embarques FOB (sempre ativo)
+    embarque_item_fob = (
+        db.session.query(EmbarqueItem)
+        .join(Embarque, Embarque.id == EmbarqueItem.embarque_id)
+        .filter(
+            EmbarqueItem.nota_fiscal == numero_nf,
+            Embarque.tipo_carga == 'FOB'
+        )
+        .first()
+    )
+    if embarque_item_fob:
+        # Se a NF está em embarque FOB, remove do monitoramento se existir
+        entrega_existente = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
+        if entrega_existente:
+            db.session.delete(entrega_existente)
+            db.session.commit()
+        return
+    
+
 
     entrega = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
     if not entrega:
