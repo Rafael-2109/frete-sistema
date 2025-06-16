@@ -235,6 +235,36 @@ body {
   background: #ffffff !important;
   /* z-index já definido nas classes acima (1015, 1014, 1013) */
 }
+
+/* 🎨 MELHORIAS NOS BOTÕES DE DATA */
+.btn-sm.btn-info,
+.btn-sm.btn-primary {
+  line-height: 1.2 !important;
+  padding: 8px 12px !important;
+  font-weight: 500 !important;
+}
+
+.btn-sm.btn-info small,
+.btn-sm.btn-primary small {
+  display: block;
+  font-size: 0.7rem !important;
+  opacity: 0.9;
+  margin-top: 2px;
+}
+
+/* Hover effects */
+.btn-sm.btn-info:hover,
+.btn-sm.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  transition: all 0.2s ease;
+}
+
+.btn-sm.btn-warning:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(255,193,7,0.4);
+  transition: all 0.2s ease;
+}
 </style>
 {% endblock %}
 
@@ -309,41 +339,52 @@ body {
     </div>
   </form>
 
-    <!-- Botões de filtro rápido -->
-    <div class="d-flex flex-wrap gap-2 mt-3">
-    <a href="{{ url_for('monitoramento.listar_entregas') }}" 
-       class="btn {% if not request.args.get('status') %}btn-dark{% else %}btn-outline-dark{% endif %}">
-      📋 Todas
-    </a>
-    <a href="?status=pendente" 
-       class="btn {% if request.args.get('status') == 'pendente' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-      ⚪ Pendentes
-    </a>
-    <a href="?status=atrasada" 
-       class="btn {% if request.args.get('status') == 'atrasada' %}btn-danger{% else %}btn-outline-danger{% endif %}">
-      🔴 Atrasadas
-    </a>
-    <a href="?status=sem_previsao" 
-       class="btn {% if request.args.get('status') == 'sem_previsao' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-      🟡 Sem Previsão
-    </a>
-    <a href="?status=entregue" 
-       class="btn {% if request.args.get('status') == 'entregue' %}btn-success{% else %}btn-outline-success{% endif %}">
-      ✅ Entregues
-    </a>
-    <a href="?status=sem_agendamento" 
-       class="btn {% if request.args.get('status') == 'sem_agendamento' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-      ⚠️ Sem Agendamento
-    </a>
-    <a href="?status=com_comentarios" 
-       class="btn {% if request.args.get('status') == 'com_comentarios' %}btn-info{% else %}btn-outline-info{% endif %}">
-      💬 Comentários em NFs
-    </a>    
-    <a href="?status=reagendar" 
-       class="btn {% if request.args.get('status') == 'reagendar' %}btn-danger{% else %}btn-outline-danger{% endif %}">
-      🔁 Reagendar
-    </a>
-   </div>
+    <!-- Botões de filtro rápido e ações -->
+    <div class="d-flex flex-wrap gap-2 mt-3 justify-content-between align-items-center">
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('monitoramento.listar_entregas') }}" 
+           class="btn {% if not request.args.get('status') %}btn-dark{% else %}btn-outline-dark{% endif %}">
+          📋 Todas
+        </a>
+        <a href="?status=no_prazo" 
+           class="btn {% if request.args.get('status') == 'no_prazo' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+          ⚪ No Prazo
+        </a>
+        <a href="?status=atrasada" 
+           class="btn {% if request.args.get('status') == 'atrasada' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+          🔴 Atrasadas
+        </a>
+        <a href="?status=sem_previsao" 
+           class="btn {% if request.args.get('status') == 'sem_previsao' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+          🟡 Sem Previsão
+        </a>
+        <a href="?status=entregue" 
+           class="btn {% if request.args.get('status') == 'entregue' %}btn-success{% else %}btn-outline-success{% endif %}">
+          ✅ Entregues
+        </a>
+        <a href="?status=sem_agendamento" 
+           class="btn {% if request.args.get('status') == 'sem_agendamento' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+          ⚠️ Agend. Pendente
+        </a>
+        <a href="?status=com_comentarios" 
+           class="btn {% if request.args.get('status') == 'com_comentarios' %}btn-info{% else %}btn-outline-info{% endif %}">
+          💬 Comentários em NFs
+        </a>    
+        <a href="?status=reagendar" 
+           class="btn {% if request.args.get('status') == 'reagendar' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+          🔁 Reagendar
+        </a>
+      </div>
+      
+      <!-- Botões de Ação -->
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('monitoramento.exportar_entregas') }}" 
+           class="btn btn-success" 
+           title="Exportar dados do monitoramento para Excel">
+          <i class="fas fa-file-excel"></i> Exportar Excel
+        </a>
+      </div>
+    </div>
 
   </div>
 </div>
@@ -558,18 +599,41 @@ body {
                 <tr>
                   <td>{{ e.numero_nf }}</td>
                   <td>{{ e.cnpj_cliente }}</td>
-                  <td>{{ e.cliente }}</td>
+                  <td>
+                    {{ e.cliente }}<br>
+                    <small class="text-muted">👤 {{ e.vendedor or 'Não informado' }}</small>
+                  </td>
                   <td>{{ e.transportadora }}</td>
                   <td>{{ e.uf }}</td>
                   <td>{{ e.municipio }}</td>
                   <td>{{ e.data_faturamento | formatar_data_segura if e.data_faturamento else '-' }}</td>
                   <td>{{ e.data_embarque | formatar_data_segura if e.data_embarque else '-' }}</td>
-                  <td>{{ e.data_agendamento | formatar_data_segura if e.data_agendamento else '-' }}</td>
-                  <td>
-                    {% if e.data_entrega_prevista %}
-                      {{ e.data_entrega_prevista | formatar_data_segura }}
-                    {% else %}-{% endif %}
-                  </td>
+                                     <td>
+                     {% if e.data_agenda %}
+                       {% set ultimo_agendamento = e.agendamentos | sort(attribute='criado_em') | last if e.agendamentos else None %}
+                       <button class="btn btn-sm btn-info w-100 text-white" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
+                         📅 {{ e.data_agenda | formatar_data_segura }}
+                         {% if ultimo_agendamento and ultimo_agendamento.protocolo_agendamento %}
+                           <br><small>📋 {{ ultimo_agendamento.protocolo_agendamento }}</small>
+                         {% endif %}
+                       </button>
+                     {% else %}
+                       <button class="btn btn-sm btn-warning w-100" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
+                         ➕ Agendar
+                       </button>
+                     {% endif %}
+                   </td>
+                                     <td>
+                     {% if e.data_entrega_prevista %}
+                       <button class="btn btn-sm btn-primary w-100 text-white" onclick="alterarDataPrevista('{{ e.id }}', '{{ e.numero_nf }}', '{{ e.data_entrega_prevista }}')">
+                         📅 {{ e.data_entrega_prevista | formatar_data_segura }}
+                       </button>
+                     {% else %}
+                       <button class="btn btn-sm btn-warning w-100" onclick="alterarDataPrevista('{{ e.id }}', '{{ e.numero_nf }}', '')">
+                         ➕ Definir Data
+                       </button>
+                     {% endif %}
+                   </td>
                   <td>
                     {% if e.entregue and e.data_hora_entrega_realizada %}
                       <span class="badge bg-success entregue-popup"
@@ -580,15 +644,21 @@ body {
                       <span class="badge bg-success">Entregue</span>
                     {% elif e.data_entrega_prevista and e.data_entrega_prevista < current_date %}
                       <span class="badge bg-danger">Atrasada</span>
-                    {% elif not e.data_entrega_prevista %}
-                      <span class="badge bg-secondary">Sem Previsão</span>
+                    {% elif e.data_entrega_prevista %}
+                      <span class="badge bg-light text-dark">No Prazo</span>
                     {% else %}
-                      <span class="badge bg-warning text-dark">Pendente</span>
+                      <span class="badge bg-secondary">Sem Previsão</span>
                     {% endif %}
                   </td>
                   <td>
-                    {% if e.pendencias_financeiras|selectattr("respondida_em", "none")|list %}
-                      {% set pendencia = e.pendencias_financeiras|selectattr("respondida_em", "none")|first %}
+                    {% set pendencias_abertas = [] %}
+                    {% for p in e.pendencias_financeiras %}
+                      {% if not p.respondida_em or p.resposta_excluida_em %}
+                        {% set _ = pendencias_abertas.append(p) %}
+                      {% endif %}
+                    {% endfor %}
+                    {% if pendencias_abertas %}
+                      {% set pendencia = pendencias_abertas[0] %}
                       <button class="btn btn-sm btn-danger pendencia-btn"
                               data-nf="{{ e.numero_nf }}"
                               data-observacao="{{ pendencia.observacao }}">
@@ -599,7 +669,7 @@ body {
                       <span class="badge bg-info">💬 Comentários</span>
                     {% endif %}
                     {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' %}
-                      <span class="badge bg-danger">⚠️ Sem Agendamento</span>
+                      <span class="badge bg-danger">⚠️ Agend. Pendente</span>
                     {% endif %}
                     {% if e.reagendar %}
                       <span class="badge bg-danger">🔁 Reagendar</span>
@@ -653,7 +723,9 @@ body {
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=numero_nf&direction={{ next_dir }}">NF</a>
+            {% set url_params = request.args.copy() %}
+            {% set _ = url_params.update({'sort': 'numero_nf', 'direction': next_dir}) %}
+            <a href="?{{ url_params | urlencode }}">NF</a>
           </th>
 
           <!-- CNPJ -->
@@ -663,7 +735,9 @@ body {
             {% else %}
               {% set next_dir = 'asc' %}
             {% endif %}
-            <a href="?sort=cnpj_cliente&direction={{ next_dir }}">CNPJ</a>
+            {% set url_params = request.args.copy() %}
+            {% set _ = url_params.update({'sort': 'cnpj_cliente', 'direction': next_dir}) %}
+            <a href="?{{ url_params | urlencode }}">CNPJ</a>
           </th>
 
           <!-- Cliente -->
@@ -767,7 +841,10 @@ body {
             {% endif %}
             {{ e.numero_nf }}</td>
           <td class="sticky-col-2">{{ e.cnpj_cliente }}</td>
-          <td class="sticky-col-3">{{ e.cliente }}</td>
+          <td class="sticky-col-3">
+            {{ e.cliente }}<br>
+            <small class="text-muted">👤 {{ e.vendedor or 'Não informado' }}</small>
+          </td>
           <td>{{ e.transportadora }}</td>
           <td>{{ e.uf }}</td>
           <td>{{ e.municipio }}</td>
@@ -775,15 +852,29 @@ body {
           <td>{{ e.data_embarque | formatar_data_segura if e.data_embarque else '-' }}</td>
           <td>
             {% if e.data_agenda %}
-              {{ e.data_agenda | formatar_data_segura }}
+              {% set ultimo_agendamento = e.agendamentos | sort(attribute='criado_em') | last if e.agendamentos else None %}
+              <button class="btn btn-sm btn-info w-100 text-white" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
+                📅 {{ e.data_agenda | formatar_data_segura }}
+                {% if ultimo_agendamento and ultimo_agendamento.protocolo_agendamento %}
+                  <br><small>📋 {{ ultimo_agendamento.protocolo_agendamento }}</small>
+                {% endif %}
+              </button>
             {% else %}
-              -
+              <button class="btn btn-sm btn-warning w-100" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
+                ➕ Agendar
+              </button>
             {% endif %}
           </td>
           <td>
             {% if e.data_entrega_prevista %}
-              {{ e.data_entrega_prevista | formatar_data_segura }}
-            {% else %}-{% endif %}
+              <button class="btn btn-sm btn-primary w-100 text-white" onclick="alterarDataPrevista('{{ e.id }}', '{{ e.numero_nf }}', '{{ e.data_entrega_prevista }}')">
+                📅 {{ e.data_entrega_prevista | formatar_data_segura }}
+              </button>
+            {% else %}
+              <button class="btn btn-sm btn-warning w-100" onclick="alterarDataPrevista('{{ e.id }}', '{{ e.numero_nf }}', '')">
+                ➕ Definir Data
+              </button>
+            {% endif %}
           </td>
           <td>
             {% if e.nf_cd %}
@@ -793,7 +884,7 @@ body {
                 <a href="?numero_nf={{ e.nova_nf }}" class="btn btn-sm btn-info">
                   Nova NF {{ e.nova_nf }}
                 </a>
-            {% elif e.entregue %}
+            {% elif e.status_finalizacao == "Entregue" %}
             <span class="badge bg-success entregue-popup" 
                   data-entrega={{ e.data_hora_entrega_realizada | formatar_data_hora_brasil if e.data_hora_entrega_realizada else '-' }}
                   style="cursor:pointer;"
@@ -804,16 +895,22 @@ body {
                 <span class="badge bg-dark">{{ e.status_finalizacao }}</span>
             {% elif e.data_entrega_prevista and e.data_entrega_prevista < current_date %}
                 <span class="badge bg-danger">Atrasada</span>
-            {% elif not e.data_entrega_prevista %}
-            <span class="badge bg-warning text-dark">Sem Previsão</span>
+            {% elif e.data_entrega_prevista %}
+            <span class="badge bg-light text-dark">No Prazo</span>
             {% else %}
-              <span class="badge bg-light text-dark">Pendente</span>
+              <span class="badge bg-warning text-dark">Sem Previsão</span>
             {% endif %}
             </td>
             
           <td>
-            {% if e.pendencias_financeiras|selectattr("respondida_em", "none")|list %}
-              {% set pendencia = e.pendencias_financeiras|selectattr("respondida_em", "none")|first %}
+            {% set pendencias_abertas = [] %}
+            {% for p in e.pendencias_financeiras %}
+              {% if not p.respondida_em or p.resposta_excluida_em %}
+                {% set _ = pendencias_abertas.append(p) %}
+              {% endif %}
+            {% endfor %}
+            {% if pendencias_abertas %}
+              {% set pendencia = pendencias_abertas[0] %}
               <button class="btn btn-sm btn-danger pendencia-btn"
                       data-nf="{{ e.numero_nf }}"
                       data-observacao="{{ pendencia.observacao }}">
@@ -821,7 +918,7 @@ body {
               </button>
             {% endif %}
             {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' %}
-              <span class="badge bg-danger">⚠️ Sem Agendamento</span>
+              <span class="badge bg-danger">⚠️ Agend. Pendente</span>
             {% endif %}
             {% if e.reagendar %}
               <span class="badge bg-danger">🔁 Reagendar</span>
@@ -900,12 +997,150 @@ body {
     </div>
   </div>
 </div>
+
+<!-- ===========================
+     MODAL PARA ALTERAR DATA PREVISTA
+     =========================== -->
+<div class="modal fade" id="dataPrevistaModal" tabindex="-1" aria-labelledby="dataPrevistaModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      
+      <!-- Cabeçalho do Modal -->
+      <div class="modal-header">
+        <h5 class="modal-title" id="dataPrevistaModalLabel">📅 Alterar Data de Entrega Prevista</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <!-- Corpo do Modal -->
+      <div class="modal-body">
+        <div class="row">
+          <div class="col-md-6">
+            <p><strong>NF:</strong> <span id="nf-data-modal"></span></p>
+            
+            <form id="form-data-prevista">
+              <div class="mb-3">
+                <label for="nova-data-prevista" class="form-label">Nova Data de Entrega Prevista</label>
+                <input type="date" id="nova-data-prevista" class="form-control" required>
+              </div>
+              
+              <div class="mb-3">
+                <label for="motivo-alteracao" class="form-label">Motivo da Alteração</label>
+                <textarea id="motivo-alteracao" class="form-control" rows="3" placeholder="Descreva o motivo da alteração..." required></textarea>
+              </div>
+            </form>
+          </div>
+          
+          <div class="col-md-6">
+            <h6>📋 Histórico de Alterações</h6>
+            <div id="historico-data-prevista" class="border p-2" style="height: 200px; overflow-y: auto;">
+              <div class="text-center text-muted">
+                <i class="fas fa-spinner fa-spin"></i> Carregando histórico...
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rodapé do Modal -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" id="confirmar-data-prevista">
+          💾 Salvar Alteração
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===========================
+     MODAL PARA AGENDAMENTO RÁPIDO
+     =========================== -->
+<div class="modal fade" id="agendamentoModal" tabindex="-1" aria-labelledby="agendamentoModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      
+      <!-- Cabeçalho do Modal -->
+      <div class="modal-header">
+        <h5 class="modal-title" id="agendamentoModalLabel">📅 Agendamento Rápido</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <!-- Corpo do Modal -->
+      <div class="modal-body">
+        <p><strong>NF:</strong> <span id="nf-agendamento-modal"></span></p>
+        
+        <form id="form-agendamento-rapido">
+          <div class="row">
+            <div class="col-md-6">
+              <label for="data-agendada" class="form-label">Data Agendada</label>
+              <input type="date" id="data-agendada" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label for="hora-agendada" class="form-label">Hora Agendada</label>
+              <input type="time" id="hora-agendada" class="form-control">
+            </div>
+          </div>
+          
+          <div class="row mt-3">
+            <div class="col-md-6">
+              <label for="forma-agendamento" class="form-label">Forma</label>
+              <select id="forma-agendamento" class="form-select" required>
+                <option value="">Selecione...</option>
+                <option value="Portal">Portal</option>
+                <option value="Telefone">Telefone</option>
+                <option value="E-mail">E-mail</option>
+                <option value="WhatsApp">WhatsApp</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label for="protocolo-agendamento" class="form-label">Protocolo</label>
+              <input type="text" id="protocolo-agendamento" class="form-control" placeholder="Protocolo...">
+            </div>
+          </div>
+          
+          <div class="mt-3">
+            <label for="motivo-agendamento" class="form-label">Motivo</label>
+            <textarea id="motivo-agendamento" class="form-control" rows="3" placeholder="Motivo do agendamento..."></textarea>
+          </div>
+        </form>
+      </div>
+
+      <!-- Rodapé do Modal -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" id="confirmar-agendamento">
+          📅 Confirmar Agendamento
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <!-- ✅ SCRIPT BÁSICO -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  // ===========================
+  // PRESERVAR FILTROS NOS LINKS DE ORDENAÇÃO
+  // ===========================
+  const currentUrl = new URL(window.location);
+  
+  // Para todos os links de ordenação na tabela
+  document.querySelectorAll('th a').forEach(link => {
+    const linkUrl = new URL(link.href, window.location.origin);
+    
+    // Preserva todos os parâmetros atuais exceto sort e direction
+    currentUrl.searchParams.forEach((value, key) => {
+      if (key !== 'sort' && key !== 'direction' && key !== 'page') {
+        linkUrl.searchParams.set(key, value);
+      }
+    });
+    
+    // Atualiza o href do link
+    link.href = linkUrl.toString();
+  });
+  
   const stickyPagination = document.getElementById('sticky-pagination');
   
   if (stickyPagination) {
@@ -1055,6 +1290,137 @@ document.addEventListener('DOMContentLoaded', function() {
     .catch(err => {
       console.error("DEBUG: Erro no fetch:", err);
       alert("Erro na requisição ao servidor.");
+    });
+  });
+
+  // ===========================
+  // NOVO: FUNCIONALIDADE DE AGENDAMENTO RÁPIDO
+  // ===========================
+  window.agendarEntrega = function(entregaId, numeroNf) {
+    document.getElementById('nf-agendamento-modal').textContent = numeroNf;
+    document.getElementById('confirmar-agendamento').setAttribute('data-entrega-id', entregaId);
+    
+    // Limpa formulário
+    document.getElementById('form-agendamento-rapido').reset();
+    
+    // Abre modal
+    const agendamentoModal = new bootstrap.Modal(document.getElementById('agendamentoModal'));
+    agendamentoModal.show();
+  };
+
+  // Confirmar agendamento
+  document.getElementById('confirmar-agendamento').addEventListener('click', function() {
+    const entregaId = this.getAttribute('data-entrega-id');
+    const formData = new FormData();
+    
+    formData.append('csrf_token', csrfToken);
+    formData.append('data_agendada', document.getElementById('data-agendada').value);
+    formData.append('hora_agendada', document.getElementById('hora-agendada').value);
+    formData.append('forma_agendamento', document.getElementById('forma-agendamento').value);
+    formData.append('protocolo_agendamento', document.getElementById('protocolo-agendamento').value);
+    formData.append('motivo', document.getElementById('motivo-agendamento').value);
+
+    fetch(`/monitoramento/${entregaId}/adicionar_agendamento`, {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => {
+      if (response.ok) {
+        alert('✅ Agendamento registrado com sucesso!');
+        location.reload();
+      } else {
+        alert('❌ Erro ao registrar agendamento.');
+      }
+    })
+    .catch(err => {
+      console.error('Erro:', err);
+      alert('❌ Erro na requisição.');
+    });
+  });
+
+  // ===========================
+  // NOVO: FUNCIONALIDADE DE ALTERAR DATA PREVISTA
+  // ===========================
+  window.alterarDataPrevista = function(entregaId, numeroNf, dataAtual) {
+    document.getElementById('nf-data-modal').textContent = numeroNf;
+    document.getElementById('confirmar-data-prevista').setAttribute('data-entrega-id', entregaId);
+    
+    // Preenche data atual se existir
+    if (dataAtual) {
+      document.getElementById('nova-data-prevista').value = dataAtual;
+    }
+    
+    // Carrega histórico
+    carregarHistoricoDataPrevista(entregaId);
+    
+    // Abre modal
+    const dataPrevistaModal = new bootstrap.Modal(document.getElementById('dataPrevistaModal'));
+    dataPrevistaModal.show();
+  };
+
+  // Carregar histórico de alterações
+  function carregarHistoricoDataPrevista(entregaId) {
+    const historicoDiv = document.getElementById('historico-data-prevista');
+    historicoDiv.innerHTML = '<div class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Carregando histórico...</div>';
+    
+    fetch(`/monitoramento/${entregaId}/historico_data_prevista`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.historico && data.historico.length > 0) {
+        let html = '';
+        data.historico.forEach(item => {
+          html += `
+            <div class="border-bottom pb-2 mb-2">
+              <small class="text-muted">${item.data_alteracao}</small><br>
+              <strong>De:</strong> ${item.data_anterior || 'Não definida'}<br>
+              <strong>Para:</strong> ${item.data_nova}<br>
+              <strong>Por:</strong> ${item.alterado_por}<br>
+              <strong>Motivo:</strong> ${item.motivo}
+            </div>
+          `;
+        });
+        historicoDiv.innerHTML = html;
+      } else {
+        historicoDiv.innerHTML = '<div class="text-center text-muted">Nenhuma alteração registrada</div>';
+      }
+    })
+    .catch(err => {
+      console.error('Erro ao carregar histórico:', err);
+      historicoDiv.innerHTML = '<div class="text-center text-danger">Erro ao carregar histórico</div>';
+    });
+  }
+
+  // Confirmar alteração de data prevista
+  document.getElementById('confirmar-data-prevista').addEventListener('click', function() {
+    const entregaId = this.getAttribute('data-entrega-id');
+    const novaData = document.getElementById('nova-data-prevista').value;
+    const motivo = document.getElementById('motivo-alteracao').value;
+    
+    if (!novaData || !motivo) {
+      alert('❌ Data e motivo são obrigatórios!');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('csrf_token', csrfToken);
+    formData.append('nova_data_prevista', novaData);
+    formData.append('motivo_alteracao', motivo);
+
+    fetch(`/monitoramento/${entregaId}/alterar_data_prevista`, {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => {
+      if (response.ok) {
+        alert('✅ Data de entrega prevista alterada com sucesso!');
+        location.reload();
+      } else {
+        alert('❌ Erro ao alterar data.');
+      }
+    })
+    .catch(err => {
+      console.error('Erro:', err);
+      alert('❌ Erro na requisição.');
     });
   });
 </script>

@@ -12,7 +12,21 @@ class PendenciaFinanceiraNF(db.Model):
     respondida_por = db.Column(db.String(100), nullable=True)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     criado_por = db.Column(db.String(100))
+    
+    # Campos para soft delete APENAS DAS RESPOSTAS (pendência nunca é apagada)
+    resposta_excluida_em = db.Column(db.DateTime, nullable=True)
+    resposta_excluida_por = db.Column(db.String(100), nullable=True)
 
     # Adicione este relacionamento:
     entrega_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'), nullable=True)
     entrega = db.relationship('EntregaMonitorada', backref='pendencias_financeiras')
+    
+    @property
+    def resposta_ativa(self):
+        """Retorna True se a resposta não foi excluída (pendência sempre fica ativa)"""
+        return self.resposta_excluida_em is None
+    
+    @property
+    def tem_resposta_valida(self):
+        """Retorna True se há resposta e ela não foi excluída"""
+        return self.respondida_em is not None and self.resposta_excluida_em is None

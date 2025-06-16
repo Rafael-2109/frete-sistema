@@ -1,9 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_from_directory
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_from_directory, send_file, jsonify
 from flask_login import login_required, current_user
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import os
+import pandas as pd
+import tempfile
 from werkzeug.utils import secure_filename
-from sqlalchemy import func
+from sqlalchemy import func, and_, or_
 
 from collections import defaultdict
 
@@ -23,7 +25,8 @@ from app.monitoramento.forms import (
     EventoEntregaForm,
     CustoExtraForm,
     AgendamentoEntregaForm,
-    FormComentarioNF
+    FormComentarioNF,
+    ExportarMonitoramentoForm
 )
 
 from app.financeiro.models import PendenciaFinanceiraNF
@@ -181,6 +184,7 @@ def adicionar_evento(id):
         if form_evento.tipo_evento.data == "NF no CD":
             entrega.nf_cd = True
             entrega.entregue = False
+            entrega.status_finalizacao = None
             entrega.data_embarque = None
             entrega.data_entrega_prevista = None
             entrega.data_agenda = None
@@ -355,16 +359,21 @@ def listar_entregas():
     query = EntregaMonitorada.query
 
     status = request.args.get('status')
-    if status == 'pendente':
-        query = query.filter(EntregaMonitorada.entregue == False)
-    elif status == 'entregue':
-        query = query.filter(EntregaMonitorada.entregue == True)
+    if status == 'entregue':
+        query = query.filter(EntregaMonitorada.status_finalizacao == 'Entregue')
     elif status == 'atrasada':
         query = query.filter(
-            EntregaMonitorada.entregue == False,
+            EntregaMonitorada.status_finalizacao == None,
             EntregaMonitorada.data_entrega_prevista != None,
             EntregaMonitorada.data_entrega_prevista < date.today()
         )
+    elif status == 'no_prazo':
+        query = query.filter(
+            EntregaMonitorada.status_finalizacao == None,
+            EntregaMonitorada.data_entrega_prevista != None,
+            EntregaMonitorada.data_entrega_prevista >= date.today()
+        )
+
     elif status == 'sem_previsao':
         query = query.filter(EntregaMonitorada.data_entrega_prevista == None)
     elif status == 'sem_agendamento':
@@ -379,7 +388,13 @@ def listar_entregas():
         query = query.filter(EntregaMonitorada.reagendar == True)
     elif status == 'pendencia_financeira':
         query = query.join(PendenciaFinanceiraNF, PendenciaFinanceiraNF.entrega_id == EntregaMonitorada.id)
-        query = query.filter(PendenciaFinanceiraNF.respondida_em == None)
+        # Pendências não respondidas OU com resposta apagada
+        query = query.filter(
+            db.or_(
+                PendenciaFinanceiraNF.respondida_em == None,
+                PendenciaFinanceiraNF.resposta_excluida_em != None
+            )
+        )
 
     if numero_nf := request.args.get('numero_nf'):
         query = query.filter(EntregaMonitorada.numero_nf.ilike(f"%{numero_nf}%"))
@@ -480,7 +495,7 @@ def listar_entregas():
         }
 
         for e in entregas:
-            if e.entregue:
+            if e.status_finalizacao == 'Entregue':
                 entregas_agrupadas['✅ Entregues'].append(e)
             elif e.reagendar:
                 entregas_agrupadas['🔁 Reagendar'].append(e)
@@ -786,4 +801,557 @@ def adicionar_comentario(id):
 def baixar_arquivo_comentario(filename):
     pasta_comentarios = os.path.join(UPLOAD_DIR, "comentarios_nf")
     return send_from_directory(pasta_comentarios, filename)
+
+@monitoramento_bp.route('/<int:id>/adicionar_pendencia', methods=['POST'])
+@login_required
+def adicionar_pendencia(id):
+    entrega = EntregaMonitorada.query.get_or_404(id)
+    observacao = request.form.get('observacao')
+    
+    if observacao and observacao.strip():
+        from app.financeiro.models import PendenciaFinanceiraNF
+        
+        pendencia = PendenciaFinanceiraNF(
+            numero_nf=entrega.numero_nf,
+            entrega_id=entrega.id,
+            observacao=observacao.strip(),
+            criado_por=current_user.nome
+        )
+        
+        # Marca a entrega como tendo pendência financeira
+        entrega.pendencia_financeira = True
+        
+        db.session.add(pendencia)
+        db.session.commit()
+        
+        flash('✔️ Pendência financeira registrada com sucesso.', 'success')
+        session['feedback'] = 'pendencia'
+    else:
+        flash('❌ Observação da pendência é obrigatória.', 'danger')
+    
+    return redirect(url_for('monitoramento.visualizar_entrega', id=entrega.id))
+
+@monitoramento_bp.route('/<int:id>/responder_pendencia', methods=['POST'])
+@login_required
+def responder_pendencia(id):
+    entrega = EntregaMonitorada.query.get_or_404(id)
+    pendencia_id = request.form.get('pendencia_id')
+    resposta_logistica = request.form.get('resposta_logistica')
+    
+    if pendencia_id and resposta_logistica and resposta_logistica.strip():
+        from app.financeiro.models import PendenciaFinanceiraNF
+        
+        pendencia = PendenciaFinanceiraNF.query.get_or_404(pendencia_id)
+        
+        if pendencia.entrega_id == entrega.id:
+            pendencia.resposta_logistica = resposta_logistica.strip()
+            pendencia.respondida_em = datetime.utcnow()
+            pendencia.respondida_por = current_user.nome
+            
+            # Verifica se ainda há pendências não respondidas (pendência nunca é excluída)
+            pendencias_abertas = PendenciaFinanceiraNF.query.filter_by(
+                entrega_id=entrega.id,
+                respondida_em=None
+            ).count()
+            
+            if pendencias_abertas == 0:
+                entrega.pendencia_financeira = False
+            
+            db.session.commit()
+            
+            flash('✔️ Resposta à pendência financeira registrada com sucesso.', 'success')
+            session['feedback'] = 'pendencia'
+        else:
+            flash('❌ Pendência não pertence a esta entrega.', 'danger')
+    else:
+        flash('❌ Resposta da logística é obrigatória.', 'danger')
+    
+    return redirect(url_for('monitoramento.visualizar_entrega', id=entrega.id))
+
+@monitoramento_bp.route('/pendencia/<int:pendencia_id>/apagar_resposta', methods=['POST'])
+@login_required
+def apagar_resposta_pendencia(pendencia_id):
+    from app.financeiro.models import PendenciaFinanceiraNF
+    
+    pendencia = PendenciaFinanceiraNF.query.get_or_404(pendencia_id)
+    entrega = pendencia.entrega
+    
+    if not pendencia.respondida_em:
+        flash('❌ Não há resposta para apagar nesta pendência.', 'warning')
+        return redirect(request.referrer)
+    
+    # Soft delete da resposta - mantém histórico
+    pendencia.resposta_excluida_em = datetime.utcnow()
+    pendencia.resposta_excluida_por = current_user.nome
+    
+    # A pendência volta a ser "não respondida" para efeitos de contagem
+    # mas mantém o histórico da resposta original
+    
+    # Verifica se ainda há pendências sem resposta válida
+    pendencias_abertas = PendenciaFinanceiraNF.query.filter_by(
+        entrega_id=entrega.id,
+        respondida_em=None
+    ).count()
+    
+    # Soma as que têm resposta excluída (voltam a contar como abertas)
+    pendencias_resposta_excluida = PendenciaFinanceiraNF.query.filter(
+        PendenciaFinanceiraNF.entrega_id == entrega.id,
+        PendenciaFinanceiraNF.respondida_em != None,
+        PendenciaFinanceiraNF.resposta_excluida_em != None
+    ).count()
+    
+    total_pendencias_abertas = pendencias_abertas + pendencias_resposta_excluida
+    
+    entrega.pendencia_financeira = total_pendencias_abertas > 0
+    
+    db.session.commit()
+    
+    flash('✔️ Resposta à pendência apagada com sucesso. (Histórico da resposta mantido)', 'success')
+    return redirect(request.referrer)
+
+@monitoramento_bp.route('/<int:id>/alterar_data_prevista', methods=['POST'])
+@login_required
+def alterar_data_prevista(id):
+    entrega = EntregaMonitorada.query.get_or_404(id)
+    nova_data_str = request.form.get('nova_data_prevista')
+    motivo_alteracao = request.form.get('motivo_alteracao')
+    
+    if not nova_data_str or not motivo_alteracao:
+        flash('❌ Data e motivo são obrigatórios.', 'danger')
+        return redirect(request.referrer)
+    
+    try:
+        from datetime import datetime
+        nova_data = datetime.strptime(nova_data_str, '%Y-%m-%d').date()
+        
+        # Registra histórico
+        from app.monitoramento.models import HistoricoDataPrevista
+        
+        historico = HistoricoDataPrevista(
+            entrega_id=entrega.id,
+            data_anterior=entrega.data_entrega_prevista,
+            data_nova=nova_data,
+            motivo_alteracao=motivo_alteracao,
+            alterado_por=current_user.nome
+        )
+        
+        # Atualiza a data na entrega
+        entrega.data_entrega_prevista = nova_data
+        
+        db.session.add(historico)
+        db.session.commit()
+        
+        flash('✅ Data de entrega prevista alterada com sucesso!', 'success')
+        
+    except ValueError:
+        flash('❌ Formato de data inválido.', 'danger')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Erro ao alterar data: {str(e)}', 'danger')
+    
+    return redirect(request.referrer)
+
+@monitoramento_bp.route('/<int:id>/historico_data_prevista')
+@login_required
+def historico_data_prevista(id):
+    entrega = EntregaMonitorada.query.get_or_404(id)
+    
+    from app.monitoramento.models import HistoricoDataPrevista
+    from app.utils.timezone import formatar_data_hora_brasil
+    
+    historicos = HistoricoDataPrevista.query.filter_by(entrega_id=entrega.id).order_by(HistoricoDataPrevista.alterado_em.desc()).all()
+    
+    historico_data = []
+    for h in historicos:
+        historico_data.append({
+            'data_alteracao': formatar_data_hora_brasil(h.alterado_em),
+            'data_anterior': h.data_anterior.strftime('%d/%m/%Y') if h.data_anterior else None,
+            'data_nova': h.data_nova.strftime('%d/%m/%Y'),
+            'motivo': h.motivo_alteracao,
+            'alterado_por': h.alterado_por
+        })
+    
+    return jsonify({'historico': historico_data})
+
+# ============================================================================
+# EXPORTAÇÃO PARA EXCEL
+# ============================================================================
+
+def aplicar_filtros_exportacao(query, filtros):
+    """Aplica filtros à query de EntregaMonitorada para exportação"""
+    
+    # Filtro por período de faturamento
+    if filtros.get('data_faturamento_inicio'):
+        query = query.filter(EntregaMonitorada.data_faturamento >= filtros['data_faturamento_inicio'])
+    
+    if filtros.get('data_faturamento_fim'):
+        query = query.filter(EntregaMonitorada.data_faturamento <= filtros['data_faturamento_fim'])
+    
+    # Filtro por período de embarque
+    if filtros.get('data_embarque_inicio'):
+        query = query.filter(EntregaMonitorada.data_embarque >= filtros['data_embarque_inicio'])
+    
+    if filtros.get('data_embarque_fim'):
+        query = query.filter(EntregaMonitorada.data_embarque <= filtros['data_embarque_fim'])
+    
+    # Filtro por cliente
+    if filtros.get('cliente'):
+        query = query.filter(EntregaMonitorada.cliente.ilike(f'%{filtros["cliente"]}%'))
+    
+    # Filtro por CNPJ
+    if filtros.get('cnpj'):
+        cnpj = filtros['cnpj'].replace('.', '').replace('/', '').replace('-', '')
+        query = query.filter(EntregaMonitorada.cnpj_cliente.like(f'%{cnpj}%'))
+    
+    # Filtro por UF
+    if filtros.get('uf'):
+        query = query.filter(EntregaMonitorada.uf == filtros['uf'].upper())
+    
+    # Filtro por município
+    if filtros.get('municipio'):
+        query = query.filter(EntregaMonitorada.municipio.ilike(f'%{filtros["municipio"]}%'))
+    
+    # Filtro por transportadora
+    if filtros.get('transportadora'):
+        query = query.filter(EntregaMonitorada.transportadora.ilike(f'%{filtros["transportadora"]}%'))
+    
+    # Filtro por vendedor
+    if filtros.get('vendedor'):
+        query = query.filter(EntregaMonitorada.vendedor.ilike(f'%{filtros["vendedor"]}%'))
+    
+    # Filtro por número NF
+    if filtros.get('numero_nf'):
+        query = query.filter(EntregaMonitorada.numero_nf.ilike(f'%{filtros["numero_nf"]}%'))
+    
+    # Filtro por status de entrega
+    if filtros.get('entregue') is not None:
+        if filtros['entregue']:
+            query = query.filter(EntregaMonitorada.status_finalizacao == 'Entregue')
+        else:
+            query = query.filter(EntregaMonitorada.status_finalizacao != 'Entregue')
+    
+    # Filtro por pendência financeira
+    if filtros.get('pendencia_financeira') is not None:
+        query = query.filter(EntregaMonitorada.pendencia_financeira == filtros['pendencia_financeira'])
+    
+    # Filtro por status de finalização
+    if filtros.get('status_finalizacao'):
+        if filtros['status_finalizacao'] == 'nao_finalizado':
+            query = query.filter(EntregaMonitorada.status_finalizacao.is_(None))
+        else:
+            query = query.filter(EntregaMonitorada.status_finalizacao == filtros['status_finalizacao'])
+    
+    # Filtro por NF no CD
+    if filtros.get('nf_cd') is not None:
+        query = query.filter(EntregaMonitorada.nf_cd == filtros['nf_cd'])
+    
+    return query
+
+def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
+    """Gera arquivo Excel com dados do monitoramento - sempre formato completo"""
+    
+    # Prepara dados principais
+    dados_principais = []
+    dados_agendamentos = []
+    dados_eventos = []
+    dados_custos = []
+    dados_logs = []
+    dados_comentarios = []
+    
+    for entrega in entregas:
+        # Agendamento mais recente
+        agendamento_recente = None
+        if entrega.agendamentos:
+            agendamento_recente = max(entrega.agendamentos, key=lambda x: x.criado_em)
+        
+        # Último log
+        ultimo_log = None
+        if entrega.logs:
+            ultimo_log = max(entrega.logs, key=lambda x: x.data_hora)
+        
+        # Custo total extra
+        custo_total = sum(custo.valor for custo in entrega.custos_extras if custo.valor)
+        
+        # Conta eventos, comentários
+        qtd_eventos = len(entrega.eventos)
+        qtd_comentarios = len([c for c in entrega.comentarios if c.resposta_a_id is None])
+        
+        # Formatar data de faturamento para dd/mm/aaaa
+        data_faturamento_formatada = ''
+        if entrega.data_faturamento:
+            data_faturamento_formatada = entrega.data_faturamento.strftime('%d/%m/%Y')
+        
+        # Formatar finalizado_em para fuso horário do Brasil
+        finalizado_em_brasil = None
+        if entrega.finalizado_em:
+            from app.utils.timezone import utc_para_brasil
+            try:
+                finalizado_em_brasil = utc_para_brasil(entrega.finalizado_em)
+            except:
+                # Fallback se não conseguir converter
+                finalizado_em_brasil = entrega.finalizado_em
+        
+        dados_principais.append({
+            # 1ª coluna: Data de faturamento formatada
+            'data_faturamento': data_faturamento_formatada,
+            'numero_nf': entrega.numero_nf,
+            'cliente': entrega.cliente,
+            'cnpj_cliente': entrega.cnpj_cliente,
+            'municipio': entrega.municipio,
+            'uf': entrega.uf,
+            'transportadora': entrega.transportadora,
+            'vendedor': entrega.vendedor,
+            'valor_nf': entrega.valor_nf,
+            'data_embarque': entrega.data_embarque,
+            'data_entrega_prevista': entrega.data_entrega_prevista,
+            'data_agenda': entrega.data_agenda,
+            'data_hora_entrega_realizada': entrega.data_hora_entrega_realizada,
+            # Substituir 'entregue' por 'status_finalizacao'
+            'status_finalizacao': entrega.status_finalizacao,
+            # Adicionar finalizado_em e finalizado_por após status_finalizacao
+            'finalizado_em': finalizado_em_brasil,
+            'finalizado_por': entrega.finalizado_por,
+            'lead_time': entrega.lead_time,
+            'reagendar': entrega.reagendar,
+            'motivo_reagendamento': entrega.motivo_reagendamento,
+            'pendencia_financeira': entrega.pendencia_financeira,
+            'nf_cd': entrega.nf_cd,
+            'nova_nf': entrega.nova_nf,
+            'observacao_operacional': entrega.observacao_operacional,
+            'resposta_financeiro': entrega.resposta_financeiro,
+            'criado_em': entrega.criado_em,
+            'criado_por': entrega.criado_por,
+            'qtd_agendamentos': len(entrega.agendamentos),
+            'data_ultimo_agendamento': agendamento_recente.data_agendada if agendamento_recente else None,
+            'protocolo_ultimo_agendamento': agendamento_recente.protocolo_agendamento if agendamento_recente else None,
+            'qtd_eventos': qtd_eventos,
+            'qtd_logs': len(entrega.logs),
+            'ultimo_log_descricao': ultimo_log.descricao if ultimo_log else None,
+            'ultimo_log_data': ultimo_log.data_hora if ultimo_log else None,
+            'qtd_custos_extras': len(entrega.custos_extras),
+            'valor_total_custos_extras': custo_total,
+            'qtd_comentarios': qtd_comentarios,
+            'possui_comentarios': entrega.possui_comentarios
+        })
+        
+        # Agendamentos
+        for ag in entrega.agendamentos:
+            dados_agendamentos.append({
+                'numero_nf': entrega.numero_nf,
+                'cliente': entrega.cliente,
+                'data_agendada': ag.data_agendada,
+                'hora_agendada': ag.hora_agendada,
+                'forma_agendamento': ag.forma_agendamento,
+                'contato_agendamento': ag.contato_agendamento,
+                'protocolo_agendamento': ag.protocolo_agendamento,
+                'motivo': ag.motivo,
+                'observacao': ag.observacao,
+                'autor': ag.autor,
+                'criado_em': ag.criado_em
+            })
+        
+        # Eventos
+        for ev in entrega.eventos:
+            dados_eventos.append({
+                'numero_nf': entrega.numero_nf,
+                'cliente': entrega.cliente,
+                'data_hora_chegada': ev.data_hora_chegada,
+                'data_hora_saida': ev.data_hora_saida,
+                'motorista': ev.motorista,
+                'tipo_evento': ev.tipo_evento,
+                'observacao': ev.observacao,
+                'autor': ev.autor,
+                'criado_em': ev.criado_em
+            })
+        
+        # Custos extras
+        for custo in entrega.custos_extras:
+            dados_custos.append({
+                'numero_nf': entrega.numero_nf,
+                'cliente': entrega.cliente,
+                'tipo': custo.tipo,
+                'valor': custo.valor,
+                'motivo': custo.motivo,
+                'autor': custo.autor,
+                'criado_em': custo.criado_em
+            })
+        
+        # Logs
+        for log in entrega.logs:
+            dados_logs.append({
+                'numero_nf': entrega.numero_nf,
+                'cliente': entrega.cliente,
+                'autor': log.autor,
+                'data_hora': log.data_hora,
+                'tipo': log.tipo,
+                'descricao': log.descricao,
+                'lembrete_para': log.lembrete_para
+            })
+        
+        # Comentários
+        for comentario in entrega.comentarios:
+            if comentario.resposta_a_id is None:
+                qtd_respostas = len(comentario.respostas)
+                dados_comentarios.append({
+                    'numero_nf': entrega.numero_nf,
+                    'cliente': entrega.cliente,
+                    'autor': comentario.autor,
+                    'texto': comentario.texto,
+                    'arquivo': comentario.arquivo,
+                    'criado_em': comentario.criado_em,
+                    'qtd_respostas': qtd_respostas
+                })
+    
+    # Cria DataFrame principal
+    df_principal = pd.DataFrame(dados_principais)
+    
+    # Cria arquivo temporário - sempre formato completo com múltiplas abas
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_file:
+        with pd.ExcelWriter(tmp_file.name) as writer:
+            # Aba principal
+            df_principal.to_excel(writer, sheet_name='Entregas', index=False)
+            
+            # Abas relacionadas
+            if dados_agendamentos:
+                df_agendamentos = pd.DataFrame(dados_agendamentos)
+                df_agendamentos.to_excel(writer, sheet_name='Agendamentos', index=False)
+            
+            if dados_eventos:
+                df_eventos = pd.DataFrame(dados_eventos)
+                df_eventos.to_excel(writer, sheet_name='Eventos', index=False)
+            
+            if dados_custos:
+                df_custos = pd.DataFrame(dados_custos)
+                df_custos.to_excel(writer, sheet_name='Custos Extras', index=False)
+            
+            if dados_logs:
+                df_logs = pd.DataFrame(dados_logs)
+                df_logs.to_excel(writer, sheet_name='Logs', index=False)
+            
+            if dados_comentarios:
+                df_comentarios = pd.DataFrame(dados_comentarios)
+                df_comentarios.to_excel(writer, sheet_name='Comentários', index=False)
+            
+            # Aba de estatísticas
+            estatisticas = {
+                'Total de Entregas': len(entregas),
+                'Entregas Finalizadas': len([e for e in entregas if e.status_finalizacao]),
+                'Entregas Entregues': len([e for e in entregas if e.status_finalizacao == 'Entregue']),
+                'Entregas Canceladas': len([e for e in entregas if e.status_finalizacao == 'Cancelada']),
+                'Entregas Devolvidas': len([e for e in entregas if e.status_finalizacao == 'Devolvida']),
+                'Pendências Financeiras': len([e for e in entregas if e.pendencia_financeira]),
+                'NFs no CD': len([e for e in entregas if e.nf_cd]),
+                'Total Agendamentos': len(dados_agendamentos),
+                'Total Eventos': len(dados_eventos),
+                'Total Custos Extras': len(dados_custos),
+                'Valor Total Custos': sum(custo['valor'] for custo in dados_custos if custo['valor']),
+                'Total Logs': len(dados_logs),
+                'Total Comentários': len(dados_comentarios)
+            }
+            
+            df_stats = pd.DataFrame(list(estatisticas.items()), columns=['Métrica', 'Valor'])
+            df_stats.to_excel(writer, sheet_name='Estatísticas', index=False)
+        
+        return tmp_file.name
+
+@monitoramento_bp.route('/exportar', methods=['GET', 'POST'])
+@login_required
+def exportar_entregas():
+    """Página para configurar e executar exportação"""
+    form = ExportarMonitoramentoForm()
+    
+    if form.validate_on_submit():
+        try:
+            # Monta filtros baseado no formulário
+            filtros = {}
+            
+            # Filtros predefinidos têm prioridade
+            if form.mes_atual.data:
+                hoje = date.today()
+                primeiro_dia_mes = date(hoje.year, hoje.month, 1)
+                filtros['data_faturamento_inicio'] = primeiro_dia_mes
+                filtros['data_faturamento_fim'] = hoje
+            elif form.ultimo_mes.data:
+                hoje = date.today()
+                if hoje.month == 1:
+                    primeiro_dia_mes_passado = date(hoje.year - 1, 12, 1)
+                    ultimo_dia_mes_passado = date(hoje.year, 1, 1) - timedelta(days=1)
+                else:
+                    primeiro_dia_mes_passado = date(hoje.year, hoje.month - 1, 1)
+                    ultimo_dia_mes_passado = date(hoje.year, hoje.month, 1) - timedelta(days=1)
+                filtros['data_faturamento_inicio'] = primeiro_dia_mes_passado
+                filtros['data_faturamento_fim'] = ultimo_dia_mes_passado
+            else:
+                # Filtros de período manuais
+                if form.data_faturamento_inicio.data:
+                    filtros['data_faturamento_inicio'] = form.data_faturamento_inicio.data
+                if form.data_faturamento_fim.data:
+                    filtros['data_faturamento_fim'] = form.data_faturamento_fim.data
+                if form.data_embarque_inicio.data:
+                    filtros['data_embarque_inicio'] = form.data_embarque_inicio.data
+                if form.data_embarque_fim.data:
+                    filtros['data_embarque_fim'] = form.data_embarque_fim.data
+            
+            # Filtros de dados
+            for campo in ['cliente', 'cnpj', 'uf', 'municipio', 'transportadora', 'vendedor', 'numero_nf']:
+                valor = getattr(form, campo).data
+                if valor and valor.strip():
+                    filtros[campo] = valor.strip()
+            
+            # Filtros de status
+            if form.entregue.data:
+                filtros['entregue'] = form.entregue.data == 'true'
+            if form.pendencia_financeira.data:
+                filtros['pendencia_financeira'] = form.pendencia_financeira.data == 'true'
+            if form.nf_cd.data:
+                filtros['nf_cd'] = form.nf_cd.data == 'true'
+            if form.status_finalizacao.data:
+                filtros['status_finalizacao'] = form.status_finalizacao.data
+            
+            # Filtro pendentes
+            if form.pendentes.data:
+                filtros['status_finalizacao'] = 'nao_finalizado'
+            
+            # Query base
+            query = EntregaMonitorada.query
+            
+            # Aplica filtros
+            query = aplicar_filtros_exportacao(query, filtros)
+            
+            # Busca entregas
+            entregas = query.order_by(EntregaMonitorada.numero_nf).all()
+            
+            if not entregas:
+                flash('❌ Nenhuma entrega encontrada com os filtros especificados', 'warning')
+                return render_template('monitoramento/exportar_entregas.html', form=form)
+            
+            # Gera arquivo Excel - sempre formato completo
+            arquivo_path = gerar_excel_monitoramento(entregas, 'multiplas_abas')
+            
+            # Nome do arquivo para download
+            nome_arquivo = form.nome_arquivo.data
+            if not nome_arquivo.endswith('.xlsx'):
+                nome_arquivo += '.xlsx'
+            
+            flash(f'✅ Exportação concluída! {len(entregas)} entregas exportadas.', 'success')
+            
+            # Envia arquivo para download
+            def cleanup_file():
+                try:
+                    os.unlink(arquivo_path)
+                except:
+                    pass
+            
+            return send_file(
+                arquivo_path,
+                as_attachment=True,
+                download_name=nome_arquivo,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            
+        except Exception as e:
+            flash(f'❌ Erro ao gerar exportação: {str(e)}', 'danger')
+            return render_template('monitoramento/exportar_entregas.html', form=form)
+    
+    return render_template('monitoramento/exportar_entregas.html', form=form)
 

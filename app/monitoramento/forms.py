@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, SelectField, FloatField, HiddenField, DateField, TimeField, SubmitField
+from wtforms import StringField, TextAreaField, SelectField, FloatField, HiddenField, DateField, TimeField, SubmitField, BooleanField
 from wtforms.validators import DataRequired, Optional
 from flask_wtf.file import FileField, FileAllowed
 
@@ -40,3 +40,57 @@ class FormComentarioNF(FlaskForm):
     arquivo = FileField('Arquivo', validators=[Optional(), FileAllowed(['jpg', 'png', 'pdf', 'xlsx', 'docx'])])
     resposta_a_id = HiddenField()
     submit = SubmitField('Enviar')
+
+class ExportarMonitoramentoForm(FlaskForm):
+    # Filtros de período
+    data_faturamento_inicio = DateField('Data Faturamento Início', validators=[Optional()])
+    data_faturamento_fim = DateField('Data Faturamento Fim', validators=[Optional()])
+    data_embarque_inicio = DateField('Data Embarque Início', validators=[Optional()])
+    data_embarque_fim = DateField('Data Embarque Fim', validators=[Optional()])
+    
+    # Filtros de dados
+    cliente = StringField('Cliente', validators=[Optional()])
+    cnpj = StringField('CNPJ', validators=[Optional()])
+    uf = StringField('UF', validators=[Optional()])
+    municipio = StringField('Município', validators=[Optional()])
+    transportadora = StringField('Transportadora', validators=[Optional()])
+    vendedor = StringField('Vendedor', validators=[Optional()])
+    numero_nf = StringField('Número NF', validators=[Optional()])
+    
+    # Filtros de status
+    entregue = SelectField('Status Entrega', choices=[
+        ('', 'Todos'),
+        ('true', 'Apenas Entregues'),
+        ('false', 'Apenas Não Entregues')
+    ], validators=[Optional()])
+    
+    pendencia_financeira = SelectField('Pendência Financeira', choices=[
+        ('', 'Todos'),
+        ('true', 'Apenas com Pendência'),
+        ('false', 'Apenas sem Pendência')
+    ], validators=[Optional()])
+    
+    nf_cd = SelectField('NF no CD', choices=[
+        ('', 'Todos'),
+        ('true', 'Apenas NF no CD'),
+        ('false', 'Apenas NF não no CD')
+    ], validators=[Optional()])
+    
+    status_finalizacao = SelectField('Status Finalização', choices=[
+        ('', 'Todos'),
+        ('nao_finalizado', 'Não Finalizados'),
+        ('Entregue', 'Entregue'),
+        ('Cancelada', 'Cancelada'),
+        ('Devolvida', 'Devolvida'),
+        ('Troca de NF', 'Troca de NF')
+    ], validators=[Optional()])
+    
+    # Filtros predefinidos
+    mes_atual = BooleanField('Mês Atual (Faturamento)')
+    ultimo_mes = BooleanField('Último Mês (Faturamento)')
+    pendentes = BooleanField('Apenas Pendentes (Não Finalizados)')
+    
+    # Opções de exportação
+    nome_arquivo = StringField('Nome do Arquivo', default='monitoramento_export.xlsx', validators=[DataRequired()])
+    
+    submit = SubmitField('Exportar para Excel')

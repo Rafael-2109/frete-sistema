@@ -28,6 +28,7 @@
     <li class="nav-item"><a class="nav-link" id="evento-tab" data-bs-toggle="tab" href="#evento" role="tab">Eventos</a></li>
     <li class="nav-item"><a class="nav-link" id="custo-tab" data-bs-toggle="tab" href="#custo" role="tab">Custos</a></li>
     <li class="nav-item"><a class="nav-link" id="agenda-tab" data-bs-toggle="tab" href="#agenda" role="tab">Agendamentos</a></li>
+    <li class="nav-item"><a class="nav-link" id="pendencias-tab" data-bs-toggle="tab" href="#pendencias" role="tab">💰 Pendências</a></li>
     <li class="nav-item"><a class="nav-link" id="finalizacao-tab" data-bs-toggle="tab" href="#finalizacao" role="tab">Finalização</a></li>
     <li class="nav-item"><a class="nav-link" id="comentarios-tab" data-bs-toggle="tab" href="#comentarios" role="tab">💬 Comentários</a></li>
 
@@ -99,6 +100,17 @@
         document.querySelector('input[name="resposta_a_id"]').value = comentario_id;
         document.querySelector('textarea[name="texto"]').placeholder = 'Responder comentário...';
         document.querySelector('textarea[name="texto"]').focus();
+      }
+      
+      function responderPendencia(pendencia_id) {
+        document.getElementById('pendencia_id').value = pendencia_id;
+        document.getElementById('resposta-pendencia').style.display = 'block';
+        document.getElementById('resposta_logistica').focus();
+      }
+      
+      function cancelarResposta() {
+        document.getElementById('resposta-pendencia').style.display = 'none';
+        document.getElementById('resposta_logistica').value = '';
       }
     </script>
 
@@ -235,12 +247,123 @@
         
       </div>
 
+    <!-- PENDÊNCIAS FINANCEIRAS -->
+    <div class="tab-pane fade" id="pendencias" role="tabpanel">
+      {% if feedback == 'pendencia' %}<div class="alert alert-success">✔️ Pendência registrada com sucesso.</div>{% endif %}
+
+      <h5>Pendências Financeiras</h5>
+      <ul class="list-group mb-3">
+        {% for pendencia in entrega.pendencias_financeiras %}
+        <li class="list-group-item">
+          <div class="row">
+            <div class="col-md-8">
+              <strong>Pendência criada em:</strong> {{ pendencia.criado_em | formatar_data_hora_brasil }}<br>
+              <strong>Por:</strong> {{ pendencia.criado_por }}<br>
+              <strong>Observação:</strong> {{ pendencia.observacao or '-' }}<br>
+              
+              {% if pendencia.respondida_em %}
+                {% if pendencia.resposta_excluida_em %}
+                  <!-- Resposta foi apagada - mostra histórico -->
+                  <div class="mt-2 p-2 bg-warning bg-opacity-10 rounded">
+                    <strong>📝 Respondida originalmente em:</strong> {{ pendencia.respondida_em | formatar_data_hora_brasil }}<br>
+                    <strong>Por:</strong> {{ pendencia.respondida_por }}<br>
+                    <strong>Resposta original:</strong> {{ pendencia.resposta_logistica }}<br>
+                    <hr class="my-2">
+                    <strong>🗑️ Resposta apagada em:</strong> {{ pendencia.resposta_excluida_em | formatar_data_hora_brasil }}<br>
+                    <strong>Por:</strong> {{ pendencia.resposta_excluida_por }}<br>
+                    <span class="badge bg-warning">⏳ Aguardando Nova Resposta</span>
+                  </div>
+                {% else %}
+                  <!-- Resposta ativa -->
+                  <div class="mt-2 p-2 bg-success bg-opacity-10 rounded">
+                    <strong>✅ Respondida em:</strong> {{ pendencia.respondida_em | formatar_data_hora_brasil }}<br>
+                    <strong>Por:</strong> {{ pendencia.respondida_por }}<br>
+                    <strong>Resposta:</strong> {{ pendencia.resposta_logistica }}
+                  </div>
+                {% endif %}
+              {% else %}
+                <span class="badge bg-warning">⏳ Aguardando Resposta</span>
+              {% endif %}
+            </div>
+            <div class="col-md-4 text-end">
+              {% if not pendencia.respondida_em or pendencia.resposta_excluida_em %}
+                <!-- Sem resposta ou resposta apagada - pode responder -->
+                <button class="btn btn-sm btn-success" onclick="responderPendencia({{ pendencia.id }})">
+                  {% if pendencia.resposta_excluida_em %}Nova {% endif %}Resposta
+                </button>
+              {% else %}
+                <!-- Tem resposta ativa - pode apagar a resposta -->
+                <form method="POST" action="{{ url_for('monitoramento.apagar_resposta_pendencia', pendencia_id=pendencia.id) }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-outline-warning" onclick="return confirm('Tem certeza que deseja apagar esta resposta? O histórico será mantido.')">
+                    🗑️ Apagar Resposta
+                  </button>
+                </form>
+              {% endif %}
+              <div class="mt-1">
+                <small class="text-muted">📋 Pendência permanente</small>
+              </div>
+            </div>
+          </div>
+        </li>
+        {% endfor %}
+        
+        {% if not entrega.pendencias_financeiras %}
+        <li class="list-group-item text-muted text-center">
+          Nenhuma pendência financeira registrada
+        </li>
+        {% endif %}
+      </ul>
+
+      <!-- Formulário para responder pendência -->
+      <div id="resposta-pendencia" style="display: none;" class="card mb-3">
+        <div class="card-header">
+          <h6 class="mb-0">Responder Pendência Financeira</h6>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="{{ url_for('monitoramento.responder_pendencia', id=entrega.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="pendencia_id" id="pendencia_id">
+            
+            <div class="mb-3">
+              <label for="resposta_logistica" class="form-label">Resposta da Logística</label>
+              <textarea name="resposta_logistica" id="resposta_logistica" class="form-control" rows="3" required></textarea>
+            </div>
+            
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-success">Enviar Resposta</button>
+              <button type="button" class="btn btn-secondary" onclick="cancelarResposta()">Cancelar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Formulário para nova pendência -->
+      <div class="card">
+        <div class="card-header">
+          <h6 class="mb-0">Registrar Nova Pendência Financeira</h6>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="{{ url_for('monitoramento.adicionar_pendencia', id=entrega.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div class="mb-3">
+              <label for="observacao_pendencia" class="form-label">Observação da Pendência</label>
+              <textarea name="observacao" id="observacao_pendencia" class="form-control" rows="3" required placeholder="Descreva a pendência financeira..."></textarea>
+            </div>
+            
+            <button type="submit" class="btn btn-warning">Registrar Pendência</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <!-- FINALIZAÇÃO -->
     <div class="tab-pane fade" id="finalizacao" role="tabpanel">
       <h5>Finalizar entrega</h5>
 {% if entrega.finalizado_em %}
 <div class="alert alert-info">
-  <strong>Finalizada em:</strong> {{ entrega.data_hora_entrega_realizada | formatar_data_hora_brasil if entrega.data_hora_entrega_realizada else entrega.finalizado_em | formatar_data_hora_brasil }}<br>
+  <strong>Finalizada em:</strong> {{ (entrega.data_hora_entrega_realizada if entrega.data_hora_entrega_realizada else entrega.finalizado_em).strftime('%d/%m/%Y %H:%M') if (entrega.data_hora_entrega_realizada or entrega.finalizado_em) else '-' }}<br>
   <strong>Status:</strong> {{ entrega.status_finalizacao }}<br>
   <strong>Por:</strong> {{ entrega.finalizado_por }}<br>
   <strong>Registrado em:</strong> {{ entrega.finalizado_em | formatar_data_hora_brasil }}<br>

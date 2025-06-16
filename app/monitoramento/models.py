@@ -142,3 +142,17 @@ class ComentarioNF(db.Model):
     resposta_a_id = db.Column(db.Integer, db.ForeignKey('comentarios_nf.id'), nullable=True)
     
     respostas = db.relationship('ComentarioNF', backref=db.backref('comentario_pai', remote_side=[id]))
+
+
+class HistoricoDataPrevista(db.Model):
+    __tablename__ = 'historico_data_prevista'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    entrega_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'), nullable=False)
+    data_anterior = db.Column(db.Date, nullable=True)  # Data anterior (pode ser None na primeira vez)
+    data_nova = db.Column(db.Date, nullable=False)  # Nova data
+    motivo_alteracao = db.Column(db.Text, nullable=False)  # Motivo da alteração
+    alterado_por = db.Column(db.String(100), nullable=False)  # Quem alterou
+    alterado_em = db.Column(db.DateTime, default=datetime.utcnow)  # Quando foi alterado
+    
+    entrega = db.relationship('EntregaMonitorada', backref='historico_data_prevista')
