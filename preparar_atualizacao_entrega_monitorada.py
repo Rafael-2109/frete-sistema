@@ -12,14 +12,16 @@ d) Criar Acompanhamento com "Tipo" = Informação e "Descrição"
 
 ESTRUTURA DA PLANILHA:
 - numero_nf (obrigatório)
-- data_embarque (opcional)
-- data_entrega_prevista (opcional)
-- data_agenda (opcional)
-- status_finalizacao (opcional: 'Cancelada', 'Devolvida', 'Entregue', etc.)
-- data_entrega_realizada (opcional: data real da entrega quando status = 'Entregue')
-- protocolo_agendamento (opcional)
-- data_agendamento (opcional)
-- acompanhamento_descricao (opcional)
+- data_embarque (opcional) - ou variações: "embarque", "dt_embarque"
+- data_entrega_prevista (opcional) - ou variações: "prevista", "dt_prevista"
+- data_agenda (opcional) - ou variações: "agenda", "dt_agenda"
+- status_finalizacao (opcional) - ou variações: "status", "situacao", "finalizacao"
+- data_entrega_realizada (opcional) - ou variações: "realizada", "dt_realizada"
+- protocolo_agendamento (opcional) - ou variações: "protocolo"
+- data_agendamento (opcional) - ou variações: "dt_agendamento"
+- acompanhamento_descricao (opcional) - ou variações: "descricao", "observacao"
+
+📌 ACEITA VARIAÇÕES: O script detecta automaticamente variações dos nomes das colunas!
 
 Uso: python preparar_atualizacao_entrega_monitorada.py arquivo.xlsx [--sheet=Nome] [--dry-run] [--confirmar]
 """
@@ -89,27 +91,64 @@ def preparar_atualizacao_entrega_monitorada(arquivo_excel, sheet_name='Sheet1', 
         for col in df.columns:
             print(f"   • {col}")
         
-        # Mapeia colunas opcionais
-        colunas_opcionais = {
-            'data_embarque': 'data_embarque',
-            'data_entrega_prevista': 'data_entrega_prevista', 
-            'data_agenda': 'data_agenda',
-            'status_finalizacao': 'status_finalizacao',
-            'data_entrega_realizada': 'data_entrega_realizada',
-            'protocolo_agendamento': 'protocolo_agendamento',
-            'data_agendamento': 'data_agendamento',
-            'acompanhamento_descricao': 'acompanhamento_descricao'
+        # ✅ NOVO: Mapeamento flexível de colunas (aceita variações)
+        def encontrar_coluna(df, possibilidades):
+            """Encontra coluna com base em uma lista de possibilidades"""
+            colunas_df = [str(col).strip() for col in df.columns]
+            
+            for possibilidade in possibilidades:
+                # Busca exata
+                if possibilidade in colunas_df:
+                    return possibilidade
+                    
+                # Busca case-insensitive
+                for col_df in colunas_df:
+                    if possibilidade.lower() == col_df.lower():
+                        return col_df
+                        
+                # Busca por contenção (parcial)
+                for col_df in colunas_df:
+                    if possibilidade.lower() in col_df.lower():
+                        return col_df
+            
+            return None
+        
+        # Mapeia colunas com múltiplas possibilidades
+        mapeamento_colunas = {
+            'data_embarque': ['data_embarque', 'data embarque', 'embarque', 'dt_embarque'],
+            'data_entrega_prevista': ['data_entrega_prevista', 'data entrega prevista', 'prevista', 'dt_prevista'],
+            'data_agenda': ['data_agenda', 'data agenda', 'agenda', 'dt_agenda'],
+            'status_finalizacao': ['status_finalizacao', 'status finalizacao', 'status', 'situacao', 'finalizacao', 'Status', 'Situação'],
+            'data_entrega_realizada': ['data_entrega_realizada', 'data entrega realizada', 'realizada', 'dt_realizada', 'data_entrega'],
+            'protocolo_agendamento': ['protocolo_agendamento', 'protocolo agendamento', 'protocolo'],
+            'data_agendamento': ['data_agendamento', 'data agendamento', 'dt_agendamento'],
+            'acompanhamento_descricao': ['acompanhamento_descricao', 'acompanhamento descricao', 'descricao', 'observacao']
         }
         
         colunas_encontradas = {}
-        for col_sistema, col_planilha in colunas_opcionais.items():
-            if col_planilha in df.columns:
-                colunas_encontradas[col_sistema] = col_planilha
+        for col_sistema, possibilidades in mapeamento_colunas.items():
+            coluna_encontrada = encontrar_coluna(df, possibilidades)
+            if coluna_encontrada:
+                colunas_encontradas[col_sistema] = coluna_encontrada
         
         print(f"\n📊 COLUNAS MAPEADAS:")
         for col_sistema, col_planilha in colunas_encontradas.items():
             valores_nao_vazios = df[col_planilha].notna().sum()
-            print(f"   • {col_sistema} ← {col_planilha} ({valores_nao_vazios} valores)")
+            variacao = ""
+            if col_planilha != col_sistema:
+                variacao = f" [variação detectada]"
+            print(f"   • {col_sistema} ← '{col_planilha}' ({valores_nao_vazios} valores){variacao}")
+        
+        # ✅ NOVO: Mostra colunas não encontradas para ajudar no debug
+        nao_encontradas = []
+        for col_sistema, possibilidades in mapeamento_colunas.items():
+            if col_sistema not in colunas_encontradas:
+                nao_encontradas.append(f"{col_sistema} (tentou: {', '.join(possibilidades[:3])}...)")
+        
+        if nao_encontradas:
+            print(f"\n⚠️  COLUNAS NÃO ENCONTRADAS:")
+            for nao_encontrada in nao_encontradas:
+                print(f"   • {nao_encontrada}")
         
         if not colunas_encontradas:
             print("⚠️  Nenhuma coluna opcional encontrada. Nada para atualizar.")
