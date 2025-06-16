@@ -286,14 +286,21 @@ document.addEventListener('DOMContentLoaded', function() {
     e.target.value = value;
   });
   
-  // Máscara para placa
+  // Máscara para placa (formato antigo ABC-1234 e Mercosul ABC-1D23)
   const placaInput = document.querySelector('input[name="placa"]');
   if (placaInput) {
     placaInput.addEventListener('input', function(e) {
       let value = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      
       if (value.length <= 7) {
-        // Formato ABC-1234
-        value = value.replace(/(\w{3})(\w{1,4})/, '$1-$2');
+        // Detecta formato Mercosul (4º caractere é número, 5º é letra)
+        if (value.length >= 5 && /\d/.test(value[3]) && /[A-Z]/.test(value[4])) {
+          // Formato Mercosul: ABC-1D23
+          value = value.replace(/([A-Z]{3})(\d{1}[A-Z]{1}\d{0,2})/, '$1-$2');
+        } else if (value.length >= 4) {
+          // Formato antigo: ABC-1234
+          value = value.replace(/([A-Z]{3})(\d{1,4})/, '$1-$2');
+        }
       }
       e.target.value = value;
     });

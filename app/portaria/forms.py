@@ -102,11 +102,11 @@ class ControlePortariaForm(FlaskForm):
         validators=[
             DataRequired(message='Placa é obrigatória'),
             Regexp(
-                r'^[A-Z]{3}-?\d{4}$|^[A-Z]{3}\d[A-Z]\d{2}$',
-                message='Placa deve estar no formato ABC-1234 ou ABC1D23'
+                r'^[A-Z]{3}-?\d{4}$|^[A-Z]{3}-?\d{1}[A-Z]{1}\d{2}$',
+                message='Placa deve estar no formato ABC-1234 (antiga) ou ABC-1D23 (Mercosul)'
             )
         ],
-        render_kw={'placeholder': 'ABC-1234 ou ABC1D23', 'style': 'text-transform: uppercase;'}
+        render_kw={'placeholder': 'ABC-1234 ou ABC-1D23', 'style': 'text-transform: uppercase;'}
     )
     
     tipo_veiculo_id = SelectField(

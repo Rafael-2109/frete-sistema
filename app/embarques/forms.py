@@ -15,6 +15,7 @@ from datetime import datetime
 from wtforms.validators import DataRequired
 from wtforms.validators import Optional
 from wtforms.validators import ValidationError
+from wtforms.validators import Regexp
 
 from app.utils.ufs import UF_LIST
 
@@ -71,7 +72,17 @@ class EmbarqueForm(FlaskForm):
     # ✅ CAMPOS EDITÁVEIS pelo usuário
     observacoes = StringField('Observações')
     itens = FieldList(FormField(EmbarqueItemForm), min_entries=1)
-    placa_veiculo = StringField('Placa do Veículo')
+    placa_veiculo = StringField(
+        'Placa do Veículo',
+        validators=[
+            Optional(),
+            Regexp(
+                r'^[A-Z]{3}-?\d{4}$|^[A-Z]{3}-?\d{1}[A-Z]{1}\d{2}$',
+                message='Placa deve estar no formato ABC-1234 (antiga) ou ABC-1D23 (Mercosul)'
+            )
+        ],
+        render_kw={'placeholder': 'ABC-1234 ou ABC-1D23', 'style': 'text-transform: uppercase;'}
+    )
     paletizado = BooleanField('Paletizado')
     laudo_anexado = BooleanField('Laudo Anexado')
     embalagem_aprovada = BooleanField('Embalagem Aprovada')
