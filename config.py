@@ -7,6 +7,9 @@ load_dotenv()
 DATABASE_URL = os.environ.get('DATABASE_URL') or 'sqlite:///sistema_fretes.db'
 IS_POSTGRESQL = DATABASE_URL.startswith('postgresql://') or DATABASE_URL.startswith('postgres://')
 
+# Detecta se é ambiente de produção
+IS_PRODUCTION = os.environ.get('ENVIRONMENT') == 'production' or 'render.com' in os.environ.get('RENDER_EXTERNAL_URL', '')
+
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key-super-secreta-aqui'
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
@@ -15,6 +18,28 @@ class Config:
     # 🆕 CONFIGURAÇÕES DE MONITORAMENTO
     # Filtrar NFs FOB do monitoramento (True por padrão)
     FILTRAR_FOB_MONITORAMENTO = os.environ.get('FILTRAR_FOB_MONITORAMENTO', 'True').lower() == 'true'
+    
+    # ✅ CONFIGURAÇÕES DE CSRF OTIMIZADAS
+    WTF_CSRF_ENABLED = True
+    WTF_CSRF_TIME_LIMIT = 7200  # 2 horas (era 1 hora por padrão)
+    
+    if IS_PRODUCTION:
+        # Configurações de CSRF para produção - menos rigorosas para evitar erros
+        WTF_CSRF_SSL_STRICT = False  # Desabilita verificação rigorosa de referrer
+        WTF_CSRF_CHECK_DEFAULT = True
+        # Headers alternativos para CSRF em produção
+        WTF_CSRF_HEADERS = ['X-CSRFToken', 'X-CSRF-Token', 'HTTP_X_CSRFTOKEN', 'HTTP_X_CSRF_TOKEN']
+    else:
+        # Configurações de CSRF para desenvolvimento
+        WTF_CSRF_SSL_STRICT = False  # Também desabilitado em dev
+        WTF_CSRF_CHECK_DEFAULT = True
+    
+    # ✅ CONFIGURAÇÕES DE SESSÃO OTIMIZADAS
+    # Sessão mais longa e estável
+    PERMANENT_SESSION_LIFETIME = 28800  # 8 horas
+    SESSION_COOKIE_SECURE = IS_PRODUCTION  # Secure apenas em produção
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'  # Mais permissivo que 'Strict'
     
     # Configurações condicionais baseadas no tipo de banco
     if IS_POSTGRESQL:

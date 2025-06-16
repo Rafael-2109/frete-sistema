@@ -226,6 +226,38 @@
       event.detail.headers['X-CSRFToken'] = token;
     }
   });
+  
+  // ✅ NOVO: Tratamento aprimorado para erros CSRF
+  document.addEventListener("htmx:responseError", function(event) {
+    if (event.detail.xhr.status === 400) {
+      try {
+        const response = JSON.parse(event.detail.xhr.responseText);
+        if (response.csrf_error) {
+          alert(response.message);
+          window.location.reload();
+          return;
+        }
+      } catch (e) {}
+    }
+  });
+  
+  // Intercepta submissões de formulários para verificar CSRF
+  document.addEventListener('submit', function(event) {
+    const form = event.target;
+    const csrfInput = form.querySelector('input[name="csrf_token"]');
+    
+    if (csrfInput && !csrfInput.value) {
+      event.preventDefault();
+      const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+      if (token) {
+        csrfInput.value = token;
+        form.submit();
+      } else {
+        alert('Sua sessão expirou. Por favor, recarregue a página.');
+        window.location.reload();
+      }
+    }
+  });
 </script>
 
 {% block scripts %}{% endblock %}

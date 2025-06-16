@@ -95,17 +95,48 @@ def create_app(config_name=None):
     # ✅ NOVO: Define tempo de vida da sessão (4 horas)
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=4)
     
-    # ✅ NOVO: Configurações adicionais de sessão
-    app.config['SESSION_COOKIE_SECURE'] = True if app.config.get('ENVIRONMENT') == 'production' else False
-    app.config['SESSION_COOKIE_HTTPONLY'] = True
-    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-
+    # ✅ CONFIGURAÇÕES DE SESSÃO APRIMORADAS
+    # Remove configurações duplicadas - agora vem do config.py
+    
     # 🚀 Inicializa extensões
     db.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
     migrate.init_app(app, db)
     Session(app)
+    
+    # ✅ NOVO: Handler específico para erros CSRF
+    from flask_wtf.csrf import CSRFError
+    
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(error):
+        """Handler específico para erros de CSRF"""
+        from flask import render_template, request, flash, redirect, url_for
+        
+        # Log do erro CSRF para análise
+        try:
+            from app.utils.logging_config import logger
+            logger.warning(f"🔒 ERRO CSRF: {error.description} | Rota: {request.path} | "
+                          f"Método: {request.method} | User-Agent: {request.headers.get('User-Agent', 'Unknown')[:50]}...")
+        except:
+            pass
+        
+        # Para requisições AJAX, retorna JSON
+        if request.is_json or 'XMLHttpRequest' in request.headers.get('X-Requested-With', ''):
+            return {
+                'success': False, 
+                'message': 'Sua sessão expirou. Por favor, recarregue a página e tente novamente.',
+                'csrf_error': True
+            }, 400
+        
+        # Para requisições normais, redireciona com mensagem
+        flash('Sua sessão expirou. Por favor, tente novamente.', 'warning')
+        
+        # Tenta redirecionar para a mesma página ou para o dashboard
+        if request.referrer and request.referrer != request.url:
+            return redirect(request.referrer)
+        else:
+            return redirect(url_for('main.dashboard'))
 
     # 🔧 Configurar login manager
     login_manager.login_view = "auth.login"
