@@ -132,95 +132,72 @@ def visualizar_embarque(id):
                 messages_fretes = []
                 messages_entregas = []
 
-                # ✅ SINCRONIZAÇÃO OTIMIZADA: Só executa se houve mudanças nas NFs
+                # ✅ SINCRONIZAÇÃO SEMPRE: Executa toda vez que salvar o embarque
                 try:
-                    # Verifica se houve mudanças nas NFs antes de sincronizar
-                    nfs_alteradas = False
-                    for i, item_form in enumerate(form.itens.entries):
-                        if i < len(embarque.itens):
-                            item_atual = embarque.itens[i]
-                            nf_nova = item_form.nota_fiscal.data or ''
-                            nf_atual = item_atual.nota_fiscal or ''
-                            if nf_nova.strip() != nf_atual.strip():
-                                nfs_alteradas = True
-                                break
-                    
-                    if nfs_alteradas:
-                        sucesso_sync, resultado_sync = sincronizar_nf_embarque_pedido_completa(embarque.id)
-                        if sucesso_sync:
-                            messages_sync.append(f"🔄 {resultado_sync}")
-                        else:
-                            messages_sync.append(f"⚠️ Erro na sincronização: {resultado_sync}")
+                    sucesso_sync, resultado_sync = sincronizar_nf_embarque_pedido_completa(embarque.id)
+                    if sucesso_sync:
+                        messages_sync.append(f"🔄 {resultado_sync}")
                     else:
-                        print("[DEBUG] ⚡ Sincronização pulada - nenhuma NF alterada")
+                        messages_sync.append(f"⚠️ Erro na sincronização: {resultado_sync}")
                 except Exception as e:
                     print(f"Erro na sincronização de NFs: {e}")
                     messages_sync.append(f"⚠️ Erro na sincronização de NFs: {e}")
 
-                # Validação de CNPJ otimizada - só executa se houve mudanças nas NFs
-                if nfs_alteradas:
+                # Validação de CNPJ sempre executa
+                try:
+                    from app.fretes.routes import validar_cnpj_embarque_faturamento
+                    sucesso_validacao, resultado_validacao = validar_cnpj_embarque_faturamento(embarque.id)
+                    if not sucesso_validacao:
+                        messages_validacao.append(f"⚠️ {resultado_validacao}")
+                except Exception as e:
+                    print(f"Erro na validação de CNPJ: {e}")
+                    messages_validacao.append(f"⚠️ Erro na validação de CNPJ: {e}")
+
+                # Lançamento automático de fretes sempre executa
+                try:
+                    from app.fretes.routes import processar_lancamento_automatico_fretes
+                    sucesso, resultado = processar_lancamento_automatico_fretes(
+                        embarque_id=embarque.id,
+                        usuario=current_user.nome if current_user.is_authenticated else 'Sistema'
+                    )
+                    if sucesso and "lançado(s) automaticamente" in resultado:
+                        messages_fretes.append(f"✅ {resultado}")
+                except Exception as e:
+                    print(f"Erro no lançamento automático de fretes: {e}")
+                    messages_fretes.append(f"⚠️ Erro no lançamento de fretes: {e}")
+
+                # Sincronização de entregas sempre executa
+                for item in embarque.itens:
+                    if not item.nota_fiscal:
+                        continue
+
                     try:
-                        from app.fretes.routes import validar_cnpj_embarque_faturamento
-                        sucesso_validacao, resultado_validacao = validar_cnpj_embarque_faturamento(embarque.id)
-                        if not sucesso_validacao:
-                            messages_validacao.append(f"⚠️ {resultado_validacao}")
+                        # Recupera a entrega pra verificar se está com nf_cd=True
+                        entrega = EntregaMonitorada.query.filter_by(numero_nf=item.nota_fiscal).first()
+
+                        if entrega and entrega.nf_cd:
+                            # ✅ IMPLEMENTAÇÃO DO ITEM 2-d: NF no CD
+                            # Atualiza status do pedido quando NF volta para CD
+                            # ✅ CORREÇÃO: Passa separacao_lote_id para maior precisão
+                            sucesso_cd, resultado_cd = atualizar_status_pedido_nf_cd(
+                                numero_pedido=item.pedido,
+                                separacao_lote_id=item.separacao_lote_id
+                            )
+                            if sucesso_cd:
+                                messages_entregas.append(f"📦 {resultado_cd}")
+                            
+                            # Se nf_cd=True, chamamos o script especial
+                            sincronizar_nova_entrega_por_nf(
+                                numero_nf=item.nota_fiscal,
+                                embarque=embarque,
+                                item_embarque=item
+                            )
+                        else:
+                            # Caso contrário, script normal
+                            sincronizar_entrega_por_nf(item.nota_fiscal)
                     except Exception as e:
-                        print(f"Erro na validação de CNPJ: {e}")
-                        messages_validacao.append(f"⚠️ Erro na validação de CNPJ: {e}")
-                else:
-                    print("[DEBUG] ⚡ Validação CNPJ pulada - nenhuma NF alterada")
-
-                # Lançamento automático de fretes otimizado - só executa se houve mudanças nas NFs
-                if nfs_alteradas:
-                    try:
-                        from app.fretes.routes import processar_lancamento_automatico_fretes
-                        sucesso, resultado = processar_lancamento_automatico_fretes(
-                            embarque_id=embarque.id,
-                            usuario=current_user.nome if current_user.is_authenticated else 'Sistema'
-                        )
-                        if sucesso and "lançado(s) automaticamente" in resultado:
-                            messages_fretes.append(f"✅ {resultado}")
-                    except Exception as e:
-                        print(f"Erro no lançamento automático de fretes: {e}")
-                        messages_fretes.append(f"⚠️ Erro no lançamento de fretes: {e}")
-                else:
-                    print("[DEBUG] ⚡ Lançamento de fretes pulado - nenhuma NF alterada")
-
-                # Sincronização de entregas otimizada - só executa se houve mudanças nas NFs
-                if nfs_alteradas:
-                    for item in embarque.itens:
-                        if not item.nota_fiscal:
-                            continue
-
-                        try:
-                            # Recupera a entrega pra verificar se está com nf_cd=True
-                            entrega = EntregaMonitorada.query.filter_by(numero_nf=item.nota_fiscal).first()
-
-                            if entrega and entrega.nf_cd:
-                                # ✅ IMPLEMENTAÇÃO DO ITEM 2-d: NF no CD
-                                # Atualiza status do pedido quando NF volta para CD
-                                # ✅ CORREÇÃO: Passa separacao_lote_id para maior precisão
-                                sucesso_cd, resultado_cd = atualizar_status_pedido_nf_cd(
-                                    numero_pedido=item.pedido,
-                                    separacao_lote_id=item.separacao_lote_id
-                                )
-                                if sucesso_cd:
-                                    messages_entregas.append(f"📦 {resultado_cd}")
-                                
-                                # Se nf_cd=True, chamamos o script especial
-                                sincronizar_nova_entrega_por_nf(
-                                    numero_nf=item.nota_fiscal,
-                                    embarque=embarque,
-                                    item_embarque=item
-                                )
-                            else:
-                                # Caso contrário, script normal
-                                sincronizar_entrega_por_nf(item.nota_fiscal)
-                        except Exception as e:
-                            print(f"Erro na sincronização de entrega {item.nota_fiscal}: {e}")
-                            messages_entregas.append(f"⚠️ Erro na entrega {item.nota_fiscal}: {e}")
-                else:
-                    print("[DEBUG] ⚡ Sincronização de entregas pulada - nenhuma NF alterada")
+                        print(f"Erro na sincronização de entrega {item.nota_fiscal}: {e}")
+                        messages_entregas.append(f"⚠️ Erro na entrega {item.nota_fiscal}: {e}")
 
                 # ✅ CORREÇÃO: Commit ÚNICO após TODAS as operações
                 db.session.commit()
@@ -621,62 +598,35 @@ def cancelar_embarque(id):
         embarque.cancelado_em = datetime.now()
         embarque.cancelado_por = current_user.nome if current_user.is_authenticated else 'Sistema'
         
-        # ✅ NOVO: Remover NFs dos itens e resetar pedidos para status "Aberto"
+        # ✅ ATUALIZADO: Remover NFs dos itens e sincronizar com pedidos
         try:
-            from app.pedidos.models import Pedido
-            
-            # 1. Remove as NFs de todos os itens do embarque
+            # 1. Remove as NFs de todos os itens do embarque que tinham NF
             nfs_removidas = 0
             for item in embarque.itens:
                 if item.nota_fiscal and item.nota_fiscal.strip():
+                    print(f"[CANCEL] Removendo NF {item.nota_fiscal} do item {item.pedido}")
                     item.nota_fiscal = None  # Remove a NF
                     nfs_removidas += 1
             
-            # 2. Busca todos os lotes de separação vinculados aos itens deste embarque
-            lotes_vinculados = set()
+            # 2. Cancela todos os itens do embarque
             for item in embarque.itens:
-                if hasattr(item, 'separacao_lote_id') and item.separacao_lote_id:
-                    lotes_vinculados.add(item.separacao_lote_id)
+                item.status = 'cancelado'
             
-            # 3. ✅ CORREÇÃO: Verifica se pedidos estão em outros embarques ativos antes de resetar
-            pedidos_atualizados = 0
-            pedidos_mantidos_cotados = 0
-            
-            for lote_id in lotes_vinculados:
-                pedidos_lote = Pedido.query.filter_by(separacao_lote_id=lote_id).all()
-                for pedido in pedidos_lote:
-                    # ✅ NOVA LÓGICA: Verifica se o pedido está em outros embarques ativos
-                    outros_embarques_ativos = EmbarqueItem.query.join(Embarque).filter(
-                        EmbarqueItem.separacao_lote_id == lote_id,
-                        EmbarqueItem.status == 'ativo',
-                        Embarque.status == 'ativo',
-                        Embarque.id != embarque.id  # Exclui o embarque que está sendo cancelado
-                    ).first()
-                    
-                    if outros_embarques_ativos:
-                        # ✅ Pedido está em outro embarque ativo - MANTÉM status "Cotado"
-                        print(f"[DEBUG] 🔄 Pedido {pedido.num_pedido}: Mantido como 'Cotado' - está no embarque #{outros_embarques_ativos.embarque.numero}")
-                        pedidos_mantidos_cotados += 1
-                    else:
-                        # ✅ Pedido NÃO está em outros embarques - pode resetar para "Aberto"
-                        pedido.cotacao_id = None
-                        pedido.transportadora = None
-                        pedido.nf_cd = False
-                        # Status será calculado automaticamente como "Aberto"
-                        print(f"[DEBUG] 🔄 Pedido {pedido.num_pedido}: Resetado para 'Aberto' - não há outros embarques ativos")
-                        pedidos_atualizados += 1
+            # 3. ✅ USAR SINCRONIZAÇÃO COMPLETA: Sincroniza as mudanças com os pedidos
+            print(f"[CANCEL] 🔄 Iniciando sincronização para embarque #{embarque.numero}")
+            sucesso_sync, resultado_sync = sincronizar_nf_embarque_pedido_completa(embarque.id)
+            print(f"[CANCEL] 📊 Resultado da sincronização: {sucesso_sync} - {resultado_sync}")
             
             if nfs_removidas > 0:
                 flash(f"✅ {nfs_removidas} NF(s) removida(s) dos itens do embarque", "info")
             
-            if pedidos_atualizados > 0:
-                flash(f"✅ {pedidos_atualizados} pedidos retornaram ao status 'Aberto'", "info")
-                
-            if pedidos_mantidos_cotados > 0:
-                flash(f"ℹ️ {pedidos_mantidos_cotados} pedidos mantidos como 'Cotado' (estão em outros embarques ativos)", "info")
+            if sucesso_sync:
+                flash(f"✅ Sincronização com pedidos: {resultado_sync}", "info")
+            else:
+                flash(f"⚠️ Erro na sincronização com pedidos: {resultado_sync}", "warning")
                 
         except Exception as e:
-            flash(f"⚠️ Erro ao resetar pedidos e remover NFs: {str(e)}", "warning")
+            flash(f"⚠️ Erro ao remover NFs e sincronizar: {str(e)}", "warning")
         
         # ✅ NOVO: Cancelar fretes vinculados ao embarque
         try:
@@ -1378,13 +1328,14 @@ def validar_nf_cliente(item_embarque):
 
 def sincronizar_nf_embarque_pedido_completa(embarque_id):
     """
-    ✅ FUNÇÃO COMPLETA: Sincronização bidirecional entre embarque e pedidos
+    ✅ FUNÇÃO OTIMIZADA: Sincronização bidirecional entre embarque e pedidos
     
     1. ADICIONA NF no pedido quando preenchida no embarque
     2. REMOVE NF do pedido quando apagada no embarque  
     3. ATUALIZA status do pedido conforme situação
+    4. TRATAMENTO ESPECIAL para embarques FOB
     
-    Esta função resolve todos os problemas de sincronização.
+    Versão otimizada com menos logs e melhor performance.
     """
     
     try:
@@ -1392,144 +1343,155 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
         if not embarque:
             return False, "Embarque não encontrado"
         
+        # Detectar se é embarque FOB
+        is_embarque_fob = (
+            embarque.tipo_carga == 'FOB' or 
+            (embarque.transportadora and embarque.transportadora.razao_social == "FOB - COLETA")
+        )
+        
+        # Buscar transportadora e cotação FOB se necessário
+        transportadora_fob = None
+        cotacao_fob = None
+        
+        if is_embarque_fob:
+            from app.transportadoras.models import Transportadora
+            transportadora_fob = Transportadora.query.filter_by(razao_social="FOB - COLETA").first()
+            
+            if transportadora_fob:
+                # Busca ou cria cotação FOB global
+                cotacao_fob = Cotacao.query.filter_by(
+                    transportadora_id=transportadora_fob.id,
+                    tipo_carga='FOB'
+                ).first()
+                
+                if not cotacao_fob:
+                    cotacao_fob = Cotacao(
+                        usuario_id=1,
+                        transportadora_id=transportadora_fob.id,
+                        status='Fechado',
+                        data_criacao=datetime.now(),
+                        data_fechamento=datetime.now(),
+                        tipo_carga='FOB',
+                        valor_total=0,
+                        peso_total=0,
+                        modalidade='FOB',
+                        nome_tabela='FOB - COLETA',
+                        frete_minimo_valor=0,
+                        valor_kg=0,
+                        percentual_valor=0,
+                        frete_minimo_peso=0,
+                        icms=0,
+                        percentual_gris=0,
+                        pedagio_por_100kg=0,
+                        valor_tas=0,
+                        percentual_adv=0,
+                        percentual_rca=0,
+                        valor_despacho=0,
+                        valor_cte=0,
+                        icms_incluso=False,
+                        icms_destino=0
+                    )
+                    db.session.add(cotacao_fob)
+                    db.session.flush()
+                    print(f"[SYNC] Cotação FOB criada com ID {cotacao_fob.id}")
+        
+        # Contadores de operações
         itens_sincronizados = 0
         itens_removidos = 0
         itens_cancelados = 0
         erros = []
         
+        # Processar cada item do embarque
         for item in embarque.itens:
+            # Buscar pedido (otimizado)
             pedido = None
             
-            # ✅ BUSCA APRIMORADA: Logs detalhados para debugging
-            print(f"[DEBUG] 🔍 Processando item: Pedido={item.pedido}, Lote={item.separacao_lote_id}, NF={item.nota_fiscal or 'SEM NF'}, Status={item.status}")
-            
-            # Buscar pedido (priorizar lote de separação)
             if item.separacao_lote_id:
                 pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
-                if pedido:
-                    print(f"[DEBUG] ✅ Pedido encontrado por lote {item.separacao_lote_id}: {pedido.num_pedido}")
-                else:
-                    print(f"[DEBUG] ❌ Pedido NÃO encontrado por lote {item.separacao_lote_id}")
             
-            # Fallback: busca por num_pedido se não encontrou por lote ou se não tem lote
-            if not pedido:
-                if item.pedido:
-                    pedido = Pedido.query.filter_by(num_pedido=item.pedido).first()
-                    if pedido:
-                        print(f"[DEBUG] ⚠️ Pedido encontrado por num_pedido {item.pedido} (sem lote)")
-                    else:
-                        print(f"[DEBUG] ❌ Pedido NÃO encontrado por num_pedido {item.pedido}")
+            if not pedido and item.pedido:
+                pedido = Pedido.query.filter_by(num_pedido=item.pedido).first()
             
             if not pedido:
-                erro_msg = f"Pedido {item.pedido} não encontrado (lote: {item.separacao_lote_id})"
-                erros.append(erro_msg)
-                print(f"[DEBUG] ❌ {erro_msg}")
+                erros.append(f"Pedido {item.pedido} não encontrado")
                 continue
             
-            # ✅ CASO 1: Item cancelado - verifica se deve voltar para "Aberto"
+            # PROCESSAMENTO POR TIPO DE OPERAÇÃO
+            
             if item.status == 'cancelado':
-                # ✅ CORREÇÃO: Verifica se o pedido está em outros embarques ativos
+                # ✅ ITEM CANCELADO: Verificar se deve resetar pedido
+                print(f"[SYNC] 🔄 Item cancelado - Pedido {pedido.num_pedido} (Lote: {item.separacao_lote_id})")
+                print(f"[SYNC]    NF atual do pedido: '{pedido.nf}'")
+                print(f"[SYNC]    Status atual do pedido: '{pedido.status_calculado}'")
+                
                 outros_embarques_ativos = EmbarqueItem.query.join(Embarque).filter(
                     EmbarqueItem.separacao_lote_id == item.separacao_lote_id,
                     EmbarqueItem.status == 'ativo',
                     Embarque.status == 'ativo',
-                    EmbarqueItem.id != item.id  # Exclui o item que está sendo cancelado
+                    EmbarqueItem.id != item.id
                 ).first()
                 
-                if outros_embarques_ativos:
-                    # ✅ Pedido está em outro embarque ativo - MANTÉM status "Cotado"
-                    print(f"[DEBUG] 🔄 Pedido {pedido.num_pedido}: Item cancelado mas mantido como 'Cotado' - está no embarque #{outros_embarques_ativos.embarque.numero}")
-                else:
-                    # ✅ Pedido NÃO está em outros embarques - pode resetar para "Aberto"
+                if not outros_embarques_ativos:
+                    # Pedido não está em outros embarques - resetar para "Aberto"
+                    nf_anterior = pedido.nf
+                    print(f"[SYNC] ✅ Não há outros embarques ativos - resetando pedido para 'Aberto'")
+                    print(f"[SYNC]    Removendo NF: '{nf_anterior}' → None")
+                    
                     pedido.nf = None
                     pedido.data_embarque = None
                     pedido.cotacao_id = None
                     pedido.transportadora = None
                     pedido.nf_cd = False
-                    # Status será calculado automaticamente como "Aberto"
-                    print(f"[DEBUG] 🚫 Pedido {pedido.num_pedido}: Item cancelado e resetado para 'Aberto' - não há outros embarques ativos")
+                    
+                    print(f"[SYNC] ✅ Pedido {pedido.num_pedido} resetado:")
+                    print(f"[SYNC]    nf: {pedido.nf}")
+                    print(f"[SYNC]    data_embarque: {pedido.data_embarque}")
+                    print(f"[SYNC]    cotacao_id: {pedido.cotacao_id}")
+                    print(f"[SYNC]    transportadora: {pedido.transportadora}")
+                    print(f"[SYNC]    nf_cd: {pedido.nf_cd}")
+                else:
+                    print(f"[SYNC] ⚠️ Pedido mantido - está em outro embarque ativo: {outros_embarques_ativos.embarque.numero}")
                 
                 itens_cancelados += 1
                 
-            # ✅ CASO 2: Item ativo com NF - sincronizar NF
             elif item.nota_fiscal and item.nota_fiscal.strip():
-                nf_anterior = pedido.nf
+                # ✅ ITEM COM NF: Sincronizar NF no pedido
                 pedido.nf = item.nota_fiscal
                 
-                # ✅ CORREÇÃO FOB: Para embarques FOB, força atualização do status manualmente
-                if embarque.tipo_carga == 'FOB' and pedido.nf and not pedido.cotacao_id:
-                    # Se for FOB e ainda não tem cotacao_id, força como COTADO
-                    print(f"[DEBUG] 🚛 FOB: Forçando cotacao_id para pedido {pedido.num_pedido}")
-                    pedido.transportadora = embarque.transportadora.razao_social if embarque.transportadora else "FOB - COLETA"
-                    
-                    # Busca ou cria cotação FOB
-                    cotacao_fob = Cotacao.query.filter_by(
-                        transportadora_id=embarque.transportadora_id,
-                        tipo_carga='FOB'
-                    ).first()
-                    
-                    if not cotacao_fob:
-                        cotacao_fob = Cotacao(
-                            usuario_id=1,
-                            transportadora_id=embarque.transportadora_id,
-                            status='Fechado',
-                            data_criacao=datetime.now(),
-                            data_fechamento=datetime.now(),
-                            tipo_carga='FOB',
-                            valor_total=0,
-                            peso_total=0,
-                            modalidade='FOB',
-                            nome_tabela='FOB - COLETA',
-                            frete_minimo_valor=0,
-                            valor_kg=0,
-                            percentual_valor=0,
-                            frete_minimo_peso=0,
-                            icms=0,
-                            percentual_gris=0,
-                            pedagio_por_100kg=0,
-                            valor_tas=0,
-                            percentual_adv=0,
-                            percentual_rca=0,
-                            valor_despacho=0,
-                            valor_cte=0,
-                            icms_incluso=False,
-                            icms_destino=0
-                        )
-                        db.session.add(cotacao_fob)
-                        db.session.flush()
-                    
-                    pedido.cotacao_id = cotacao_fob.id
+                # Configuração especial FOB
+                if is_embarque_fob and transportadora_fob and cotacao_fob:
+                    pedido.transportadora = transportadora_fob.razao_social
+                    if not pedido.cotacao_id:
+                        pedido.cotacao_id = cotacao_fob.id
                 
-                # Status será atualizado automaticamente pelo trigger
                 itens_sincronizados += 1
-                print(f"[DEBUG] ✅ Pedido {pedido.num_pedido}: NF atualizada '{nf_anterior}' → '{item.nota_fiscal}' | Status: {pedido.status_calculado}")
                 
-            # ✅ CASO 3: Item ativo sem NF - remover NF do pedido
-            elif not item.nota_fiscal or not item.nota_fiscal.strip():
-                if pedido.nf:  # Só remove se havia NF antes
-                    nf_anterior = pedido.nf
+            else:
+                # ✅ ITEM SEM NF: Remover NF do pedido se existir
+                if pedido.nf:
                     pedido.nf = None
-                    # Status será recalculado automaticamente pelo trigger
                     itens_removidos += 1
-                    print(f"[DEBUG] 🗑️ Pedido {pedido.num_pedido}: NF removida '{nf_anterior}' | Status: {pedido.status_calculado}")
         
+        # Salvar todas as alterações
         db.session.commit()
         
-        # ✅ VERIFICAÇÃO FINAL: Confirma se os status foram atualizados corretamente
-        if itens_sincronizados > 0 or itens_removidos > 0:
-            print(f"[DEBUG] 🔄 Verificando status final dos pedidos após commit...")
+        # ✅ VERIFICAÇÃO PÓS-COMMIT: Confirma se as alterações foram persistidas
+        if itens_cancelados > 0:
+            print(f"[SYNC] 🔍 Verificação pós-commit - Confirmando alterações nos pedidos:")
             for item in embarque.itens:
-                if item.status == 'ativo':
-                    # Recarrega o pedido do banco para ver o status atualizado
-                    pedido = None
+                if item.status == 'cancelado':
+                    # Recarrega o pedido do banco após commit
+                    pedido_verificacao = None
                     if item.separacao_lote_id:
-                        pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
-                    else:
-                        pedido = Pedido.query.filter_by(num_pedido=item.pedido).first()
+                        pedido_verificacao = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+                    elif item.pedido:
+                        pedido_verificacao = Pedido.query.filter_by(num_pedido=item.pedido).first()
                     
-                    if pedido:
-                        status_final = pedido.status_calculado
-                        print(f"[DEBUG] 📊 Pedido {pedido.num_pedido}: NF='{pedido.nf or 'SEM NF'}', Status='{status_final}', Cotação={pedido.cotacao_id or 'N/A'}")
+                    if pedido_verificacao:
+                        print(f"[SYNC] 📊 Pedido {pedido_verificacao.num_pedido}:")
+                        print(f"[SYNC]    NF: '{pedido_verificacao.nf}'")
+                        print(f"[SYNC]    Status: '{pedido_verificacao.status_calculado}'")
+                        print(f"[SYNC]    Cotação ID: {pedido_verificacao.cotacao_id}")
         
         # Montar mensagem de resultado
         resultado_parts = []
@@ -1538,20 +1500,26 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
         if itens_removidos > 0:
             resultado_parts.append(f"{itens_removidos} NF(s) removida(s)")
         if itens_cancelados > 0:
-            resultado_parts.append(f"{itens_cancelados} item(ns) cancelado(s)")
+            resultado_parts.append(f"{itens_cancelados} item(ns) processado(s)")
+        
+        if is_embarque_fob and itens_sincronizados > 0:
+            resultado_parts.append("embarque FOB configurado")
         
         resultado_msg = "✅ " + ", ".join(resultado_parts) if resultado_parts else "Nenhuma alteração necessária"
         
         if erros:
-            resultado_msg += f" | ⚠️ {len(erros)} erro(s): {'; '.join(erros[:2])}"
+            resultado_msg += f" | ⚠️ {len(erros)} erro(s)"
         
-        print(f"[DEBUG] ✅ Sincronização completa: {resultado_msg}")
+        # Log resumido apenas se houve alterações significativas
+        if itens_sincronizados > 0 or itens_removidos > 0 or itens_cancelados > 0:
+            print(f"[SYNC] Embarque #{embarque.numero}: {resultado_msg}")
+        
         return True, resultado_msg
             
     except Exception as e:
         db.session.rollback()
-        error_msg = f"Erro na sincronização completa: {str(e)}"
-        print(f"[DEBUG] ❌ {error_msg}")
+        error_msg = f"Erro na sincronização: {str(e)}"
+        print(f"[SYNC] ❌ {error_msg}")
         return False, error_msg
 
 def sincronizar_nf_embarque_pedido(embarque_id):
