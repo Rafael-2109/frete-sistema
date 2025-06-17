@@ -373,9 +373,12 @@ def listar_entregas():
             EntregaMonitorada.data_entrega_prevista != None,
             EntregaMonitorada.data_entrega_prevista >= date.today()
         )
-
     elif status == 'sem_previsao':
-        query = query.filter(EntregaMonitorada.data_entrega_prevista == None)
+        # ✅ CORRIGIDO: Excluir finalizados do filtro "Sem Previsão"
+        query = query.filter(
+            EntregaMonitorada.data_entrega_prevista == None,
+            EntregaMonitorada.status_finalizacao == None
+        )
     elif status == 'sem_agendamento':
         subquery = db.session.query(AgendamentoEntrega.entrega_id).distinct()
         # CNPJs que têm contato cadastrado MAS forma é diferente de "SEM AGENDAMENTO"
@@ -384,10 +387,14 @@ def listar_entregas():
         )
         query = query.filter(
             EntregaMonitorada.cnpj_cliente.in_(cnpjs_precisam_agendamento),
-            ~EntregaMonitorada.id.in_(subquery)
+            ~EntregaMonitorada.id.in_(subquery),
+            EntregaMonitorada.status_finalizacao == None
         )
     elif status == 'reagendar':
-        query = query.filter(EntregaMonitorada.reagendar == True)
+        query = query.filter(
+            EntregaMonitorada.reagendar == True,
+            EntregaMonitorada.status_finalizacao == None
+        )
     elif status == 'pendencia_financeira':
         query = query.join(PendenciaFinanceiraNF, PendenciaFinanceiraNF.entrega_id == EntregaMonitorada.id)
         # Pendências não respondidas OU com resposta apagada
@@ -397,6 +404,15 @@ def listar_entregas():
                 PendenciaFinanceiraNF.resposta_excluida_em != None
             )
         )
+    # ✅ NOVOS FILTROS DE STATUS ESPECÍFICOS
+    elif status == 'troca_nf':
+        query = query.filter(EntregaMonitorada.status_finalizacao == 'Troca de NF')
+    elif status == 'cancelada':
+        query = query.filter(EntregaMonitorada.status_finalizacao == 'Cancelada')
+    elif status == 'devolvida':
+        query = query.filter(EntregaMonitorada.status_finalizacao == 'Devolvida')
+    elif status == 'nf_cd':
+        query = query.filter(EntregaMonitorada.nf_cd == True)
 
     if numero_nf := request.args.get('numero_nf'):
         query = query.filter(EntregaMonitorada.numero_nf.ilike(f"%{numero_nf}%"))
@@ -423,26 +439,45 @@ def listar_entregas():
             )
         )
 
+    # ✅ CORRIGINDO FILTROS DE DATA - formato YYYY-MM-DD (padrão HTML date input)
     if data_emissao := request.args.get('data_emissao'):
         try:
-            dt = datetime.strptime(data_emissao, "%d-%m-%Y").date()
+            # Tenta formato YYYY-MM-DD primeiro (HTML date input)
+            dt = datetime.strptime(data_emissao, "%Y-%m-%d").date()
             query = query.filter(EntregaMonitorada.data_faturamento == dt)
         except ValueError:
-            pass
+            try:
+                # Fallback para formato brasileiro DD-MM-YYYY
+                dt = datetime.strptime(data_emissao, "%d-%m-%Y").date()
+                query = query.filter(EntregaMonitorada.data_faturamento == dt)
+            except ValueError:
+                pass
 
     if data_embarque := request.args.get('data_embarque'):
         try:
-            dt = datetime.strptime(data_embarque, "%d-%m-%Y").date()
+            # Tenta formato YYYY-MM-DD primeiro (HTML date input)
+            dt = datetime.strptime(data_embarque, "%Y-%m-%d").date()
             query = query.filter(EntregaMonitorada.data_embarque == dt)
         except ValueError:
-            pass
+            try:
+                # Fallback para formato brasileiro DD-MM-YYYY  
+                dt = datetime.strptime(data_embarque, "%d-%m-%Y").date()
+                query = query.filter(EntregaMonitorada.data_embarque == dt)
+            except ValueError:
+                pass
 
     if data_entrega := request.args.get('data_entrega'):
         try:
-            dt = datetime.strptime(data_entrega, "%d-%m-%Y").date()
+            # Tenta formato YYYY-MM-DD primeiro (HTML date input)
+            dt = datetime.strptime(data_entrega, "%Y-%m-%d").date()
             query = query.filter(func.date(EntregaMonitorada.data_hora_entrega_realizada) == dt)
         except ValueError:
-            pass
+            try:
+                # Fallback para formato brasileiro DD-MM-YYYY
+                dt = datetime.strptime(data_entrega, "%d-%m-%Y").date()
+                query = query.filter(func.date(EntregaMonitorada.data_hora_entrega_realizada) == dt)
+            except ValueError:
+                pass
 
     # Faz join para poder ordenar / filtrar por esse valor, se necessário
     # (Se não for filtrar explicitamente, o "outerjoin" nem sempre é necessário)
@@ -491,8 +526,8 @@ def listar_entregas():
             '🔴 Atrasadas': [],
             '⚠️ Sem Agendamento': [],
             '🔁 Reagendar': [],
-            '⚪ Sem Previsão': [],
-            '🟡 Pendentes': [],
+            '🟡 Sem Previsão': [],
+            '⚪ No Prazo': [],
             '✅ Entregues': []
         }
 
@@ -506,12 +541,50 @@ def listar_entregas():
             elif e.data_entrega_prevista and e.data_entrega_prevista < date.today():
                 entregas_agrupadas['🔴 Atrasadas'].append(e)
             elif not e.data_entrega_prevista:
-                entregas_agrupadas['⚪ Sem Previsão'].append(e)
+                entregas_agrupadas['🟡 Sem Previsão'].append(e)
             else:
-                entregas_agrupadas['🟡 Pendentes'].append(e)
+                entregas_agrupadas['⚪ No Prazo'].append(e)
 
         # Remove grupos vazios
         entregas_agrupadas = {k: v for k, v in entregas_agrupadas.items() if v}
+
+    # ✅ CALCULANDO CONTADORES DOS FILTROS
+    contadores = {}
+    
+    # Contador Atrasadas
+    contadores['atrasadas'] = EntregaMonitorada.query.filter(
+        EntregaMonitorada.status_finalizacao == None,
+        EntregaMonitorada.data_entrega_prevista != None,
+        EntregaMonitorada.data_entrega_prevista < date.today()
+    ).count()
+    
+    # Contador Sem Previsão  
+    contadores['sem_previsao'] = EntregaMonitorada.query.filter(
+        EntregaMonitorada.data_entrega_prevista == None,
+        EntregaMonitorada.status_finalizacao == None
+    ).count()
+    
+    # Contador Reagendar
+    contadores['reagendar'] = EntregaMonitorada.query.filter(
+        EntregaMonitorada.reagendar == True,
+        EntregaMonitorada.status_finalizacao == None
+    ).count()
+    
+    # Contador Sem Agendamento
+    subquery_agendamentos = db.session.query(AgendamentoEntrega.entrega_id).distinct()
+    cnpjs_precisam_agendamento = db.session.query(ContatoAgendamento.cnpj).filter(
+        ContatoAgendamento.forma != 'SEM AGENDAMENTO'
+    )
+    contadores['sem_agendamento'] = EntregaMonitorada.query.filter(
+        EntregaMonitorada.cnpj_cliente.in_(cnpjs_precisam_agendamento),
+        ~EntregaMonitorada.id.in_(subquery_agendamentos),
+        EntregaMonitorada.status_finalizacao == None
+    ).count()
+    
+    # Contador NF no CD
+    contadores['nf_cd'] = EntregaMonitorada.query.filter(
+        EntregaMonitorada.nf_cd == True
+    ).count()
 
     page = request.args.get('page', 1, type=int)
     per_page = 20
@@ -525,7 +598,8 @@ def listar_entregas():
         agrupar=agrupar,
         current_date=date.today(),
         contatos_agendamento=contatos_agendamento,
-        current_user=current_user
+        current_user=current_user,
+        contadores=contadores
     )
 
 @monitoramento_bp.route('/sincronizar-todas-entregas', methods=['POST'])

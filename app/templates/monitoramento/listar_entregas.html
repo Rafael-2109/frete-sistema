@@ -276,43 +276,59 @@ body {
 <!-- 1) Se quiser um fundo claro só para os filtros, use algo como: -->
 <div class="bg-light py-2">
   <div class="container-fluid">
-    <!-- Filtros -->
+    <!-- ✅ FILTROS COM PERSISTÊNCIA - Mantém valores anteriores -->
     <form method="get" class="row g-1 align-items-end">
+    <!-- Campos hidden para manter status e agrupamento -->
+    {% if request.args.get('status') %}
+      <input type="hidden" name="status" value="{{ request.args.get('status') }}">
+    {% endif %}
+    {% if request.args.get('agrupar') %}
+      <input type="hidden" name="agrupar" value="{{ request.args.get('agrupar') }}">
+    {% endif %}
     <div class="col-md-2">
       <label class="form-label">Nota Fiscal</label>
-      <input type="text" name="numero_nf" class="form-control" placeholder="Nota Fiscal">
+      <input type="text" name="numero_nf" class="form-control" placeholder="Nota Fiscal" 
+             value="{{ request.args.get('numero_nf', '') }}">
     </div>
     <div class="col-md-2">
       <label class="form-label">Transportadora</label>
-      <input type="text" name="transportadora" class="form-control" placeholder="Transportadora">
+      <input type="text" name="transportadora" class="form-control" placeholder="Transportadora" 
+             value="{{ request.args.get('transportadora', '') }}">
     </div>
     <div class="col-md-2">
       <label class="form-label">Cliente</label>
-      <input type="text" name="cliente" class="form-control" placeholder="Cliente">
+      <input type="text" name="cliente" class="form-control" placeholder="Cliente" 
+             value="{{ request.args.get('cliente', '') }}">
     </div>
     <div class="col-md-2">
       <label class="form-label">CNPJ</label>
-      <input type="text" name="cnpj_cliente" class="form-control" placeholder="CNPJ">
+      <input type="text" name="cnpj_cliente" class="form-control" placeholder="CNPJ" 
+             value="{{ request.args.get('cnpj_cliente', '') }}">
     </div>
     <div class="col-md-1">
       <label class="form-label">UF</label>
-      <input type="text" name="uf" class="form-control" placeholder="UF">
+      <input type="text" name="uf" class="form-control" placeholder="UF" 
+             value="{{ request.args.get('uf', '') }}">
     </div>
     <div class="col-md-2">
       <label class="form-label">Protocolo</label>
-      <input type="text" name="protocolo" class="form-control" placeholder="Protocolo">
+      <input type="text" name="protocolo" class="form-control" placeholder="Protocolo" 
+             value="{{ request.args.get('protocolo', '') }}">
     </div>
     <div class="col-md-2">
       <label class="form-label">Data Emissão</label>
-      <input type="date" name="data_emissao" class="form-control">
+      <input type="date" name="data_emissao" class="form-control" 
+             value="{{ request.args.get('data_emissao', '') }}">
     </div>
     <div class="col-md-2">
       <label class="form-label">Data Embarque</label>
-      <input type="date" name="data_embarque" class="form-control">
+      <input type="date" name="data_embarque" class="form-control" 
+             value="{{ request.args.get('data_embarque', '') }}">
     </div>
     <div class="col-md-2">
       <label class="form-label">Data Entrega</label>
-      <input type="date" name="data_entrega" class="form-control">
+      <input type="date" name="data_entrega" class="form-control" 
+             value="{{ request.args.get('data_entrega', '') }}">
     </div>  
 
     <div class="col-md-3">
@@ -352,11 +368,11 @@ body {
         </a>
         <a href="?status=atrasada" 
            class="btn {% if request.args.get('status') == 'atrasada' %}btn-danger{% else %}btn-outline-danger{% endif %}">
-          🔴 Atrasadas
+          🔴 Atrasadas {% if contadores.atrasadas %}({{ contadores.atrasadas }}){% endif %}
         </a>
         <a href="?status=sem_previsao" 
            class="btn {% if request.args.get('status') == 'sem_previsao' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-          🟡 Sem Previsão
+          🟡 Sem Previsão {% if contadores.sem_previsao %}({{ contadores.sem_previsao }}){% endif %}
         </a>
         <a href="?status=entregue" 
            class="btn {% if request.args.get('status') == 'entregue' %}btn-success{% else %}btn-outline-success{% endif %}">
@@ -364,7 +380,7 @@ body {
         </a>
         <a href="?status=sem_agendamento" 
            class="btn {% if request.args.get('status') == 'sem_agendamento' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-          ⚠️ Agend. Pendente
+          ⚠️ Agend. Pendente {% if contadores.sem_agendamento %}({{ contadores.sem_agendamento }}){% endif %}
         </a>
         <a href="?status=com_comentarios" 
            class="btn {% if request.args.get('status') == 'com_comentarios' %}btn-info{% else %}btn-outline-info{% endif %}">
@@ -372,8 +388,27 @@ body {
         </a>    
         <a href="?status=reagendar" 
            class="btn {% if request.args.get('status') == 'reagendar' %}btn-danger{% else %}btn-outline-danger{% endif %}">
-          🔁 Reagendar
+          🔁 Reagendar {% if contadores.reagendar %}({{ contadores.reagendar }}){% endif %}
         </a>
+        <!-- ✅ NOVOS FILTROS DE STATUS ESPECÍFICOS (só aparecem quando sem filtro principal) -->
+        {% if not request.args.get('status') or request.args.get('status') in ['troca_nf', 'cancelada', 'devolvida', 'nf_cd'] %}
+        <a href="?status=troca_nf" 
+           class="btn {% if request.args.get('status') == 'troca_nf' %}btn-info{% else %}btn-outline-info{% endif %}">
+          🔄 Troca de NF
+        </a>
+        <a href="?status=cancelada" 
+           class="btn {% if request.args.get('status') == 'cancelada' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+          ❌ Cancelada
+        </a>
+        <a href="?status=devolvida" 
+           class="btn {% if request.args.get('status') == 'devolvida' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+          📦 Devolvida
+        </a>
+        <a href="?status=nf_cd" 
+           class="btn {% if request.args.get('status') == 'nf_cd' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+          🏢 NF no CD {% if contadores.nf_cd %}({{ contadores.nf_cd }}){% endif %}
+        </a>
+        {% endif %}
       </div>
       
       <!-- Botões de Ação -->

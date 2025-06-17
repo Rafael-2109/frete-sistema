@@ -377,7 +377,7 @@ def api_embarques():
             )
         )
     
-    embarques = query.order_by(Embarque.numero.desc()).limit(20).all()
+    embarques = query.order_by(Embarque.numero.desc()).limit(100).all()
     
     resultados = []
     for e in embarques:
@@ -407,10 +407,10 @@ def api_embarques_disponiveis():
     """
     from app.embarques.models import Embarque
     
-    # Busca todos os embarques ativos (não apenas os sem data_embarque)
+    # Busca todos os embarques ativos (não apenas os sem data_embarque) - SEM LIMITE para portaria
     embarques = Embarque.query.filter(
         Embarque.status == 'ativo'
-    ).order_by(Embarque.numero.desc()).limit(50).all()
+    ).order_by(Embarque.numero.desc()).all()
     
     resultado = []
     for embarque in embarques:
