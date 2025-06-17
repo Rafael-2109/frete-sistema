@@ -378,10 +378,12 @@ def listar_entregas():
         query = query.filter(EntregaMonitorada.data_entrega_prevista == None)
     elif status == 'sem_agendamento':
         subquery = db.session.query(AgendamentoEntrega.entrega_id).distinct()
+        # CNPJs que têm contato cadastrado MAS forma é diferente de "SEM AGENDAMENTO"
+        cnpjs_precisam_agendamento = db.session.query(ContatoAgendamento.cnpj).filter(
+            ContatoAgendamento.forma != 'SEM AGENDAMENTO'
+        )
         query = query.filter(
-            EntregaMonitorada.cnpj_cliente.in_(
-                db.session.query(ContatoAgendamento.cnpj)
-            ),
+            EntregaMonitorada.cnpj_cliente.in_(cnpjs_precisam_agendamento),
             ~EntregaMonitorada.id.in_(subquery)
         )
     elif status == 'reagendar':
