@@ -33,6 +33,7 @@ class AgendamentoEntregaForm(FlaskForm):
     protocolo_agendamento = StringField('Protocolo', validators=[Optional()])
     motivo = TextAreaField('Motivo', validators=[Optional()])
     observacao = TextAreaField('Observação', validators=[Optional()])  # ← NOVO CAMPO
+    criar_confirmado = BooleanField('Criar agenda já confirmada', validators=[Optional()])  # ← NOVO CAMPO
     submit_agendamento = SubmitField('Registrar Agendamento')
 
 class FormComentarioNF(FlaskForm):

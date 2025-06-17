@@ -112,6 +112,24 @@
         document.getElementById('resposta-pendencia').style.display = 'none';
         document.getElementById('resposta_logistica').value = '';
       }
+      
+      function confirmarAgendamentoVisualizar(agendamentoId) {
+        if (!confirm('Confirmar este agendamento?')) return;
+        
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/monitoramento/confirmar_agendamento/${agendamentoId}`;
+        
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+        
+        document.body.appendChild(form);
+        form.submit();
+      }
     </script>
 
     <!-- LOG -->
@@ -212,20 +230,49 @@
         <h5>Agendamentos realizados</h5>
         <ul class="list-group mb-3">
           {% for ag in entrega.agendamentos %}
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
-              <strong>{{ ag.data_agendada | formatar_data_hora_brasil if ag.data_agendada else '-' }} 
-              {{ ag.hora_agendada | formatar_hora_brasil if ag.hora_agendada else '' }}</strong><br>
-              {{ ag.forma_agendamento }}: {{ ag.contato_agendamento }}<br>
-                                  Protocolo: {{ ag.protocolo_agendamento | formatar_protocolo }}<br>
-              Motivo: {{ ag.motivo }}<br>
-              Observação: {{ ag.observacao or '-' }}<br>
-              <em>Por {{ ag.autor }} em {{ ag.criado_em | formatar_data_hora_brasil }}</em>
+          <li class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start">
+              <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <strong>{{ ag.data_agendada | formatar_data_hora_brasil if ag.data_agendada else '-' }} 
+                  {{ ag.hora_agendada | formatar_hora_brasil if ag.hora_agendada else '' }}</strong>
+                  {% if ag.status == 'confirmado' %}
+                    <span class="badge bg-primary">✅ Confirmado</span>
+                  {% else %}
+                    <span class="badge bg-warning">⏳ Aguardando</span>
+                  {% endif %}
+                </div>
+                
+                <div>
+                  <strong>Forma:</strong> {{ ag.forma_agendamento }} | <strong>Contato:</strong> {{ ag.contato_agendamento }}<br>
+                  <strong>Protocolo:</strong> {{ ag.protocolo_agendamento | formatar_protocolo }}<br>
+                  <strong>Motivo:</strong> {{ ag.motivo or '-' }}<br>
+                  <strong>Observação:</strong> {{ ag.observacao or '-' }}<br>
+                  <em>Criado por {{ ag.autor }} em {{ ag.criado_em | formatar_data_hora_brasil }}</em>
+                  
+                  {% if ag.status == 'confirmado' and ag.confirmado_por %}
+                    <br><em class="text-success">Confirmado por {{ ag.confirmado_por }} em {{ ag.confirmado_em | formatar_data_hora_brasil }}</em>
+                    {% if ag.observacoes_confirmacao %}
+                      <br><strong>Obs. Confirmação:</strong> {{ ag.observacoes_confirmacao }}
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </div>
+              
+              <div class="d-flex flex-column gap-2">
+                {% set ultimo_agendamento = entrega.agendamentos | sort(attribute='criado_em') | last %}
+                {% if ag.id == ultimo_agendamento.id and ag.status == 'aguardando' %}
+                  <button class="btn btn-sm btn-success" onclick="confirmarAgendamentoVisualizar({{ ag.id }})">
+                    ✅ Confirmar
+                  </button>
+                {% endif %}
+                
+                <form method="POST" action="{{ url_for('monitoramento.excluir_agendamento', agendamento_id=ag.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir este agendamento?')">Excluir</button>
+                </form>
+              </div>
             </div>
-            <form method="POST" action="{{ url_for('monitoramento.excluir_agendamento', agendamento_id=ag.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn btn-sm btn-outline-danger">Excluir</button>
-            </form>
           </li>
           {% endfor %}
         </ul>
@@ -242,6 +289,12 @@
           {{ form_agendamento.protocolo_agendamento.label }} {{ form_agendamento.protocolo_agendamento(class="form-control") }}
           {{ form_agendamento.motivo.label }} {{ form_agendamento.motivo(class="form-control") }}
           {{ form_agendamento.observacao.label }} {{ form_agendamento.observacao(class="form-control") }}
+          
+          <div class="form-check mt-3">
+            {{ form_agendamento.criar_confirmado(class="form-check-input") }}
+            {{ form_agendamento.criar_confirmado.label(class="form-check-label") }}
+          </div>
+          
           {{ form_agendamento.submit_agendamento(class="btn btn-primary mt-3") }}
         </form>
         

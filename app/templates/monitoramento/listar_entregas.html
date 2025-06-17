@@ -651,12 +651,30 @@ body {
                                      <td>
                      {% if e.data_agenda %}
                        {% set ultimo_agendamento = e.agendamentos | sort(attribute='criado_em') | last if e.agendamentos else None %}
-                       <button class="btn btn-sm btn-info w-100 text-white" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
-                         📅 {{ e.data_agenda | formatar_data_segura }}
-                         {% if ultimo_agendamento and ultimo_agendamento.protocolo_agendamento %}
-                           <br><small>📋 {{ ultimo_agendamento.protocolo_agendamento }}</small>
-                         {% endif %}
-                       </button>
+                       {% if ultimo_agendamento and ultimo_agendamento.status == 'confirmado' %}
+                         <button class="btn btn-sm btn-primary w-100 text-white" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
+                           📅 {{ e.data_agenda | formatar_data_segura }}
+                           {% if ultimo_agendamento.protocolo_agendamento %}
+                             <br><small>📋 {{ ultimo_agendamento.protocolo_agendamento }}</small>
+                           {% endif %}
+                           <br><small>✅ Confirmado</small>
+                         </button>
+                       {% else %}
+                         <div class="d-flex align-items-center gap-1">
+                           <button class="btn btn-sm btn-warning flex-grow-1" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
+                             📅 {{ e.data_agenda | formatar_data_segura }}
+                             {% if ultimo_agendamento and ultimo_agendamento.protocolo_agendamento %}
+                               <br><small>📋 {{ ultimo_agendamento.protocolo_agendamento }}</small>
+                             {% endif %}
+                             <br><small>⏳ Aguardando</small>
+                           </button>
+                           {% if ultimo_agendamento and ultimo_agendamento.status == 'aguardando' %}
+                             <button class="btn btn-sm btn-success" onclick="confirmarAgendamento('{{ ultimo_agendamento.id }}')">
+                               ✅
+                             </button>
+                           {% endif %}
+                         </div>
+                       {% endif %}
                      {% else %}
                        <button class="btn btn-sm btn-warning w-100" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
                          ➕ Agendar
@@ -691,29 +709,34 @@ body {
                     {% endif %}
                   </td>
                   <td>
-                    {% set pendencias_abertas = [] %}
-                    {% for p in e.pendencias_financeiras %}
-                      {% if not p.respondida_em or p.resposta_excluida_em %}
-                        {% set _ = pendencias_abertas.append(p) %}
+                    <div class="d-flex flex-column gap-1">
+                      {% set pendencias_abertas = [] %}
+                      {% for p in e.pendencias_financeiras %}
+                        {% if not p.respondida_em or p.resposta_excluida_em %}
+                          {% set _ = pendencias_abertas.append(p) %}
+                        {% endif %}
+                      {% endfor %}
+                      {% if pendencias_abertas %}
+                        {% set pendencia = pendencias_abertas[0] %}
+                        <button class="btn btn-sm btn-danger pendencia-btn"
+                                data-nf="{{ e.numero_nf }}"
+                                data-observacao="{{ pendencia.observacao }}">
+                          Pend. Financ.
+                        </button>
                       {% endif %}
-                    {% endfor %}
-                    {% if pendencias_abertas %}
-                      {% set pendencia = pendencias_abertas[0] %}
-                      <button class="btn btn-sm btn-danger pendencia-btn"
-                              data-nf="{{ e.numero_nf }}"
-                              data-observacao="{{ pendencia.observacao }}">
-                        Pend. Financ.
-                      </button>
-                    {% endif %}
-                    {% if e.possui_comentarios %}
-                      <span class="badge bg-info">💬 Comentários</span>
-                    {% endif %}
-                    {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' %}
-                      <span class="badge bg-danger">⚠️ Agend. Pendente</span>
-                    {% endif %}
-                    {% if e.reagendar %}
-                      <span class="badge bg-danger">🔁 Reagendar</span>
-                    {% endif %}
+                      
+                      {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' and not e.status_finalizacao %}
+                        <span class="badge bg-danger">⚠️ Agend. Pendente</span>
+                      {% endif %}
+                      
+                      {% if e.reagendar %}
+                        <span class="badge bg-danger">🔁 Reagendar</span>
+                      {% endif %}
+                      
+                      {% if e.possui_comentarios %}
+                        <span class="badge bg-info">💬 Comentários</span>
+                      {% endif %}
+                    </div>
                   </td>
                   <td class="d-flex flex-nowrap align-items-center gap-2">
                     <a href="{{ url_for('monitoramento.visualizar_entrega', id=e.id, **request.args) }}"
@@ -768,20 +791,8 @@ body {
             <a href="?{{ url_params | urlencode }}">NF</a>
           </th>
 
-          <!-- CNPJ -->
-          <th class="sticky-col-2">
-            {% if current_sort == 'cnpj_cliente' and current_dir == 'asc' %}
-              {% set next_dir = 'desc' %}
-            {% else %}
-              {% set next_dir = 'asc' %}
-            {% endif %}
-            {% set url_params = request.args.copy() %}
-            {% set _ = url_params.update({'sort': 'cnpj_cliente', 'direction': next_dir}) %}
-            <a href="?{{ url_params | urlencode }}">CNPJ</a>
-          </th>
-
           <!-- Cliente -->
-          <th class="sticky-col-3">
+          <th class="sticky-col-2">
             {% if current_sort == 'cliente' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -798,26 +809,6 @@ body {
               {% set next_dir = 'asc' %}
             {% endif %}
             <a href="?sort=transportadora&direction={{ next_dir }}">Transportadora</a>
-          </th>
-
-          <!-- UF -->
-          <th>
-            {% if current_sort == 'uf' and current_dir == 'asc' %}
-              {% set next_dir = 'desc' %}
-            {% else %}
-              {% set next_dir = 'asc' %}
-            {% endif %}
-            <a href="?sort=uf&direction={{ next_dir }}">UF</a>
-          </th>          
-
-          <!-- Município -->
-          <th>
-            {% if current_sort == 'municipio' and current_dir == 'asc' %}
-              {% set next_dir = 'desc' %}
-            {% else %}
-              {% set next_dir = 'asc' %}
-            {% endif %}
-            <a href="?sort=municipio&direction={{ next_dir }}">Município</a>
           </th>
 
           <!-- Faturamento -->
@@ -880,25 +871,44 @@ body {
               </span>
             {% endif %}
             {{ e.numero_nf }}</td>
-          <td class="sticky-col-2">{{ e.cnpj_cliente }}</td>
-          <td class="sticky-col-3">
+          <td class="sticky-col-2">
+            <small class="text-muted">{{ e.cnpj_cliente }}</small><br>
             {{ e.cliente }}<br>
             <small class="text-muted">👤 {{ e.vendedor or 'Não informado' }}</small>
           </td>
-          <td>{{ e.transportadora }}</td>
-          <td>{{ e.uf }}</td>
-          <td>{{ e.municipio }}</td>
+          <td>
+            {{ e.transportadora }}<br>
+            <small class="text-muted">{{ e.uf }} - {{ e.municipio }}</small>
+          </td>
           <td>{{ e.data_faturamento | formatar_data_segura if e.data_faturamento else '-' }}</td>
           <td>{{ e.data_embarque | formatar_data_segura if e.data_embarque else '-' }}</td>
           <td>
             {% if e.data_agenda %}
               {% set ultimo_agendamento = e.agendamentos | sort(attribute='criado_em') | last if e.agendamentos else None %}
-              <button class="btn btn-sm btn-info w-100 text-white" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
-                📅 {{ e.data_agenda | formatar_data_segura }}
-                {% if ultimo_agendamento and ultimo_agendamento.protocolo_agendamento %}
-                  <br><small>📋 {{ ultimo_agendamento.protocolo_agendamento }}</small>
-                {% endif %}
-              </button>
+              {% if ultimo_agendamento and ultimo_agendamento.status == 'confirmado' %}
+                <button class="btn btn-sm btn-primary w-100 text-white" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
+                  📅 {{ e.data_agenda | formatar_data_segura }}
+                  {% if ultimo_agendamento.protocolo_agendamento %}
+                    <br><small>📋 {{ ultimo_agendamento.protocolo_agendamento }}</small>
+                  {% endif %}
+                  <br><small>✅ Confirmado</small>
+                </button>
+              {% else %}
+                <div class="d-flex align-items-center gap-1">
+                  <button class="btn btn-sm btn-warning flex-grow-1" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
+                    📅 {{ e.data_agenda | formatar_data_segura }}
+                    {% if ultimo_agendamento and ultimo_agendamento.protocolo_agendamento %}
+                      <br><small>📋 {{ ultimo_agendamento.protocolo_agendamento }}</small>
+                    {% endif %}
+                    <br><small>⏳ Aguardando</small>
+                  </button>
+                  {% if ultimo_agendamento and ultimo_agendamento.status == 'aguardando' %}
+                    <button class="btn btn-sm btn-success" onclick="confirmarAgendamento('{{ ultimo_agendamento.id }}')">
+                      ✅
+                    </button>
+                  {% endif %}
+                </div>
+              {% endif %}
             {% else %}
               <button class="btn btn-sm btn-warning w-100" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
                 ➕ Agendar
@@ -943,26 +953,34 @@ body {
             </td>
             
           <td>
-            {% set pendencias_abertas = [] %}
-            {% for p in e.pendencias_financeiras %}
-              {% if not p.respondida_em or p.resposta_excluida_em %}
-                {% set _ = pendencias_abertas.append(p) %}
+            <div class="d-flex flex-column gap-1">
+              {% set pendencias_abertas = [] %}
+              {% for p in e.pendencias_financeiras %}
+                {% if not p.respondida_em or p.resposta_excluida_em %}
+                  {% set _ = pendencias_abertas.append(p) %}
+                {% endif %}
+              {% endfor %}
+              {% if pendencias_abertas %}
+                {% set pendencia = pendencias_abertas[0] %}
+                <button class="btn btn-sm btn-danger pendencia-btn"
+                        data-nf="{{ e.numero_nf }}"
+                        data-observacao="{{ pendencia.observacao }}">
+                  Pend. Financ.
+                </button>
               {% endif %}
-            {% endfor %}
-            {% if pendencias_abertas %}
-              {% set pendencia = pendencias_abertas[0] %}
-              <button class="btn btn-sm btn-danger pendencia-btn"
-                      data-nf="{{ e.numero_nf }}"
-                      data-observacao="{{ pendencia.observacao }}">
-                Pend. Financ.
-              </button>
-            {% endif %}
-            {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' %}
-              <span class="badge bg-danger">⚠️ Agend. Pendente</span>
-            {% endif %}
-            {% if e.reagendar %}
-              <span class="badge bg-danger">🔁 Reagendar</span>
-            {% endif %}
+              
+              {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' and not e.status_finalizacao %}
+                <span class="badge bg-danger">⚠️ Agend. Pendente</span>
+              {% endif %}
+              
+              {% if e.reagendar %}
+                <span class="badge bg-danger">🔁 Reagendar</span>
+              {% endif %}
+              
+              {% if e.possui_comentarios %}
+                <span class="badge bg-info">💬 Comentários</span>
+              {% endif %}
+            </div>
           </td>
           <td class="d-flex flex-nowrap align-items-center gap-2">
             <a href="{{ url_for('monitoramento.visualizar_entrega', id=e.id, **request.args) }}"
@@ -1096,7 +1114,7 @@ body {
      MODAL PARA AGENDAMENTO RÁPIDO
      =========================== -->
 <div class="modal fade" id="agendamentoModal" tabindex="-1" aria-labelledby="agendamentoModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
       
       <!-- Cabeçalho do Modal -->
@@ -1107,49 +1125,83 @@ body {
 
       <!-- Corpo do Modal -->
       <div class="modal-body">
-        <p><strong>NF:</strong> <span id="nf-agendamento-modal"></span></p>
-        
-        <form id="form-agendamento-rapido">
-          <div class="row">
-            <div class="col-md-6">
-              <label for="data-agendada" class="form-label">Data Agendada</label>
-              <input type="date" id="data-agendada" class="form-control" required>
-            </div>
-            <div class="col-md-6">
-              <label for="hora-agendada" class="form-label">Hora Agendada</label>
-              <input type="time" id="hora-agendada" class="form-control">
+        <div class="row">
+          <div class="col-md-6">
+            <p><strong>NF:</strong> <span id="nf-agendamento-modal"></span></p>
+            
+            <form id="form-agendamento-rapido">
+              <div class="row">
+                <div class="col-md-6">
+                  <label for="data-agendada" class="form-label">Data Agendada</label>
+                  <input type="date" id="data-agendada" class="form-control" required>
+                </div>
+                <div class="col-md-6">
+                  <label for="hora-agendada" class="form-label">Hora Agendada</label>
+                  <input type="time" id="hora-agendada" class="form-control">
+                </div>
+              </div>
+              
+              <div class="row mt-3">
+                <div class="col-md-6">
+                  <label for="forma-agendamento" class="form-label">Forma</label>
+                  <select id="forma-agendamento" class="form-select" required>
+                    <option value="">Selecione...</option>
+                    <option value="Portal">Portal</option>
+                    <option value="Telefone">Telefone</option>
+                    <option value="E-mail">E-mail</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label for="protocolo-agendamento" class="form-label">Protocolo</label>
+                  <input type="text" id="protocolo-agendamento" class="form-control" placeholder="Protocolo...">
+                </div>
+              </div>
+              
+              <div class="mt-3">
+                <label for="motivo-agendamento" class="form-label">Motivo</label>
+                <textarea id="motivo-agendamento" class="form-control" rows="3" placeholder="Motivo do agendamento..."></textarea>
+              </div>
+              
+              <div class="form-check mt-3">
+                <input class="form-check-input" type="checkbox" id="criar-confirmado">
+                <label class="form-check-label" for="criar-confirmado">
+                  ✅ Criar agenda já confirmada
+                </label>
+              </div>
+            </form>
+            
+            <!-- Área de confirmação do último agendamento -->
+            <div id="confirmar-ultimo-agendamento" class="mt-3" style="display: none;">
+              <hr>
+              <h6>🎯 Confirmar Último Agendamento</h6>
+              <div id="detalhes-ultimo-agendamento"></div>
+              <div class="mt-2">
+                <label for="observacoes-confirmacao" class="form-label">Observações da Confirmação</label>
+                <textarea id="observacoes-confirmacao" class="form-control" rows="2" placeholder="Observações sobre a confirmação..."></textarea>
+              </div>
+              <button type="button" class="btn btn-success btn-sm mt-2" id="btn-confirmar-ultimo">
+                ✅ Confirmar Agendamento
+              </button>
             </div>
           </div>
           
-          <div class="row mt-3">
-            <div class="col-md-6">
-              <label for="forma-agendamento" class="form-label">Forma</label>
-              <select id="forma-agendamento" class="form-select" required>
-                <option value="">Selecione...</option>
-                <option value="Portal">Portal</option>
-                <option value="Telefone">Telefone</option>
-                <option value="E-mail">E-mail</option>
-                <option value="WhatsApp">WhatsApp</option>
-              </select>
-            </div>
-            <div class="col-md-6">
-              <label for="protocolo-agendamento" class="form-label">Protocolo</label>
-              <input type="text" id="protocolo-agendamento" class="form-control" placeholder="Protocolo...">
+          <div class="col-md-6">
+            <h6>📋 Histórico de Agendamentos</h6>
+            <div id="historico-agendamentos" class="border p-2" style="height: 400px; overflow-y: auto;">
+              <div class="text-center text-muted">
+                <i class="fas fa-spinner fa-spin"></i> Carregando histórico...
+              </div>
             </div>
           </div>
-          
-          <div class="mt-3">
-            <label for="motivo-agendamento" class="form-label">Motivo</label>
-            <textarea id="motivo-agendamento" class="form-control" rows="3" placeholder="Motivo do agendamento..."></textarea>
-          </div>
-        </form>
+        </div>
       </div>
 
       <!-- Rodapé do Modal -->
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn btn-success" id="confirmar-agendamento">
-          📅 Confirmar Agendamento
+          📅 Criar Agendamento
         </button>
       </div>
     </div>
@@ -1273,8 +1325,27 @@ document.addEventListener('DOMContentLoaded', function() {
   // 1. Pega o token CSRF do <meta name="csrf-token">
   const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-  // 2. Instancia o modal do Bootstrap
+  // 2. Instancia os modais do Bootstrap (uma vez só)
   const pendenciaModal = new bootstrap.Modal(document.getElementById('pendenciaModal'));
+  const agendamentoModal = new bootstrap.Modal(document.getElementById('agendamentoModal'), {
+    backdrop: 'static',  // Impede fechamento ao clicar fora
+    keyboard: true       // Permite Esc para fechar
+  });
+  const dataPrevistaModal = new bootstrap.Modal(document.getElementById('dataPrevistaModal'), {
+    backdrop: 'static',  // Impede fechamento ao clicar fora
+    keyboard: true       // Permite Esc para fechar
+  });
+
+  // Event listeners para melhorar UX dos modais
+  document.getElementById('agendamentoModal').addEventListener('shown.bs.modal', function () {
+    // Foca no primeiro campo quando modal abrir
+    document.getElementById('data-agendada').focus();
+  });
+
+  document.getElementById('dataPrevistaModal').addEventListener('shown.bs.modal', function () {
+    // Foca no campo de data quando modal abrir
+    document.getElementById('nova-data-prevista').focus();
+  });
 
   // Ao clicar no botão .pendencia-btn, abrimos o modal
   document.querySelectorAll('.pendencia-btn').forEach(btn => {
@@ -1333,11 +1404,82 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Limpa formulário
     document.getElementById('form-agendamento-rapido').reset();
+    document.getElementById('criar-confirmado').checked = false;
     
-    // Abre modal
-    const agendamentoModal = new bootstrap.Modal(document.getElementById('agendamentoModal'));
+    // Carrega histórico de agendamentos
+    carregarHistoricoAgendamentos(entregaId);
+    
+    // Usa a instância global do modal
     agendamentoModal.show();
   };
+
+  // Carregar histórico de agendamentos
+  function carregarHistoricoAgendamentos(entregaId) {
+    const historicoDiv = document.getElementById('historico-agendamentos');
+    const confirmarUltimoDiv = document.getElementById('confirmar-ultimo-agendamento');
+    
+    historicoDiv.innerHTML = '<div class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Carregando histórico...</div>';
+    
+    fetch(`/monitoramento/${entregaId}/historico_agendamentos`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.agendamentos && data.agendamentos.length > 0) {
+        let html = '';
+        let ultimoAguardando = null;
+        
+        data.agendamentos.forEach((agendamento, index) => {
+          const statusBadge = agendamento.status === 'confirmado' 
+            ? '<span class="badge bg-primary">✅ Confirmado</span>'
+            : '<span class="badge bg-warning">⏳ Aguardando</span>';
+          
+          // Identifica o último agendamento aguardando
+          if (index === 0 && agendamento.status === 'aguardando') {
+            ultimoAguardando = agendamento;
+          }
+          
+          html += `
+            <div class="border-bottom pb-2 mb-2">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <strong>${agendamento.data_agendada}</strong>
+                  ${agendamento.hora_agendada ? ' às ' + agendamento.hora_agendada : ''}
+                  <br><small class="text-muted">📋 ${agendamento.protocolo_agendamento || 'Sem protocolo'}</small>
+                  <br><small class="text-muted">Por ${agendamento.autor} - ${agendamento.criado_em}</small>
+                  ${agendamento.status === 'confirmado' && agendamento.confirmado_por ? 
+                    `<br><small class="text-success">Confirmado por ${agendamento.confirmado_por} em ${agendamento.confirmado_em}</small>` : ''}
+                </div>
+                <div>${statusBadge}</div>
+              </div>
+              ${agendamento.motivo ? `<small><strong>Motivo:</strong> ${agendamento.motivo}</small><br>` : ''}
+              ${agendamento.observacoes_confirmacao ? `<small><strong>Obs. Confirmação:</strong> ${agendamento.observacoes_confirmacao}</small>` : ''}
+            </div>
+          `;
+        });
+        
+        historicoDiv.innerHTML = html;
+        
+        // Mostra área de confirmação se há agendamento aguardando
+        if (ultimoAguardando) {
+          document.getElementById('detalhes-ultimo-agendamento').innerHTML = `
+            <p><strong>Data:</strong> ${ultimoAguardando.data_agendada}${ultimoAguardando.hora_agendada ? ' às ' + ultimoAguardando.hora_agendada : ''}</p>
+            <p><strong>Protocolo:</strong> ${ultimoAguardando.protocolo_agendamento || 'Sem protocolo'}</p>
+            <p><strong>Forma:</strong> ${ultimoAguardando.forma_agendamento}</p>
+          `;
+          document.getElementById('btn-confirmar-ultimo').setAttribute('data-agendamento-id', ultimoAguardando.id);
+          confirmarUltimoDiv.style.display = 'block';
+        } else {
+          confirmarUltimoDiv.style.display = 'none';
+        }
+      } else {
+        historicoDiv.innerHTML = '<div class="text-center text-muted">Nenhum agendamento registrado</div>';
+        confirmarUltimoDiv.style.display = 'none';
+      }
+    })
+    .catch(err => {
+      console.error('Erro ao carregar histórico:', err);
+      historicoDiv.innerHTML = '<div class="text-center text-danger">Erro ao carregar histórico</div>';
+    });
+  }
 
   // Confirmar agendamento
   document.getElementById('confirmar-agendamento').addEventListener('click', function() {
@@ -1350,6 +1492,7 @@ document.addEventListener('DOMContentLoaded', function() {
     formData.append('forma_agendamento', document.getElementById('forma-agendamento').value);
     formData.append('protocolo_agendamento', document.getElementById('protocolo-agendamento').value);
     formData.append('motivo', document.getElementById('motivo-agendamento').value);
+    formData.append('criar_confirmado', document.getElementById('criar-confirmado').checked ? 'y' : '');
 
     fetch(`/monitoramento/${entregaId}/adicionar_agendamento`, {
       method: 'POST',
@@ -1369,6 +1512,58 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  // Confirmar último agendamento no modal
+  document.getElementById('btn-confirmar-ultimo').addEventListener('click', function() {
+    const agendamentoId = this.getAttribute('data-agendamento-id');
+    const observacoes = document.getElementById('observacoes-confirmacao').value;
+    
+    const formData = new FormData();
+    formData.append('csrf_token', csrfToken);
+    formData.append('observacoes_confirmacao', observacoes);
+
+    fetch(`/monitoramento/confirmar_agendamento/${agendamentoId}`, {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => {
+      if (response.ok) {
+        alert('✅ Agendamento confirmado com sucesso!');
+        location.reload();
+      } else {
+        alert('❌ Erro ao confirmar agendamento.');
+      }
+    })
+    .catch(err => {
+      console.error('Erro:', err);
+      alert('❌ Erro na requisição.');
+    });
+  });
+
+  // Função para confirmar agendamento diretamente da listagem
+  window.confirmarAgendamento = function(agendamentoId) {
+    if (!confirm('Confirmar este agendamento?')) return;
+    
+    const formData = new FormData();
+    formData.append('csrf_token', csrfToken);
+
+    fetch(`/monitoramento/confirmar_agendamento/${agendamentoId}`, {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => {
+      if (response.ok) {
+        alert('✅ Agendamento confirmado com sucesso!');
+        location.reload();
+      } else {
+        alert('❌ Erro ao confirmar agendamento.');
+      }
+    })
+    .catch(err => {
+      console.error('Erro:', err);
+      alert('❌ Erro na requisição.');
+    });
+  };
+
   // ===========================
   // NOVO: FUNCIONALIDADE DE ALTERAR DATA PREVISTA
   // ===========================
@@ -1384,8 +1579,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Carrega histórico
     carregarHistoricoDataPrevista(entregaId);
     
-    // Abre modal
-    const dataPrevistaModal = new bootstrap.Modal(document.getElementById('dataPrevistaModal'));
+    // Usa a instância global do modal
     dataPrevistaModal.show();
   };
 

@@ -83,8 +83,19 @@ class AgendamentoEntrega(db.Model):
     observacao = db.Column(db.Text)  # ← NOVO CAMPO
     autor = db.Column(db.String(100))
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # ✅ NOVOS CAMPOS DE STATUS
+    status = db.Column(db.String(20), default='aguardando')  # aguardando, confirmado (novos agendamentos aguardam por padrão)
+    confirmado_por = db.Column(db.String(100), nullable=True)
+    confirmado_em = db.Column(db.DateTime, nullable=True)
+    observacoes_confirmacao = db.Column(db.Text, nullable=True)
 
     entrega = db.relationship('EntregaMonitorada', backref='agendamentos')
+    
+    @property
+    def ultimo_agendamento(self):
+        """Verifica se este é o último agendamento da entrega"""
+        return self == max(self.entrega.agendamentos, key=lambda ag: ag.criado_em) if self.entrega.agendamentos else False
 
 class EventoEntrega(db.Model):
     __tablename__ = 'eventos_entrega'

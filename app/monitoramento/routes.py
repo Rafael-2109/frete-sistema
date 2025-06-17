@@ -239,6 +239,9 @@ def adicionar_agendamento(id):
     form_agendamento = AgendamentoEntregaForm()
 
     if form_agendamento.validate_on_submit():
+        # Determina o status baseado no checkbox
+        status = 'confirmado' if form_agendamento.criar_confirmado.data else 'aguardando'
+        
         ag = AgendamentoEntrega(
             entrega_id=entrega.id,
             data_agendada=form_agendamento.data_agendada.data,
@@ -248,8 +251,15 @@ def adicionar_agendamento(id):
             protocolo_agendamento=form_agendamento.protocolo_agendamento.data,
             motivo=form_agendamento.motivo.data,
             observacao=form_agendamento.observacao.data,
-            autor=current_user.nome
+            autor=current_user.nome,
+            status=status
         )
+        
+        # Se criado já confirmado, preenche campos de confirmação
+        if status == 'confirmado':
+            ag.confirmado_por = current_user.nome
+            ag.confirmado_em = datetime.utcnow()
+        
         db.session.add(ag)
 
         entrega.data_agenda = form_agendamento.data_agendada.data
@@ -261,6 +271,60 @@ def adicionar_agendamento(id):
         flash('Erro ao validar Agendamento.', 'danger')
 
     return redirect(url_for('monitoramento.visualizar_entrega', id=entrega.id))
+
+
+@monitoramento_bp.route('/confirmar_agendamento/<int:agendamento_id>', methods=['POST'])
+@login_required
+def confirmar_agendamento(agendamento_id):
+    agendamento = AgendamentoEntrega.query.get_or_404(agendamento_id)
+    
+    # Só pode confirmar se estiver aguardando
+    if agendamento.status != 'aguardando':
+        flash('Este agendamento já foi confirmado.', 'warning')
+        return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+    
+    # Atualiza para confirmado
+    agendamento.status = 'confirmado'
+    agendamento.confirmado_por = current_user.nome
+    agendamento.confirmado_em = datetime.utcnow()
+    
+    # Pega observações do POST se houver
+    observacoes = request.form.get('observacoes_confirmacao', '').strip()
+    if observacoes:
+        agendamento.observacoes_confirmacao = observacoes
+    
+    db.session.commit()
+    
+    flash('✅ Agendamento confirmado com sucesso!', 'success')
+    return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+
+
+@monitoramento_bp.route('/<int:id>/historico_agendamentos')
+@login_required
+def historico_agendamentos(id):
+    entrega = EntregaMonitorada.query.get_or_404(id)
+    agendamentos = AgendamentoEntrega.query.filter_by(entrega_id=id).order_by(AgendamentoEntrega.criado_em.desc()).all()
+    
+    agendamentos_data = []
+    for ag in agendamentos:
+        agendamentos_data.append({
+            'id': ag.id,
+            'data_agendada': ag.data_agendada.strftime('%d/%m/%Y') if ag.data_agendada else '',
+            'hora_agendada': ag.hora_agendada.strftime('%H:%M') if ag.hora_agendada else '',
+            'forma_agendamento': ag.forma_agendamento or '',
+            'protocolo_agendamento': ag.protocolo_agendamento or '',
+            'motivo': ag.motivo or '',
+            'observacao': ag.observacao or '',
+            'status': ag.status or 'aguardando',
+            'autor': ag.autor or '',
+            'criado_em': ag.criado_em.strftime('%d/%m/%Y %H:%M') if ag.criado_em else '',
+            'confirmado_por': ag.confirmado_por or '',
+            'confirmado_em': ag.confirmado_em.strftime('%d/%m/%Y %H:%M') if ag.confirmado_em else '',
+            'observacoes_confirmacao': ag.observacoes_confirmacao or ''
+        })
+    
+    return jsonify({'agendamentos': agendamentos_data})
+
 
 @monitoramento_bp.route('/<int:id>/finalizar', methods=['POST'])
 @login_required

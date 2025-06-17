@@ -10,6 +10,55 @@ from app.vinculos.models import CidadeAtendida
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.transportadoras.models import Transportadora
 
+
+def adicionar_dias_uteis(data_inicio, dias_uteis):
+    """
+    Adiciona dias úteis (excluindo sábados e domingos) a uma data usando numpy ou pandas.
+    
+    Args:
+        data_inicio (date): Data inicial
+        dias_uteis (int): Número de dias úteis a adicionar
+        
+    Returns:
+        date: Data final após adicionar os dias úteis
+    """
+    if not data_inicio or not dias_uteis:
+        return data_inicio
+    
+    try:
+        # ✅ OPÇÃO 1: Usa numpy (mais eficiente)
+        import numpy as np
+        # Converte date para numpy datetime64
+        data_np = np.datetime64(data_inicio)
+        # Adiciona dias úteis
+        resultado_np = np.busday_offset(data_np, dias_uteis, roll='forward')
+        # Converte de volta para date
+        return resultado_np.astype('datetime64[D]').astype('object')
+        
+    except ImportError:
+        try:
+            # ✅ OPÇÃO 2: Usa pandas (fallback)
+            import pandas as pd
+            # Cria um BusinessDay offset
+            bday = pd.tseries.offsets.BDay(dias_uteis)
+            # Aplica o offset
+            resultado_pd = pd.Timestamp(data_inicio) + bday
+            return resultado_pd.date()
+            
+        except ImportError:
+            # ✅ OPÇÃO 3: Fallback manual (só para emergência)
+            print("[WARNING] NumPy e Pandas não disponíveis. Usando cálculo manual para dias úteis.")
+            data_atual = data_inicio
+            dias_adicionados = 0
+            
+            while dias_adicionados < dias_uteis:
+                data_atual += timedelta(days=1)
+                # 0 = Segunda, 1 = Terça, ..., 5 = Sábado, 6 = Domingo
+                if data_atual.weekday() < 5:  # Segunda a Sexta (0-4)
+                    dias_adicionados += 1
+            
+            return data_atual
+
 def sincronizar_entrega_por_nf(numero_nf):
     fat = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).first()
     if not fat:
@@ -106,7 +155,10 @@ def sincronizar_entrega_por_nf(numero_nf):
             entrega_id=entrega.id,
             data_agendada=data_agenda_embarque,
             forma_agendamento="Embarque Automático",
-            autor=current_user.nome
+            autor=current_user.nome,
+            status="confirmado",  # ✅ Se está no embarque, já foi confirmado
+            confirmado_por=current_user.nome,
+            confirmado_em=datetime.utcnow()
         )
         db.session.add(novo_ag)
 
@@ -126,7 +178,10 @@ def sincronizar_entrega_por_nf(numero_nf):
                     entrega_id=entrega.id,
                     protocolo_agendamento=protocolo_embarque,
                     forma_agendamento="Embarque Automático",
-                    autor=current_user.nome
+                    autor=current_user.nome,
+                    status="confirmado",  # ✅ Se está no embarque, já foi confirmado
+                    confirmado_por=current_user.nome,
+                    confirmado_em=datetime.utcnow()
                 )
                 db.session.add(novo_ag)
 
@@ -163,7 +218,8 @@ def sincronizar_entrega_por_nf(numero_nf):
         data_final = entrega.data_agenda
     else:
         if assoc and assoc.lead_time and item_mais_recente and embarque and embarque.data_embarque:
-            data_final = embarque.data_embarque + timedelta(days=assoc.lead_time)
+            # ✅ CORREÇÃO: Usa dias úteis ao invés de dias corridos
+            data_final = adicionar_dias_uteis(embarque.data_embarque, assoc.lead_time)
 
     entrega.data_entrega_prevista = data_final
 
@@ -200,7 +256,10 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
             data_agendada         = data_agenda_item,
             forma_agendamento     = "Reenvio do CD",
             autor=current_user.nome,
-            criado_em=datetime.utcnow()
+            criado_em=datetime.utcnow(),
+            status="confirmado",  # ✅ Se está no embarque/reenvio, já foi confirmado
+            confirmado_por=current_user.nome,
+            confirmado_em=datetime.utcnow()
         )
         db.session.add(novo_ag)
 
@@ -226,7 +285,8 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
                 .first()
             )
             if assoc and assoc.lead_time and embarque.data_embarque:
-                data_final = embarque.data_embarque + timedelta(days=assoc.lead_time)
+                # ✅ CORREÇÃO: Usa dias úteis ao invés de dias corridos
+                data_final = adicionar_dias_uteis(embarque.data_embarque, assoc.lead_time)
 
     entrega.data_entrega_prevista = data_final
 
