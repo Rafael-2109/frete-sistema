@@ -318,7 +318,7 @@ body {
     <div class="col-md-2">
       <label class="form-label">Data Emissão</label>
       <input type="date" name="data_emissao" class="form-control" 
-             value="{{ request.args.get('data_emissao', '') }}">
+             value="{{ request.args.get('data_emissao', '') }}" id="data_emissao">
     </div>
     <div class="col-md-2">
       <label class="form-label">Data Embarque</label>
@@ -1184,8 +1184,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const stickyPagination = document.getElementById('sticky-pagination');
   
   if (stickyPagination) {
-    console.log('✅ Paginação sticky encontrada!');
-    
     // 🔧 FORÇA estilos para garantir que sticky funcione
     stickyPagination.style.setProperty('position', 'sticky', 'important');
     stickyPagination.style.setProperty('top', '0px', 'important');
@@ -1199,81 +1197,48 @@ document.addEventListener('DOMContentLoaded', function() {
       parent = parent.parentElement;
     }
     
-    console.log('🔧 Estilos forçados aplicados');
-    
-    // Observer para detectar quando a paginação está grudada
+    // Observer para detectar quando a paginação está grudada (sem logs)
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.intersectionRatio < 1) {
           // Paginação está grudada (não completamente visível)
           stickyPagination.classList.add('stuck');
-          console.log('🔴 PAGINAÇÃO GRUDADA! Sticky está funcionando!');
         } else {
           // Paginação está solta (completamente visível)
           stickyPagination.classList.remove('stuck');
-          console.log('🟢 PAGINAÇÃO NORMAL');
         }
       },
       { threshold: 1 } // Detecta quando 100% do elemento está visível
     );
     
     observer.observe(stickyPagination);
-    
-    // 🧪 TESTE FINAL: Monitora posição a cada segundo
-    setInterval(() => {
-      const rect = stickyPagination.getBoundingClientRect();
-      const computedStyle = window.getComputedStyle(stickyPagination);
-      
-      console.log('📊 DEBUG STICKY:');
-      console.log('   - Position:', computedStyle.position);
-      console.log('   - Top:', computedStyle.top);
-      console.log('   - Z-index:', computedStyle.zIndex);
-      console.log('   - BoundingRect top:', rect.top);
-      console.log('   - Scroll Y:', window.scrollY);
-      
-      // Testa se deveria estar grudado (scroll passou da posição original)
-      if (window.scrollY > 200 && rect.top > 10) {
-        console.warn('⚠️ STICKY NÃO ESTÁ FUNCIONANDO! Posição deveria ser 10px, mas está em:', rect.top);
-      }
-    }, 3000);
-    
-  } else {
-    console.log('❌ Paginação sticky não encontrada');
   }
   });
 
   // ===========================
-  // DEBUG: TESTE DOS CAMPOS DE DATA
+  // AUTO SUBMIT PARA CAMPOS DE DATA
   // ===========================
   
-  // Verifica se os campos de data estão funcionando corretamente
+  // Seleciona todos os campos de data no formulário de filtros
+  const camposData = document.querySelectorAll('input[type="date"]');
+  const dataEmissao = document.getElementById('data_emissao');
   const dataEmbarque = document.getElementById('data_embarque');
   const dataEntregaPrevista = document.getElementById('data_entrega_prevista');
   const dataEntrega = document.getElementById('data_entrega');
   
-  if (dataEmbarque) {
-    dataEmbarque.addEventListener('change', function() {
-      console.log('✅ Data Embarque alterada para:', this.value);
-    });
+  // Função para auto submit
+  function autoSubmitFiltros() {
+    // Encontra o formulário pai
+    const form = this.closest('form');
+    if (form) {
+      form.submit();
+    }
   }
   
-  if (dataEntregaPrevista) {
-    dataEntregaPrevista.addEventListener('change', function() {
-      console.log('✅ Data Entrega Prevista alterada para:', this.value);
-    });
-  }
-  
-  if (dataEntrega) {
-    dataEntrega.addEventListener('change', function() {
-      console.log('✅ Data Entrega Realizada alterada para:', this.value);
-    });
-  }
-  
-  // Verifica valores iniciais dos campos
-  console.log('🔍 Valores iniciais dos campos de data:');
-  console.log('   - Data Embarque:', dataEmbarque?.value || 'campo não encontrado');
-  console.log('   - Data Entrega Prevista:', dataEntregaPrevista?.value || 'campo não encontrado');  
-  console.log('   - Data Entrega Realizada:', dataEntrega?.value || 'campo não encontrado');
+  // Adiciona auto submit para todos os campos de data
+  camposData.forEach(campo => {
+    campo.addEventListener('change', autoSubmitFiltros);
+  });
 </script>
 <!-- ===========================
      SCRIPTS ESPECÍFICOS
@@ -1305,11 +1270,8 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <script>
-  console.log("DEBUG: Iniciando script do Modal Pendência.");
-
   // 1. Pega o token CSRF do <meta name="csrf-token">
   const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-  console.log("DEBUG: CSRF token =", csrfToken);
 
   // 2. Instancia o modal do Bootstrap
   const pendenciaModal = new bootstrap.Modal(document.getElementById('pendenciaModal'));
@@ -1317,7 +1279,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Ao clicar no botão .pendencia-btn, abrimos o modal
   document.querySelectorAll('.pendencia-btn').forEach(btn => {
     btn.addEventListener('click', function() {
-      console.log("DEBUG: Botão Pend. Financ. clicado.");
       const nf = this.dataset.nf;
       const observacao = this.dataset.observacao;
 
@@ -1336,7 +1297,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Ao clicar no botão Confirmar do modal
   document.getElementById('confirmar-resposta').addEventListener('click', function() {
-    console.log("DEBUG: Botão Confirmar clicado.");
     const nf = this.getAttribute('data-nf');
     const resposta = document.getElementById('resposta-logistica').value;
 
@@ -1344,14 +1304,12 @@ document.addEventListener('DOMContentLoaded', function() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // 3. Inclui o token CSRF no cabeçalho X-CSRFToken
         'X-CSRFToken': csrfToken
       },
       body: JSON.stringify({ resposta: resposta })
     })
     .then(r => r.json())
     .then(data => {
-      console.log("DEBUG: Resposta do servidor:", data);
       if (data.success) {
         alert('Resposta salva com sucesso!');
         pendenciaModal.hide();
@@ -1361,7 +1319,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     })
     .catch(err => {
-      console.error("DEBUG: Erro no fetch:", err);
+      console.error("Erro no modal de pendências:", err);
       alert("Erro na requisição ao servidor.");
     });
   });
@@ -1498,5 +1456,5 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 </script>
 {% endblock %}
-
 </div> <!-- fim pagination-container -->
+

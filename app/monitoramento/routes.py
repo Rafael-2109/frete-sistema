@@ -5,7 +5,7 @@ import os
 import pandas as pd
 import tempfile
 from werkzeug.utils import secure_filename
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func
 
 from collections import defaultdict
 

@@ -125,7 +125,8 @@ class ControlePortariaForm(FlaskForm):
             ('Coleta', 'Coleta'),
             ('Coleta + Devolução', 'Coleta + Devolução'),
             ('Devolução', 'Devolução'),
-            ('Entrega', 'Entrega')
+            ('Entrega', 'Entrega'),
+            ('Coleta de Moto', 'Coleta de Moto'),
         ]
     )
     

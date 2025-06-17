@@ -85,7 +85,6 @@ def visualizar_embarque(id):
 
                 # ✅ READONLY: Transportadora não é mais editável - mantém valor existente
                 embarque.observacoes = form.observacoes.data
-                embarque.placa_veiculo = form.placa_veiculo.data
                 embarque.paletizado = form.paletizado.data
                 embarque.laudo_anexado = form.laudo_anexado.data
                 embarque.embalagem_aprovada = form.embalagem_aprovada.data

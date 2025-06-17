@@ -1513,12 +1513,8 @@ def otimizar():
         valor_liquido = opcao_atual.get('valor_liquido', 0)
         frete_atual_kg = valor_liquido / peso_total if peso_total > 0 else 0
         
-        print(f"[DEBUG] Dados básicos:")
-        print(f"[DEBUG] - Transportadora: {transportadora}")
-        print(f"[DEBUG] - Modalidade: {modalidade}")
-        print(f"[DEBUG] - Peso total: {peso_total}kg")
-        print(f"[DEBUG] - Valor líquido: R${valor_liquido}")
-        print(f"[DEBUG] - Frete atual/kg: R${frete_atual_kg:.2f}")
+        print(f"[OTIMIZADOR] 📊 Dados atuais: {transportadora} | {modalidade} | {peso_total}kg | R$/kg: {frete_atual_kg:.2f}")
+        print(f"[OTIMIZADOR] 📦 Pedidos atuais: {len(pedidos)} | Pedidos disponíveis: {len(pedidos_mesmo_uf)}")
 
         # ✅ CARREGA VEÍCULOS DISPONÍVEIS
         # Import já está no topo do arquivo
@@ -1571,14 +1567,17 @@ def otimizar():
                 resultado = calcular_otimizacoes_pedido(pedido_calculo, pedidos_para_calculo, modalidade, veiculos, frete_atual_kg)
                 if resultado:
                     otimizacoes['remover'][pedido.id] = resultado
-                    print(f"[DEBUG] ✅ Otimização calculada para pedido {pedido.num_pedido}: {list(resultado.keys())}")
+                    pass  # Otimização encontrada
                 else:
-                    print(f"[DEBUG] ⚠️ Nenhuma otimização encontrada para pedido {pedido.num_pedido}")
+                    pass  # Nenhuma otimização encontrada
                     # Cria uma otimização básica para mostrar dados atuais
                     otimizacoes['remover'][pedido.id] = {
                         'frete_kg_atual': frete_atual_kg,
                         'peso_pedido': pedido.peso_total or 0,
-                        'sem_otimizacao': True
+                        'sem_otimizacao': True,
+                        'transportadora_atual': transportadora,
+                        'modalidade_atual': modalidade,
+                        'valor_liquido_atual': valor_liquido
                     }
             except Exception as e:
                 print(f"[DEBUG] ❌ Erro ao calcular otimização para pedido {pedido.num_pedido}: {str(e)}")
@@ -1586,27 +1585,33 @@ def otimizar():
                 otimizacoes['remover'][pedido.id] = {
                     'frete_kg_atual': frete_atual_kg,
                     'peso_pedido': pedido.peso_total or 0,
-                    'erro': str(e)
+                    'erro': str(e),
+                    'transportadora_atual': transportadora,
+                    'modalidade_atual': modalidade,
+                    'valor_liquido_atual': valor_liquido
                 }
 
         # Calcula otimizações para pedidos que podem ser adicionados
         # ✅ CORREÇÃO: Remove limitação artificial e otimiza para performance
         max_otimizacoes = min(len(pedidos_mesmo_uf), 100)  # Limite dinâmico mais realista
-        print(f"[DEBUG] 📊 Processando {max_otimizacoes} de {len(pedidos_mesmo_uf)} pedidos disponíveis para otimização")
+        print(f"[OTIMIZADOR] 🔄 Processando {max_otimizacoes} de {len(pedidos_mesmo_uf)} pedidos para adicionar")
         
         for pedido in pedidos_mesmo_uf[:max_otimizacoes]:
             try:
                 resultado = calcular_otimizacoes_pedido_adicional(pedido, pedidos_para_calculo, transportadora, modalidade, peso_total, veiculos, frete_atual_kg)
                 if resultado:
                     otimizacoes['adicionar'][pedido.id] = resultado
-                    print(f"[DEBUG] ✅ Otimização calculada para adicionar pedido {pedido.num_pedido}: {list(resultado.keys())}")
+                    pass  # Otimização encontrada  
                 else:
-                    print(f"[DEBUG] ⚠️ Nenhuma otimização encontrada para adicionar pedido {pedido.num_pedido}")
+                    pass  # Nenhuma otimização encontrada
                     # Cria uma otimização básica para mostrar dados atuais
                     otimizacoes['adicionar'][pedido.id] = {
                         'frete_kg_atual': frete_atual_kg,
                         'peso_pedido': pedido.peso_total or 0,
-                        'sem_otimizacao': True
+                        'sem_otimizacao': True,
+                        'transportadora_atual': transportadora,
+                        'modalidade_atual': modalidade,
+                        'valor_liquido_atual': valor_liquido
                     }
             except Exception as e:
                 print(f"[DEBUG] ❌ Erro ao calcular otimização para adicionar pedido {pedido.num_pedido}: {str(e)}")
@@ -1614,12 +1619,13 @@ def otimizar():
                 otimizacoes['adicionar'][pedido.id] = {
                     'frete_kg_atual': frete_atual_kg,
                     'peso_pedido': pedido.peso_total or 0,
-                    'erro': str(e)
+                    'erro': str(e),
+                    'transportadora_atual': transportadora,
+                    'modalidade_atual': modalidade,
+                    'valor_liquido_atual': valor_liquido
                 }
         
-        print(f"[DEBUG] Otimizações calculadas:")
-        print(f"[DEBUG] - Remoção: {len(otimizacoes['remover'])} opções")
-        print(f"[DEBUG] - Adição: {len(otimizacoes['adicionar'])} opções")
+        print(f"[OTIMIZADOR] ✅ Finalizado: {len(otimizacoes['remover'])} otimizações de remoção | {len(otimizacoes['adicionar'])} otimizações de adição")
 
         return render_template(
             'cotacao/otimizador.html',

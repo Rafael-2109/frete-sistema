@@ -111,6 +111,15 @@
                                                     <strong>{{ otimizacao.nova_modalidade }} - R$ {{ "%.2f"|format(otimizacao.frete_liquido_novo) }}</strong>
                                                 {% else %}
                                                     <strong>R$/kg atual:</strong> R$ {{ "%.2f"|format(otimizacao.frete_kg_atual) }}<br>
+                                                    {% if otimizacao.transportadora_atual %}
+                                                        <strong>Transportadora:</strong> {{ otimizacao.transportadora_atual }}<br>
+                                                    {% endif %}
+                                                    {% if otimizacao.modalidade_atual %}
+                                                        <strong>Modalidade:</strong> {{ otimizacao.modalidade_atual }}<br>
+                                                    {% endif %}
+                                                    {% if otimizacao.valor_liquido_atual %}
+                                                        <strong>Valor líquido:</strong> R$ {{ "%.2f"|format(otimizacao.valor_liquido_atual) }}<br>
+                                                    {% endif %}
                                                     {% if otimizacao.sem_otimizacao %}
                                                         <span class="text-muted">Sem otimização disponível</span>
                                                     {% endif %}
@@ -212,6 +221,15 @@
                                                     {% endif %}
                                                 {% else %}
                                                     <strong>R$/kg atual:</strong> R$ {{ "%.2f"|format(otimizacao.frete_kg_atual) }}<br>
+                                                    {% if otimizacao.transportadora_atual %}
+                                                        <strong>Transportadora:</strong> {{ otimizacao.transportadora_atual }}<br>
+                                                    {% endif %}
+                                                    {% if otimizacao.modalidade_atual %}
+                                                        <strong>Modalidade:</strong> {{ otimizacao.modalidade_atual }}<br>
+                                                    {% endif %}
+                                                    {% if otimizacao.valor_liquido_atual %}
+                                                        <strong>Valor líquido:</strong> R$ {{ "%.2f"|format(otimizacao.valor_liquido_atual) }}<br>
+                                                    {% endif %}
                                                     {% if otimizacao.sem_otimizacao %}
                                                         <span class="text-muted">Sem otimização disponível</span>
                                                     {% endif %}
