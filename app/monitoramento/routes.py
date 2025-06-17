@@ -466,6 +466,20 @@ def listar_entregas():
             except ValueError:
                 pass
 
+    # ✅ NOVO FILTRO: Data Entrega Prevista
+    if data_entrega_prevista := request.args.get('data_entrega_prevista'):
+        try:
+            # Tenta formato YYYY-MM-DD primeiro (HTML date input)
+            dt = datetime.strptime(data_entrega_prevista, "%Y-%m-%d").date()
+            query = query.filter(EntregaMonitorada.data_entrega_prevista == dt)
+        except ValueError:
+            try:
+                # Fallback para formato brasileiro DD-MM-YYYY
+                dt = datetime.strptime(data_entrega_prevista, "%d-%m-%Y").date()
+                query = query.filter(EntregaMonitorada.data_entrega_prevista == dt)
+            except ValueError:
+                pass
+
     if data_entrega := request.args.get('data_entrega'):
         try:
             # Tenta formato YYYY-MM-DD primeiro (HTML date input)

@@ -164,7 +164,7 @@ class ControlePortariaForm(FlaskForm):
         # Carrega embarques ativos
         self.embarque_id.choices = [('', 'Selecione um embarque')]
         try:
-            embarques = Embarque.query.filter_by(status='ativo').order_by(Embarque.numero.desc()).limit(50).all()
+            embarques = Embarque.query.filter_by(status='ativo').order_by(Embarque.numero.desc()).all()
             self.embarque_id.choices.extend([
                 (e.id, f'Embarque #{e.numero} - {e.transportadora.razao_social if e.transportadora else ""}') 
                 for e in embarques

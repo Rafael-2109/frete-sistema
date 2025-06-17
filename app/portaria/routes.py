@@ -377,7 +377,7 @@ def api_embarques():
             )
         )
     
-    embarques = query.order_by(Embarque.numero.desc()).limit(100).all()
+    embarques = query.order_by(Embarque.numero.desc()).all()
     
     resultados = []
     for e in embarques:

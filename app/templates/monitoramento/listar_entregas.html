@@ -323,12 +323,17 @@ body {
     <div class="col-md-2">
       <label class="form-label">Data Embarque</label>
       <input type="date" name="data_embarque" class="form-control" 
-             value="{{ request.args.get('data_embarque', '') }}">
+             value="{{ request.args.get('data_embarque', '') }}" id="data_embarque">
     </div>
     <div class="col-md-2">
-      <label class="form-label">Data Entrega</label>
+      <label class="form-label">Data Entrega Prevista</label>
+      <input type="date" name="data_entrega_prevista" class="form-control" 
+             value="{{ request.args.get('data_entrega_prevista', '') }}" id="data_entrega_prevista">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Entrega Realizada Em</label>
       <input type="date" name="data_entrega" class="form-control" 
-             value="{{ request.args.get('data_entrega', '') }}">
+             value="{{ request.args.get('data_entrega', '') }}" id="data_entrega">
     </div>  
 
     <div class="col-md-3">
@@ -1235,7 +1240,40 @@ document.addEventListener('DOMContentLoaded', function() {
   } else {
     console.log('❌ Paginação sticky não encontrada');
   }
-});
+  });
+
+  // ===========================
+  // DEBUG: TESTE DOS CAMPOS DE DATA
+  // ===========================
+  
+  // Verifica se os campos de data estão funcionando corretamente
+  const dataEmbarque = document.getElementById('data_embarque');
+  const dataEntregaPrevista = document.getElementById('data_entrega_prevista');
+  const dataEntrega = document.getElementById('data_entrega');
+  
+  if (dataEmbarque) {
+    dataEmbarque.addEventListener('change', function() {
+      console.log('✅ Data Embarque alterada para:', this.value);
+    });
+  }
+  
+  if (dataEntregaPrevista) {
+    dataEntregaPrevista.addEventListener('change', function() {
+      console.log('✅ Data Entrega Prevista alterada para:', this.value);
+    });
+  }
+  
+  if (dataEntrega) {
+    dataEntrega.addEventListener('change', function() {
+      console.log('✅ Data Entrega Realizada alterada para:', this.value);
+    });
+  }
+  
+  // Verifica valores iniciais dos campos
+  console.log('🔍 Valores iniciais dos campos de data:');
+  console.log('   - Data Embarque:', dataEmbarque?.value || 'campo não encontrado');
+  console.log('   - Data Entrega Prevista:', dataEntregaPrevista?.value || 'campo não encontrado');  
+  console.log('   - Data Entrega Realizada:', dataEntrega?.value || 'campo não encontrado');
 </script>
 <!-- ===========================
      SCRIPTS ESPECÍFICOS
