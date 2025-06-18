@@ -234,13 +234,13 @@ def registrar_movimento():
                             
                             # Sincroniza com sistema de entregas para cada item do embarque
                             if embarque.itens:
-                                from app.utils.sincronizar_entregas import sincronizar_nova_entrega_por_nf
+                                from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
                                 print(f"[DEBUG] Sincronizando {len(embarque.itens)} itens com sistema de entregas...")
                                 
                                 for item in embarque.itens:
                                     if item.nota_fiscal:
                                         try:
-                                            sincronizar_nova_entrega_por_nf(item.nota_fiscal, embarque, item)
+                                            sincronizar_entrega_por_nf(item.nota_fiscal)
                                             print(f"[DEBUG] NF {item.nota_fiscal} sincronizada com entregas")
                                         except Exception as e:
                                             print(f"[DEBUG] Erro ao sincronizar NF {item.nota_fiscal}: {str(e)}")
@@ -537,6 +537,24 @@ def adicionar_embarque():
         # Se o veículo já saiu, atualiza a data_embarque imediatamente
         if registro.data_saida and not embarque.data_embarque:
             embarque.data_embarque = registro.data_saida
+            print(f"[DEBUG] Data embarque atualizada para {registro.data_saida} (vinculação após saída)")
+            
+            # 🔧 CORREÇÃO: Sincroniza com sistema de entregas para cada item do embarque
+            if embarque.itens:
+                from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
+                print(f"[DEBUG] Sincronizando {len(embarque.itens)} itens com sistema de entregas...")
+                
+                for item in embarque.itens:
+                    if item.nota_fiscal:
+                        try:
+                            sincronizar_entrega_por_nf(item.nota_fiscal)
+                            print(f"[DEBUG] NF {item.nota_fiscal} sincronizada com entregas")
+                        except Exception as e:
+                            print(f"[DEBUG] Erro ao sincronizar NF {item.nota_fiscal}: {str(e)}")
+                            # Não interrompe o processo por erro de sincronização
+                
+                flash(f'Sistema de entregas sincronizado para {len(embarque.itens)} nota(s) fiscal(is)!', 'success')
+            
             db.session.commit()
             flash(f'Data de embarque atualizada para {registro.data_saida.strftime("%d/%m/%Y")}!', 'info')
         
