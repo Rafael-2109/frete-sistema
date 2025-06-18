@@ -114,7 +114,7 @@
                         <div class="col-md-3">
                             <strong style="color: black;">Anexo:</strong><br>
                             {% if fatura.arquivo_pdf %}
-                                <a href="{{ url_for('static', filename=fatura.arquivo_pdf) }}" 
+                                <a href="{{ url_for('fretes.download_pdf_fatura', fatura_id=fatura.id) }}" 
                                    target="_blank" 
                                    class="btn btn-sm btn-outline-primary" 
                                    title="Visualizar Anexo">

@@ -29,7 +29,7 @@
         <div class="card-body">
           {% if registro.motorista_obj.foto_documento %}
           <div class="text-center mb-3">
-            <img src="{{ url_for('static', filename=registro.motorista_obj.foto_documento) }}" 
+            <img src="{{ registro.motorista_obj.foto_documento | file_url }}" 
                  alt="Foto do documento" 
                  class="img-thumbnail"
                  style="max-width: 200px; max-height: 150px;">

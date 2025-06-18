@@ -1,6 +1,6 @@
 from app import db
 from flask_login import current_user
-from datetime import datetime
+from datetime import datetime, date
 
 class EntregaMonitorada(db.Model):
     __tablename__ = 'entregas_monitoradas'
@@ -167,3 +167,46 @@ class HistoricoDataPrevista(db.Model):
     alterado_em = db.Column(db.DateTime, default=datetime.utcnow)  # Quando foi alterado
     
     entrega = db.relationship('EntregaMonitorada', backref='historico_data_prevista')
+
+class ArquivoEntrega(db.Model):
+    """
+    Rastreia arquivos das entregas (local e S3)
+    """
+    __tablename__ = 'arquivo_entrega'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    entrega_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'), nullable=False)
+    nome_original = db.Column(db.String(255), nullable=False)  # Nome original do arquivo
+    nome_arquivo = db.Column(db.String(255), nullable=False)   # Nome do arquivo no storage
+    caminho_arquivo = db.Column(db.String(500), nullable=False)  # Caminho completo no storage
+    tipo_storage = db.Column(db.String(20), nullable=False)    # 'local' ou 's3'
+    tamanho_bytes = db.Column(db.Integer)                      # Tamanho do arquivo
+    content_type = db.Column(db.String(100))                   # Tipo MIME
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.String(100), nullable=False)
+    
+    # Relacionamento
+    entrega = db.relationship('EntregaMonitorada', backref=db.backref('arquivos_entrega', lazy=True, cascade='all, delete-orphan'))
+    
+    def __repr__(self):
+        return f'<ArquivoEntrega {self.nome_original} - Entrega {self.entrega_id}>'
+    
+    @property
+    def extensao(self):
+        """Retorna a extensão do arquivo"""
+        return self.nome_original.split('.')[-1].lower() if '.' in self.nome_original else ''
+    
+    @property
+    def icone(self):
+        """Retorna emoji do ícone baseado na extensão"""
+        ext = self.extensao
+        if ext in ['pdf']:
+            return '📄'
+        elif ext in ['jpg', 'jpeg', 'png']:
+            return '🖼️'
+        elif ext in ['doc', 'docx']:
+            return '📝'
+        elif ext in ['xls', 'xlsx']:
+            return '📊'
+        else:
+            return '📁'

@@ -19,18 +19,38 @@
   </form>
 
   <ul class="list-group">
-    {% for nome in arquivos %}
-      {% set ext = nome.split('.')[-1]|lower %}
-      {% if ext in ['pdf'] %} {% set icone = '📄' %}
-      {% elif ext in ['jpg', 'jpeg', 'png'] %} {% set icone = '🖼️' %}
-      {% elif ext in ['doc', 'docx'] %} {% set icone = '📝' %}
-      {% elif ext in ['xls', 'xlsx'] %} {% set icone = '📊' %}
-      {% else %} {% set icone = '📁' %}
-      {% endif %}
-      <li class="list-group-item d-flex justify-content-between align-items-center">
-        {{ icone }} {{ nome }}
-        <a href="{{ url_for('monitoramento.get_arquivo_entrega', entrega_id=entrega.id, filename=nome) }}" 
-           target="_blank" class="btn btn-sm btn-outline-primary">Abrir</a>
+    {% for arquivo in arquivos %}
+      <li class="list-group-item">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <span class="me-2">{{ arquivo.icone }}</span>
+            <strong>{{ arquivo.nome }}</strong>
+            {% if arquivo.tipo == 'local_antigo' %}
+              <span class="badge bg-secondary ms-2">Local Antigo</span>
+            {% elif arquivo.tipo == 'local' %}
+              <span class="badge bg-info ms-2">Local</span>
+            {% elif arquivo.tipo == 's3' %}
+              <span class="badge bg-success ms-2">S3</span>
+            {% endif %}
+          </div>
+          <a href="{{ arquivo.url }}" 
+             target="_blank" class="btn btn-sm btn-outline-primary">
+            {% if arquivo.tipo == 's3' %}Download{% else %}Abrir{% endif %}
+          </a>
+        </div>
+        {% if arquivo.criado_em or arquivo.criado_por or arquivo.tamanho %}
+          <div class="small text-muted mt-1">
+            {% if arquivo.criado_em %}
+              Enviado em: {{ arquivo.criado_em | formatar_data_hora_brasil }}
+            {% endif %}
+            {% if arquivo.criado_por %}
+              por {{ arquivo.criado_por }}
+            {% endif %}
+            {% if arquivo.tamanho %}
+              - {{ (arquivo.tamanho / 1024) | round(1) }} KB
+            {% endif %}
+          </div>
+        {% endif %}
       </li>
     {% else %}
       <li class="list-group-item text-muted">Nenhum arquivo encontrado.</li>

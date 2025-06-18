@@ -6,6 +6,10 @@ import os
 import traceback
 
 from app import db
+
+# 🔒 Importar decoradores de permissão
+from app.utils.auth_decorators import require_portaria
+
 from app.portaria.models import Motorista, ControlePortaria
 from app.portaria.forms import CadastroMotoristaForm, BuscarMotoristaForm, ControlePortariaForm, FiltroHistoricoForm
 from app.embarques.models import Embarque
@@ -36,6 +40,7 @@ def salvar_foto_documento(foto):
 
 @portaria_bp.route('/')
 @login_required
+@require_portaria()  # 🔒 BLOQUEADO para vendedores
 def dashboard():
     """
     Dashboard principal da portaria - mostra veículos do dia
@@ -55,6 +60,7 @@ def dashboard():
 
 @portaria_bp.route('/buscar_motorista', methods=['POST'])
 @login_required
+@require_portaria()  # 🔒 BLOQUEADO para vendedores
 def buscar_motorista():
     """
     Busca motorista por CPF via AJAX
@@ -86,6 +92,7 @@ def buscar_motorista():
 
 @portaria_bp.route('/cadastrar_motorista', methods=['GET', 'POST'])
 @login_required
+@require_portaria()  # 🔒 BLOQUEADO para vendedores
 def cadastrar_motorista():
     """
     Cadastra ou edita motorista
@@ -142,6 +149,7 @@ def cadastrar_motorista():
 
 @portaria_bp.route('/registrar_movimento', methods=['POST'])
 @login_required
+@require_portaria()  # 🔒 BLOQUEADO para vendedores
 def registrar_movimento():
     """
     Registra chegada, entrada ou saída de veículo
@@ -339,12 +347,21 @@ def excluir_motorista(id):
         if motorista.registros_portaria.count() > 0:
             flash('Não é possível excluir motorista com registros na portaria!', 'warning')
         else:
-            # Remove foto se existir
+            # Remove foto se existir (S3 ou local)
             if motorista.foto_documento:
                 try:
-                    foto_path = os.path.join(current_app.root_path, 'static', motorista.foto_documento)
-                    if os.path.exists(foto_path):
-                        os.remove(foto_path)
+                    from app.utils.file_storage import get_file_storage
+                    storage = get_file_storage()
+                    
+                    # Para arquivos S3 (novos)
+                    if not motorista.foto_documento.startswith('uploads/'):
+                        # TODO: Implementar exclusão no S3 se necessário
+                        pass
+                    else:
+                        # Para arquivos locais (antigos)
+                        foto_path = os.path.join(current_app.root_path, 'static', motorista.foto_documento)
+                        if os.path.exists(foto_path):
+                            os.remove(foto_path)
                 except:
                     pass  # Ignora erro na exclusão do arquivo
             

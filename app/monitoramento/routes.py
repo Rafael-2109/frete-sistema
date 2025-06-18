@@ -12,13 +12,18 @@ from collections import defaultdict
 import re
 
 from app import db
+
+# 🔒 Importar decoradores de permissão
+from app.utils.auth_decorators import require_monitoramento_geral, allow_vendedor_own_data, check_vendedor_permission, get_vendedor_filter_query
+
 from app.monitoramento.models import (
     EntregaMonitorada,
     EventoEntrega,
     CustoExtraEntrega,
     RegistroLogEntrega,
     AgendamentoEntrega,
-    ComentarioNF
+    ComentarioNF,
+    ArquivoEntrega
 )
 from app.monitoramento.forms import (
     LogEntregaForm,
@@ -43,6 +48,22 @@ from app.utils.template_filters import file_url
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, '..', '..', 'uploads', 'entregas')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+def get_file_icon(filename):
+    """Retorna ícone baseado na extensão do arquivo"""
+    ext = filename.split('.')[-1].lower() if '.' in filename else ''
+    if ext in ['pdf']:
+        return '📄'
+    elif ext in ['jpg', 'jpeg', 'png']:
+        return '🖼️'
+    elif ext in ['doc', 'docx']:
+        return '📝'
+    elif ext in ['xls', 'xlsx']:
+        return '📊'
+    else:
+        return '📁'
+
+# Função de migração removida - não há arquivos locais para migrar
 
 monitoramento_bp = Blueprint('monitoramento', __name__, url_prefix='/monitoramento')
 
@@ -93,8 +114,15 @@ def processar_nf_cd_pedido(entrega_id):
 
 @monitoramento_bp.route('/<int:id>', methods=['GET'])
 @login_required
+@allow_vendedor_own_data()  # 🔒 VENDEDORES: Apenas dados próprios
 def visualizar_entrega(id):
     entrega = EntregaMonitorada.query.get_or_404(id)
+    
+    # 🔒 VERIFICAÇÃO ESPECÍFICA PARA VENDEDORES
+    if current_user.perfil == 'vendedor':
+        if not check_vendedor_permission(vendedor_nome=entrega.vendedor, numero_nf=entrega.numero_nf):
+            flash('Acesso negado. Você só pode visualizar entregas dos seus clientes.', 'danger')
+            return redirect(url_for('monitoramento.listar_entregas'))
 
     # Instancie os forms só para renderizar na página:
     form_log = LogEntregaForm()
@@ -132,6 +160,7 @@ def visualizar_entrega(id):
 
 @monitoramento_bp.route('/<int:id>/adicionar_log', methods=['POST'])
 @login_required
+@require_monitoramento_geral()  # 🔒 BLOQUEADO para vendedores
 def adicionar_log(id):
     entrega = EntregaMonitorada.query.get_or_404(id)
     form_log = LogEntregaForm()
@@ -158,6 +187,7 @@ def adicionar_log(id):
 
 @monitoramento_bp.route('/<int:id>/adicionar_evento', methods=['POST'])
 @login_required
+@require_monitoramento_geral()  # 🔒 BLOQUEADO para vendedores
 def adicionar_evento(id):
     entrega = EntregaMonitorada.query.get_or_404(id)
     form_evento = EventoEntregaForm()
@@ -423,8 +453,17 @@ def resolver_pendencia(id):
 
 @monitoramento_bp.route('/listar_entregas')
 @login_required
+@allow_vendedor_own_data()  # 🔒 VENDEDORES: Apenas dados próprios
 def listar_entregas():
     query = EntregaMonitorada.query
+    
+    # 🔒 FILTRO PARA VENDEDORES - Só vê seus dados
+    vendedor_filtro = get_vendedor_filter_query()
+    if vendedor_filtro == "ACESSO_NEGADO":
+        flash('Acesso negado. Perfil sem permissão para monitoramento.', 'danger')
+        return redirect(url_for('main.dashboard'))
+    elif vendedor_filtro is not None:  # Vendedor específico
+        query = query.filter(EntregaMonitorada.vendedor.ilike(f'%{vendedor_filtro}%'))
 
     status = request.args.get('status')
     if status == 'entregue':
@@ -805,7 +844,7 @@ def visualizar_arquivos(id):
         file = request.files['arquivo']
         if file and file.filename:
             try:
-                # 🌐 Salvar no S3 usando o novo sistema
+                # 🌐 Salvar no storage usando o novo sistema
                 file_path = storage.save_file(
                     file=file,
                     folder=f'entregas/{entrega.id}',
@@ -813,6 +852,26 @@ def visualizar_arquivos(id):
                 )
                 
                 if file_path:
+                    # 📝 Registrar arquivo na tabela
+                    # Obter tamanho do arquivo
+                    file.seek(0, 2)  # Move para o final
+                    tamanho_arquivo = file.tell()
+                    file.seek(0)  # Volta para o início
+                    
+                    arquivo_entrega = ArquivoEntrega(
+                        entrega_id=entrega.id,
+                        nome_original=file.filename,
+                        nome_arquivo=os.path.basename(file_path),
+                        caminho_arquivo=file_path,
+                        tipo_storage='s3' if storage.use_s3 else 'local',
+                        tamanho_bytes=tamanho_arquivo,
+                        content_type=file.content_type,
+                        criado_por=current_user.nome
+                    )
+                    
+                    db.session.add(arquivo_entrega)
+                    db.session.commit()
+                    
                     flash("✅ Arquivo salvo com sucesso no sistema!", 'success')
                 else:
                     flash("❌ Erro ao salvar arquivo.", 'danger')
@@ -822,21 +881,39 @@ def visualizar_arquivos(id):
             
             return redirect(request.url)
 
-    # 📁 Listar arquivos (antigos + novos)
+    # 📁 Listar arquivos (novos do banco + antigos da pasta local)
     arquivos = []
     
-    # Arquivos antigos (pasta local)
+    # ✅ Arquivos novos (rastreados no banco)
+    arquivos_banco = ArquivoEntrega.query.filter_by(entrega_id=entrega.id).order_by(ArquivoEntrega.criado_em.desc()).all()
+    for arquivo_db in arquivos_banco:
+        arquivos.append({
+            'id': arquivo_db.id,
+            'nome': arquivo_db.nome_original,
+            'tipo': arquivo_db.tipo_storage,
+            'icone': arquivo_db.icone,
+            'tamanho': arquivo_db.tamanho_bytes,
+            'criado_em': arquivo_db.criado_em,
+            'criado_por': arquivo_db.criado_por,
+            'url': url_for('monitoramento.download_arquivo_entrega', arquivo_id=arquivo_db.id)
+        })
+    
+    # 📂 Arquivos antigos (pasta local - compatibilidade)
     pasta_local = os.path.join(UPLOAD_DIR, str(entrega.id))
     if os.path.exists(pasta_local):
         for arquivo in os.listdir(pasta_local):
-            arquivos.append({
-                'nome': arquivo,
-                'tipo': 'local',
-                'url': url_for('monitoramento.get_arquivo_entrega', entrega_id=entrega.id, filename=arquivo)
-            })
-    
-    # 🆕 Arquivos novos (S3) - listar seria complexo, então por enquanto só mostrar quando forem uploadados
-    # Futuramente pode implementar uma tabela no banco para rastrear arquivos
+            # Evita duplicatas se o arquivo já está no banco
+            if not any(a['nome'] == arquivo for a in arquivos):
+                arquivos.append({
+                    'id': None,
+                    'nome': arquivo,
+                    'tipo': 'local_antigo',
+                    'icone': get_file_icon(arquivo),
+                    'tamanho': None,
+                    'criado_em': None,
+                    'criado_por': 'Sistema Antigo',
+                    'url': url_for('monitoramento.get_arquivo_entrega', entrega_id=entrega.id, filename=arquivo)
+                })
     
     return render_template('monitoramento/arquivos.html', entrega=entrega, arquivos=arquivos)
 
@@ -854,6 +931,39 @@ def get_arquivo_entrega(entrega_id, filename):
     """Serve arquivos antigos (compatibilidade)"""
     pasta = os.path.join(UPLOAD_DIR, str(entrega_id))
     return send_from_directory(pasta, filename)
+
+@monitoramento_bp.route('/arquivo/<int:arquivo_id>/download')
+@login_required
+def download_arquivo_entrega(arquivo_id):
+    """Serve arquivos novos (rastreados no banco)"""
+    arquivo = ArquivoEntrega.query.get_or_404(arquivo_id)
+    
+    # 🔒 Verificar acesso à entrega (mesmo controle de visualizar_entrega)
+    if current_user.perfil == 'vendedor':
+        if not check_vendedor_permission(vendedor_nome=arquivo.entrega.vendedor, numero_nf=arquivo.entrega.numero_nf):
+            flash('Acesso negado. Você só pode baixar arquivos das entregas dos seus clientes.', 'danger')
+            return redirect(url_for('monitoramento.listar_entregas'))
+    
+    try:
+        storage = get_file_storage()
+        
+        if arquivo.tipo_storage == 's3':
+            # Para arquivos S3, gera URL assinada e redireciona
+            url = storage.get_file_url(arquivo.caminho_arquivo)
+            if url:
+                return redirect(url)
+            else:
+                flash("❌ Erro ao gerar link do arquivo.", 'danger')
+                return redirect(request.referrer)
+        else:
+            # Para arquivos locais, serve diretamente
+            pasta = os.path.dirname(arquivo.caminho_arquivo)
+            nome_arquivo = os.path.basename(arquivo.caminho_arquivo)
+            return send_from_directory(pasta, nome_arquivo)
+            
+    except Exception as e:
+        flash(f"❌ Erro ao baixar arquivo: {str(e)}", 'danger')
+        return redirect(request.referrer)
 
 @monitoramento_bp.route('/log/<int:log_id>/excluir', methods=['POST'])
 @login_required
@@ -960,7 +1070,16 @@ def remover_finalizacao(id):
 
 @monitoramento_bp.route('/<int:id>/adicionar_comentario', methods=['POST'])
 @login_required
+@allow_vendedor_own_data()  # 🔒 PERMITIDO para vendedores (apenas seus dados)
 def adicionar_comentario(id):
+    entrega = EntregaMonitorada.query.get_or_404(id)
+    
+    # 🔒 VERIFICAÇÃO ESPECÍFICA PARA VENDEDORES
+    if current_user.perfil == 'vendedor':
+        if not check_vendedor_permission(vendedor_nome=entrega.vendedor, numero_nf=entrega.numero_nf):
+            flash('Acesso negado. Você só pode comentar nas entregas dos seus clientes.', 'danger')
+            return redirect(url_for('monitoramento.listar_entregas'))
+    
     form = FormComentarioNF()
 
     if form.validate_on_submit():
@@ -1473,6 +1592,7 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
 
 @monitoramento_bp.route('/exportar', methods=['GET', 'POST'])
 @login_required
+@allow_vendedor_own_data()  # 🔒 PERMITIDO para vendedores (apenas seus dados)
 def exportar_entregas():
     """Página para configurar e executar exportação"""
     form = ExportarMonitoramentoForm()
@@ -1532,6 +1652,26 @@ def exportar_entregas():
             # Query base
             query = EntregaMonitorada.query
             
+            # 🔒 FILTRO PARA VENDEDORES NA EXPORTAÇÃO - Só exportam seus dados
+            vendedor_filtro = get_vendedor_filter_query()
+            if vendedor_filtro == "ACESSO_NEGADO":
+                flash('Acesso negado. Perfil sem permissão para exportação.', 'danger')
+                return redirect(url_for('main.dashboard'))
+            elif vendedor_filtro is not None:  # Vendedor específico
+                query = query.filter(EntregaMonitorada.vendedor.ilike(f'%{vendedor_filtro}%'))
+                # Para vendedores, também aplica filtro por NF através do faturamento
+                if current_user.perfil == 'vendedor':
+                    from app.faturamento.models import RelatorioFaturamentoImportado
+                    nfs_vendedor = db.session.query(RelatorioFaturamentoImportado.numero_nf).filter(
+                        RelatorioFaturamentoImportado.vendedor.ilike(f'%{vendedor_filtro}%')
+                    ).subquery()
+                    query = query.filter(
+                        db.or_(
+                            EntregaMonitorada.vendedor.ilike(f'%{vendedor_filtro}%'),
+                            EntregaMonitorada.numero_nf.in_(db.select([nfs_vendedor.c.numero_nf]))
+                        )
+                    )
+            
             # Aplica filtros
             query = aplicar_filtros_exportacao(query, filtros)
             
@@ -1549,6 +1689,11 @@ def exportar_entregas():
             nome_arquivo = form.nome_arquivo.data
             if not nome_arquivo.endswith('.xlsx'):
                 nome_arquivo += '.xlsx'
+            
+            # 🔒 Adiciona informação do vendedor no nome do arquivo se for vendedor
+            if current_user.perfil == 'vendedor':
+                nome_base = nome_arquivo.replace('.xlsx', '')
+                nome_arquivo = f'{nome_base}_vendedor_{current_user.vendedor_vinculado or current_user.nome.replace(" ", "_")}.xlsx'
             
             flash(f'✅ Exportação concluída! {len(entregas)} entregas exportadas.', 'success')
             
@@ -1571,4 +1716,6 @@ def exportar_entregas():
             return render_template('monitoramento/exportar_entregas.html', form=form)
     
     return render_template('monitoramento/exportar_entregas.html', form=form)
+
+# Rota administrativa de migração removida - não necessária
 

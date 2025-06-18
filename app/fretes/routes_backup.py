@@ -817,13 +817,26 @@ def nova_fatura():
         
         # Upload do arquivo PDF
         if form.arquivo_pdf.data:
-            filename = secure_filename(form.arquivo_pdf.data.filename)
-            if filename:
-                upload_folder = os.path.join(current_app.root_path, 'uploads', 'faturas')
-                os.makedirs(upload_folder, exist_ok=True)
-                filepath = os.path.join(upload_folder, filename)
-                form.arquivo_pdf.data.save(filepath)
-                nova_fatura.arquivo_pdf = f'uploads/faturas/{filename}'
+            try:
+                # 🌐 Usar sistema S3 para salvar PDFs
+                from app.utils.file_storage import get_file_storage
+                storage = get_file_storage()
+                
+                file_path = storage.save_file(
+                    file=form.arquivo_pdf.data,
+                    folder='faturas',
+                    allowed_extensions=['pdf']
+                )
+                
+                if file_path:
+                    nova_fatura.arquivo_pdf = file_path
+                else:
+                    flash('❌ Erro ao salvar arquivo PDF da fatura.', 'danger')
+                    return render_template('fretes/nova_fatura.html', form=form, transportadoras=transportadoras)
+                    
+            except Exception as e:
+                flash(f'❌ Erro ao salvar PDF: {str(e)}', 'danger')
+                return render_template('fretes/nova_fatura.html', form=form, transportadoras=transportadoras)
         
         db.session.add(nova_fatura)
         db.session.commit()

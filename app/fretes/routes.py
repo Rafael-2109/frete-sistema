@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app, session
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app, session, send_from_directory
 from flask_login import login_required, current_user
 from datetime import datetime
 from sqlalchemy import and_, or_, desc, func
@@ -7,6 +7,9 @@ import re
 from werkzeug.utils import secure_filename
 
 from app import db
+
+# 🔒 Importar decoradores de permissão
+from app.utils.auth_decorators import require_financeiro, require_admin, require_profiles
 
 from app.embarques.models import Embarque, EmbarqueItem
 from app.faturamento.models import RelatorioFaturamentoImportado
@@ -29,6 +32,7 @@ fretes_bp = Blueprint('fretes', __name__, url_prefix='/fretes')
 
 @fretes_bp.route('/')
 @login_required
+@require_financeiro()  # 🔒 BLOQUEADO para vendedores
 def index():
     """Dashboard principal do sistema de fretes"""
     # Estatísticas gerais
@@ -59,6 +63,7 @@ def index():
 
 @fretes_bp.route('/listar')
 @login_required
+@require_financeiro()  # 🔒 BLOQUEADO para vendedores
 def listar_fretes():
     """Lista todos os fretes com filtros"""
     from app.transportadoras.models import Transportadora
@@ -115,6 +120,7 @@ def listar_fretes():
 
 @fretes_bp.route('/lancar_cte', methods=['GET', 'POST'])
 @login_required
+@require_financeiro()  # 🔒 BLOQUEADO para vendedores
 def lancar_cte():
     """Lançamento de CTe com base na NF - primeiro mostra fretes que contêm a NF"""
     form = LancamentoCteForm()
@@ -208,6 +214,7 @@ def lancar_cte():
 
 @fretes_bp.route('/criar_novo_frete_por_nf')
 @login_required
+@require_financeiro()  # 🔒 BLOQUEADO para vendedores
 def criar_novo_frete_por_nf():
     """Cria novo frete baseado em uma NF específica"""
     numero_nf = request.args.get('numero_nf')
@@ -272,6 +279,7 @@ def criar_novo_frete_por_nf():
 
 @fretes_bp.route('/processar_cte_frete_existente', methods=['POST'])
 @login_required
+@require_financeiro()  # 🔒 BLOQUEADO para vendedores
 def processar_cte_frete_existente():
     """Processa lançamento de CTe em frete já existente"""
     try:
@@ -799,6 +807,7 @@ def analise_diferencas(frete_id):
 
 @fretes_bp.route('/faturas')
 @login_required
+@require_financeiro()  # 🔒 BLOQUEADO para vendedores
 def listar_faturas():
     """Lista faturas de frete"""
     faturas = FaturaFrete.query.order_by(desc(FaturaFrete.criado_em)).paginate(
@@ -828,13 +837,26 @@ def nova_fatura():
         
         # Upload do arquivo PDF
         if form.arquivo_pdf.data:
-            filename = secure_filename(form.arquivo_pdf.data.filename)
-            if filename:
-                upload_folder = os.path.join(current_app.root_path, 'uploads', 'faturas')
-                os.makedirs(upload_folder, exist_ok=True)
-                filepath = os.path.join(upload_folder, filename)
-                form.arquivo_pdf.data.save(filepath)
-                nova_fatura.arquivo_pdf = f'uploads/faturas/{filename}'
+            try:
+                # 🌐 Usar sistema S3 para salvar PDFs
+                from app.utils.file_storage import get_file_storage
+                storage = get_file_storage()
+                
+                file_path = storage.save_file(
+                    file=form.arquivo_pdf.data,
+                    folder='faturas',
+                    allowed_extensions=['pdf']
+                )
+                
+                if file_path:
+                    nova_fatura.arquivo_pdf = file_path
+                else:
+                    flash('❌ Erro ao salvar arquivo PDF da fatura.', 'danger')
+                    return render_template('fretes/nova_fatura.html', form=form, transportadoras=transportadoras)
+                    
+            except Exception as e:
+                flash(f'❌ Erro ao salvar PDF: {str(e)}', 'danger')
+                return render_template('fretes/nova_fatura.html', form=form, transportadoras=transportadoras)
         
         db.session.add(nova_fatura)
         db.session.commit()
@@ -2538,3 +2560,38 @@ def excluir_despesa_extra(despesa_id):
         db.session.rollback()
         flash(f'Erro ao excluir despesa extra: {str(e)}', 'error')
         return redirect(url_for('fretes.visualizar_frete', frete_id=frete.id))
+
+@fretes_bp.route('/fatura/<int:fatura_id>/download')
+@login_required
+def download_pdf_fatura(fatura_id):
+    """Serve PDFs de faturas (S3 e locais)"""
+    fatura = FaturaFrete.query.get_or_404(fatura_id)
+    
+    if not fatura.arquivo_pdf:
+        flash("❌ Esta fatura não possui arquivo PDF.", 'warning')
+        return redirect(request.referrer or url_for('fretes.listar_faturas'))
+    
+    try:
+        from app.utils.file_storage import get_file_storage
+        storage = get_file_storage()
+        
+        # Para arquivos S3 (novos)
+        if not fatura.arquivo_pdf.startswith('uploads/'):
+            url = storage.get_file_url(fatura.arquivo_pdf)
+            if url:
+                return redirect(url)
+            else:
+                flash("❌ Erro ao gerar link do arquivo.", 'danger')
+                return redirect(request.referrer)
+        else:
+            # Para arquivos locais (antigos)
+            pasta = os.path.dirname(fatura.arquivo_pdf)
+            nome_arquivo = os.path.basename(fatura.arquivo_pdf)
+            return send_from_directory(
+                os.path.join(current_app.root_path, 'static', pasta), 
+                nome_arquivo
+            )
+            
+    except Exception as e:
+        flash(f"❌ Erro ao baixar arquivo: {str(e)}", 'danger')
+        return redirect(request.referrer)

@@ -6,6 +6,9 @@ from flask_login import login_required, current_user
 
 from app import db
 
+# 🔒 Importar decoradores de permissão
+from app.utils.auth_decorators import require_embarques, allow_vendedor_own_data, get_vendedor_filter_query
+
 from app.embarques.forms import EmbarqueForm, EmbarqueItemForm
 
 from app.transportadoras.models import Transportadora
@@ -30,8 +33,23 @@ from app.utils.embarque_numero import obter_proximo_numero_embarque
 
 @embarques_bp.route('/<int:id>', methods=['GET', 'POST'])
 @login_required
+@require_embarques()  # 🔒 VENDEDORES: Apenas com dados próprios
 def visualizar_embarque(id):
     embarque = Embarque.query.get_or_404(id)
+    
+    # 🔒 VERIFICAÇÃO ESPECÍFICA PARA VENDEDORES
+    if current_user.perfil == 'vendedor':
+        # Verifica se o vendedor tem permissão para ver este embarque
+        tem_permissao = False
+        from app.utils.auth_decorators import check_vendedor_permission
+        for item in embarque.itens:
+            if check_vendedor_permission(numero_nf=item.nota_fiscal):
+                tem_permissao = True
+                break
+        
+        if not tem_permissao:
+            flash('Acesso negado. Você só pode visualizar embarques dos seus clientes.', 'danger')
+            return redirect(url_for('embarques.listar_embarques'))
 
     if request.method == 'POST':
         form = EmbarqueForm(request.form)
@@ -288,6 +306,7 @@ def visualizar_embarque(id):
         return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria)
   
 @embarques_bp.route('/listar_embarques')
+@require_embarques()  # 🔒 VENDEDORES: Apenas com dados próprios
 def listar_embarques():
     from app.embarques.forms import FiltrosEmbarqueExpandidoForm
     
