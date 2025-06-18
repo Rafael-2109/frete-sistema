@@ -87,7 +87,7 @@
               <div class="mb-3">
                 <label class="form-label">Foto Atual:</label>
                 <div class="text-center">
-                  <img src="{{ url_for('static', filename=motorista.foto_documento) }}" 
+                  <img src="{{ motorista.foto_documento | file_url }}" 
                        alt="Documento do motorista" 
                        class="img-thumbnail"
                        style="max-width: 300px; max-height: 200px;">

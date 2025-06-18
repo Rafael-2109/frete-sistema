@@ -11,29 +11,28 @@ from app.portaria.forms import CadastroMotoristaForm, BuscarMotoristaForm, Contr
 from app.embarques.models import Embarque
 from app.monitoramento.models import EntregaMonitorada
 from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
+from app.utils.file_storage import get_file_storage
 
 portaria_bp = Blueprint('portaria', __name__, url_prefix='/portaria')
 
 def salvar_foto_documento(foto):
     """
-    Salva foto do documento do motorista
+    Salva foto do documento do motorista usando sistema centralizado
     """
     if not foto:
         return None
     
-    filename = secure_filename(foto.filename)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
-    filename = timestamp + filename
-    
-    # Cria diretório se não existir
-    upload_path = os.path.join(current_app.root_path, 'static', 'uploads', 'motoristas')
-    os.makedirs(upload_path, exist_ok=True)
-    
-    filepath = os.path.join(upload_path, filename)
-    foto.save(filepath)
-    
-    # Retorna caminho relativo para salvar no banco
-    return f'uploads/motoristas/{filename}'
+    try:
+        storage = get_file_storage()
+        file_path = storage.save_file(
+            file=foto,
+            folder='motoristas',
+            allowed_extensions=['jpg', 'jpeg', 'png']
+        )
+        return file_path
+    except Exception as e:
+        current_app.logger.error(f"Erro ao salvar foto do motorista: {str(e)}")
+        return None
 
 @portaria_bp.route('/')
 @login_required

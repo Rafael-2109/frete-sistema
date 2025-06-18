@@ -70,6 +70,21 @@ class Config:
     # Flask-Login
     REMEMBER_COOKIE_DURATION = 86400  # 24 horas
     SESSION_PROTECTION = 'strong'
+    
+    # ===========================
+    # CONFIGURAÇÕES DE ARMAZENAMENTO DE ARQUIVOS
+    # ===========================
+    
+    # AWS S3 (para produção)
+    USE_S3 = os.environ.get('USE_S3', 'False').lower() == 'true'
+    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+    S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
+    
+    # Upload de arquivos
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max upload
+    UPLOAD_EXTENSIONS = ['jpg', 'jpeg', 'png', 'pdf', 'xlsx', 'docx', 'txt']
 
 class TestConfig(Config):
     TESTING = True

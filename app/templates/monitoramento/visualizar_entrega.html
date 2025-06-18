@@ -66,8 +66,8 @@
           {% if comentario.arquivo %}
             <br><br>
             <strong>Anexo:</strong>
-            <a href="{{ url_for('monitoramento.baixar_arquivo_comentario', filename=comentario.arquivo) }}" target="_blank">
-              {{ comentario.arquivo }}
+            <a href="{{ comentario.arquivo | file_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+              📎 {{ comentario.arquivo.split('/')[-1] if '/' in comentario.arquivo else comentario.arquivo }}
             </a>
           {% endif %}
     
@@ -82,8 +82,8 @@
                 {% if resposta.arquivo %}
                   <br><br>
                   <strong>Anexo:</strong>
-                  <a href="{{ url_for('monitoramento.baixar_arquivo_comentario', filename=resposta.arquivo) }}" target="_blank">
-                    {{ resposta.arquivo }}
+                  <a href="{{ resposta.arquivo | file_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                    📎 {{ resposta.arquivo.split('/')[-1] if '/' in resposta.arquivo else resposta.arquivo }}
                   </a>
                 {% endif %}
               </div>

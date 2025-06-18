@@ -13,12 +13,14 @@ from app.fretes.routes import validar_cnpj_embarque_faturamento
 from app.monitoramento.models import EntregaMonitorada
 from datetime import datetime
 
+# 🌐 Importar sistema de arquivos S3
+from app.utils.file_storage import get_file_storage
 
 faturamento_bp = Blueprint('faturamento', __name__,url_prefix='/faturamento')
 
+# Pasta para compatibilidade com arquivos antigos
 UPLOAD_FOLDER = 'uploads/faturamento'
 ALLOWED_EXTENSIONS = {'xlsx'}
-
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
@@ -69,12 +71,28 @@ def importar_relatorio():
         file = form.arquivo.data
 
         if file and file.filename.endswith('.xlsx'):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(filepath)
-
             try:
-                df = pd.read_excel(filepath)
+                # 🌐 Usar sistema S3 para salvar arquivo
+                storage = get_file_storage()
+                file_path = storage.save_file(
+                    file=file,
+                    folder='faturamento',
+                    allowed_extensions=['xlsx']
+                )
+                
+                if not file_path:
+                    flash('❌ Erro ao salvar arquivo no sistema!', 'danger')
+                    return redirect(request.url)
+                
+                # 📁 Para processamento, salvar temporariamente local
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as temp_file:
+                    file.seek(0)  # Reset pointer
+                    temp_file.write(file.read())
+                    temp_filepath = temp_file.name
+
+                # Processar arquivo Excel
+                df = pd.read_excel(temp_filepath)
                 df = df.drop_duplicates(subset=["Número da Nota Fiscal"])
 
                 df["Número da Nota Fiscal"] = df["Número da Nota Fiscal"].apply(
@@ -129,6 +147,9 @@ def importar_relatorio():
                     nfs_importadas.append(numero_nf)
 
                 db.session.commit()
+                
+                # 🗑️ Remover arquivo temporário
+                os.unlink(temp_filepath)
 
                 # Re-validar embarques que estavam pendentes
                 try:
@@ -182,6 +203,7 @@ def importar_relatorio():
 
                 # Mensagens de resultado
                 flash(f'✅ Relatório importado com sucesso! {len(nfs_importadas)} NFs processadas.', 'success')
+                flash(f'📁 Arquivo salvo no sistema de armazenamento.', 'info')
                 
                 if linhas_ignoradas > 0:
                     flash(f'⚠️ {linhas_ignoradas} linhas foram ignoradas (NF ou Origem vazios).', 'warning')
@@ -189,10 +211,10 @@ def importar_relatorio():
                 return redirect(url_for('faturamento.importar_relatorio'))
 
             except Exception as e:
-                flash(f'Erro ao processar o arquivo: {e}', 'danger')
+                flash(f'❌ Erro ao processar o arquivo: {e}', 'danger')
                 return redirect(request.url)
 
-        flash('Tipo de arquivo não permitido. Envie um .xlsx', 'danger')
+        flash('❌ Tipo de arquivo não permitido. Envie um .xlsx', 'danger')
         return redirect(request.url)
 
     return render_template('faturamento/importar_relatorio.html', form=form)

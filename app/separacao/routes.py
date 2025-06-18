@@ -10,8 +10,12 @@ from app.separacao.models import Separacao
 from app.separacao.forms import ImportarExcelForm
 from app.utils.localizacao import LocalizacaoService
 
+# 🌐 Importar sistema de arquivos S3
+from app.utils.file_storage import get_file_storage
+
 separacao_bp = Blueprint('separacao', __name__, url_prefix='/separacao')
 
+# Pasta para compatibilidade com arquivos antigos
 UPLOAD_FOLDER = 'uploads/separacao'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -92,12 +96,29 @@ def importar():
     form = ImportarExcelForm()
     if form.validate_on_submit():
         arquivo = form.arquivo_excel.data
-        nome_seguro = secure_filename(arquivo.filename)
-        caminho_arquivo = os.path.join(UPLOAD_FOLDER, nome_seguro)
-        arquivo.save(caminho_arquivo)
-
+        
         try:
-            df = pd.read_excel(caminho_arquivo)
+            # 🌐 Usar sistema S3 para salvar arquivo
+            storage = get_file_storage()
+            file_path = storage.save_file(
+                file=arquivo,
+                folder='separacao',
+                allowed_extensions=['xlsx', 'xls']
+            )
+            
+            if not file_path:
+                flash('❌ Erro ao salvar arquivo no sistema!', 'danger')
+                return redirect(request.url)
+            
+            # 📁 Para processamento, salvar temporariamente local
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as temp_file:
+                arquivo.seek(0)  # Reset pointer
+                temp_file.write(arquivo.read())
+                temp_filepath = temp_file.name
+
+            # Processar arquivo Excel
+            df = pd.read_excel(temp_filepath)
 
             for i, row in df.iterrows():
 
@@ -139,7 +160,12 @@ def importar():
                     db.session.rollback()
 
             db.session.commit()
-            flash('Importação realizada com sucesso!', 'success')
+            
+            # 🗑️ Remover arquivo temporário
+            os.unlink(temp_filepath)
+            
+            flash('✅ Importação realizada com sucesso!', 'success')
+            flash('📁 Arquivo salvo no sistema de armazenamento.', 'info')
 
             # Ao fim, em vez de voltar pra 'separacao.listar', 
             # chamamos direto o gerar_resumo:
@@ -147,10 +173,8 @@ def importar():
 
         except Exception as e:
             db.session.rollback()
-            flash(f"Erro ao importar: {e}", "danger")
-
-        finally:
-            os.remove(caminho_arquivo)
+            flash(f"❌ Erro ao importar: {e}", "danger")
+            return redirect(request.url)
 
     return render_template('separacao/importar.html', form=form)
 

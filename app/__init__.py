@@ -348,6 +348,13 @@ def create_app(config_name=None):
     app.jinja_env.filters['valor_br'] = formatar_valor_brasileiro
     app.jinja_env.filters['numero_br'] = formatar_numero_brasileiro
     app.jinja_env.filters['peso_br'] = formatar_peso_brasileiro
+    
+    # ✅ NOVO: Registrar filtros de arquivo
+    try:
+        from app.utils.template_filters import register_template_filters
+        register_template_filters(app)
+    except ImportError:
+        pass
 
     # Registra funções globais para templates
     @app.template_global()

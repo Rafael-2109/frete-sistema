@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_from_directory, send_file, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_from_directory, send_file, jsonify, make_response
 from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta
 import os
@@ -35,6 +35,10 @@ from app.cadastros_agendamento.models import ContatoAgendamento
 
 from app.utils.sincronizar_todas_entregas import sincronizar_todas_entregas
 from app.pedidos.models import Pedido  # ✅ ADICIONADO: Para controle de status NF no CD
+
+# 🌐 Importar sistema de arquivos S3
+from app.utils.file_storage import get_file_storage
+from app.utils.template_filters import file_url
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, '..', '..', 'uploads', 'entregas')
@@ -789,21 +793,51 @@ def visualizar_historico(id):
 @login_required
 def visualizar_arquivos(id):
     entrega = EntregaMonitorada.query.get_or_404(id)
-    pasta = os.path.join(UPLOAD_DIR, str(entrega.id))
-    os.makedirs(pasta, exist_ok=True)
-
+    
+    # 🆕 Usar sistema S3
+    storage = get_file_storage()
+    
     if request.method == 'POST':
         if 'arquivo' not in request.files:
             flash("Nenhum arquivo enviado.", 'warning')
             return redirect(request.url)
+        
         file = request.files['arquivo']
         if file and file.filename:
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(pasta, filename))
-            flash("Arquivo salvo com sucesso.", 'success')
+            try:
+                # 🌐 Salvar no S3 usando o novo sistema
+                file_path = storage.save_file(
+                    file=file,
+                    folder=f'entregas/{entrega.id}',
+                    allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'xlsx', 'docx', 'txt']
+                )
+                
+                if file_path:
+                    flash("✅ Arquivo salvo com sucesso no sistema!", 'success')
+                else:
+                    flash("❌ Erro ao salvar arquivo.", 'danger')
+                    
+            except Exception as e:
+                flash(f"❌ Erro ao salvar arquivo: {str(e)}", 'danger')
+            
             return redirect(request.url)
 
-    arquivos = os.listdir(pasta)
+    # 📁 Listar arquivos (antigos + novos)
+    arquivos = []
+    
+    # Arquivos antigos (pasta local)
+    pasta_local = os.path.join(UPLOAD_DIR, str(entrega.id))
+    if os.path.exists(pasta_local):
+        for arquivo in os.listdir(pasta_local):
+            arquivos.append({
+                'nome': arquivo,
+                'tipo': 'local',
+                'url': url_for('monitoramento.get_arquivo_entrega', entrega_id=entrega.id, filename=arquivo)
+            })
+    
+    # 🆕 Arquivos novos (S3) - listar seria complexo, então por enquanto só mostrar quando forem uploadados
+    # Futuramente pode implementar uma tabela no banco para rastrear arquivos
+    
     return render_template('monitoramento/arquivos.html', entrega=entrega, arquivos=arquivos)
 
 @monitoramento_bp.route('/<int:id>/toggle-reagendar', methods=['POST'])
@@ -817,6 +851,7 @@ def toggle_reagendar(id):
 @monitoramento_bp.route('/uploads/entregas/<int:entrega_id>/<filename>')
 @login_required
 def get_arquivo_entrega(entrega_id, filename):
+    """Serve arquivos antigos (compatibilidade)"""
     pasta = os.path.join(UPLOAD_DIR, str(entrega_id))
     return send_from_directory(pasta, filename)
 
@@ -929,32 +964,60 @@ def adicionar_comentario(id):
     form = FormComentarioNF()
 
     if form.validate_on_submit():
-        arquivo_nome = None
+        arquivo_path = None
         if form.arquivo.data:
-            arquivo_nome = secure_filename(form.arquivo.data.filename)
-            pasta_comentarios = os.path.join(UPLOAD_DIR, "comentarios_nf")
-            os.makedirs(pasta_comentarios, exist_ok=True)
-            form.arquivo.data.save(os.path.join(pasta_comentarios, arquivo_nome))
+            try:
+                # 🌐 Usar sistema S3 para comentários
+                storage = get_file_storage()
+                arquivo_path = storage.save_file(
+                    file=form.arquivo.data,
+                    folder=f'comentarios_nf',
+                    allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'xlsx', 'docx', 'txt']
+                )
+                
+                if not arquivo_path:
+                    flash("❌ Erro ao salvar arquivo do comentário.", 'danger')
+                    return redirect(url_for('monitoramento.visualizar_entrega', id=id))
+                    
+            except Exception as e:
+                flash(f"❌ Erro ao salvar arquivo: {str(e)}", 'danger')
+                return redirect(url_for('monitoramento.visualizar_entrega', id=id))
 
         comentario = ComentarioNF(
             entrega_id=id,
             autor=current_user.nome,
             texto=form.texto.data,
-            arquivo=arquivo_nome,
+            arquivo=arquivo_path,  # 🆕 Agora salva o caminho S3
             resposta_a_id=form.resposta_a_id.data or None
         )
         db.session.add(comentario)
         db.session.commit()
 
-        flash('Comentário adicionado com sucesso.', 'success')
+        flash('✅ Comentário adicionado com sucesso!', 'success')
     
     return redirect(url_for('monitoramento.visualizar_entrega', id=id))
 
-@monitoramento_bp.route('/comentarios_nf/<filename>')
+@monitoramento_bp.route('/comentarios_nf/<path:filename>')
 @login_required
 def baixar_arquivo_comentario(filename):
-    pasta_comentarios = os.path.join(UPLOAD_DIR, "comentarios_nf")
-    return send_from_directory(pasta_comentarios, filename)
+    """Serve arquivos de comentários"""
+    try:
+        # 🌐 Para arquivos S3, usar o sistema de URLs
+        storage = get_file_storage()
+        
+        # Se for um caminho S3 (começa com s3://)
+        if filename.startswith('s3://') or filename.startswith('comentarios_nf/'):
+            url = storage.get_file_url(filename)
+            if url:
+                return redirect(url)
+        
+        # Fallback para arquivos antigos (pasta local)
+        pasta_comentarios = os.path.join(UPLOAD_DIR, "comentarios_nf")
+        return send_from_directory(pasta_comentarios, filename)
+        
+    except Exception as e:
+        flash(f"❌ Erro ao acessar arquivo: {str(e)}", 'danger')
+        return redirect(request.referrer)
 
 @monitoramento_bp.route('/<int:id>/adicionar_pendencia', methods=['POST'])
 @login_required
