@@ -32,24 +32,14 @@ def upgrade():
     colunas_existentes = [col['name'] for col in inspector.get_columns('agendamentos_entrega')]
     print(f"🔍 Colunas existentes: {colunas_existentes}")
     
+    # PRIMEIRO: Adicionar todas as colunas
+    
     # Adicionar campo status aos agendamentos (só se não existir)
     if 'status' not in colunas_existentes:
         op.add_column('agendamentos_entrega', sa.Column('status', sa.String(20), nullable=True))
         print("✅ Coluna 'status' adicionada")
     else:
         print("ℹ️ Coluna 'status' já existe - pulando")
-    
-    # Atualizar todos os registros existentes para 'confirmado'
-    # (agendamentos antigos só eram registrados quando já confirmados)
-    op.execute("UPDATE agendamentos_entrega SET status = 'confirmado' WHERE status IS NULL OR status = ''")
-    print("✅ Agendamentos existentes marcados como 'confirmado' (processo antigo)")
-    
-    # Preencher campos de confirmação para agendamentos existentes
-    op.execute("""UPDATE agendamentos_entrega 
-                  SET confirmado_por = 'Sistema Legacy', 
-                      confirmado_em = criado_em 
-                  WHERE status = 'confirmado' AND confirmado_por IS NULL""")
-    print("✅ Campos de confirmação preenchidos para agendamentos legacy")
     
     # Adicionar campos de confirmação (só se não existirem)
     if 'confirmado_por' not in colunas_existentes:
@@ -69,6 +59,20 @@ def upgrade():
         print("✅ Coluna 'observacoes_confirmacao' adicionada")
     else:
         print("ℹ️ Coluna 'observacoes_confirmacao' já existe - pulando")
+    
+    # SEGUNDO: Fazer os UPDATEs (agora as colunas já existem)
+    
+    # Atualizar todos os registros existentes para 'confirmado'
+    # (agendamentos antigos só eram registrados quando já confirmados)
+    op.execute("UPDATE agendamentos_entrega SET status = 'confirmado' WHERE status IS NULL OR status = ''")
+    print("✅ Agendamentos existentes marcados como 'confirmado' (processo antigo)")
+    
+    # Preencher campos de confirmação para agendamentos existentes
+    op.execute("""UPDATE agendamentos_entrega 
+                  SET confirmado_por = 'Sistema Legacy', 
+                      confirmado_em = criado_em 
+                  WHERE status = 'confirmado' AND confirmado_por IS NULL""")
+    print("✅ Campos de confirmação preenchidos para agendamentos legacy")
     
     print("🎉 Migração concluída com sucesso!")
 
