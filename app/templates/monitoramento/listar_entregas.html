@@ -277,7 +277,7 @@ body {
 <div class="bg-light py-2">
   <div class="container-fluid">
     <!-- ✅ FILTROS COM PERSISTÊNCIA - Mantém valores anteriores -->
-    <form method="get" class="row g-1 align-items-end">
+    <form method="get" class="row g-1 align-items-end" id="form-filtros">
     <!-- Campos hidden para manter status e agrupamento -->
     {% if request.args.get('status') %}
       <input type="hidden" name="status" value="{{ request.args.get('status') }}">
@@ -1268,27 +1268,23 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // ===========================
-  // AUTO SUBMIT PARA CAMPOS DE DATA
+  // AUTO SUBMIT PARA CAMPOS DE DATA (APENAS FILTROS)
   // ===========================
   
-  // Seleciona todos os campos de data no formulário de filtros
-  const camposData = document.querySelectorAll('input[type="date"]');
-  const dataEmissao = document.getElementById('data_emissao');
-  const dataEmbarque = document.getElementById('data_embarque');
-  const dataEntregaPrevista = document.getElementById('data_entrega_prevista');
-  const dataEntrega = document.getElementById('data_entrega');
+  // Seleciona APENAS os campos de data do formulário de filtros (não dos modais)
+  const camposDataFiltros = document.querySelectorAll('#form-filtros input[type="date"]');
   
   // Função para auto submit
   function autoSubmitFiltros() {
     // Encontra o formulário pai
     const form = this.closest('form');
-    if (form) {
+    if (form && form.id === 'form-filtros') {
       form.submit();
     }
   }
   
-  // Adiciona auto submit para todos os campos de data
-  camposData.forEach(campo => {
+  // Adiciona auto submit APENAS para os campos de filtro
+  camposDataFiltros.forEach(campo => {
     campo.addEventListener('change', autoSubmitFiltros);
   });
 </script>
