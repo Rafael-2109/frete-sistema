@@ -89,8 +89,9 @@ class FileStorage:
                 }
             )
             
-            # Retorna URL do S3
-            return f"s3://{self.bucket_name}/{file_path}"
+            # 🆕 CORRIGIDO: Retorna apenas o caminho, sem prefixo
+            # Isso mantém consistência com o banco de dados
+            return file_path
             
         except ClientError as e:
             current_app.logger.error(f"Erro S3: {str(e)}")
@@ -122,23 +123,41 @@ class FileStorage:
         if not file_path:
             return None
         
-        if file_path.startswith('s3://'):
-            # Para S3, gera URL assinada (válida por 1 hora)
-            bucket_name = file_path.split('/')[2]
-            object_key = '/'.join(file_path.split('/')[3:])
-            
+        # 🆕 CORRIGIDO: Detecta automaticamente se é S3 ou local
+        if self.use_s3 and not file_path.startswith('uploads/'):
+            # Sistema S3 ativo e não é arquivo local antigo
             try:
+                # Remove prefixo s3:// se existir
+                if file_path.startswith('s3://'):
+                    bucket_name = file_path.split('/')[2]
+                    object_key = '/'.join(file_path.split('/')[3:])
+                else:
+                    # Arquivo S3 sem prefixo
+                    bucket_name = self.bucket_name
+                    object_key = file_path
+                
+                # Gera URL assinada (válida por 1 hora)
                 url = self.s3_client.generate_presigned_url(
                     'get_object',
                     Params={'Bucket': bucket_name, 'Key': object_key},
                     ExpiresIn=3600  # 1 hora
                 )
                 return url
-            except ClientError:
+            except ClientError as e:
+                current_app.logger.error(f"Erro ao gerar URL S3 para {file_path}: {str(e)}")
                 return None
         else:
-            # Para arquivos locais, usa Flask url_for
-            return url_for('static', filename=file_path)
+            # Para arquivos locais ou sistema S3 desativado
+            try:
+                # Remove prefixo s3:// se existir (fallback)
+                if file_path.startswith('s3://'):
+                    # Converte para caminho local
+                    local_path = '/'.join(file_path.split('/')[3:])
+                    return url_for('static', filename=f'uploads/{local_path}')
+                else:
+                    return url_for('static', filename=file_path)
+            except Exception:
+                return None
     
     def delete_file(self, file_path):
         """
