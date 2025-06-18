@@ -3,10 +3,14 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from datetime import datetime
 import os
+import traceback
 
 from app import db
 from app.portaria.models import Motorista, ControlePortaria
 from app.portaria.forms import CadastroMotoristaForm, BuscarMotoristaForm, ControlePortariaForm, FiltroHistoricoForm
+from app.embarques.models import Embarque
+from app.monitoramento.models import EntregaMonitorada
+from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
 
 portaria_bp = Blueprint('portaria', __name__, url_prefix='/portaria')
 
@@ -225,7 +229,6 @@ def registrar_movimento():
                     
                     # Atualiza data_embarque do embarque vinculado automaticamente
                     if registro.embarque_id and registro.embarque:
-                        from app.embarques.models import Embarque
                         embarque = registro.embarque
                         if not embarque.data_embarque:  # Só atualiza se não estiver preenchida
                             embarque.data_embarque = registro.data_saida
@@ -234,7 +237,6 @@ def registrar_movimento():
                             
                             # Sincroniza com sistema de entregas para cada item do embarque
                             if embarque.itens:
-                                from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
                                 print(f"[DEBUG] Sincronizando {len(embarque.itens)} itens com sistema de entregas...")
                                 
                                 for item in embarque.itens:
@@ -257,7 +259,6 @@ def registrar_movimento():
     except Exception as e:
         print(f"[DEBUG] Erro capturado: {str(e)}")
         print(f"[DEBUG] Tipo do erro: {type(e)}")
-        import traceback
         traceback.print_exc()
         
         db.session.rollback()
@@ -366,7 +367,6 @@ def api_embarques():
     """
     termo = request.args.get('q', '')
     
-    from app.embarques.models import Embarque
     query = Embarque.query.filter_by(status='ativo')
     
     if termo:
@@ -405,8 +405,6 @@ def api_embarques_disponiveis():
     API para buscar embarques disponíveis para vincular à portaria
     (todos os embarques ativos, incluindo os já vinculados)
     """
-    from app.embarques.models import Embarque
-    
     # Busca todos os embarques ativos (não apenas os sem data_embarque) - SEM LIMITE para portaria
     embarques = Embarque.query.filter(
         Embarque.status == 'ativo'
@@ -463,7 +461,6 @@ def adicionar_embarque():
             return redirect(url_for('portaria.detalhes_veiculo', registro_id=registro_id))
         
         # Busca o embarque
-        from app.embarques.models import Embarque
         embarque = Embarque.query.get_or_404(embarque_id)
         
         # Verifica se o embarque já está vinculado a outro veículo
@@ -485,8 +482,6 @@ def adicionar_embarque():
                 
                 # Ajusta sistema de entregas para cada NF do embarque substituído
                 if embarque_substituido.itens:
-                    from app.monitoramento.models import EntregaMonitorada
-                    
                     for item in embarque_substituido.itens:
                         if item.nota_fiscal:
                             entrega = EntregaMonitorada.query.filter_by(numero_nf=item.nota_fiscal).first()
@@ -541,7 +536,6 @@ def adicionar_embarque():
             
             # 🔧 CORREÇÃO: Sincroniza com sistema de entregas para cada item do embarque
             if embarque.itens:
-                from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
                 print(f"[DEBUG] Sincronizando {len(embarque.itens)} itens com sistema de entregas...")
                 
                 for item in embarque.itens:
@@ -595,8 +589,6 @@ def excluir_embarque():
             
             # 2. Ajusta sistema de entregas para cada NF do embarque
             if embarque.itens:
-                from app.monitoramento.models import EntregaMonitorada
-                
                 for item in embarque.itens:
                     if item.nota_fiscal:
                         entrega = EntregaMonitorada.query.filter_by(numero_nf=item.nota_fiscal).first()
