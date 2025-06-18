@@ -264,6 +264,27 @@ def listar_relatorios():
         query = query.filter(RelatorioFaturamentoImportado.nome_cliente.ilike(f"%{nome_cliente}%"))
     if vendedor := request.args.get('vendedor'):
         query = query.filter(RelatorioFaturamentoImportado.vendedor.ilike(f"%{vendedor}%"))
+    
+    # 🆕 NOVOS FILTROS SOLICITADOS
+    if incoterm := request.args.get('incoterm'):
+        query = query.filter(RelatorioFaturamentoImportado.incoterm.ilike(f"%{incoterm}%"))
+    if origem := request.args.get('origem'):
+        query = query.filter(RelatorioFaturamentoImportado.origem.ilike(f"%{origem}%"))
+    
+    # 🆕 FILTROS DE DATA (DE/ATÉ)
+    if data_de := request.args.get('data_de'):
+        try:
+            data_de_parsed = datetime.strptime(data_de, '%Y-%m-%d').date()
+            query = query.filter(RelatorioFaturamentoImportado.data_fatura >= data_de_parsed)
+        except ValueError:
+            pass
+    
+    if data_ate := request.args.get('data_ate'):
+        try:
+            data_ate_parsed = datetime.strptime(data_ate, '%Y-%m-%d').date()
+            query = query.filter(RelatorioFaturamentoImportado.data_fatura <= data_ate_parsed)
+        except ValueError:
+            pass
 
     # 2) Descobrir qual coluna e direção de ordenação
     sort = request.args.get('sort', 'data_fatura')      # padrão
@@ -299,7 +320,14 @@ def listar_relatorios():
     per_page = 20
     paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
 
-    # 6) Render
+    # 6) Buscar valores únicos para os filtros dropdown (apenas Incoterm)
+    incoterms_unicos = db.session.query(RelatorioFaturamentoImportado.incoterm).distinct().filter(
+        RelatorioFaturamentoImportado.incoterm.isnot(None),
+        RelatorioFaturamentoImportado.incoterm != ''
+    ).order_by(RelatorioFaturamentoImportado.incoterm).all()
+    incoterms_list = [item[0] for item in incoterms_unicos if item[0]]
+
+    # 7) Render
     return render_template(
         'faturamento/listar_relatorios.html',
         relatorios=paginacao.items,
@@ -307,6 +335,7 @@ def listar_relatorios():
         sort=sort,
         direction=direction,
         mostrar_inativas=mostrar_inativas,
+        incoterms_list=incoterms_list,
     )
 
 def sincronizar_nfs_pendentes_embarques(nfs_importadas):

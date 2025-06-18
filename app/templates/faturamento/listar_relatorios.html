@@ -1,5 +1,12 @@
 {% extends 'base.html' %}
 {% block content %}
+
+{# Variável para preservar filtros na ordenação #}
+{% set filtros_atuais = request.args.copy() %}
+{% if 'sort' in filtros_atuais %}{% set _ = filtros_atuais.pop('sort') %}{% endif %}
+{% if 'direction' in filtros_atuais %}{% set _ = filtros_atuais.pop('direction') %}{% endif %}
+{% if 'page' in filtros_atuais %}{% set _ = filtros_atuais.pop('page') %}{% endif %}
+
 <div class="container-fluid mt-4">
   <h2>Relatórios de Faturamento Importados</h2>
   
@@ -33,41 +40,100 @@
     </div>
   </div>
 
-  <!-- =========== FILTROS =========== -->
-  <form method="GET" class="row g-3 mb-4">
-    <div class="col-md-3">
-      <input type="text"
-             name="numero_nf"
-             class="form-control"
-             placeholder="Número NF"
-             value="{{ request.args.get('numero_nf', '') }}">
-    </div>
-    <div class="col-md-3">
-      <input type="text"
-             name="cnpj_cliente"
-             class="form-control"
-             placeholder="CNPJ Cliente"
-             value="{{ request.args.get('cnpj_cliente', '') }}">
-    </div>
-    <div class="col-md-3">
-      <input type="text"
-             name="nome_cliente"
-             class="form-control"
-             placeholder="Nome Cliente"
-             value="{{ request.args.get('nome_cliente', '') }}">
-    </div>
-    <div class="col-md-3">
-      <input type="text"
-             name="vendedor"
-             class="form-control"
-             placeholder="Vendedor"
-             value="{{ request.args.get('vendedor', '') }}">
+  <!-- =========== FILTROS EXPANDIDOS =========== -->
+  <form method="GET" class="mb-4" id="form-filtros-faturamento">
+    <!-- Primeira linha de filtros -->
+    <div class="row g-3 mb-3">
+      <div class="col-md-3">
+        <label class="form-label">Número NF</label>
+        <input type="text"
+               name="numero_nf"
+               class="form-control"
+               placeholder="Número NF"
+               value="{{ request.args.get('numero_nf', '') }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">CNPJ Cliente</label>
+        <input type="text"
+               name="cnpj_cliente"
+               class="form-control"
+               placeholder="CNPJ Cliente"
+               value="{{ request.args.get('cnpj_cliente', '') }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Nome Cliente</label>
+        <input type="text"
+               name="nome_cliente"
+               class="form-control"
+               placeholder="Nome Cliente"
+               value="{{ request.args.get('nome_cliente', '') }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Vendedor</label>
+        <input type="text"
+               name="vendedor"
+               class="form-control"
+               placeholder="Vendedor"
+               value="{{ request.args.get('vendedor', '') }}">
+      </div>
     </div>
 
-    <div class="col-md-3">
-      <button type="submit" class="btn btn-primary w-100">
-        Filtrar
-      </button>
+    <!-- 🆕 SEGUNDA LINHA - NOVOS FILTROS SOLICITADOS -->
+    <div class="row g-3 mb-3">
+      <div class="col-md-2">
+        <label class="form-label">🏷️ Incoterm</label>
+        <select name="incoterm" class="form-select">
+          <option value="">Todos</option>
+          {% for incoterm in incoterms_list %}
+            <option value="{{ incoterm }}" 
+                    {% if request.args.get('incoterm') == incoterm %}selected{% endif %}>
+              {{ incoterm }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">📦 Pedido</label>
+        <input type="text"
+               name="origem"
+               class="form-control"
+               placeholder="Número do Pedido"
+               value="{{ request.args.get('origem', '') }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">📅 Data de Fatura (De)</label>
+        <input type="date"
+               name="data_de"
+               class="form-control"
+               value="{{ request.args.get('data_de', '') }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">📅 Data de Fatura (Até)</label>
+        <input type="date"
+               name="data_ate"
+               class="form-control"
+               value="{{ request.args.get('data_ate', '') }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">&nbsp;</label>
+        <button type="submit" class="btn btn-primary w-100">
+          🔍 Filtrar
+        </button>
+      </div>
+    </div>
+
+    <!-- Botão para limpar filtros -->
+    <div class="row">
+      <div class="col-12">
+        <a href="{{ url_for('faturamento.listar_relatorios') }}" class="btn btn-outline-secondary btn-sm">
+          🗑️ Limpar Filtros
+        </a>
+        <span class="text-muted ms-3">
+          {% if request.args %}
+            <small>Filtros ativos: {{ request.args|length }}</small>
+          {% endif %}
+        </span>
+      </div>
     </div>
   </form>
 
@@ -88,7 +154,7 @@
         {# NF #}
         {% set next_dir = 'desc' if sort=='numero_nf' and direction=='asc' else 'asc' %}
         <th>
-          <a href="?sort=numero_nf&direction={{ next_dir }}">
+          <a href="{{ url_for('faturamento.listar_relatorios', sort='numero_nf', direction=next_dir, **filtros_atuais) }}">
             NF
             {% if sort=='numero_nf' %}
               <span class="badge text-secondary">
@@ -101,7 +167,7 @@
         {# ORIGEM #}
         {% set next_dir = 'desc' if sort=='origem' and direction=='asc' else 'asc' %}
         <th>
-          <a href="?sort=origem&direction={{ next_dir }}">
+          <a href="{{ url_for('faturamento.listar_relatorios', sort='origem', direction=next_dir, **filtros_atuais) }}">
             Origem
             {% if sort=='origem' %}
               <span class="badge text-secondary">
@@ -127,7 +193,7 @@
         {# Data Fatura #}
         {% set next_dir = 'desc' if sort=='data_fatura' and direction=='asc' else 'asc' %}
         <th>
-          <a href="?sort=data_fatura&direction={{ next_dir }}">
+          <a href="{{ url_for('faturamento.listar_relatorios', sort='data_fatura', direction=next_dir, **filtros_atuais) }}">
             Data Fatura
             {% if sort=='data_fatura' %}
               <span class="badge text-secondary">
@@ -205,7 +271,7 @@
         {# Incoterm #}
         {% set next_dir = 'desc' if sort=='incoterm' and direction=='asc' else 'asc' %}
         <th>
-          <a href="?sort=incoterm&direction={{ next_dir }}">
+          <a href="{{ url_for('faturamento.listar_relatorios', sort='incoterm', direction=next_dir, **filtros_atuais) }}">
             Incoterm
             {% if sort=='incoterm' %}
               <span class="badge text-secondary">
@@ -432,6 +498,52 @@ function inativarSelecionadas() {
 // Inicializa contador na carga da página
 document.addEventListener('DOMContentLoaded', function() {
   atualizarContador();
+  
+  // ===========================
+  // AUTO SUBMIT PARA CAMPOS DE DATA
+  // ===========================
+  
+  // Seleciona APENAS os campos de data do formulário de filtros
+  const camposDataFiltros = document.querySelectorAll('#form-filtros-faturamento input[type="date"]');
+  
+  // Função para auto submit
+  function autoSubmitFiltros() {
+    const form = this.closest('form');
+    if (form && form.id === 'form-filtros-faturamento') {
+      form.submit();
+    }
+  }
+  
+  // Adiciona auto submit APENAS para os campos de filtro
+  camposDataFiltros.forEach(campo => {
+    campo.addEventListener('change', autoSubmitFiltros);
+  });
+  
+  // Auto submit para selects (apenas Incoterm agora)
+  const selectsFiltros = document.querySelectorAll('#form-filtros-faturamento select');
+  selectsFiltros.forEach(select => {
+    select.addEventListener('change', autoSubmitFiltros);
+  });
+
+  // ===========================
+  // PRESERVAR FILTROS NOS LINKS DE ORDENAÇÃO
+  // ===========================
+  const currentUrl = new URL(window.location);
+  
+  // Para todos os links de ordenação na tabela
+  document.querySelectorAll('th a').forEach(link => {
+    const linkUrl = new URL(link.href, window.location.origin);
+    
+    // Preserva todos os parâmetros atuais exceto sort, direction e page
+    currentUrl.searchParams.forEach((value, key) => {
+      if (key !== 'sort' && key !== 'direction' && key !== 'page') {
+        linkUrl.searchParams.set(key, value);
+      }
+    });
+    
+    // Atualiza o href do link
+    link.href = linkUrl.toString();
+  });
 });
 </script>
 {% endblock %}
