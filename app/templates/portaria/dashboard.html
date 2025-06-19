@@ -133,6 +133,60 @@
     </div>
   </div>
 
+  <!-- Embarques Pendentes -->
+  <div class="card mt-4">
+    <div class="card-header bg-warning text-dark">
+      <h5 class="mb-0"><i class="fas fa-truck me-2"></i>Embarques Pendentes (sem data de embarque)</h5>
+    </div>
+    <div class="card-body">
+      {% if embarques_pendentes %}
+      <div class="table-responsive">
+        <table class="table table-sm table-striped">
+          <thead class="table-dark">
+            <tr>
+              <th>Embarque</th>
+              <th>Transportadora</th>
+              <th>Data Prevista</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for embarque in embarques_pendentes %}
+            <tr>
+              <td>
+                <strong>#{{ embarque.numero }}</strong>
+              </td>
+              <td>
+                {{ embarque.transportadora.razao_social if embarque.transportadora else '-' }}
+              </td>
+              <td>
+                {{ embarque.data_prevista_embarque | formatar_data_segura if embarque.data_prevista_embarque else '-' }}
+              </td>
+              <td>
+                <a href="{{ url_for('embarques.visualizar_embarque', id=embarque.id) }}" 
+                   class="btn btn-sm btn-outline-primary">
+                  <i class="fas fa-eye"></i> Ver
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-2">
+        <small class="text-muted">
+          <i class="fas fa-info-circle"></i> 
+          {{ embarques_pendentes|length }} embarque(s) aguardando saída na portaria
+        </small>
+      </div>
+      {% else %}
+      <div class="alert alert-success">
+        <i class="fas fa-check-circle"></i> Todos os embarques ativos já saíram da portaria.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
   <!-- Card dos Veículos do Dia -->
   <div class="card mt-4">
     <div class="card-header bg-dark text-white">

@@ -17,26 +17,62 @@
       <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h6>
     </div>
     <div class="card-body">
-      <form method="GET" class="row g-3">
-        <div class="col-md-4">
-          {{ form.data_inicio.label(class="form-label") }}
-          {{ form.data_inicio(class="form-control", value=data_inicio | formatar_data_hora_brasil if data_inicio else '') }}
+      <form method="GET">
+        <!-- Primeira linha: Datas -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-3">
+            {{ form.data_inicio.label(class="form-label") }}
+            {{ form.data_inicio(value=data_inicio | formatar_data_hora_brasil if data_inicio else '') }}
+          </div>
+          <div class="col-md-3">
+            {{ form.data_fim.label(class="form-label") }}
+            {{ form.data_fim(value=data_fim | formatar_data_hora_brasil if data_fim else '') }}
+          </div>
+          <div class="col-md-3">
+            {{ form.embarque_numero.label(class="form-label") }}
+            {{ form.embarque_numero() }}
+          </div>
+          <div class="col-md-3">
+            {{ form.tem_embarque.label(class="form-label") }}
+            {{ form.tem_embarque() }}
+          </div>
         </div>
-        <div class="col-md-4">
-          {{ form.data_fim.label(class="form-label") }}
-          {{ form.data_fim(class="form-control", value=data_fim | formatar_data_hora_brasil if data_fim else '') }}
-        </div>
-        <div class="col-md-4 d-flex align-items-end">
-          <div class="btn-group w-100">
-            {{ form.filtrar(class="btn btn-primary") }}
-            <a href="{{ url_for('portaria.historico') }}" class="btn btn-outline-secondary">
-              <i class="fas fa-times"></i> Limpar
-            </a>
+        
+        <!-- Segunda linha: Filtros específicos -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-3">
+            {{ form.tipo_carga.label(class="form-label") }}
+            {{ form.tipo_carga() }}
+          </div>
+          <div class="col-md-3">
+            {{ form.tipo_veiculo_id.label(class="form-label") }}
+            {{ form.tipo_veiculo_id() }}
+          </div>
+          <div class="col-md-3">
+            {{ form.status.label(class="form-label") }}
+            {{ form.status() }}
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="btn-group w-100">
+              {{ form.filtrar(class="btn btn-primary") }}
+              <a href="{{ url_for('portaria.historico') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-times"></i> Limpar
+              </a>
+            </div>
           </div>
         </div>
       </form>
     </div>
   </div>
+
+  <!-- Resumo dos Resultados -->
+  {% if filtros_aplicados %}
+  <div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> 
+    Encontrados <strong>{{ registros|length }}</strong> registro(s) com os filtros aplicados.
+    <a href="{{ url_for('portaria.historico') }}" class="alert-link">Limpar filtros</a>
+  </div>
+  {% endif %}
 
   <!-- Resumo -->
   {% if registros %}

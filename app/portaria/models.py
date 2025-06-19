@@ -1,5 +1,8 @@
 from datetime import datetime
 from app import db
+from app.embarques.models import Embarque
+from app.veiculos.models import Veiculo
+
 
 class Motorista(db.Model):
     """
@@ -172,16 +175,48 @@ class ControlePortaria(db.Model):
         return dentro + aguardando + saiu
     
     @staticmethod
-    def historico(data_inicio=None, data_fim=None):
+    def historico(data_inicio=None, data_fim=None, embarque_numero=None, tem_embarque=None, 
+                 tipo_carga=None, tipo_veiculo_id=None, status=None):
         """Retorna histórico de registros com filtros opcionais"""
+        
         query = ControlePortaria.query.join(Motorista)
         
+        # Filtros de data
         if data_inicio:
             query = query.filter(ControlePortaria.data_chegada >= data_inicio)
         if data_fim:
             query = query.filter(ControlePortaria.data_chegada <= data_fim)
         
-        return query.order_by(
+        # Filtro por número do embarque
+        if embarque_numero:
+            query = query.join(Embarque).filter(
+                Embarque.numero.like(f'%{embarque_numero}%')
+            )
+        
+        # Filtro por presença de embarque
+        if tem_embarque == 'sim':
+            query = query.filter(ControlePortaria.embarque_id.isnot(None))
+        elif tem_embarque == 'nao':
+            query = query.filter(ControlePortaria.embarque_id.is_(None))
+        
+        # Filtro por tipo de carga
+        if tipo_carga:
+            query = query.filter(ControlePortaria.tipo_carga == tipo_carga)
+        
+        # Filtro por tipo de veículo
+        if tipo_veiculo_id:
+            query = query.filter(ControlePortaria.tipo_veiculo_id == tipo_veiculo_id)
+        
+        # Filtro por status (calculado dinamicamente)
+        # Este será aplicado após a query base
+        
+        registros = query.order_by(
             ControlePortaria.data_chegada.desc(),
             ControlePortaria.hora_chegada.desc()
         ).all()
+        
+        # Aplicar filtro de status se especificado
+        if status:
+            registros = [r for r in registros if r.status == status]
+        
+        return registros

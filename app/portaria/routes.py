@@ -38,12 +38,14 @@ def salvar_foto_documento(foto):
         current_app.logger.error(f"Erro ao salvar foto do motorista: {str(e)}")
         return None
 
+
+
 @portaria_bp.route('/')
 @login_required
 @require_portaria()  # 🔒 BLOQUEADO para vendedores
 def dashboard():
     """
-    Dashboard principal da portaria - mostra veículos do dia
+    Dashboard principal da portaria - mostra veículos do dia e embarques pendentes
     """
     form_buscar = BuscarMotoristaForm()
     form_controle = ControlePortariaForm()
@@ -51,11 +53,18 @@ def dashboard():
     # Busca veículos do dia ordenados conforme especificação
     veiculos_hoje = ControlePortaria.veiculos_do_dia()
     
+    # Busca embarques pendentes (sem data de embarque)
+    embarques_pendentes = Embarque.query.filter(
+        Embarque.status == 'ativo',
+        Embarque.data_embarque.is_(None)
+    ).order_by(Embarque.numero.desc()).all()
+    
     return render_template(
         'portaria/dashboard.html',
         form_buscar=form_buscar,
         form_controle=form_controle,
-        veiculos_hoje=veiculos_hoje
+        veiculos_hoje=veiculos_hoje,
+        embarques_pendentes=embarques_pendentes
     )
 
 @portaria_bp.route('/buscar_motorista', methods=['POST'])
@@ -277,36 +286,67 @@ def registrar_movimento():
 @login_required
 def historico():
     """
-    Exibe histórico completo da portaria com filtros
+    Exibe histórico completo da portaria com filtros expandidos
     """
-    form = FiltroHistoricoForm()
+    form = FiltroHistoricoForm(request.args)
     registros = []
+    filtros_aplicados = False
     
-    # Aplica filtros se fornecidos
+    # Processa filtros
     data_inicio = None
     data_fim = None
+    embarque_numero = request.args.get('embarque_numero', '').strip()
+    tem_embarque = request.args.get('tem_embarque', '').strip()
+    tipo_carga = request.args.get('tipo_carga', '').strip()
+    tipo_veiculo_id = request.args.get('tipo_veiculo_id', '').strip()
+    status = request.args.get('status', '').strip()
     
+    # Converte datas
     if request.args.get('data_inicio'):
         try:
             data_inicio = datetime.strptime(request.args.get('data_inicio'), '%Y-%m-%d').date()
+            filtros_aplicados = True
         except ValueError:
             flash('Data de início inválida!', 'warning')
     
     if request.args.get('data_fim'):
         try:
             data_fim = datetime.strptime(request.args.get('data_fim'), '%Y-%m-%d').date()
+            filtros_aplicados = True
         except ValueError:
             flash('Data de fim inválida!', 'warning')
     
-    # Busca registros com filtros
-    registros = ControlePortaria.historico(data_inicio, data_fim)
+    # Converte tipo_veiculo_id para int se fornecido
+    tipo_veiculo_id_int = None
+    if tipo_veiculo_id:
+        try:
+            tipo_veiculo_id_int = int(tipo_veiculo_id)
+            filtros_aplicados = True
+        except ValueError:
+            pass
+    
+    # Verifica se há filtros aplicados
+    if embarque_numero or tem_embarque or tipo_carga or status:
+        filtros_aplicados = True
+    
+    # Busca registros com todos os filtros
+    registros = ControlePortaria.historico(
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        embarque_numero=embarque_numero if embarque_numero else None,
+        tem_embarque=tem_embarque if tem_embarque else None,
+        tipo_carga=tipo_carga if tipo_carga else None,
+        tipo_veiculo_id=tipo_veiculo_id_int,
+        status=status if status else None
+    )
     
     return render_template(
         'portaria/historico.html',
         form=form,
         registros=registros,
         data_inicio=data_inicio,
-        data_fim=data_fim
+        data_fim=data_fim,
+        filtros_aplicados=filtros_aplicados
     )
 
 @portaria_bp.route('/listar_motoristas')

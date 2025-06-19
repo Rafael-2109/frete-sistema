@@ -180,14 +180,82 @@ class FiltroHistoricoForm(FlaskForm):
     data_inicio = StringField(
         'Data Início',
         validators=[Optional()],
-        render_kw={'type': 'date'}
+        render_kw={'type': 'date', 'class': 'form-control'}
     )
     
     data_fim = StringField(
         'Data Fim',
         validators=[Optional()],
-        render_kw={'type': 'date'}
+        render_kw={'type': 'date', 'class': 'form-control'}
+    )
+    
+    embarque_numero = StringField(
+        'Número do Embarque',
+        validators=[Optional()],
+        render_kw={'placeholder': 'Digite o número do embarque', 'class': 'form-control'}
+    )
+    
+    tem_embarque = SelectField(
+        'Vinculado a Embarque',
+        choices=[
+            ('', 'Todos os registros'),
+            ('sim', 'Com embarque vinculado'),
+            ('nao', 'Sem embarque vinculado')
+        ],
+        validators=[Optional()],
+        render_kw={'class': 'form-control'}
+    )
+    
+    tipo_carga = SelectField(
+        'Tipo de Carga',
+        choices=[
+            ('', 'Todos os tipos'),
+            ('Coleta', 'Coleta'),
+            ('Coleta + Devolução', 'Coleta + Devolução'),
+            ('Devolução', 'Devolução'),
+            ('Entrega', 'Entrega'),
+            ('Coleta de Moto', 'Coleta de Moto')
+        ],
+        validators=[Optional()],
+        render_kw={'class': 'form-control'}
+    )
+    
+    tipo_veiculo_id = SelectField(
+        'Tipo de Veículo',
+        coerce=coerce_int_or_none,
+        validators=[Optional()],
+        choices=[],  # Será populado dinamicamente
+        render_kw={'class': 'form-control'}
+    )
+    
+    status = SelectField(
+        'Status',
+        choices=[
+            ('', 'Todos os status'),
+            ('PENDENTE', 'Pendente'),
+            ('AGUARDANDO', 'Aguardando'),
+            ('DENTRO', 'Carregando'),
+            ('SAIU', 'Saiu para entrega')
+        ],
+        validators=[Optional()],
+        render_kw={'class': 'form-control'}
     )
     
     filtrar = SubmitField('Filtrar')
     limpar = SubmitField('Limpar Filtros')
+    
+    def __init__(self, *args, **kwargs):
+        super(FiltroHistoricoForm, self).__init__(*args, **kwargs)
+        
+        # Carrega opções de tipos de veículos
+        self.tipo_veiculo_id.choices = [('', 'Todos os tipos')]
+        try:
+            from app.veiculos.models import Veiculo
+            veiculos = Veiculo.query.order_by(Veiculo.nome).all()
+            self.tipo_veiculo_id.choices.extend([
+                (v.id, v.nome) for v in veiculos
+            ])
+        except:
+            pass  # Em caso de erro na consulta
+
+
