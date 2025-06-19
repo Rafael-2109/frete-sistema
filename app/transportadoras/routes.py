@@ -105,6 +105,7 @@ def editar_transportadora(id):
             transportadora.uf = form.uf.data.upper()
             transportadora.optante = form.optante.data == 'True'
             transportadora.condicao_pgto = form.condicao_pgto.data
+            transportadora.freteiro = form.freteiro.data == 'True'
             
             db.session.commit()
             flash('Transportadora atualizada com sucesso!', 'success')
@@ -117,8 +118,9 @@ def editar_transportadora(id):
             db.session.rollback()
             flash(f'Erro ao atualizar transportadora: {str(e)}', 'danger')
     
-    # Ajusta o valor do campo optante para string antes de renderizar o form
+    # Ajusta os valores dos campos boolean para string antes de renderizar o form
     form.optante.data = str(transportadora.optante)
+    form.freteiro.data = str(transportadora.freteiro)
     
     return render_template('transportadoras/transportadoras.html', 
                          form=form, 
