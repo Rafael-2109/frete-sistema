@@ -2641,6 +2641,7 @@ def lancamento_freteiros():
         if fretes_pendentes or despesas_pendentes:
             # Organiza fretes por embarque
             fretes_por_embarque = {}
+            total_valor = 0
             for frete in fretes_pendentes:
                 embarque_id = frete.embarque_id
                 if embarque_id not in fretes_por_embarque:
@@ -2650,15 +2651,22 @@ def lancamento_freteiros():
                         'total_cotado': 0,
                         'total_considerado': 0
                     }
+                
+                # Adiciona peso total ao frete se não existir
+                if not hasattr(frete, 'peso_total'):
+                    frete.peso_total = sum([item.peso for item in frete.embarque.itens if item.peso]) if frete.embarque else 0
+                
                 fretes_por_embarque[embarque_id]['fretes'].append(frete)
                 fretes_por_embarque[embarque_id]['total_cotado'] += frete.valor_cotado or 0
                 fretes_por_embarque[embarque_id]['total_considerado'] += frete.valor_considerado or frete.valor_cotado or 0
+                total_valor += frete.valor_considerado or frete.valor_cotado or 0
             
             dados_freteiros.append({
                 'freteiro': freteiro,
                 'fretes_por_embarque': fretes_por_embarque,
-                'despesas_pendentes': despesas_pendentes,
-                'total_pendencias': len(fretes_pendentes) + len(despesas_pendentes)
+                'despesas_extras': despesas_pendentes,
+                'total_pendencias': len(fretes_pendentes) + len(despesas_pendentes),
+                'total_valor': total_valor + sum([d.valor_despesa or 0 for d in despesas_pendentes])
             })
     
     return render_template('fretes/lancamento_freteiros.html', 
@@ -2697,12 +2705,45 @@ def emitir_fatura_freteiro(transportadora_id):
             valor_total_fatura = 0
             ctes_criados = []
             
+            # Captura valores considerados alterados por embarque (se houver)
+            valores_considerados_embarque = {}
+            for key, value in request.form.items():
+                if key.startswith('valor_considerado_') and value:
+                    embarque_id = key.replace('valor_considerado_', '')
+                    try:
+                        valores_considerados_embarque[int(embarque_id)] = float(value)
+                    except (ValueError, TypeError):
+                        pass
+            
+            # Aplica rateio por peso se valores foram alterados
+            rateios_por_embarque = {}
+            for embarque_id, valor_novo in valores_considerados_embarque.items():
+                # Busca fretes do embarque selecionados
+                fretes_embarque = [
+                    Frete.query.get(int(fid)) for fid in fretes_selecionados 
+                    if Frete.query.get(int(fid)) and Frete.query.get(int(fid)).embarque_id == embarque_id
+                ]
+                
+                if fretes_embarque:
+                    # Calcula peso total
+                    peso_total = sum([
+                        sum([item.peso for item in frete.embarque.itens if item.peso]) 
+                        for frete in fretes_embarque if frete.embarque
+                    ])
+                    
+                    if peso_total > 0:
+                        # Calcula rateio por peso
+                        for frete in fretes_embarque:
+                            peso_frete = sum([item.peso for item in frete.embarque.itens if item.peso]) if frete.embarque else 0
+                            valor_rateado = (peso_frete / peso_total) * valor_novo
+                            rateios_por_embarque[frete.id] = valor_rateado
+            
             # Processa fretes selecionados
             for frete_id in fretes_selecionados:
                 frete = Frete.query.get(int(frete_id))
                 if frete and frete.transportadora_id == transportadora_id:
-                    # Preenche dados do CTe
-                    valor_considerado = frete.valor_considerado or frete.valor_cotado
+                    # Usa valor rateado se existe, senão usa valor original
+                    valor_considerado = rateios_por_embarque.get(frete.id) or frete.valor_considerado or frete.valor_cotado
                     valor_total_fatura += valor_considerado
                     
                     # Gera nome do CTe

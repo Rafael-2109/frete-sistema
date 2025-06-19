@@ -29,8 +29,11 @@
                         <form method="POST" 
                               action="{{ url_for('fretes.emitir_fatura_freteiro', transportadora_id=dados.freteiro.id) }}" 
                               class="fatura-form" 
-                              data-transportadora-id="{{ dados.freteiro.id }}">
+                              data-transportadora-id="{{ dados.freteiro.id }}"
+                              id="form_{{ dados.freteiro.id }}">
                             {{ form.hidden_tag() }}
+                            <!-- Campos hidden para valores considerados alterados -->
+                            <div id="valores_considerados_{{ dados.freteiro.id }}"></div>
                             <div class="input-group">
                                 {{ form.data_vencimento(class="form-control", required=True) }}
                                 <button type="submit" class="btn btn-success emitir-fatura-btn" 
@@ -46,38 +49,144 @@
             
             <div class="card-body">
                 {% if dados.fretes_por_embarque %}
-                    <h6>Fretes Pendentes</h6>
+                    <h6><i class="fas fa-truck-loading"></i> Fretes Pendentes</h6>
+                    
                     {% for embarque_id, embarque_data in dados.fretes_por_embarque.items() %}
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Sel</th>
-                                        <th>Cliente</th>
-                                        <th>NFs</th>
-                                        <th>Destino</th>
-                                        <th>Valor</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for frete in embarque_data.fretes %}
-                                    <tr>
-                                        <td>
-                                            <input type="checkbox" class="form-check-input" 
-                                                   name="fretes_selecionados" 
-                                                   value="{{ frete.id }}" 
+                        <!-- Cabeçalho do Embarque -->
+                        <div class="card mb-3 border-secondary">
+                            <div class="card-header bg-light">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <h6 class="mb-0">
+                                            <input type="checkbox" class="form-check-input me-2 embarque-checkbox" 
+                                                   id="embarque_{{ embarque_id }}" 
+                                                   data-embarque-id="{{ embarque_id }}"
                                                    data-transportadora-id="{{ dados.freteiro.id }}">
-                                        </td>
-                                        <td>{{ frete.nome_cliente[:30] }}</td>
-                                        <td>{{ frete.numeros_nfs[:20] }}...</td>
-                                        <td>{{ frete.cidade_destino }}/{{ frete.uf_destino }}</td>
-                                        <td>R$ {{ "{:,.2f}".format(frete.valor_considerado or frete.valor_cotado or 0) }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                                            <i class="fas fa-box"></i>
+                                            <a href="{{ url_for('embarques.visualizar_embarque', id=embarque_id) }}" 
+                                               target="_blank" class="text-decoration-none">
+                                                Embarque {{ embarque_id }}
+                                            </a>
+                                            <span class="badge bg-info ms-2">{{ embarque_data.fretes|length }} fretes</span>
+                                        </h6>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        {% set total_embarque = embarque_data.fretes | sum(attribute='valor_considerado') or embarque_data.fretes | sum(attribute='valor_cotado') or 0 %}
+                                        <strong>Subtotal: R$ <span id="subtotal_{{ embarque_id }}">{{ "{:,.2f}".format(total_embarque) }}</span></strong>
+                                        <div class="mt-1">
+                                            <small class="text-muted">Valor Considerado:</small>
+                                            <input type="number" step="0.01" min="0" 
+                                                   class="form-control form-control-sm d-inline-block valor-considerado"
+                                                   style="width: 120px;" 
+                                                   id="valor_considerado_{{ embarque_id }}"
+                                                   data-embarque-id="{{ embarque_id }}"
+                                                   data-transportadora-id="{{ dados.freteiro.id }}"
+                                                   data-total-original="{{ total_embarque }}"
+                                                   placeholder="{{ "{:.2f}".format(total_embarque) }}">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Tabela de Fretes do Embarque -->
+                            <div class="card-body p-2">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped mb-0">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th width="40">Sel</th>
+                                                <th width="300">Cliente</th>
+                                                <th width="120">NFs</th>
+                                                <th width="200">Destino</th>
+                                                <th width="80">Peso</th>
+                                                <th width="100">Valor Cotado</th>
+                                                <th width="100">Valor Considerado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for frete in embarque_data.fretes %}
+                                            <tr class="frete-row" data-frete-id="{{ frete.id }}">
+                                                <td>
+                                                    <input type="checkbox" class="form-check-input frete-checkbox" 
+                                                           name="fretes_selecionados" 
+                                                           value="{{ frete.id }}" 
+                                                           data-embarque-id="{{ embarque_id }}"
+                                                           data-transportadora-id="{{ dados.freteiro.id }}"
+                                                           data-peso="{{ frete.peso_total or 0 }}"
+                                                           data-valor-cotado="{{ frete.valor_cotado or 0 }}"
+                                                           data-valor-considerado="{{ frete.valor_considerado or frete.valor_cotado or 0 }}">
+                                                </td>
+                                                <td class="text-truncate" title="{{ frete.nome_cliente }}">
+                                                    {{ frete.nome_cliente[:35] }}...
+                                                </td>
+                                                <td>
+                                                    <small>{{ frete.numeros_nfs[:15] }}{% if frete.numeros_nfs|length > 15 %}...{% endif %}</small>
+                                                </td>
+                                                <td>{{ frete.cidade_destino }}/{{ frete.uf_destino }}</td>
+                                                <td class="text-end">
+                                                    <small>{{ "{:.0f}".format(frete.peso_total or 0) }} kg</small>
+                                                </td>
+                                                <td class="text-end">
+                                                    <small>R$ {{ "{:,.2f}".format(frete.valor_cotado or 0) }}</small>
+                                                </td>
+                                                <td class="text-end">
+                                                    <strong class="valor-considerado-individual" data-frete-id="{{ frete.id }}">
+                                                        R$ {{ "{:,.2f}".format(frete.valor_considerado or frete.valor_cotado or 0) }}
+                                                    </strong>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     {% endfor %}
+                    
+                    <!-- Total Geral da Transportadora -->
+                    <div class="alert alert-info">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Total Geral da Transportadora:</strong>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <strong class="h5">R$ <span id="total_geral_{{ dados.freteiro.id }}">{{ "{:,.2f}".format(dados.total_valor) }}</span></strong>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+                
+                {% if dados.despesas_extras %}
+                    <h6 class="mt-4"><i class="fas fa-receipt"></i> Despesas Extras Pendentes</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th width="40">Sel</th>
+                                    <th>Descrição</th>
+                                    <th>Frete</th>
+                                    <th width="100">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for despesa in dados.despesas_extras %}
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input" 
+                                               name="despesas_selecionadas" 
+                                               value="{{ despesa.id }}" 
+                                               data-transportadora-id="{{ dados.freteiro.id }}">
+                                    </td>
+                                    <td>{{ despesa.descricao }}</td>
+                                    <td>
+                                        <small>{{ despesa.frete.nome_cliente[:25] }} - {{ despesa.frete.numeros_nfs[:10] }}</small>
+                                    </td>
+                                    <td class="text-end">R$ {{ "{:,.2f}".format(despesa.valor) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 {% endif %}
             </div>
         </div>
@@ -87,12 +196,79 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    
+    // Função para calcular rateio por peso
+    function calcularRateio(embarqueId, valorTotal) {
+        const fretesEmbarque = document.querySelectorAll(`input[data-embarque-id="${embarqueId}"]`);
+        let pesoTotal = 0;
+        
+        // Calcula peso total
+        fretesEmbarque.forEach(frete => {
+            pesoTotal += parseFloat(frete.getAttribute('data-peso') || 0);
+        });
+        
+        if (pesoTotal === 0) return;
+        
+        // Distribui valor proporcionalmente ao peso
+        fretesEmbarque.forEach(frete => {
+            const peso = parseFloat(frete.getAttribute('data-peso') || 0);
+            const valorRateado = (peso / pesoTotal) * valorTotal;
+            
+            // Atualiza o valor considerado individual
+            const freteId = frete.value;
+            const elementoValor = document.querySelector(`.valor-considerado-individual[data-frete-id="${freteId}"]`);
+            if (elementoValor) {
+                elementoValor.textContent = `R$ ${valorRateado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+            }
+            
+            // Atualiza o data-attribute
+            frete.setAttribute('data-valor-considerado-rateado', valorRateado.toFixed(2));
+        });
+    }
+    
+    // Função para atualizar subtotal do embarque
+    function atualizarSubtotalEmbarque(embarqueId) {
+        const fretesEmbarque = document.querySelectorAll(`input[data-embarque-id="${embarqueId}"]`);
+        let subtotal = 0;
+        
+        fretesEmbarque.forEach(frete => {
+            const valorConsiderado = parseFloat(frete.getAttribute('data-valor-considerado-rateado') || 
+                                             frete.getAttribute('data-valor-considerado') || 0);
+            subtotal += valorConsiderado;
+        });
+        
+        const elementoSubtotal = document.getElementById(`subtotal_${embarqueId}`);
+        if (elementoSubtotal) {
+            elementoSubtotal.textContent = subtotal.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        }
+    }
+    
+    // Função para atualizar total geral da transportadora
+    function atualizarTotalGeral(transportadoraId) {
+        const todosFretes = document.querySelectorAll(`input[data-transportadora-id="${transportadoraId}"]`);
+        let totalGeral = 0;
+        
+        todosFretes.forEach(frete => {
+            if (frete.name !== 'data_vencimento') {
+                const valorConsiderado = parseFloat(frete.getAttribute('data-valor-considerado-rateado') || 
+                                                 frete.getAttribute('data-valor-considerado') || 0);
+                totalGeral += valorConsiderado;
+            }
+        });
+        
+        const elementoTotal = document.getElementById(`total_geral_${transportadoraId}`);
+        if (elementoTotal) {
+            elementoTotal.textContent = totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        }
+    }
+    
+    // Função para atualizar status do botão
     function atualizarStatusBotao(transportadoraId) {
         const dataVencimento = document.querySelector(`form[data-transportadora-id="${transportadoraId}"] input[name="data_vencimento"]`);
         const botaoEmitir = document.querySelector(`.emitir-fatura-btn[data-transportadora-id="${transportadoraId}"]`);
         const statusText = document.getElementById(`status_${transportadoraId}`);
         
-        const itensSelecionados = document.querySelectorAll(`input[name="fretes_selecionados"][data-transportadora-id="${transportadoraId}"]:checked`).length;
+        const itensSelecionados = document.querySelectorAll(`input[name="fretes_selecionados"][data-transportadora-id="${transportadoraId}"]:checked, input[name="despesas_selecionadas"][data-transportadora-id="${transportadoraId}"]:checked`).length;
         const temData = dataVencimento && dataVencimento.value.trim() !== '';
         
         if (!temData) {
@@ -103,10 +279,96 @@ document.addEventListener('DOMContentLoaded', function() {
             statusText.textContent = 'Selecione pelo menos um item';
         } else {
             botaoEmitir.disabled = false;
-            statusText.textContent = `Pronto: ${itensSelecionados} item(ns)`;
+            statusText.textContent = `Pronto: ${itensSelecionados} item(ns) selecionado(s)`;
         }
     }
     
+    // Event listeners para campos de valor considerado
+    document.querySelectorAll('.valor-considerado').forEach(input => {
+        input.addEventListener('change', function() {
+            const embarqueId = this.getAttribute('data-embarque-id');
+            const transportadoraId = this.getAttribute('data-transportadora-id');
+            const valorOriginal = parseFloat(this.getAttribute('data-total-original'));
+            const novoValor = parseFloat(this.value) || valorOriginal;
+            
+            // Se valor foi alterado, fazer rateio
+            if (novoValor !== valorOriginal) {
+                calcularRateio(embarqueId, novoValor);
+            }
+            
+            atualizarSubtotalEmbarque(embarqueId);
+            atualizarTotalGeral(transportadoraId);
+        });
+    });
+    
+    // Event listeners para checkboxes de embarque
+    document.querySelectorAll('.embarque-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const embarqueId = this.getAttribute('data-embarque-id');
+            const transportadoraId = this.getAttribute('data-transportadora-id');
+            const isChecked = this.checked;
+            
+            // Seleciona/deseleciona todos os fretes do embarque
+            document.querySelectorAll(`input[data-embarque-id="${embarqueId}"]`).forEach(frete => {
+                if (frete.name === 'fretes_selecionados') {
+                    frete.checked = isChecked;
+                }
+            });
+            
+            atualizarStatusBotao(transportadoraId);
+        });
+    });
+    
+    // Event listeners para checkboxes de transportadora
+    document.querySelectorAll('.transportadora-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const transportadoraId = this.getAttribute('data-transportadora-id');
+            const isChecked = this.checked;
+            
+            // Seleciona/deseleciona todos os itens da transportadora
+            document.querySelectorAll(`input[data-transportadora-id="${transportadoraId}"]`).forEach(item => {
+                if (item.name === 'fretes_selecionados' || item.name === 'despesas_selecionadas') {
+                    item.checked = isChecked;
+                }
+            });
+            
+            // Seleciona/deseleciona checkboxes de embarque
+            document.querySelectorAll(`.embarque-checkbox[data-transportadora-id="${transportadoraId}"]`).forEach(embarque => {
+                embarque.checked = isChecked;
+            });
+            
+            atualizarStatusBotao(transportadoraId);
+        });
+    });
+    
+    // Event listeners para checkboxes individuais de fretes
+    document.querySelectorAll('input[name="fretes_selecionados"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const transportadoraId = this.getAttribute('data-transportadora-id');
+            const embarqueId = this.getAttribute('data-embarque-id');
+            
+            // Verifica se todos os fretes do embarque estão selecionados
+            const fretesEmbarque = document.querySelectorAll(`input[name="fretes_selecionados"][data-embarque-id="${embarqueId}"]`);
+            const fretesSelecionados = document.querySelectorAll(`input[name="fretes_selecionados"][data-embarque-id="${embarqueId}"]:checked`);
+            
+            const checkboxEmbarque = document.getElementById(`embarque_${embarqueId}`);
+            if (checkboxEmbarque) {
+                checkboxEmbarque.checked = (fretesEmbarque.length === fretesSelecionados.length);
+            }
+            
+            atualizarStatusBotao(transportadoraId);
+        });
+    });
+    
+    // Event listeners para checkboxes de despesas
+    document.querySelectorAll('input[name="despesas_selecionadas"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const transportadoraId = this.getAttribute('data-transportadora-id');
+            atualizarStatusBotao(transportadoraId);
+        });
+    });
+    
+    // Event listeners para campos de data
     document.querySelectorAll('input[name="data_vencimento"]').forEach(input => {
         input.addEventListener('change', function() {
             const form = this.closest('form');
@@ -115,26 +377,30 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    document.querySelectorAll('.transportadora-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
+    // Event listeners para submit dos formulários
+    document.querySelectorAll('.fatura-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
             const transportadoraId = this.getAttribute('data-transportadora-id');
-            const isChecked = this.checked;
+            const containerValores = document.getElementById(`valores_considerados_${transportadoraId}`);
             
-            document.querySelectorAll(`input[name="fretes_selecionados"][data-transportadora-id="${transportadoraId}"]`).forEach(item => {
-                item.checked = isChecked;
+            // Limpa campos hidden existentes
+            containerValores.innerHTML = '';
+            
+            // Adiciona campos hidden para valores considerados alterados
+            document.querySelectorAll(`.valor-considerado[data-transportadora-id="${transportadoraId}"]`).forEach(input => {
+                if (input.value && input.value.trim() !== '') {
+                    const embarqueId = input.getAttribute('data-embarque-id');
+                    const hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.name = `valor_considerado_${embarqueId}`;
+                    hiddenInput.value = input.value;
+                    containerValores.appendChild(hiddenInput);
+                }
             });
-            
-            atualizarStatusBotao(transportadoraId);
         });
     });
     
-    document.querySelectorAll('input[name="fretes_selecionados"]').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const transportadoraId = this.getAttribute('data-transportadora-id');
-            atualizarStatusBotao(transportadoraId);
-        });
-    });
-    
+    // Inicialização - atualiza status dos botões
     document.querySelectorAll('.transportadora-checkbox').forEach(checkbox => {
         const transportadoraId = checkbox.getAttribute('data-transportadora-id');
         atualizarStatusBotao(transportadoraId);

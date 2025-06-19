@@ -1,5 +1,5 @@
-from flask import render_template, redirect, url_for, flash, request, session
-from flask_login import login_required
+from flask import render_template, redirect, url_for, flash, request, session, jsonify
+from flask_login import login_required, current_user
 from app import db
 from app.transportadoras.forms import TransportadoraForm, ImportarTransportadorasForm
 from app.transportadoras.models import Transportadora
@@ -9,6 +9,7 @@ from app.utils.importacao.utils_importacao import salvar_temp
 import pandas as pd
 from sqlalchemy.exc import IntegrityError
 import traceback
+from datetime import datetime
 
 @transportadoras_bp.route('/', methods=['GET', 'POST'])
 @login_required
@@ -19,8 +20,11 @@ def cadastrar_transportadora():
     erros_importacao = session.get('erros_importacao', [])
     
     if form.validate_on_submit():
+        # Limpa o CNPJ antes de salvar
+        cnpj_limpo = ''.join(filter(str.isdigit, form.cnpj.data))
+        
         nova = Transportadora(
-            cnpj=form.cnpj.data,
+            cnpj=cnpj_limpo,
             razao_social=form.razao_social.data,
             cidade=form.cidade.data,
             uf=form.uf.data.upper(),
@@ -40,7 +44,7 @@ def cadastrar_transportadora():
             db.session.rollback()
             flash(f'Erro ao cadastrar transportadora: {str(e)}', 'danger')
     
-    transportadoras = Transportadora.query.all()
+    transportadoras = Transportadora.query.order_by(Transportadora.razao_social.asc()).all()
     return render_template('transportadoras/transportadoras.html', 
                          form=form, 
                          transportadoras=transportadoras,
@@ -99,7 +103,10 @@ def editar_transportadora(id):
     
     if form.validate_on_submit():
         try:
-            transportadora.cnpj = form.cnpj.data
+            # Limpa o CNPJ antes de salvar
+            cnpj_limpo = ''.join(filter(str.isdigit, form.cnpj.data))
+            
+            transportadora.cnpj = cnpj_limpo
             transportadora.razao_social = form.razao_social.data
             transportadora.cidade = form.cidade.data
             transportadora.uf = form.uf.data.upper()
@@ -119,12 +126,78 @@ def editar_transportadora(id):
             flash(f'Erro ao atualizar transportadora: {str(e)}', 'danger')
     
     # Ajusta os valores dos campos boolean para string antes de renderizar o form
+    form.id.data = transportadora.id
     form.optante.data = str(transportadora.optante)
     form.freteiro.data = str(transportadora.freteiro)
     
     return render_template('transportadoras/transportadoras.html', 
                          form=form, 
-                         transportadoras=Transportadora.query.all())
+                         transportadoras=Transportadora.query.order_by(Transportadora.razao_social.asc()).all())
+
+@transportadoras_bp.route('/dados/<int:id>')
+@login_required
+def dados_transportadora(id):
+    """Retorna dados da transportadora em JSON para o modal"""
+    try:
+        transportadora = Transportadora.query.get_or_404(id)
+        return jsonify({
+            'success': True,
+            'transportadora': {
+                'id': transportadora.id,
+                'cnpj': transportadora.cnpj,
+                'razao_social': transportadora.razao_social,
+                'cidade': transportadora.cidade,
+                'uf': transportadora.uf,
+                'optante': transportadora.optante,
+                'freteiro': transportadora.freteiro,
+                'condicao_pgto': transportadora.condicao_pgto
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@transportadoras_bp.route('/editar/<int:id>', methods=['POST'])
+@login_required
+def editar_transportadora_ajax(id):
+    """Edita transportadora via AJAX"""
+    try:
+        transportadora = Transportadora.query.get_or_404(id)
+        
+        # Limpa o CNPJ antes de salvar
+        cnpj_limpo = ''.join(filter(str.isdigit, request.form.get('cnpj', '')))
+        
+        # Verifica se o CNPJ já existe para outra transportadora
+        cnpj_existente = Transportadora.query.filter(
+            Transportadora.cnpj == cnpj_limpo,
+            Transportadora.id != id
+        ).first()
+        
+        if cnpj_existente:
+            return jsonify({
+                'success': False, 
+                'message': f'CNPJ já cadastrado para a transportadora: {cnpj_existente.razao_social}'
+            })
+        
+        # Atualiza os dados
+        transportadora.cnpj = cnpj_limpo
+        transportadora.razao_social = request.form.get('razao_social', '')
+        transportadora.cidade = request.form.get('cidade', '')
+        transportadora.uf = request.form.get('uf', '').upper()
+        transportadora.optante = request.form.get('optante') == 'True'
+        transportadora.freteiro = request.form.get('freteiro') == 'True'
+        transportadora.condicao_pgto = request.form.get('condicao_pgto', '')
+        
+        # TODO: Adicionar campos de auditoria no futuro
+        # transportadora.alterado_por = current_user.nome
+        # transportadora.alterado_em = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Transportadora atualizada com sucesso!'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Erro ao atualizar transportadora: {str(e)}'})
 
 @transportadoras_bp.route('/excluir/<int:id>')
 @login_required

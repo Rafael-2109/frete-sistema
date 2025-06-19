@@ -160,9 +160,9 @@
                             </td>
                             <td>{{ transportadora.condicao_pgto or '-' }}</td>
                             <td>
-                                <a href="{{ url_for('transportadoras.editar_transportadora', id=transportadora.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                                <button class="btn btn-sm btn-warning" onclick="editarTransportadora({{ transportadora.id }})" title="Editar">
                                     <i class="fas fa-edit"></i> Editar
-                                </a>
+                                </button>
                                 <a href="{{ url_for('transportadoras.excluir_transportadora', id=transportadora.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Tem certeza que deseja excluir esta transportadora?')" title="Excluir">
                                     <i class="fas fa-trash"></i> Excluir
                                 </a>
@@ -175,4 +175,143 @@
         </div>
     </div>
 </div>
+
+<!-- Modal de Edição -->
+<div class="modal fade" id="modalEditarTransportadora" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Transportadora</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formEditarTransportadora">
+                <div class="modal-body">
+                    <input type="hidden" id="edit_id" name="id">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">CNPJ</label>
+                                <input type="text" class="form-control" id="edit_cnpj" name="cnpj" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Razão Social</label>
+                                <input type="text" class="form-control" id="edit_razao_social" name="razao_social" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Cidade</label>
+                                <input type="text" class="form-control" id="edit_cidade" name="cidade" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">UF</label>
+                                <select class="form-control" id="edit_uf" name="uf" required>
+                                    {% for uf_code, uf_name in form.uf.choices %}
+                                        <option value="{{ uf_code }}">{{ uf_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Optante Simples</label>
+                                <select class="form-control" id="edit_optante" name="optante">
+                                    <option value="False">Não</option>
+                                    <option value="True">Sim</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">É Freteiro?</label>
+                                <select class="form-control" id="edit_freteiro" name="freteiro">
+                                    <option value="False">Não</option>
+                                    <option value="True">Sim</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Condição de Pagamento</label>
+                                <input type="text" class="form-control" id="edit_condicao_pgto" name="condicao_pgto">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function editarTransportadora(id) {
+    // Busca os dados da transportadora
+    fetch(`/transportadoras/dados/${id}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Preenche o formulário
+                document.getElementById('edit_id').value = data.transportadora.id;
+                document.getElementById('edit_cnpj').value = data.transportadora.cnpj;
+                document.getElementById('edit_razao_social').value = data.transportadora.razao_social;
+                document.getElementById('edit_cidade').value = data.transportadora.cidade;
+                document.getElementById('edit_uf').value = data.transportadora.uf;
+                document.getElementById('edit_optante').value = data.transportadora.optante.toString();
+                document.getElementById('edit_freteiro').value = data.transportadora.freteiro.toString();
+                document.getElementById('edit_condicao_pgto').value = data.transportadora.condicao_pgto || '';
+                
+                // Abre o modal
+                new bootstrap.Modal(document.getElementById('modalEditarTransportadora')).show();
+            } else {
+                alert('Erro ao carregar dados da transportadora');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao carregar dados da transportadora');
+        });
+}
+
+// Submit do formulário de edição
+document.getElementById('formEditarTransportadora').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const id = formData.get('id');
+    
+    fetch(`/transportadoras/editar/${id}`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Transportadora atualizada com sucesso!');
+            location.reload();
+        } else {
+            alert('Erro: ' + (data.message || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao salvar alterações');
+    });
+});
+</script>
+
 {% endblock %}

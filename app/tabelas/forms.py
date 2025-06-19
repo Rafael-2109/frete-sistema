@@ -1,10 +1,11 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, BooleanField, SelectField, FileField, IntegerField
-from wtforms.validators import DataRequired, NumberRange
+from wtforms import StringField, SubmitField, BooleanField, SelectField, FileField, IntegerField, HiddenField
+from wtforms.validators import DataRequired, NumberRange, ValidationError
 
 
 
 class TabelaFreteForm(FlaskForm):
+    id = HiddenField('ID')  # Para edição
     transportadora = SelectField('Transportadora', coerce=int, validators=[DataRequired()])
     uf_origem = SelectField('UF Origem', validators=[DataRequired()])
     uf_destino = SelectField('UF Destino', validators=[DataRequired()])
@@ -43,6 +44,29 @@ class TabelaFreteForm(FlaskForm):
     icms_incluso = BooleanField('ICMS incluso no valor')
 
     submit = SubmitField('Salvar')
+    
+    def validate_nome_tabela(self, field):
+        """Valida se já existe tabela com a mesma combinação: transportadora + UF destino + nome + modalidade"""
+        from app.tabelas.models import TabelaFrete
+        
+        # Busca tabela com esta combinação
+        query = TabelaFrete.query.filter_by(
+            transportadora_id=self.transportadora.data,
+            uf_destino=self.uf_destino.data,
+            nome_tabela=field.data,
+            modalidade=self.modalidade.data
+        )
+        
+        # Se é edição, exclui o próprio registro da verificação
+        if self.id.data:
+            query = query.filter(TabelaFrete.id != int(self.id.data))
+        
+        tabela_existente = query.first()
+        
+        if tabela_existente:
+            from app.transportadoras.models import Transportadora
+            transportadora = Transportadora.query.get(self.transportadora.data)
+            raise ValidationError(f'Já existe tabela "{field.data}" para {transportadora.razao_social} com destino {self.uf_destino.data} e modalidade {self.modalidade.data}')
 
 class ImportarTabelaFreteForm(FlaskForm):
     arquivo = FileField("Arquivo Excel", validators=[DataRequired()])
