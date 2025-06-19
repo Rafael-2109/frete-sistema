@@ -953,18 +953,19 @@ body {
               <div class="mt-1">
                 {% if e.possui_canhoto %}
                   <a href="{{ url_for('monitoramento.visualizar_canhoto', id=e.id) }}" 
-                     class="btn btn-sm btn-success" 
+                     class="badge bg-success text-decoration-none" 
                      title="Visualizar canhoto anexado"
                      target="_blank">
                     📄 Canhoto OK
                   </a>
                 {% else %}
-                  <button class="btn btn-sm btn-secondary upload-canhoto-btn" 
-                          data-entrega-id="{{ e.id }}"
-                          data-numero-nf="{{ e.numero_nf }}"
-                          title="Anexar canhoto da entrega">
+                  <span class="badge bg-light text-dark upload-canhoto-btn" 
+                        data-entrega-id="{{ e.id }}"
+                        data-numero-nf="{{ e.numero_nf }}"
+                        title="Anexar canhoto da entrega"
+                        style="cursor: pointer;">
                     📄 S/ canhoto
-                  </button>
+                  </span>
                 {% endif %}
               </div>
             {% elif e.status_finalizacao %}
