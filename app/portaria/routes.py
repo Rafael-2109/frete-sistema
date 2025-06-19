@@ -419,11 +419,14 @@ def excluir_motorista(id):
 @login_required
 def api_embarques():
     """
-    API para buscar embarques ativos (para select dinâmico)
+    API para buscar embarques pendentes de embarque (para select dinâmico)
     """
     termo = request.args.get('q', '')
     
-    query = Embarque.query.filter_by(status='ativo')
+    query = Embarque.query.filter(
+        Embarque.status == 'ativo',
+        Embarque.data_embarque.is_(None)  # Apenas embarques pendentes
+    )
     
     if termo:
         query = query.filter(
@@ -458,12 +461,13 @@ def detalhes_veiculo(registro_id):
 @login_required
 def api_embarques_disponiveis():
     """
-    API para buscar embarques disponíveis para vincular à portaria
-    (todos os embarques ativos, incluindo os já vinculados)
+    API para buscar embarques pendentes de embarque para vincular à portaria
+    (apenas embarques ativos sem data_embarque)
     """
-    # Busca todos os embarques ativos (não apenas os sem data_embarque) - SEM LIMITE para portaria
+    # Busca apenas embarques pendentes de embarque (sem data_embarque)
     embarques = Embarque.query.filter(
-        Embarque.status == 'ativo'
+        Embarque.status == 'ativo',
+        Embarque.data_embarque.is_(None)  # Apenas embarques que ainda não saíram
     ).order_by(Embarque.numero.desc()).all()
     
     resultado = []

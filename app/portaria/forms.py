@@ -162,12 +162,15 @@ class ControlePortariaForm(FlaskForm):
         except:
             pass  # Em caso de erro na consulta
         
-        # Carrega embarques ativos
+        # Carrega apenas embarques pendentes de embarque (sem data_embarque)
         self.embarque_id.choices = [('', 'Selecione um embarque')]
         try:
-            embarques = Embarque.query.filter_by(status='ativo').order_by(Embarque.numero.desc()).all()
+            embarques = Embarque.query.filter(
+                Embarque.status == 'ativo',
+                Embarque.data_embarque.is_(None)  # Apenas embarques que ainda não saíram
+            ).order_by(Embarque.numero.desc()).all()
             self.embarque_id.choices.extend([
-                (e.id, f'Embarque #{e.numero} - {e.transportadora.razao_social if e.transportadora else ""}') 
+                (e.id, f'Embarque #{e.numero} - {e.transportadora.razao_social if e.transportadora else ""} (PENDENTE)') 
                 for e in embarques
             ])
         except:
