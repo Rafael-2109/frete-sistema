@@ -37,37 +37,7 @@ def init_database():
             if len(tables) > 10:
                 print(f"  ... e mais {len(tables) - 10} tabelas")
             
-            # Atualizar colunas CNPJ para o tamanho correto
-            try:
-                print("🔧 Atualizando colunas CNPJ para VARCHAR(20)...")
-                
-                comandos_sql = [
-                    "ALTER TABLE transportadoras ALTER COLUMN cnpj TYPE VARCHAR(20);",
-                    "ALTER TABLE cotacao_itens ALTER COLUMN cnpj_cliente TYPE VARCHAR(20);", 
-                    "ALTER TABLE embarque_volumes ALTER COLUMN cnpj_cliente TYPE VARCHAR(20);",
-                    "ALTER TABLE contatos_agendamento ALTER COLUMN cnpj TYPE VARCHAR(20);",
-                    "ALTER TABLE separacao_itens ALTER COLUMN cnpj_cpf TYPE VARCHAR(20);",
-                    "ALTER TABLE pedidos ALTER COLUMN cnpj_cpf TYPE VARCHAR(20);",
-                    "ALTER TABLE entregas_monitoradas ALTER COLUMN cnpj_cliente TYPE VARCHAR(20);",
-                    "ALTER TABLE faturamento ALTER COLUMN cnpj_cliente TYPE VARCHAR(20);",
-                    "ALTER TABLE faturamento ALTER COLUMN cnpj_transportadora TYPE VARCHAR(20);",
-                    "ALTER TABLE fretes ALTER COLUMN cnpj_cliente TYPE VARCHAR(20);"
-                ]
-                
-                for comando in comandos_sql:
-                    try:
-                        db.session.execute(db.text(comando))
-                    except Exception:
-                        # Tabela pode não existir ou já estar correta
-                        continue
-                
-                db.session.commit()
-                print("✓ Colunas CNPJ atualizadas para VARCHAR(20)")
-                
-            except Exception as e:
-                print(f"⚠️ Aviso ao atualizar colunas CNPJ: {str(e)}")
-                # Não falhamos o deploy por isso
-                pass
+            print("✓ Banco de dados inicializado com sucesso")
                 
         print("=== BANCO INICIALIZADO COM SUCESSO ===")
         return True
