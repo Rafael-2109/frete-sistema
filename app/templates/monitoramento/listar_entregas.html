@@ -418,6 +418,13 @@ body {
       
       <!-- Botões de Ação -->
       <div class="d-flex gap-2">
+        {% if current_user.perfil != 'vendedor' %}
+        <a href="{{ url_for('monitoramento.upload_canhotos_lote') }}" 
+           class="btn btn-primary" 
+           title="Upload de múltiplos canhotos de uma vez">
+          <i class="fas fa-upload"></i> Upload Canhotos
+        </a>
+        {% endif %}
         <a href="{{ url_for('monitoramento.exportar_entregas') }}" 
            class="btn btn-success" 
            title="Exportar dados do monitoramento para Excel">
@@ -941,6 +948,25 @@ body {
                   tabindex="0">
               Entregue
               </span>
+              
+              <!-- 📄 STATUS/BOTÃO DO CANHOTO -->
+              <div class="mt-1">
+                {% if e.possui_canhoto %}
+                  <a href="{{ url_for('monitoramento.visualizar_canhoto', id=e.id) }}" 
+                     class="btn btn-sm btn-success" 
+                     title="Visualizar canhoto anexado"
+                     target="_blank">
+                    📄 Canhoto OK
+                  </a>
+                {% else %}
+                  <button class="btn btn-sm btn-secondary upload-canhoto-btn" 
+                          data-entrega-id="{{ e.id }}"
+                          data-numero-nf="{{ e.numero_nf }}"
+                          title="Anexar canhoto da entrega">
+                    📄 S/ canhoto
+                  </button>
+                {% endif %}
+              </div>
             {% elif e.status_finalizacao %}
                 <span class="badge bg-dark">{{ e.status_finalizacao }}</span>
             {% elif e.data_entrega_prevista and e.data_entrega_prevista < current_date %}
@@ -1104,6 +1130,62 @@ body {
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn btn-success" id="confirmar-data-prevista">
           💾 Salvar Alteração
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===========================
+     MODAL PARA UPLOAD DE CANHOTO
+     =========================== -->
+<div class="modal fade" id="canhotoModal" tabindex="-1" aria-labelledby="canhotoModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      
+      <!-- Cabeçalho do Modal -->
+      <div class="modal-header">
+        <h5 class="modal-title" id="canhotoModalLabel">📄 Anexar Canhoto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <!-- Corpo do Modal -->
+      <div class="modal-body">
+        <p>
+          <strong>NF:</strong>
+          <span id="nf-canhoto-modal"></span>
+        </p>
+        
+        <form id="form-upload-canhoto" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label for="arquivo-canhoto" class="form-label">Arquivo do Canhoto</label>
+            <input type="file" 
+                   class="form-control" 
+                   id="arquivo-canhoto" 
+                   name="canhoto" 
+                   accept=".jpg,.jpeg,.png,.pdf"
+                   required>
+            <div class="form-text">
+              Formatos aceitos: JPG, PNG, PDF (máx. 10MB)
+            </div>
+          </div>
+          
+          <!-- Preview do arquivo selecionado -->
+          <div id="preview-canhoto" class="mt-2" style="display: none;">
+            <div class="alert alert-info">
+              <strong>Arquivo selecionado:</strong> <span id="nome-arquivo-canhoto"></span>
+              <br>
+              <small>Tamanho: <span id="tamanho-arquivo-canhoto"></span></small>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- Rodapé do Modal -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" id="confirmar-upload-canhoto">
+          📄 Anexar Canhoto
         </button>
       </div>
     </div>
@@ -1331,6 +1413,10 @@ document.addEventListener('DOMContentLoaded', function() {
     backdrop: 'static',  // Impede fechamento ao clicar fora
     keyboard: true       // Permite Esc para fechar
   });
+  const canhotoModal = new bootstrap.Modal(document.getElementById('canhotoModal'), {
+    backdrop: 'static',  // Impede fechamento ao clicar fora
+    keyboard: true       // Permite Esc para fechar
+  });
 
   // Event listeners para melhorar UX dos modais
   document.getElementById('agendamentoModal').addEventListener('shown.bs.modal', function () {
@@ -1341,6 +1427,11 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('dataPrevistaModal').addEventListener('shown.bs.modal', function () {
     // Foca no campo de data quando modal abrir
     document.getElementById('nova-data-prevista').focus();
+  });
+
+  document.getElementById('canhotoModal').addEventListener('shown.bs.modal', function () {
+    // Foca no campo de arquivo quando modal abrir
+    document.getElementById('arquivo-canhoto').focus();
   });
 
   // Ao clicar no botão .pendencia-btn, abrimos o modal
@@ -1388,6 +1479,106 @@ document.addEventListener('DOMContentLoaded', function() {
     .catch(err => {
       console.error("Erro no modal de pendências:", err);
       alert("Erro na requisição ao servidor.");
+    });
+  });
+
+  // ===========================
+  // FUNCIONALIDADE DE UPLOAD DE CANHOTO
+  // ===========================
+  
+  // Event listener para botões de upload de canhoto
+  document.querySelectorAll('.upload-canhoto-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const entregaId = this.dataset.entregaId;
+      const numeroNf = this.dataset.numeroNf;
+      
+      // Preenche campos do modal
+      document.getElementById('nf-canhoto-modal').textContent = numeroNf;
+      document.getElementById('confirmar-upload-canhoto').setAttribute('data-entrega-id', entregaId);
+      
+      // Limpa formulário
+      document.getElementById('form-upload-canhoto').reset();
+      document.getElementById('preview-canhoto').style.display = 'none';
+      
+      // Abre o modal
+      canhotoModal.show();
+    });
+  });
+  
+  // Preview do arquivo selecionado
+  document.getElementById('arquivo-canhoto').addEventListener('change', function() {
+    const file = this.files[0];
+    const previewDiv = document.getElementById('preview-canhoto');
+    
+    if (file) {
+      document.getElementById('nome-arquivo-canhoto').textContent = file.name;
+      document.getElementById('tamanho-arquivo-canhoto').textContent = (file.size / 1024).toFixed(1) + ' KB';
+      previewDiv.style.display = 'block';
+    } else {
+      previewDiv.style.display = 'none';
+    }
+  });
+  
+  // Confirmar upload do canhoto
+  document.getElementById('confirmar-upload-canhoto').addEventListener('click', function() {
+    const entregaId = this.getAttribute('data-entrega-id');
+    const fileInput = document.getElementById('arquivo-canhoto');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+      alert('Por favor, selecione um arquivo.');
+      return;
+    }
+    
+    // Validar tamanho (máx 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Arquivo muito grande. O tamanho máximo é 10MB.');
+      return;
+    }
+    
+    // Validar extensão
+    const extensao = file.name.split('.').pop().toLowerCase();
+    if (!['jpg', 'jpeg', 'png', 'pdf'].includes(extensao)) {
+      alert('Formato não permitido. Use apenas JPG, PNG ou PDF.');
+      return;
+    }
+    
+    // Criar FormData para envio
+    const formData = new FormData();
+    formData.append('canhoto', file);
+    
+    // Desabilita botão durante upload
+    const btn = this;
+    const textOriginal = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    btn.disabled = true;
+    
+    // Enviar arquivo
+    fetch(`/monitoramento/${entregaId}/upload_canhoto`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken
+      },
+      body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message);
+        canhotoModal.hide();
+        location.reload(); // Recarrega para mostrar o novo status
+      } else {
+        alert('Erro: ' + data.message);
+      }
+    })
+    .catch(error => {
+      console.error('Erro no upload:', error);
+      alert('Erro ao enviar arquivo. Tente novamente.');
+    })
+    .finally(() => {
+      // Reabilita botão
+      btn.innerHTML = textOriginal;
+      btn.disabled = false;
     });
   });
 

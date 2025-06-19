@@ -1729,3 +1729,197 @@ def exportar_entregas():
 
 # Rota administrativa de migração removida - não necessária
 
+# ============================================================================
+# CANHOTOS DE ENTREGA
+# ============================================================================
+
+@monitoramento_bp.route('/<int:id>/upload_canhoto', methods=['POST'])
+@login_required
+@allow_vendedor_own_data()  # 🔒 PERMITIDO para vendedores (apenas seus dados)
+def upload_canhoto(id):
+    """Upload individual de canhoto para uma entrega"""
+    entrega = EntregaMonitorada.query.get_or_404(id)
+    
+    # 🔒 VERIFICAÇÃO ESPECÍFICA PARA VENDEDORES
+    if current_user.perfil == 'vendedor':
+        if not check_vendedor_permission(vendedor_nome=entrega.vendedor, numero_nf=entrega.numero_nf):
+            return jsonify({'success': False, 'message': 'Acesso negado'})
+    
+    if 'canhoto' not in request.files:
+        return jsonify({'success': False, 'message': 'Nenhum arquivo enviado'})
+    
+    file = request.files['canhoto']
+    if not file or not file.filename:
+        return jsonify({'success': False, 'message': 'Arquivo inválido'})
+    
+    # Validar extensão
+    extensao = file.filename.split('.')[-1].lower()
+    if extensao not in ['jpg', 'jpeg', 'png', 'pdf']:
+        return jsonify({'success': False, 'message': 'Apenas arquivos JPG, PNG ou PDF são permitidos'})
+    
+    try:
+        # 🌐 Salvar no S3
+        from app.utils.file_storage import get_file_storage
+        storage = get_file_storage()
+        file_path = storage.save_file(
+            file=file,
+            folder='canhotos',
+            allowed_extensions=['jpg', 'jpeg', 'png', 'pdf']
+        )
+        
+        if file_path:
+            # Remove canhoto anterior se existir
+            if entrega.canhoto_arquivo:
+                try:
+                    # TODO: Implementar exclusão do arquivo anterior no S3 se necessário
+                    pass
+                except:
+                    pass
+            
+            entrega.canhoto_arquivo = file_path
+            db.session.commit()
+            
+            return jsonify({
+                'success': True, 
+                'message': f'Canhoto anexado com sucesso para NF {entrega.numero_nf}!'
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Erro ao salvar arquivo'})
+            
+    except Exception as e:
+        current_app.logger.error(f"Erro ao fazer upload do canhoto: {str(e)}")
+        return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'})
+
+@monitoramento_bp.route('/upload_canhotos_lote', methods=['GET', 'POST'])
+@login_required
+@require_monitoramento_geral()  # 🔒 BLOQUEADO para vendedores (apenas staff)
+def upload_canhotos_lote():
+    """Upload em lote de canhotos identificados pelo nome do arquivo"""
+    if request.method == 'POST':
+        if 'canhotos' not in request.files:
+            flash('Nenhum arquivo enviado.', 'warning')
+            return redirect(request.url)
+        
+        files = request.files.getlist('canhotos')
+        
+        resultados = {
+            'sucesso': [],
+            'erro': [],
+            'nao_encontrado': []
+        }
+        
+        for file in files:
+            if not file or not file.filename:
+                continue
+            
+            try:
+                # Extrair número da NF do nome do arquivo (ex: 133526.jpeg -> 133526)
+                nome_arquivo = file.filename.split('.')[0]
+                numero_nf = ''.join(filter(str.isdigit, nome_arquivo))
+                
+                if not numero_nf:
+                    resultados['erro'].append(f'{file.filename}: Nome inválido (deve conter número da NF)')
+                    continue
+                
+                # Buscar entrega pela NF
+                entrega = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
+                
+                if not entrega:
+                    resultados['nao_encontrado'].append(f'{file.filename}: NF {numero_nf} não encontrada')
+                    continue
+                
+                # Validar extensão
+                extensao = file.filename.split('.')[-1].lower()
+                if extensao not in ['jpg', 'jpeg', 'png', 'pdf']:
+                    resultados['erro'].append(f'{file.filename}: Extensão não permitida')
+                    continue
+                
+                # Salvar arquivo
+                from app.utils.file_storage import get_file_storage
+                storage = get_file_storage()
+                file_path = storage.save_file(
+                    file=file,
+                    folder='canhotos',
+                    allowed_extensions=['jpg', 'jpeg', 'png', 'pdf']
+                )
+                
+                if file_path:
+                    # Remove canhoto anterior se existir
+                    if entrega.canhoto_arquivo:
+                        try:
+                            # TODO: Implementar exclusão do arquivo anterior no S3 se necessário
+                            pass
+                        except:
+                            pass
+                    
+                    entrega.canhoto_arquivo = file_path
+                    resultados['sucesso'].append(f'NF {numero_nf}: {file.filename}')
+                else:
+                    resultados['erro'].append(f'{file.filename}: Erro ao salvar')
+                    
+            except Exception as e:
+                current_app.logger.error(f"Erro ao processar {file.filename}: {str(e)}")
+                resultados['erro'].append(f'{file.filename}: {str(e)}')
+        
+        # Salvar todas as alterações
+        db.session.commit()
+        
+        # Exibir resultados
+        if resultados['sucesso']:
+            flash(f"✅ {len(resultados['sucesso'])} canhoto(s) anexado(s) com sucesso!", 'success')
+        
+        if resultados['erro']:
+            for erro in resultados['erro']:
+                flash(f"❌ {erro}", 'danger')
+        
+        if resultados['nao_encontrado']:
+            for nao_encontrado in resultados['nao_encontrado']:
+                flash(f"⚠️ {nao_encontrado}", 'warning')
+        
+        return redirect(request.url)
+    
+    return render_template('monitoramento/upload_canhotos_lote.html')
+
+@monitoramento_bp.route('/<int:id>/visualizar_canhoto')
+@login_required
+@allow_vendedor_own_data()  # 🔒 PERMITIDO para vendedores (apenas seus dados)
+def visualizar_canhoto(id):
+    """Visualizar/baixar canhoto de uma entrega"""
+    entrega = EntregaMonitorada.query.get_or_404(id)
+    
+    # 🔒 VERIFICAÇÃO ESPECÍFICA PARA VENDEDORES
+    if current_user.perfil == 'vendedor':
+        if not check_vendedor_permission(vendedor_nome=entrega.vendedor, numero_nf=entrega.numero_nf):
+            flash('Acesso negado. Você só pode visualizar entregas dos seus clientes.', 'danger')
+            return redirect(url_for('monitoramento.listar_entregas'))
+    
+    if not entrega.canhoto_arquivo:
+        flash('Esta entrega não possui canhoto anexado.', 'warning')
+        return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+    
+    try:
+        from app.utils.file_storage import get_file_storage
+        storage = get_file_storage()
+        
+        # Para arquivos S3 (novos)
+        if not entrega.canhoto_arquivo.startswith('uploads/'):
+            url = storage.get_file_url(entrega.canhoto_arquivo)
+            if url:
+                return redirect(url)
+            else:
+                flash('Erro ao gerar URL do arquivo.', 'danger')
+                return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+        else:
+            # Para arquivos locais (antigos) - compatibilidade
+            from flask import send_from_directory
+            import os
+            return send_from_directory(
+                os.path.join(current_app.root_path, 'static'), 
+                entrega.canhoto_arquivo
+            )
+            
+    except Exception as e:
+        current_app.logger.error(f"Erro ao acessar canhoto: {str(e)}")
+        flash('Erro ao acessar o arquivo.', 'danger')
+        return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+

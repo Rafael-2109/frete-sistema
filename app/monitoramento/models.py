@@ -42,10 +42,18 @@ class EntregaMonitorada(db.Model):
     nova_nf = db.Column(db.String(20), nullable=True)
     substituida_por_nf_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'), nullable=True)
     substituida_por_nf = db.relationship('EntregaMonitorada', remote_side=[id], backref='substituicoes')
+    
+    # Canhoto da entrega
+    canhoto_arquivo = db.Column(db.String(500), nullable=True)  # Caminho do arquivo do canhoto
 
     @property
     def possui_comentarios(self):
         return self.comentarios.count() > 0
+    
+    @property
+    def possui_canhoto(self):
+        """Verifica se a entrega possui canhoto anexado"""
+        return bool(self.canhoto_arquivo)
 
     def __repr__(self):
         return f"<Entrega NF {self.numero_nf} - {self.cliente}>"
