@@ -12,6 +12,7 @@ class Transportadora(db.Model):
     uf = db.Column(db.String(2), nullable=False)
     optante = db.Column(db.Boolean, default=False)  # Sim/Não
     condicao_pgto = db.Column(db.String(50), nullable=True)
+    freteiro = db.Column(db.Boolean, default=False)  # Define se é freteiro
 
     def __repr__(self):
         return f'<Transportadora {self.razao_social}>'

@@ -5,6 +5,10 @@ from sqlalchemy import and_, or_, desc, func
 import os
 import re
 from werkzeug.utils import secure_filename
+from app.transportadoras.models import Transportadora
+from app.fretes.forms import LancamentoFreteirosForm
+from datetime import datetime
+
 
 from app import db
 
@@ -2595,3 +2599,193 @@ def download_pdf_fatura(fatura_id):
     except Exception as e:
         flash(f"❌ Erro ao baixar arquivo: {str(e)}", 'danger')
         return redirect(request.referrer)
+
+# ============================================================================
+# LANÇAMENTO FRETEIROS
+# ============================================================================
+
+@fretes_bp.route('/lancamento_freteiros')
+@login_required
+@require_financeiro()  # 🔒 RESTRITO - apenas financeiro pode lançar freteiros
+def lancamento_freteiros():
+    """
+    Tela para lançamento de fretes dos freteiros
+    Mostra todos os freteiros com fretes e despesas extras pendentes
+    """
+    
+    # Busca apenas transportadoras marcadas como freteiros
+    freteiros = Transportadora.query.filter_by(freteiro=True).all()
+    
+    dados_freteiros = []
+    
+    for freteiro in freteiros:
+        # Busca fretes pendentes (sem número CTE ou com valor CTE vazio)
+        fretes_pendentes = Frete.query.filter(
+            Frete.transportadora_id == freteiro.id,
+            db.or_(
+                Frete.numero_cte.is_(None),
+                Frete.numero_cte == '',
+                Frete.valor_cte.is_(None)
+            )
+        ).all()
+        
+        # Busca despesas extras pendentes (sem documento) - através do frete
+        despesas_pendentes = db.session.query(DespesaExtra).join(Frete).filter(
+            Frete.transportadora_id == freteiro.id,
+            db.or_(
+                DespesaExtra.numero_documento.is_(None),
+                DespesaExtra.numero_documento == ''
+            )
+        ).all()
+        
+        if fretes_pendentes or despesas_pendentes:
+            # Organiza fretes por embarque
+            fretes_por_embarque = {}
+            for frete in fretes_pendentes:
+                embarque_id = frete.embarque_id
+                if embarque_id not in fretes_por_embarque:
+                    fretes_por_embarque[embarque_id] = {
+                        'embarque': frete.embarque,
+                        'fretes': [],
+                        'total_cotado': 0,
+                        'total_considerado': 0
+                    }
+                fretes_por_embarque[embarque_id]['fretes'].append(frete)
+                fretes_por_embarque[embarque_id]['total_cotado'] += frete.valor_cotado or 0
+                fretes_por_embarque[embarque_id]['total_considerado'] += frete.valor_considerado or frete.valor_cotado or 0
+            
+            dados_freteiros.append({
+                'freteiro': freteiro,
+                'fretes_por_embarque': fretes_por_embarque,
+                'despesas_pendentes': despesas_pendentes,
+                'total_pendencias': len(fretes_pendentes) + len(despesas_pendentes)
+            })
+    
+    return render_template('fretes/lancamento_freteiros.html', 
+                          dados_freteiros=dados_freteiros,
+                          form=LancamentoFreteirosForm())
+
+@fretes_bp.route('/emitir_fatura_freteiro/<int:transportadora_id>', methods=['POST'])
+@login_required
+@require_financeiro()  # 🔒 RESTRITO - apenas financeiro pode emitir faturas de freteiros
+def emitir_fatura_freteiro(transportadora_id):
+    """
+    Emite fatura para um freteiro com base nos lançamentos selecionados
+    """
+    
+    form = LancamentoFreteirosForm()
+    transportadora = Transportadora.query.get_or_404(transportadora_id)
+    
+    if not transportadora.freteiro:
+        flash('Erro: Transportadora não é um freteiro', 'danger')
+        return redirect(url_for('fretes.lancamento_freteiros'))
+    
+    if form.validate_on_submit():
+        try:
+            # Pega os IDs dos fretes e despesas selecionados via request.form
+            fretes_selecionados = request.form.getlist('fretes_selecionados')
+            despesas_selecionadas = request.form.getlist('despesas_selecionadas')
+            
+            if not fretes_selecionados and not despesas_selecionadas:
+                flash('Selecione pelo menos um lançamento para emitir a fatura', 'warning')
+                return redirect(url_for('fretes.lancamento_freteiros'))
+            
+            data_vencimento = form.data_vencimento.data
+            observacoes = form.observacoes.data or ''
+            
+            # Calcula valor total da fatura
+            valor_total_fatura = 0
+            ctes_criados = []
+            
+            # Processa fretes selecionados
+            for frete_id in fretes_selecionados:
+                frete = Frete.query.get(int(frete_id))
+                if frete and frete.transportadora_id == transportadora_id:
+                    # Preenche dados do CTe
+                    valor_considerado = frete.valor_considerado or frete.valor_cotado
+                    valor_total_fatura += valor_considerado
+                    
+                    # Gera nome do CTe
+                    data_embarque = frete.embarque.data_embarque or frete.embarque.data_prevista_embarque
+                    data_str = data_embarque.strftime('%d/%m/%Y') if data_embarque else 'S/Data'
+                    nfs_str = frete.numeros_nfs[:50] + ('...' if len(frete.numeros_nfs) > 50 else '')
+                    
+                    nome_cte = f"Frete ({data_str}) NFs {nfs_str}"
+                    
+                    # Atualiza frete
+                    frete.numero_cte = nome_cte
+                    frete.valor_cte = valor_considerado
+                    frete.valor_considerado = valor_considerado
+                    frete.valor_pago = valor_considerado
+                    frete.vencimento = data_vencimento
+                    frete.status = 'APROVADO'
+                    frete.aprovado_por = current_user.nome
+                    frete.aprovado_em = datetime.utcnow()
+                    
+                    ctes_criados.append(nome_cte)
+            
+            # Processa despesas extras selecionadas
+            for despesa_id in despesas_selecionadas:
+                despesa = DespesaExtra.query.get(int(despesa_id))
+                if despesa and despesa.frete.transportadora_id == transportadora_id:
+                    valor_total_fatura += despesa.valor_despesa or 0
+                    
+                    # Preenche documento da despesa
+                    despesa.tipo_documento = 'CTE'
+                    despesa.numero_documento = f"Despesa {despesa.tipo_despesa}"
+                    despesa.vencimento_despesa = data_vencimento
+                    
+                    ctes_criados.append(f"Despesa: {despesa.tipo_despesa}")
+            
+            # Cria a fatura
+            data_venc_str = data_vencimento.strftime('%d%m%Y')
+            nome_fatura = f"Fechamento {transportadora.razao_social} {data_venc_str}"
+            
+            nova_fatura = FaturaFrete(
+                transportadora_id=transportadora_id,
+                numero_fatura=nome_fatura,
+                data_emissao=datetime.now().date(),
+                valor_total_fatura=valor_total_fatura,
+                vencimento=data_vencimento,
+                status_conferencia='CONFERIDO',  # Automaticamente conferida
+                conferido_por=current_user.nome,
+                conferido_em=datetime.utcnow(),
+                observacoes_conferencia=f"Fatura criada automaticamente via lançamento freteiros. {observacoes}",
+                criado_por=current_user.nome
+            )
+            
+            db.session.add(nova_fatura)
+            db.session.flush()  # Para obter o ID
+            
+            # Vincula fretes à fatura
+            for frete_id in fretes_selecionados:
+                frete = Frete.query.get(int(frete_id))
+                if frete:
+                    frete.fatura_frete_id = nova_fatura.id
+            
+            # Vincula despesas à fatura (via observações)
+            for despesa_id in despesas_selecionadas:
+                despesa = DespesaExtra.query.get(int(despesa_id))
+                if despesa:
+                    obs_atual = despesa.observacoes or ''
+                    despesa.observacoes = f"{obs_atual} | Fatura: {nova_fatura.numero_fatura}".strip(' |')
+            
+            db.session.commit()
+            
+            flash(f'''
+                <strong>Fatura criada com sucesso!</strong><br>
+                <strong>Fatura:</strong> {nova_fatura.numero_fatura}<br>
+                <strong>Valor Total:</strong> R$ {valor_total_fatura:,.2f}<br>
+                <strong>CTes Criados:</strong> {len(ctes_criados)}<br>
+                <strong>Vencimento:</strong> {data_vencimento.strftime('%d/%m/%Y')}
+            ''', 'success')
+            
+            return redirect(url_for('fretes.listar_faturas'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao emitir fatura: {str(e)}', 'danger')
+            return redirect(url_for('fretes.lancamento_freteiros'))
+    
+    flash('Dados inválidos no formulário', 'danger')
+    return redirect(url_for('fretes.lancamento_freteiros'))

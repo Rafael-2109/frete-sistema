@@ -244,3 +244,9 @@ class ConfiguracaoFreteForm(FlaskForm):
     aprovadores_default = TextAreaField('Aprovadores Padrão (um por linha)')
     
     submit = SubmitField('Salvar Configurações')
+
+class LancamentoFreteirosForm(FlaskForm):
+    """Formulário para lançamento de fretes de freteiros"""
+    data_vencimento = DateField('Data de Vencimento', validators=[DataRequired()])
+    observacoes = TextAreaField('Observações')
+    submit = SubmitField('Emitir Fatura')

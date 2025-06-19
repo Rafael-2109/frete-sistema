@@ -11,6 +11,7 @@ class TransportadoraForm(FlaskForm):
     uf = SelectField('UF', choices=UF_LIST)
     optante = SelectField('Optante Simples', choices=[('False', 'Não'), ('True', 'Sim')], default='False')
     condicao_pgto = StringField('Condição de Pagamento', validators=[Length(max=50)])
+    freteiro = SelectField('É Freteiro?', choices=[('False', 'Não'), ('True', 'Sim')], default='False')
 
 class ImportarTransportadorasForm(FlaskForm):
     arquivo = FileField('Arquivo Excel', validators=[

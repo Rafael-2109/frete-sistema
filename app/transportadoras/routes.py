@@ -25,7 +25,8 @@ def cadastrar_transportadora():
             cidade=form.cidade.data,
             uf=form.uf.data.upper(),
             optante=form.optante.data == 'True',
-            condicao_pgto=form.condicao_pgto.data
+            condicao_pgto=form.condicao_pgto.data,
+            freteiro=form.freteiro.data == 'True'
         )
         db.session.add(nova)
         try:

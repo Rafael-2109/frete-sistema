@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Lançamento de Fretes - Freteiros{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1><i class="fas fa-truck"></i> Lançamento de Fretes - Freteiros</h1>
+    
+    {% if not dados_freteiros %}
+        <div class="alert alert-info">
+            <h5>Nenhuma pendência encontrada</h5>
+            <p>Não há freteiros com fretes ou despesas pendentes no momento.</p>
+        </div>
+    {% else %}
+        {% for dados in dados_freteiros %}
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h5>
+                            <input type="checkbox" class="form-check-input me-2 transportadora-checkbox" 
+                                   id="transportadora_{{ dados.freteiro.id }}" 
+                                   data-transportadora-id="{{ dados.freteiro.id }}">
+                            {{ dados.freteiro.razao_social }}
+                        </h5>
+                        <small>{{ dados.total_pendencias }} pendência(s)</small>
+                    </div>
+                    <div class="col-md-4">
+                        <form method="POST" 
+                              action="{{ url_for('fretes.emitir_fatura_freteiro', transportadora_id=dados.freteiro.id) }}" 
+                              class="fatura-form" 
+                              data-transportadora-id="{{ dados.freteiro.id }}">
+                            {{ form.hidden_tag() }}
+                            <div class="input-group">
+                                {{ form.data_vencimento(class="form-control", required=True) }}
+                                <button type="submit" class="btn btn-success emitir-fatura-btn" 
+                                        data-transportadora-id="{{ dados.freteiro.id }}" disabled>
+                                    Emitir Fatura
+                                </button>
+                            </div>
+                            <small id="status_{{ dados.freteiro.id }}">Preencha a data</small>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                {% if dados.fretes_por_embarque %}
+                    <h6>Fretes Pendentes</h6>
+                    {% for embarque_id, embarque_data in dados.fretes_por_embarque.items() %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Sel</th>
+                                        <th>Cliente</th>
+                                        <th>NFs</th>
+                                        <th>Destino</th>
+                                        <th>Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for frete in embarque_data.fretes %}
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" class="form-check-input" 
+                                                   name="fretes_selecionados" 
+                                                   value="{{ frete.id }}" 
+                                                   data-transportadora-id="{{ dados.freteiro.id }}">
+                                        </td>
+                                        <td>{{ frete.nome_cliente[:30] }}</td>
+                                        <td>{{ frete.numeros_nfs[:20] }}...</td>
+                                        <td>{{ frete.cidade_destino }}/{{ frete.uf_destino }}</td>
+                                        <td>R$ {{ "{:,.2f}".format(frete.valor_considerado or frete.valor_cotado or 0) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function atualizarStatusBotao(transportadoraId) {
+        const dataVencimento = document.querySelector(`form[data-transportadora-id="${transportadoraId}"] input[name="data_vencimento"]`);
+        const botaoEmitir = document.querySelector(`.emitir-fatura-btn[data-transportadora-id="${transportadoraId}"]`);
+        const statusText = document.getElementById(`status_${transportadoraId}`);
+        
+        const itensSelecionados = document.querySelectorAll(`input[name="fretes_selecionados"][data-transportadora-id="${transportadoraId}"]:checked`).length;
+        const temData = dataVencimento && dataVencimento.value.trim() !== '';
+        
+        if (!temData) {
+            botaoEmitir.disabled = true;
+            statusText.textContent = 'Preencha a data de vencimento';
+        } else if (itensSelecionados === 0) {
+            botaoEmitir.disabled = true;
+            statusText.textContent = 'Selecione pelo menos um item';
+        } else {
+            botaoEmitir.disabled = false;
+            statusText.textContent = `Pronto: ${itensSelecionados} item(ns)`;
+        }
+    }
+    
+    document.querySelectorAll('input[name="data_vencimento"]').forEach(input => {
+        input.addEventListener('change', function() {
+            const form = this.closest('form');
+            const transportadoraId = form.getAttribute('data-transportadora-id');
+            atualizarStatusBotao(transportadoraId);
+        });
+    });
+    
+    document.querySelectorAll('.transportadora-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const transportadoraId = this.getAttribute('data-transportadora-id');
+            const isChecked = this.checked;
+            
+            document.querySelectorAll(`input[name="fretes_selecionados"][data-transportadora-id="${transportadoraId}"]`).forEach(item => {
+                item.checked = isChecked;
+            });
+            
+            atualizarStatusBotao(transportadoraId);
+        });
+    });
+    
+    document.querySelectorAll('input[name="fretes_selecionados"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const transportadoraId = this.getAttribute('data-transportadora-id');
+            atualizarStatusBotao(transportadoraId);
+        });
+    });
+    
+    document.querySelectorAll('.transportadora-checkbox').forEach(checkbox => {
+        const transportadoraId = checkbox.getAttribute('data-transportadora-id');
+        atualizarStatusBotao(transportadoraId);
+    });
+});
+</script>
+
+{% endblock %} 

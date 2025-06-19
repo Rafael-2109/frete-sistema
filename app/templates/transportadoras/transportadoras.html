@@ -99,13 +99,19 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <div class="mb-3">
                             {{ form.optante.label(class="form-label") }}
                             {{ form.optante(class="form-control") }}
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            {{ form.freteiro.label(class="form-label") }}
+                            {{ form.freteiro(class="form-control") }}
+                        </div>
+                    </div>
+                    <div class="col-md-4">
                         <div class="mb-3">
                             {{ form.condicao_pgto.label(class="form-label") }}
                             {{ form.condicao_pgto(class="form-control") }}
@@ -132,6 +138,7 @@
                             <th>Cidade</th>
                             <th>UF</th>
                             <th>Optante</th>
+                            <th>Freteiro</th>
                             <th>Condição Pgto</th>
                             <th>Ações</th>
                         </tr>
@@ -144,6 +151,13 @@
                             <td>{{ transportadora.cidade }}</td>
                             <td>{{ transportadora.uf }}</td>
                             <td>{{ 'Sim' if transportadora.optante else 'Não' }}</td>
+                            <td>
+                                {% if transportadora.freteiro %}
+                                    <span class="badge bg-success">Sim</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Não</span>
+                                {% endif %}
+                            </td>
                             <td>{{ transportadora.condicao_pgto or '-' }}</td>
                             <td>
                                 <a href="{{ url_for('transportadoras.editar_transportadora', id=transportadora.id) }}" class="btn btn-sm btn-warning" title="Editar">
