@@ -20,11 +20,11 @@ def cadastrar_transportadora():
     erros_importacao = session.get('erros_importacao', [])
     
     if form.validate_on_submit():
-        # Limpa o CNPJ antes de salvar
-        cnpj_limpo = ''.join(filter(str.isdigit, form.cnpj.data))
+        # Mantém o CNPJ como digitado (sem limpeza)
+        cnpj_digitado = form.cnpj.data.strip()
         
         nova = Transportadora(
-            cnpj=cnpj_limpo,
+            cnpj=cnpj_digitado,
             razao_social=form.razao_social.data,
             cidade=form.cidade.data,
             uf=form.uf.data.upper(),
@@ -132,12 +132,12 @@ def editar_transportadora_ajax(id):
     try:
         transportadora = Transportadora.query.get_or_404(id)
         
-        # Limpa o CNPJ antes de salvar
-        cnpj_limpo = ''.join(filter(str.isdigit, request.form.get('cnpj', '')))
+        # Mantém o CNPJ como recebido (sem limpeza)
+        cnpj_recebido = request.form.get('cnpj', '').strip()
         
         # Verifica se o CNPJ já existe para outra transportadora
         cnpj_existente = Transportadora.query.filter(
-            Transportadora.cnpj == cnpj_limpo,
+            Transportadora.cnpj == cnpj_recebido,
             Transportadora.id != id
         ).first()
         
@@ -148,7 +148,7 @@ def editar_transportadora_ajax(id):
             })
         
         # Atualiza os dados
-        transportadora.cnpj = cnpj_limpo
+        transportadora.cnpj = cnpj_recebido
         transportadora.razao_social = request.form.get('razao_social', '')
         transportadora.cidade = request.form.get('cidade', '')
         transportadora.uf = request.form.get('uf', '').upper()
