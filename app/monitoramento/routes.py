@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_from_directory, send_file, jsonify, make_response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_from_directory, send_file, jsonify, make_response, current_app
 from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta
 import os
@@ -844,6 +844,13 @@ def visualizar_arquivos(id):
         file = request.files['arquivo']
         if file and file.filename:
             try:
+                # 📏 Obter informações do arquivo ANTES de salvar
+                file.seek(0, 2)  # Move para o final
+                tamanho_arquivo = file.tell()
+                file.seek(0)  # Volta para o início
+                
+                current_app.logger.info(f"🔄 Iniciando upload: {file.filename} ({tamanho_arquivo} bytes) para entrega {entrega.id}")
+                
                 # 🌐 Salvar no storage usando o novo sistema
                 file_path = storage.save_file(
                     file=file,
@@ -852,12 +859,9 @@ def visualizar_arquivos(id):
                 )
                 
                 if file_path:
-                    # 📝 Registrar arquivo na tabela
-                    # Obter tamanho do arquivo
-                    file.seek(0, 2)  # Move para o final
-                    tamanho_arquivo = file.tell()
-                    file.seek(0)  # Volta para o início
+                    current_app.logger.info(f"✅ Arquivo salvo no storage: {file_path}")
                     
+                    # 📝 Registrar arquivo na tabela
                     arquivo_entrega = ArquivoEntrega(
                         entrega_id=entrega.id,
                         nome_original=file.filename,
@@ -865,18 +869,21 @@ def visualizar_arquivos(id):
                         caminho_arquivo=file_path,
                         tipo_storage='s3' if storage.use_s3 else 'local',
                         tamanho_bytes=tamanho_arquivo,
-                        content_type=file.content_type,
+                        content_type=file.content_type or 'application/octet-stream',
                         criado_por=current_user.nome
                     )
                     
                     db.session.add(arquivo_entrega)
                     db.session.commit()
                     
+                    current_app.logger.info(f"✅ Arquivo registrado no banco: ID {arquivo_entrega.id}")
                     flash("✅ Arquivo salvo com sucesso no sistema!", 'success')
                 else:
+                    current_app.logger.error(f"❌ Falha ao salvar arquivo no storage: {file.filename}")
                     flash("❌ Erro ao salvar arquivo.", 'danger')
                     
             except Exception as e:
+                current_app.logger.error(f"❌ ERRO DETALHADO no upload: {str(e)}", exc_info=True)
                 flash(f"❌ Erro ao salvar arquivo: {str(e)}", 'danger')
             
             return redirect(request.url)
@@ -886,7 +893,10 @@ def visualizar_arquivos(id):
     
     # ✅ Arquivos novos (rastreados no banco)
     arquivos_banco = ArquivoEntrega.query.filter_by(entrega_id=entrega.id).order_by(ArquivoEntrega.criado_em.desc()).all()
+    current_app.logger.info(f"📂 Listando arquivos da entrega {entrega.id}: {len(arquivos_banco)} arquivos no banco")
+    
     for arquivo_db in arquivos_banco:
+        current_app.logger.info(f"📄 Arquivo no banco: {arquivo_db.nome_original} (ID: {arquivo_db.id}, Tipo: {arquivo_db.tipo_storage})")
         arquivos.append({
             'id': arquivo_db.id,
             'nome': arquivo_db.nome_original,
