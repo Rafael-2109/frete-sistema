@@ -2660,9 +2660,17 @@ def lancamento_freteiros():
                 if not hasattr(frete, 'peso_total'):
                     frete.peso_total = sum([item.peso or 0 for item in frete.embarque.itens if item.peso]) if frete.embarque else 0
                 
-                # Calcula valor NF do frete através dos itens do embarque  
+                # Calcula valor NF do frete através APENAS dos itens que pertencem a este frete específico
                 if not hasattr(frete, 'valor_nf'):
-                    frete.valor_nf = sum([item.valor or 0 for item in frete.embarque.itens if item.valor]) if frete.embarque else 0
+                    if frete.embarque and frete.numeros_nfs:
+                        # Pega apenas as NFs que pertencem a este frete
+                        nfs_frete = [nf.strip() for nf in frete.numeros_nfs.split(',') if nf.strip()]
+                        frete.valor_nf = sum([
+                            item.valor or 0 for item in frete.embarque.itens 
+                            if item.nota_fiscal and item.nota_fiscal.strip() in nfs_frete
+                        ])
+                    else:
+                        frete.valor_nf = 0
                 
                 fretes_por_embarque[embarque_id]['fretes'].append(frete)
                 fretes_por_embarque[embarque_id]['total_cotado'] += frete.valor_cotado or 0

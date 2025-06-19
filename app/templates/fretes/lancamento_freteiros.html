@@ -86,6 +86,30 @@
                                         </div>
                                     </div>
                                 </div>
+                                <!-- Indicadores do Embarque (sutis e centralizados) -->
+                                {% set peso_total_calc = 0 %}
+                                {% set valor_nf_total_calc = 0 %}
+                                {% set valor_considerado_total_calc = 0 %}
+                                {% for frete_calc in embarque_data.fretes %}
+                                    {% set peso_total_calc = peso_total_calc + (frete_calc.peso_total or 0) %}
+                                    {% set valor_nf_total_calc = valor_nf_total_calc + (frete_calc.valor_nf or 0) %}
+                                    {% set valor_considerado_total_calc = valor_considerado_total_calc + (frete_calc.valor_considerado or frete_calc.valor_cotado or 0) %}
+                                {% endfor %}
+                                <div class="text-center mt-2" id="indicadores_embarque_{{ embarque_id }}">
+                                    <small class="text-muted fw-bold">
+                                        {% if peso_total_calc > 0 %}
+                                            R$ {{ "{:.2f}".format(valor_considerado_total_calc / peso_total_calc) }}/kg
+                                        {% else %}
+                                            R$ 0,00/kg
+                                        {% endif %}
+                                        |
+                                        {% if valor_nf_total_calc > 0 %}
+                                            {{ "{:.2f}".format((valor_considerado_total_calc / valor_nf_total_calc) * 100) }}% s/ NF
+                                        {% else %}
+                                            0,00% s/ NF
+                                        {% endif %}
+                                    </small>
+                                </div>
                             </div>
                             
                             <!-- Tabela de Fretes do Embarque -->
@@ -163,52 +187,25 @@
                                             {% endfor %}
                                             
                                             <!-- Linha de Totalizador do Embarque -->
-                                            <tr class="table-info fw-bold">
+                                            <tr class="table-info">
                                                 <td style="text-align: center;"><i class="fas fa-calculator"></i></td>
-                                                <td><strong>TOTAL EMBARQUE {{ embarque_id }}</strong></td>
-                                                <td style="text-align: center;">-</td>
-                                                <td style="text-align: center;">-</td>
+                                                <td><span class="text-muted fw-bold">-</span></td>
+                                                <td style="text-align: center;"><span class="text-muted fw-bold">-</span></td>
+                                                <td style="text-align: center;"><span class="text-muted fw-bold">Total</span></td>
                                                 <td style="text-align: right;" id="peso_total_embarque_{{ embarque_id }}">
-                                                    <strong>{{ "{:,.0f}".format(peso_total_embarque) }} kg</strong>
+                                                    <span class="text-muted fw-bold">{{ "{:,.0f}".format(peso_total_embarque) }} kg</span>
                                                 </td>
                                                 <td style="text-align: right;" id="valor_nf_total_embarque_{{ embarque_id }}">
-                                                    <strong>R$ {{ "{:,.2f}".format(valor_nf_total_embarque) }}</strong>
+                                                    <span class="text-muted fw-bold">R$ {{ "{:,.2f}".format(valor_nf_total_embarque) }}</span>
                                                 </td>
                                                 <td style="text-align: right;" id="valor_cotado_total_embarque_{{ embarque_id }}">
-                                                    <strong>R$ {{ "{:,.2f}".format(valor_cotado_total_embarque) }}</strong>
+                                                    <span class="text-muted fw-bold">R$ {{ "{:,.2f}".format(valor_cotado_total_embarque) }}</span>
                                                 </td>
                                                 <td style="text-align: right;" id="valor_considerado_total_embarque_{{ embarque_id }}">
-                                                    <strong>R$ {{ "{:,.2f}".format(valor_considerado_total_embarque) }}</strong>
+                                                    <span class="text-muted fw-bold">R$ {{ "{:,.2f}".format(valor_considerado_total_embarque) }}</span>
                                                 </td>
                                             </tr>
-                                            
-                                            <!-- Linha de Indicadores do Embarque -->
-                                            <tr class="table-warning">
-                                                <td colspan="4" style="text-align: center;">
-                                                    <small><strong>Indicadores do Embarque:</strong></small>
-                                                </td>
-                                                <td style="text-align: right;" id="reais_por_kg_embarque_{{ embarque_id }}">
-                                                    <small><strong>
-                                                        {% if peso_total_embarque > 0 %}
-                                                            R$ {{ "{:.2f}".format(valor_considerado_total_embarque / peso_total_embarque) }}/kg
-                                                        {% else %}
-                                                            R$ 0,00/kg
-                                                        {% endif %}
-                                                    </strong></small>
-                                                </td>
-                                                <td colspan="2" style="text-align: center;">
-                                                    <small><strong>% Frete sobre Valor NF:</strong></small>
-                                                </td>
-                                                <td style="text-align: right;" id="percentual_embarque_{{ embarque_id }}">
-                                                    <small><strong>
-                                                        {% if valor_nf_total_embarque > 0 %}
-                                                            {{ "{:.2f}".format((valor_considerado_total_embarque / valor_nf_total_embarque) * 100) }}%
-                                                        {% else %}
-                                                            0,00%
-                                                        {% endif %}
-                                                    </strong></small>
-                                                </td>
-                                            </tr>
+
                                         </tbody>
                                     </table>
                                 </div>
@@ -446,36 +443,37 @@ document.addEventListener('DOMContentLoaded', function() {
         // Atualiza totalizadores do embarque
         const elementoPesoEmb = document.getElementById(`peso_total_embarque_${embarqueId}`);
         if (elementoPesoEmb) {
-            elementoPesoEmb.innerHTML = `<strong>${pesoTotalEmb.toLocaleString('pt-BR', {minimumFractionDigits: 0})} kg</strong>`;
+            elementoPesoEmb.innerHTML = `<span class="text-muted fw-bold">${pesoTotalEmb.toLocaleString('pt-BR', {minimumFractionDigits: 0})} kg</span>`;
         }
         
         const elementoValorNfEmb = document.getElementById(`valor_nf_total_embarque_${embarqueId}`);
         if (elementoValorNfEmb) {
-            elementoValorNfEmb.innerHTML = `<strong>R$ ${valorNfTotalEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>`;
+            elementoValorNfEmb.innerHTML = `<span class="text-muted fw-bold">R$ ${valorNfTotalEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>`;
         }
         
         const elementoValorCotadoEmb = document.getElementById(`valor_cotado_total_embarque_${embarqueId}`);
         if (elementoValorCotadoEmb) {
-            elementoValorCotadoEmb.innerHTML = `<strong>R$ ${valorCotadoTotalEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>`;
+            elementoValorCotadoEmb.innerHTML = `<span class="text-muted fw-bold">R$ ${valorCotadoTotalEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>`;
         }
         
         const elementoValorConsideradoEmb = document.getElementById(`valor_considerado_total_embarque_${embarqueId}`);
         if (elementoValorConsideradoEmb) {
-            elementoValorConsideradoEmb.innerHTML = `<strong>R$ ${valorConsideradoTotalEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>`;
+            elementoValorConsideradoEmb.innerHTML = `<span class="text-muted fw-bold">R$ ${valorConsideradoTotalEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>`;
         }
         
-        // Atualiza R$/kg do embarque
-        const elementoReaisKgEmb = document.getElementById(`reais_por_kg_embarque_${embarqueId}`);
-        if (elementoReaisKgEmb) {
+        // Atualiza indicadores do embarque no cabeçalho
+        const indicadoresEmbarque = document.getElementById(`indicadores_embarque_${embarqueId}`);
+        if (indicadoresEmbarque) {
             const reaisKgEmb = pesoTotalEmb > 0 ? valorConsideradoTotalEmb / pesoTotalEmb : 0;
-            elementoReaisKgEmb.innerHTML = `<small><strong>R$ ${reaisKgEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2})}/kg</strong></small>`;
-        }
-        
-        // Atualiza % frete sobre NF do embarque
-        const elementoPercentualEmb = document.getElementById(`percentual_embarque_${embarqueId}`);
-        if (elementoPercentualEmb) {
             const percentualEmb = valorNfTotalEmb > 0 ? (valorConsideradoTotalEmb / valorNfTotalEmb) * 100 : 0;
-            elementoPercentualEmb.innerHTML = `<small><strong>${percentualEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2})}%</strong></small>`;
+            
+            indicadoresEmbarque.innerHTML = `
+                <small class="text-muted fw-bold">
+                    R$ ${reaisKgEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2})}/kg
+                    |
+                    ${percentualEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2})}% s/ NF
+                </small>
+            `;
         }
     }
     
