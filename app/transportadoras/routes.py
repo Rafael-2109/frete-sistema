@@ -95,44 +95,7 @@ def importar():
     return render_template('transportadoras/importar.html', 
                          form=form)
 
-@transportadoras_bp.route('/editar/<int:id>', methods=['GET', 'POST'])
-@login_required
-def editar_transportadora(id):
-    transportadora = Transportadora.query.get_or_404(id)
-    form = TransportadoraForm(obj=transportadora)
-    
-    if form.validate_on_submit():
-        try:
-            # Limpa o CNPJ antes de salvar
-            cnpj_limpo = ''.join(filter(str.isdigit, form.cnpj.data))
-            
-            transportadora.cnpj = cnpj_limpo
-            transportadora.razao_social = form.razao_social.data
-            transportadora.cidade = form.cidade.data
-            transportadora.uf = form.uf.data.upper()
-            transportadora.optante = form.optante.data == 'True'
-            transportadora.condicao_pgto = form.condicao_pgto.data
-            transportadora.freteiro = form.freteiro.data == 'True'
-            
-            db.session.commit()
-            flash('Transportadora atualizada com sucesso!', 'success')
-            return redirect(url_for('transportadoras.cadastrar_transportadora'))
-        
-        except IntegrityError:
-            db.session.rollback()
-            flash('Erro ao atualizar. CNPJ já existe para outra transportadora.', 'danger')
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Erro ao atualizar transportadora: {str(e)}', 'danger')
-    
-    # Ajusta os valores dos campos boolean para string antes de renderizar o form
-    form.id.data = transportadora.id
-    form.optante.data = str(transportadora.optante)
-    form.freteiro.data = str(transportadora.freteiro)
-    
-    return render_template('transportadoras/transportadoras.html', 
-                         form=form, 
-                         transportadoras=Transportadora.query.order_by(Transportadora.razao_social.asc()).all())
+
 
 @transportadoras_bp.route('/dados/<int:id>')
 @login_required
@@ -140,20 +103,26 @@ def dados_transportadora(id):
     """Retorna dados da transportadora em JSON para o modal"""
     try:
         transportadora = Transportadora.query.get_or_404(id)
+        
+        # Garante que os valores boolean sejam tratados corretamente
+        optante_valor = transportadora.optante if transportadora.optante is not None else False
+        freteiro_valor = transportadora.freteiro if transportadora.freteiro is not None else False
+        
         return jsonify({
             'success': True,
             'transportadora': {
                 'id': transportadora.id,
-                'cnpj': transportadora.cnpj,
-                'razao_social': transportadora.razao_social,
-                'cidade': transportadora.cidade,
-                'uf': transportadora.uf,
-                'optante': transportadora.optante,
-                'freteiro': transportadora.freteiro,
-                'condicao_pgto': transportadora.condicao_pgto
+                'cnpj': transportadora.cnpj or '',
+                'razao_social': transportadora.razao_social or '',
+                'cidade': transportadora.cidade or '',
+                'uf': transportadora.uf or '',
+                'optante': optante_valor,
+                'freteiro': freteiro_valor,
+                'condicao_pgto': transportadora.condicao_pgto or ''
             }
         })
     except Exception as e:
+        print(f"[ERRO] Erro ao buscar transportadora {id}: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
 
 @transportadoras_bp.route('/editar/<int:id>', methods=['POST'])

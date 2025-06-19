@@ -259,28 +259,39 @@
 function editarTransportadora(id) {
     // Busca os dados da transportadora
     fetch(`/transportadoras/dados/${id}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
-                // Preenche o formulário
-                document.getElementById('edit_id').value = data.transportadora.id;
-                document.getElementById('edit_cnpj').value = data.transportadora.cnpj;
-                document.getElementById('edit_razao_social').value = data.transportadora.razao_social;
-                document.getElementById('edit_cidade').value = data.transportadora.cidade;
-                document.getElementById('edit_uf').value = data.transportadora.uf;
-                document.getElementById('edit_optante').value = data.transportadora.optante.toString();
-                document.getElementById('edit_freteiro').value = data.transportadora.freteiro.toString();
+                // Preenche o formulário com tratamento seguro dos valores
+                document.getElementById('edit_id').value = data.transportadora.id || '';
+                document.getElementById('edit_cnpj').value = data.transportadora.cnpj || '';
+                document.getElementById('edit_razao_social').value = data.transportadora.razao_social || '';
+                document.getElementById('edit_cidade').value = data.transportadora.cidade || '';
+                document.getElementById('edit_uf').value = data.transportadora.uf || '';
+                
+                // Tratamento seguro para campos boolean
+                const optante = data.transportadora.optante === true || data.transportadora.optante === 'true';
+                const freteiro = data.transportadora.freteiro === true || data.transportadora.freteiro === 'true';
+                
+                document.getElementById('edit_optante').value = optante ? 'True' : 'False';
+                document.getElementById('edit_freteiro').value = freteiro ? 'True' : 'False';
                 document.getElementById('edit_condicao_pgto').value = data.transportadora.condicao_pgto || '';
                 
                 // Abre o modal
                 new bootstrap.Modal(document.getElementById('modalEditarTransportadora')).show();
             } else {
-                alert('Erro ao carregar dados da transportadora');
+                console.error('Erro do servidor:', data.message);
+                alert('Erro ao carregar transportadora: ' + (data.message || 'Erro desconhecido'));
             }
         })
         .catch(error => {
-            console.error('Erro:', error);
-            alert('Erro ao carregar dados da transportadora');
+            console.error('Erro na requisição:', error);
+            alert('Erro ao carregar transportadora. Verifique o console para mais detalhes.');
         });
 }
 

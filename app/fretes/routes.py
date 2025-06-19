@@ -2642,6 +2642,10 @@ def lancamento_freteiros():
             # Organiza fretes por embarque
             fretes_por_embarque = {}
             total_valor = 0
+            peso_total_transportadora = 0
+            valor_nf_total_transportadora = 0
+            valor_cotado_total_transportadora = 0
+            
             for frete in fretes_pendentes:
                 embarque_id = frete.embarque_id
                 if embarque_id not in fretes_por_embarque:
@@ -2652,21 +2656,33 @@ def lancamento_freteiros():
                         'total_considerado': 0
                     }
                 
-                # Adiciona peso total ao frete se não existir
+                # Calcula peso total do frete através dos itens do embarque
                 if not hasattr(frete, 'peso_total'):
-                    frete.peso_total = sum([item.peso for item in frete.embarque.itens if item.peso]) if frete.embarque else 0
+                    frete.peso_total = sum([item.peso or 0 for item in frete.embarque.itens if item.peso]) if frete.embarque else 0
+                
+                # Calcula valor NF do frete através dos itens do embarque  
+                if not hasattr(frete, 'valor_nf'):
+                    frete.valor_nf = sum([item.valor_nf or 0 for item in frete.embarque.itens if item.valor_nf]) if frete.embarque else 0
                 
                 fretes_por_embarque[embarque_id]['fretes'].append(frete)
                 fretes_por_embarque[embarque_id]['total_cotado'] += frete.valor_cotado or 0
                 fretes_por_embarque[embarque_id]['total_considerado'] += frete.valor_considerado or frete.valor_cotado or 0
+                
+                # Soma totais da transportadora
                 total_valor += frete.valor_considerado or frete.valor_cotado or 0
+                peso_total_transportadora += frete.peso_total or 0
+                valor_nf_total_transportadora += frete.valor_nf or 0
+                valor_cotado_total_transportadora += frete.valor_cotado or 0
             
             dados_freteiros.append({
                 'freteiro': freteiro,
                 'fretes_por_embarque': fretes_por_embarque,
                 'despesas_extras': despesas_pendentes,
                 'total_pendencias': len(fretes_pendentes) + len(despesas_pendentes),
-                'total_valor': total_valor + sum([d.valor_despesa or 0 for d in despesas_pendentes])
+                'total_valor': total_valor + sum([d.valor_despesa or 0 for d in despesas_pendentes]),
+                'peso_total': peso_total_transportadora,
+                'valor_nf_total': valor_nf_total_transportadora,
+                'valor_cotado_total': valor_cotado_total_transportadora
             })
     
     return render_template('fretes/lancamento_freteiros.html', 
