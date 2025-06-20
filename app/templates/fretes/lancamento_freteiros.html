@@ -302,11 +302,11 @@
                                                value="{{ despesa.id }}" 
                                                data-transportadora-id="{{ dados.freteiro.id }}">
                                     </td>
-                                    <td>{{ despesa.descricao }}</td>
+                                    <td>{{ despesa.tipo_despesa }} - {{ despesa.motivo_despesa }}</td>
                                     <td>
                                         <small>{{ despesa.frete.nome_cliente[:25] }} - {{ despesa.frete.numeros_nfs[:10] }}</small>
                                     </td>
-                                    <td class="text-end">R$ {{ "{:,.2f}".format(despesa.valor) }}</td>
+                                    <td class="text-end">R$ {{ "{:,.2f}".format(despesa.valor_despesa) }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

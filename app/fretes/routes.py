@@ -2636,7 +2636,8 @@ def lancamento_freteiros():
             Embarque.status == 'ativo',  # Apenas embarques ativos
             db.or_(
                 DespesaExtra.numero_documento.is_(None),
-                DespesaExtra.numero_documento == ''
+                DespesaExtra.numero_documento == '',
+                DespesaExtra.numero_documento == 'PENDENTE_FATURA'
             )
         ).all()
         
