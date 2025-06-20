@@ -72,7 +72,10 @@ def importar_relatorio():
 
         if file and file.filename.endswith('.xlsx'):
             try:
-                # 📁 CORREÇÃO: Ler o arquivo uma vez e usar os bytes para ambas operações
+                # 📁 CORREÇÃO: Capturar filename antes de processar arquivo
+                original_filename = file.filename
+                
+                # Ler o arquivo uma vez e usar os bytes para ambas operações
                 file.seek(0)  # Garantir que está no início
                 file_content = file.read()  # Ler todo o conteúdo uma vez
                 
@@ -82,7 +85,7 @@ def importar_relatorio():
                 # Criar um objeto BytesIO para simular arquivo para o S3
                 from io import BytesIO
                 file_for_s3 = BytesIO(file_content)
-                file_for_s3.name = file.filename  # Dar nome ao BytesIO
+                file_for_s3.name = original_filename  # Usar filename capturado
                 
                 file_path = storage.save_file(
                     file=file_for_s3,
