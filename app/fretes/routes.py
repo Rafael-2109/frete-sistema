@@ -2746,9 +2746,16 @@ def emitir_fatura_freteiro(transportadora_id):
     
     if form.validate_on_submit():
         try:
+            # 🔍 DEBUG: Logs para debug
+            print(f"🔍 DEBUG - Form data: {request.form}")
+            print(f"🔍 DEBUG - Form keys: {list(request.form.keys())}")
+            
             # Pega os IDs dos fretes e despesas selecionados via request.form
             fretes_selecionados = request.form.getlist('fretes_selecionados')
             despesas_selecionadas = request.form.getlist('despesas_selecionadas')
+            
+            print(f"🔍 DEBUG - Fretes selecionados: {fretes_selecionados}")
+            print(f"🔍 DEBUG - Despesas selecionadas: {despesas_selecionadas}")
             
             if not fretes_selecionados and not despesas_selecionadas:
                 flash('Selecione pelo menos um lançamento para emitir a fatura', 'warning')
