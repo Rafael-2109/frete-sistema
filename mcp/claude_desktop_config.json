@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "frete-sistema": {
+      "command": "python",
+      "args": ["mcp/mcp_server_estavel.py"],
+      "cwd": "C:\\Users\\rafael.nascimento\\Desktop\\Sistema Online\\frete_sistema",
+      "env": {
+        "FLASK_ENV": "development"
+      }
+    }
+  }
+} 
