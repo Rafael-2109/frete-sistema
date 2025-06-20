@@ -35,7 +35,7 @@ class FileStorage:
         Salva arquivo no storage configurado
         
         Args:
-            file: Arquivo do formulário (FileStorage)
+            file: Arquivo do formulário (FileStorage) ou BytesIO
             folder: Pasta de destino (ex: 'motoristas', 'faturas')
             filename: Nome personalizado (opcional)
             allowed_extensions: Lista de extensões permitidas (opcional)
@@ -43,12 +43,15 @@ class FileStorage:
         Returns:
             str: URL/caminho do arquivo salvo ou None se erro
         """
-        if not file or not file.filename:
+        # 🛠️ CORREÇÃO: Suporte a BytesIO e FileStorage
+        file_name = getattr(file, 'filename', None) or getattr(file, 'name', None)
+        
+        if not file or not file_name:
             return None
         
         # Verifica extensão se especificada
         if allowed_extensions:
-            file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+            file_ext = file_name.rsplit('.', 1)[1].lower() if '.' in file_name else ''
             if file_ext not in allowed_extensions:
                 raise ValueError(f"Extensão '{file_ext}' não permitida. Permitidas: {allowed_extensions}")
         
@@ -56,7 +59,7 @@ class FileStorage:
         if not filename:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
             unique_id = str(uuid.uuid4())[:8]
-            filename = f"{timestamp}{unique_id}_{secure_filename(file.filename)}"
+            filename = f"{timestamp}{unique_id}_{secure_filename(file_name)}"
         else:
             filename = secure_filename(filename)
         
@@ -75,8 +78,11 @@ class FileStorage:
     def _save_to_s3(self, file, file_path):
         """Salva arquivo no S3"""
         try:
+            # 🛠️ CORREÇÃO: Suporte a BytesIO e FileStorage
+            file_name = getattr(file, 'filename', None) or getattr(file, 'name', None)
+            
             # Determina content type
-            content_type = mimetypes.guess_type(file.filename)[0] or 'application/octet-stream'
+            content_type = mimetypes.guess_type(file_name)[0] or 'application/octet-stream' if file_name else 'application/octet-stream'
             
             # Upload para S3
             self.s3_client.upload_fileobj(
