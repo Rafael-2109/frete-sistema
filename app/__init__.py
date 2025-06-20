@@ -421,7 +421,7 @@ def create_app(config_name=None):
     from app.cotacao.routes import cotacao_bp
     from app.portaria.routes import portaria_bp
     
-    from app.api.routes import api_bp
+    from app.api import api_bp
 
 
     app.register_blueprint(auth_bp)
