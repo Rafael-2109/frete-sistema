@@ -1,11 +1,10 @@
-from flask import request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 import tempfile
 import pandas as pd
 import os
 
-from . import api_bp
 from .cors import cors_enabled
 from app import db
 from app.pedidos.models import Pedido
@@ -16,6 +15,9 @@ from app.fretes.models import Frete
 from app.portaria.models import ControlePortaria
 from app.transportadoras.models import Transportadora
 from sqlalchemy import and_, desc, func
+
+# Definir o blueprint seguindo o padrão do sistema
+api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
 # ============================================================================
 # ENDPOINTS DA API MCP
