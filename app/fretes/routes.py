@@ -2619,9 +2619,10 @@ def lancamento_freteiros():
     dados_freteiros = []
     
     for freteiro in freteiros:
-        # Busca fretes pendentes (sem número CTE ou com valor CTE vazio)
-        fretes_pendentes = Frete.query.filter(
+        # Busca fretes pendentes (sem número CTE ou com valor CTE vazio) - APENAS EMBARQUES ATIVOS
+        fretes_pendentes = Frete.query.join(Embarque).filter(
             Frete.transportadora_id == freteiro.id,
+            Embarque.status == 'ativo',  # Apenas embarques ativos
             db.or_(
                 Frete.numero_cte.is_(None),
                 Frete.numero_cte == '',
@@ -2629,9 +2630,10 @@ def lancamento_freteiros():
             )
         ).all()
         
-        # Busca despesas extras pendentes (sem documento) - através do frete
-        despesas_pendentes = db.session.query(DespesaExtra).join(Frete).filter(
+        # Busca despesas extras pendentes (sem documento) - através do frete - APENAS EMBARQUES ATIVOS
+        despesas_pendentes = db.session.query(DespesaExtra).join(Frete).join(Embarque).filter(
             Frete.transportadora_id == freteiro.id,
+            Embarque.status == 'ativo',  # Apenas embarques ativos
             db.or_(
                 DespesaExtra.numero_documento.is_(None),
                 DespesaExtra.numero_documento == ''
@@ -2656,8 +2658,16 @@ def lancamento_freteiros():
                         'total_considerado': 0
                     }
                 
-                # **FORÇA CÁLCULO** do peso total do frete através dos itens do embarque
-                frete.peso_total = sum([item.peso or 0 for item in frete.embarque.itens if item.peso]) if frete.embarque else 0
+                # **FORÇA CÁLCULO** do peso total APENAS das NFs específicas do frete
+                if frete.embarque and frete.numeros_nfs:
+                    # Pega apenas as NFs que pertencem a este frete
+                    nfs_frete = [nf.strip() for nf in frete.numeros_nfs.split(',') if nf.strip()]
+                    frete.peso_total = sum([
+                        item.peso or 0 for item in frete.embarque.itens 
+                        if item.peso and item.nota_fiscal and item.nota_fiscal.strip() in nfs_frete and item.status == 'ativo'
+                    ])
+                else:
+                    frete.peso_total = 0
                 
                 # **FORÇA CÁLCULO** valor NF do frete através APENAS dos itens que pertencem a este frete específico
                 if frete.embarque and frete.numeros_nfs:
@@ -2665,7 +2675,7 @@ def lancamento_freteiros():
                     nfs_frete = [nf.strip() for nf in frete.numeros_nfs.split(',') if nf.strip()]
                     frete.valor_nf = sum([
                         item.valor or 0 for item in frete.embarque.itens 
-                        if item.nota_fiscal and item.nota_fiscal.strip() in nfs_frete
+                        if item.valor and item.nota_fiscal and item.nota_fiscal.strip() in nfs_frete and item.status == 'ativo'
                     ])
                 else:
                     frete.valor_nf = 0

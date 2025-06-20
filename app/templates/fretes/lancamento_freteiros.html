@@ -92,9 +92,9 @@
                                                     {% endif %}
                                                     |
                                                     {% if valor_nf_total_calc > 0 %}
-                                                        {{ "{:.2f}".format((valor_considerado_total_calc / valor_nf_total_calc) * 100) }}% s/ NF
+                                                        {{ "{:.1f}".format((valor_considerado_total_calc / valor_nf_total_calc) * 100) }}% s/ NF
                                                     {% else %}
-                                                        0,00% s/ NF
+                                                        0,0% s/ NF
                                                     {% endif %}
                                                 </small>
                                             </div>
@@ -161,8 +161,7 @@
                                                            data-peso="{{ peso_frete }}"
                                                            data-valor-nf="{{ valor_nf_frete }}"
                                                            data-valor-cotado="{{ valor_cotado_frete }}"
-                                                           data-valor-considerado="{{ valor_considerado_frete }}"
-                                                           <!-- DEBUG: peso={{ peso_frete }}, valorNf={{ valor_nf_frete }}, valorCotado={{ valor_cotado_frete }}, valorConsiderado={{ valor_considerado_frete }} -->
+                                                           data-valor-considerado="{{ valor_considerado_frete }}">
                                                 </td>
                                                 <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
                                                     title="{{ frete.nome_cliente }}">
@@ -415,14 +414,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const elementoReaisKg = document.getElementById(`reais_por_kg_transportadora_${transportadoraId}`);
         if (elementoReaisKg) {
             const reaisKg = pesoTotalTransp > 0 ? valorConsideradoTotalTransp / pesoTotalTransp : 0;
-            elementoReaisKg.innerHTML = `<strong>R$ ${reaisKg.toLocaleString('pt-BR', {minimumFractionDigits: 2})}/kg</strong>`;
+            elementoReaisKg.innerHTML = `<strong>R$ ${reaisKg.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}/kg</strong>`;
         }
         
         // Atualiza % frete sobre NF da transportadora
         const elementoPercentual = document.getElementById(`percentual_total_transportadora_${transportadoraId}`);
         if (elementoPercentual) {
             const percentual = valorNfTotalTransp > 0 ? (valorConsideradoTotalTransp / valorNfTotalTransp) * 100 : 0;
-            elementoPercentual.innerHTML = `<strong>${percentual.toLocaleString('pt-BR', {minimumFractionDigits: 2})}%</strong>`;
+            elementoPercentual.innerHTML = `<strong>${percentual.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}%</strong>`;
         }
     }
     
@@ -434,24 +433,18 @@ document.addEventListener('DOMContentLoaded', function() {
         let valorCotadoTotalEmb = 0;
         let valorConsideradoTotalEmb = 0;
         
-        console.log(`🔍 DEBUG Embarque ${embarqueId}: Encontrados ${fretesEmbarque.length} fretes`);
-        
-        fretesEmbarque.forEach((frete, index) => {
+        fretesEmbarque.forEach(frete => {
             const peso = parseFloat(frete.getAttribute('data-peso') || 0);
             const valorNf = parseFloat(frete.getAttribute('data-valor-nf') || 0);
             const valorCotado = parseFloat(frete.getAttribute('data-valor-cotado') || 0);
             const valorConsiderado = parseFloat(frete.getAttribute('data-valor-considerado-rateado') || 
                                              frete.getAttribute('data-valor-considerado') || 0);
             
-            console.log(`  Frete ${index + 1}: peso=${peso}, valorNf=${valorNf}, valorCotado=${valorCotado}, valorConsiderado=${valorConsiderado}`);
-            
             pesoTotalEmb += peso;
             valorNfTotalEmb += valorNf;
             valorCotadoTotalEmb += valorCotado;
             valorConsideradoTotalEmb += valorConsiderado;
         });
-        
-        console.log(`📊 Totais calculados - Peso: ${pesoTotalEmb}, Valor NF: ${valorNfTotalEmb}, Valor Cotado: ${valorCotadoTotalEmb}, Valor Considerado: ${valorConsideradoTotalEmb}`);
         
         // Atualiza totalizadores do embarque
         const elementoPesoEmb = document.getElementById(`peso_total_embarque_${embarqueId}`);
@@ -482,9 +475,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             indicadoresEmbarque.innerHTML = `
                 <small class="text-muted fw-bold">
-                    R$ ${reaisKgEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2})}/kg
+                    R$ ${reaisKgEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}/kg
                     |
-                    ${percentualEmb.toLocaleString('pt-BR', {minimumFractionDigits: 2})}% s/ NF
+                    ${percentualEmb.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}% s/ NF
                 </small>
             `;
         }
@@ -636,11 +629,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // 🔧 INICIALIZAÇÃO: Calcula totalizadores de todos os embarques no carregamento
-    console.log('🚀 Inicializando totalizadores de embarques...');
     document.querySelectorAll('.embarque-checkbox').forEach(checkbox => {
         const embarqueId = checkbox.getAttribute('data-embarque-id');
         const transportadoraId = checkbox.getAttribute('data-transportadora-id');
-        console.log(`🔧 Inicializando embarque ${embarqueId}`);
         atualizarTotalizadoresEmbarque(embarqueId);
         atualizarTotalGeral(transportadoraId);
     });
