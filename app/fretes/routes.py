@@ -2748,6 +2748,16 @@ def emitir_fatura_freteiro(transportadora_id):
                     except (ValueError, TypeError):
                         pass
             
+            # 🆕 Captura valores alterados das despesas extras
+            valores_despesas_alterados = {}
+            for key, value in request.form.items():
+                if key.startswith('valor_despesa_') and value:
+                    despesa_id = key.replace('valor_despesa_', '')
+                    try:
+                        valores_despesas_alterados[int(despesa_id)] = float(value)
+                    except (ValueError, TypeError):
+                        pass
+            
             # Aplica rateio por peso se valores foram alterados
             rateios_por_embarque = {}
             for embarque_id, valor_novo in valores_considerados_embarque.items():
@@ -2802,14 +2812,20 @@ def emitir_fatura_freteiro(transportadora_id):
             for despesa_id in despesas_selecionadas:
                 despesa = DespesaExtra.query.get(int(despesa_id))
                 if despesa and despesa.frete.transportadora_id == transportadora_id:
-                    valor_total_fatura += despesa.valor_despesa or 0
+                    # 🆕 Usa valor alterado se existir, senão usa valor original
+                    valor_despesa_final = valores_despesas_alterados.get(int(despesa_id)) or despesa.valor_despesa
+                    valor_total_fatura += valor_despesa_final
+                    
+                    # 🆕 Atualiza o valor da despesa no banco se foi alterado
+                    if int(despesa_id) in valores_despesas_alterados:
+                        despesa.valor_despesa = valores_despesas_alterados[int(despesa_id)]
                     
                     # Preenche documento da despesa
                     despesa.tipo_documento = 'CTE'
                     despesa.numero_documento = f"Despesa {despesa.tipo_despesa}"
                     despesa.vencimento_despesa = data_vencimento
                     
-                    ctes_criados.append(f"Despesa: {despesa.tipo_despesa}")
+                    ctes_criados.append(f"Despesa: {despesa.tipo_despesa} - R$ {valor_despesa_final:.2f}")
             
             # Cria a fatura
             data_venc_str = data_vencimento.strftime('%d%m%Y')
