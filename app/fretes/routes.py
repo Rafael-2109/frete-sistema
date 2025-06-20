@@ -1147,8 +1147,31 @@ def editar_fatura(fatura_id):
     
     if request.method == 'POST':
         try:
+            # ✅ CORREÇÃO CRÍTICA: Captura nome antigo antes de alterar
+            numero_fatura_antigo = fatura.numero_fatura
+            numero_fatura_novo = request.form.get('numero_fatura')
+            
+            # ✅ ATUALIZA OBSERVAÇÕES DAS DESPESAS EXTRAS SE NOME MUDOU
+            if numero_fatura_novo != numero_fatura_antigo:
+                # Busca despesas vinculadas à fatura antiga
+                despesas_vinculadas = DespesaExtra.query.filter(
+                    DespesaExtra.observacoes.contains(f'Fatura: {numero_fatura_antigo}')
+                ).all()
+                
+                # Atualiza observações para usar novo nome da fatura
+                for despesa in despesas_vinculadas:
+                    if despesa.observacoes:
+                        import re
+                        despesa.observacoes = re.sub(
+                            rf'Fatura:\s*{re.escape(numero_fatura_antigo)}',
+                            f'Fatura: {numero_fatura_novo}',
+                            despesa.observacoes
+                        )
+                
+                print(f"DEBUG: Atualizadas {len(despesas_vinculadas)} despesas extras da fatura '{numero_fatura_antigo}' → '{numero_fatura_novo}'")
+            
             # Atualiza dados da fatura
-            fatura.numero_fatura = request.form.get('numero_fatura')
+            fatura.numero_fatura = numero_fatura_novo
             fatura.data_emissao = datetime.strptime(request.form.get('data_emissao'), '%Y-%m-%d').date()
             fatura.valor_total_fatura = float(request.form.get('valor_total_fatura').replace(',', '.'))
             fatura.vencimento = datetime.strptime(request.form.get('vencimento'), '%Y-%m-%d').date() if request.form.get('vencimento') else None
@@ -1156,7 +1179,11 @@ def editar_fatura(fatura_id):
             
             db.session.commit()
             
-            flash(f'✅ Fatura {fatura.numero_fatura} atualizada com sucesso!', 'success')
+            if numero_fatura_novo != numero_fatura_antigo:
+                flash(f'✅ Fatura editada com sucesso! Nome alterado de "{numero_fatura_antigo}" para "{numero_fatura_novo}". Despesas extras atualizadas automaticamente.', 'success')
+            else:
+                flash(f'✅ Fatura {fatura.numero_fatura} atualizada com sucesso!', 'success')
+            
             return redirect(url_for('fretes.listar_faturas'))
             
         except Exception as e:
@@ -2434,21 +2461,67 @@ def vincular_despesa_fatura(despesa_id):
 @fretes_bp.route('/despesas/<int:despesa_id>/desvincular_fatura', methods=['POST'])
 @login_required
 def desvincular_despesa_fatura(despesa_id):
-    """Desvincula uma despesa extra de sua fatura"""
+    """Desvincula uma despesa extra de sua fatura com validações robustas"""
     despesa = DespesaExtra.query.get_or_404(despesa_id)
     
     try:
-        # Remove referência da fatura das observações
+        # ✅ NOVA VALIDAÇÃO: Identifica a fatura vinculada
+        fatura_vinculada = None
         if despesa.observacoes and 'Fatura:' in despesa.observacoes:
-            # Remove a parte "Fatura: XXX |" das observações
-            despesa.observacoes = re.sub(r'Fatura: [^|]+ \| ?', '', despesa.observacoes)
-            if not despesa.observacoes.strip():
-                despesa.observacoes = None
+            try:
+                import re
+                # Extrai o nome da fatura das observações
+                match = re.search(r'Fatura:\s*([^|]+)', despesa.observacoes)
+                if match:
+                    nome_fatura = match.group(1).strip()
+                    fatura_vinculada = FaturaFrete.query.filter_by(numero_fatura=nome_fatura).first()
+            except Exception as e:
+                print(f"Erro ao identificar fatura: {e}")
+        
+        # ✅ VALIDAÇÃO CRÍTICA: Bloqueia desvinculação de fatura conferida
+        if fatura_vinculada and fatura_vinculada.status_conferencia == 'CONFERIDO':
+            flash('❌ Não é possível desvincular despesa de fatura já CONFERIDA!', 'error')
+            return redirect(url_for('fretes.gerenciar_despesas_extras'))
+        
+        # ✅ VALIDAÇÃO: Verifica se há fatura para desvincular
+        if not despesa.observacoes or 'Fatura:' not in despesa.observacoes:
+            flash('⚠️ Esta despesa não está vinculada a nenhuma fatura!', 'warning')
+            return redirect(url_for('fretes.gerenciar_despesas_extras'))
+        
+        # ✅ DESVINCULAÇÃO ROBUSTA: Remove referência da fatura das observações
+        observacoes_originais = despesa.observacoes
+        
+        # Remove padrões: "Fatura: XXX |", " | Fatura: XXX", "Fatura: XXX"
+        import re
+        # Remove início: "Fatura: XXX | "
+        despesa.observacoes = re.sub(r'^Fatura:\s*[^|]+\s*\|\s*', '', despesa.observacoes)
+        # Remove meio: " | Fatura: XXX | "
+        despesa.observacoes = re.sub(r'\s*\|\s*Fatura:\s*[^|]+\s*\|\s*', ' | ', despesa.observacoes)
+        # Remove final: " | Fatura: XXX"
+        despesa.observacoes = re.sub(r'\s*\|\s*Fatura:\s*[^|]+\s*$', '', despesa.observacoes)
+        # Remove caso seja só a fatura: "Fatura: XXX"
+        despesa.observacoes = re.sub(r'^Fatura:\s*[^|]+\s*$', '', despesa.observacoes)
+        
+        # Limpa observações vazias
+        if not despesa.observacoes or despesa.observacoes.strip() in ['', '|']:
+            despesa.observacoes = None
+        
+        # ✅ RESET CAMPOS: Volta despesa ao estado "sem fatura"
+        despesa.numero_documento = 'PENDENTE_FATURA'
+        despesa.vencimento_despesa = None
         
         db.session.commit()
-        flash('Despesa extra desvinculada da fatura com sucesso!', 'success')
+        
+        # ✅ LOG DEBUG: Para troubleshooting
+        nome_fatura_debug = fatura_vinculada.numero_fatura if fatura_vinculada else 'Desconhecida'
+        print(f"DEBUG: Despesa #{despesa.id} desvinculada da fatura '{nome_fatura_debug}'")
+        print(f"  Observações antes: '{observacoes_originais}'")
+        print(f"  Observações depois: '{despesa.observacoes}'")
+        
+        flash(f'✅ Despesa extra desvinculada da fatura {nome_fatura_debug} com sucesso!', 'success')
         
     except Exception as e:
+        db.session.rollback()
         flash(f'Erro ao desvincular despesa da fatura: {str(e)}', 'error')
     
     return redirect(url_for('fretes.gerenciar_despesas_extras'))
