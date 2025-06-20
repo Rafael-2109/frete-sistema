@@ -72,10 +72,20 @@ def importar_relatorio():
 
         if file and file.filename.endswith('.xlsx'):
             try:
+                # 📁 CORREÇÃO: Ler o arquivo uma vez e usar os bytes para ambas operações
+                file.seek(0)  # Garantir que está no início
+                file_content = file.read()  # Ler todo o conteúdo uma vez
+                
                 # 🌐 Usar sistema S3 para salvar arquivo
                 storage = get_file_storage()
+                
+                # Criar um objeto BytesIO para simular arquivo para o S3
+                from io import BytesIO
+                file_for_s3 = BytesIO(file_content)
+                file_for_s3.name = file.filename  # Dar nome ao BytesIO
+                
                 file_path = storage.save_file(
-                    file=file,
+                    file=file_for_s3,
                     folder='faturamento',
                     allowed_extensions=['xlsx']
                 )
@@ -84,11 +94,10 @@ def importar_relatorio():
                     flash('❌ Erro ao salvar arquivo no sistema!', 'danger')
                     return redirect(request.url)
                 
-                # 📁 Para processamento, salvar temporariamente local
+                # 📁 Para processamento, criar arquivo temporário dos bytes
                 import tempfile
                 with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as temp_file:
-                    file.seek(0)  # Reset pointer
-                    temp_file.write(file.read())
+                    temp_file.write(file_content)  # Usar os bytes já lidos
                     temp_filepath = temp_file.name
 
                 # Processar arquivo Excel
@@ -149,7 +158,10 @@ def importar_relatorio():
                 db.session.commit()
                 
                 # 🗑️ Remover arquivo temporário
-                os.unlink(temp_filepath)
+                try:
+                    os.unlink(temp_filepath)
+                except OSError:
+                    pass  # Ignorar se não conseguir remover
 
                 # Re-validar embarques que estavam pendentes
                 try:
