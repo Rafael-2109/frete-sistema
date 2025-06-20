@@ -249,66 +249,33 @@ async function carregarUltimosEmbarques() {
     }
 }
 
-// 🔍 Função para consultar cliente via API
+// 🔍 Função para consultar cliente via API (TEMPORARIAMENTE DESABILITADA)
 async function consultarCliente() {
     const nomeCliente = document.getElementById('cliente-nome').value.trim();
-    const uf = document.getElementById('cliente-uf').value;
     
     if (!nomeCliente) {
         alert('Digite o nome do cliente');
         return;
     }
     
-    try {
-        const url = `/api/v1/cliente/${encodeURIComponent(nomeCliente)}${uf ? `?uf=${uf}` : ''}`;
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        const resultadoDiv = document.getElementById('resultado-consulta');
-        const dadosDiv = document.getElementById('dados-cliente');
-        
-        if (data.success) {
-            const resumo = data.resumo;
-            dadosDiv.innerHTML = `
-                <div class="alert alert-info">
-                    <strong>${data.cliente}</strong> ${data.uf !== 'Todas' ? `(${data.uf})` : ''}<br>
-                    <small>
-                        📦 ${resumo.total_pedidos} pedidos | 
-                        💰 R$ ${resumo.valor_total.toLocaleString('pt-BR', {minimumFractionDigits: 2})} | 
-                        📄 ${resumo.pedidos_faturados} faturados (${resumo.percentual_faturado}%)
-                    </small>
-                </div>
-                <div class="mt-2">
-                    <button class="btn btn-sm btn-success" onclick="downloadExcelCliente()">
-                        <i class="fas fa-file-excel"></i> Baixar Relatório Excel
-                    </button>
-                </div>
-            `;
-            resultadoDiv.style.display = 'block';
-        } else {
-            dadosDiv.innerHTML = `<div class="alert alert-warning">${data.error}</div>`;
-            resultadoDiv.style.display = 'block';
-        }
-    } catch (error) {
-        console.error('Erro na consulta:', error);
-        const dadosDiv = document.getElementById('dados-cliente');
-        dadosDiv.innerHTML = '<div class="alert alert-danger">Erro na consulta</div>';
-        document.getElementById('resultado-consulta').style.display = 'block';
-    }
+    // Funcionalidade temporariamente desabilitada
+    const resultadoDiv = document.getElementById('resultado-consulta');
+    const dadosDiv = document.getElementById('dados-cliente');
+    
+    dadosDiv.innerHTML = `
+        <div class="alert alert-warning">
+            <i class="fas fa-wrench"></i> 
+            <strong>Funcionalidade em manutenção</strong><br>
+            A consulta rápida de clientes está temporariamente indisponível.
+            Use o menu "Pedidos > Lista de Pedidos" para consultar informações de clientes.
+        </div>
+    `;
+    resultadoDiv.style.display = 'block';
 }
 
-// 📥 Função para download de Excel via API
+// 📥 Função para download de Excel via API (TEMPORARIAMENTE DESABILITADA)
 function downloadExcelCliente() {
-    const nomeCliente = document.getElementById('cliente-nome').value.trim();
-    const uf = document.getElementById('cliente-uf').value;
-    
-    if (!nomeCliente) {
-        alert('Digite o nome do cliente primeiro');
-        return;
-    }
-    
-    const url = `/api/v1/cliente/${encodeURIComponent(nomeCliente)}/excel${uf ? `?uf=${uf}` : ''}`;
-    window.open(url, '_blank');
+    alert('Funcionalidade temporariamente indisponível. Use o menu "Relatórios" para exportar dados.');
 }
 
 // 🔄 Função para recarregar todos os dados

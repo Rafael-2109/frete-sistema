@@ -66,13 +66,25 @@
             </a>
             
             {% if not frete.fatura_frete or frete.fatura_frete.status_conferencia != 'CONFERIDO' %}
+                <!-- ✅ NOVO: Botão Cancelar CTe (fluxo reverso) -->
+                {% if frete.numero_cte %}
+                <form method="POST" action="{{ url_for('fretes.cancelar_cte', frete_id=frete.id) }}" 
+                      style="display: inline-block;"
+                      onsubmit="return confirm('🔄 Cancelar CTe: O CTe será removido mas o frete será mantido (status PENDENTE). Confirma?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-undo"></i> Cancelar CTe
+                    </button>
+                </form>
+                {% endif %}
+                
                 <!-- Botão Excluir CTe/Frete -->
                 <form method="POST" action="{{ url_for('fretes.excluir_frete', frete_id=frete.id) }}" 
                       style="display: inline-block;"
-                      onsubmit="return confirm('ATENÇÃO: Esta ação irá excluir PERMANENTEMENTE este CTe/Frete e todas as suas movimentações de conta corrente. Tem certeza que deseja continuar?')">
+                      onsubmit="return confirm('⚠️ EXCLUIR COMPLETO: Esta ação irá excluir PERMANENTEMENTE este CTe/Frete e todas as suas movimentações. Tem certeza?')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <button type="submit" class="btn btn-danger">
-                        <i class="fas fa-trash"></i> Excluir CTe
+                        <i class="fas fa-trash"></i> Excluir Tudo
                     </button>
                 </form>
             {% else %}

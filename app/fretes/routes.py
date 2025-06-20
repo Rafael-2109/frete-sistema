@@ -1171,26 +1171,62 @@ def editar_fatura(fatura_id):
 @fretes_bp.route('/faturas/<int:fatura_id>/excluir', methods=['POST'])
 @login_required
 def excluir_fatura(fatura_id):
-    """Exclui uma fatura que não possui fretes ou despesas vinculadas"""
+    """Exclui uma fatura com validações inteligentes"""
     fatura = FaturaFrete.query.get_or_404(fatura_id)
     
     try:
-        # Verifica se há fretes vinculados
-        fretes_vinculados = Frete.query.filter_by(fatura_frete_id=fatura_id).count()
-        if fretes_vinculados > 0:
-            flash(f'❌ Não é possível excluir a fatura {fatura.numero_fatura}. Há {fretes_vinculados} frete(s) vinculado(s).', 'error')
-            return redirect(url_for('fretes.listar_faturas'))
-        
         # Verifica se fatura está conferida
         if fatura.status_conferencia == 'CONFERIDO':
             flash('❌ Fatura conferida não pode ser excluída!', 'error')
             return redirect(url_for('fretes.listar_faturas'))
         
+        # ✅ NOVA LÓGICA: Verifica fretes com CTe lançado vs sem CTe
+        fretes_com_cte = Frete.query.filter(
+            Frete.fatura_frete_id == fatura_id,
+            Frete.numero_cte.isnot(None)
+        ).count()
+        
+        fretes_sem_cte = Frete.query.filter(
+            Frete.fatura_frete_id == fatura_id,
+            Frete.numero_cte.is_(None)
+        ).count()
+        
+        # Se há fretes com CTe, não pode excluir
+        if fretes_com_cte > 0:
+            flash(f'❌ Não é possível excluir a fatura {fatura.numero_fatura}. Há {fretes_com_cte} frete(s) com CTe lançado. Use "Cancelar CTe" primeiro.', 'error')
+            return redirect(url_for('fretes.listar_faturas'))
+        
+        # ✅ PERMITE EXCLUSÃO se só há fretes sem CTe
+        if fretes_sem_cte > 0:
+            # Remove vinculação dos fretes sem CTe com a fatura
+            fretes_vinculados = Frete.query.filter_by(fatura_frete_id=fatura_id).all()
+            for frete in fretes_vinculados:
+                frete.fatura_frete_id = None
+                frete.vencimento = None  # Remove vencimento também
+            
+            flash(f'ℹ️  {fretes_sem_cte} frete(s) sem CTe foram desvinculados da fatura.', 'info')
+        
+        # Exclui despesas extras relacionadas se houver
+        despesas_excluidas = DespesaExtra.query.filter(
+            DespesaExtra.observacoes.contains(f'Fatura: {fatura.numero_fatura}')
+        ).count()
+        
+        DespesaExtra.query.filter(
+            DespesaExtra.observacoes.contains(f'Fatura: {fatura.numero_fatura}')
+        ).delete(synchronize_session=False)
+        
+        if despesas_excluidas > 0:
+            flash(f'ℹ️  {despesas_excluidas} despesa(s) extra(s) foram excluídas.', 'info')
+        
+        # Salva dados para o flash
         numero_fatura = fatura.numero_fatura
+        transportadora = fatura.transportadora.razao_social
+        
+        # Exclui a fatura
         db.session.delete(fatura)
         db.session.commit()
         
-        flash(f'✅ Fatura {numero_fatura} excluída com sucesso!', 'success')
+        flash(f'✅ Fatura {numero_fatura} excluída com sucesso! Transportadora: {transportadora}', 'success')
         return redirect(url_for('fretes.listar_faturas'))
         
     except Exception as e:
@@ -2506,17 +2542,28 @@ def listar_contas_correntes():
 @fretes_bp.route('/<int:frete_id>/excluir', methods=['POST'])
 @login_required
 def excluir_frete(frete_id):
-    """Exclui um frete (CTe) se a fatura não estiver conferida"""
+    """Exclui um frete (CTe) com validações inteligentes"""
     frete = Frete.query.get_or_404(frete_id)
     
     try:
+        # ✅ NOVA LÓGICA: Permite exclusão se não requer mais aprovação
+        requer_aprovacao_atual, motivos = frete.requer_aprovacao_por_valor()
+        
         # Verifica se fatura está conferida
         if frete.fatura_frete and frete.fatura_frete.status_conferencia == 'CONFERIDO':
             flash('❌ Não é possível excluir CTe de fatura conferida!', 'error')
             return redirect(url_for('fretes.visualizar_frete', frete_id=frete_id))
         
+        # ✅ NOVA VALIDAÇÃO: Se estava aprovado mas agora valores são iguais, permite exclusão
+        if frete.status == 'APROVADO' and requer_aprovacao_atual:
+            flash('❌ Não é possível excluir CTe aprovado que ainda requer aprovação! Motivos: ' + '; '.join(motivos), 'error')
+            return redirect(url_for('fretes.visualizar_frete', frete_id=frete_id))
+        
         # Remove movimentações da conta corrente relacionadas
         ContaCorrenteTransportadora.query.filter_by(frete_id=frete_id).delete()
+        
+        # Remove aprovações relacionadas
+        AprovacaoFrete.query.filter_by(frete_id=frete_id).delete()
         
         # Salva dados para o flash
         numero_cte = frete.numero_cte or f'Frete #{frete.id}'
@@ -2533,6 +2580,58 @@ def excluir_frete(frete_id):
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao excluir CTe: {str(e)}', 'error')
+        return redirect(url_for('fretes.visualizar_frete', frete_id=frete_id))
+
+
+@fretes_bp.route('/<int:frete_id>/cancelar_cte', methods=['POST'])
+@login_required
+def cancelar_cte(frete_id):
+    """Cancela apenas o CTe, mantendo o frete (fluxo reverso)"""
+    frete = Frete.query.get_or_404(frete_id)
+    
+    try:
+        # Verifica se fatura está conferida
+        if frete.fatura_frete and frete.fatura_frete.status_conferencia == 'CONFERIDO':
+            flash('❌ Não é possível cancelar CTe de fatura conferida!', 'error')
+            return redirect(url_for('fretes.visualizar_frete', frete_id=frete_id))
+        
+        # Verifica se tem CTe para cancelar
+        if not frete.numero_cte:
+            flash('❌ Este frete não possui CTe para cancelar!', 'error')
+            return redirect(url_for('fretes.visualizar_frete', frete_id=frete_id))
+        
+        # Salva dados para o flash
+        numero_cte = frete.numero_cte
+        cliente = frete.nome_cliente
+        
+        # ✅ CANCELA APENAS O CTE - FRETE VOLTA AO STATUS PENDENTE
+        frete.numero_cte = None
+        frete.valor_cte = None
+        frete.data_emissao_cte = None
+        frete.vencimento = None
+        frete.status = 'PENDENTE'
+        frete.fatura_frete_id = None  # Remove vinculação com fatura
+        
+        # Limpa campos de aprovação
+        frete.aprovado_por = None
+        frete.aprovado_em = None
+        frete.observacoes_aprovacao = None
+        frete.requer_aprovacao = False
+        
+        # Remove movimentações da conta corrente relacionadas
+        ContaCorrenteTransportadora.query.filter_by(frete_id=frete_id).delete()
+        
+        # Remove aprovações relacionadas
+        AprovacaoFrete.query.filter_by(frete_id=frete_id).delete()
+        
+        db.session.commit()
+        
+        flash(f'✅ CTe {numero_cte} cancelado com sucesso! Frete #{frete.id} voltou ao status PENDENTE. Cliente: {cliente}', 'success')
+        return redirect(url_for('fretes.visualizar_frete', frete_id=frete_id))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao cancelar CTe: {str(e)}', 'error')
         return redirect(url_for('fretes.visualizar_frete', frete_id=frete_id))
 
 @fretes_bp.route('/despesas/<int:despesa_id>/excluir', methods=['POST'])
