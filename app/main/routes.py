@@ -4,7 +4,16 @@ import os
 from app.utils.api_helper import APIDataHelper, get_dashboard_stats, get_system_alerts
 import tempfile
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
+
+from app import db
+from app.pedidos.models import Pedido
+from app.faturamento.models import RelatorioFaturamentoImportado
+from app.monitoramento.models import EntregaMonitorada
+from app.embarques.models import Embarque
+from app.fretes.models import Frete
+from app.transportadoras.models import Transportadora
+from sqlalchemy import desc
 
 main_bp = Blueprint('main', __name__)
 
@@ -222,3 +231,94 @@ def favicon():
     # Se não encontrar, retorna resposta vazia
     from flask import Response
     return Response('', status=204, mimetype='image/vnd.microsoft.icon')
+
+@main_bp.route('/api/estatisticas-internas', methods=['GET'])
+@login_required
+def api_estatisticas_internas():
+    """Estatísticas do sistema para dashboard interno (com autenticação de sessão)"""
+    try:
+        # Estatísticas básicas
+        total_embarques = Embarque.query.count()
+        embarques_ativos = Embarque.query.filter(Embarque.status == 'ativo').count()
+        
+        total_fretes = Frete.query.count()
+        fretes_pendentes = Frete.query.filter(Frete.status_aprovacao == 'pendente').count()
+        fretes_aprovados = Frete.query.filter(Frete.status_aprovacao == 'aprovado').count()
+        
+        total_entregas = EntregaMonitorada.query.count()
+        entregas_entregues = EntregaMonitorada.query.filter(
+            EntregaMonitorada.status_finalizacao == 'Entregue'
+        ).count()
+        
+        pendencias_financeiras = EntregaMonitorada.query.filter(
+            EntregaMonitorada.pendencia_financeira == True
+        ).count()
+        
+        resultado = {
+            'embarques': {
+                'total': total_embarques,
+                'ativos': embarques_ativos,
+                'cancelados': total_embarques - embarques_ativos
+            },
+            'fretes': {
+                'total': total_fretes,
+                'pendentes_aprovacao': fretes_pendentes,
+                'aprovados': fretes_aprovados,
+                'percentual_aprovacao': round((fretes_aprovados / total_fretes * 100), 1) if total_fretes > 0 else 0
+            },
+            'entregas': {
+                'total_monitoradas': total_entregas,
+                'entregues': entregas_entregues,
+                'pendencias_financeiras': pendencias_financeiras,
+                'percentual_entrega': round((entregas_entregues / total_entregas * 100), 1) if total_entregas > 0 else 0
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': resultado,
+            'usuario': current_user.nome,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@main_bp.route('/api/embarques-internos', methods=['GET'])
+@login_required
+def api_embarques_internos():
+    """Lista embarques para dashboard interno (com autenticação de sessão)"""
+    try:
+        limite = int(request.args.get('limite', 8))
+        
+        embarques = Embarque.query.filter(
+            Embarque.status == 'ativo'
+        ).order_by(Embarque.id.desc()).limit(limite).all()
+        
+        resultado = []
+        for embarque in embarques:
+            resultado.append({
+                'id': embarque.id,
+                'numero': embarque.numero,
+                'status': embarque.status,
+                'data_embarque': embarque.data_embarque.isoformat() if embarque.data_embarque else None,
+                'transportadora': embarque.transportadora.razao_social if embarque.transportadora else None,
+                'total_fretes': len(embarque.fretes) if embarque.fretes else 0
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': resultado,
+            'total': len(resultado),
+            'usuario': current_user.nome,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

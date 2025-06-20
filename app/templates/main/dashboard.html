@@ -184,10 +184,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// 📊 Função para carregar estatísticas via API
+// 📊 Função para carregar estatísticas via API interna
 async function carregarEstatisticas() {
     try {
-        const response = await fetch('/api/v1/estatisticas');
+        const response = await fetch('/api/estatisticas-internas');
         const data = await response.json();
         
         if (data.success) {
@@ -211,10 +211,10 @@ async function carregarEstatisticas() {
     }
 }
 
-// 📋 Função para carregar últimos embarques via API
+// 📋 Função para carregar últimos embarques via API interna
 async function carregarUltimosEmbarques() {
     try {
-        const response = await fetch('/api/v1/embarques?limite=8&status=ativo');
+        const response = await fetch('/api/embarques-internos?limite=8');
         const data = await response.json();
         
         if (data.success) {

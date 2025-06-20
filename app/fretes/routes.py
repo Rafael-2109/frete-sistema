@@ -2850,9 +2850,13 @@ def emitir_fatura_freteiro(transportadora_id):
                     
                     ctes_criados.append(f"Despesa: {despesa.tipo_despesa} - R$ {valor_despesa_final:.2f}")
             
-            # Cria a fatura
-            data_venc_str = data_vencimento.strftime('%d%m%Y')
-            nome_fatura = f"Fechamento {transportadora.razao_social} {data_venc_str}"
+            # Cria a fatura (limitando o nome para caber nos 50 caracteres do banco)
+            data_venc_str = data_vencimento.strftime('%d/%m/%Y')
+            # Encurta nome da transportadora para caber no limite de 50 caracteres
+            # Formato: "Fech [NOME] [DD/MM/YYYY]" = 5 + espaços + nome + 10 = máx 50
+            max_chars_nome = 50 - 5 - 1 - 10 - 1  # 33 chars para o nome
+            nome_transportadora = transportadora.razao_social[:max_chars_nome]
+            nome_fatura = f"Fech {nome_transportadora} {data_venc_str}"[:50]  # Garantia extra
             
             nova_fatura = FaturaFrete(
                 transportadora_id=transportadora_id,
