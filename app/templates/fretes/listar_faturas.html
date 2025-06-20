@@ -98,6 +98,12 @@
                                 </td>
                                 <td>
                                     <div class="btn-group-vertical" role="group">
+                                        <!-- ✅ NOVO: Botão Visualizar -->
+                                        <a href="{{ url_for('fretes.visualizar_fatura', fatura_id=fatura.id) }}" 
+                                           class="btn btn-sm btn-outline-info mb-1" title="Visualizar fatura">
+                                            <i class="fas fa-eye"></i> Visualizar
+                                        </a>
+                                        
                                         <!-- Botão Lançar CTe -->
                                         <a href="{{ url_for('fretes.lancar_cte') }}?fatura_id={{ fatura.id }}" 
                                            class="btn btn-sm btn-outline-primary mb-1" title="Lançar CTe nesta fatura">
@@ -130,12 +136,12 @@
                                             {% endif %}
                                             
                                         {% elif fatura.status_conferencia == 'CONFERIDO' %}
-                                            <!-- Fatura Conferida - Botão para Reabrir -->
+                                            <!-- Fatura Conferida - Botões disponíveis -->
                                             <span class="badge badge-success mb-1" style="color: white; background-color: #28a745;">
                                                 <i class="fas fa-lock"></i> CONFERIDA
                                             </span>
                                             <a href="{{ url_for('fretes.conferir_fatura', fatura_id=fatura.id) }}" 
-                                               class="btn btn-sm btn-outline-warning" title="Reabrir fatura">
+                                               class="btn btn-sm btn-outline-warning mb-1" title="Reabrir fatura">
                                                 <i class="fas fa-unlock"></i> Reabrir
                                             </a>
                                         {% endif %}

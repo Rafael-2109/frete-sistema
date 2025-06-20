@@ -1195,6 +1195,14 @@ def editar_fatura(fatura_id):
                          fatura=fatura, 
                          transportadoras=transportadoras)
 
+@fretes_bp.route('/faturas/<int:fatura_id>/visualizar')
+@login_required
+def visualizar_fatura(fatura_id):
+    """Visualiza uma fatura sem permitir edição"""
+    fatura = FaturaFrete.query.get_or_404(fatura_id)
+    
+    return render_template('fretes/visualizar_fatura.html', fatura=fatura)
+
 @fretes_bp.route('/faturas/<int:fatura_id>/excluir', methods=['POST'])
 @login_required
 def excluir_fatura(fatura_id):
@@ -2785,8 +2793,20 @@ def lancamento_freteiros():
     Mostra todos os freteiros com fretes e despesas extras pendentes
     """
     
+    # ✅ NOVO: Filtro por transportadora
+    filtro_transportadora = request.args.get('transportadora_id', type=int)
+    
     # Busca apenas transportadoras marcadas como freteiros
-    freteiros = Transportadora.query.filter_by(freteiro=True).all()
+    query_freteiros = Transportadora.query.filter_by(freteiro=True)
+    
+    # ✅ APLICA FILTRO se especificado
+    if filtro_transportadora:
+        query_freteiros = query_freteiros.filter(Transportadora.id == filtro_transportadora)
+    
+    freteiros = query_freteiros.all()
+    
+    # ✅ PARA O DROPDOWN: Busca todos os freteiros (para mostrar no filtro)
+    todos_freteiros = Transportadora.query.filter_by(freteiro=True).order_by(Transportadora.razao_social).all()
     
     dados_freteiros = []
     
@@ -2899,7 +2919,9 @@ def lancamento_freteiros():
     
     return render_template('fretes/lancamento_freteiros.html', 
                           dados_freteiros=dados_freteiros,
-                          form=LancamentoFreteirosForm())
+                          form=LancamentoFreteirosForm(),
+                          todos_freteiros=todos_freteiros,
+                          filtro_selecionado=filtro_transportadora)
 
 @fretes_bp.route('/emitir_fatura_freteiro/<int:transportadora_id>', methods=['POST'])
 @login_required
