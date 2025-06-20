@@ -83,7 +83,7 @@ class Config:
     S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
     
     # Upload de arquivos
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max upload
+    MAX_CONTENT_LENGTH = 32 * 1024 * 1024  # 32MB max upload
     UPLOAD_EXTENSIONS = ['jpg', 'jpeg', 'png', 'pdf', 'xlsx', 'docx', 'txt']
 
 class TestConfig(Config):

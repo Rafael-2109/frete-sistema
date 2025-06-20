@@ -44,7 +44,7 @@ def api_consultar_embarques():
                 'numero': embarque.numero,
                 'status': embarque.status,
                 'data_embarque': embarque.data_embarque.isoformat() if embarque.data_embarque else None,
-                'transportadora': embarque.transportadora.nome if embarque.transportadora else None,
+                'transportadora': embarque.transportadora.razao_social if embarque.transportadora else None,
                 'total_fretes': len(embarque.fretes) if embarque.fretes else 0
             })
         
@@ -52,7 +52,7 @@ def api_consultar_embarques():
             'success': True,
             'data': resultado,
             'total': len(resultado),
-            'usuario': current_user.username,
+            'usuario': current_user.nome,
             'timestamp': datetime.now().isoformat()
         })
         
@@ -81,7 +81,7 @@ def api_consultar_fretes():
             resultado.append({
                 'id': frete.id,
                 'embarque_numero': frete.embarque.numero if frete.embarque else None,
-                'transportadora': frete.transportadora.nome if frete.transportadora else None,
+                'transportadora': frete.transportadora.razao_social if frete.transportadora else None,
                 'valor_cotado': float(frete.valor_cotado) if frete.valor_cotado else None,
                 'status_aprovacao': frete.status_aprovacao,
                 'tem_cte': bool(frete.numero_cte)
@@ -91,7 +91,7 @@ def api_consultar_fretes():
             'success': True,
             'data': resultado,
             'total': len(resultado),
-            'usuario': current_user.username,
+            'usuario': current_user.nome,
             'timestamp': datetime.now().isoformat()
         })
         
@@ -140,7 +140,7 @@ def api_consultar_monitoramento():
             'success': True,
             'data': resultado,
             'total': len(resultado),
-            'usuario': current_user.username,
+            'usuario': current_user.nome,
             'timestamp': datetime.now().isoformat()
         })
         
@@ -239,7 +239,7 @@ def api_consultar_cliente_detalhado(cliente_nome):
                 'percentual_faturado': round((pedidos_faturados/len(pedidos)*100), 1) if pedidos else 0
             },
             'data': resultado,
-            'usuario': current_user.username,
+            'usuario': current_user.nome,
             'timestamp': datetime.now().isoformat()
         })
         
@@ -369,7 +369,7 @@ def api_estatisticas_sistema():
         return jsonify({
             'success': True,
             'data': resultado,
-            'usuario': current_user.username,
+            'usuario': current_user.nome,
             'timestamp': datetime.now().isoformat()
         })
         
@@ -408,7 +408,7 @@ def api_consultar_portaria():
             'success': True,
             'data': resultado,
             'total': len(resultado),
-            'usuario': current_user.username,
+            'usuario': current_user.nome,
             'timestamp': datetime.now().isoformat()
         })
         
