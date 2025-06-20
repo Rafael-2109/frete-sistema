@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "frete-sistema": {
+      "command": "python",
+      "args": ["C:\\Caminho\\Para\\Servidor\\mcp_server_estavel.py"],
+      "cwd": "C:\\Caminho\\Para\\Sistema\\frete_sistema",
+      "env": {
+        "FLASK_ENV": "production"
+      }
+    }
+  }
+} 

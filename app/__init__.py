@@ -420,6 +420,9 @@ def create_app(config_name=None):
     from app.pedidos.routes import pedidos_bp
     from app.cotacao.routes import cotacao_bp
     from app.portaria.routes import portaria_bp
+    
+    from app.api.routes import api_bp
+
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(embarques_bp)
@@ -438,6 +441,9 @@ def create_app(config_name=None):
     app.register_blueprint(pedidos_bp)
     app.register_blueprint(cotacao_bp)
     app.register_blueprint(portaria_bp)
+    
+    # 🆕 API REST para funcionalidades MCP
+    app.register_blueprint(api_bp)
 
     # 🧱 Cria tabelas se ainda não existirem (em ambiente local)
     with app.app_context():
