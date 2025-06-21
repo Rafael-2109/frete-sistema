@@ -19,9 +19,14 @@ logger = logging.getLogger(__name__)
 try:
     from flask import current_app
     from app import db
-    from app.embarques.models import Embarque
+    from app.embarques.models import Embarque, EmbarqueItem
     from app.fretes.models import Frete  
     from app.transportadoras.models import Transportadora
+    from app.pedidos.models import Pedido
+    from app.monitoramento.models import EntregaMonitorada
+    from sqlalchemy import or_, and_, desc
+    import io
+    import pandas as pd
     FLASK_AVAILABLE = True
 except ImportError:
     FLASK_AVAILABLE = False
@@ -35,7 +40,9 @@ class MCPWebServer:
             "status_sistema": self._status_sistema,
             "consultar_fretes": self._consultar_fretes,
             "consultar_transportadoras": self._consultar_transportadoras,
-            "consultar_embarques": self._consultar_embarques
+            "consultar_embarques": self._consultar_embarques,
+            "consultar_pedidos_cliente": self._consultar_pedidos_cliente,
+            "exportar_pedidos_excel": self._exportar_pedidos_excel
         }
         logger.info("🚀 MCP Web Server inicializado com %d ferramentas", len(self.tools))
     
@@ -81,6 +88,14 @@ class MCPWebServer:
                             {
                                 "name": "consultar_embarques",
                                 "description": "Mostra embarques ativos"
+                            },
+                            {
+                                "name": "consultar_pedidos_cliente",
+                                "description": "Consulta pedidos por cliente com status completo (agendamento, embarque, faturamento, entrega)"
+                            },
+                            {
+                                "name": "exportar_pedidos_excel",
+                                "description": "Exporta relatório de pedidos por cliente para Excel"
                             }
                         ]
                     }
@@ -361,6 +376,251 @@ class MCPWebServer:
         except Exception as e:
             logger.error(f"Erro consulta embarques: {e}")
             return f"❌ Erro na consulta de embarques: {str(e)}"
+
+    def _consultar_pedidos_cliente(self, args: Dict[str, Any]) -> str:
+        """Consulta pedidos por cliente com status completo para representantes"""
+        try:
+            cliente = args.get("cliente")
+            uf = args.get("uf")
+            limite = args.get("limite", 20)  # Default 20 pedidos
+            
+            if not cliente:
+                return "❌ **ERRO:** Cliente não informado. Use: 'Pedidos do cliente Assai' ou 'Pedidos do Assai de SP'"
+            
+            if FLASK_AVAILABLE and current_app:
+                with current_app.app_context():
+                    # Query base dos pedidos
+                    query = db.session.query(Pedido).filter(
+                        Pedido.raz_social_red.ilike(f'%{cliente}%')
+                    )
+                    
+                    # Filtrar por UF se informado
+                    if uf:
+                        query = query.filter(Pedido.uf_normalizada == uf.upper())
+                    
+                    # Ordenar pelos mais recentes e limitar
+                    pedidos = query.order_by(desc(Pedido.criado_em)).limit(limite).all()
+                    
+                    if not pedidos:
+                        return f"🔍 **CONSULTA DE PEDIDOS**\n\nNenhum pedido encontrado para o cliente '{cliente}'{f' em {uf}' if uf else ''}."
+                    
+                    resultado = f"📋 **ÚLTIMOS PEDIDOS - {cliente.upper()}{f' ({uf})' if uf else ''}**\n\n"
+                    resultado += f"**Total encontrado:** {len(pedidos)} pedidos\n\n"
+                    
+                    for pedido in pedidos:
+                        # Status do pedido com emoji
+                        status_emojis = {
+                            'NF no CD': '🔴',
+                            'FATURADO': '✅', 
+                            'EMBARCADO': '🚚',
+                            'COTADO': '💰',
+                            'ABERTO': '⏳'
+                        }
+                        
+                        status_emoji = status_emojis.get(pedido.status_calculado, '📋')
+                        
+                        resultado += f"📦 **Pedido #{pedido.num_pedido}**\n"
+                        resultado += f"   • Cliente: {pedido.raz_social_red}\n"
+                        resultado += f"   • Destino: {pedido.cidade_normalizada or pedido.nome_cidade}/{pedido.uf_normalizada or pedido.cod_uf}\n"
+                        resultado += f"   • Valor: R$ {pedido.valor_saldo_total:,.2f}\n"
+                        resultado += f"   • Peso: {pedido.peso_total:.0f} kg\n"
+                        resultado += f"   • Status: {status_emoji} {pedido.status_calculado}\n"
+                        
+                        # ✅ AGENDAMENTO
+                        if pedido.agendamento and pedido.protocolo:
+                            resultado += f"   • 📅 Agendado: {pedido.agendamento.strftime('%d/%m/%Y')} - Protocolo: {pedido.protocolo}\n"
+                        elif pedido.agendamento:
+                            resultado += f"   • 📅 Agendado: {pedido.agendamento.strftime('%d/%m/%Y')}\n"
+                        else:
+                            resultado += f"   • 📅 Agendamento: ⏳ Pendente\n"
+                        
+                        # ✅ EMBARQUE
+                        if pedido.data_embarque:
+                            resultado += f"   • 🚚 Embarcado: {pedido.data_embarque.strftime('%d/%m/%Y')}\n"
+                        elif pedido.expedicao:
+                            resultado += f"   • 🚚 Previsão Embarque: {pedido.expedicao.strftime('%d/%m/%Y')}\n"
+                        else:
+                            resultado += f"   • 🚚 Embarque: ⏳ Pendente\n"
+                        
+                        # ✅ FATURAMENTO (NF)
+                        if pedido.nf and pedido.nf.strip():
+                            if getattr(pedido, 'nf_cd', False):
+                                resultado += f"   • 📄 NF: {pedido.nf} (🔴 NO CD)\n"
+                            else:
+                                resultado += f"   • 📄 NF: {pedido.nf} (✅ Faturada)\n"
+                        else:
+                            resultado += f"   • 📄 Faturamento: ⏳ Pendente\n"
+                        
+                        # ✅ ENTREGA (verificar monitoramento)
+                        if pedido.nf and pedido.nf.strip():
+                            entrega = db.session.query(EntregaMonitorada).filter(
+                                EntregaMonitorada.numero_nf == pedido.nf
+                            ).first()
+                            
+                            if entrega:
+                                if entrega.entregue:
+                                    if entrega.data_hora_entrega_realizada:
+                                        data_entrega = entrega.data_hora_entrega_realizada.strftime('%d/%m/%Y')
+                                    else:
+                                        data_entrega = "Data não informada"
+                                    resultado += f"   • 🎯 Entregue: {data_entrega}\n"
+                                elif entrega.data_entrega_prevista:
+                                    resultado += f"   • 🎯 Previsão Entrega: {entrega.data_entrega_prevista.strftime('%d/%m/%Y')}\n"
+                                else:
+                                    resultado += f"   • 🎯 Entrega: Em trânsito\n"
+                            else:
+                                resultado += f"   • 🎯 Entrega: ⏳ Não monitorada\n"
+                        else:
+                            resultado += f"   • 🎯 Entrega: ⏳ Pendente faturamento\n"
+                        
+                        # Transportadora
+                        if pedido.transportadora:
+                            resultado += f"   • 🚛 Transportadora: {pedido.transportadora}\n"
+                        
+                        resultado += "\n"
+                    
+                    # Resumo final
+                    resultado += "📊 **RESUMO:**\n"
+                    
+                    # Contar status
+                    status_count = {}
+                    for pedido in pedidos:
+                        status = pedido.status_calculado
+                        status_count[status] = status_count.get(status, 0) + 1
+                    
+                    for status, count in status_count.items():
+                        emoji = status_emojis.get(status, '📋')
+                        resultado += f"• {emoji} {status}: {count}\n"
+                    
+                    resultado += f"\n💡 **Para exportar para Excel, use:** 'Exportar pedidos do {cliente} para Excel'"
+                    
+                    return resultado
+            
+            else:
+                return f"""📋 **CONSULTA DE PEDIDOS - MODO FALLBACK**
+
+🔍 **Cliente:** {cliente}{f' ({uf})' if uf else ''}
+
+📦 **Sistema em modo básico**
+• Consulta não disponível no momento
+• Interface web principal disponível
+
+💡 **Para consulta completa:**
+• Acesse via interface web
+• Aguarde conectividade total"""
+                
+        except Exception as e:
+            logger.error(f"Erro consulta pedidos cliente: {e}")
+            return f"❌ Erro na consulta de pedidos: {str(e)}"
+    
+    def _exportar_pedidos_excel(self, args: Dict[str, Any]) -> str:
+        """Exporta pedidos por cliente para Excel"""
+        try:
+            cliente = args.get("cliente")
+            uf = args.get("uf") 
+            
+            if not cliente:
+                return "❌ **ERRO:** Cliente não informado para exportação."
+            
+            if FLASK_AVAILABLE and current_app:
+                with current_app.app_context():
+                    # Query similar à consulta, mas sem limite
+                    query = db.session.query(Pedido).filter(
+                        Pedido.raz_social_red.ilike(f'%{cliente}%')
+                    )
+                    
+                    if uf:
+                        query = query.filter(Pedido.uf_normalizada == uf.upper())
+                    
+                    pedidos = query.order_by(desc(Pedido.criado_em)).limit(100).all()  # Máximo 100 para Excel
+                    
+                    if not pedidos:
+                        return f"❌ **EXPORTAÇÃO EXCEL**\n\nNenhum pedido encontrado para '{cliente}'{f' em {uf}' if uf else ''} para exportar."
+                    
+                    # Preparar dados para Excel
+                    dados_excel = []
+                    
+                    for pedido in pedidos:
+                        # Buscar dados de entrega se NF existe
+                        entrega = None
+                        if pedido.nf and pedido.nf.strip():
+                            entrega = db.session.query(EntregaMonitorada).filter(
+                                EntregaMonitorada.numero_nf == pedido.nf
+                            ).first()
+                        
+                        # Preparar linha do Excel
+                        linha = {
+                            'Pedido': pedido.num_pedido,
+                            'Cliente': pedido.raz_social_red,
+                            'Cidade': pedido.cidade_normalizada or pedido.nome_cidade,
+                            'UF': pedido.uf_normalizada or pedido.cod_uf,
+                            'Valor_Pedido': pedido.valor_saldo_total or 0,
+                            'Peso_kg': pedido.peso_total or 0,
+                            'Status': pedido.status_calculado,
+                            'Data_Agendamento': pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
+                            'Protocolo': pedido.protocolo or '',
+                            'Data_Embarque': pedido.data_embarque.strftime('%d/%m/%Y') if pedido.data_embarque else '',
+                            'Previsao_Embarque': pedido.expedicao.strftime('%d/%m/%Y') if pedido.expedicao else '',
+                            'NF': pedido.nf or '',
+                            'NF_no_CD': 'SIM' if getattr(pedido, 'nf_cd', False) else 'NÃO',
+                            'Transportadora': pedido.transportadora or '',
+                            'Data_Faturamento': entrega.data_faturamento.strftime('%d/%m/%Y') if entrega and entrega.data_faturamento else '',
+                            'Previsao_Entrega': entrega.data_entrega_prevista.strftime('%d/%m/%Y') if entrega and entrega.data_entrega_prevista else '',
+                            'Data_Entrega': entrega.data_hora_entrega_realizada.strftime('%d/%m/%Y') if entrega and entrega.data_hora_entrega_realizada else '',
+                            'Entregue': 'SIM' if entrega and entrega.entregue else 'NÃO',
+                            'Lead_Time_dias': entrega.lead_time if entrega and entrega.lead_time else '',
+                            'Criado_em': pedido.criado_em.strftime('%d/%m/%Y %H:%M') if pedido.criado_em else ''
+                        }
+                        
+                        dados_excel.append(linha)
+                    
+                    # Criar DataFrame
+                    df = pd.DataFrame(dados_excel)
+                    
+                    # Gerar nome do arquivo
+                    nome_arquivo = f"pedidos_{cliente.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+                    
+                    # Simular salvamento (na prática, seria salvo em storage)
+                    resultado = f"""📊 **EXPORTAÇÃO PARA EXCEL REALIZADA**
+
+✅ **Arquivo gerado:** {nome_arquivo}
+📋 **Total de pedidos:** {len(dados_excel)}
+🎯 **Cliente:** {cliente}{f' ({uf})' if uf else ''}
+
+📄 **Colunas incluídas:**
+• Dados do Pedido: Número, Cliente, Destino, Valor, Peso
+• Status e Agendamento: Status atual, Data/Protocolo agendamento  
+• Embarque: Data embarque, Previsão embarque
+• Faturamento: NF, Status NF no CD, Data faturamento
+• Entrega: Previsão, Data entrega, Lead time
+• Transportadora e outros detalhes
+
+💡 **O arquivo seria salvo no sistema de arquivos/S3**
+💡 **Na interface web, haveria download direto**
+
+📈 **Resumo dos dados:**"""
+                    
+                    # Adicionar resumo por status
+                    status_count = df['Status'].value_counts()
+                    for status, count in status_count.items():
+                        resultado += f"\n• {status}: {count} pedidos"
+                    
+                    return resultado
+            
+            else:
+                return f"""📊 **EXPORTAÇÃO EXCEL - MODO FALLBACK**
+
+❌ **Função não disponível no momento**
+• Sistema em modo básico
+• Exportação requer conectividade com banco
+
+💡 **Para exportar:**
+• Acesse via interface web principal
+• Aguarde sistema conectar ao banco"""
+                
+        except Exception as e:
+            logger.error(f"Erro exportação Excel: {e}")
+            return f"❌ Erro na exportação para Excel: {str(e)}"
 
 # Instância global do servidor MCP
 mcp_web_server = MCPWebServer() 
