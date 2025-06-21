@@ -1,0 +1,93 @@
+# 🤖 MCP v4.0 - DEPENDÊNCIAS IA/ML AVANÇADAS
+# Arquivo específico para o sistema inteligente
+
+# ==========================================
+# 🧠 CORE AI/ML STACK
+# ==========================================
+pandas>=2.0.0              # Data manipulation avançada
+numpy>=1.24.0               # Numerical computing
+scikit-learn>=1.3.0         # Machine Learning algorithms
+scipy>=1.11.0               # Scientific computing
+statsmodels>=0.14.0         # Statistical analysis
+
+# ==========================================
+# 🔮 DEEP LEARNING (Opcional - para futuro)
+# ==========================================
+# tensorflow>=2.13.0       # Deep Learning (comentado por enquanto)
+# torch>=2.0.0              # PyTorch alternative
+# transformers>=4.30.0      # Hugging Face models
+
+# ==========================================
+# 📊 VISUALIZATIONS & DASHBOARDS
+# ==========================================
+plotly>=5.15.0              # Interactive charts
+dash>=2.14.0                # Web dashboards
+seaborn>=0.12.0             # Statistical visualizations
+matplotlib>=3.7.0           # Basic plotting
+
+# ==========================================
+# ⚡ REAL-TIME & PERFORMANCE
+# ==========================================
+redis>=4.6.0                # Cache & real-time storage
+celery>=5.3.0               # Background tasks
+websockets>=11.0            # Real-time communication
+asyncio-redis>=0.16.0       # Async Redis client
+
+# ==========================================
+# 🧠 NLP & TEXT PROCESSING
+# ==========================================
+spacy>=3.6.0                # Advanced NLP
+nltk>=3.8.0                 # Natural Language Toolkit
+textblob>=0.17.0            # Simple text processing
+fuzzywuzzy>=0.18.0          # Fuzzy string matching
+python-levenshtein>=0.21.0  # String distance calculations
+
+# ==========================================
+# 📈 TIME SERIES & FORECASTING
+# ==========================================
+prophet>=1.1.4              # Time series forecasting
+# pytseries>=0.1.0          # Time series utilities (não disponível - removido)
+
+# ==========================================
+# 🌐 API & INTEGRATIONS
+# ==========================================
+fastapi>=0.100.0            # High-performance API
+uvicorn>=0.23.0             # ASGI server
+httpx>=0.24.0               # Async HTTP client
+aiohttp>=3.8.0              # Async HTTP client alternative
+
+# ==========================================
+# 🔧 UTILITIES & HELPERS
+# ==========================================
+python-dotenv>=1.0.0        # Environment variables
+pydantic>=2.0.0             # Data validation
+joblib>=1.3.0               # Model persistence
+schedule>=1.2.0             # Task scheduling
+python-dateutil>=2.8.0      # Date utilities
+
+# ==========================================
+# 🧪 TESTING & DEVELOPMENT
+# ==========================================
+pytest>=7.4.0              # Testing framework
+pytest-asyncio>=0.21.0     # Async testing
+pytest-cov>=4.1.0          # Coverage testing
+factory-boy>=3.3.0         # Test data factories
+
+# ==========================================
+# 📊 MONITORING & LOGGING
+# ==========================================
+prometheus-client>=0.17.0   # Metrics collection
+structlog>=23.1.0           # Structured logging
+colorlog>=6.7.0             # Colored logging
+
+# ==========================================
+# 💾 DATA PERSISTENCE
+# ==========================================
+sqlalchemy>=2.0.0          # Database ORM (já existe no requirements.txt principal)
+alembic>=1.11.0             # Database migrations (já existe)
+
+# ==========================================
+# 📦 PACKAGING & DEPLOYMENT
+# ==========================================
+gunicorn>=21.0.0            # WSGI server (já existe)
+docker>=6.1.0               # Docker SDK for Python 
