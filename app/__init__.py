@@ -421,6 +421,7 @@ def create_app(config_name=None):
     from app.cotacao.routes import cotacao_bp
     from app.portaria.routes import portaria_bp
     from app.api.routes import api_bp
+    from app.claude_ai import claude_ai_bp
 
 
     app.register_blueprint(auth_bp)
@@ -443,6 +444,9 @@ def create_app(config_name=None):
     
     # 🆕 API REST para funcionalidades MCP
     app.register_blueprint(api_bp)
+    
+    # 🤖 Claude AI Integration
+    app.register_blueprint(claude_ai_bp)
 
     # 🧱 Cria tabelas se ainda não existirem (em ambiente local)
     with app.app_context():
