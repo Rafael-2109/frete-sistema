@@ -115,28 +115,44 @@ class MCPWebServer:
                     total_fretes = db.session.query(Frete).count()
                     total_transportadoras = db.session.query(Transportadora).count()
                     
-                    return f"""🚀 **SISTEMA DE FRETES - STATUS WEB**
+                    # Estatísticas detalhadas
+                    fretes_pendentes = db.session.query(Frete).filter(Frete.status == 'PENDENTE').count()
+                    fretes_aprovados = db.session.query(Frete).filter(Frete.status == 'APROVADO').count()
+                    fretes_pagos = db.session.query(Frete).filter(Frete.status == 'PAGO').count()
+                    
+                    return f"""🚀 **SISTEMA DE FRETES - STATUS DETALHADO**
 
-📊 **ESTATÍSTICAS ATUAIS:**
+📊 **ESTATÍSTICAS GERAIS:**
 • Total de Embarques: {total_embarques}
 • Embarques Ativos: {embarques_ativos}
 • Total de Fretes: {total_fretes}  
 • Transportadoras: {total_transportadoras}
 
-🌐 **AMBIENTE WEB:**
-• Servidor: Render.com
-• Status: Online e operacional
-• MCP Web: ✅ Ativo
-• Banco de dados: ✅ Conectado
+🚚 **STATUS DOS FRETES:**
+• Pendentes: {fretes_pendentes}
+• Aprovados: {fretes_aprovados}  
+• Pagos: {fretes_pagos}
 
-⚡ **FUNCIONALIDADES DISPONÍVEIS:**
-• Consulta de fretes por cliente
-• Lista de transportadoras
-• Status de embarques
-• Analytics em tempo real
+🌐 **AMBIENTE RENDER.COM:**
+• Status: ✅ Online e operacional
+• MCP Web: ✅ Ativo
+• Banco PostgreSQL: ✅ Conectado
+• API REST: ✅ Funcionando
+
+⚡ **FUNCIONALIDADES MCP:**
+• consultar_fretes - Busca por cliente
+• consultar_transportadoras - Lista completa
+• consultar_embarques - Embarques ativos
+• status_sistema - Este relatório
+
+🤖 **COMANDOS EXEMPLO:**
+• "Fretes do cliente Assai"
+• "Listar transportadoras"
+• "Embarques em andamento"
+• "Status do sistema"
 
 🕒 **Verificado em:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
-🔗 **MCP Web Server v1.0 conectado com sucesso**"""
+🔗 **MCP Web Server v2.0 - Dados reais integrados**"""
             
             else:
                 # Fallback quando Flask não disponível
@@ -167,7 +183,7 @@ class MCPWebServer:
             return f"❌ Erro ao obter status do sistema: {str(e)}"
     
     def _consultar_fretes(self, args: Dict[str, Any]) -> str:
-        """Consulta fretes - baseado na versão que funcionou"""
+        """Consulta fretes - versão melhorada com dados reais"""
         try:
             cliente = args.get("cliente")
             
@@ -176,10 +192,11 @@ class MCPWebServer:
                     query = db.session.query(Frete)
                     
                     if cliente:
-                        # Adaptar conforme estrutura real do modelo Frete
-                        query = query.filter(Frete.id.isnot(None))  # Placeholder
-                        
-                    fretes = query.limit(10).all()
+                        # Buscar por nome do cliente (case-insensitive)
+                        query = query.filter(Frete.nome_cliente.ilike(f'%{cliente}%'))
+                    
+                    # Limitar a últimos 10 fretes e ordenar por ID desc
+                    fretes = query.order_by(Frete.id.desc()).limit(10).all()
                     
                     if not fretes:
                         return f"🔍 **CONSULTA DE FRETES**\n\nNenhum frete encontrado{f' para o cliente {cliente}' if cliente else ''}."
@@ -188,12 +205,39 @@ class MCPWebServer:
                     if cliente:
                         resultado += f"**Cliente:** {cliente}\n\n"
                     
-                    for i, frete in enumerate(fretes, 1):
+                    for frete in fretes:
+                        # Status com emoji
+                        status_emoji = {
+                            'PENDENTE': '⏳',
+                            'EM_TRATATIVA': '🔄', 
+                            'APROVADO': '✅',
+                            'REJEITADO': '❌',
+                            'PAGO': '💰',
+                            'CANCELADO': '🚫'
+                        }.get(frete.status, '📋')
+                        
                         resultado += f"📦 **Frete #{frete.id}**\n"
-                        resultado += f"   • Status: {getattr(frete, 'status_aprovacao', 'N/A')}\n"
-                        resultado += f"   • Valor: R$ {getattr(frete, 'valor_considerado', 0):,.2f}\n\n"
+                        resultado += f"   • Cliente: {frete.nome_cliente}\n"
+                        resultado += f"   • Destino: {frete.cidade_destino}/{frete.uf_destino}\n"
+                        resultado += f"   • Peso: {frete.peso_total:.0f} kg\n"
+                        resultado += f"   • Valor Cotado: R$ {frete.valor_cotado:,.2f}\n"
+                        if frete.valor_considerado:
+                            resultado += f"   • Valor Considerado: R$ {frete.valor_considerado:,.2f}\n"
+                        if frete.numero_cte:
+                            resultado += f"   • CTe: {frete.numero_cte}\n"
+                        resultado += f"   • Status: {status_emoji} {frete.status}\n"
+                        
+                        # Transportadora
+                        if frete.transportadora:
+                            resultado += f"   • Transportadora: {frete.transportadora.razao_social}\n"
+                        
+                        resultado += "\n"
                         
                     resultado += f"📈 **Total encontrado:** {len(fretes)} fretes"
+                    
+                    if cliente:
+                        resultado += f" para {cliente}"
+                    
                     return resultado
             
             else:
@@ -258,13 +302,14 @@ class MCPWebServer:
             return f"❌ Erro na consulta de transportadoras: {str(e)}"
     
     def _consultar_embarques(self, args: Dict[str, Any]) -> str:
-        """Consulta embarques - baseado na versão que funcionou"""
+        """Consulta embarques - versão melhorada com dados reais"""
         try:
             if FLASK_AVAILABLE and current_app:
                 with current_app.app_context():
+                    # Buscar embarques ativos ordenados por número desc
                     embarques = db.session.query(Embarque).filter(
                         Embarque.status == 'ativo'
-                    ).limit(10).all()
+                    ).order_by(Embarque.numero.desc()).limit(10).all()
                     
                     if not embarques:
                         return "🚚 **EMBARQUES ATIVOS**\n\nNenhum embarque ativo encontrado."
@@ -272,10 +317,30 @@ class MCPWebServer:
                     resultado = f"🚚 **EMBARQUES ATIVOS**\n\n**Total:** {len(embarques)} embarques\n\n"
                     
                     for embarque in embarques:
+                        # Calcular totais reais
+                        peso_total = embarque.total_peso_pedidos() or 0
+                        valor_total = embarque.total_valor_pedidos() or 0
+                        total_notas = embarque.total_notas()
+                        
                         resultado += f"📋 **Embarque #{embarque.numero}**\n"
-                        resultado += f"   • Status: {embarque.status}\n"
-                        resultado += f"   • Peso: {getattr(embarque, 'peso_total', 0):.0f} kg\n"
-                        resultado += f"   • Valor: R$ {getattr(embarque, 'valor_total', 0):,.2f}\n\n"
+                        resultado += f"   • Status: {embarque.status.title()}\n"
+                        resultado += f"   • Total NFs: {total_notas}\n"
+                        resultado += f"   • Peso: {peso_total:.0f} kg\n"
+                        resultado += f"   • Valor: R$ {valor_total:,.2f}\n"
+                        
+                        # Transportadora
+                        if embarque.transportadora:
+                            resultado += f"   • Transportadora: {embarque.transportadora.razao_social}\n"
+                        
+                        # Data prevista
+                        if embarque.data_prevista_embarque:
+                            resultado += f"   • Data Prevista: {embarque.data_prevista_embarque.strftime('%d/%m/%Y')}\n"
+                        
+                        # Status das NFs e Fretes
+                        resultado += f"   • Status NFs: {embarque.status_nfs}\n"
+                        resultado += f"   • Status Fretes: {embarque.status_fretes}\n"
+                        
+                        resultado += "\n"
                     
                     return resultado
             
