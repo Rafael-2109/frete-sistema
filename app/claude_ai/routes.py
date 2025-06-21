@@ -1,4 +1,4 @@
-from flask import render_template, request, jsonify, current_app
+from flask import render_template, request, jsonify, current_app, flash, redirect, url_for
 from flask_login import login_required, current_user
 import subprocess
 import json
@@ -7,6 +7,13 @@ import sys
 from datetime import datetime
 from .mcp_connector import MCPSistemaOnline
 from . import claude_ai_bp
+
+# Importar MCP v4.0 Server
+try:
+    from .mcp_v4_server import mcp_v4_server, process_query
+    MCP_V4_AVAILABLE = True
+except ImportError:
+    MCP_V4_AVAILABLE = False
 
 @claude_ai_bp.route('/chat')
 @login_required
@@ -256,6 +263,111 @@ def test_mcp_directly():
         current_app.logger.error(f"Erro teste MCP: {e}")
         return jsonify({
             'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+# Adicionar nova rota para MCP v4.0
+@claude_ai_bp.route('/api/v4/query', methods=['POST'])
+@login_required
+def mcp_v4_query():
+    """Endpoint para consultas MCP v4.0 com IA"""
+    try:
+        data = request.get_json()
+        query = data.get('query', '')
+        user_id = str(current_user.id) if current_user.is_authenticated else 'anonymous'
+        
+        if not query:
+            return jsonify({
+                'success': False,
+                'error': 'Query não fornecida'
+            }), 400
+        
+        if not MCP_V4_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'MCP v4.0 não disponível'
+            }), 503
+        
+        # Processar query com MCP v4.0
+        response = process_query(query, user_id)
+        
+        return jsonify({
+            'success': True,
+            'response': response,
+            'query': query,
+            'user_id': user_id,
+            'version': '4.0',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro no MCP v4.0: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+@claude_ai_bp.route('/v4/dashboard')
+@login_required
+def dashboard_v4():
+    """Dashboard MCP v4.0 com métricas avançadas"""
+    try:
+        # Obter métricas do servidor v4.0
+        if MCP_V4_AVAILABLE:
+            metrics = {
+                'requests_processed': mcp_v4_server.metrics['requests_processed'],
+                'intents_classified': mcp_v4_server.metrics['intents_classified'],
+                'cache_hits': mcp_v4_server.metrics['cache_hits'],
+                'cache_misses': mcp_v4_server.metrics['cache_misses'],
+                'uptime': str(datetime.now() - mcp_v4_server.metrics['start_time']).split('.')[0],
+                'ai_infrastructure': True
+            }
+        else:
+            metrics = {'ai_infrastructure': False}
+        
+        return render_template('claude_ai/dashboard_v4.html', 
+                             metrics=metrics,
+                             mcp_available=MCP_V4_AVAILABLE)
+        
+    except Exception as e:
+        logger.error(f"Erro no dashboard v4.0: {e}")
+        flash(f'Erro ao carregar dashboard v4.0: {str(e)}', 'error')
+        return redirect(url_for('claude_ai.dashboard'))
+
+@claude_ai_bp.route('/v4/status')
+def status_v4():
+    """Status da infraestrutura MCP v4.0 (endpoint público)"""
+    try:
+        if MCP_V4_AVAILABLE:
+            # Processar consulta de status via MCP v4.0
+            status_response = process_query("Status do sistema")
+            
+            return jsonify({
+                'success': True,
+                'status': 'operational',
+                'version': '4.0',
+                'ai_infrastructure': True,
+                'mcp_server': 'active',
+                'response': status_response,
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'status': 'unavailable',
+                'version': '4.0',
+                'ai_infrastructure': False,
+                'mcp_server': 'inactive',
+                'error': 'MCP v4.0 não disponível',
+                'timestamp': datetime.now().isoformat()
+            }), 503
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro no status v4.0: {e}")
+        return jsonify({
+            'success': False,
+            'status': 'error',
             'error': str(e),
             'timestamp': datetime.now().isoformat()
         }), 500
