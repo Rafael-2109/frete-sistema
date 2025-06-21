@@ -17,7 +17,7 @@ import re
 # Importar infraestrutura v4.0
 try:
     from app.utils.redis_cache import intelligent_cache, cache_result
-    from app.utils.ai_logging import ai_logger, log_execution_time, log_api_endpoint
+    from app.utils.ai_logging import ai_logger, log_execution_time, log_api_endpoint, log_info
     from config_ai import ai_config
     AI_INFRASTRUCTURE_AVAILABLE = True
 except ImportError as e:
@@ -103,7 +103,7 @@ class NLPProcessor:
         }
         
         if AI_INFRASTRUCTURE_AVAILABLE:
-            ai_logger.log_info("✅ NLP Processor inicializado com patterns")
+            log_info("✅ NLP Processor inicializado com patterns")
     
     def classify_intent(self, query: str) -> Tuple[str, Dict[str, Any]]:
         """
@@ -172,7 +172,7 @@ class ContextManager:
         self.max_context_length = ai_config.NLP_CONFIG.get('max_context_length', 10) if AI_INFRASTRUCTURE_AVAILABLE else 10
         
         if AI_INFRASTRUCTURE_AVAILABLE:
-            ai_logger.log_info("✅ Context Manager inicializado")
+            log_info("✅ Context Manager inicializado")
     
     def add_interaction(self, user_id: str, query: str, response: str, intent: str = None, entities: Dict = None):
         """Adiciona interação ao contexto do usuário"""
@@ -259,7 +259,7 @@ class MCPv4Server:
         }
         
         if AI_INFRASTRUCTURE_AVAILABLE:
-            ai_logger.log_info(f"🚀 MCP v4.0 Server inicializado com {len(self.tools)} ferramentas")
+            log_info(f"🚀 MCP v4.0 Server inicializado com {len(self.tools)} ferramentas")
         else:
             logger.info(f"🚀 MCP v4.0 Server inicializado (modo básico) com {len(self.tools)} ferramentas")
     

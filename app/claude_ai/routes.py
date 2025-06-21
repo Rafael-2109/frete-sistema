@@ -331,7 +331,7 @@ def dashboard_v4():
                              mcp_available=MCP_V4_AVAILABLE)
         
     except Exception as e:
-        logger.error(f"Erro no dashboard v4.0: {e}")
+        current_app.logger.error(f"Erro no dashboard v4.0: {e}")
         flash(f'Erro ao carregar dashboard v4.0: {str(e)}', 'error')
         return redirect(url_for('claude_ai.dashboard'))
 
