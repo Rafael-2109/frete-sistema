@@ -1,0 +1,376 @@
+{% extends 'base.html' %}
+
+{% block title %}Claude AI - Assistente do Sistema{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- 📱 Sidebar de Histórico (Opcional) -->
+        <div class="col-md-3 d-none d-md-block">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="fas fa-history"></i> Histórico de Chats</h6>
+                </div>
+                <div class="card-body" id="chat-history">
+                    <div class="text-muted text-center">
+                        <i class="fas fa-comments fa-2x mb-2"></i><br>
+                        Suas conversas aparecerão aqui
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 💬 Área Principal do Chat -->
+        <div class="col-md-9">
+            <div class="card h-100" style="min-height: 600px;">
+                <!-- Header do Chat -->
+                <div class="card-header bg-gradient-primary text-white d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-robot fa-2x me-3"></i>
+                        <div>
+                            <h5 class="mb-0">Claude AI</h5>
+                            <small class="opacity-75">Assistente Inteligente do Sistema de Fretes</small>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <span class="badge bg-success">
+                            <i class="fas fa-circle me-1" style="font-size: 8px;"></i>
+                            Online
+                        </span>
+                        <button class="btn btn-outline-light btn-sm" onclick="clearChat()" title="Limpar Chat">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Área de Mensagens -->
+                <div class="card-body d-flex flex-column p-0">
+                    <div id="chat-messages" class="flex-fill overflow-auto p-3" style="max-height: 400px; background: #f8f9fa;">
+                        <!-- Mensagem de boas-vindas -->
+                        <div class="chat-message bot-message">
+                            <div class="d-flex mb-3">
+                                <div class="avatar bg-primary text-white rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                    <i class="fas fa-robot"></i>
+                                </div>
+                                <div class="message-content">
+                                    <div class="bg-white rounded-3 p-3 shadow-sm">
+                                        <h6 class="mb-2">👋 Olá! Sou o Claude AI</h6>
+                                        <p class="mb-2">Sou seu assistente inteligente para o sistema de fretes. Posso ajudar você com:</p>
+                                        <ul class="mb-2 small">
+                                            <li>📊 Status do sistema e estatísticas</li>
+                                            <li>🚛 Consultas sobre transportadoras</li>
+                                            <li>📦 Informações sobre fretes</li>
+                                            <li>🚚 Status de embarques</li>
+                                            <li>❓ Suporte e orientações</li>
+                                        </ul>
+                                        <p class="mb-0"><strong>Como posso ajudar você hoje?</strong></p>
+                                    </div>
+                                    <small class="text-muted">Agora</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Indicador de Digitação -->
+                    <div id="typing-indicator" class="px-3 py-2" style="display: none;">
+                        <div class="d-flex align-items-center text-muted">
+                            <div class="avatar bg-primary text-white rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 30px; height: 30px;">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="typing-dots">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                            <span class="ms-2">Claude está pensando...</span>
+                        </div>
+                    </div>
+
+                    <!-- Sugestões Rápidas -->
+                    <div class="px-3 py-2 bg-light border-top">
+                        <div class="d-flex flex-wrap gap-2" id="quick-suggestions">
+                            <button class="btn btn-outline-primary btn-sm suggestion-btn" data-query="status do sistema">
+                                📊 Status do Sistema
+                            </button>
+                            <button class="btn btn-outline-success btn-sm suggestion-btn" data-query="listar transportadoras">
+                                🚛 Transportadoras
+                            </button>
+                            <button class="btn btn-outline-info btn-sm suggestion-btn" data-query="consultar fretes">
+                                📦 Fretes
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm suggestion-btn" data-query="embarques ativos">
+                                🚚 Embarques
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm suggestion-btn" data-query="ajuda">
+                                ❓ Ajuda
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Área de Input -->
+                    <div class="p-3 border-top">
+                        <form id="message-form" class="d-flex gap-2">
+                            <input type="text" id="message-input" class="form-control" 
+                                   placeholder="Digite sua pergunta..." maxlength="500" autofocus>
+                            <button type="submit" id="send-button" class="btn btn-primary" disabled>
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </form>
+                        <small class="text-muted">
+                            <i class="fas fa-lightbulb"></i> 
+                            Dica: Seja específico em suas perguntas para obter respostas mais precisas
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Estilos Personalizados -->
+<style>
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.chat-message {
+    margin-bottom: 1rem;
+}
+
+.bot-message .message-content {
+    max-width: 80%;
+}
+
+.user-message {
+    justify-content: flex-end;
+}
+
+.user-message .message-content {
+    max-width: 80%;
+    order: 1;
+}
+
+.user-message .avatar {
+    order: 2;
+    background: #28a745 !important;
+    margin-left: 1rem;
+    margin-right: 0;
+}
+
+.user-message .bg-primary {
+    background: #007bff !important;
+    color: white;
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.typing-dots span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #6c757d;
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.4;
+    }
+    30% {
+        transform: translateY(-10px);
+        opacity: 1;
+    }
+}
+
+.suggestion-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#chat-messages {
+    scroll-behavior: smooth;
+}
+
+/* Scroll personalizado */
+#chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+#chat-messages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+#chat-messages::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+#chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+</style>
+
+<!-- JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+    const chatMessages = document.getElementById('chat-messages');
+    const typingIndicator = document.getElementById('typing-indicator');
+    const quickSuggestions = document.getElementById('quick-suggestions');
+    
+    let messageHistory = [];
+    
+    // Event listeners
+    messageInput.addEventListener('input', function() {
+        sendButton.disabled = this.value.trim().length === 0;
+    });
+    
+    messageForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        sendMessage();
+    });
+    
+    // Sugestões rápidas
+    quickSuggestions.addEventListener('click', function(e) {
+        if (e.target.classList.contains('suggestion-btn')) {
+            messageInput.value = e.target.dataset.query;
+            sendMessage();
+        }
+    });
+    
+    // Função principal para enviar mensagem
+    async function sendMessage() {
+        const message = messageInput.value.trim();
+        if (!message) return;
+        
+        // Adiciona mensagem do usuário
+        addMessage(message, 'user');
+        messageInput.value = '';
+        sendButton.disabled = true;
+        
+        // Mostra indicador de digitação
+        showTyping(true);
+        
+        try {
+            const response = await fetch('/claude/api/query', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ query: message })
+            });
+            
+            const data = await response.json();
+            
+            setTimeout(() => {  // Simula tempo de resposta
+                showTyping(false);
+                
+                if (data.success) {
+                    addMessage(data.response, 'bot');
+                } else {
+                    addMessage('❌ **Erro**: ' + (data.error || 'Não foi possível processar sua solicitação.'), 'bot');
+                }
+            }, 1000);
+            
+        } catch (error) {
+            showTyping(false);
+            console.error('Erro na consulta:', error);
+            addMessage('❌ **Erro de conexão**. Verifique sua internet e tente novamente.', 'bot');
+        }
+    }
+    
+    // Adicionar mensagem ao chat
+    function addMessage(text, sender) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${sender}-message`;
+        
+        const time = new Date().toLocaleTimeString('pt-BR', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+        
+        const avatarIcon = sender === 'user' ? 'fa-user' : 'fa-robot';
+        const avatarBg = sender === 'user' ? 'bg-success' : 'bg-primary';
+        const messageBg = sender === 'user' ? 'bg-primary text-white' : 'bg-white';
+        
+        messageDiv.innerHTML = `
+            <div class="d-flex mb-3">
+                <div class="avatar ${avatarBg} text-white rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                    <i class="fas ${avatarIcon}"></i>
+                </div>
+                <div class="message-content">
+                    <div class="${messageBg} rounded-3 p-3 shadow-sm">
+                        ${formatMessage(text)}
+                    </div>
+                    <small class="text-muted">${time}</small>
+                </div>
+            </div>
+        `;
+        
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        
+        // Salva no histórico
+        messageHistory.push({ text, sender, time });
+    }
+    
+    // Formatar mensagem com markdown básico
+    function formatMessage(text) {
+        return text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/### (.*?)$/gm, '<h6>$1</h6>')
+            .replace(/## (.*?)$/gm, '<h5>$1</h5>')
+            .replace(/# (.*?)$/gm, '<h4>$1</h4>')
+            .replace(/```([\s\S]*?)```/g, '<pre class="bg-light p-2 rounded"><code>$1</code></pre>')
+            .replace(/`(.*?)`/g, '<code class="bg-light px-1 rounded">$1</code>')
+            .replace(/\n/g, '<br>');
+    }
+    
+    // Mostrar/ocultar indicador de digitação
+    function showTyping(show) {
+        typingIndicator.style.display = show ? 'block' : 'none';
+        if (show) {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    }
+    
+    // Limpar chat
+    window.clearChat = function() {
+        if (confirm('Tem certeza que deseja limpar todo o histórico do chat?')) {
+            chatMessages.innerHTML = '';
+            messageHistory = [];
+            // Adiciona mensagem de boas-vindas novamente
+            location.reload();
+        }
+    };
+    
+    // Verifica saúde do serviço
+    fetch('/claude/api/health')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('✅ Claude AI service online');
+            }
+        })
+        .catch(error => {
+            console.warn('⚠️ Claude AI service not available:', error);
+        });
+});
+</script>
+{% endblock %} 
