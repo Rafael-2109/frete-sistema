@@ -34,25 +34,68 @@ class MCPSistemaOnline:
         try:
             query_lower = query.lower()
             
-            # Mapear query para ferramenta MCP correspondente
-            if any(word in query_lower for word in ['status', 'sistema', 'funcionando']):
+            # 🎯 PRIORIDADE ALTA: Pedidos e entregas por cliente (para representantes)
+            if any(word in query_lower for word in ['pedidos', 'pedido', 'entregas', 'entrega']):
+                cliente, uf = self._extrair_cliente_e_uf(query)
+                if cliente:
+                    args = {"cliente": cliente}
+                    if uf:
+                        args["uf"] = uf
+                    return self._executar_ferramenta("consultar_pedidos_cliente", args)
+                else:
+                    return {
+                        'success': False,
+                        'response': "❌ **CONSULTA DE PEDIDOS**\n\nInforme o cliente. Exemplo: 'Pedidos do cliente Assai de SP'",
+                        'timestamp': datetime.now().isoformat(),
+                        'source': 'VALIDATION_ERROR'
+                    }
+            
+            # 📊 Exportação para Excel
+            elif any(word in query_lower for word in ['exportar', 'excel', 'planilha', 'relatório']):
+                cliente, uf = self._extrair_cliente_e_uf(query)
+                if cliente:
+                    args = {"cliente": cliente}
+                    if uf:
+                        args["uf"] = uf
+                    return self._executar_ferramenta("exportar_pedidos_excel", args)
+                else:
+                    return {
+                        'success': False,
+                        'response': "❌ **EXPORTAÇÃO EXCEL**\n\nInforme o cliente. Exemplo: 'Exportar pedidos do Assai para Excel'",
+                        'timestamp': datetime.now().isoformat(),
+                        'source': 'VALIDATION_ERROR'
+                    }
+            
+            # Status do sistema
+            elif any(word in query_lower for word in ['status', 'sistema', 'funcionando']):
                 return self._executar_ferramenta("status_sistema")
             
+            # Transportadoras
             elif any(word in query_lower for word in ['transportadora', 'empresa', 'cnpj']):
                 return self._executar_ferramenta("consultar_transportadoras")
             
-            elif any(word in query_lower for word in ['frete', 'cliente']):
-                # Extrair cliente se mencionado
+            # Fretes (diferente de pedidos)
+            elif any(word in query_lower for word in ['frete', 'valor', 'cotação']) and 'pedidos' not in query_lower:
                 cliente = self._extrair_cliente_query(query)
                 args = {"cliente": cliente} if cliente else {}
                 return self._executar_ferramenta("consultar_fretes", args)
             
+            # Embarques
             elif any(word in query_lower for word in ['embarque', 'ativo', 'andamento']):
                 return self._executar_ferramenta("consultar_embarques")
             
             else:
-                # Query genérica - mostrar status
-                return self._executar_ferramenta("status_sistema")
+                # Query genérica - tentar interpretar se contém nome de cliente
+                cliente, uf = self._extrair_cliente_e_uf(query)
+                if cliente:
+                    # Se tem cliente mas não especificou o que quer, mostrar pedidos
+                    args = {"cliente": cliente}
+                    if uf:
+                        args["uf"] = uf
+                    return self._executar_ferramenta("consultar_pedidos_cliente", args)
+                else:
+                    # Sem contexto claro - mostrar status
+                    return self._executar_ferramenta("status_sistema")
                 
         except Exception as e:
             logger.error(f"Erro consulta rápida: {e}")
@@ -166,13 +209,75 @@ class MCPSistemaOnline:
             'source': 'FALLBACK'
         }
     
+    def _extrair_cliente_e_uf(self, query: str) -> tuple[Optional[str], Optional[str]]:
+        """Extrai nome do cliente e UF da query de forma inteligente"""
+        import re
+        
+        # Normalizar query
+        query_clean = query.strip()
+        palavras = query_clean.split()
+        
+        # Lista de UFs brasileiras
+        ufs_brasil = [
+            'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+            'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+            'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+        ]
+        
+        # Extrair UF
+        uf = None
+        for palavra in palavras:
+            palavra_upper = palavra.upper().strip('.,!?')
+            if palavra_upper in ufs_brasil:
+                uf = palavra_upper
+                break
+        
+        # Padrões para extrair cliente
+        cliente = None
+        
+        # Padrão 1: "Pedidos do [CLIENTE]" ou "Entregas do [CLIENTE]"
+        match = re.search(r'(?:pedidos?|entregas?|fretes?|exportar|relatório)\s+do?\s+(?:cliente\s+)?([A-Za-z][A-Za-z0-9\s]+?)(?:\s+(?:de|em|para)\s+[A-Z]{2}|\s*$|para\s+excel)', query_clean, re.IGNORECASE)
+        if match:
+            cliente = match.group(1).strip()
+        
+        # Padrão 2: "Pedidos da [CLIENTE]" 
+        if not cliente:
+            match = re.search(r'(?:pedidos?|entregas?|fretes?|exportar|relatório)\s+da\s+(?:cliente\s+)?([A-Za-z][A-Za-z0-9\s]+?)(?:\s+(?:de|em|para)\s+[A-Z]{2}|\s*$|para\s+excel)', query_clean, re.IGNORECASE)
+            if match:
+                cliente = match.group(1).strip()
+        
+        # Padrão 3: "Cliente [CLIENTE]"
+        if not cliente:
+            match = re.search(r'cliente\s+([A-Za-z][A-Za-z0-9\s]+?)(?:\s+(?:de|em)\s+[A-Z]{2}|\s*$)', query_clean, re.IGNORECASE)
+            if match:
+                cliente = match.group(1).strip()
+        
+        # Padrão 4: Nomes conhecidos de clientes (casos especiais)
+        clientes_conhecidos = ['Assai', 'Carrefour', 'Magazine Luiza', 'Renner', 'Atacadão', 'Hudson']
+        if not cliente:
+            for nome_cliente in clientes_conhecidos:
+                if nome_cliente.lower() in query.lower():
+                    cliente = nome_cliente
+                    break
+        
+        # Limpar cliente se encontrado
+        if cliente:
+            # Remover palavras comuns do final
+            palavras_remover = ['de', 'em', 'para', 'excel', 'planilha', 'relatório']
+            palavras_cliente = cliente.split()
+            while palavras_cliente and palavras_cliente[-1].lower() in palavras_remover:
+                palavras_cliente.pop()
+            cliente = ' '.join(palavras_cliente).strip()
+            
+            # Capitalizar primeira letra de cada palavra
+            cliente = ' '.join(word.capitalize() for word in cliente.split())
+        
+        return cliente, uf
+    
     def _extrair_cliente_query(self, query: str) -> Optional[str]:
-        """Extrai nome do cliente da query"""
-        palavras = query.split()
-        for i, palavra in enumerate(palavras):
-            if palavra.lower() in ['cliente', 'do', 'da'] and i + 1 < len(palavras):
-                return palavras[i + 1]
-        return None
+        """Método mantido para compatibilidade - usa a nova função"""
+        cliente, _ = self._extrair_cliente_e_uf(query)
+        return cliente
     
     def status_rapido(self) -> dict:
         """Status rápido do sistema"""
