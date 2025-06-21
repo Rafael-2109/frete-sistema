@@ -227,8 +227,9 @@ class MCPWebServer:
                     
                     for transportadora in transportadoras:
                         tipo = "✅ Freteiro" if getattr(transportadora, 'freteiro', False) else "🏢 Empresa"
-                        resultado += f"🔹 **{transportadora.nome}**\n"
+                        resultado += f"🔹 **{transportadora.razao_social}**\n"
                         resultado += f"   • CNPJ: {getattr(transportadora, 'cnpj', 'N/A')}\n"  
+                        resultado += f"   • Cidade: {getattr(transportadora, 'cidade', 'N/A')}/{getattr(transportadora, 'uf', 'N/A')}\n"
                         resultado += f"   • Tipo: {tipo}\n\n"
                     
                     return resultado
