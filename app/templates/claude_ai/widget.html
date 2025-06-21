@@ -472,7 +472,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         try {
             // Chama API do Claude
-            const response = await fetch('/claude/api/query', {
+                            const response = await fetch('/claude-ai/api/query', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -538,7 +538,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Verificar saúde do serviço ao carregar
-    fetch('/claude/api/health')
+                fetch('/claude-ai/api/health')
         .then(response => response.json())
         .then(data => {
             if (data.success) {
