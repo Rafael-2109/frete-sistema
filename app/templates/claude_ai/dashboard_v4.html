@@ -202,6 +202,12 @@
 </div>
 
 <script>
+// Função para obter CSRF token
+function getCSRFToken() {
+    const metaTag = document.querySelector('meta[name="csrf-token"]');
+    return metaTag ? metaTag.getAttribute('content') : '';
+}
+
 // Função para testar MCP v4.0
 async function testMCPv4() {
     const query = document.getElementById('testQuery').value.trim();
@@ -222,6 +228,7 @@ async function testMCPv4() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
             },
             body: JSON.stringify({ query: query })
         });

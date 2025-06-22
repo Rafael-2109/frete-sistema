@@ -94,6 +94,91 @@
         </div>
     </div>
 
+    <!-- 🤖 Seção MCP v4.0 - NOVA -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow border-left-dark">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-gradient-dark text-white">
+                    <h6 class="m-0 font-weight-bold">🤖 Claude AI - MCP v4.0</h6>
+                    <div>
+                        <span class="badge badge-success">✅ ATIVO</span>
+                        <span class="badge badge-info ms-1">11 Ferramentas</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="text-dark mb-2">Sistema Inteligente Avançado</h5>
+                            <p class="text-muted mb-3">
+                                Consulte dados em <strong>linguagem natural</strong>, detecte anomalias, analise tendências e otimize rotas usando inteligência artificial conectada aos dados reais do sistema.
+                            </p>
+                            <div class="row">
+                                <div class="col-sm-6 mb-2">
+                                    <span class="badge badge-primary mr-1">📊 Análise de Tendências</span>
+                                    <span class="badge badge-success mr-1">🔍 Detecção de Anomalias</span>
+                                </div>
+                                <div class="col-sm-6 mb-2">
+                                    <span class="badge badge-warning mr-1">🗺️ Otimização de Rotas</span>
+                                    <span class="badge badge-info mr-1">💰 Previsão de Custos</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="mb-3">
+                                <i class="fas fa-robot fa-3x text-primary mb-2"></i>
+                                <p class="text-muted small">NLP com 90% precisão</p>
+                            </div>
+                            <div class="btn-group-vertical w-100" role="group">
+                                <a href="/claude-ai/v4/dashboard" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-tachometer-alt"></i> Dashboard v4.0
+                                </a>
+                                <a href="/claude-ai/chat" class="btn btn-success btn-sm">
+                                    <i class="fas fa-comments"></i> Chat Inteligente
+                                </a>
+                                <button type="button" class="btn btn-info btn-sm" onclick="mostrarExemplos()">
+                                    <i class="fas fa-lightbulb"></i> Ver Exemplos
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Exemplos ocultos inicialmente -->
+                    <div id="exemplos-mcp" class="mt-4" style="display: none;">
+                        <hr>
+                        <h6 class="text-primary mb-3">💬 Exemplos de Consultas em Linguagem Natural:</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="bg-light p-3 rounded mb-2">
+                                    <strong>"Como estão os fretes do Assai em SP?"</strong>
+                                    <br><small class="text-muted">→ Consulta inteligente por cliente e UF</small>
+                                </div>
+                                <div class="bg-light p-3 rounded mb-2">
+                                    <strong>"Detectar problemas nos custos"</strong>
+                                    <br><small class="text-muted">→ Análise automática de anomalias</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="bg-light p-3 rounded mb-2">
+                                    <strong>"Análise de tendências dos últimos 30 dias"</strong>
+                                    <br><small class="text-muted">→ Analytics avançado com dados reais</small>
+                                </div>
+                                <div class="bg-light p-3 rounded mb-2">
+                                    <strong>"Otimizar rotas para RJ e MG"</strong>
+                                    <br><small class="text-muted">→ Otimização baseada em histórico</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-center mt-3">
+                            <a href="/claude-ai/v4/dashboard" class="btn btn-primary">
+                                🚀 Testar Agora
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 🆕 Tabela com Últimos Embarques da API -->
     <div class="row">
         <div class="col-lg-8">
@@ -289,6 +374,23 @@ setInterval(function() {
     carregarEstatisticas();
     carregarUltimosEmbarques();
 }, 5 * 60 * 1000);
+
+// 🤖 Função para mostrar/ocultar exemplos MCP
+function mostrarExemplos() {
+    const exemploDiv = document.getElementById('exemplos-mcp');
+    const botao = event.target;
+    
+    if (exemploDiv.style.display === 'none') {
+        exemploDiv.style.display = 'block';
+        botao.innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar Exemplos';
+        
+        // Scroll suave para os exemplos
+        exemploDiv.scrollIntoView({ behavior: 'smooth' });
+    } else {
+        exemploDiv.style.display = 'none';
+        botao.innerHTML = '<i class="fas fa-lightbulb"></i> Ver Exemplos';
+    }
+}
 </script>
 
 {% endblock %}
