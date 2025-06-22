@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import json
 from flask_login import current_user
+from sqlalchemy import func, and_, or_
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +50,9 @@ CONTEXTO EMPRESARIAL:
 - Precisão é fundamental para tomada de decisão
 
 IMPORTANTE - DIFERENCIAÇÃO DE CLIENTES:
-🏢 **ATACADOS** (múltiplos clientes): "Total Atacado", "Bento Atacado", "ATR Atacado", "MIKRO ATACADO E DISTRIBUIDOR"
-🎯 **ATACADÃO** (cliente específico): Refere-se especificamente ao cliente "Atacadão"
-🏪 **FILIAIS**: "Atacadão 154", "Atacadão 183", "Assai LJ 189", "Assai LJ 315"
+🏢 **GRUPOS DE CLIENTES**: Quando mencionado "atacados", "supermercados", refere-se a múltiplos clientes
+🏬 **CLIENTE ESPECÍFICO**: Nome exato do cliente refere-se apenas àquele cliente
+🏪 **FILIAIS**: "Cliente 001", "Cliente LJ 001", "Loja 123" referem-se a filiais específicas
 
 DIFERENÇA CONCEITUAL NO SISTEMA:
 🚚 **FRETES** = Cotações, contratos de transporte, valores, aprovações
@@ -59,9 +60,9 @@ DIFERENÇA CONCEITUAL NO SISTEMA:
 🚛 **EMBARQUES** = Despachos, envios, movimentação física
 
 FLUXO DE PEDIDOS:
-1. **ABERTO**: Sem cotação, tem data_expedicao (previsão), data_agenda, protocolo_agendamento
-2. **COTADO**: Com embarques, data_embarque_prevista, data_agenda, protocolo_agendamento  
-3. **FATURADO**: Procurar num_pedido → RelatorioFaturamentoImportado.origem → numero_nf → EntregaMonitorada
+1. **ABERTO**: Pedidos com data expedição (previsão) → agendamento
+2. **COTADO**: Embarques com data prevista → agendamento + protocolo
+3. **DESPACHADO**: Procurar num_pedido → RelatorioImportado.origem → numero_nf → EntregaMonitorada
 
 DADOS DISPONÍVEIS EM CONTEXTO:
 {dados_contexto_especifico}
@@ -75,17 +76,16 @@ SUAS CAPACIDADES AVANÇADAS:
 
 INSTRUÇÕES CRÍTICAS:
 1. **PRECISÃO ABSOLUTA** - Dados incorretos custam milhões
-2. **CONTEXTO ESPECÍFICO** - Se perguntou sobre Atacadão, foque no Atacadão
-3. **ANÁLISE TEMPORAL** - Default 7 dias, mas aceite personalizações (30, 60 dias, comparações)
+2. **CONTEXTO ESPECÍFICO** - Se perguntou sobre cliente X, foque no cliente X
+3. **ANÁLISE TEMPORAL** - Extrair período (7, 30, 60 dias) ou usar padrão
 4. **MÉTRICAS CALCULADAS** - Inclua % entregas no prazo, atrasos médios, comparações
 5. **VENDEDORES** - Mostre apenas clientes que têm permissão
-6. **INTELIGÊNCIA CONTEXTUAL** - Diferencie "atacados" de "Atacadão" de "filiais"
+6. **INTELIGÊNCIA CONTEXTUAL** - Diferencie grupos de clientes vs clientes específicos vs filiais
 
 EXEMPLOS DE INTERPRETAÇÃO:
-- "Entregas dos atacados" → Todos clientes com "atacado" no nome
-- "Entregas do Atacadão" → Cliente específico "Atacadão"  
-- "Atacadão 154" → Filial específica do Atacadão
-- "Como estão as entregas?" → Últimos 7 dias, oferecer outros períodos
+- "Entregas dos supermercados" → GRUPO_SUPERMERCADOS (múltiplos clientes)
+- "Entregas do Cliente ABC" → Cliente específico "Cliente ABC"
+- "Cliente ABC 001" → Filial específica do Cliente ABC
 
 Responda sempre em português brasileiro com precisão industrial."""
     
@@ -167,30 +167,38 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
             "metricas_solicitadas": []
         }
         
-        # ANÁLISE DE CLIENTE ESPECÍFICO
-        if "atacadão" in consulta_lower and not re.search(r"atacad[oa]s", consulta_lower):
-            analise["cliente_especifico"] = "Atacadão"
-            analise["tipo_consulta"] = "cliente_especifico"
-            
-            # Verificar se é filial específica
-            filial_match = re.search(r"atacadão\s*(\d+)", consulta_lower)
-            if filial_match:
-                analise["filial"] = filial_match.group(1)
-                analise["cliente_especifico"] = f"Atacadão {filial_match.group(1)}"
+        # ANÁLISE DE CLIENTE ESPECÍFICO - Sistema genérico
+        # Detectar se mencionou cliente específico por nome
+        palavras_consulta = consulta_lower.split()
+        clientes_detectados = []
         
-        elif "assai" in consulta_lower:
-            analise["cliente_especifico"] = "Assai"
-            analise["tipo_consulta"] = "cliente_especifico"
-            
-            # Verificar filial Assai
-            filial_match = re.search(r"assai\s*(?:lj\s*)?(\d+)", consulta_lower)
-            if filial_match:
-                analise["filial"] = filial_match.group(1)
-                analise["cliente_especifico"] = f"Assai LJ {filial_match.group(1)}"
-                
-        elif re.search(r"atacad[oa]s", consulta_lower):
-            analise["tipo_consulta"] = "grupo_atacados"
-            analise["cliente_especifico"] = "GRUPO_ATACADOS"
+        # Detectar grupos vs clientes específicos
+        if re.search(r"atacad[oa]s|supermercados|varejo", consulta_lower):
+            analise["tipo_consulta"] = "grupo_clientes"
+            analise["cliente_especifico"] = "GRUPO_CLIENTES"
+        else:
+            # Buscar por nomes específicos de clientes (método genérico)
+            # Este código pode ser expandido conforme necessário para detectar clientes específicos
+            # sem hardcoding de nomes
+            for palavra in palavras_consulta:
+                if len(palavra) > 3 and palavra.isalpha():
+                    # Lógica genérica para detectar possíveis nomes de clientes
+                    # Pode ser refinada conforme padrões específicos do sistema
+                    pass
+        
+        # Detectar filiais por padrões numéricos
+        filial_patterns = [
+            r"(\w+)\s*(\d{3,4})",  # Cliente 123, Loja 456
+            r"(\w+)\s*lj\s*(\d+)",  # Cliente LJ 189
+            r"filial\s*(\d+)"      # Filial 001
+        ]
+        
+        for pattern in filial_patterns:
+            match = re.search(pattern, consulta_lower)
+            if match:
+                analise["tipo_consulta"] = "filial_especifica"
+                analise["filial_detectada"] = match.groups()
+                break
         
         # ANÁLISE TEMPORAL
         if re.search(r"(\d+)\s*dias?", consulta_lower):
@@ -248,7 +256,6 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
             from app.pedidos.models import Pedido
             from app.monitoramento.models import EntregaMonitorada
             from app.faturamento.models import RelatorioFaturamentoImportado
-            from sqlalchemy import func, and_, or_
             
             # Data limite baseada na análise
             data_limite = datetime.now() - timedelta(days=analise.get("periodo_dias", 7))
@@ -271,9 +278,14 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
                 
                 # Aplicar filtro de cliente específico
                 if analise.get("cliente_especifico"):
-                    if analise["cliente_especifico"] == "GRUPO_ATACADOS":
+                    if analise["cliente_especifico"] == "GRUPO_CLIENTES":
+                        # Filtro genérico para grupos de clientes
                         query_entregas = query_entregas.filter(
-                            EntregaMonitorada.cliente.ilike('%atacado%')
+                            or_(
+                                EntregaMonitorada.cliente.ilike('%atacado%'),
+                                EntregaMonitorada.cliente.ilike('%supermercado%'),
+                                EntregaMonitorada.cliente.ilike('%varejo%')
+                            )
                         )
                     else:
                         query_entregas = query_entregas.filter(
@@ -330,7 +342,7 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
                     Frete.criado_em >= data_limite
                 )
                 
-                if analise.get("cliente_especifico") and analise["cliente_especifico"] != "GRUPO_ATACADOS":
+                if analise.get("cliente_especifico") and analise["cliente_especifico"] != "GRUPO_CLIENTES":
                     query_fretes = query_fretes.filter(
                         Frete.nome_cliente.ilike(f'%{analise["cliente_especifico"]}%')
                     )
@@ -429,8 +441,15 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
             
             # Aplicar filtros específicos
             if analise.get("cliente_especifico"):
-                if analise["cliente_especifico"] == "GRUPO_ATACADOS":
-                    query_base = query_base.filter(EntregaMonitorada.cliente.ilike('%atacado%'))
+                if analise["cliente_especifico"] == "GRUPO_CLIENTES":
+                    # Filtro genérico para grupos de clientes
+                    query_base = query_base.filter(
+                        or_(
+                            EntregaMonitorada.cliente.ilike('%atacado%'),
+                            EntregaMonitorada.cliente.ilike('%supermercado%'),
+                            EntregaMonitorada.cliente.ilike('%varejo%')
+                        )
+                    )
                 else:
                     query_base = query_base.filter(EntregaMonitorada.cliente.ilike(f'%{analise["cliente_especifico"]}%'))
             
@@ -485,9 +504,9 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
 2. Filtros por permissão - Vendedores veem apenas seus clientes
 3. Métricas calculadas - Performance, atrasos, comparações temporais
 4. Cache inteligente - Estatísticas otimizadas para consultas frequentes
-5. Diferenciação semântica - Distingue "atacados" vs "Atacadão" vs filiais
+5. Diferenciação semântica - Distingue grupos de clientes vs clientes específicos vs filiais
 6. Análises temporais flexíveis - 7, 30, 60 dias ou períodos customizados
-7. Correlação de dados - Liga pedidos → faturamento → monitoramento
+7. Correlação de dados - Liga pedidos → dados importados → monitoramento
 """
     
     def _fallback_simulado(self, consulta: str) -> str:

@@ -22,8 +22,9 @@ except ImportError:
 @claude_ai_bp.route('/chat')
 @login_required
 def chat_page():
-    """Página principal do chat com Claude AI"""
-    return render_template('claude_ai/chat.html')
+    """Redireciona para Claude 4 Sonnet (nova interface principal)"""
+    from flask import redirect, url_for
+    return redirect(url_for('claude_ai.claude_real'))
 
 @claude_ai_bp.route('/dashboard')
 @login_required
@@ -271,9 +272,9 @@ def test_mcp_directly():
             'timestamp': datetime.now().isoformat()
         }), 500
 
-# Adicionar nova rota para MCP v4.0
+# 🚨 DEPRECADO: Usar Claude 4 Sonnet principal (/real) ao invés destas rotas v4
 @claude_ai_bp.route('/api/v4/query', methods=['POST'])
-@login_required
+@login_required  
 def mcp_v4_query():
     """Endpoint para consultas MCP v4.0 com IA"""
     try:

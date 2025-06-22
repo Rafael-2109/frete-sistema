@@ -186,10 +186,24 @@
         {% endif %}
         
         <!-- Claude AI -->
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('claude_ai.chat_page') }}" title="Assistente Claude AI">
-            <i class="fas fa-robot text-primary"></i> Claude AI
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="menuClaudeAI" role="button" data-bs-toggle="dropdown" title="Claude AI - Inteligência Artificial">
+            <i class="fas fa-brain text-info"></i> Claude AI
           </a>
+          <ul class="dropdown-menu">
+            <li><h6 class="dropdown-header">🧠 Inteligência Artificial</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('claude_ai.claude_real') }}">
+              <i class="fas fa-brain text-primary"></i> Claude 4 Sonnet
+              <span class="badge bg-success ms-2">PRINCIPAL</span>
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('claude_ai.dashboard_mcp') }}">
+              <i class="fas fa-chart-line"></i> Dashboard IA
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{{ url_for('claude_ai.claude_real') }}?mode=analytics">
+              <i class="fas fa-chart-bar"></i> Análises Avançadas
+            </a></li>
+          </ul>
         </li>
         
         <!-- Logout -->
