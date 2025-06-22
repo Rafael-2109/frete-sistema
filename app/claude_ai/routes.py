@@ -573,7 +573,25 @@ def get_suggestions():
         try:
             context_manager = get_conversation_context()
             if context_manager:
-                conversation_context = context_manager.get_context(str(current_user.id))
+                # get_context() retorna LISTA, mas suggestion_engine espera DICT
+                context_history = context_manager.get_context(str(current_user.id))
+                
+                # Converter lista de mensagens para contexto estruturado
+                if context_history and isinstance(context_history, list):
+                    # Pegar conteúdo das últimas mensagens
+                    recent_messages = context_history[-5:]  # Últimas 5 mensagens
+                    recent_content = " ".join([msg.get('content', '') for msg in recent_messages])
+                    
+                    # Estruturar contexto como dicionário
+                    conversation_context = {
+                        'recent_content': recent_content,
+                        'message_count': len(context_history),
+                        'has_context': True,
+                        'last_messages': recent_messages
+                    }
+                    
+                    logger.debug(f"✅ Contexto conversacional estruturado: {len(context_history)} mensagens")
+                    
         except Exception as e:
             logger.debug(f"Contexto conversacional não disponível: {e}")
         
