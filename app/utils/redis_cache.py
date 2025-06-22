@@ -1,451 +1,320 @@
 #!/usr/bin/env python3
 """
-⚡ SISTEMA DE CACHE REDIS INTELIGENTE - MCP v4.0
-Cache otimizado para IA, ML e real-time data
+Sistema de Cache Redis - Sistema de Fretes
+Cache inteligente para consultas, estatísticas e dados do Claude AI
 """
 
 import redis
 import json
-import pickle
 import logging
-import asyncio
-from typing import Any, Dict, List, Optional, Union
-from datetime import datetime, timedelta
-from functools import wraps
 import hashlib
-import time
-
-# Importar configurações de IA
-try:
-    from config_ai import ai_config
-except ImportError:
-    # Fallback para desenvolvimento
-    class MockConfig:
-        @staticmethod
-        def get_redis_config():
-            return {'host': 'localhost', 'port': 6379, 'db': 0}
-        @staticmethod
-        def get_ml_redis_config():
-            return {'host': 'localhost', 'port': 6379, 'db': 1}
-        CACHE_TIMEOUTS = {
-            'real_time_metrics': 30,
-            'ai_insights': 300,
-            'ml_predictions': 1800,
-            'user_context': 3600,
-            'dashboard_data': 60,
-            'system_status': 120,
-            'alerts_cache': 15,
-            'query_results': 600
-        }
-    ai_config = MockConfig()
+from typing import Any, Optional, Dict, List
+from datetime import datetime, timedelta
+import os
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
-class IntelligentRedisCache:
-    """Sistema de cache Redis inteligente para MCP v4.0"""
+class RedisCache:
+    """Sistema de Cache Redis para Sistema de Fretes"""
     
     def __init__(self):
-        """Inicializa o sistema de cache"""
-        self.primary_redis = None
-        self.ml_redis = None
-        self.connected = False
-        self.stats = {
-            'hits': 0,
-            'misses': 0,
-            'sets': 0,
-            'errors': 0,
-            'last_connection_attempt': None
-        }
-        self._connect()
-    
-    def _connect(self):
-        """Conecta aos servidores Redis"""
+        """Inicializa conexão Redis"""
+        # Configuração para Render Key Value (Redis compatível)
+        self.redis_url = os.getenv('REDIS_URL')  # URL interna do Render
+        self.redis_host = os.getenv('REDIS_HOST', 'localhost')
+        self.redis_port = int(os.getenv('REDIS_PORT', 6379))
+        self.redis_password = os.getenv('REDIS_PASSWORD', None)
+        
         try:
-            # Redis principal
-            primary_config = ai_config.get_redis_config()
-            self.primary_redis = redis.Redis(**primary_config)
-            
-            # Redis para ML
-            ml_config = ai_config.get_ml_redis_config()
-            self.ml_redis = redis.Redis(**ml_config)
-            
-            # Testar conexões
-            self.primary_redis.ping()
-            self.ml_redis.ping()
-            
-            self.connected = True
-            self.stats['last_connection_attempt'] = datetime.now()
-            logger.info("✅ Conectado ao Redis com sucesso")
-            
-        except Exception as e:
-            self.connected = False
-            self.stats['errors'] += 1
-            self.stats['last_connection_attempt'] = datetime.now()
-            logger.error(f"❌ Erro ao conectar ao Redis: {e}")
-            
-            # Usar cache em memória como fallback
-            self._setup_memory_fallback()
-    
-    def _setup_memory_fallback(self):
-        """Configura cache em memória como fallback"""
-        self.memory_cache = {}
-        logger.warning("⚠️ Usando cache em memória como fallback")
-    
-    def _get_cache_key(self, key: str, prefix: str = "mcp_v4") -> str:
-        """Gera chave de cache padronizada"""
-        return f"{prefix}:{key}"
-    
-    def _serialize_data(self, data: Any, use_pickle: bool = False) -> Union[str, bytes]:
-        """Serializa dados para cache"""
-        try:
-            if use_pickle:
-                return pickle.dumps(data)
+            # PRIORIDADE 1: URL do Render Key Value (formato: redis://internal-url:6379)
+            if self.redis_url:
+                logger.info("🔗 Conectando via REDIS_URL (Render Key Value)")
+                self.client = redis.from_url(
+                    self.redis_url,
+                    decode_responses=True,
+                    socket_connect_timeout=10,
+                    socket_timeout=10,
+                    retry_on_timeout=True
+                )
+            # PRIORIDADE 2: Configuração manual (desenvolvimento local)
             else:
-                return json.dumps(data, default=str, ensure_ascii=False)
+                logger.info("🔗 Conectando via host/port (desenvolvimento)")
+                self.client = redis.Redis(
+                    host=self.redis_host,
+                    port=self.redis_port,
+                    password=self.redis_password,
+                    decode_responses=True,
+                    socket_connect_timeout=5,
+                    socket_timeout=5
+                )
+            
+            # Testar conexão
+            self.client.ping()
+            self.disponivel = True
+            logger.info("🚀 Redis Cache conectado com sucesso!")
+            
         except Exception as e:
-            logger.error(f"Erro ao serializar dados: {e}")
-            return json.dumps({"error": "serialization_failed"})
+            logger.warning(f"⚠️ Redis não disponível: {e}")
+            logger.info("💡 Para Render: Configure REDIS_URL na aba Environment")
+            logger.info("💡 Para local: Instale Redis ou use cache em memória")
+            self.client = None
+            self.disponivel = False
     
-    def _deserialize_data(self, data: Union[str, bytes], use_pickle: bool = False) -> Any:
-        """Deserializa dados do cache"""
+    def _gerar_chave(self, prefixo: str, **kwargs) -> str:
+        """Gera chave única para cache baseada nos parâmetros"""
+        # Criar string única dos parâmetros
+        params_str = json.dumps(kwargs, sort_keys=True, default=str)
+        hash_params = hashlib.md5(params_str.encode()).hexdigest()[:12]
+        
+        return f"{prefixo}:{hash_params}"
+    
+    def get(self, chave: str) -> Optional[Any]:
+        """Busca item no cache"""
+        if not self.disponivel:
+            return None
+        
         try:
-            if use_pickle:
-                return pickle.loads(data)
-            else:
-                return json.loads(data)
+            valor = self.client.get(chave)
+            if valor:
+                return json.loads(valor)
+            return None
         except Exception as e:
-            logger.error(f"Erro ao deserializar dados: {e}")
+            logger.error(f"❌ Erro ao buscar cache {chave}: {e}")
             return None
     
-    def set(self, key: str, value: Any, timeout: Optional[int] = None, 
-            category: str = "default", use_ml_redis: bool = False, 
-            use_pickle: bool = False) -> bool:
-        """
-        Define valor no cache com timeout inteligente
+    def set(self, chave: str, valor: Any, ttl: int = 300) -> bool:
+        """Armazena item no cache com TTL (Time To Live)"""
+        if not self.disponivel:
+            return False
         
-        Args:
-            key: Chave do cache
-            value: Valor a ser armazenado
-            timeout: Timeout em segundos (None = usar padrão da categoria)
-            category: Categoria do cache para timeout automático
-            use_ml_redis: Usar Redis de ML
-            use_pickle: Usar pickle ao invés de JSON
-        """
         try:
-            cache_key = self._get_cache_key(key)
-            
-            # Determinar timeout
-            if timeout is None:
-                timeout = ai_config.CACHE_TIMEOUTS.get(category, 300)
-            
-            # Serializar dados
-            serialized_data = self._serialize_data(value, use_pickle)
-            
-            # Escolher Redis apropriado
-            redis_client = self.ml_redis if use_ml_redis else self.primary_redis
-            
-            if self.connected and redis_client:
-                # Redis disponível
-                result = redis_client.setex(cache_key, timeout, serialized_data)
-                
-                # Adicionar metadados
-                metadata = {
-                    'created_at': datetime.now().isoformat(),
-                    'category': category,
-                    'timeout': timeout,
-                    'use_pickle': use_pickle
-                }
-                redis_client.setex(f"{cache_key}:meta", timeout, json.dumps(metadata))
-                
-                self.stats['sets'] += 1
-                return result
-                
-            else:
-                # Fallback para memória
-                self.memory_cache[cache_key] = {
-                    'data': value,
-                    'expires_at': datetime.now() + timedelta(seconds=timeout),
-                    'category': category
-                }
-                self.stats['sets'] += 1
-                return True
-                
+            valor_json = json.dumps(valor, default=str, ensure_ascii=False)
+            self.client.setex(chave, ttl, valor_json)
+            return True
         except Exception as e:
-            self.stats['errors'] += 1
-            logger.error(f"Erro ao definir cache {key}: {e}")
+            logger.error(f"❌ Erro ao salvar cache {chave}: {e}")
             return False
     
-    def get(self, key: str, use_ml_redis: bool = False, 
-            use_pickle: bool = False) -> Optional[Any]:
-        """
-        Obtém valor do cache
-        
-        Args:
-            key: Chave do cache
-            use_ml_redis: Usar Redis de ML
-            use_pickle: Usar pickle para deserializar
-        """
-        try:
-            cache_key = self._get_cache_key(key)
-            
-            # Escolher Redis apropriado
-            redis_client = self.ml_redis if use_ml_redis else self.primary_redis
-            
-            if self.connected and redis_client:
-                # Redis disponível
-                data = redis_client.get(cache_key)
-                
-                if data is not None:
-                    self.stats['hits'] += 1
-                    return self._deserialize_data(data, use_pickle)
-                else:
-                    self.stats['misses'] += 1
-                    return None
-                    
-            else:
-                # Fallback para memória
-                cached_item = self.memory_cache.get(cache_key)
-                
-                if cached_item and cached_item['expires_at'] > datetime.now():
-                    self.stats['hits'] += 1
-                    return cached_item['data']
-                else:
-                    self.stats['misses'] += 1
-                    # Remover item expirado
-                    if cached_item:
-                        del self.memory_cache[cache_key]
-                    return None
-                    
-        except Exception as e:
-            self.stats['errors'] += 1
-            logger.error(f"Erro ao obter cache {key}: {e}")
-            return None
-    
-    def delete(self, key: str, use_ml_redis: bool = False) -> bool:
+    def delete(self, chave: str) -> bool:
         """Remove item do cache"""
+        if not self.disponivel:
+            return False
+        
         try:
-            cache_key = self._get_cache_key(key)
-            
-            # Escolher Redis apropriado
-            redis_client = self.ml_redis if use_ml_redis else self.primary_redis
-            
-            if self.connected and redis_client:
-                result = redis_client.delete(cache_key)
-                redis_client.delete(f"{cache_key}:meta")  # Remover metadados também
-                return bool(result)
-            else:
-                # Fallback para memória
-                if cache_key in self.memory_cache:
-                    del self.memory_cache[cache_key]
-                    return True
-                return False
-                
+            self.client.delete(chave)
+            return True
         except Exception as e:
-            self.stats['errors'] += 1
-            logger.error(f"Erro ao deletar cache {key}: {e}")
+            logger.error(f"❌ Erro ao remover cache {chave}: {e}")
             return False
     
-    def get_by_pattern(self, pattern: str, use_ml_redis: bool = False) -> List[str]:
-        """Obtém chaves que correspondem ao padrão"""
+    def flush_pattern(self, pattern: str) -> int:
+        """Remove todas as chaves que correspondem ao padrão"""
+        if not self.disponivel:
+            return 0
+        
         try:
-            redis_client = self.ml_redis if use_ml_redis else self.primary_redis
-            
-            if self.connected and redis_client:
-                cache_pattern = self._get_cache_key(pattern)
-                keys = redis_client.keys(cache_pattern)
-                return [key.decode() if isinstance(key, bytes) else key for key in keys]
-            else:
-                # Fallback para memória
-                import fnmatch
-                cache_pattern = self._get_cache_key(pattern)
-                return [key for key in self.memory_cache.keys() 
-                       if fnmatch.fnmatch(key, cache_pattern)]
-                
+            chaves = self.client.keys(f"{pattern}*")
+            if chaves:
+                return self.client.delete(*chaves)
+            return 0
         except Exception as e:
-            self.stats['errors'] += 1
-            logger.error(f"Erro ao buscar padrão {pattern}: {e}")
-            return []
-    
-    def clear_category(self, category: str) -> int:
-        """Remove todos os itens de uma categoria"""
-        try:
-            pattern = f"*:meta"
-            keys_to_delete = []
-            
-            redis_client = self.primary_redis if self.connected else None
-            
-            if redis_client:
-                # Buscar por metadados da categoria
-                meta_keys = redis_client.keys(self._get_cache_key(pattern))
-                
-                for meta_key in meta_keys:
-                    meta_data = redis_client.get(meta_key)
-                    if meta_data:
-                        try:
-                            metadata = json.loads(meta_data)
-                            if metadata.get('category') == category:
-                                # Adicionar chave de dados correspondente
-                                data_key = meta_key.replace(':meta', '')
-                                keys_to_delete.extend([data_key, meta_key])
-                        except:
-                            continue
-                
-                # Deletar todas as chaves encontradas
-                if keys_to_delete:
-                    return redis_client.delete(*keys_to_delete)
-                    
-            else:
-                # Fallback para memória
-                keys_to_delete = [key for key, value in self.memory_cache.items() 
-                                if value.get('category') == category]
-                
-                for key in keys_to_delete:
-                    del self.memory_cache[key]
-                
-                return len(keys_to_delete)
-                
-        except Exception as e:
-            self.stats['errors'] += 1
-            logger.error(f"Erro ao limpar categoria {category}: {e}")
+            logger.error(f"❌ Erro ao limpar cache {pattern}: {e}")
             return 0
     
-    def get_stats(self) -> Dict[str, Any]:
-        """Retorna estatísticas do cache"""
-        hit_rate = 0
-        if self.stats['hits'] + self.stats['misses'] > 0:
-            hit_rate = self.stats['hits'] / (self.stats['hits'] + self.stats['misses'])
-        
-        return {
-            **self.stats,
-            'hit_rate': hit_rate,
-            'connected': self.connected,
-            'memory_cache_size': len(getattr(self, 'memory_cache', {})),
-            'redis_info': self._get_redis_info()
-        }
+    # MÉTODOS ESPECÍFICOS PARA O SISTEMA DE FRETES
     
-    def _get_redis_info(self) -> Dict[str, Any]:
-        """Obtém informações do Redis"""
-        if not self.connected:
-            return {'status': 'disconnected'}
+    def cache_consulta_claude(self, consulta: str, cliente: str = None, 
+                             periodo_dias: int = 30, resultado: Any = None, 
+                             ttl: int = 300) -> Optional[Any]:
+        """Cache específico para consultas do Claude AI"""
+        chave = self._gerar_chave(
+            "claude_consulta",
+            consulta=consulta.lower().strip(),
+            cliente=cliente,
+            periodo_dias=periodo_dias
+        )
+        
+        if resultado is not None:
+            # Salvar no cache
+            return self.set(chave, resultado, ttl)
+        else:
+            # Buscar do cache
+            return self.get(chave)
+    
+    def cache_estatisticas_cliente(self, cliente: str, periodo_dias: int = 30, 
+                                  dados: Any = None, ttl: int = 180) -> Optional[Any]:
+        """Cache para estatísticas por cliente"""
+        chave = self._gerar_chave(
+            "stats_cliente",
+            cliente=cliente,
+            periodo_dias=periodo_dias
+        )
+        
+        if dados is not None:
+            return self.set(chave, dados, ttl)
+        else:
+            return self.get(chave)
+    
+    def cache_entregas_cliente(self, cliente: str, periodo_dias: int = 30, 
+                              entregas: Any = None, ttl: int = 120) -> Optional[Any]:
+        """Cache para entregas por cliente"""
+        chave = self._gerar_chave(
+            "entregas_cliente",
+            cliente=cliente,
+            periodo_dias=periodo_dias
+        )
+        
+        if entregas is not None:
+            return self.set(chave, entregas, ttl)
+        else:
+            return self.get(chave)
+    
+    def cache_dashboard_vendedor(self, vendedor: str, dados: Any = None, 
+                                ttl: int = 60) -> Optional[Any]:
+        """Cache para dashboard do vendedor"""
+        chave = self._gerar_chave("dashboard_vendedor", vendedor=vendedor)
+        
+        if dados is not None:
+            return self.set(chave, dados, ttl)
+        else:
+            return self.get(chave)
+    
+    def invalidar_cache_cliente(self, cliente: str) -> int:
+        """Invalida todo cache relacionado a um cliente específico"""
+        patterns = [
+            f"claude_consulta:*{cliente}*",
+            f"stats_cliente:*{cliente}*", 
+            f"entregas_cliente:*{cliente}*"
+        ]
+        
+        total_removido = 0
+        for pattern in patterns:
+            total_removido += self.flush_pattern(pattern)
+        
+        logger.info(f"🗑️ Cache do cliente {cliente} invalidado: {total_removido} chaves")
+        return total_removido
+    
+    def get_info_cache(self) -> Dict[str, Any]:
+        """Retorna informações sobre o cache"""
+        if not self.disponivel:
+            return {"disponivel": False, "erro": "Redis não conectado"}
         
         try:
-            info = self.primary_redis.info()
+            info = self.client.info()
             return {
-                'status': 'connected',
-                'redis_version': info.get('redis_version'),
-                'used_memory': info.get('used_memory_human'),
-                'connected_clients': info.get('connected_clients'),
-                'uptime_in_seconds': info.get('uptime_in_seconds')
+                "disponivel": True,
+                "memoria_usada": info.get('used_memory_human', 'N/A'),
+                "chaves_totais": info.get('db0', {}).get('keys', 0),
+                "hits": info.get('keyspace_hits', 0),
+                "misses": info.get('keyspace_misses', 0),
+                "versao_redis": info.get('redis_version', 'N/A')
             }
         except Exception as e:
-            return {'status': 'error', 'error': str(e)}
-    
-    def health_check(self) -> bool:
-        """Verifica saúde da conexão Redis"""
-        try:
-            if self.connected:
-                self.primary_redis.ping()
-                self.ml_redis.ping()
-                return True
-            return False
-        except Exception as e:
-            logger.error(f"Health check falhou: {e}")
-            self.connected = False
-            return False
+            return {"disponivel": False, "erro": str(e)}
 
-# Decorador para cache automático
-def cache_result(timeout: int = 300, category: str = "default", 
-                use_ml_redis: bool = False, use_pickle: bool = False):
-    """
-    Decorador para cache automático de resultados de funções
+
+# Decorador para cache automático de funções
+def cache_resultado(ttl: int = 300, prefixo: str = "funcao"):
+    """Decorador para cachear automaticamente resultado de funções"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            cache = RedisCache()
+            if not cache.disponivel:
+                return func(*args, **kwargs)
+            
+            # Gerar chave baseada na função e parâmetros
+            chave = cache._gerar_chave(
+                f"{prefixo}_{func.__name__}",
+                args=args,
+                kwargs=kwargs
+            )
+            
+            # Tentar buscar do cache
+            resultado_cache = cache.get(chave)
+            if resultado_cache is not None:
+                logger.debug(f"✅ Cache HIT: {func.__name__}")
+                return resultado_cache
+            
+            # Executar função e cachear resultado
+            resultado = func(*args, **kwargs)
+            cache.set(chave, resultado, ttl)
+            logger.debug(f"💾 Cache MISS: {func.__name__} - resultado cacheado")
+            
+            return resultado
+        return wrapper
+    return decorator
+
+
+# Instância global do cache
+redis_cache = RedisCache()
+
+# Variável global para indicar disponibilidade
+REDIS_DISPONIVEL = redis_cache.disponivel
+
+
+# IMPLEMENTAÇÃO DO PADRÃO CACHE-ASIDE PARA CONSULTAS
+class CacheAsideManager:
+    """Implementa padrão Cache-Aside conforme documentação Redis oficial"""
     
-    Args:
-        timeout: Timeout em segundos
-        category: Categoria do cache
-        use_ml_redis: Usar Redis de ML
-        use_pickle: Usar pickle para serialização
+    def __init__(self, cache_instance: RedisCache = None):
+        self.cache = cache_instance or redis_cache
+    
+    def get_or_set(self, cache_key: str, fetch_function, ttl: int = 300, *args, **kwargs):
+        """
+        Implementa Cache-Aside Pattern:
+        1. Verifica se dados estão no cache (Cache Hit)
+        2. Se não estão, busca da fonte original (Cache Miss)
+        3. Armazena no cache para próximas consultas
+        """
+        # Step 1: Verificar cache (Cache Hit?)
+        cached_data = self.cache.get(cache_key)
+        if cached_data is not None:
+            logger.debug(f"🎯 CACHE HIT: {cache_key}")
+            return cached_data, True  # True = veio do cache
+        
+        # Step 2: Cache Miss - buscar da fonte original
+        logger.debug(f"💨 CACHE MISS: {cache_key}")
+        fresh_data = fetch_function(*args, **kwargs)
+        
+        # Step 3: Armazenar no cache para próximas consultas
+        if fresh_data is not None:
+            self.cache.set(cache_key, fresh_data, ttl)
+            logger.debug(f"💾 Dados armazenados no cache: {cache_key}")
+        
+        return fresh_data, False  # False = veio da fonte original
+
+
+# Instância global do gerenciador Cache-Aside
+cache_aside = CacheAsideManager()
+
+
+# FUNÇÃO UTILITÁRIA PARA INTEGRAÇÃO FÁCIL
+def cached_query(prefixo: str, ttl: int = 300):
+    """
+    Decorador simplificado para cachear consultas ao banco
+    Exemplo de uso:
+    
+    @cached_query('entregas_assai', ttl=180)
+    def buscar_entregas_assai(periodo_dias=30):
+        return query_banco_dados()
     """
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # Gerar chave única baseada na função e parâmetros
-            func_signature = f"{func.__module__}.{func.__name__}"
-            params_hash = hashlib.md5(
-                str(args).encode() + str(sorted(kwargs.items())).encode()
-            ).hexdigest()
-            cache_key = f"func_cache:{func_signature}:{params_hash}"
+            # Gerar chave única
+            chave = redis_cache._gerar_chave(prefixo, args=args, kwargs=kwargs)
             
-            # Tentar obter do cache
-            cached_result = intelligent_cache.get(
-                cache_key, use_ml_redis=use_ml_redis, use_pickle=use_pickle
+            # Usar Cache-Aside pattern
+            resultado, from_cache = cache_aside.get_or_set(
+                chave, func, ttl, *args, **kwargs
             )
             
-            if cached_result is not None:
-                return cached_result
+            # Adicionar informação se veio do cache
+            if isinstance(resultado, dict):
+                resultado['_from_cache'] = from_cache
             
-            # Executar função e cachear resultado
-            result = func(*args, **kwargs)
-            intelligent_cache.set(
-                cache_key, result, timeout=timeout, category=category,
-                use_ml_redis=use_ml_redis, use_pickle=use_pickle
-            )
-            
-            return result
+            return resultado
         return wrapper
-    return decorator
-
-# Instância global do cache
-intelligent_cache = IntelligentRedisCache()
-
-# Funções de conveniência
-def cache_set(key: str, value: Any, timeout: Optional[int] = None, 
-              category: str = "default") -> bool:
-    """Função de conveniência para set"""
-    return intelligent_cache.set(key, value, timeout, category)
-
-def cache_get(key: str) -> Optional[Any]:
-    """Função de conveniência para get"""
-    return intelligent_cache.get(key)
-
-def cache_delete(key: str) -> bool:
-    """Função de conveniência para delete"""
-    return intelligent_cache.delete(key)
-
-def cache_clear_category(category: str) -> int:
-    """Função de conveniência para limpar categoria"""
-    return intelligent_cache.clear_category(category)
-
-def cache_stats() -> Dict[str, Any]:
-    """Função de conveniência para estatísticas"""
-    return intelligent_cache.get_stats()
-
-# Inicialização e testes básicos
-if __name__ == "__main__":
-    # Teste básico do sistema de cache
-    print("🧪 Testando sistema de cache Redis...")
-    
-    # Teste de conexão
-    health = intelligent_cache.health_check()
-    print(f"Health check: {'✅' if health else '❌'}")
-    
-    # Teste de operações básicas
-    test_key = "test_mcp_v4"
-    test_data = {"message": "MCP v4.0 Cache Test", "timestamp": datetime.now().isoformat()}
-    
-    # Set
-    set_result = cache_set(test_key, test_data, timeout=60, category="testing")
-    print(f"Cache set: {'✅' if set_result else '❌'}")
-    
-    # Get
-    cached_data = cache_get(test_key)
-    print(f"Cache get: {'✅' if cached_data else '❌'}")
-    if cached_data:
-        print(f"Data: {cached_data}")
-    
-    # Stats
-    stats = cache_stats()
-    print(f"Cache stats: {stats}")
-    
-    # Cleanup
-    cache_delete(test_key)
-    print("✅ Teste concluído") 
+    return decorator 

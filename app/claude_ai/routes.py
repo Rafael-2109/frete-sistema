@@ -8,6 +8,9 @@ import logging
 from datetime import datetime
 from .mcp_connector import MCPSistemaOnline
 from . import claude_ai_bp
+from app.utils.auth_decorators import require_staff
+from .claude_real_integration import processar_com_claude_real
+from .mcp_connector import MCPConnector
 
 # Configurar logger
 logger = logging.getLogger(__name__)
@@ -18,6 +21,12 @@ try:
     MCP_V4_AVAILABLE = True
 except ImportError:
     MCP_V4_AVAILABLE = False
+
+# Importar Redis cache se disponível
+try:
+    from app.utils.redis_cache import redis_cache, REDIS_DISPONIVEL
+except ImportError:
+    REDIS_DISPONIVEL = False
 
 @claude_ai_bp.route('/chat')
 @login_required
@@ -390,8 +399,6 @@ def claude_real():
                 return jsonify({'error': 'Query é obrigatória'}), 400
             
             # Usar Claude REAL
-            from .claude_real_integration import processar_com_claude_real
-            
             user_context = {
                 'user_id': current_user.id,
                 'user_name': current_user.nome,
@@ -432,5 +439,99 @@ def claude_real_status():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@claude_ai_bp.route('/redis-status')
+@login_required
+@require_staff
+def redis_status():
+    """Dashboard de status do Redis Cache"""
+    if not REDIS_DISPONIVEL:
+        return jsonify({
+            "disponivel": False,
+            "erro": "Redis não está instalado ou configurado",
+            "status": "❌ Offline"
+        })
+    
+    try:
+        info_cache = redis_cache.get_info_cache()
+        
+        # Calcular taxa de hit do cache
+        hits = info_cache.get('hits', 0)
+        misses = info_cache.get('misses', 0)
+        total_requests = hits + misses
+        hit_rate = (hits / total_requests * 100) if total_requests > 0 else 0
+        
+        return jsonify({
+            "disponivel": True,
+            "status": "✅ Online",
+            "info": info_cache,
+            "performance": {
+                "hit_rate": round(hit_rate, 1),
+                "total_requests": total_requests,
+                "cache_hits": hits,
+                "cache_misses": misses
+            },
+            "timestamp": datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "disponivel": False,
+            "erro": str(e),
+            "status": "❌ Erro"
+        })
+
+@claude_ai_bp.route('/redis-clear')
+@login_required
+@require_staff
+def redis_clear():
+    """Limpar cache Redis (apenas staff)"""
+    if not REDIS_DISPONIVEL:
+        return jsonify({"sucesso": False, "erro": "Redis não disponível"})
+    
+    try:
+        # Limpar apenas caches específicos do sistema de fretes
+        total_removido = 0
+        patterns = [
+            "claude_consulta",
+            "stats_cliente", 
+            "entregas_cliente",
+            "dashboard_vendedor",
+            "contexto_inteligente"
+        ]
+        
+        for pattern in patterns:
+            removido = redis_cache.flush_pattern(pattern)
+            total_removido += removido
+        
+        logger.info(f"🗑️ Cache Redis limpo por {current_user.nome}: {total_removido} chaves removidas")
+        
+        return jsonify({
+            "sucesso": True,
+            "chaves_removidas": total_removido,
+            "timestamp": datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+        })
+        
+    except Exception as e:
+        return jsonify({"sucesso": False, "erro": str(e)})
+
+@claude_ai_bp.route('/dashboard')
+@login_required
+def dashboard():
+    """Dashboard principal do Claude AI com informações de cache"""
+    context = {
+        'redis_disponivel': REDIS_DISPONIVEL,
+        'user': current_user,
+        'is_staff': getattr(current_user, 'is_staff', False)
+    }
+    
+    # Adicionar info do cache se disponível
+    if REDIS_DISPONIVEL:
+        try:
+            context['redis_info'] = redis_cache.get_info_cache()
+        except:
+            context['redis_info'] = {"erro": "Erro ao conectar Redis"}
+    
+    return render_template('claude_ai/dashboard_v4.html', **context)
 
 # Funções de fallback para when MCP não está disponível 

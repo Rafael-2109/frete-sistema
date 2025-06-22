@@ -14,7 +14,17 @@ import json
 from flask_login import current_user
 from sqlalchemy import func, and_, or_
 
+# Configurar logger
 logger = logging.getLogger(__name__)
+
+# Importar sistema de cache Redis
+try:
+    from app.utils.redis_cache import redis_cache, cache_aside, cached_query
+    REDIS_DISPONIVEL = redis_cache.disponivel
+    logger.info(f"🚀 Redis Cache: {'Ativo' if REDIS_DISPONIVEL else 'Inativo'}")
+except ImportError:
+    REDIS_DISPONIVEL = False
+    logger.warning("⚠️ Redis Cache não disponível - usando cache em memória")
 
 class ClaudeRealIntegration:
     """Integração com Claude REAL da Anthropic"""
@@ -37,22 +47,43 @@ class ClaudeRealIntegration:
                 self.client = None
                 self.modo_real = False
         
-        # Cache para evitar queries repetitivas
-        self._cache = {}
-        self._cache_timeout = 300  # 5 minutos
+        # Cache para evitar queries repetitivas (REDIS OU MEMÓRIA)
+        if REDIS_DISPONIVEL:
+            self._cache = redis_cache
+            self._cache_timeout = 300  # 5 minutos
+            logger.info("✅ Usando Redis Cache para consultas Claude")
+        else:
+            self._cache = {}
+            self._cache_timeout = 300  # 5 minutos fallback
+            logger.info("⚠️ Usando cache em memória (fallback)")
         
-        # System prompt PODEROSO para Claude real
-        self.system_prompt = """Você é Claude integrado ao Sistema de Fretes de uma INDÚSTRIA QUE FATURA R$ 200 MILHÕES/ANO. 
+        # System prompt CORRIGIDO para Claude real
+        self.system_prompt = """Você é Claude integrado ao Sistema de Fretes Industrial.
 
 CONTEXTO EMPRESARIAL:
 - Sistema crítico de gestão de fretes
 - Volume alto de operações
 - Precisão é fundamental para tomada de decisão
 
-IMPORTANTE - DIFERENCIAÇÃO DE CLIENTES:
-🏢 **GRUPOS DE CLIENTES**: Quando mencionado "atacados", "supermercados", refere-se a múltiplos clientes
-🏬 **CLIENTE ESPECÍFICO**: Nome exato do cliente refere-se apenas àquele cliente
-🏪 **FILIAIS**: "Cliente 001", "Cliente LJ 001", "Loja 123" referem-se a filiais específicas
+IMPORTANTE - DIFERENCIAÇÃO RIGOROSA DE CLIENTES:
+🏢 **REDES DIFERENTES**: ASSAI ≠ ATACADÃO (são concorrentes, nunca confundir!)
+🏬 **CLIENTE ESPECÍFICO**: Nome exato do cliente (ex: "Assai" refere-se APENAS ao Assai)
+🏪 **FILIAIS**: "Cliente 001", "Cliente LJ 001" referem-se a filiais específicas
+🚨 **CRÍTICO**: JAMAIS misturar dados de clientes diferentes!
+
+ANÁLISE TEMPORAL INTELIGENTE:
+📅 **"Maio"** = MÊS INTEIRO de maio (não apenas 7 dias)
+📅 **"Junho"** = MÊS INTEIRO de junho (não apenas 7 dias)  
+📅 **"30 dias"** = Últimos 30 dias corridos
+📅 **"Semana"** = Últimos 7 dias apenas
+
+DADOS OBRIGATÓRIOS A INCLUIR:
+✅ **Datas de Entrega Realizadas** (quando foi entregue)
+✅ **Cumprimento de Prazo** (no prazo / atrasado)
+✅ **Agendamentos** (datas e protocolos)
+✅ **Reagendamentos** (se houve e quantos)
+✅ **Status Detalhado** (pendente, em trânsito, entregue)
+✅ **Histórico Completo** por entrega
 
 DIFERENÇA CONCEITUAL NO SISTEMA:
 🚚 **FRETES** = Cotações, contratos de transporte, valores, aprovações
@@ -62,32 +93,39 @@ DIFERENÇA CONCEITUAL NO SISTEMA:
 FLUXO DE PEDIDOS:
 1. **ABERTO**: Pedidos com data expedição (previsão) → agendamento
 2. **COTADO**: Embarques com data prevista → agendamento + protocolo
-3. **DESPACHADO**: Procurar num_pedido → RelatorioImportado.origem → numero_nf → EntregaMonitorada
+3. **FATURADO**: Procurar num_pedido → RelatorioImportado.origem → numero_nf → EntregaMonitorada
 
 DADOS DISPONÍVEIS EM CONTEXTO:
 {dados_contexto_especifico}
 
 SUAS CAPACIDADES AVANÇADAS:
-- Análise inteligente de dados reais
-- Insights preditivos e recomendações estratégicas
+- Análise inteligente de dados reais com precisão absoluta
+- Insights preditivos e recomendações estratégicas  
 - Detecção de padrões e anomalias
 - Cálculos de performance automatizados
 - Comparações temporais flexíveis
+- Histórico completo de reagendamentos
 
 INSTRUÇÕES CRÍTICAS:
-1. **PRECISÃO ABSOLUTA** - Dados incorretos custam milhões
-2. **CONTEXTO ESPECÍFICO** - Se perguntou sobre cliente X, foque no cliente X
-3. **ANÁLISE TEMPORAL** - Extrair período (7, 30, 60 dias) ou usar padrão
-4. **MÉTRICAS CALCULADAS** - Inclua % entregas no prazo, atrasos médios, comparações
+1. **PRECISÃO ABSOLUTA** - Dados incorretos custam operações
+2. **CLIENTE ESPECÍFICO** - Se perguntou sobre Cliente X, foque APENAS no Cliente X
+3. **ANÁLISE TEMPORAL CORRETA** - Mês = mês inteiro, não 7 dias
+4. **DADOS COMPLETOS** - Inclua TODAS as informações relevantes
 5. **VENDEDORES** - Mostre apenas clientes que têm permissão
 6. **INTELIGÊNCIA CONTEXTUAL** - Diferencie grupos de clientes vs clientes específicos vs filiais
+7. **REAGENDAMENTOS** - Sempre verificar histórico de reagendas
+8. **JAMAIS CONFUNDIR CLIENTES** - Assai ≠ Atacadão ≠ outros
 
-EXEMPLOS DE INTERPRETAÇÃO:
+EXEMPLOS DE INTERPRETAÇÃO CORRETA:
+
 - "Entregas dos supermercados" → GRUPO_SUPERMERCADOS (múltiplos clientes)
 - "Entregas do Cliente ABC" → Cliente específico "Cliente ABC"
 - "Cliente ABC 001" → Filial específica do Cliente ABC
+- "Entregas do Assai em maio" → APENAS dados do Assai do mês de maio completo
+- "Performance de junho" → Análise do mês de junho inteiro
+- "Entregas dos supermercados" → GRUPO de supermercados (múltiplos clientes)
 
-Responda sempre em português brasileiro com precisão industrial."""
+Responda sempre em português brasileiro com precisão industrial máxima."""
     
     def processar_consulta_real(self, consulta: str, user_context: Dict = None) -> str:
         """Processa consulta usando Claude REAL com contexto inteligente"""
@@ -95,11 +133,29 @@ Responda sempre em português brasileiro com precisão industrial."""
         if not self.modo_real:
             return self._fallback_simulado(consulta)
         
+        # REDIS CACHE PARA CONSULTAS CLAUDE
+        if REDIS_DISPONIVEL:
+            # Verificar se consulta similar já foi processada
+            resultado_cache = redis_cache.cache_consulta_claude(
+                consulta=consulta,
+                cliente=user_context.get('cliente_filter') if user_context else None,
+                periodo_dias=30  # padrão
+            )
+            
+            if resultado_cache:
+                logger.info("🎯 CACHE HIT: Resposta Claude carregada do Redis")
+                # Adicionar timestamp atual mas manter resposta cacheada
+                resultado_cache = resultado_cache.replace(
+                    "🕒 **Processado:** ",
+                    f"🕒 **Processado:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} ⚡ (Redis Cache) | Original: "
+                )
+                return resultado_cache
+        
         try:
             # Analisar consulta para contexto inteligente
             contexto_analisado = self._analisar_consulta(consulta)
             
-            # Carregar dados específicos baseados na análise
+            # Carregar dados específicos baseados na análise (já usa Redis internamente)
             dados_contexto = self._carregar_contexto_inteligente(contexto_analisado)
             
             # Preparar mensagens para Claude real
@@ -117,7 +173,14 @@ DADOS ESPECÍFICOS CARREGADOS:
 CONTEXTO DO USUÁRIO:
 {json.dumps(user_context or {}, indent=2, ensure_ascii=False)}
 
-Por favor, analise a consulta e forneça uma resposta inteligente, precisa e acionável usando os dados específicos carregados para esta consulta."""
+IMPORTANTE: O usuário está perguntando especificamente sobre "{contexto_analisado.get('cliente_especifico', 'dados gerais')}" no período de "{contexto_analisado.get('periodo_dias', 7)} dias". 
+
+Por favor, analise APENAS os dados do cliente/período especificado e forneça uma resposta completa incluindo:
+- Datas de entrega realizadas
+- Cumprimento de prazos
+- Histórico de agendamentos e protocolos  
+- Reagendamentos (se houver)
+- Status detalhado de cada entrega"""
                 }
             ]
             
@@ -137,7 +200,12 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
             # Log da interação
             logger.info(f"✅ Claude REAL (4.0) processou: '{consulta[:50]}...'")
             
-            return f"""🤖 **CLAUDE 4 SONNET REAL** (Industrial R$ 200MM/ano)
+            # Indicador de performance (se veio do cache)
+            cache_indicator = ""
+            if dados_contexto.get('_from_cache'):
+                cache_indicator = " ⚡ (Dados em Cache)"
+            
+            resposta_final = f"""🤖 **CLAUDE 4 SONNET REAL**{cache_indicator}
 
 {resultado}
 
@@ -146,7 +214,20 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
 🎯 **Contexto:** {contexto_analisado.get('tipo_consulta', 'Geral').title()}
 📊 **Dados:** {contexto_analisado.get('periodo_dias', 7)} dias | {contexto_analisado.get('registros_carregados', 0)} registros
 🕒 **Processado:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
-⚡ **Modo:** IA Real Industrial"""
+⚡ **Modo:** IA Real Industrial{' + Redis Cache' if REDIS_DISPONIVEL else ''}"""
+            
+            # Salvar resposta no Redis cache para consultas similares
+            if REDIS_DISPONIVEL:
+                redis_cache.cache_consulta_claude(
+                    consulta=consulta,
+                    cliente=user_context.get('cliente_filter') if user_context else None,
+                    periodo_dias=contexto_analisado.get('periodo_dias', 30),
+                    resultado=resposta_final,
+                    ttl=300  # 5 minutos para respostas Claude
+                )
+                logger.info("💾 Resposta Claude salva no Redis cache")
+            
+            return resposta_final
             
         except Exception as e:
             logger.error(f"❌ Erro no Claude real: {e}")
@@ -161,30 +242,32 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
             "timestamp_analise": datetime.now().isoformat(),
             "tipo_consulta": "geral",
             "cliente_especifico": None,
-            "periodo_dias": 7,  # Default 7 dias
+            "periodo_dias": 30,  # Default 30 dias para análises mais completas
             "filtro_geografico": None,
             "foco_dados": [],
             "metricas_solicitadas": []
         }
         
-        # ANÁLISE DE CLIENTE ESPECÍFICO - Sistema genérico
-        # Detectar se mencionou cliente específico por nome
-        palavras_consulta = consulta_lower.split()
-        clientes_detectados = []
+        # ANÁLISE DE CLIENTE ESPECÍFICO - RIGOROSA
+        
+        # DETECTAR CLIENTES ESPECÍFICOS POR NOME EXATO
+        if "assai" in consulta_lower:
+            analise["tipo_consulta"] = "cliente_especifico"
+            analise["cliente_especifico"] = "Assai"
+        elif "atacadão" in consulta_lower or "atacadao" in consulta_lower:
+            analise["tipo_consulta"] = "cliente_especifico" 
+            analise["cliente_especifico"] = "Atacadão"
+        elif "tenda" in consulta_lower:
+            analise["tipo_consulta"] = "cliente_especifico"
+            analise["cliente_especifico"] = "Tenda"
+        elif "carrefour" in consulta_lower:
+            analise["tipo_consulta"] = "cliente_especifico"
+            analise["cliente_especifico"] = "Carrefour"
         
         # Detectar grupos vs clientes específicos
-        if re.search(r"atacad[oa]s|supermercados|varejo", consulta_lower):
+        elif re.search(r"supermercados|atacados|varejo", consulta_lower):
             analise["tipo_consulta"] = "grupo_clientes"
             analise["cliente_especifico"] = "GRUPO_CLIENTES"
-        else:
-            # Buscar por nomes específicos de clientes (método genérico)
-            # Este código pode ser expandido conforme necessário para detectar clientes específicos
-            # sem hardcoding de nomes
-            for palavra in palavras_consulta:
-                if len(palavra) > 3 and palavra.isalpha():
-                    # Lógica genérica para detectar possíveis nomes de clientes
-                    # Pode ser refinada conforme padrões específicos do sistema
-                    pass
         
         # Detectar filiais por padrões numéricos
         filial_patterns = [
@@ -200,8 +283,30 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
                 analise["filial_detectada"] = match.groups()
                 break
         
-        # ANÁLISE TEMPORAL
-        if re.search(r"(\d+)\s*dias?", consulta_lower):
+        # ANÁLISE TEMPORAL INTELIGENTE - CORRIGIDA
+        if "maio" in consulta_lower:
+            # Maio inteiro = todo o mês de maio
+            hoje = datetime.now()
+            if hoje.month >= 5:  # Se estivermos em maio ou depois
+                inicio_maio = datetime(hoje.year, 5, 1)
+                dias_maio = (hoje - inicio_maio).days + 1
+                analise["periodo_dias"] = min(dias_maio, 31)  # Máximo 31 dias de maio
+            else:
+                analise["periodo_dias"] = 31  # Maio do ano anterior
+            analise["mes_especifico"] = "maio"
+            
+        elif "junho" in consulta_lower:
+            # Junho inteiro = todo o mês de junho
+            hoje = datetime.now()
+            if hoje.month >= 6:  # Se estivermos em junho ou depois
+                inicio_junho = datetime(hoje.year, 6, 1)
+                dias_junho = (hoje - inicio_junho).days + 1
+                analise["periodo_dias"] = min(dias_junho, 30)  # Máximo 30 dias de junho
+            else:
+                analise["periodo_dias"] = 30  # Junho do ano anterior
+            analise["mes_especifico"] = "junho"
+            
+        elif re.search(r"(\d+)\s*dias?", consulta_lower):
             dias_match = re.search(r"(\d+)\s*dias?", consulta_lower)
             analise["periodo_dias"] = int(dias_match.group(1))
         elif "30 dias" in consulta_lower or "mês" in consulta_lower:
@@ -236,35 +341,58 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
             else:
                 analise["foco_dados"] = ["entregas_monitoradas"]
         
-        # MÉTRICAS SOLICITADAS
+        # MÉTRICAS SOLICITADAS - EXPANDIDAS
         if any(palavra in consulta_lower for palavra in ["prazo", "atraso", "pontualidade"]):
             analise["metricas_solicitadas"].append("performance_prazo")
         if any(palavra in consulta_lower for palavra in ["comparar", "comparação", "tendência"]):
             analise["metricas_solicitadas"].append("comparacao_temporal")
         if "média" in consulta_lower:
             analise["metricas_solicitadas"].append("medias")
+        if any(palavra in consulta_lower for palavra in ["reagenda", "agendamento", "protocolo"]):
+            analise["metricas_solicitadas"].append("agendamentos")
             
         return analise
     
     def _carregar_contexto_inteligente(self, analise: Dict[str, Any]) -> Dict[str, Any]:
         """Carrega dados específicos baseados na análise da consulta"""
+        
+        # CACHE-ASIDE PATTERN: Verificar se dados estão no Redis
+        if REDIS_DISPONIVEL:
+            chave_cache = redis_cache._gerar_chave(
+                "contexto_inteligente",
+                cliente=analise.get("cliente_especifico"),
+                periodo_dias=analise.get("periodo_dias", 30),
+                foco_dados=analise.get("foco_dados", []),
+                filtro_geografico=analise.get("filtro_geografico")
+            )
+            
+            # Tentar buscar do cache primeiro (Cache Hit)
+            dados_cache = redis_cache.get(chave_cache)
+            if dados_cache:
+                logger.info("🎯 CACHE HIT: Contexto inteligente carregado do Redis")
+                return dados_cache
+        
+        # CACHE MISS: Carregar dados do banco de dados
+        logger.info("💨 CACHE MISS: Carregando contexto do banco de dados")
+        
         try:
             from app import db
             from app.fretes.models import Frete
             from app.embarques.models import Embarque
             from app.transportadoras.models import Transportadora
             from app.pedidos.models import Pedido
-            from app.monitoramento.models import EntregaMonitorada
+            from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
             from app.faturamento.models import RelatorioFaturamentoImportado
             
             # Data limite baseada na análise
-            data_limite = datetime.now() - timedelta(days=analise.get("periodo_dias", 7))
+            data_limite = datetime.now() - timedelta(days=analise.get("periodo_dias", 30))
             
             contexto = {
                 "analise_aplicada": analise,
                 "timestamp": datetime.now().isoformat(),
                 "registros_carregados": 0,
-                "dados_especificos": {}
+                "dados_especificos": {},
+                "_from_cache": False  # Indicador que veio do banco
             }
             
             # FILTROS BASEADOS NO USUÁRIO (VENDEDOR)
@@ -272,119 +400,270 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
             
             # CARREGAR DADOS ESPECÍFICOS POR FOCO
             if "entregas_monitoradas" in analise["foco_dados"]:
-                query_entregas = db.session.query(EntregaMonitorada).filter(
-                    EntregaMonitorada.data_embarque >= data_limite
-                )
-                
-                # Aplicar filtro de cliente específico
-                if analise.get("cliente_especifico"):
-                    if analise["cliente_especifico"] == "GRUPO_CLIENTES":
-                        # Filtro genérico para grupos de clientes
-                        query_entregas = query_entregas.filter(
-                            or_(
-                                EntregaMonitorada.cliente.ilike('%atacado%'),
-                                EntregaMonitorada.cliente.ilike('%supermercado%'),
-                                EntregaMonitorada.cliente.ilike('%varejo%')
-                            )
-                        )
+                # Usar cache específico para entregas se disponível
+                if REDIS_DISPONIVEL:
+                    entregas_cache = redis_cache.cache_entregas_cliente(
+                        cliente=analise.get("cliente_especifico", ""),
+                        periodo_dias=analise.get("periodo_dias", 30)
+                    )
+                    if entregas_cache:
+                        contexto["dados_especificos"]["entregas"] = entregas_cache
+                        contexto["registros_carregados"] += entregas_cache.get("total_registros", 0)
+                        logger.info("🎯 CACHE HIT: Entregas carregadas do Redis")
                     else:
-                        query_entregas = query_entregas.filter(
-                            EntregaMonitorada.cliente.ilike(f'%{analise["cliente_especifico"]}%')
+                        # Cache miss - carregar do banco e salvar no cache
+                        dados_entregas = self._carregar_entregas_banco(analise, filtros_usuario, data_limite)
+                        contexto["dados_especificos"]["entregas"] = dados_entregas
+                        contexto["registros_carregados"] += dados_entregas.get("total_registros", 0)
+                        
+                        # Salvar no cache Redis
+                        redis_cache.cache_entregas_cliente(
+                            cliente=analise.get("cliente_especifico", ""),
+                            periodo_dias=analise.get("periodo_dias", 30),
+                            entregas=dados_entregas,
+                            ttl=120  # 2 minutos para entregas
                         )
-                
-                # Aplicar filtro geográfico
-                if analise.get("filtro_geografico"):
-                    query_entregas = query_entregas.filter(
-                        EntregaMonitorada.uf == analise["filtro_geografico"]
-                    )
-                
-                # Aplicar filtros de usuário (vendedor)
-                if filtros_usuario.get("vendedor_restricao"):
-                    query_entregas = query_entregas.filter(
-                        EntregaMonitorada.vendedor == filtros_usuario["vendedor"]
-                    )
-                
-                entregas = query_entregas.order_by(EntregaMonitorada.data_embarque.desc()).limit(50).all()
-                
-                # Calcular métricas se solicitado
-                metricas_entregas = {}
-                if "performance_prazo" in analise.get("metricas_solicitadas", []):
-                    metricas_entregas = self._calcular_metricas_prazo(entregas)
-                
-                contexto["dados_especificos"]["entregas"] = {
-                    "registros": [
-                        {
-                            "id": e.id,
-                            "numero_nf": e.numero_nf,
-                            "cliente": e.cliente,
-                            "uf": e.uf,
-                            "municipio": e.municipio,
-                            "transportadora": e.transportadora,
-                            "status_finalizacao": e.status_finalizacao,
-                            "data_embarque": e.data_embarque.isoformat() if e.data_embarque else None,
-                            "data_entrega_prevista": e.data_entrega_prevista.isoformat() if e.data_entrega_prevista else None,
-                            "data_entrega_realizada": e.data_hora_entrega_realizada.isoformat() if e.data_hora_entrega_realizada else None,
-                            "entregue": e.entregue,
-                            "valor_nf": float(e.valor_nf or 0),
-                            "vendedor": e.vendedor,
-                            "lead_time": e.lead_time
-                        }
-                        for e in entregas
-                    ],
-                    "total_registros": len(entregas),
-                    "metricas": metricas_entregas
-                }
-                contexto["registros_carregados"] += len(entregas)
+                        logger.info("💾 Entregas salvas no Redis cache")
+                else:
+                    # Redis não disponível - carregar diretamente do banco
+                    dados_entregas = self._carregar_entregas_banco(analise, filtros_usuario, data_limite)
+                    contexto["dados_especificos"]["entregas"] = dados_entregas
+                    contexto["registros_carregados"] += dados_entregas.get("total_registros", 0)
             
             # CARREGAR FRETES SE SOLICITADO
             if "fretes" in analise["foco_dados"]:
-                query_fretes = db.session.query(Frete).filter(
-                    Frete.criado_em >= data_limite
-                )
-                
-                if analise.get("cliente_especifico") and analise["cliente_especifico"] != "GRUPO_CLIENTES":
-                    query_fretes = query_fretes.filter(
-                        Frete.nome_cliente.ilike(f'%{analise["cliente_especifico"]}%')
-                    )
-                
-                fretes = query_fretes.order_by(Frete.criado_em.desc()).limit(30).all()
-                
-                contexto["dados_especificos"]["fretes"] = {
-                    "registros": [
-                        {
-                            "id": f.id,
-                            "cliente": f.nome_cliente,
-                            "uf_destino": f.uf_destino,
-                            "valor_cotado": float(f.valor_cotado or 0),
-                            "valor_considerado": float(f.valor_considerado or 0),
-                            "peso_total": float(f.peso_total or 0),
-                            "status": f.status,
-                            "data_criacao": f.criado_em.isoformat() if f.criado_em else None
-                        }
-                        for f in fretes
-                    ],
-                    "total_registros": len(fretes)
-                }
-                contexto["registros_carregados"] += len(fretes)
+                dados_fretes = self._carregar_fretes_banco(analise, data_limite)
+                contexto["dados_especificos"]["fretes"] = dados_fretes
+                contexto["registros_carregados"] += dados_fretes.get("total_registros", 0)
             
-            # ESTATÍSTICAS GERAIS (CACHE)
-            stats_key = f"stats_{analise.get('cliente_especifico', 'geral')}_{analise.get('periodo_dias', 7)}"
-            if stats_key not in self._cache or (datetime.now().timestamp() - self._cache[stats_key]["timestamp"]) > self._cache_timeout:
-                estatisticas = self._calcular_estatisticas_especificas(analise, filtros_usuario)
-                self._cache[stats_key] = {
-                    "data": estatisticas,
-                    "timestamp": datetime.now().timestamp()
-                }
+            # ESTATÍSTICAS GERAIS COM REDIS CACHE
+            if REDIS_DISPONIVEL:
+                estatisticas = redis_cache.cache_estatisticas_cliente(
+                    cliente=analise.get("cliente_especifico", "geral"),
+                    periodo_dias=analise.get("periodo_dias", 30)
+                )
+                if not estatisticas:
+                    # Cache miss - calcular e salvar
+                    estatisticas = self._calcular_estatisticas_especificas(analise, filtros_usuario)
+                    redis_cache.cache_estatisticas_cliente(
+                        cliente=analise.get("cliente_especifico", "geral"),
+                        periodo_dias=analise.get("periodo_dias", 30),
+                        dados=estatisticas,
+                        ttl=180  # 3 minutos para estatísticas
+                    )
+                    logger.info("💾 Estatísticas salvas no Redis cache")
+                else:
+                    logger.info("🎯 CACHE HIT: Estatísticas carregadas do Redis")
             else:
-                estatisticas = self._cache[stats_key]["data"]
+                # Fallback sem Redis
+                stats_key = f"stats_{analise.get('cliente_especifico', 'geral')}_{analise.get('periodo_dias', 30)}"
+                if stats_key not in self._cache or (datetime.now().timestamp() - self._cache[stats_key]["timestamp"]) > self._cache_timeout:
+                    estatisticas = self._calcular_estatisticas_especificas(analise, filtros_usuario)
+                    self._cache[stats_key] = {
+                        "data": estatisticas,
+                        "timestamp": datetime.now().timestamp()
+                    }
+                else:
+                    estatisticas = self._cache[stats_key]["data"]
             
             contexto["estatisticas"] = estatisticas
+            
+            # Salvar contexto completo no Redis para próximas consultas similares
+            if REDIS_DISPONIVEL:
+                redis_cache.set(chave_cache, contexto, ttl=300)  # 5 minutos
+                logger.info("💾 Contexto completo salvo no Redis cache")
             
             return contexto
             
         except Exception as e:
             logger.error(f"❌ Erro ao carregar contexto inteligente: {e}")
-            return {"erro": str(e), "timestamp": datetime.now().isoformat()}
+            return {"erro": str(e), "timestamp": datetime.now().isoformat(), "_from_cache": False}
+    
+    def _carregar_entregas_banco(self, analise: Dict[str, Any], filtros_usuario: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
+        """Carrega entregas específicas do banco de dados"""
+        from app import db
+        from app.monitoramento.models import EntregaMonitorada
+        
+        query_entregas = db.session.query(EntregaMonitorada).filter(
+            EntregaMonitorada.data_embarque >= data_limite
+        )
+        
+        # Aplicar filtro de cliente específico - RIGOROSO
+        if analise.get("cliente_especifico"):
+            if analise["cliente_especifico"] == "GRUPO_CLIENTES":
+                # Filtro genérico para grupos de clientes
+                query_entregas = query_entregas.filter(
+                    or_(
+                        EntregaMonitorada.cliente.ilike('%atacado%'),
+                        EntregaMonitorada.cliente.ilike('%supermercado%'),
+                        EntregaMonitorada.cliente.ilike('%varejo%')
+                    )
+                )
+            elif analise["cliente_especifico"] == "Assai":
+                # APENAS Assai - NUNCA Atacadão
+                query_entregas = query_entregas.filter(
+                    and_(
+                        EntregaMonitorada.cliente.ilike('%assai%'),
+                        ~EntregaMonitorada.cliente.ilike('%atacadão%'),
+                        ~EntregaMonitorada.cliente.ilike('%atacadao%')
+                    )
+                )
+            elif analise["cliente_especifico"] == "Atacadão":
+                # APENAS Atacadão - NUNCA Assai
+                query_entregas = query_entregas.filter(
+                    and_(
+                        or_(
+                            EntregaMonitorada.cliente.ilike('%atacadão%'),
+                            EntregaMonitorada.cliente.ilike('%atacadao%')
+                        ),
+                        ~EntregaMonitorada.cliente.ilike('%assai%')
+                    )
+                )
+            else:
+                # Outros clientes específicos
+                query_entregas = query_entregas.filter(
+                    EntregaMonitorada.cliente.ilike(f'%{analise["cliente_especifico"]}%')
+                )
+        
+        # Aplicar filtro geográfico
+        if analise.get("filtro_geografico"):
+            query_entregas = query_entregas.filter(
+                EntregaMonitorada.uf == analise["filtro_geografico"]
+            )
+        
+        # Aplicar filtros de usuário (vendedor)
+        if filtros_usuario.get("vendedor_restricao"):
+            query_entregas = query_entregas.filter(
+                EntregaMonitorada.vendedor == filtros_usuario["vendedor"]
+            )
+        
+        entregas = query_entregas.order_by(EntregaMonitorada.data_embarque.desc()).limit(100).all()
+        
+        # Calcular métricas se solicitado
+        metricas_entregas = {}
+        if "performance_prazo" in analise.get("metricas_solicitadas", []):
+            metricas_entregas = self._calcular_metricas_prazo(entregas)
+        
+        # Carregar agendamentos se solicitado
+        agendamentos_info = {}
+        if "agendamentos" in analise.get("metricas_solicitadas", []):
+            agendamentos_info = self._carregar_agendamentos(entregas)
+        
+        return {
+            "registros": [
+                {
+                    "id": e.id,
+                    "numero_nf": e.numero_nf,
+                    "cliente": e.cliente,
+                    "uf": e.uf,
+                    "municipio": e.municipio,
+                    "transportadora": e.transportadora,
+                    "status_finalizacao": e.status_finalizacao,
+                    "data_embarque": e.data_embarque.isoformat() if e.data_embarque else None,
+                    "data_entrega_prevista": e.data_entrega_prevista.isoformat() if e.data_entrega_prevista else None,
+                    "data_entrega_realizada": e.data_hora_entrega_realizada.isoformat() if e.data_hora_entrega_realizada else None,
+                    "entregue": e.entregue,
+                    "valor_nf": float(e.valor_nf or 0),
+                    "vendedor": e.vendedor,
+                    "lead_time": e.lead_time,
+                    "no_prazo": self._verificar_prazo_entrega(e),
+                    "dias_atraso": self._calcular_dias_atraso(e)
+                }
+                for e in entregas
+            ],
+            "total_registros": len(entregas),
+            "metricas": metricas_entregas,
+            "agendamentos": agendamentos_info
+        }
+    
+    def _carregar_fretes_banco(self, analise: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
+        """Carrega fretes específicos do banco de dados"""
+        from app import db
+        from app.fretes.models import Frete
+        
+        query_fretes = db.session.query(Frete).filter(
+            Frete.criado_em >= data_limite
+        )
+        
+        if analise.get("cliente_especifico") and analise["cliente_especifico"] != "GRUPO_CLIENTES":
+            query_fretes = query_fretes.filter(
+                Frete.nome_cliente.ilike(f'%{analise["cliente_especifico"]}%')
+            )
+        
+        fretes = query_fretes.order_by(Frete.criado_em.desc()).limit(50).all()
+        
+        return {
+            "registros": [
+                {
+                    "id": f.id,
+                    "cliente": f.nome_cliente,
+                    "uf_destino": f.uf_destino,
+                    "valor_cotado": float(f.valor_cotado or 0),
+                    "valor_considerado": float(f.valor_considerado or 0),
+                    "peso_total": float(f.peso_total or 0),
+                    "status": f.status,
+                    "data_criacao": f.criado_em.isoformat() if f.criado_em else None
+                }
+                for f in fretes
+            ],
+            "total_registros": len(fretes)
+        }
+    
+    def _carregar_agendamentos(self, entregas: List) -> Dict[str, Any]:
+        """Carrega informações de agendamentos e reagendamentos"""
+        try:
+            from app import db
+            from app.monitoramento.models import AgendamentoEntrega
+            
+            agendamentos_info = {
+                "total_agendamentos": 0,
+                "reagendamentos": 0,
+                "agendamentos_detalhes": []
+            }
+            
+            for entrega in entregas:
+                agendamentos = db.session.query(AgendamentoEntrega).filter(
+                    AgendamentoEntrega.entrega_id == entrega.id
+                ).order_by(AgendamentoEntrega.data_agendamento.desc()).all()
+                
+                if agendamentos:
+                    agendamentos_info["total_agendamentos"] += len(agendamentos)
+                    if len(agendamentos) > 1:
+                        agendamentos_info["reagendamentos"] += 1
+                    
+                    for ag in agendamentos:
+                        agendamentos_info["agendamentos_detalhes"].append({
+                            "entrega_id": entrega.id,
+                            "numero_nf": entrega.numero_nf,
+                            "cliente": entrega.cliente,
+                            "data_agendamento": ag.data_agendamento.isoformat() if ag.data_agendamento else None,
+                            "protocolo": getattr(ag, 'protocolo', None),
+                            "status": getattr(ag, 'status', 'Aguardando confirmação'),
+                            "observacoes": getattr(ag, 'observacoes', None)
+                        })
+            
+            return agendamentos_info
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao carregar agendamentos: {e}")
+            return {"erro": str(e)}
+    
+    def _verificar_prazo_entrega(self, entrega) -> bool:
+        """Verifica se entrega foi realizada no prazo"""
+        if not entrega.data_hora_entrega_realizada or not entrega.data_entrega_prevista:
+            return None
+        
+        return entrega.data_hora_entrega_realizada.date() <= entrega.data_entrega_prevista
+    
+    def _calcular_dias_atraso(self, entrega) -> int:
+        """Calcula dias de atraso da entrega"""
+        if not entrega.data_hora_entrega_realizada or not entrega.data_entrega_prevista:
+            return None
+        
+        if entrega.data_hora_entrega_realizada.date() > entrega.data_entrega_prevista:
+            return (entrega.data_hora_entrega_realizada.date() - entrega.data_entrega_prevista).days
+        
+        return 0
     
     def _obter_filtros_usuario(self) -> Dict[str, Any]:
         """Obtém filtros específicos do usuário atual"""
@@ -417,12 +696,22 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
             and e.data_hora_entrega_realizada.date() <= e.data_entrega_prevista
         ]
         
+        # Calcular atrasos
+        atrasos = []
+        for e in entregas_realizadas:
+            if e.data_entrega_prevista and e.data_hora_entrega_realizada.date() > e.data_entrega_prevista:
+                atraso = (e.data_hora_entrega_realizada.date() - e.data_entrega_prevista).days
+                atrasos.append(atraso)
+        
         return {
             "total_entregas": total_entregas,
             "entregas_realizadas": len(entregas_realizadas),
             "entregas_no_prazo": len(entregas_no_prazo),
+            "entregas_atrasadas": len(atrasos),
             "percentual_no_prazo": round((len(entregas_no_prazo) / len(entregas_realizadas) * 100), 1) if entregas_realizadas else 0,
-            "media_lead_time": round(sum(e.lead_time for e in entregas if e.lead_time) / len([e for e in entregas if e.lead_time]), 1) if any(e.lead_time for e in entregas) else None
+            "media_lead_time": round(sum(e.lead_time for e in entregas if e.lead_time) / len([e for e in entregas if e.lead_time]), 1) if any(e.lead_time for e in entregas) else None,
+            "media_atraso": round(sum(atrasos) / len(atrasos), 1) if atrasos else 0,
+            "maior_atraso": max(atrasos) if atrasos else 0
         }
     
     def _calcular_estatisticas_especificas(self, analise: Dict[str, Any], filtros_usuario: Dict[str, Any]) -> Dict[str, Any]:
@@ -432,7 +721,7 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
             from app.monitoramento.models import EntregaMonitorada
             from app.fretes.models import Frete
             
-            data_limite = datetime.now() - timedelta(days=analise.get("periodo_dias", 7))
+            data_limite = datetime.now() - timedelta(days=analise.get("periodo_dias", 30))
             
             # Base query para entregas
             query_base = db.session.query(EntregaMonitorada).filter(
@@ -450,6 +739,26 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
                             EntregaMonitorada.cliente.ilike('%varejo%')
                         )
                     )
+                elif analise["cliente_especifico"] == "Assai":
+                    # APENAS Assai
+                    query_base = query_base.filter(
+                        and_(
+                            EntregaMonitorada.cliente.ilike('%assai%'),
+                            ~EntregaMonitorada.cliente.ilike('%atacadão%'),
+                            ~EntregaMonitorada.cliente.ilike('%atacadao%')
+                        )
+                    )
+                elif analise["cliente_especifico"] == "Atacadão":
+                    # APENAS Atacadão
+                    query_base = query_base.filter(
+                        and_(
+                            or_(
+                                EntregaMonitorada.cliente.ilike('%atacadão%'),
+                                EntregaMonitorada.cliente.ilike('%atacadao%')
+                            ),
+                            ~EntregaMonitorada.cliente.ilike('%assai%')
+                        )
+                    )
                 else:
                     query_base = query_base.filter(EntregaMonitorada.cliente.ilike(f'%{analise["cliente_especifico"]}%'))
             
@@ -461,10 +770,10 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
             entregas_pendentes = query_base.filter(EntregaMonitorada.status_finalizacao.in_(['Pendente', 'Em trânsito'])).count()
             
             return {
-                "periodo_analisado": f"{analise.get('periodo_dias', 7)} dias",
+                "periodo_analisado": f"{analise.get('periodo_dias', 30)} dias",
                 "total_entregas": total_entregas,
                 "entregas_entregues": entregas_entregues,
-                "entregas_pendentes": entregas_pendentes,
+                "entregas_pendentes": entregas_pendentes,  
                 "percentual_entregues": round((entregas_entregues / total_entregas * 100), 1) if total_entregas > 0 else 0,
                 "cliente_especifico": analise.get("cliente_especifico"),
                 "filtro_geografico": analise.get("filtro_geografico"),
@@ -483,7 +792,10 @@ Por favor, analise a consulta e forneça uma resposta inteligente, precisa e aci
             descricao.append(f"- Dados específicos do cliente: {analise['cliente_especifico']}")
         
         if analise.get("periodo_dias"):
-            descricao.append(f"- Período: Últimos {analise['periodo_dias']} dias")
+            if analise.get("mes_especifico"):
+                descricao.append(f"- Período: Mês de {analise['mes_especifico']} ({analise['periodo_dias']} dias)")
+            else:
+                descricao.append(f"- Período: Últimos {analise['periodo_dias']} dias")
         
         if analise.get("filtro_geografico"):
             descricao.append(f"- Filtro geográfico: {analise['filtro_geografico']}")
@@ -504,9 +816,10 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
 2. Filtros por permissão - Vendedores veem apenas seus clientes
 3. Métricas calculadas - Performance, atrasos, comparações temporais
 4. Cache inteligente - Estatísticas otimizadas para consultas frequentes
-5. Diferenciação semântica - Distingue grupos de clientes vs clientes específicos vs filiais
-6. Análises temporais flexíveis - 7, 30, 60 dias ou períodos customizados
-7. Correlação de dados - Liga pedidos → dados importados → monitoramento
+5. Diferenciação rigorosa - Assai ≠ Atacadão (nunca confunde)
+6. Análises temporais corretas - Mês = mês inteiro, não 7 dias
+7. Dados completos - Datas de entrega, prazos, reagendamentos, protocolos
+8. Histórico de agendamentos - Reagendas e protocolos completos
 """
     
     def _fallback_simulado(self, consulta: str) -> str:
@@ -521,11 +834,12 @@ Consulta recebida: "{consulta}"
 3. Reinicie o sistema
 
 💡 **Com Claude 4 Sonnet Real você terá:**
-- Inteligência de R$ 200MM/ano industrial
+- Inteligência industrial de ponta
 - Análises contextuais precisas
-- Diferenciação inteligente de clientes
+- Diferenciação rigorosa de clientes (Assai ≠ Atacadão)
 - Métricas calculadas automaticamente
 - Performance otimizada com cache
+- Dados completos com reagendamentos
 
 🔄 **Por enquanto, usando sistema básico...**"""
 
