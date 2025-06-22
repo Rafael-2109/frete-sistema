@@ -290,6 +290,76 @@ class CacheAsideManager:
 cache_aside = CacheAsideManager()
 
 
+# INTELLIGENT CACHE (para compatibilidade com MCP v4.0)
+class IntelligentCache:
+    """Cache inteligente com categorização para IA avançada"""
+    
+    def __init__(self, base_cache: RedisCache = None):
+        self.cache = base_cache or redis_cache
+        self.categories = {}
+    
+    def set(self, key: str, value: Any, category: str = "general", ttl: int = 300) -> bool:
+        """Armazena com categoria para organização"""
+        categorized_key = f"{category}:{key}"
+        
+        # Rastrear categoria
+        if category not in self.categories:
+            self.categories[category] = []
+        if categorized_key not in self.categories[category]:
+            self.categories[category].append(categorized_key)
+        
+        return self.cache.set(categorized_key, value, ttl)
+    
+    def get(self, key: str, category: str = "general") -> Optional[Any]:
+        """Busca por categoria"""
+        categorized_key = f"{category}:{key}"
+        return self.cache.get(categorized_key)
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Estatísticas do cache inteligente"""
+        return {
+            "categories": list(self.categories.keys()),
+            "total_categories": len(self.categories),
+            "cache_available": self.cache.disponivel,
+            "cache_info": self.cache.get_info_cache() if self.cache.disponivel else {}
+        }
+    
+    def clear_category(self, category: str) -> int:
+        """Limpa cache de uma categoria específica"""
+        if category in self.categories:
+            count = 0
+            for key in self.categories[category]:
+                if self.cache.delete(key):
+                    count += 1
+            del self.categories[category]
+            return count
+        return 0
+
+# Instância global do cache inteligente
+intelligent_cache = IntelligentCache()
+
+# Decorador compatível com cache_result
+def cache_result(ttl: int = 300, category: str = "function_cache"):
+    """Decorador para cache de resultados com categoria"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Gerar chave baseada na função
+            func_key = f"{func.__name__}:{hash(str(args) + str(kwargs))}"
+            
+            # Tentar buscar do cache
+            cached = intelligent_cache.get(func_key, category)
+            if cached is not None:
+                return cached
+            
+            # Executar e cachear
+            result = func(*args, **kwargs)
+            intelligent_cache.set(func_key, result, category, ttl)
+            
+            return result
+        return wrapper
+    return decorator
+
 # FUNÇÃO UTILITÁRIA PARA INTEGRAÇÃO FÁCIL
 def cached_query(prefixo: str, ttl: int = 300):
     """
