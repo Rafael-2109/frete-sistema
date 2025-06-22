@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from .mcp_connector import MCPSistemaOnline
 from . import claude_ai_bp
-from app.utils.auth_decorators import require_staff
+from app.utils.auth_decorators import require_admin
 from .claude_real_integration import processar_com_claude_real
 from .mcp_connector import MCPConnector
 
@@ -442,7 +442,7 @@ def claude_real_status():
 
 @claude_ai_bp.route('/redis-status')
 @login_required
-@require_staff
+@require_admin
 def redis_status():
     """Dashboard de status do Redis Cache"""
     if not REDIS_DISPONIVEL:
@@ -483,7 +483,7 @@ def redis_status():
 
 @claude_ai_bp.route('/redis-clear')
 @login_required
-@require_staff
+@require_admin
 def redis_clear():
     """Limpar cache Redis (apenas staff)"""
     if not REDIS_DISPONIVEL:
