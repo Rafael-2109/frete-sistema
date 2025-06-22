@@ -8,7 +8,7 @@ import os
 import anthropic
 import logging
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,22 @@ CONTEXTO: Sistema completo de gestão de fretes com:
 - Controle financeiro e faturamento
 - Portaria e controle de veículos
 
+IMPORTANTE - DIFERENÇA CONCEITUAL NO SISTEMA:
+
+🚚 **FRETES** = Cotações, contratos de transporte, valores, aprovações
+📦 **ENTREGAS** = Monitoramento pós-embarque, status de entrega, canhotos, datas realizadas
+
+QUANDO O USUÁRIO PERGUNTAR SOBRE:
+- "FRETES" → Use dados da tabela 'fretes' (cotações, valores, aprovações)
+- "ENTREGAS" → Use dados da tabela 'entregas_monitoradas' (status entrega, datas realizadas)
+- "EMBARQUES" → Use dados da tabela 'embarques' (despachos, envios)
+
+DADOS DISPONÍVEIS:
+- fretes_recentes: Últimas cotações e contratos
+- entregas_recentes: Últimas entregas monitoradas
+- entregas_ultimos_15_dias: Histórico detalhado de entregas
+- estatisticas: Contadores gerais do sistema
+
 SUAS CAPACIDADES:
 - Análise inteligente de dados reais
 - Insights preditivos e recomendações
@@ -57,11 +73,18 @@ DADOS REAIS: Você tem acesso aos dados reais via PostgreSQL.
 
 INSTRUÇÕES:
 1. Seja EXTREMAMENTE inteligente e preciso
-2. Forneça insights valiosos e acionáveis  
-3. Use linguagem natural e seja conversacional
-4. Sempre que possível, sugira melhorias
-5. Identifique padrões e anomalias
-6. Seja proativo em recomendações
+2. SEMPRE diferencie fretes de entregas conforme definição acima
+3. Use os dados corretos para cada tipo de consulta
+4. Forneça insights valiosos e acionáveis  
+5. Use linguagem natural e seja conversacional
+6. Sempre que possível, sugira melhorias
+7. Identifique padrões e anomalias
+8. Seja proativo em recomendações
+
+EXEMPLOS DE CONSULTAS:
+- "Como estão os fretes do Atacadão?" → Consultar tabela fretes (cotações)
+- "Como estão as entregas do Atacadão?" → Consultar tabela entregas_monitoradas
+- "Status dos embarques" → Consultar tabela embarques
 
 Responda sempre em português brasileiro."""
     
@@ -128,11 +151,16 @@ Por favor, analise a consulta e forneça uma resposta inteligente, detalhada e a
             from app.embarques.models import Embarque
             from app.transportadoras.models import Transportadora
             from app.pedidos.models import Pedido
+            from app.monitoramento.models import EntregaMonitorada
             from sqlalchemy import func
+            
+            # Data de 15 dias atrás para análises
+            data_limite = datetime.now() - timedelta(days=15)
             
             # Estatísticas rápidas para contexto
             contexto = {
                 "timestamp": datetime.now().isoformat(),
+                "tipo_dados": "sistema_fretes_completo",
                 "estatisticas": {
                     "total_fretes": db.session.query(Frete).count(),
                     "fretes_pendentes": db.session.query(Frete).filter(Frete.status == 'PENDENTE').count(),
@@ -142,6 +170,9 @@ Por favor, analise a consulta e forneça uma resposta inteligente, detalhada e a
                     "total_transportadoras": db.session.query(Transportadora).count(),
                     "transportadoras_freteiros": db.session.query(Transportadora).filter(Transportadora.freteiro == True).count(),
                     "total_pedidos": db.session.query(Pedido).count(),
+                    "total_entregas_monitoradas": db.session.query(EntregaMonitorada).count(),
+                    "entregas_entregues": db.session.query(EntregaMonitorada).filter(EntregaMonitorada.status_finalizacao == 'Entregue').count(),
+                    "entregas_pendentes": db.session.query(EntregaMonitorada).filter(EntregaMonitorada.status_finalizacao.in_(['Pendente', 'Em trânsito'])).count(),
                 },
                 "fretes_recentes": [
                     {
@@ -151,9 +182,41 @@ Por favor, analise a consulta e forneça uma resposta inteligente, detalhada e a
                         "valor": float(f.valor_cotado or 0),
                         "peso": float(f.peso_total or 0),
                         "status": f.status,
-                        "data": f.criado_em.isoformat() if f.criado_em else None
+                        "data": f.criado_em.isoformat() if f.criado_em else None,
+                        "tipo": "FRETE"
                     }
                     for f in db.session.query(Frete).order_by(Frete.criado_em.desc()).limit(5).all()
+                ],
+                "entregas_recentes": [
+                    {
+                        "id": e.id,
+                        "numero_nf": e.numero_nf,
+                        "cliente": e.nome_cliente,
+                        "uf_destino": e.uf_destino,
+                        "status_finalizacao": e.status_finalizacao,
+                        "data_embarque": e.data_embarque.isoformat() if e.data_embarque else None,
+                        "data_entrega_prevista": e.data_entrega_prevista.isoformat() if e.data_entrega_prevista else None,
+                        "data_entrega_realizada": e.data_entrega_realizada.isoformat() if e.data_entrega_realizada else None,
+                        "tipo": "ENTREGA"
+                    }
+                    for e in db.session.query(EntregaMonitorada).order_by(EntregaMonitorada.data_embarque.desc()).limit(5).all()
+                ],
+                "entregas_ultimos_15_dias": [
+                    {
+                        "id": e.id,
+                        "numero_nf": e.numero_nf,
+                        "cliente": e.nome_cliente,
+                        "uf_destino": e.uf_destino,
+                        "status_finalizacao": e.status_finalizacao,
+                        "data_embarque": e.data_embarque.isoformat() if e.data_embarque else None,
+                        "data_entrega_prevista": e.data_entrega_prevista.isoformat() if e.data_entrega_prevista else None,
+                        "data_entrega_realizada": e.data_entrega_realizada.isoformat() if e.data_entrega_realizada else None,
+                        "atraso_dias": None,  # Calcular se necessário
+                        "tipo": "ENTREGA"
+                    }
+                    for e in db.session.query(EntregaMonitorada).filter(
+                        EntregaMonitorada.data_embarque >= data_limite
+                    ).order_by(EntregaMonitorada.data_embarque.desc()).limit(20).all()
                 ],
                 "transportadoras_ativas": [
                     {
@@ -165,7 +228,20 @@ Por favor, analise a consulta e forneça uma resposta inteligente, detalhada e a
                         "optante": t.optante
                     }
                     for t in db.session.query(Transportadora).limit(5).all()
-                ]
+                ],
+                "definicoes_importantes": {
+                    "diferenca_frete_entrega": {
+                        "FRETES": "Cotações, contratos de transporte, valores de frete, aprovações",
+                        "ENTREGAS": "Monitoramento de entregas, status de entrega, canhotos, datas realizadas"
+                    },
+                    "tabelas_sistema": {
+                        "fretes": "Tabela de fretes/cotações",
+                        "entregas_monitoradas": "Tabela de monitoramento de entregas",
+                        "embarques": "Tabela de embarques/despachos",
+                        "transportadoras": "Cadastro de transportadoras",
+                        "pedidos": "Pedidos dos clientes"
+                    }
+                }
             }
             
             return contexto
