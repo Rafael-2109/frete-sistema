@@ -215,40 +215,33 @@
         </div>
 
         <div class="col-lg-4">
-            <!-- 🆕 Widget de Consulta Rápida -->
+            <!-- 🤖 Link rápido para MCP v4.0 -->
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Consulta Rápida via API</h6>
+                    <h6 class="m-0 font-weight-bold text-primary">🤖 Claude AI - MCP v4.0</h6>
                 </div>
                 <div class="card-body">
-                    <form id="form-consulta-cliente">
-                        <div class="form-group">
-                            <label for="cliente-nome">Nome do Cliente:</label>
-                            <input type="text" class="form-control" id="cliente-nome" placeholder="Ex: Assai, Carrefour...">
-                        </div>
-                        <div class="form-group">
-                            <label for="cliente-uf">UF (Opcional):</label>
-                            <select class="form-control" id="cliente-uf">
-                                <option value="">Todas</option>
-                                <option value="SP">SP</option>
-                                <option value="RJ">RJ</option>
-                                <option value="MG">MG</option>
-                                <option value="PR">PR</option>
-                                <option value="SC">SC</option>
-                                <option value="RS">RS</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-block">
-                            <i class="fas fa-search"></i> Consultar
-                        </button>
-                        <button type="button" class="btn btn-success btn-block mt-2" onclick="downloadExcelCliente()">
-                            <i class="fas fa-file-excel"></i> Baixar Excel
-                        </button>
-                    </form>
+                    <p class="text-muted mb-3">
+                        Acesse o sistema inteligente com processamento de linguagem natural avançado.
+                    </p>
                     
-                    <div id="resultado-consulta" class="mt-3" style="display: none;">
-                        <h6>Resultado:</h6>
-                        <div id="dados-cliente"></div>
+                    <div class="mb-3">
+                        <strong>💬 Exemplos de consultas:</strong>
+                        <ul class="mt-2 text-sm">
+                            <li>"Status do sistema"</li>
+                            <li>"Transportadoras cadastradas"</li>
+                            <li>"Análise de tendências"</li>
+                            <li>"Embarques ativos"</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="btn-group-vertical w-100">
+                        <a href="/claude-ai/v4/dashboard" class="btn btn-primary btn-sm">
+                            <i class="fas fa-tachometer-alt"></i> Dashboard v4.0
+                        </a>
+                        <a href="/claude-ai/chat" class="btn btn-success btn-sm">
+                            <i class="fas fa-comments"></i> Chat Inteligente
+                        </a>
                     </div>
                 </div>
             </div>

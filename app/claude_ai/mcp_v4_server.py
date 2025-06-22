@@ -88,14 +88,17 @@ class NLPProcessor:
                 r'(?:performance|desempenho).*?sistema'
             ],
             'analise_tendencias': [
-                r'(?:tendências?|padrões?).*?(?:frete|embarque|custo)',
-                r'(?:análise|análises).*?(?:tendência|padrão)',
+                r'análise.*?(?:tendência|padrão|evolução|dados)',  # Melhor match para "Análise de tendências"
+                r'(?:tendências?|padrões?).*?(?:frete|embarque|custo|dados)',
                 r'(?:evolução|crescimento).*?(?:custo|frete|volume)',
                 r'(?:comportamento|histórico).*?(?:frete|embarque)',
                 r'(?:previsão|projeção).*?(?:tendência|padrão)',
                 r'(?:insights?|descobertas?).*?(?:dados|histórico)',
                 r'(?:como|qual).*?(?:tendência|evolução)',
-                r'(?:analytics?|business\s+intelligence)'
+                r'(?:analytics?|business\s+intelligence)',
+                r'análise\s+de\s+tendências?',  # Match exato
+                r'analisar.*?tendências?',  # "analisar tendências"
+                r'tendências?.*?(?:sistema|dados|mercado)'  # Outras variações
             ],
             'detectar_anomalias': [
                 r'(?:anomalias?|problemas?).*?(?:frete|embarque|custo)',
@@ -176,7 +179,7 @@ class NLPProcessor:
             'consulta_embarques': ['embarque', 'embarques', 'envio', 'envios', 'despacho'],
             'consulta_transportadoras': ['transportadora', 'transportadoras', 'empresa', 'empresas', 'freteiro'],
             'status_sistema': ['sistema', 'status', 'situação', 'relatório', 'resumo', 'dashboard'],
-            'analise_tendencias': ['tendência', 'tendências', 'análise', 'padrão', 'padrões', 'evolução'],
+            'analise_tendencias': ['tendência', 'tendências', 'análise', 'padrão', 'padrões', 'evolução', 'analisar', 'analytics', 'histórico', 'comportamento'],
             'detectar_anomalias': ['anomalia', 'anomalias', 'problema', 'problemas', 'erro', 'alertas'],
             'otimizar_rotas': ['otimizar', 'otimização', 'rota', 'rotas', 'caminho', 'trajeto'],
             'previsao_custos': ['previsão', 'projeção', 'custo', 'custos', 'orçamento', 'forecast']
@@ -186,7 +189,9 @@ class NLPProcessor:
             for keyword in keywords:
                 if keyword in text_normalized:
                     intent_scores.setdefault(intent, 0)
-                    intent_scores[intent] += 0.3  # Boost por palavra-chave
+                    # Boost maior para analise_tendencias quando detecta "análise"
+                    boost_value = 0.5 if intent == 'analise_tendencias' and keyword == 'análise' else 0.3
+                    intent_scores[intent] += boost_value  # Boost por palavra-chave
         
         # Selecionar intent com maior score
         if intent_scores:
@@ -1008,22 +1013,6 @@ class MCPv4Server:
                 ai_logger.log_error(e, operation="previsao_custos")
             return f"❌ Erro na previsão de custos: {str(e)}"
     
-    # Implementações básicas das ferramentas v3.1
-    def _consultar_fretes(self, args: Dict[str, Any]) -> str:
-        return "🚚 **CONSULTA DE FRETES v4.0** - Implementação em andamento"
-    
-    def _consultar_transportadoras(self, args: Dict[str, Any]) -> str:
-        return "🚛 **TRANSPORTADORAS v4.0** - Implementação em andamento"
-    
-    def _consultar_embarques(self, args: Dict[str, Any]) -> str:
-        return "📦 **EMBARQUES v4.0** - Implementação em andamento"
-    
-    def _consultar_pedidos_cliente(self, args: Dict[str, Any]) -> str:
-        return "📋 **PEDIDOS CLIENTE v4.0** - Implementação em andamento"
-    
-    def _exportar_pedidos_excel(self, args: Dict[str, Any]) -> str:
-        return "📊 **EXPORT EXCEL v4.0** - Implementação em andamento"
-
     def _query_intelligent(self, args: Dict[str, Any]) -> str:
         """Ferramenta universal inteligente - processa qualquer consulta em linguagem natural"""
         try:
@@ -1036,19 +1025,24 @@ class MCPv4Server:
             intent = self.nlp_processor.classify_intent(query)
             entities = self.nlp_processor.extract_entities(query)
             
+            # Log para debug
+            logger.info(f"🎯 DEBUG - Query: '{query}' | Intent: '{intent}' | Entities: {entities}")
+            
             # Mesclar entidades com argumentos
             merged_args = {**args, **entities}
             
-            # Mapear intent para ferramenta e executar
+            # Mapear intent para ferramenta e executar - CORRIGIDO
             intent_mapping = {
                 'consulta_fretes': self._consultar_fretes,
-                'consulta_embarques': self._consultar_embarques,
+                'consulta_embarques': self._consultar_embarques, 
                 'consulta_transportadoras': self._consultar_transportadoras,
                 'status_sistema': self._status_sistema,
                 'analise_tendencias': self._analisar_tendencias,
                 'detectar_anomalias': self._detectar_anomalias,
                 'otimizar_rotas': self._otimizar_rotas,
-                'previsao_custos': self._previsao_custos
+                'previsao_custos': self._previsao_custos,
+                'consultar_pedidos': self._consultar_pedidos_cliente,
+                'exportar_pedidos': self._exportar_pedidos_excel
             }
             
             # Executar ferramenta correspondente
@@ -1063,57 +1057,341 @@ class MCPv4Server:
                         description=f"Query '{query}' processada como '{intent}' com entidades {entities}"
                     )
                 
+                logger.info(f"✅ Executando ferramenta para intent: {intent}")
                 return intent_mapping[intent](merged_args)
             else:
-                # Fallback para status do sistema
-                return self._status_sistema(merged_args)
+                # Log de fallback com informação útil
+                logger.warning(f"⚠️ Intent '{intent}' não mapeado, usando fallback inteligente")
+                
+                # Fallback inteligente baseado em palavras-chave
+                query_lower = query.lower()
+                if any(word in query_lower for word in ['frete', 'fretes', 'carga']):
+                    return self._consultar_fretes(merged_args)
+                elif any(word in query_lower for word in ['embarque', 'embarques', 'envio']):
+                    return self._consultar_embarques(merged_args)
+                elif any(word in query_lower for word in ['transportadora', 'empresa', 'freteiro']):
+                    return self._consultar_transportadoras(merged_args)
+                elif any(word in query_lower for word in ['tendência', 'análise', 'padrão']):
+                    return self._analisar_tendencias(merged_args)
+                elif any(word in query_lower for word in ['anomalia', 'problema', 'erro']):
+                    return self._detectar_anomalias(merged_args)
+                elif any(word in query_lower for word in ['otimizar', 'rota', 'caminho']):
+                    return self._otimizar_rotas(merged_args)
+                elif any(word in query_lower for word in ['previsão', 'custo', 'orçamento']):
+                    return self._previsao_custos(merged_args)
+                else:
+                    # Último fallback com informação útil
+                    return f"""🤖 **CONSULTA PROCESSADA - MCP v4.0**
+
+📝 **Sua consulta:** "{query}"
+🎯 **Intent detectado:** {intent}
+🔍 **Entidades encontradas:** {entities if entities else 'Nenhuma'}
+
+⚠️ **Status:** Intent não mapeado para ferramenta específica.
+
+💡 **Tente consultas como:**
+• "Status do sistema" → Métricas gerais
+• "Como estão os fretes do [CLIENTE]?" → Consulta específica
+• "Análise de tendências" → Analytics avançado  
+• "Detectar anomalias" → Verificação de problemas
+• "Transportadoras cadastradas" → Lista de empresas
+• "Embarques ativos" → Status atual
+
+🤖 **Para melhor resultado, seja mais específico na sua consulta!**"""
                 
         except Exception as e:
             if AI_INFRASTRUCTURE_AVAILABLE:
                 ai_logger.log_error(e, operation="query_intelligent")
+            logger.error(f"❌ Erro em query_intelligent: {e}")
             return f"❌ Erro ao processar consulta inteligente: {str(e)}"
 
-    def query_intelligent(self, query: str, user_id: str = "unknown") -> Dict[str, Any]:
-        """Método público para consultas inteligentes - facilita testes"""
+    # Implementações básicas das ferramentas v3.1 - AGORA FUNCIONAIS
+    def _consultar_fretes(self, args: Dict[str, Any]) -> str:
+        """Consulta fretes do sistema"""
         try:
-            # Processar via requisição MCP usando a ferramenta query_intelligent
-            requisicao = {
-                "method": "tools/call",
-                "params": {
-                    "name": "query_intelligent", 
-                    "arguments": {"query": query}
-                },
-                "id": 1
-            }
+            cliente = args.get('cliente', '')
+            uf = args.get('uf', '')
             
-            response = self.processar_requisicao(requisicao, user_id)
+            from app import db
+            from app.fretes.models import Frete
+            from sqlalchemy import and_
             
-            # Converter formato para teste
-            if 'result' in response and len(response['result']) > 0:
-                return {
-                    "content": response['result']
-                }
-            else:
-                return response
-                
+            # Query base
+            query = db.session.query(Frete).filter(Frete.status != 'CANCELADO')
+            
+            # Filtros
+            conditions = []
+            if cliente:
+                conditions.append(Frete.nome_cliente.ilike(f'%{cliente}%'))
+            if uf:
+                conditions.append(Frete.uf_destino == uf.upper())
+            
+            if conditions:
+                query = query.filter(and_(*conditions))
+            
+            # Buscar fretes (limitado)
+            fretes = query.order_by(Frete.criado_em.desc()).limit(10).all()
+            
+            if not fretes:
+                return f"""🚚 **CONSULTA DE FRETES v4.0**
+
+🔍 **Filtros aplicados:**
+{f'• Cliente: {cliente}' if cliente else ''}
+{f'• UF Destino: {uf}' if uf else ''}
+
+⚠️ **Resultado:** Nenhum frete encontrado com os filtros especificados.
+
+💡 **Sugestões:**
+• Verifique se o nome do cliente está correto
+• Tente buscar sem filtros específicos
+• Use "Status do sistema" para ver estatísticas gerais"""
+            
+            total_valor = sum(f.valor_cotado or 0 for f in fretes)
+            total_peso = sum(f.peso_total or 0 for f in fretes)
+            
+            result = f"""🚚 **CONSULTA DE FRETES v4.0 - DADOS REAIS**
+
+🔍 **Filtros aplicados:**
+{f'• Cliente: {cliente}' if cliente else ''}
+{f'• UF Destino: {uf}' if uf else ''}
+
+📊 **Resumo encontrado:**
+• Total de fretes: {len(fretes)}
+• Valor total: R$ {total_valor:.2f}
+• Peso total: {total_peso:.1f} kg
+• Custo médio/kg: R$ {(total_valor/total_peso if total_peso > 0 else 0):.2f}
+
+🚚 **FRETES ENCONTRADOS:**"""
+            
+            for frete in fretes[:5]:  # Mostrar até 5
+                status_emoji = "✅" if frete.status == "APROVADO" else "⏳" if frete.status == "PENDENTE" else "📝"
+                result += f"""
+{status_emoji} **ID {frete.id}** | {frete.nome_cliente or 'N/A'}
+   📍 {frete.uf_destino} | 📦 {frete.peso_total or 0:.0f}kg | 💰 R$ {frete.valor_cotado or 0:.2f}
+   📅 {frete.criado_em.strftime('%d/%m/%Y') if frete.criado_em else 'N/A'} | Status: {frete.status}"""
+            
+            if len(fretes) > 5:
+                result += f"\n\n... e mais {len(fretes) - 5} fretes"
+            
+            result += f"""
+
+🤖 **Consulta realizada com dados reais do PostgreSQL**
+🕒 **Em:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"""
+            
+            return result
+            
         except Exception as e:
-            logger.error(f"Erro em query_intelligent: {e}")
-            return {
-                "content": [{
-                    "type": "text",
-                    "text": f"❌ Erro ao processar consulta: {str(e)}"
-                }]
-            }
+            logger.error(f"Erro em _consultar_fretes: {e}")
+            return f"❌ Erro ao consultar fretes: {str(e)}"
+    
+    def _consultar_transportadoras(self, args: Dict[str, Any]) -> str:
+        """Lista transportadoras do sistema"""
+        try:
+            from app import db
+            from app.transportadoras.models import Transportadora
+            
+            transportadoras = db.session.query(Transportadora).order_by(Transportadora.razao_social).all()
+            
+            if not transportadoras:
+                return """🚛 **TRANSPORTADORAS CADASTRADAS v4.0**
+
+⚠️ **Resultado:** Nenhuma transportadora cadastrada no sistema.
+
+💡 **Para cadastrar transportadoras, acesse:**
+Menu → Transportadoras → Nova Transportadora"""
+            
+            result = f"""🚛 **TRANSPORTADORAS CADASTRADAS v4.0**
+
+📊 **Total cadastradas:** {len(transportadoras)}
+
+🚚 **LISTA COMPLETA:**"""
+            
+            for i, trans in enumerate(transportadoras, 1):
+                tipo_emoji = "👤" if trans.freteiro else "🏢"
+                optante_status = "✅ Optante" if trans.optante else "❌ Não optante"
+                result += f"""
+
+{tipo_emoji} **{i}. {trans.razao_social}**
+   📄 CNPJ: {trans.cnpj or 'N/A'}
+   📍 {trans.cidade or 'N/A'}/{trans.uf or 'N/A'}
+   💳 Pagamento: {trans.condicao_pgto or 'Não definido'}
+   🏷️ Tipo: {'Freteiro Autônomo' if trans.freteiro else 'Empresa de Transporte'}
+   📋 Simples: {optante_status}"""
+            
+            # Estatísticas básicas
+            freteiros = sum(1 for t in transportadoras if t.freteiro)
+            empresas = len(transportadoras) - freteiros
+            optantes = sum(1 for t in transportadoras if t.optante)
+            
+            result += f"""
+
+📈 **ESTATÍSTICAS:**
+• Freteiros autônomos: {freteiros}
+• Empresas de transporte: {empresas}
+• Optantes do Simples: {optantes}
+• Total ativo: {len(transportadoras)}
+
+🤖 **Dados reais do sistema PostgreSQL**
+🕒 **Consultado em:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"""
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Erro em _consultar_transportadoras: {e}")
+            return f"❌ Erro ao consultar transportadoras: {str(e)}"
+    
+    def _consultar_embarques(self, args: Dict[str, Any]) -> str:
+        """Consulta embarques do sistema"""
+        try:
+            from app import db
+            from app.embarques.models import Embarque
+            
+            # Buscar embarques ativos mais recentes
+            embarques = db.session.query(Embarque).filter(
+                Embarque.status == 'ativo'
+            ).order_by(Embarque.criado_em.desc()).limit(10).all()
+            
+            if not embarques:
+                return """📦 **EMBARQUES ATIVOS v4.0**
+
+⚠️ **Resultado:** Nenhum embarque ativo encontrado no sistema.
+
+💡 **Embarques podem estar:**
+• Já finalizados (status diferente de 'ativo')
+• Ainda não criados no sistema
+• Use "Status do sistema" para ver estatísticas gerais"""
+            
+            result = f"""📦 **EMBARQUES ATIVOS v4.0 - DADOS REAIS**
+
+📊 **Total de embarques ativos:** {len(embarques)}
+
+🚚 **EMBARQUES ENCONTRADOS:**"""
+            
+            for embarque in embarques:
+                data_embarque = embarque.data_embarque.strftime('%d/%m/%Y') if embarque.data_embarque else 'Não definida'
+                transportadora = embarque.transportadora.razao_social if embarque.transportadora else 'Não atribuída'
+                
+                # Contar fretes do embarque
+                total_fretes = len(embarque.fretes) if hasattr(embarque, 'fretes') else 0
+                
+                result += f"""
+
+📦 **Embarque #{embarque.numero_embarque}**
+   🚛 Transportadora: {transportadora}
+   📅 Data embarque: {data_embarque}
+   📦 Total fretes: {total_fretes}
+   📍 Status: {embarque.status.upper()}
+   📝 Criado: {embarque.criado_em.strftime('%d/%m/%Y %H:%M') if embarque.criado_em else 'N/A'}"""
+            
+            result += f"""
+
+📈 **RESUMO:**
+• Embarques aguardando saída: {len([e for e in embarques if not e.data_embarque])}
+• Embarques com data definida: {len([e for e in embarques if e.data_embarque])}
+• Total de operações ativas: {len(embarques)}
+
+🤖 **Dados em tempo real do PostgreSQL**
+🕒 **Consultado em:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"""
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Erro em _consultar_embarques: {e}")
+            return f"❌ Erro ao consultar embarques: {str(e)}"
+    
+    def _consultar_pedidos_cliente(self, args: Dict[str, Any]) -> str:
+        """Consulta pedidos de cliente específico"""
+        cliente = args.get('cliente', '')
+        
+        if not cliente:
+            return """📋 **CONSULTA DE PEDIDOS v4.0**
+
+⚠️ **Cliente não especificado.**
+
+💡 **Como usar:**
+• "Pedidos do Assai"
+• "Como estão os pedidos da Renner?"
+• "Consultar pedidos do [NOME_CLIENTE]" """
+        
+        try:
+            from app import db
+            from app.pedidos.models import Pedido
+            
+            # Buscar pedidos do cliente
+            pedidos = db.session.query(Pedido).filter(
+                Pedido.nome_cliente.ilike(f'%{cliente}%')
+            ).order_by(Pedido.criado_em.desc()).limit(10).all()
+            
+            if not pedidos:
+                return f"""📋 **PEDIDOS DO CLIENTE v4.0**
+
+🔍 **Cliente pesquisado:** {cliente}
+⚠️ **Resultado:** Nenhum pedido encontrado.
+
+💡 **Verifique:**
+• Se o nome do cliente está correto
+• Se há pedidos cadastrados para este cliente
+• Tente buscar por parte do nome"""
+            
+            total_valor = sum(p.valor_total or 0 for p in pedidos)
+            
+            result = f"""📋 **PEDIDOS DO CLIENTE v4.0**
+
+👤 **Cliente:** {cliente}
+📊 **Encontrados:** {len(pedidos)} pedidos
+💰 **Valor total:** R$ {total_valor:.2f}
+
+📝 **PEDIDOS RECENTES:**"""
+            
+            for pedido in pedidos[:5]:
+                status_emoji = "✅" if pedido.status == "finalizado" else "⏳" if pedido.status == "pendente" else "📝"
+                result += f"""
+
+{status_emoji} **Pedido #{pedido.numero_pedido or 'N/A'}**
+   📅 Data: {pedido.criado_em.strftime('%d/%m/%Y') if pedido.criado_em else 'N/A'}
+   💰 Valor: R$ {pedido.valor_total or 0:.2f}
+   📦 Peso: {pedido.peso_total or 0:.1f}kg
+   📍 Status: {pedido.status or 'N/A'}"""
+            
+            if len(pedidos) > 5:
+                result += f"\n\n... e mais {len(pedidos) - 5} pedidos"
+            
+            result += f"""
+
+🤖 **Dados reais do sistema PostgreSQL**
+🕒 **Consultado em:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"""
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Erro em _consultar_pedidos_cliente: {e}")
+            return f"❌ Erro ao consultar pedidos: {str(e)}"
+    
+    def _exportar_pedidos_excel(self, args: Dict[str, Any]) -> str:
+        """Informações sobre exportação Excel"""
+        return """📊 **EXPORTAÇÃO EXCEL v4.0**
+
+⚠️ **Funcionalidade em desenvolvimento**
+
+💡 **Para exportar dados:**
+• Menu → Relatórios → Exportar Dados
+• Acesse o módulo específico (Pedidos, Fretes, etc.)
+• Use a opção "Exportar" disponível nas listagens
+
+🔄 **Em breve:** Exportação inteligente via comandos de voz!"""
 
 # Instância global do servidor v4.0
 mcp_v4_server = MCPv4Server()
 
-# Função de conveniência para processar queries
+# Função de conveniência para processar queries - CORRIGIDA
 def process_query(query: str, user_id: str = "unknown") -> str:
     """Processa query em linguagem natural"""
     request = {
         "method": "tools/call",
-        "params": {"arguments": {"query": query}}
+        "params": {
+            "name": "query_intelligent",  # 🔧 CORREÇÃO: Especificar ferramenta query_intelligent
+            "arguments": {"query": query}
+        }
     }
     
     response = mcp_v4_server.processar_requisicao(request, user_id)
