@@ -116,7 +116,7 @@ Por favor, analise a consulta e forneça uma resposta inteligente, detalhada e a
             
             # Chamar Claude REAL
             response = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",  # Modelo mais avançado
+                model="claude-sonnet-4-20250514",  # Claude 4 Sonnet - Lançado em maio 2025
                 max_tokens=4000,
                 temperature=0.1,  # Mais determinístico para dados
                 system=self.system_prompt.format(
