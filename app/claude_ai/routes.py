@@ -533,4 +533,97 @@ def dashboard():
     
     return render_template('claude_ai/dashboard_v4.html', **context)
 
+@claude_ai_bp.route('/clear-context')
+@login_required  
+def clear_context():
+    """Limpar contexto conversacional do usuário atual"""
+    try:
+        from .conversation_context import get_conversation_context
+        context_manager = get_conversation_context()
+        
+        if context_manager:
+            user_id = str(current_user.id)
+            success = context_manager.clear_context(user_id)
+            
+            if success:
+                flash('🧠 Contexto conversacional limpo com sucesso!', 'success')
+                logger.info(f"🗑️ Contexto limpo para usuário {current_user.nome}")
+            else:
+                flash('⚠️ Erro ao limpar contexto conversacional', 'warning')
+        else:
+            flash('⚠️ Sistema de contexto não disponível', 'warning')
+            
+    except Exception as e:
+        logger.error(f"❌ Erro ao limpar contexto: {e}")
+        flash('❌ Erro interno ao limpar contexto', 'error')
+    
+    return redirect(url_for('claude_ai.chat'))
+
+@claude_ai_bp.route('/context-status')
+@login_required
+def context_status():
+    """Retorna status do contexto conversacional do usuário (AJAX)"""
+    try:
+        from .conversation_context import get_conversation_context
+        context_manager = get_conversation_context()
+        
+        if not context_manager:
+            return jsonify({
+                'success': False,
+                'error': 'Sistema de contexto não disponível'
+            })
+        
+        user_id = str(current_user.id)
+        summary = context_manager.get_context_summary(user_id)
+        
+        return jsonify({
+            'success': True,
+            'context_summary': summary,
+            'user_id': user_id
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao obter status do contexto: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@claude_ai_bp.route('/api/query', methods=['POST'])
+@login_required
+def api_query():
+    """Processa consulta via API com contexto conversacional"""
+    try:
+        data = request.get_json()
+        consulta = data.get('query', '').strip()
+        
+        if not consulta:
+            return jsonify({'error': 'Consulta vazia'}), 400
+        
+        # Preparar contexto do usuário INCLUINDO USER_ID
+        user_context = {
+            'user_id': current_user.id,  # IMPORTANTE: incluir user_id
+            'username': current_user.nome,
+            'perfil': current_user.perfil.name if current_user.perfil else 'usuario',
+            'vendedor_codigo': current_user.vendedor_codigo,
+            'cliente_filter': None  # Pode ser expandido depois
+        }
+        
+        # Log da consulta
+        logger.info(f"🤖 Consulta Claude recebida de {current_user.nome}: '{consulta[:100]}...'")
+        
+        # Processar com Claude REAL
+        resposta = processar_com_claude_real(consulta, user_context)
+        
+        return jsonify({
+            'response': resposta,
+            'timestamp': datetime.now().isoformat(),
+            'user': current_user.nome,
+            'context_enabled': True  # Indicar que contexto está ativo
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro na API query: {e}")
+        return jsonify({'error': 'Erro interno do servidor'}), 500
+
 # Funções de fallback para when MCP não está disponível 

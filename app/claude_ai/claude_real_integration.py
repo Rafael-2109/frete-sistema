@@ -26,6 +26,19 @@ except ImportError:
     REDIS_DISPONIVEL = False
     logger.warning("⚠️ Redis Cache não disponível - usando cache em memória")
 
+# Importar sistema de contexto conversacional
+try:
+    from .conversation_context import init_conversation_context, get_conversation_context
+    # Inicializar contexto conversacional
+    if REDIS_DISPONIVEL:
+        init_conversation_context(redis_cache)
+        logger.info("🧠 Sistema de Contexto Conversacional inicializado com Redis")
+    else:
+        init_conversation_context()
+        logger.info("🧠 Sistema de Contexto Conversacional inicializado (memória)")
+except ImportError as e:
+    logger.warning(f"⚠️ Sistema de Contexto Conversacional não disponível: {e}")
+
 class ClaudeRealIntegration:
     """Integração com Claude REAL da Anthropic"""
     
@@ -57,8 +70,14 @@ class ClaudeRealIntegration:
             self._cache_timeout = 300  # 5 minutos fallback
             logger.info("⚠️ Usando cache em memória (fallback)")
         
-        # System prompt CORRIGIDO para Claude real
-        self.system_prompt = """Você é Claude integrado ao Sistema de Fretes Industrial.
+        # System prompt CORRIGIDO para Claude real com CONTEXTO CONVERSACIONAL
+        self.system_prompt = """Você é Claude integrado ao Sistema de Fretes Industrial com MEMÓRIA CONVERSACIONAL.
+
+🧠 **CONTEXTO CONVERSACIONAL ATIVO**:
+- Você LEMBRA de perguntas anteriores nesta sessão
+- Perguntas de seguimento como "E em maio?" devem usar o contexto anterior
+- Mantenha continuidade das conversas sobre o mesmo cliente/assunto
+- Se usuário perguntar sobre "cliente X" e depois "E esse mês?", refere-se ao mesmo cliente X
 
 CONTEXTO EMPRESARIAL:
 - Sistema crítico de gestão de fretes
@@ -85,6 +104,12 @@ DADOS OBRIGATÓRIOS A INCLUIR:
 ✅ **Status Detalhado** (pendente, em trânsito, entregue)
 ✅ **Histórico Completo** por entrega
 
+CONTEXTO CONVERSACIONAL:
+- USE o histórico fornecido para manter continuidade
+- Se pergunta anterior foi sobre "Cliente X" e atual é "E em maio?", aplique ao Cliente X
+- Mantenha coerência entre perguntas relacionadas
+- Responda perguntas de seguimento baseado no contexto
+
 DIFERENÇA CONCEITUAL NO SISTEMA:
 🚚 **FRETES** = Cotações, contratos de transporte, valores, aprovações
 📦 **ENTREGAS** = Monitoramento pós-embarque, status de entrega, canhotos, datas realizadas
@@ -105,6 +130,7 @@ SUAS CAPACIDADES AVANÇADAS:
 - Cálculos de performance automatizados
 - Comparações temporais flexíveis
 - Histórico completo de reagendamentos
+- **MEMÓRIA CONVERSACIONAL ATIVA**
 
 INSTRUÇÕES CRÍTICAS:
 1. **PRECISÃO ABSOLUTA** - Dados incorretos custam operações
@@ -115,6 +141,7 @@ INSTRUÇÕES CRÍTICAS:
 6. **INTELIGÊNCIA CONTEXTUAL** - Diferencie grupos de clientes vs clientes específicos vs filiais
 7. **REAGENDAMENTOS** - Sempre verificar histórico de reagendas
 8. **JAMAIS CONFUNDIR CLIENTES** - Assai ≠ Atacadão ≠ outros
+9. **CONTEXTO CONVERSACIONAL** - Use histórico para manter continuidade
 
 EXEMPLOS DE INTERPRETAÇÃO CORRETA:
 
@@ -125,19 +152,34 @@ EXEMPLOS DE INTERPRETAÇÃO CORRETA:
 - "Performance de junho" → Análise do mês de junho inteiro
 - "Entregas dos supermercados" → GRUPO de supermercados (múltiplos clientes)
 
-Responda sempre em português brasileiro com precisão industrial máxima."""
+🧠 **CONTEXTO CONVERSACIONAL**:
+- Pergunta anterior: "Entregas do Assai em junho" 
+- Pergunta atual: "E em maio?"
+- Interpretação: "Entregas do Assai em maio" (manter cliente do contexto)
+
+Responda sempre em português brasileiro com precisão industrial máxima e continuidade conversacional."""
     
     def processar_consulta_real(self, consulta: str, user_context: Dict = None) -> str:
-        """Processa consulta usando Claude REAL com contexto inteligente"""
+        """Processa consulta usando Claude REAL com contexto inteligente e MEMÓRIA CONVERSACIONAL"""
         
         if not self.modo_real:
             return self._fallback_simulado(consulta)
         
-        # REDIS CACHE PARA CONSULTAS CLAUDE
+        # 🧠 SISTEMA DE CONTEXTO CONVERSACIONAL
+        user_id = str(user_context.get('user_id', 'anonymous')) if user_context else 'anonymous'
+        context_manager = get_conversation_context()
+        
+        # Construir prompt com contexto conversacional
+        consulta_com_contexto = consulta
+        if context_manager:
+            consulta_com_contexto = context_manager.build_context_prompt(user_id, consulta)
+            logger.info(f"🧠 Contexto conversacional aplicado para usuário {user_id}")
+        
+        # REDIS CACHE PARA CONSULTAS CLAUDE (usando consulta original para cache)
         if REDIS_DISPONIVEL:
             # Verificar se consulta similar já foi processada
             resultado_cache = redis_cache.cache_consulta_claude(
-                consulta=consulta,
+                consulta=consulta,  # Usar consulta original para cache
                 cliente=user_context.get('cliente_filter') if user_context else None,
                 periodo_dias=30  # padrão
             )
@@ -149,10 +191,17 @@ Responda sempre em português brasileiro com precisão industrial máxima."""
                     "🕒 **Processado:** ",
                     f"🕒 **Processado:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} ⚡ (Redis Cache) | Original: "
                 )
+                
+                # Adicionar mensagem ao contexto
+                if context_manager:
+                    metadata = context_manager.extract_metadata(consulta, resultado_cache)
+                    context_manager.add_message(user_id, 'user', consulta, metadata)
+                    context_manager.add_message(user_id, 'assistant', resultado_cache, metadata)
+                
                 return resultado_cache
         
         try:
-            # Analisar consulta para contexto inteligente
+            # Analisar consulta para contexto inteligente (usar consulta original)
             contexto_analisado = self._analisar_consulta(consulta)
             
             # Carregar dados específicos baseados na análise (já usa Redis internamente)
@@ -162,9 +211,9 @@ Responda sempre em português brasileiro com precisão industrial máxima."""
             messages = [
                 {
                     "role": "user", 
-                    "content": f"""CONSULTA DO USUÁRIO: {consulta}
+                    "content": f"""CONSULTA DO USUÁRIO (com contexto conversacional): {consulta_com_contexto}
 
-ANÁLISE DA CONSULTA:
+ANÁLISE DA CONSULTA ORIGINAL:
 {json.dumps(contexto_analisado, indent=2, ensure_ascii=False)}
 
 DADOS ESPECÍFICOS CARREGADOS:
@@ -175,12 +224,15 @@ CONTEXTO DO USUÁRIO:
 
 IMPORTANTE: O usuário está perguntando especificamente sobre "{contexto_analisado.get('cliente_especifico', 'dados gerais')}" no período de "{contexto_analisado.get('periodo_dias', 7)} dias". 
 
+Se há HISTÓRICO CONVERSACIONAL acima, USE-O para manter continuidade da conversa.
+
 Por favor, analise APENAS os dados do cliente/período especificado e forneça uma resposta completa incluindo:
 - Datas de entrega realizadas
 - Cumprimento de prazos
 - Histórico de agendamentos e protocolos  
 - Reagendamentos (se houver)
-- Status detalhado de cada entrega"""
+- Status detalhado de cada entrega
+- CONTINUIDADE com perguntas anteriores (se houver contexto)"""
                 }
             ]
             
@@ -210,16 +262,23 @@ Por favor, analise APENAS os dados do cliente/período especificado e forneça u
 {resultado}
 
 ---
-🧠 **Powered by:** Claude 4 Sonnet (Anthropic) - Modelo mais avançado disponível
+🧠 **Powered by:** Claude 4 Sonnet (Anthropic) - Modelo mais avançado disponível + Contexto Conversacional
 🎯 **Contexto:** {contexto_analisado.get('tipo_consulta', 'Geral').title()}
 📊 **Dados:** {contexto_analisado.get('periodo_dias', 7)} dias | {contexto_analisado.get('registros_carregados', 0)} registros
 🕒 **Processado:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
-⚡ **Modo:** IA Real Industrial{' + Redis Cache' if REDIS_DISPONIVEL else ''}"""
+⚡ **Modo:** IA Real Industrial{' + Redis Cache' if REDIS_DISPONIVEL else ''} + Memória Conversacional"""
             
-            # Salvar resposta no Redis cache para consultas similares
+            # 🧠 ADICIONAR CONVERSA AO CONTEXTO
+            if context_manager:
+                metadata = context_manager.extract_metadata(consulta, resultado)
+                context_manager.add_message(user_id, 'user', consulta, metadata)
+                context_manager.add_message(user_id, 'assistant', resposta_final, metadata)
+                logger.info(f"🧠 Conversa adicionada ao contexto para usuário {user_id}")
+            
+            # Salvar resposta no Redis cache para consultas similares (usar consulta original)
             if REDIS_DISPONIVEL:
                 redis_cache.cache_consulta_claude(
-                    consulta=consulta,
+                    consulta=consulta,  # Consulta original para cache
                     cliente=user_context.get('cliente_filter') if user_context else None,
                     periodo_dias=contexto_analisado.get('periodo_dias', 30),
                     resultado=resposta_final,

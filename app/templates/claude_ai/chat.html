@@ -37,19 +37,61 @@
                             <small class="opacity-75">Assistente Inteligente do Sistema de Fretes</small>
                         </div>
                     </div>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 align-items-center">
+                        <!-- 🧠 Indicador de Contexto Conversacional -->
+                        <div id="context-indicator" class="d-flex align-items-center">
+                            <span class="badge bg-info me-2" id="context-badge" title="Contexto Conversacional">
+                                <i class="fas fa-brain me-1"></i>
+                                <span id="context-status">Carregando...</span>
+                            </span>
+                        </div>
+                        
                         <span class="badge bg-success">
                             <i class="fas fa-circle me-1" style="font-size: 8px;"></i>
                             Online
                         </span>
-                        <button class="btn btn-outline-light btn-sm" onclick="clearChat()" title="Limpar Chat">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        
+                        <!-- Dropdown de Ações -->
+                        <div class="dropdown">
+                            <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" id="chatActionsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <button class="dropdown-item" onclick="clearContext()" id="clear-context-btn">
+                                        <i class="fas fa-brain me-2"></i>Limpar Memória
+                                    </button>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <button class="dropdown-item" onclick="clearChat()">
+                                        <i class="fas fa-trash me-2"></i>Limpar Chat
+                                    </button>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item" onclick="showContextHelp()">
+                                        <i class="fas fa-question-circle me-2"></i>Como Funciona
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Área de Mensagens -->
                 <div class="card-body d-flex flex-column p-0">
+                    <!-- 🧠 Alerta de Contexto (quando ativo) -->
+                    <div id="context-alert" class="alert alert-info alert-dismissible mx-3 mt-3 mb-0" style="display: none;">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-brain me-2"></i>
+                            <div class="flex-fill">
+                                <strong>Memória Conversacional Ativa!</strong>
+                                <p class="mb-0 small">Eu lembro das suas perguntas anteriores. Você pode fazer perguntas de seguimento como "E em maio?" e eu entenderei o contexto.</p>
+                            </div>
+                            <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    </div>
+                    
                     <div id="chat-messages" class="flex-fill overflow-auto p-3" style="max-height: 400px; background: #f8f9fa;">
                         <!-- Mensagem de boas-vindas -->
                         <div class="chat-message bot-message">
@@ -59,15 +101,21 @@
                                 </div>
                                 <div class="message-content">
                                     <div class="bg-white rounded-3 p-3 shadow-sm">
-                                        <h6 class="mb-2">👋 Olá! Sou o Claude AI</h6>
-                                        <p class="mb-2">Sou seu assistente inteligente para o sistema de fretes. Posso ajudar você com:</p>
+                                        <h6 class="mb-2">👋 Olá! Sou o Claude AI com Memória Conversacional</h6>
+                                        <p class="mb-2">Sou seu assistente inteligente para o sistema de fretes com <strong>contexto conversacional ativo</strong>. Posso ajudar você com:</p>
                                         <ul class="mb-2 small">
                                             <li>📊 Status do sistema e estatísticas</li>
                                             <li>🚛 Consultas sobre transportadoras</li>
                                             <li>📦 Informações sobre fretes</li>
                                             <li>🚚 Status de embarques</li>
-                                            <li>❓ Suporte e orientações</li>
+                                            <li>🧠 <strong>Perguntas de seguimento</strong> (Ex: "E em maio?" após perguntar sobre um cliente)</li>
                                         </ul>
+                                        <div class="alert alert-success p-2 mb-2">
+                                            <strong>🧠 Novidade:</strong> Agora eu <strong>lembro</strong> de nossas conversas! 
+                                            Você pode fazer perguntas como:
+                                            <br>• "Entregas do Assai em junho" seguido de "E em maio?"
+                                            <br>• "Status do cliente X" seguido de "Quantas foram entregues?"
+                                        </div>
                                         <p class="mb-0"><strong>Como posso ajudar você hoje?</strong></p>
                                     </div>
                                     <small class="text-muted">Agora</small>
@@ -239,6 +287,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let messageHistory = [];
     
+    // 🧠 CONTEXTO CONVERSACIONAL - Inicialização
+    checkContextStatus();
+    
     // Event listeners
     messageInput.addEventListener('input', function() {
         sendButton.disabled = this.value.trim().length === 0;
@@ -257,7 +308,112 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Função principal para enviar mensagem
+    // 🧠 FUNÇÕES DE CONTEXTO CONVERSACIONAL
+    async function checkContextStatus() {
+        try {
+            const response = await fetch('/claude-ai/context-status');
+            const data = await response.json();
+            
+            if (data.success) {
+                updateContextIndicator(data.context_summary);
+            } else {
+                updateContextIndicator({ has_context: false });
+            }
+        } catch (error) {
+            console.warn('⚠️ Erro ao verificar contexto:', error);
+            updateContextIndicator({ has_context: false, error: true });
+        }
+    }
+    
+    function updateContextIndicator(contextSummary) {
+        const statusElement = document.getElementById('context-status');
+        const badgeElement = document.getElementById('context-badge');
+        const alertElement = document.getElementById('context-alert');
+        const clearBtn = document.getElementById('clear-context-btn');
+        
+        if (contextSummary.has_context) {
+            statusElement.textContent = `${contextSummary.message_count} mensagens`;
+            badgeElement.className = 'badge bg-success me-2';
+            badgeElement.title = `Contexto ativo: ${contextSummary.message_count} mensagens, ${contextSummary.storage_type === 'redis' ? 'Redis' : 'Memória'}`;
+            
+            // Mostrar clientes mencionados se houver
+            if (contextSummary.clientes_mencionados && contextSummary.clientes_mencionados.length > 0) {
+                badgeElement.title += ` | Clientes: ${contextSummary.clientes_mencionados.join(', ')}`;
+            }
+            
+            // Mostrar alerta se é a primeira vez
+            if (contextSummary.message_count <= 4) {
+                alertElement.style.display = 'block';
+            }
+            
+            clearBtn.disabled = false;
+        } else {
+            statusElement.textContent = contextSummary.error ? 'Erro' : 'Inativo';
+            badgeElement.className = contextSummary.error ? 'badge bg-warning me-2' : 'badge bg-secondary me-2';
+            badgeElement.title = contextSummary.error ? 'Erro no sistema de contexto' : 'Nenhum contexto ativo';
+            alertElement.style.display = 'none';
+            clearBtn.disabled = true;
+        }
+    }
+    
+    // Limpar contexto conversacional
+    window.clearContext = async function() {
+        if (confirm('🧠 Tem certeza que deseja limpar a memória conversacional?\n\nEu esquecerei todas as conversas anteriores desta sessão.')) {
+            try {
+                const response = await fetch('/claude-ai/clear-context');
+                if (response.ok) {
+                    // Atualizar indicador
+                    updateContextIndicator({ has_context: false });
+                    
+                    // Mostrar mensagem de sucesso
+                    addMessage('🧠 **Memória conversacional limpa!** Agora você pode começar uma nova conversa. Eu não lembrarei mais das perguntas anteriores.', 'bot');
+                    
+                    console.log('✅ Contexto conversacional limpo');
+                } else {
+                    throw new Error('Falha na requisição');
+                }
+            } catch (error) {
+                console.error('❌ Erro ao limpar contexto:', error);
+                addMessage('❌ **Erro ao limpar memória conversacional**. Tente novamente.', 'bot');
+            }
+        }
+    };
+    
+    // Mostrar ajuda sobre contexto
+    window.showContextHelp = function() {
+        const helpMessage = `🧠 **Como Funciona a Memória Conversacional**
+
+**O que é:**
+• Eu lembro de todas as perguntas e respostas desta sessão
+• Posso responder perguntas de seguimento mantendo o contexto
+
+**Exemplos Práticos:**
+1️⃣ **Você:** "Entregas do Assai em junho"
+    **Eu:** [resposta com dados de junho]
+    **Você:** "E em maio?"
+    **Eu:** ✅ Entendo que você quer dados do Assai em maio
+
+2️⃣ **Você:** "Status das entregas da Renner"
+    **Eu:** [resposta sobre Renner]
+    **Você:** "Quantas foram entregues no prazo?"
+    **Eu:** ✅ Sei que você se refere às entregas da Renner
+
+**Benefícios:**
+• Conversas mais naturais e fluidas
+• Menos repetição de informações
+• Análises contextuais mais precisas
+
+**Privacidade:**
+• Contexto é único por usuário
+• Automaticamente expira após 1 hora
+• Pode ser limpo manualmente a qualquer momento
+
+**Armazenamento:** ${window.contextStorageType || 'Redis + Fallback Memória'}`;
+
+        addMessage(helpMessage, 'bot');
+    };
+    
+    // Função principal para enviar mensagem (ATUALIZADA)
     async function sendMessage() {
         const message = messageInput.value.trim();
         if (!message) return;
@@ -295,8 +451,14 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {  // Simula tempo de resposta
                 showTyping(false);
                 
-                if (data.success) {
+                if (data.response) {
                     addMessage(data.response, 'bot');
+                    
+                    // ✅ Verificar se contexto está ativo na resposta
+                    if (data.context_enabled) {
+                        // Atualizar status do contexto após nova mensagem
+                        setTimeout(checkContextStatus, 500);
+                    }
                 } else {
                     addMessage('❌ **Erro**: ' + (data.error || 'Não foi possível processar sua solicitação.'), 'bot');
                 }
@@ -309,7 +471,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Adicionar mensagem ao chat
+    // Adicionar mensagem ao chat (MANTIDA)
     function addMessage(text, sender) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `chat-message ${sender}-message`;
@@ -344,7 +506,7 @@ document.addEventListener('DOMContentLoaded', function() {
         messageHistory.push({ text, sender, time });
     }
     
-    // Formatar mensagem com markdown básico
+    // Formatar mensagem com markdown básico (MANTIDA)
     function formatMessage(text) {
         return text
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -357,7 +519,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .replace(/\n/g, '<br>');
     }
     
-    // Mostrar/ocultar indicador de digitação
+    // Mostrar/ocultar indicador de digitação (MANTIDA)
     function showTyping(show) {
         typingIndicator.style.display = show ? 'block' : 'none';
         if (show) {
@@ -365,9 +527,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Limpar chat
+    // Limpar chat (ATUALIZADA para avisar sobre contexto)
     window.clearChat = function() {
-        if (confirm('Tem certeza que deseja limpar todo o histórico do chat?')) {
+        if (confirm('Tem certeza que deseja limpar todo o histórico do chat?\n\n⚠️ Nota: Isso NÃO afeta a memória conversacional. Para limpar a memória, use "Limpar Memória".')) {
             chatMessages.innerHTML = '';
             messageHistory = [];
             // Adiciona mensagem de boas-vindas novamente
@@ -375,8 +537,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
     
-    // Verifica saúde do serviço
-                fetch('/claude-ai/api/health')
+    // Verifica saúde do serviço (MANTIDA)
+    fetch('/claude-ai/api/health')
         .then(response => response.json())
         .then(data => {
             if (data.success) {
