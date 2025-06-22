@@ -10,7 +10,7 @@ from .mcp_connector import MCPSistemaOnline
 from . import claude_ai_bp
 from app.utils.auth_decorators import require_admin
 from .claude_real_integration import processar_com_claude_real
-from .mcp_connector import MCPConnector
+from .mcp_connector import MCPSistemaOnline
 
 # Configurar logger
 logger = logging.getLogger(__name__)
