@@ -4,9 +4,13 @@ import subprocess
 import json
 import os
 import sys
+import logging
 from datetime import datetime
 from .mcp_connector import MCPSistemaOnline
 from . import claude_ai_bp
+
+# Configurar logger
+logger = logging.getLogger(__name__)
 
 # Importar MCP v4.0 Server
 try:
