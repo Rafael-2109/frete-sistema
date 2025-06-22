@@ -21,6 +21,9 @@ pytz==2025.2
 psutil==5.9.6
 boto3==1.35.0
 
+# Redis Cache
+redis==5.0.8
+
 # Model Context Protocol
 mcp==1.0.0
 pydantic==2.11.7
