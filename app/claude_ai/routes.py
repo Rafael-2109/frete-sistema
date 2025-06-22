@@ -50,22 +50,7 @@ def chat_page():
     from flask import redirect, url_for
     return redirect(url_for('claude_ai.claude_real'))
 
-@claude_ai_bp.route('/dashboard')
-@login_required
-def dashboard_mcp():
-    """Dashboard MCP - Status do sistema em tempo real"""
-    try:
-        mcp_connector = MCPSistemaOnline(current_app.root_path)
-        status_data = mcp_connector.status_rapido()
-        
-        return render_template('claude_ai/dashboard.html', 
-                             status=status_data,
-                             user=current_user.nome)
-    except Exception as e:
-        current_app.logger.error(f"Erro dashboard MCP: {e}")
-        return render_template('claude_ai/dashboard.html', 
-                             status={'online': False, 'error': str(e)},
-                             user=current_user.nome)
+# ❌ REMOVIDO: Dashboard MCP antigo - substituído pelo Dashboard Executivo
 
 @claude_ai_bp.route('/widget')
 @login_required
@@ -819,4 +804,292 @@ def suggestions_dashboard():
     except Exception as e:
         logger.error(f"Erro no dashboard de sugestões: {e}")
         flash(f'Erro ao carregar dashboard: {str(e)}', 'error')
-        return redirect(url_for('claude_ai.claude_real')) 
+        return redirect(url_for('claude_ai.claude_real'))
+
+@claude_ai_bp.route('/dashboard-executivo')
+@login_required
+def dashboard_executivo():
+    """📊 Dashboard Executivo com métricas em tempo real"""
+    from datetime import datetime
+    return render_template('claude_ai/dashboard_executivo.html', 
+                         momento_atual=datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
+
+@claude_ai_bp.route('/api/dashboard/kpis')
+@login_required
+def api_dashboard_kpis():
+    """API para KPIs do dashboard executivo"""
+    try:
+        from app import db
+        from app.monitoramento.models import EntregaMonitorada
+        from app.embarques.models import Embarque
+        from datetime import datetime, date
+        
+        hoje = date.today()
+        
+        # Entregas realizadas hoje
+        entregas_hoje = db.session.query(EntregaMonitorada).filter(
+            db.func.date(EntregaMonitorada.data_hora_entrega_realizada) == hoje
+        ).count()
+        
+        # Embarques ativos
+        embarques_ativos = db.session.query(Embarque).filter(
+            Embarque.status == 'ativo'
+        ).count()
+        
+        # Pendências críticas (entregas atrasadas + pendências financeiras)
+        from datetime import timedelta
+        data_limite = hoje - timedelta(days=2)
+        
+        entregas_atrasadas = db.session.query(EntregaMonitorada).filter(
+            EntregaMonitorada.data_entrega_prevista < hoje,
+            EntregaMonitorada.entregue == False
+        ).count()
+        
+        pendencias_financeiras = db.session.query(EntregaMonitorada).filter(
+            EntregaMonitorada.pendencia_financeira == True
+        ).count()
+        
+        pendencias_criticas = entregas_atrasadas + pendencias_financeiras
+        
+        # Performance geral (últimos 30 dias)
+        data_limite_30d = hoje - timedelta(days=30)
+        
+        total_entregas_30d = db.session.query(EntregaMonitorada).filter(
+            EntregaMonitorada.data_embarque >= data_limite_30d
+        ).count()
+        
+        entregas_no_prazo_30d = db.session.query(EntregaMonitorada).filter(
+            EntregaMonitorada.data_embarque >= data_limite_30d,
+            EntregaMonitorada.data_hora_entrega_realizada <= EntregaMonitorada.data_entrega_prevista
+        ).count()
+        
+        performance_geral = round((entregas_no_prazo_30d / total_entregas_30d * 100), 1) if total_entregas_30d > 0 else 0
+        
+        return jsonify({
+            'entregas_hoje': entregas_hoje,
+            'embarques_ativos': embarques_ativos,
+            'pendencias_criticas': pendencias_criticas,
+            'performance_geral': performance_geral
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao carregar KPIs: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@claude_ai_bp.route('/api/dashboard/graficos')
+@login_required
+def api_dashboard_graficos():
+    """API para dados dos gráficos do dashboard"""
+    try:
+        from app import db
+        from app.monitoramento.models import EntregaMonitorada
+        from datetime import datetime, date, timedelta
+        
+        # Dados para gráfico de entregas (últimos 15 dias)
+        dados_grafico = []
+        labels = []
+        
+        for i in range(14, -1, -1):
+            data_analise = date.today() - timedelta(days=i)
+            
+            entregas_dia = db.session.query(EntregaMonitorada).filter(
+                db.func.date(EntregaMonitorada.data_hora_entrega_realizada) == data_analise
+            ).count()
+            
+            dados_grafico.append(entregas_dia)
+            labels.append(data_analise.strftime('%d/%m'))
+        
+        # Top 5 clientes (últimos 30 dias)
+        data_limite = date.today() - timedelta(days=30)
+        
+        top_clientes = db.session.query(
+            EntregaMonitorada.cliente,
+            db.func.count(EntregaMonitorada.id).label('total_entregas')
+        ).filter(
+            EntregaMonitorada.data_embarque >= data_limite
+        ).group_by(
+            EntregaMonitorada.cliente
+        ).order_by(
+            db.func.count(EntregaMonitorada.id).desc()
+        ).limit(5).all()
+        
+        top_clientes_data = [
+            {'nome': cliente.cliente, 'entregas': cliente.total_entregas}
+            for cliente in top_clientes
+        ]
+        
+        return jsonify({
+            'labels': labels,
+            'entregas': dados_grafico,
+            'top_clientes': top_clientes_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao carregar gráficos: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@claude_ai_bp.route('/api/dashboard/alertas')
+@login_required
+def api_dashboard_alertas():
+    """API para alertas inteligentes do dashboard - SISTEMA AVANÇADO"""
+    try:
+        from .alert_engine import get_alert_engine
+        
+        # Usar o motor de alertas inteligentes
+        alert_engine = get_alert_engine()
+        
+        # Contexto do usuário
+        user_context = {
+            'user_id': current_user.id,
+            'username': current_user.nome,
+            'perfil': getattr(current_user, 'perfil', 'usuario')
+        }
+        
+        # Gerar alertas personalizados
+        alertas = alert_engine.gerar_alertas_dashboard(user_context)
+        
+        return jsonify({'alertas': alertas})
+        
+    except Exception as e:
+        logger.error(f"Erro ao carregar alertas: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@claude_ai_bp.route('/api/relatorio-automatizado')
+@login_required
+def api_relatorio_automatizado():
+    """🤖 Geração automática de relatórios via Claude"""
+    try:
+        # Usar a integração Claude existente para gerar relatório
+        from .claude_real_integration import processar_com_claude_real
+        
+        consulta_relatorio = """
+        Gere um relatório executivo completo com:
+        1. Resumo das entregas dos últimos 7 dias
+        2. Performance por cliente (top 5)
+        3. Alertas e pendências críticas
+        4. Recomendações de melhorias
+        5. Previsões para próxima semana
+        
+        Formato: Relatório executivo profissional
+        """
+        
+        # Processar com Claude Real
+        relatorio = processar_com_claude_real(consulta_relatorio)
+        
+        return jsonify({
+            'success': True,
+            'relatorio': relatorio,
+            'gerado_em': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao gerar relatório automatizado: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@claude_ai_bp.route('/api/export-excel-claude', methods=['POST'])
+@login_required  
+def api_export_excel_claude():
+    """📊 Export Excel REAL via comando Claude"""
+    try:
+        from .excel_generator import get_excel_generator
+        
+        data = request.get_json()
+        tipo_relatorio = data.get('tipo', 'entregas_atrasadas')
+        filtros = data.get('filtros', {})
+        
+        excel_generator = get_excel_generator()
+        
+        if tipo_relatorio == 'entregas_atrasadas':
+            resultado = excel_generator.gerar_relatorio_entregas_atrasadas(filtros)
+        elif tipo_relatorio == 'cliente_especifico':
+            cliente = filtros.get('cliente', '')
+            periodo = filtros.get('periodo_dias', 30)
+            resultado = excel_generator.gerar_relatorio_cliente_especifico(cliente, periodo)
+        else:
+            # Fallback para entregas atrasadas
+            resultado = excel_generator.gerar_relatorio_entregas_atrasadas(filtros)
+        
+        return jsonify(resultado)
+        
+    except Exception as e:
+        logger.error(f"Erro ao exportar Excel via Claude: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/api/processar-comando-excel', methods=['POST'])
+@login_required
+def processar_comando_excel():
+    """🧠 Processa comando de export Excel via Claude"""
+    try:
+        from .excel_generator import get_excel_generator
+        
+        data = request.get_json()
+        comando = data.get('comando', '').lower()
+        
+        excel_generator = get_excel_generator()
+        resultado = None
+        
+        # Analisar comando e determinar tipo de relatório
+        if 'entregas atrasadas' in comando or 'atraso' in comando:
+            # Detectar filtros no comando
+            filtros = {}
+            if 'cliente' in comando:
+                # Extrair nome do cliente do comando
+                import re
+                match = re.search(r'cliente\s+([a-zA-Z\s]+)', comando)
+                if match:
+                    filtros['cliente'] = match.group(1).strip()
+            
+            resultado = excel_generator.gerar_relatorio_entregas_atrasadas(filtros)
+            
+        elif any(cliente in comando for cliente in ['assai', 'atacadão', 'carrefour', 'tenda']):
+            # Relatório de cliente específico
+            cliente = None
+            for nome in ['assai', 'atacadão', 'carrefour', 'tenda']:
+                if nome in comando:
+                    cliente = nome.title()
+                    break
+            
+            if cliente:
+                resultado = excel_generator.gerar_relatorio_cliente_especifico(cliente)
+        
+        else:
+            # Comando genérico - gerar entregas atrasadas
+            resultado = excel_generator.gerar_relatorio_entregas_atrasadas()
+        
+        if resultado and resultado.get('success'):
+            # Retornar resposta formatada para o Claude
+            resposta_claude = f"""📊 **EXCEL GERADO COM SUCESSO!**
+
+✅ **Arquivo**: {resultado['filename']}
+📈 **Registros**: {resultado['total_registros']}
+💰 **Valor Total**: R$ {resultado.get('valor_total', 0):,.2f}
+📅 **Gerado**: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+🔗 **DOWNLOAD**: {resultado['file_url']}
+
+📋 **Conteúdo do Relatório**:
+• Aba "Entregas Atrasadas": Dados completos
+• Aba "Resumo": Estatísticas principais  
+• Aba "Ações Recomendadas": Lista de ações prioritárias
+
+💡 **Como usar**: Clique no link acima para baixar o arquivo Excel."""
+
+            return jsonify({
+                'success': True,
+                'resposta_formatada': resposta_claude,
+                'arquivo_info': resultado
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': resultado.get('error', 'Erro desconhecido'),
+                'resposta_formatada': f"❌ Erro ao gerar Excel: {resultado.get('message', 'Erro desconhecido')}"
+            })
+        
+    except Exception as e:
+        logger.error(f"Erro ao processar comando Excel: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'resposta_formatada': f"❌ Erro interno ao gerar Excel: {str(e)}"
+        }), 500 

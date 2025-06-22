@@ -196,12 +196,17 @@
               <i class="fas fa-brain text-primary"></i> Claude 4 Sonnet
               <span class="badge bg-success ms-2">PRINCIPAL</span>
             </a></li>
-            <li><a class="dropdown-item" href="{{ url_for('claude_ai.dashboard_mcp') }}">
-              <i class="fas fa-chart-line"></i> Dashboard IA
+            <li><a class="dropdown-item" href="{{ url_for('claude_ai.dashboard_executivo') }}">
+              <i class="fas fa-tachometer-alt text-warning"></i> Dashboard Executivo
+              <span class="badge bg-success ms-2">PRINCIPAL</span>
             </a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="{{ url_for('claude_ai.claude_real') }}?mode=analytics">
               <i class="fas fa-chart-bar"></i> Análises Avançadas
+            </a></li>
+            <li><a class="dropdown-item" href="/MANUAL_ATALHOS_CLAUDE.md" target="_blank">
+              <i class="fas fa-book text-info"></i> Manual de Atalhos
+              <span class="badge bg-info ms-2">GUIA</span>
             </a></li>
           </ul>
         </li>

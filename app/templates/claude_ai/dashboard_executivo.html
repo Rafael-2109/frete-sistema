@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 Dashboard Executivo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-light">
+    <div class="container-fluid">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h2 class="text-primary">📊 Dashboard Executivo</h2>
+                    <div class="d-flex gap-3">
+                        <button class="btn btn-outline-primary" onclick="exportarRelatorio()">
+                            <i class="fas fa-download"></i> Exportar Relatório
+                        </button>
+                        <button class="btn btn-success" onclick="atualizarDados()">
+                            <i class="fas fa-sync"></i> Atualizar
+                        </button>
+                    </div>
+                </div>
+                <p class="text-muted">Última atualização: <span id="ultimaAtualizacao">{{ momento_atual }}</span></p>
+            </div>
+        </div>
+
+        <!-- KPIs Principais -->
+        <div class="row mb-4">
+            <!-- Entregas Hoje -->
+            <div class="col-xl-3 col-md-6">
+                <div class="card border-primary h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="text-primary">🚚 Entregas Hoje</h6>
+                                <h3 class="mb-1" id="entregasHoje">--</h3>
+                                <small class="text-muted">Meta: 85%</small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-truck-fast fa-2x text-primary"></i>
+                            </div>
+                        </div>
+                        <div class="progress mt-2" style="height: 6px;">
+                            <div class="progress-bar bg-primary" id="progressEntregas" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Embarques Ativos -->
+            <div class="col-xl-3 col-md-6">
+                <div class="card border-warning h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="text-warning">📦 Embarques Ativos</h6>
+                                <h3 class="mb-1" id="embarquesAtivos">--</h3>
+                                <small class="text-muted">Em andamento</small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-boxes fa-2x text-warning"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pendências Críticas -->
+            <div class="col-xl-3 col-md-6">
+                <div class="card border-danger h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="text-danger">⚠️ Pendências Críticas</h6>
+                                <h3 class="mb-1" id="pendenciasCriticas">--</h3>
+                                <small class="text-muted">Requer ação</small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Geral -->
+            <div class="col-xl-3 col-md-6">
+                <div class="card border-success h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="text-success">🎯 Performance</h6>
+                                <h3 class="mb-1" id="performanceGeral">--</h3>
+                                <small class="text-muted">Últimos 30 dias</small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-chart-line fa-2x text-success"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráficos e Análises -->
+        <div class="row">
+            <!-- Gráfico de Entregas por Dia -->
+            <div class="col-xl-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>📈 Entregas por Dia (Últimos 15 dias)</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="graficoEntregas" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Clientes -->
+            <div class="col-xl-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>🏆 Top 5 Clientes</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="topClientes">
+                            <!-- Carregado via JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alertas e Ações -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>🚨 Alertas Inteligentes</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="alertasInteligentes">
+                            <!-- Carregado via JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Integração Claude -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5><i class="fas fa-brain"></i> Claude AI - Análise Executiva</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="claudeQuery" 
+                                   placeholder="Ex: 'Analyze performance do último mês' ou 'Gere relatório executivo'">
+                            <button class="btn btn-primary" onclick="consultarClaude()">
+                                <i class="fas fa-search"></i> Consultar Claude
+                            </button>
+                        </div>
+                        <div id="claudeResponse" class="bg-light p-3 rounded" style="min-height: 100px; display: none;">
+                            <!-- Resposta do Claude aparece aqui -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-refresh a cada 5 minutos
+        let autoRefreshInterval;
+        
+        function iniciarDashboard() {
+            atualizarDados();
+            autoRefreshInterval = setInterval(atualizarDados, 300000); // 5 minutos
+        }
+
+        function atualizarDados() {
+            // Atualizar timestamp
+            document.getElementById('ultimaAtualizacao').textContent = new Date().toLocaleString('pt-BR');
+            
+            // Carregar KPIs
+            carregarKPIs();
+            
+            // Carregar gráficos
+            carregarGraficos();
+            
+            // Carregar alertas
+            carregarAlertas();
+        }
+
+        async function carregarKPIs() {
+            try {
+                const response = await fetch('/claude-ai/api/dashboard/kpis');
+                const data = await response.json();
+                
+                document.getElementById('entregasHoje').textContent = data.entregas_hoje || '--';
+                document.getElementById('embarquesAtivos').textContent = data.embarques_ativos || '--';
+                document.getElementById('pendenciasCriticas').textContent = data.pendencias_criticas || '--';
+                document.getElementById('performanceGeral').textContent = (data.performance_geral || 0) + '%';
+                
+                // Atualizar progress bar
+                const progressBar = document.getElementById('progressEntregas');
+                const percentage = data.performance_geral || 0;
+                progressBar.style.width = percentage + '%';
+                
+            } catch (error) {
+                console.error('Erro ao carregar KPIs:', error);
+            }
+        }
+
+        async function carregarGraficos() {
+            try {
+                const response = await fetch('/claude-ai/api/dashboard/graficos');
+                const data = await response.json();
+                
+                // Gráfico de entregas
+                const ctx = document.getElementById('graficoEntregas').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels || [],
+                        datasets: [{
+                            label: 'Entregas Realizadas',
+                            data: data.entregas || [],
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Entregas por Dia'
+                            }
+                        }
+                    }
+                });
+                
+                // Top clientes
+                let topClientesHtml = '';
+                (data.top_clientes || []).forEach((cliente, index) => {
+                    topClientesHtml += `
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>${index + 1}. ${cliente.nome}</span>
+                            <span class="badge bg-primary">${cliente.entregas}</span>
+                        </div>
+                    `;
+                });
+                document.getElementById('topClientes').innerHTML = topClientesHtml;
+                
+            } catch (error) {
+                console.error('Erro ao carregar gráficos:', error);
+            }
+        }
+
+        async function carregarAlertas() {
+            try {
+                const response = await fetch('/claude-ai/api/dashboard/alertas');
+                const data = await response.json();
+                
+                let alertasHtml = '';
+                if (data.alertas && data.alertas.length > 0) {
+                    data.alertas.forEach(alerta => {
+                        const tipoClass = alerta.tipo === 'critico' ? 'danger' : 
+                                        alerta.tipo === 'atencao' ? 'warning' : 'info';
+                        alertasHtml += `
+                            <div class="alert alert-${tipoClass} alert-dismissible fade show">
+                                <i class="fas fa-${alerta.icone}"></i>
+                                <strong>${alerta.titulo}</strong> ${alerta.mensagem}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        `;
+                    });
+                } else {
+                    alertasHtml = '<div class="text-muted">✅ Nenhum alerta crítico no momento</div>';
+                }
+                
+                document.getElementById('alertasInteligentes').innerHTML = alertasHtml;
+                
+            } catch (error) {
+                console.error('Erro ao carregar alertas:', error);
+            }
+        }
+
+        async function consultarClaude() {
+            const query = document.getElementById('claudeQuery').value.trim();
+            if (!query) return;
+            
+            const responseDiv = document.getElementById('claudeResponse');
+            responseDiv.style.display = 'block';
+            responseDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Claude está analisando...';
+            
+            try {
+                const response = await fetch('/claude-ai/api/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({ query: query })
+                });
+                
+                const data = await response.json();
+                responseDiv.innerHTML = `<pre class="mb-0">${data.response}</pre>`;
+                
+            } catch (error) {
+                responseDiv.innerHTML = '<div class="text-danger">❌ Erro ao consultar Claude</div>';
+            }
+        }
+
+        function exportarRelatorio() {
+            // Implementar export de relatório executivo
+            alert('🚧 Funcionalidade de export em desenvolvimento');
+        }
+
+        // Inicializar dashboard
+        document.addEventListener('DOMContentLoaded', iniciarDashboard);
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

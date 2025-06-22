@@ -165,6 +165,10 @@ Responda sempre em português brasileiro com precisão industrial máxima e cont
         if not self.modo_real:
             return self._fallback_simulado(consulta)
         
+        # 📊 DETECTAR COMANDOS DE EXPORT EXCEL
+        if self._is_excel_command(consulta):
+            return self._processar_comando_excel(consulta, user_context)
+        
         # 🧠 SISTEMA DE CONTEXTO CONVERSACIONAL
         user_id = str(user_context.get('user_id', 'anonymous')) if user_context else 'anonymous'
         context_manager = get_conversation_context()
@@ -880,6 +884,131 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
 7. Dados completos - Datas de entrega, prazos, reagendamentos, protocolos
 8. Histórico de agendamentos - Reagendas e protocolos completos
 """
+    
+    def _is_excel_command(self, consulta: str) -> bool:
+        """Detecta se o comando é para gerar Excel"""
+        comandos_excel = [
+            'excel', 'planilha', 'xls', 'xlsx', 'exportar', 'export',
+            'gerar relatório', 'gere relatório', 'gerar planilha',
+            'relatório em excel', 'baixar dados', 'download'
+        ]
+        
+        consulta_lower = consulta.lower()
+        return any(comando in consulta_lower for comando in comandos_excel)
+    
+    def _processar_comando_excel(self, consulta: str, user_context: Dict = None) -> str:
+        """Processa comando de geração de Excel via API interna"""
+        try:
+            from .excel_generator import get_excel_generator
+            
+            logger.info(f"📊 Processando comando Excel: {consulta}")
+            
+            excel_generator = get_excel_generator()
+            consulta_lower = consulta.lower()
+            
+            # Analisar comando e gerar Excel apropriado
+            if 'entregas atrasadas' in consulta_lower or 'atraso' in consulta_lower:
+                # Detectar filtros no comando
+                filtros = {}
+                if 'cliente' in consulta_lower:
+                    import re
+                    match = re.search(r'cliente\s+([a-zA-Z\s]+)', consulta_lower)
+                    if match:
+                        filtros['cliente'] = match.group(1).strip()
+                
+                resultado = excel_generator.gerar_relatorio_entregas_atrasadas(filtros)
+                
+            elif any(cliente in consulta_lower for cliente in ['assai', 'atacadão', 'carrefour', 'walmart']):
+                # Relatório de cliente específico
+                cliente = None
+                for nome in ['assai', 'atacadão', 'carrefour', 'walmart']:
+                    if nome in consulta_lower:
+                        cliente = nome.title()
+                        break
+                
+                if cliente:
+                    resultado = excel_generator.gerar_relatorio_cliente_especifico(cliente)
+                else:
+                    resultado = excel_generator.gerar_relatorio_entregas_atrasadas()
+            
+            else:
+                # Comando genérico - gerar entregas atrasadas
+                resultado = excel_generator.gerar_relatorio_entregas_atrasadas()
+            
+            if resultado and resultado.get('success'):
+                # Retornar resposta formatada
+                return f"""📊 **EXCEL GERADO COM SUCESSO!**
+
+✅ **Arquivo**: `{resultado['filename']}`
+📈 **Registros**: {resultado['total_registros']}
+💰 **Valor Total**: R$ {resultado.get('valor_total', 0):,.2f}
+📅 **Gerado**: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+🔗 **DOWNLOAD**: [Clique aqui para baixar]({resultado['file_url']})
+
+📋 **Conteúdo do Relatório**:
+• **Aba "Entregas Atrasadas"**: Dados completos com NF, cliente, datas, prazos
+• **Aba "Resumo"**: Estatísticas executivas e KPIs principais  
+• **Aba "Ações Recomendadas"**: Lista priorizada de ações por criticidade
+
+💡 **Como usar**: 
+1. Clique no link de download acima
+2. Abra o arquivo Excel
+3. Navegue pelas abas para análise completa
+4. Use filtros do Excel para análises específicas
+
+🚀 **Funcionalidades Avançadas**:
+- Dados atualizados em tempo real
+- Cálculos automáticos de atrasos
+- Priorização de ações críticas
+- Análise de performance por cliente
+
+---
+🧠 **Powered by:** Claude 4 Sonnet + Excel Generator Real
+📊 **Dados:** Sistema de Fretes em tempo real
+🕒 **Processado:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+⚡ **Modo:** Export Excel Automático"""
+            
+            else:
+                return f"""❌ **ERRO AO GERAR EXCEL**
+
+**Problema detectado:** {resultado.get('message', 'Erro desconhecido')}
+
+🔧 **Possíveis soluções:**
+1. Verificar se há dados disponíveis no período
+2. Confirmar se cliente existe no sistema  
+3. Tentar comando mais específico
+
+📝 **Exemplos de comandos que funcionam:**
+- "Gerar Excel de entregas atrasadas"
+- "Exportar dados do Assai para Excel"
+- "Relatório de performance em planilha"
+
+🆘 **Se o problema persistir:**
+- Entre em contato com suporte técnico
+- Erro técnico: `{resultado.get('error', 'N/A')}`
+
+---
+⚠️ **Sistema de Export Excel em desenvolvimento contínuo**"""
+                
+        except Exception as e:
+            logger.error(f"❌ Erro crítico no comando Excel: {e}")
+            return f"""❌ **ERRO CRÍTICO NO COMANDO EXCEL**
+
+**Erro:** {str(e)}
+
+🔧 **Possíveis causas:**
+- Serviço de Excel temporariamente indisponível
+- Problema de conectividade interna
+- Sobrecarga do sistema
+
+🆘 **Soluções:**
+1. Aguardar alguns minutos e tentar novamente
+2. Usar exportações manuais do sistema
+3. Contactar suporte se erro persistir
+
+---
+⚠️ **Sistema tentará auto-recuperação automaticamente**"""
     
     def _fallback_simulado(self, consulta: str) -> str:
         """Fallback quando Claude real não está disponível"""
