@@ -128,19 +128,41 @@
                     
                     <!-- Sugestões Rápidas -->
                     <div class="mt-3">
-                        <div class="d-flex flex-wrap gap-2" id="quick-suggestions">
-                            <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="usarSugestao('Status do sistema de fretes')">
-                                📊 Status Sistema
+                        <!-- 🧠 SUGESTÕES INTELIGENTES -->
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="text-muted fw-bold">
+                                <i class="fas fa-lightbulb me-1"></i>
+                                SUGESTÕES INTELIGENTES
+                            </small>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="recarregarSugestoes()" title="Atualizar Sugestões">
+                                <i class="fas fa-sync-alt"></i>
                             </button>
-                            <button class="btn btn-outline-success btn-sm suggestion-btn" onclick="usarSugestao('Analise o desempenho das entregas por região nos últimos 30 dias')">
-                                🎯 Análise Regional
-                            </button>
-                            <button class="btn btn-outline-info btn-sm suggestion-btn" onclick="usarSugestao('Compare o desempenho das transportadoras')">
-                                📈 Comparar Transportadoras
-                            </button>
-                            <button class="btn btn-outline-warning btn-sm suggestion-btn" onclick="usarSugestao('Identifique gargalos no processo logístico')">
-                                🔍 Detectar Gargalos
-                            </button>
+                        </div>
+                        
+                        <div id="intelligent-suggestions" class="d-flex flex-wrap gap-2">
+                            <!-- Carregando sugestões... -->
+                            <div class="suggestion-loading text-center w-100 py-3">
+                                <i class="fas fa-brain fa-spin text-primary"></i>
+                                <small class="text-muted d-block mt-1">Gerando sugestões personalizadas...</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Sugestões básicas de fallback -->
+                        <div id="fallback-suggestions" class="d-none">
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="usarSugestao('Status do sistema de fretes')">
+                                    📊 Status Sistema
+                                </button>
+                                <button class="btn btn-outline-success btn-sm suggestion-btn" onclick="usarSugestao('Analise o desempenho das entregas por região nos últimos 30 dias')">
+                                    🎯 Análise Regional
+                                </button>
+                                <button class="btn btn-outline-info btn-sm suggestion-btn" onclick="usarSugestao('Compare o desempenho das transportadoras')">
+                                    📈 Comparar Transportadoras
+                                </button>
+                                <button class="btn btn-outline-warning btn-sm suggestion-btn" onclick="usarSugestao('Identifique gargalos no processo logístico')">
+                                    🔍 Detectar Gargalos
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -281,6 +303,7 @@ let chatHistory = [];
 document.addEventListener('DOMContentLoaded', function() {
     verificarStatus();
     carregarStatusSistema();
+    carregarSugestoesInteligentes(); // 🧠 Carregar sugestões inteligentes
 });
 
 function verificarStatus() {
@@ -516,5 +539,167 @@ document.getElementById('user-input').addEventListener('keypress', function(e) {
         enviarMensagem();
     }
 });
+
+// 🧠 SISTEMA DE SUGESTÕES INTELIGENTES
+
+function carregarSugestoesInteligentes() {
+    const suggestionsContainer = document.getElementById('intelligent-suggestions');
+    const fallbackContainer = document.getElementById('fallback-suggestions');
+    
+    // Mostrar loading
+    showSuggestionsLoading();
+    
+    fetch('/claude-ai/api/suggestions', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.suggestions && data.suggestions.length > 0) {
+            // Renderizar sugestões inteligentes
+            renderSugestoes(data.suggestions, data.user_profile);
+            console.log('🧠 Sugestões inteligentes carregadas:', data.suggestions.length, 'para perfil:', data.user_profile);
+        } else {
+            // Fallback para sugestões básicas
+            showFallbackSuggestions();
+            console.warn('⚠️ Usando sugestões de fallback:', data.error || 'Nenhuma sugestão disponível');
+        }
+    })
+    .catch(error => {
+        console.error('❌ Erro ao carregar sugestões:', error);
+        showFallbackSuggestions();
+    });
+}
+
+function renderSugestoes(suggestions, userProfile) {
+    const container = document.getElementById('intelligent-suggestions');
+    const fallbackContainer = document.getElementById('fallback-suggestions');
+    
+    // Esconder fallback e loading
+    fallbackContainer.classList.add('d-none');
+    
+    // Limpar container
+    container.innerHTML = '';
+    
+    // Categorias de cores para diferentes tipos de sugestões
+    const categoryColors = {
+        'vendedor_diario': 'primary',
+        'vendedor_problemas': 'warning',
+        'vendedor_oportunidade': 'info',
+        'financeiro_urgente': 'danger',
+        'financeiro_analise': 'success',
+        'operacional_urgente': 'danger',
+        'operacional_diario': 'primary',
+        'admin_dashboard': 'dark',
+        'contextual_comparacao': 'secondary',
+        'contextual_cliente': 'info',
+        'basic': 'outline-secondary'
+    };
+    
+    // Renderizar cada sugestão
+    suggestions.forEach((suggestion, index) => {
+        const color = categoryColors[suggestion.category] || 'outline-primary';
+        const priority = suggestion.priority || 3;
+        
+        const suggestionBtn = document.createElement('button');
+        suggestionBtn.className = `btn btn-${color} btn-sm suggestion-btn me-2 mb-2`;
+        suggestionBtn.style.animationDelay = `${index * 100}ms`;
+        suggestionBtn.style.animation = 'fadeInUp 0.5s ease-out forwards';
+        suggestionBtn.style.opacity = '0';
+        
+        // Estilo baseado na prioridade
+        if (priority >= 4) {
+            suggestionBtn.classList.add('fw-bold');
+        }
+        
+        suggestionBtn.innerHTML = `
+            <span class="me-1">${suggestion.icon}</span>
+            ${suggestion.text}
+        `;
+        
+        suggestionBtn.title = suggestion.description;
+        suggestionBtn.onclick = () => usarSugestaoInteligente(suggestion);
+        
+        container.appendChild(suggestionBtn);
+    });
+    
+    // Adicionar indicador de perfil
+    const profileIndicator = document.createElement('small');
+    profileIndicator.className = 'text-muted d-block mt-2';
+    profileIndicator.innerHTML = `
+        <i class="fas fa-user-tag me-1"></i>
+        Sugestões personalizadas para: <strong>${userProfile}</strong>
+    `;
+    container.appendChild(profileIndicator);
+}
+
+function usarSugestaoInteligente(suggestion) {
+    // Preencher input com a sugestão
+    document.getElementById('user-input').value = suggestion.text;
+    
+    // Enviar mensagem
+    enviarMensagem();
+    
+    // Registrar feedback positivo (usuário usou a sugestão)
+    registrarFeedbackSugestao(suggestion.text, true);
+    
+    // Log para analytics
+    console.log('🎯 Sugestão utilizada:', suggestion.text, 'Categoria:', suggestion.category);
+}
+
+function registrarFeedbackSugestao(suggestionText, helpful = true) {
+    fetch('/claude-ai/api/suggestions/feedback', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify({
+            suggestion: suggestionText,
+            helpful: helpful
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('📊 Feedback registrado:', suggestionText, helpful ? 'útil' : 'não útil');
+        }
+    })
+    .catch(error => {
+        console.warn('⚠️ Erro ao registrar feedback:', error);
+    });
+}
+
+function recarregarSugestoes() {
+    console.log('🔄 Recarregando sugestões inteligentes...');
+    carregarSugestoesInteligentes();
+}
+
+function showSuggestionsLoading() {
+    const container = document.getElementById('intelligent-suggestions');
+    container.innerHTML = `
+        <div class="suggestion-loading text-center w-100 py-3">
+            <i class="fas fa-brain fa-spin text-primary"></i>
+            <small class="text-muted d-block mt-1">Gerando sugestões personalizadas...</small>
+        </div>
+    `;
+}
+
+function showFallbackSuggestions() {
+    const container = document.getElementById('intelligent-suggestions');
+    const fallbackContainer = document.getElementById('fallback-suggestions');
+    
+    container.innerHTML = `
+        <div class="alert alert-warning alert-sm p-2 w-100">
+            <i class="fas fa-exclamation-triangle me-1"></i>
+            <small>Usando sugestões básicas</small>
+        </div>
+    `;
+    
+    fallbackContainer.classList.remove('d-none');
+}
 </script>
 {% endblock %} 

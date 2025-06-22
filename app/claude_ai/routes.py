@@ -14,6 +14,22 @@ from .claude_real_integration import processar_com_claude_real
 # Configurar logger
 logger = logging.getLogger(__name__)
 
+# Importar sistema de sugestões inteligentes
+try:
+    from .suggestion_engine import get_suggestion_engine, init_suggestion_engine
+    SUGGESTIONS_AVAILABLE = True
+except ImportError:
+    SUGGESTIONS_AVAILABLE = False
+    logger.warning("Sistema de sugestões inteligentes não disponível")
+
+# Importar contexto conversacional
+try:
+    from .conversation_context import get_conversation_context
+    CONTEXT_AVAILABLE = True
+except ImportError:
+    CONTEXT_AVAILABLE = False
+    logger.warning("Contexto conversacional não disponível")
+
 # Importar MCP v4.0 Server
 try:
     from .mcp_v4_server import mcp_v4_server, process_query
@@ -626,4 +642,179 @@ def api_query():
         logger.error(f"❌ Erro na API query: {e}")
         return jsonify({'error': 'Erro interno do servidor'}), 500
 
-# Funções de fallback para when MCP não está disponível 
+# 🧠 SISTEMA DE SUGESTÕES INTELIGENTES - NOVA FUNCIONALIDADE
+
+@claude_ai_bp.route('/api/suggestions')
+@login_required
+def get_suggestions():
+    """API para obter sugestões inteligentes baseadas no perfil do usuário"""
+    try:
+        # Importar sistema de sugestões
+        try:
+            from .suggestion_engine import get_suggestion_engine, init_suggestion_engine
+            from .conversation_context import get_conversation_context
+        except ImportError as e:
+            logger.error(f"Sistema de sugestões não disponível: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'Sistema de sugestões não disponível',
+                'suggestions': []
+            })
+        
+        # Inicializar engine se necessário
+        suggestion_engine = get_suggestion_engine()
+        if not suggestion_engine:
+            try:
+                from app.utils.redis_cache import redis_cache
+                suggestion_engine = init_suggestion_engine(redis_cache)
+            except ImportError:
+                suggestion_engine = init_suggestion_engine(None)
+        
+        if not suggestion_engine:
+            return jsonify({
+                'success': False,
+                'error': 'Engine de sugestões não inicializado',
+                'suggestions': []
+            })
+        
+        # Contexto do usuário
+        user_context = {
+            'user_id': current_user.id,
+            'username': current_user.nome,
+            'perfil': getattr(current_user, 'perfil', 'usuario'),
+            'vendedor_codigo': getattr(current_user, 'vendedor_codigo', None)
+        }
+        
+        # Obter contexto conversacional se disponível
+        conversation_context = None
+        try:
+            context_manager = get_conversation_context()
+            if context_manager:
+                conversation_context = context_manager.get_context(str(current_user.id))
+        except Exception as e:
+            logger.debug(f"Contexto conversacional não disponível: {e}")
+        
+        # Gerar sugestões inteligentes
+        suggestions = suggestion_engine.get_intelligent_suggestions(
+            user_context, 
+            conversation_context
+        )
+        
+        return jsonify({
+            'success': True,
+            'suggestions': suggestions,
+            'user_profile': user_context['perfil'],
+            'context_available': conversation_context is not None,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao obter sugestões: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'suggestions': []
+        })
+
+@claude_ai_bp.route('/api/suggestions/feedback', methods=['POST'])
+@login_required
+def suggestion_feedback():
+    """Registra feedback sobre sugestões para machine learning"""
+    try:
+        data = request.get_json()
+        suggestion_text = data.get('suggestion', '')
+        was_helpful = data.get('helpful', True)
+        
+        if not suggestion_text:
+            return jsonify({
+                'success': False,
+                'error': 'Texto da sugestão é obrigatório'
+            })
+        
+        # Importar e inicializar engine
+        try:
+            from .suggestion_engine import get_suggestion_engine
+            suggestion_engine = get_suggestion_engine()
+            
+            if suggestion_engine:
+                user_context = {
+                    'user_id': current_user.id,
+                    'username': current_user.nome,
+                    'perfil': getattr(current_user, 'perfil', 'usuario')
+                }
+                
+                # Registrar aprendizado (se método existir)
+                if hasattr(suggestion_engine, 'learn_from_interaction'):
+                    suggestion_engine.learn_from_interaction(
+                        user_context, 
+                        suggestion_text, 
+                        was_helpful
+                    )
+                
+                logger.info(f"Feedback registrado: {suggestion_text} - Útil: {was_helpful}")
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Feedback registrado com sucesso'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Engine de sugestões não disponível'
+                })
+                
+        except ImportError:
+            return jsonify({
+                'success': False,
+                'error': 'Sistema de sugestões não disponível'
+            })
+        
+    except Exception as e:
+        logger.error(f"Erro ao registrar feedback: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@claude_ai_bp.route('/suggestions/dashboard')
+@login_required
+def suggestions_dashboard():
+    """Dashboard para visualizar e gerenciar sugestões"""
+    try:
+        # Verificar se usuário tem permissão (admin ou staff)
+        if not getattr(current_user, 'staff', False) and getattr(current_user, 'perfil', '') != 'admin':
+            flash('Acesso não autorizado', 'error')
+            return redirect(url_for('claude_ai.claude_real'))
+        
+        # Obter estatísticas das sugestões
+        stats = {
+            'total_suggestions': 0,
+            'categories': {},
+            'user_interactions': 0,
+            'feedback_positive': 0
+        }
+        
+        try:
+            from .suggestion_engine import get_suggestion_engine
+            suggestion_engine = get_suggestion_engine()
+            
+            if suggestion_engine:
+                # Calcular estatísticas básicas
+                stats['total_suggestions'] = len(suggestion_engine.base_suggestions)
+                
+                # Contar por categoria
+                for suggestion in suggestion_engine.base_suggestions:
+                    category = suggestion.category
+                    stats['categories'][category] = stats['categories'].get(category, 0) + 1
+        
+        except ImportError:
+            flash('Sistema de sugestões não disponível', 'warning')
+        
+        return render_template('claude_ai/suggestions_dashboard.html', 
+                             stats=stats,
+                             user=current_user)
+        
+    except Exception as e:
+        logger.error(f"Erro no dashboard de sugestões: {e}")
+        flash(f'Erro ao carregar dashboard: {str(e)}', 'error')
+        return redirect(url_for('claude_ai.claude_real')) 
