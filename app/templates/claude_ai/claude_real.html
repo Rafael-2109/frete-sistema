@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block title %}Claude REAL - Sistema de Fretes{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            🧠 Claude REAL - Inteligência Artificial Avançada
+                        </h6>
+                        <small class="text-muted">Powered by Claude 3.5 Sonnet (Anthropic)</small>
+                    </div>
+                    <div>
+                        <span id="status-badge" class="badge badge-secondary">Verificando...</span>
+                        <button class="btn btn-sm btn-outline-primary" onclick="verificarStatus()">
+                            <i class="fas fa-sync-alt"></i> Verificar Status
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <!-- Área de configuração -->
+                    <div id="config-area" class="alert alert-warning" style="display: none;">
+                        <h5><i class="fas fa-cog"></i> Configuração Necessária</h5>
+                        <p>Para usar Claude REAL, configure a API key da Anthropic:</p>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>📝 Passos para configurar:</h6>
+                                <ol>
+                                    <li>Acesse <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></li>
+                                    <li>Crie uma conta ou faça login</li>
+                                    <li>Gere uma API key</li>
+                                    <li>Configure no servidor:</li>
+                                </ol>
+                                
+                                <div class="bg-dark text-light p-3 rounded">
+                                    <code>
+# No servidor Render.com:<br>
+export ANTHROPIC_API_KEY=sk-ant-api03-xxxxx...<br><br>
+# Ou no arquivo .env:<br>
+ANTHROPIC_API_KEY=sk-ant-api03-xxxxx...
+                                    </code>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <h6>💰 Custos da API Anthropic:</h6>
+                                <ul>
+                                    <li><strong>Claude 3.5 Sonnet:</strong> $3/1M input tokens</li>
+                                    <li><strong>Claude 3 Haiku:</strong> $0.25/1M tokens (mais barato)</li>
+                                    <li><strong>Estimativa:</strong> ~$10-50/mês uso normal</li>
+                                </ul>
+                                
+                                <div class="alert alert-info">
+                                    <strong>💡 Alternativas GRATUITAS:</strong><br>
+                                    • Claude via MCP (atual) - Grátis<br>
+                                    • Ollama + Llama local - Grátis<br>
+                                    • OpenAI GPT-4o mini - Muito barato
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Chat area -->
+                    <div id="chat-area">
+                        <div id="chat-messages" class="border rounded p-3 mb-3" style="height: 400px; overflow-y: auto; background-color: #f8f9fa;">
+                            <div class="message system-message">
+                                <div class="d-flex align-items-center mb-2">
+                                    <div class="avatar bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mr-2" style="width: 35px; height: 35px;">
+                                        🤖
+                                    </div>
+                                    <strong>Claude REAL</strong>
+                                    <small class="text-muted ml-2">Sistema iniciado</small>
+                                </div>
+                                <div class="message-content bg-white p-3 rounded shadow-sm">
+                                    Olá! Sou o Claude REAL integrado ao seu sistema de fretes. 
+                                    Tenho a mesma inteligência do Claude Desktop/web e posso:
+                                    
+                                    <ul class="mt-2 mb-0">
+                                        <li>🧠 Análises complexas e insights profundos</li>
+                                        <li>📊 Interpretação inteligente de dados</li>
+                                        <li>💡 Recomendações estratégicas</li>
+                                        <li>🔍 Detecção de padrões e anomalias</li>
+                                        <li>📈 Previsões e tendências</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="input-group">
+                            <input type="text" id="user-input" class="form-control" 
+                                   placeholder="Digite sua consulta... (ex: 'Analise as tendências de frete dos últimos 30 dias e sugira otimizações')" 
+                                   onkeypress="if(event.key==='Enter') enviarMensagem()">
+                            <div class="input-group-append">
+                                <button class="btn btn-primary" onclick="enviarMensagem()" id="send-btn">
+                                    <i class="fas fa-paper-plane"></i> Enviar
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                💡 <strong>Exemplos de consultas avançadas:</strong>
+                                "Análise completa do desempenho por transportadora", 
+                                "Identifique gargalos no processo de faturamento",
+                                "Preveja custos para o próximo trimestre"
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let claudeRealMode = false;
+
+function verificarStatus() {
+    fetch('/claude-ai/real/status')
+        .then(response => response.json())
+        .then(data => {
+            const badge = document.getElementById('status-badge');
+            const configArea = document.getElementById('config-area');
+            
+            if (data.modo_real && data.client_conectado) {
+                badge.className = 'badge badge-success';
+                badge.innerHTML = '<i class="fas fa-check"></i> Claude REAL Ativo';
+                configArea.style.display = 'none';
+                claudeRealMode = true;
+            } else {
+                badge.className = 'badge badge-warning';
+                badge.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Modo Simulado';
+                configArea.style.display = 'block';
+                claudeRealMode = false;
+            }
+        })
+        .catch(error => {
+            const badge = document.getElementById('status-badge');
+            badge.className = 'badge badge-danger';
+            badge.innerHTML = '<i class="fas fa-times"></i> Erro';
+            console.error('Erro:', error);
+        });
+}
+
+function enviarMensagem() {
+    const input = document.getElementById('user-input');
+    const query = input.value.trim();
+    
+    if (!query) return;
+    
+    // Adicionar mensagem do usuário
+    adicionarMensagem('user', query);
+    input.value = '';
+    
+    // Mostrar loading
+    const sendBtn = document.getElementById('send-btn');
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+    
+    // Enviar para Claude real
+    fetch('/claude-ai/real', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify({query: query})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            adicionarMensagem('claude', data.response);
+        } else {
+            adicionarMensagem('error', 'Erro: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        adicionarMensagem('error', 'Erro de conexão: ' + error.message);
+    })
+    .finally(() => {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar';
+    });
+}
+
+function adicionarMensagem(type, content) {
+    const messagesContainer = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message mb-3';
+    
+    const timestamp = new Date().toLocaleTimeString();
+    let avatar, userName, bgClass;
+    
+    if (type === 'user') {
+        avatar = '👤';
+        userName = 'Você';
+        bgClass = 'bg-primary text-white';
+    } else if (type === 'claude') {
+        avatar = '🧠';
+        userName = claudeRealMode ? 'Claude REAL' : 'Claude Simulado';
+        bgClass = 'bg-success text-white';
+    } else {
+        avatar = '⚠️';
+        userName = 'Erro';
+        bgClass = 'bg-danger text-white';
+    }
+    
+    messageDiv.innerHTML = `
+        <div class="d-flex align-items-center mb-2">
+            <div class="avatar ${bgClass} rounded-circle d-flex align-items-center justify-content-center mr-2" style="width: 35px; height: 35px;">
+                ${avatar}
+            </div>
+            <strong>${userName}</strong>
+            <small class="text-muted ml-2">${timestamp}</small>
+        </div>
+        <div class="message-content bg-white p-3 rounded shadow-sm">
+            ${content.replace(/\n/g, '<br>')}
+        </div>
+    `;
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function getCSRFToken() {
+    return document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+}
+
+// Verificar status ao carregar
+document.addEventListener('DOMContentLoaded', function() {
+    verificarStatus();
+});
+
+// Enter para enviar
+document.getElementById('user-input').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        enviarMensagem();
+    }
+});
+</script>
+
+<style>
+.message {
+    margin-bottom: 1rem;
+}
+
+.message-content {
+    max-width: 100%;
+    word-wrap: break-word;
+}
+
+.avatar {
+    min-width: 35px;
+    font-size: 16px;
+}
+
+#chat-messages {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.system-message .message-content {
+    border-left: 4px solid #007bff;
+}
+</style>
+{% endblock %} 

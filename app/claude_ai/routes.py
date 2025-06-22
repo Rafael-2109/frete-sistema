@@ -372,4 +372,60 @@ def status_v4():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@claude_ai_bp.route('/real', methods=['GET', 'POST'])
+@login_required
+def claude_real():
+    """Interface com Claude REAL da Anthropic"""
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+            consulta = data.get('query', '')
+            
+            if not consulta:
+                return jsonify({'error': 'Query é obrigatória'}), 400
+            
+            # Usar Claude REAL
+            from .claude_real_integration import processar_com_claude_real
+            
+            user_context = {
+                'user_id': current_user.id,
+                'user_name': current_user.nome,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            resultado = processar_com_claude_real(consulta, user_context)
+            
+            return jsonify({
+                'response': resultado,
+                'status': 'success',
+                'timestamp': datetime.now().isoformat(),
+                'mode': 'claude_real'
+            })
+            
+        except Exception as e:
+            logger.error(f"Erro no Claude real: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    # GET request - mostrar interface
+    return render_template('claude_ai/claude_real.html')
+
+@claude_ai_bp.route('/real/status')
+@login_required  
+def claude_real_status():
+    """Status da integração Claude real"""
+    try:
+        from .claude_real_integration import claude_integration
+        
+        status_info = {
+            'modo_real': claude_integration.modo_real,
+            'api_key_configurada': bool(claude_integration.api_key),
+            'client_conectado': bool(claude_integration.client),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return jsonify(status_info)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Funções de fallback para when MCP não está disponível 

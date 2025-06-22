@@ -25,3 +25,10 @@ boto3==1.35.0
 mcp==1.0.0
 pydantic==2.11.7
 anyio==4.9.0
+
+# Claude Real API
+anthropic>=0.8.0
+
+# Alternativas gratuitas (opcional)
+# ollama>=0.1.0  # Para Llama local
+# openai>=1.0.0  # Para GPT-4o mini
