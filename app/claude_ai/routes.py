@@ -441,7 +441,7 @@ def claude_real_status():
 
 @claude_ai_bp.route('/redis-status')
 @login_required
-@require_admin
+@require_admin()
 def redis_status():
     """Dashboard de status do Redis Cache"""
     if not REDIS_DISPONIVEL:
@@ -482,7 +482,7 @@ def redis_status():
 
 @claude_ai_bp.route('/redis-clear')
 @login_required
-@require_admin
+@require_admin()
 def redis_clear():
     """Limpar cache Redis (apenas staff)"""
     if not REDIS_DISPONIVEL:
