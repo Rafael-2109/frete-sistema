@@ -26,6 +26,13 @@ def init_intelligent_suggestions():
                 print("🧠 Sistema de Sugestões Inteligentes inicializado (sem Redis)")
             else:
                 print("❌ Erro ao inicializar Sistema de Sugestões")
+        
+        # 📊 Configurar analisador de dados (será inicializado quando necessário)
+        try:
+            from .data_analyzer import init_data_analyzers
+            print("📊 Analisador de Dados configurado")
+        except ImportError as e:
+            print(f"⚠️ Analisador de dados não disponível: {e}")
                 
     except ImportError:
         print("⚠️ Sistema de Sugestões Inteligentes não disponível")

@@ -416,7 +416,9 @@ def claude_real():
             # Usar Claude REAL
             user_context = {
                 'user_id': current_user.id,
-                'user_name': current_user.nome,
+                'username': current_user.nome,
+                'perfil': getattr(current_user, 'perfil', 'usuario'),
+                'vendedor_codigo': getattr(current_user, 'vendedor_codigo', None),
                 'timestamp': datetime.now().isoformat()
             }
             
@@ -620,8 +622,8 @@ def api_query():
         user_context = {
             'user_id': current_user.id,  # IMPORTANTE: incluir user_id
             'username': current_user.nome,
-            'perfil': current_user.perfil.name if current_user.perfil else 'usuario',
-            'vendedor_codigo': current_user.vendedor_codigo,
+            'perfil': getattr(current_user, 'perfil', 'usuario'),
+            'vendedor_codigo': getattr(current_user, 'vendedor_codigo', None),
             'cliente_filter': None  # Pode ser expandido depois
         }
         
