@@ -360,7 +360,9 @@ class MCPv4Server:
             "analisar_tendencias": self._analisar_tendencias,
             "detectar_anomalias": self._detectar_anomalias,
             "otimizar_rotas": self._otimizar_rotas,
-            "previsao_custos": self._previsao_custos
+            "previsao_custos": self._previsao_custos,
+            # Ferramenta inteligente universal
+            "query_intelligent": self._query_intelligent
         }
         
         # Métricas do servidor
@@ -381,6 +383,10 @@ class MCPv4Server:
         """Processa requisição MCP com IA avançada"""
         start_time = time.time()
         self.metrics['requests_processed'] += 1
+        
+        # Inicializar variáveis
+        intent = None
+        entities = {}
         
         try:
             method = requisicao.get("method")
@@ -476,7 +482,8 @@ class MCPv4Server:
                             {"name": "analisar_tendencias", "description": "Análise de tendências e padrões nos dados"},
                             {"name": "detectar_anomalias", "description": "Detecção de anomalias nos processos"},
                             {"name": "otimizar_rotas", "description": "Otimização de rotas e custos"},
-                            {"name": "previsao_custos", "description": "Previsão de custos e análise financeira"}
+                            {"name": "previsao_custos", "description": "Previsão de custos e análise financeira"},
+                            {"name": "query_intelligent", "description": "Consulta inteligente universal com NLP"}
                         ]
                     }
                 }
@@ -1016,6 +1023,87 @@ class MCPv4Server:
     
     def _exportar_pedidos_excel(self, args: Dict[str, Any]) -> str:
         return "📊 **EXPORT EXCEL v4.0** - Implementação em andamento"
+
+    def _query_intelligent(self, args: Dict[str, Any]) -> str:
+        """Ferramenta universal inteligente - processa qualquer consulta em linguagem natural"""
+        try:
+            query = args.get("query", "")
+            
+            if not query:
+                return "❌ Por favor, forneça uma consulta para processar."
+            
+            # Classificar intenção
+            intent = self.nlp_processor.classify_intent(query)
+            entities = self.nlp_processor.extract_entities(query)
+            
+            # Mesclar entidades com argumentos
+            merged_args = {**args, **entities}
+            
+            # Mapear intent para ferramenta e executar
+            intent_mapping = {
+                'consulta_fretes': self._consultar_fretes,
+                'consulta_embarques': self._consultar_embarques,
+                'consulta_transportadoras': self._consultar_transportadoras,
+                'status_sistema': self._status_sistema,
+                'analise_tendencias': self._analisar_tendencias,
+                'detectar_anomalias': self._detectar_anomalias,
+                'otimizar_rotas': self._otimizar_rotas,
+                'previsao_custos': self._previsao_custos
+            }
+            
+            # Executar ferramenta correspondente
+            if intent in intent_mapping:
+                self.metrics['intents_classified'] += 1
+                
+                if AI_INFRASTRUCTURE_AVAILABLE:
+                    ai_logger.log_ai_insight(
+                        insight_type="intelligent_query",
+                        confidence=0.9,
+                        impact="high",
+                        description=f"Query '{query}' processada como '{intent}' com entidades {entities}"
+                    )
+                
+                return intent_mapping[intent](merged_args)
+            else:
+                # Fallback para status do sistema
+                return self._status_sistema(merged_args)
+                
+        except Exception as e:
+            if AI_INFRASTRUCTURE_AVAILABLE:
+                ai_logger.log_error(e, operation="query_intelligent")
+            return f"❌ Erro ao processar consulta inteligente: {str(e)}"
+
+    def query_intelligent(self, query: str, user_id: str = "unknown") -> Dict[str, Any]:
+        """Método público para consultas inteligentes - facilita testes"""
+        try:
+            # Processar via requisição MCP usando a ferramenta query_intelligent
+            requisicao = {
+                "method": "tools/call",
+                "params": {
+                    "name": "query_intelligent", 
+                    "arguments": {"query": query}
+                },
+                "id": 1
+            }
+            
+            response = self.processar_requisicao(requisicao, user_id)
+            
+            # Converter formato para teste
+            if 'result' in response and len(response['result']) > 0:
+                return {
+                    "content": response['result']
+                }
+            else:
+                return response
+                
+        except Exception as e:
+            logger.error(f"Erro em query_intelligent: {e}")
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": f"❌ Erro ao processar consulta: {str(e)}"
+                }]
+            }
 
 # Instância global do servidor v4.0
 mcp_v4_server = MCPv4Server()

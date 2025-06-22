@@ -75,24 +75,8 @@ def test_mcp_v4_real():
             print(f"Comando: '{teste['comando']}'")
             
             try:
-                # Executar comando via MCP
-                request_data = {
-                    "method": "tools/call",
-                    "params": {
-                        "name": "query_intelligent",
-                        "arguments": {
-                            "query": teste['comando']
-                        }
-                    }
-                }
-                
-                # Simular processamento MCP - CORREÇÃO
-                result = mcp_server.handle_tool_call(
-                    "query_intelligent",
-                    {
-                        "query": teste['comando']
-                    }
-                )
+                # Executar comando via MCP - MÉTODO CORRETO
+                result = mcp_server.query_intelligent(teste['comando'])
                 
                 if result and 'content' in result:
                     content = result.get('content', [])
