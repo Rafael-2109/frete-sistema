@@ -157,60 +157,132 @@ class SuggestionEngine:
             Lista de sugestões personalizadas
         """
         try:
+            # 🔍 VALIDAR TIPOS DE ENTRADA
+            if not isinstance(user_context, dict):
+                logger.error(f"❌ user_context deve ser dict, recebido: {type(user_context)}")
+                return self._get_fallback_suggestions({'perfil': 'usuario'})
+            
+            if conversation_context is not None and not isinstance(conversation_context, dict):
+                logger.warning(f"⚠️ conversation_context deve ser dict, recebido: {type(conversation_context)}, ignorando")
+                conversation_context = None
+            
             # Cache key baseado no usuário e contexto
             cache_key = self._generate_cache_key(user_context, conversation_context)
             
-            # Tentar buscar do cache Redis
-            if self.redis_cache and self.redis_cache.disponivel:
-                cached_suggestions = self.redis_cache.get(cache_key)
-                if cached_suggestions:
-                    logger.debug(f"🎯 Sugestões carregadas do cache para usuário {user_context.get('username', 'unknown')}")
-                    return cached_suggestions
+            # Tentar buscar do cache Redis com validação robusta
+            if self._is_redis_available():
+                try:
+                    cached_suggestions = self.redis_cache.get(cache_key)
+                    if cached_suggestions and isinstance(cached_suggestions, list):
+                        logger.debug(f"🎯 Sugestões carregadas do cache para usuário {user_context.get('username', 'unknown')}")
+                        return cached_suggestions
+                except Exception as redis_error:
+                    logger.warning(f"⚠️ Erro no Redis cache: {redis_error}, continuando sem cache")
             
             # Gerar sugestões dinamicamente
             suggestions = self._generate_suggestions(user_context, conversation_context)
             
-            # Salvar no cache
-            if self.redis_cache and self.redis_cache.disponivel:
-                self.redis_cache.set(cache_key, suggestions, ttl=self.cache_ttl)
-                logger.debug(f"💾 Sugestões salvas no cache para usuário {user_context.get('username', 'unknown')}")
+            # Salvar no cache com validação
+            if self._is_redis_available() and isinstance(suggestions, list):
+                try:
+                    self.redis_cache.set(cache_key, suggestions, ttl=self.cache_ttl)
+                    logger.debug(f"💾 Sugestões salvas no cache para usuário {user_context.get('username', 'unknown')}")
+                except Exception as redis_error:
+                    logger.warning(f"⚠️ Erro ao salvar no Redis: {redis_error}")
             
             return suggestions
             
         except Exception as e:
             logger.error(f"❌ Erro ao gerar sugestões inteligentes: {e}")
-            return self._get_fallback_suggestions(user_context)
+            # Garantir que user_context seja dict para fallback
+            safe_context = user_context if isinstance(user_context, dict) else {'perfil': 'usuario'}
+            return self._get_fallback_suggestions(safe_context)
+    
+    def _is_redis_available(self) -> bool:
+        """Verifica se Redis está disponível e configurado corretamente"""
+        try:
+            return (
+                self.redis_cache is not None and 
+                hasattr(self.redis_cache, 'disponivel') and 
+                hasattr(self.redis_cache, 'get') and 
+                hasattr(self.redis_cache, 'set') and
+                self.redis_cache.disponivel
+            )
+        except Exception:
+            return False
     
     def _generate_suggestions(self, user_context: Dict[str, Any], conversation_context: Optional[Dict] = None) -> List[Dict[str, Any]]:
         """Gera sugestões baseadas no contexto atual"""
         
-        user_profile = user_context.get('perfil', 'usuario').lower()
-        username = user_context.get('username', 'Usuario')
-        vendedor_codigo = user_context.get('vendedor_codigo')
+        try:
+            user_profile = user_context.get('perfil', 'usuario').lower()
+            username = user_context.get('username', 'Usuario')
+            vendedor_codigo = user_context.get('vendedor_codigo')
+            
+            # Filtrar sugestões por perfil
+            profile_suggestions = [
+                s for s in self.base_suggestions 
+                if user_profile in s.user_profiles or 'admin' in s.user_profiles
+            ]
+            
+            # 🧠 GERAR SUGESTÕES BASEADAS EM DADOS REAIS
+            data_based_suggestions = self._generate_data_based_suggestions(user_context)
+            
+            # Analisar contexto conversacional para sugestões contextuais
+            contextual_suggestions = self._get_contextual_suggestions(conversation_context, user_profile)
+            
+            # 🔍 VALIDAR TIPOS DAS LISTAS DE SUGESTÕES
+            # Garantir que todas as listas contêm apenas objetos Suggestion
+            profile_suggestions = self._validate_suggestions_list(profile_suggestions, "profile")
+            data_based_suggestions = self._validate_suggestions_list(data_based_suggestions, "data_based")
+            contextual_suggestions = self._validate_suggestions_list(contextual_suggestions, "contextual")
+            
+            # Combinar todas as sugestões
+            all_suggestions = profile_suggestions + data_based_suggestions + contextual_suggestions
+            
+            # Filtrar apenas objetos Suggestion válidos
+            valid_suggestions = [s for s in all_suggestions if isinstance(s, Suggestion)]
+            
+            if len(valid_suggestions) != len(all_suggestions):
+                logger.warning(f"⚠️ Filtradas {len(all_suggestions) - len(valid_suggestions)} sugestões inválidas")
+            
+            # Ordenar por prioridade
+            prioritized = sorted(valid_suggestions, key=lambda x: x.priority, reverse=True)
+            
+            # Limitar a 6 sugestões principais
+            final_suggestions = prioritized[:6]
+            
+            # Converter para dict
+            return [s.to_dict() if hasattr(s, 'to_dict') else s for s in final_suggestions]
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao gerar sugestões: {e}")
+            # Retornar sugestões básicas em caso de erro
+            return [
+                {
+                    "text": "Status do sistema",
+                    "category": "basic",
+                    "priority": 3,
+                    "icon": "📊",
+                    "description": "Verificar status geral do sistema",
+                    "user_profiles": [user_context.get('perfil', 'usuario')]
+                }
+            ]
+    
+    def _validate_suggestions_list(self, suggestions_list: list, list_name: str) -> List[Suggestion]:
+        """Valida e filtra lista de sugestões para garantir que são objetos Suggestion"""
+        if not isinstance(suggestions_list, list):
+            logger.warning(f"⚠️ {list_name}_suggestions não é lista: {type(suggestions_list)}")
+            return []
         
-        # Filtrar sugestões por perfil
-        profile_suggestions = [
-            s for s in self.base_suggestions 
-            if user_profile in s.user_profiles or 'admin' in s.user_profiles
-        ]
+        valid_suggestions = []
+        for i, suggestion in enumerate(suggestions_list):
+            if isinstance(suggestion, Suggestion):
+                valid_suggestions.append(suggestion)
+            else:
+                logger.warning(f"⚠️ {list_name}_suggestions[{i}] não é Suggestion: {type(suggestion)}")
         
-        # 🧠 GERAR SUGESTÕES BASEADAS EM DADOS REAIS
-        data_based_suggestions = self._generate_data_based_suggestions(user_context)
-        
-        # Analisar contexto conversacional para sugestões contextuais
-        contextual_suggestions = self._get_contextual_suggestions(conversation_context, user_profile)
-        
-        # Combinar todas as sugestões
-        all_suggestions = profile_suggestions + data_based_suggestions + contextual_suggestions
-        
-        # Ordenar por prioridade
-        prioritized = sorted(all_suggestions, key=lambda x: x.priority, reverse=True)
-        
-        # Limitar a 6 sugestões principais
-        final_suggestions = prioritized[:6]
-        
-        # Converter para dict
-        return [s.to_dict() for s in final_suggestions]
+        return valid_suggestions
     
     def _generate_data_based_suggestions(self, user_context: Dict[str, Any]) -> List[Suggestion]:
         """
@@ -364,36 +436,59 @@ class SuggestionEngine:
     
     def _get_fallback_suggestions(self, user_context: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Sugestões de fallback em caso de erro"""
-        profile = user_context.get('perfil', 'usuario').lower()
-        
-        fallback = [
-            {
-                "text": "Status do sistema",
-                "category": "basic",
-                "priority": 3,
-                "icon": "📊",
-                "description": "Verificar status geral do sistema",
-                "user_profiles": [profile]
-            },
-            {
-                "text": "Consultar entregas",
-                "category": "basic", 
-                "priority": 3,
-                "icon": "📦",
-                "description": "Consultar entregas recentes",
-                "user_profiles": [profile]
-            },
-            {
-                "text": "Ajuda",
-                "category": "basic",
-                "priority": 2,
-                "icon": "❓",
-                "description": "Obter ajuda sobre o sistema",
-                "user_profiles": [profile]
-            }
-        ]
-        
-        return fallback
+        try:
+            # Validar user_context
+            if not isinstance(user_context, dict):
+                user_context = {'perfil': 'usuario'}
+            
+            profile = user_context.get('perfil', 'usuario').lower()
+            
+            fallback = [
+                {
+                    "text": "Status do sistema",
+                    "category": "basic",
+                    "priority": 3,
+                    "icon": "📊",
+                    "description": "Verificar status geral do sistema",
+                    "user_profiles": [profile],
+                    "context_keywords": []
+                },
+                {
+                    "text": "Consultar entregas",
+                    "category": "basic", 
+                    "priority": 3,
+                    "icon": "📦",
+                    "description": "Consultar entregas recentes",
+                    "user_profiles": [profile],
+                    "context_keywords": []
+                },
+                {
+                    "text": "Ajuda",
+                    "category": "basic",
+                    "priority": 2,
+                    "icon": "❓",
+                    "description": "Obter ajuda sobre o sistema",
+                    "user_profiles": [profile],
+                    "context_keywords": []
+                }
+            ]
+            
+            return fallback
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao gerar sugestões de fallback: {e}")
+            # Fallback do fallback - sugestões mínimas
+            return [
+                {
+                    "text": "Status do sistema",
+                    "category": "basic",
+                    "priority": 3,
+                    "icon": "📊",
+                    "description": "Verificar status geral do sistema",
+                    "user_profiles": ["usuario"],
+                    "context_keywords": []
+                }
+            ]
     
     def _generate_cache_key(self, user_context: Dict[str, Any], conversation_context: Optional[Dict] = None) -> str:
         """Gera chave única para cache de sugestões"""
