@@ -9,10 +9,11 @@ import anthropic
 import logging
 import re
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import json
 from flask_login import current_user
 from sqlalchemy import func, and_, or_
+from app import db
 
 # Configurar logger
 logger = logging.getLogger(__name__)
@@ -1337,7 +1338,8 @@ def processar_com_claude_real(consulta: str, user_context: Dict = None) -> str:
 
 def _carregar_dados_entregas(analise: Dict[str, Any], filtros_usuario: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
     """📦 Carrega dados específicos de ENTREGAS (padrão)"""
-    dados_entregas = _carregar_entregas_banco(analise, filtros_usuario, data_limite)
+    # Usar a instância global para acessar o método
+    dados_entregas = claude_integration._carregar_entregas_banco(analise, filtros_usuario, data_limite)
     return {
         "tipo_dados": "entregas",
         "entregas": dados_entregas,
@@ -1690,7 +1692,8 @@ def _calcular_estatisticas_por_dominio(analise: Dict[str, Any], filtros_usuario:
     try:
         # Para entregas, usar a função existente
         if dominio == "entregas":
-            return _calcular_estatisticas_especificas(analise, filtros_usuario)
+            # Usar a instância global para acessar o método
+            return claude_integration._calcular_estatisticas_especificas(analise, filtros_usuario)
         
         # Para outros domínios, estatísticas já estão incluídas nos dados carregados
         return {
