@@ -785,7 +785,17 @@ Por favor, forneça uma resposta completa incluindo:
                 EntregaMonitorada.vendedor == filtros_usuario["vendedor"]
             )
         
-        entregas = query_entregas.order_by(EntregaMonitorada.data_embarque.desc()).limit(100).all()
+        # CORREÇÃO: Para análises de período, carregar TODAS as entregas (sem limit inadequado)
+        total_entregas_periodo = query_entregas.count()
+        logger.info(f"📦 Total entregas no período: {total_entregas_periodo}")
+        
+        # Para performance, limitar apenas se for um volume muito grande
+        if total_entregas_periodo <= 1000:
+            entregas = query_entregas.order_by(EntregaMonitorada.data_embarque.desc()).all()
+            logger.info(f"✅ Carregando TODAS as {total_entregas_periodo} entregas do período")
+        else:
+            entregas = query_entregas.order_by(EntregaMonitorada.data_embarque.desc()).limit(500).all()
+            logger.warning(f"⚠️ Volume alto! Limitando a 500 entregas de {total_entregas_periodo} totais")
         
         # Calcular métricas se solicitado
         metricas_entregas = {}
@@ -820,6 +830,8 @@ Por favor, forneça uma resposta completa incluindo:
                 for e in entregas
             ],
             "total_registros": len(entregas),
+            "total_periodo_completo": total_entregas_periodo,  # Total real no período
+            "dados_limitados": len(entregas) < total_entregas_periodo,  # Se está limitado
             "metricas": metricas_entregas,
             "agendamentos": agendamentos_info
         }
@@ -1614,9 +1626,12 @@ def _carregar_dados_embarques(analise: Dict[str, Any], filtros_usuario: Dict[str
             Embarque.status == 'ativo'
         )
         
-        embarques = query_embarques.order_by(Embarque.numero.desc()).limit(50).all()
+        # CORREÇÃO: Carregar todos os embarques do período (sem limit inadequado)
+        embarques = query_embarques.order_by(Embarque.numero.desc()).all()
         
-        # Estatísticas
+        logger.info(f"📦 Total embarques encontrados: {len(embarques)}")
+        
+        # Estatísticas baseadas em TODOS os dados
         total_embarques = len(embarques)
         embarques_sem_data = len([e for e in embarques if not e.data_embarque])
         embarques_despachados = len([e for e in embarques if e.data_embarque])
@@ -1657,22 +1672,41 @@ def _carregar_dados_faturamento(analise: Dict[str, Any], filtros_usuario: Dict[s
         from app import db
         from app.faturamento.models import RelatorioFaturamentoImportado as RelatorioImportado
         
+        # Log da consulta para debug
+        cliente_filtro = analise.get("cliente_especifico")
+        logger.info(f"🔍 CONSULTA FATURAMENTO: Cliente={cliente_filtro}, Período={analise.get('periodo_dias', 30)} dias")
+        
         # Query de faturamento
         query_faturamento = db.session.query(RelatorioImportado).filter(
             RelatorioImportado.data_fatura >= data_limite.date()
         )
         
         # Aplicar filtros
-        if analise.get("cliente_especifico") and not analise.get("correcao_usuario"):
+        if cliente_filtro and not analise.get("correcao_usuario"):
             query_faturamento = query_faturamento.filter(
-                RelatorioImportado.nome_cliente.ilike(f'%{analise["cliente_especifico"]}%')
+                RelatorioImportado.nome_cliente.ilike(f'%{cliente_filtro}%')
             )
+            logger.info(f"🎯 Filtro aplicado: nome_cliente ILIKE '%{cliente_filtro}%'")
         
-        faturas = query_faturamento.order_by(RelatorioImportado.data_fatura.desc()).limit(100).all()
+        # CORREÇÃO: Remover limitação inadequada para consultas de período completo
+        # Carregar TODOS os dados do período (sem limit) 
+        faturas = query_faturamento.order_by(RelatorioImportado.data_fatura.desc()).all()
         
-        # Estatísticas
+        logger.info(f"📊 Total faturas encontradas: {len(faturas)}")
+        
+        # Estatísticas CORRETAS baseadas em TODOS os dados
         total_faturas = len(faturas)
         valor_total_faturado = sum(float(f.valor_total or 0) for f in faturas)
+        
+        # Log de validação do total
+        logger.info(f"💰 Valor total calculado: R$ {valor_total_faturado:,.2f}")
+        
+        # Validação de consistência (alertar se muitas faturas)
+        if total_faturas > 1000:
+            logger.warning(f"⚠️ Alto volume de faturas: {total_faturas} registros. Considere filtros específicos.")
+        
+        # Para resposta JSON, limitar apenas os registros individuais (não as estatísticas)
+        faturas_para_json = faturas[:200]  # Mostrar até 200 faturas individuais na resposta
         
         return {
             "tipo_dados": "faturamento",
@@ -1687,15 +1721,17 @@ def _carregar_dados_faturamento(analise: Dict[str, Any], filtros_usuario: Dict[s
                         "data_fatura": f.data_fatura.isoformat() if f.data_fatura else None,
                         "incoterm": f.incoterm
                     }
-                    for f in faturas
+                    for f in faturas_para_json  # Usar lista limitada apenas para registros individuais
                 ],
                 "estatisticas": {
-                    "total_faturas": total_faturas,
-                    "valor_total_faturado": valor_total_faturado,
-                    "ticket_medio": round(valor_total_faturado / total_faturas, 2) if total_faturas > 0 else 0
+                    "total_faturas": total_faturas,  # Baseado em TODOS os dados
+                    "valor_total_faturado": valor_total_faturado,  # Baseado em TODOS os dados
+                    "ticket_medio": round(valor_total_faturado / total_faturas, 2) if total_faturas > 0 else 0,
+                    "registros_na_resposta": len(faturas_para_json),  # Quantos estão sendo mostrados
+                    "dados_completos": len(faturas_para_json) == total_faturas  # Se mostra todos ou é limitado
                 }
             },
-            "registros_carregados": total_faturas
+            "registros_carregados": total_faturas  # Total real carregado
         }
         
     except Exception as e:
