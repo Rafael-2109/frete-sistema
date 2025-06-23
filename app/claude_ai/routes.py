@@ -288,6 +288,14 @@ def claude_real():
     """Interface com Claude REAL da Anthropic"""
     if request.method == 'POST':
         try:
+            # 🔒 VALIDAÇÃO CSRF INTELIGENTE para APIs JSON
+            from app.utils.csrf_helper import validate_api_csrf
+            
+            csrf_valid = validate_api_csrf(request, logger, graceful_mode=True)
+            if not csrf_valid:
+                logger.error("🔒 Falha crítica na validação CSRF")
+                return jsonify({'error': 'Token CSRF inválido'}), 400
+            
             data = request.get_json()
             consulta = data.get('query', '')
             

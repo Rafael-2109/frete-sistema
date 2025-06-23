@@ -134,4 +134,75 @@ def log_csrf_error(error, additional_info=""):
         logger.debug(f"🔒 CSRF Session Info: {session_info}")
         
     except Exception as e:
-        logger.error(f"🔒 Erro ao logar erro CSRF: {str(e)}") 
+        logger.error(f"🔒 Erro ao logar erro CSRF: {str(e)}")
+
+def validate_api_csrf(request, logger=None, graceful_mode=True):
+    """
+    Validação CSRF específica para APIs JSON com modo gracioso
+    
+    Args:
+        request: Objeto request do Flask
+        logger: Logger para registro de eventos
+        graceful_mode: Se True, permite continuar mesmo com erro CSRF em produção
+        
+    Returns:
+        bool: True se validação passou ou modo gracioso permitiu continuar
+    """
+    from flask import current_app
+    from flask_wtf.csrf import validate_csrf, CSRFError
+    
+    try:
+        # Buscar token CSRF de múltiplas fontes
+        csrf_token = None
+        
+        # 1. Headers
+        csrf_token = (request.headers.get('X-CSRFToken') or 
+                     request.headers.get('X-CSRF-Token') or
+                     request.headers.get('HTTP_X_CSRF_TOKEN'))
+        
+        # 2. JSON body
+        if not csrf_token and request.json:
+            csrf_token = request.json.get('csrf_token')
+        
+        # 3. Form data (fallback)
+        if not csrf_token:
+            csrf_token = request.form.get('csrf_token')
+        
+        if not csrf_token:
+            if logger:
+                logger.warning("🔒 API CSRF: Token não encontrado em nenhuma fonte")
+            
+            if graceful_mode and not current_app.config.get('DEBUG', False):
+                if logger:
+                    logger.info("🔄 Modo gracioso: Continuando sem token CSRF em produção")
+                return True
+            return False
+        
+        # Tentar validar o token
+        validate_csrf(csrf_token)
+        
+        if logger:
+            logger.debug("✅ API CSRF: Token validado com sucesso")
+        return True
+        
+    except CSRFError as e:
+        if logger:
+            logger.warning(f"🔒 API CSRF Error: {e}")
+        
+        # Modo gracioso para produção
+        if graceful_mode and not current_app.config.get('DEBUG', False):
+            if logger:
+                logger.info("🔄 Modo gracioso: Ignorando erro CSRF em produção")
+            return True
+        
+        return False
+        
+    except Exception as e:
+        if logger:
+            logger.error(f"🔒 API CSRF: Erro inesperado: {e}")
+        
+        # Em caso de erro inesperado, modo gracioso permite continuar
+        if graceful_mode:
+            return True
+        
+        return False 

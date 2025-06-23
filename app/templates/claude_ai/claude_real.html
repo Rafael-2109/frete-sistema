@@ -393,13 +393,21 @@ function enviarMensagem() {
     adicionarAoHistorico(query);
     
     // Enviar para Claude real
+    const csrfToken = getCSRFToken();
+    console.log('🔒 CSRF Token:', csrfToken ? 'Presente' : 'Ausente');
+    
     fetch('/claude-ai/real', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
+            'X-CSRFToken': csrfToken,
+            'X-CSRF-Token': csrfToken,  // Header alternativo
+            'HTTP_X_CSRF_TOKEN': csrfToken  // Header alternativo para produção
         },
-        body: JSON.stringify({query: query})
+        body: JSON.stringify({
+            query: query,
+            csrf_token: csrfToken  // Incluir no body também
+        })
     })
     .then(response => response.json())
     .then(data => {
@@ -530,7 +538,23 @@ function exportarChat() {
 }
 
 function getCSRFToken() {
-    return document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+    // Buscar token CSRF de múltiplas formas para compatibilidade
+    const metaTag = document.querySelector('meta[name="csrf-token"]');
+    if (metaTag) {
+        return metaTag.getAttribute('content');
+    }
+    
+    // Fallback: buscar em cookies ou outros lugares
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        if (cookie.trim().startsWith('csrf_token=')) {
+            return cookie.split('=')[1];
+        }
+    }
+    
+    // Se não encontrar, tentar gerar via Flask
+    console.warn('⚠️ Token CSRF não encontrado, usando fallback');
+    return '';
 }
 
 // Enter para enviar
@@ -549,11 +573,13 @@ function carregarSugestoesInteligentes() {
     // Mostrar loading
     showSuggestionsLoading();
     
+    const csrfToken = getCSRFToken();
     fetch('/claude-ai/api/suggestions', {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
+            'X-CSRFToken': csrfToken,
+            'X-CSRF-Token': csrfToken
         }
     })
     .then(response => response.json())
@@ -659,15 +685,18 @@ function usarSugestaoInteligente(suggestion) {
 }
 
 function registrarFeedbackSugestao(suggestionText, helpful = true) {
+    const csrfToken = getCSRFToken();
     fetch('/claude-ai/api/suggestions/feedback', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
+            'X-CSRFToken': csrfToken,
+            'X-CSRF-Token': csrfToken
         },
         body: JSON.stringify({
             suggestion: suggestionText,
-            helpful: helpful
+            helpful: helpful,
+            csrf_token: csrfToken
         })
     })
     .then(response => response.json())
