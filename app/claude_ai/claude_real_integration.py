@@ -70,25 +70,29 @@ class ClaudeRealIntegration:
             self._cache_timeout = 300  # 5 minutos fallback
             logger.info("⚠️ Usando cache em memória (fallback)")
         
-        # System prompt CORRIGIDO para Claude real com CONTEXTO CONVERSACIONAL
-        self.system_prompt = """Você é Claude integrado ao Sistema de Fretes Industrial com MEMÓRIA CONVERSACIONAL.
+        # System prompt MODULAR para Claude real com MÚLTIPLOS DOMÍNIOS
+        self.system_prompt = """Você é Claude integrado ao Sistema de Fretes Industrial com INTELIGÊNCIA MODULAR.
+
+🎯 **DETECÇÃO AUTOMÁTICA DE DOMÍNIO**:
+Você detecta automaticamente o tipo de consulta e adapta sua resposta:
+
+📦 **ENTREGAS** = Monitoramento, status de entrega, canhotos, prazos, reagendamentos
+🚚 **FRETES** = Cotações, valores, aprovações, CTe, transportadoras, conta corrente  
+🚛 **TRANSPORTADORAS** = Cadastros, freteiros vs empresas, desempenho por transportadora
+📋 **PEDIDOS** = Status (aberto/cotado/faturado), expedição, agendamentos, protocolos
+🚢 **EMBARQUES** = Despachos, portaria, movimentação física, volumes
+💰 **FATURAMENTO** = Notas fiscais, valores faturados, origens, incoterms
+💳 **FINANCEIRO** = Despesas extras, pendências, vencimentos, conta corrente
 
 🧠 **CONTEXTO CONVERSACIONAL ATIVO**:
 - Você LEMBRA de perguntas anteriores nesta sessão
-- Perguntas de seguimento como "E em maio?" devem usar o contexto anterior
-- Mantenha continuidade das conversas sobre o mesmo cliente/assunto
-- Se usuário perguntar sobre "cliente X" e depois "E esse mês?", refere-se ao mesmo cliente X
+- Perguntas de seguimento mantêm o contexto (cliente, domínio, período)
+- Adapta automaticamente entre domínios baseado na consulta
 
-CONTEXTO EMPRESARIAL:
-- Sistema crítico de gestão de fretes
-- Volume alto de operações
-- Precisão é fundamental para tomada de decisão
-
-IMPORTANTE - DIFERENCIAÇÃO RIGOROSA DE CLIENTES:
-🏢 **REDES DIFERENTES**: ASSAI ≠ ATACADÃO (são concorrentes, nunca confundir!)
-🏬 **CLIENTE ESPECÍFICO**: Nome exato do cliente (ex: "Assai" refere-se APENAS ao Assai)
-🏪 **FILIAIS**: "Cliente 001", "Cliente LJ 001" referem-se a filiais específicas
-🚨 **CRÍTICO**: JAMAIS misturar dados de clientes diferentes!
+IMPORTANTE - DIFERENCIAÇÃO RIGOROSA:
+🏢 **CLIENTES**: ASSAI ≠ ATACADÃO (concorrentes, NUNCA confundir!)
+🏬 **FILIAIS**: "Cliente 001" = filial específica vs "Cliente" = grupo
+🎯 **DOMÍNIOS**: Entrega ≠ Frete ≠ Embarque (conceitos diferentes)
 
 ANÁLISE TEMPORAL INTELIGENTE:
 📅 **"Maio"** = MÊS INTEIRO de maio (não apenas 7 dias)
@@ -96,66 +100,53 @@ ANÁLISE TEMPORAL INTELIGENTE:
 📅 **"30 dias"** = Últimos 30 dias corridos
 📅 **"Semana"** = Últimos 7 dias apenas
 
-DADOS OBRIGATÓRIOS A INCLUIR:
-✅ **Datas de Entrega Realizadas** (quando foi entregue)
-✅ **Cumprimento de Prazo** (no prazo / atrasado)
-✅ **Agendamentos** (datas e protocolos)
-✅ **Reagendamentos** (se houve e quantos)
-✅ **Status Detalhado** (pendente, em trânsito, entregue)
-✅ **Histórico Completo** por entrega
+🎯 **DADOS ESPECÍFICOS POR DOMÍNIO**:
 
-CONTEXTO CONVERSACIONAL:
-- USE o histórico fornecido para manter continuidade
-- Se pergunta anterior foi sobre "Cliente X" e atual é "E em maio?", aplique ao Cliente X
-- Mantenha coerência entre perguntas relacionadas
-- Responda perguntas de seguimento baseado no contexto
+**ENTREGAS** (padrão):
+✅ Status de entrega, prazos, reagendamentos, canhotos
+✅ Datas previstas vs realizadas, lead time, performance
 
-DIFERENÇA CONCEITUAL NO SISTEMA:
-🚚 **FRETES** = Cotações, contratos de transporte, valores, aprovações
-📦 **ENTREGAS** = Monitoramento pós-embarque, status de entrega, canhotos, datas realizadas
-🚛 **EMBARQUES** = Despachos, envios, movimentação física
+**FRETES**:
+✅ Valores cotados vs considerados, aprovações pendentes
+✅ CTe emitidos, status de pagamento, transportadoras
 
-FLUXO DE PEDIDOS:
-1. **ABERTO**: Pedidos com data expedição (previsão) → agendamento
-2. **COTADO**: Embarques com data prevista → agendamento + protocolo
-3. **FATURADO**: Procurar num_pedido → RelatorioImportado.origem → numero_nf → EntregaMonitorada
+**TRANSPORTADORAS**:
+✅ Freteiros vs empresas, volume de fretes, desempenho
+✅ Valores médios, cidades de atuação, conta corrente
 
-DADOS DISPONÍVEIS EM CONTEXTO:
-{dados_contexto_especifico}
+**PEDIDOS**:
+✅ Status (aberto/cotado/faturado), valores, pesos
+✅ Expedição, agendamentos, protocolos, rotas
 
-SUAS CAPACIDADES AVANÇADAS:
-- Análise inteligente de dados reais com precisão absoluta
-- Insights preditivos e recomendações estratégicas  
-- Detecção de padrões e anomalias
-- Cálculos de performance automatizados
-- Comparações temporais flexíveis
-- Histórico completo de reagendamentos
-- **MEMÓRIA CONVERSACIONAL ATIVA**
+**EMBARQUES**:
+✅ Números de embarque, motoristas, placas, portaria
+✅ Datas de criação vs despacho, status aguardando/despachado
+
+**FATURAMENTO**:
+✅ NFs emitidas, valores faturados, origens, clientes
+✅ Ticket médio, incoterms, datas de fatura
+
+**FINANCEIRO**:
+✅ Despesas extras, pendências, vencimentos
+✅ Valores pendentes, tipos de despesa, observações
+
+CONTEXTO ATUAL: {dados_contexto_especifico}
 
 INSTRUÇÕES CRÍTICAS:
-1. **PRECISÃO ABSOLUTA** - Dados incorretos custam operações
-2. **CLIENTE ESPECÍFICO** - Se perguntou sobre Cliente X, foque APENAS no Cliente X
-3. **ANÁLISE TEMPORAL CORRETA** - Mês = mês inteiro, não 7 dias
-4. **DADOS COMPLETOS** - Inclua TODAS as informações relevantes
-5. **VENDEDORES** - Mostre apenas clientes que têm permissão
-6. **INTELIGÊNCIA CONTEXTUAL** - Diferencie grupos de clientes vs clientes específicos vs filiais
-7. **REAGENDAMENTOS** - Sempre verificar histórico de reagendas
-8. **JAMAIS CONFUNDIR CLIENTES** - Assai ≠ Atacadão ≠ outros
-9. **CONTEXTO CONVERSACIONAL** - Use histórico para manter continuidade
+1. **DOMÍNIO AUTOMÁTICO** - Detecte o domínio e foque nos dados relevantes
+2. **PRECISÃO POR CONTEXTO** - Use métricas específicas do domínio
+3. **DADOS COMPLETOS** - Inclua todas as informações do domínio detectado
+4. **TRANSIÇÃO INTELIGENTE** - Se pergunta muda domínio, adapte automaticamente
+5. **CONTINUIDADE** - Mantenha contexto conversacional entre domínios
+6. **JAMAIS CONFUNDIR** - Clientes, domínios e conceitos são distintos
 
-EXEMPLOS DE INTERPRETAÇÃO CORRETA:
+EXEMPLOS DE ADAPTAÇÃO:
+- "Fretes do Assai" → DOMÍNIO: Fretes | CLIENTE: Assai específico
+- "Transportadoras freteiras" → DOMÍNIO: Transportadoras | FILTRO: freteiro=True  
+- "Pedidos sem cotação" → DOMÍNIO: Pedidos | FILTRO: status=aberto
+- "Embarques aguardando" → DOMÍNIO: Embarques | FILTRO: sem data_embarque
 
-- "Entregas dos supermercados" → GRUPO_SUPERMERCADOS (múltiplos clientes)
-- "Entregas do Cliente ABC" → Cliente específico "Cliente ABC"
-- "Cliente ABC 001" → Filial específica do Cliente ABC
-- "Entregas dos supermercados" → GRUPO de supermercados (múltiplos clientes)
-
-🧠 **CONTEXTO CONVERSACIONAL**:
-- Pergunta anterior: "Entregas do Assai em junho" 
-- Pergunta atual: "E em maio?"
-- Interpretação: "Entregas do Assai em maio" (manter cliente do contexto)
-
-Responda sempre em português brasileiro com precisão industrial máxima e continuidade conversacional."""
+Responda com inteligência contextual, adaptando automaticamente ao domínio detectado."""
     
     def processar_consulta_real(self, consulta: str, user_context: Dict = None) -> str:
         """Processa consulta usando Claude REAL com contexto inteligente e MEMÓRIA CONVERSACIONAL"""
@@ -325,6 +316,7 @@ Por favor, forneça uma resposta completa incluindo:
             "consulta_original": consulta,
             "timestamp_analise": datetime.now().isoformat(),
             "tipo_consulta": "geral",
+            "dominio": "entregas",  # ✅ NOVO: Detectar domínio automaticamente
             "cliente_especifico": None,
             "periodo_dias": 30,  # Default 30 dias para análises mais completas
             "filtro_geografico": None,
@@ -349,10 +341,63 @@ Por favor, forneça uma resposta completa incluindo:
                 analise["tipo_consulta"] = "geral"  # Forçar consulta geral
                 analise["cliente_especifico"] = None  # Resetar cliente específico
                 logger.info(f"🚨 CORREÇÃO DETECTADA: Usuário corrigiu interpretação com '{palavra_correcao}'")
-                
-                # Se é correção, tratar como consulta geral sem filtros específicos
-                # Apenas analisar período e foco dos dados, mas SEM cliente específico
                 break
+        
+        # 🎯 NOVO: DETECÇÃO AUTOMÁTICA DE DOMÍNIO
+        dominios = {
+            "fretes": [
+                "frete", "cotação", "cotado", "valor frete", "tabela frete", "freteiro",
+                "aprovação", "aprovado", "pendente aprovação", "cte", "conhecimento",
+                "conta corrente", "valor pago", "desconto", "multa"
+            ],
+            "transportadoras": [
+                "transportadora", "transportador", "freteiro", "motorista", "veiculo",
+                "placa", "cnpj transportadora", "razão social", "expresso", "jadlog",
+                "rapidão", "mercúrio", "rodonaves", "jamef"
+            ],
+            "pedidos": [
+                "pedido", "cotação manual", "sem cotação", "aberto", "num pedido",
+                "valor pedido", "peso pedido", "expedição", "agenda", "protocolo",
+                "rota", "sub rota", "separação"
+            ],
+            "embarques": [
+                "embarque", "embarcado", "data embarque", "separação", "nota fiscal",
+                "nf", "volumes", "peso embarque", "portaria", "saída", "despacho"
+            ],
+            "faturamento": [
+                "fatura", "faturado", "nota fiscal", "nf", "origem", "relatório",
+                "importado", "valor nf", "cliente faturamento", "status fatura"
+            ],
+            "financeiro": [
+                "pendência", "pendente", "despesa extra", "documento", "vencimento",
+                "observação financeira", "status financeiro", "valor pendente"
+            ],
+            "entregas": [
+                "entrega", "entregue", "monitoramento", "reagendamento", "protocolo",
+                "canhoto", "data entrega", "prazo", "atraso", "pontualidade",
+                "status entrega", "pendência financeira"
+            ]
+        }
+        
+        # Detectar domínio baseado nas palavras-chave
+        pontuacao_dominios = {}
+        for dominio, palavras in dominios.items():
+            pontos = 0
+            for palavra in palavras:
+                if palavra in consulta_lower:
+                    pontos += 1
+            if pontos > 0:
+                pontuacao_dominios[dominio] = pontos
+        
+        # Escolher domínio com maior pontuação
+        if pontuacao_dominios:
+            dominio_detectado = max(pontuacao_dominios, key=pontuacao_dominios.get)
+            analise["dominio"] = dominio_detectado
+            logger.info(f"🎯 Domínio detectado: {dominio_detectado} (pontos: {pontuacao_dominios})")
+        else:
+            # Se não detectou nenhum domínio específico, usar entregas como padrão
+            analise["dominio"] = "entregas"
+            logger.info("🎯 Domínio padrão: entregas")
         
         # ANÁLISE DE CLIENTE ESPECÍFICO - APENAS SE NÃO HOUVER CORREÇÃO
         if not analise["correcao_usuario"]:
@@ -1286,4 +1331,375 @@ claude_integration = ClaudeRealIntegration()
 
 def processar_com_claude_real(consulta: str, user_context: Dict = None) -> str:
     """Função pública para processar com Claude real"""
-    return claude_integration.processar_consulta_real(consulta, user_context) 
+    return claude_integration.processar_consulta_real(consulta, user_context)
+
+# 🎯 NOVAS FUNÇÕES MODULARES POR DOMÍNIO
+
+def _carregar_dados_entregas(analise: Dict[str, Any], filtros_usuario: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
+    """📦 Carrega dados específicos de ENTREGAS (padrão)"""
+    dados_entregas = _carregar_entregas_banco(analise, filtros_usuario, data_limite)
+    return {
+        "tipo_dados": "entregas",
+        "entregas": dados_entregas,
+        "registros_carregados": dados_entregas.get("total_registros", 0)
+    }
+
+def _carregar_dados_fretes(analise: Dict[str, Any], filtros_usuario: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
+    """🚛 Carrega dados específicos de FRETES"""
+    try:
+        from app import db
+        from app.fretes.models import Frete, DespesaExtra
+        from app.transportadoras.models import Transportadora
+        
+        # Query de fretes
+        query_fretes = db.session.query(Frete).filter(
+            Frete.criado_em >= data_limite
+        )
+        
+        # Aplicar filtros
+        if analise.get("cliente_especifico") and not analise.get("correcao_usuario"):
+            query_fretes = query_fretes.filter(
+                Frete.nome_cliente.ilike(f'%{analise["cliente_especifico"]}%')
+            )
+        
+        fretes = query_fretes.order_by(Frete.criado_em.desc()).limit(50).all()
+        
+        # Estatísticas de fretes
+        total_fretes = len(fretes)
+        fretes_aprovados = len([f for f in fretes if f.status_aprovacao == 'aprovado'])
+        fretes_pendentes = len([f for f in fretes if f.status_aprovacao == 'pendente'])
+        valor_total_cotado = sum(float(f.valor_cotado or 0) for f in fretes)
+        
+        return {
+            "tipo_dados": "fretes",
+            "fretes": {
+                "registros": [
+                    {
+                        "id": f.id,
+                        "cliente": f.nome_cliente,
+                        "uf_destino": f.uf_destino,
+                        "transportadora": f.transportadora,
+                        "valor_cotado": float(f.valor_cotado or 0),
+                        "valor_considerado": float(f.valor_considerado or 0),
+                        "peso_total": float(f.peso_total or 0),
+                        "status_aprovacao": f.status_aprovacao,
+                        "cte": f.cte,
+                        "data_criacao": f.criado_em.isoformat() if f.criado_em else None
+                    }
+                    for f in fretes
+                ],
+                "estatisticas": {
+                    "total_fretes": total_fretes,
+                    "fretes_aprovados": fretes_aprovados,
+                    "fretes_pendentes": fretes_pendentes,
+                    "percentual_aprovacao": round((fretes_aprovados / total_fretes * 100), 1) if total_fretes > 0 else 0,
+                    "valor_total_cotado": valor_total_cotado
+                }
+            },
+            "registros_carregados": total_fretes
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao carregar dados de fretes: {e}")
+        return {"erro": str(e), "tipo_dados": "fretes"}
+
+def _carregar_dados_transportadoras(analise: Dict[str, Any], filtros_usuario: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
+    """🚚 Carrega dados específicos de TRANSPORTADORAS"""
+    try:
+        from app import db
+        from app.transportadoras.models import Transportadora
+        from app.fretes.models import Frete
+        
+        # Transportadoras ativas
+        transportadoras = db.session.query(Transportadora).filter(
+            Transportadora.ativo == True
+        ).all()
+        
+        # Fretes por transportadora
+        fretes_por_transportadora = {}
+        for transportadora in transportadoras:
+            fretes_query = db.session.query(Frete).filter(
+                Frete.transportadora == transportadora.razao_social,
+                Frete.criado_em >= data_limite
+            )
+            
+            fretes_count = fretes_query.count()
+            valor_total = sum(float(f.valor_cotado or 0) for f in fretes_query.all())
+            
+            fretes_por_transportadora[transportadora.razao_social] = {
+                "total_fretes": fretes_count,
+                "valor_total": valor_total,
+                "media_valor": round(valor_total / fretes_count, 2) if fretes_count > 0 else 0
+            }
+        
+        return {
+            "tipo_dados": "transportadoras",
+            "transportadoras": {
+                "registros": [
+                    {
+                        "id": t.id,
+                        "razao_social": t.razao_social,
+                        "cnpj": t.cnpj,
+                        "cidade": t.cidade,
+                        "uf": t.uf,
+                        "tipo": "Freteiro" if getattr(t, 'freteiro', False) else "Empresa",
+                        "fretes_periodo": fretes_por_transportadora.get(t.razao_social, {})
+                    }
+                    for t in transportadoras
+                ],
+                "estatisticas": {
+                    "total_transportadoras": len(transportadoras),
+                    "freteiros": len([t for t in transportadoras if getattr(t, 'freteiro', False)]),
+                    "empresas": len([t for t in transportadoras if not getattr(t, 'freteiro', False)])
+                }
+            },
+            "registros_carregados": len(transportadoras)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao carregar dados de transportadoras: {e}")
+        return {"erro": str(e), "tipo_dados": "transportadoras"}
+
+def _carregar_dados_pedidos(analise: Dict[str, Any], filtros_usuario: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
+    """📋 Carrega dados específicos de PEDIDOS"""
+    try:
+        from app import db
+        from app.pedidos.models import Pedido
+        
+        # Query de pedidos
+        query_pedidos = db.session.query(Pedido).filter(
+            Pedido.expedicao >= data_limite.date()
+        )
+        
+        # Aplicar filtros
+        if analise.get("cliente_especifico") and not analise.get("correcao_usuario"):
+            query_pedidos = query_pedidos.filter(
+                Pedido.raz_social_red.ilike(f'%{analise["cliente_especifico"]}%')
+            )
+        
+        pedidos = query_pedidos.order_by(Pedido.expedicao.desc()).limit(100).all()
+        
+        # Estatísticas de pedidos
+        total_pedidos = len(pedidos)
+        pedidos_abertos = len([p for p in pedidos if not p.cotacao_id and not p.nf])
+        pedidos_cotados = len([p for p in pedidos if p.cotacao_id and not p.nf])
+        pedidos_faturados = len([p for p in pedidos if p.nf])
+        valor_total = sum(float(p.valor_saldo_total or 0) for p in pedidos)
+        
+        return {
+            "tipo_dados": "pedidos",
+            "pedidos": {
+                "registros": [
+                    {
+                        "id": p.id,
+                        "num_pedido": p.num_pedido,
+                        "cliente": p.raz_social_red,
+                        "cnpj_cpf": p.cnpj_cpf,
+                        "cidade": p.nome_cidade,
+                        "uf": p.cod_uf,
+                        "valor_total": float(p.valor_saldo_total or 0),
+                        "peso_total": float(p.peso_total or 0),
+                        "rota": p.rota,
+                        "expedicao": p.expedicao.isoformat() if p.expedicao else None,
+                        "agendamento": p.agendamento.isoformat() if p.agendamento else None,
+                        "protocolo": p.protocolo,
+                        "nf": p.nf,
+                        "status": "FATURADO" if p.nf else ("COTADO" if p.cotacao_id else "ABERTO")
+                    }
+                    for p in pedidos
+                ],
+                "estatisticas": {
+                    "total_pedidos": total_pedidos,
+                    "pedidos_abertos": pedidos_abertos,
+                    "pedidos_cotados": pedidos_cotados,
+                    "pedidos_faturados": pedidos_faturados,
+                    "valor_total": valor_total,
+                    "percentual_faturamento": round((pedidos_faturados / total_pedidos * 100), 1) if total_pedidos > 0 else 0
+                }
+            },
+            "registros_carregados": total_pedidos
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao carregar dados de pedidos: {e}")
+        return {"erro": str(e), "tipo_dados": "pedidos"}
+
+def _carregar_dados_embarques(analise: Dict[str, Any], filtros_usuario: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
+    """📦 Carrega dados específicos de EMBARQUES"""
+    try:
+        from app import db
+        from app.embarques.models import Embarque, EmbarqueItem
+        
+        # Query de embarques
+        query_embarques = db.session.query(Embarque).filter(
+            Embarque.data_criacao >= data_limite,
+            Embarque.status == 'ativo'
+        )
+        
+        embarques = query_embarques.order_by(Embarque.numero.desc()).limit(50).all()
+        
+        # Estatísticas
+        total_embarques = len(embarques)
+        embarques_sem_data = len([e for e in embarques if not e.data_embarque])
+        embarques_despachados = len([e for e in embarques if e.data_embarque])
+        
+        return {
+            "tipo_dados": "embarques",
+            "embarques": {
+                "registros": [
+                    {
+                        "id": e.id,
+                        "numero": e.numero,
+                        "motorista": e.motorista,
+                        "placa_veiculo": e.placa_veiculo,
+                        "data_criacao": e.data_criacao.isoformat() if e.data_criacao else None,
+                        "data_embarque": e.data_embarque.isoformat() if e.data_embarque else None,
+                        "status": "Despachado" if e.data_embarque else "Aguardando",
+                        "observacoes": e.observacoes
+                    }
+                    for e in embarques
+                ],
+                "estatisticas": {
+                    "total_embarques": total_embarques,
+                    "embarques_despachados": embarques_despachados,
+                    "embarques_aguardando": embarques_sem_data,
+                    "percentual_despachado": round((embarques_despachados / total_embarques * 100), 1) if total_embarques > 0 else 0
+                }
+            },
+            "registros_carregados": total_embarques
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao carregar dados de embarques: {e}")
+        return {"erro": str(e), "tipo_dados": "embarques"}
+
+def _carregar_dados_faturamento(analise: Dict[str, Any], filtros_usuario: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
+    """💰 Carrega dados específicos de FATURAMENTO"""
+    try:
+        from app import db
+        from app.faturamento.models import RelatorioFaturamentoImportado as RelatorioImportado
+        
+        # Query de faturamento
+        query_faturamento = db.session.query(RelatorioImportado).filter(
+            RelatorioImportado.data_fatura >= data_limite.date()
+        )
+        
+        # Aplicar filtros
+        if analise.get("cliente_especifico") and not analise.get("correcao_usuario"):
+            query_faturamento = query_faturamento.filter(
+                RelatorioImportado.cliente.ilike(f'%{analise["cliente_especifico"]}%')
+            )
+        
+        faturas = query_faturamento.order_by(RelatorioImportado.data_fatura.desc()).limit(100).all()
+        
+        # Estatísticas
+        total_faturas = len(faturas)
+        valor_total_faturado = sum(float(f.valor_total or 0) for f in faturas)
+        
+        return {
+            "tipo_dados": "faturamento",
+            "faturamento": {
+                "registros": [
+                    {
+                        "id": f.id,
+                        "numero_nf": f.numero_nf,
+                        "cliente": f.cliente,
+                        "origem": f.origem,
+                        "valor_total": float(f.valor_total or 0),
+                        "data_fatura": f.data_fatura.isoformat() if f.data_fatura else None,
+                        "incoterm": f.incoterm
+                    }
+                    for f in faturas
+                ],
+                "estatisticas": {
+                    "total_faturas": total_faturas,
+                    "valor_total_faturado": valor_total_faturado,
+                    "ticket_medio": round(valor_total_faturado / total_faturas, 2) if total_faturas > 0 else 0
+                }
+            },
+            "registros_carregados": total_faturas
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao carregar dados de faturamento: {e}")
+        return {"erro": str(e), "tipo_dados": "faturamento"}
+
+def _carregar_dados_financeiro(analise: Dict[str, Any], filtros_usuario: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
+    """💳 Carrega dados específicos de FINANCEIRO"""
+    try:
+        from app import db
+        from app.fretes.models import DespesaExtra
+        from app.monitoramento.models import PendenciaFinanceira
+        
+        # Despesas extras
+        query_despesas = db.session.query(DespesaExtra).filter(
+            DespesaExtra.data_vencimento >= data_limite.date()
+        )
+        
+        despesas = query_despesas.order_by(DespesaExtra.data_vencimento.desc()).limit(50).all()
+        
+        # Pendências financeiras
+        try:
+            pendencias = db.session.query(PendenciaFinanceira).filter(
+                PendenciaFinanceira.criado_em >= data_limite
+            ).limit(50).all()
+        except:
+            pendencias = []  # Fallback se tabela não existir
+        
+        # Estatísticas
+        total_despesas = len(despesas)
+        valor_total_despesas = sum(float(d.valor_despesa or 0) for d in despesas)
+        
+        return {
+            "tipo_dados": "financeiro",
+            "financeiro": {
+                "despesas_extras": [
+                    {
+                        "id": d.id,
+                        "tipo_despesa": d.tipo_despesa,
+                        "valor": float(d.valor_despesa or 0),
+                        "vencimento": d.data_vencimento.isoformat() if d.data_vencimento else None,
+                        "numero_documento": d.numero_documento,
+                        "observacoes": d.observacoes
+                    }
+                    for d in despesas
+                ],
+                "pendencias_financeiras": [
+                    {
+                        "id": p.id,
+                        "observacao": p.observacao,
+                        "criado_em": p.criado_em.isoformat() if p.criado_em else None
+                    }
+                    for p in pendencias
+                ],
+                "estatisticas": {
+                    "total_despesas": total_despesas,
+                    "valor_total_despesas": valor_total_despesas,
+                    "total_pendencias": len(pendencias)
+                }
+            },
+            "registros_carregados": total_despesas + len(pendencias)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao carregar dados financeiros: {e}")
+        return {"erro": str(e), "tipo_dados": "financeiro"}
+
+def _calcular_estatisticas_por_dominio(analise: Dict[str, Any], filtros_usuario: Dict[str, Any], dominio: str) -> Dict[str, Any]:
+    """📊 Calcula estatísticas específicas baseadas no domínio"""
+    try:
+        # Para entregas, usar a função existente
+        if dominio == "entregas":
+            return _calcular_estatisticas_especificas(analise, filtros_usuario)
+        
+        # Para outros domínios, estatísticas já estão incluídas nos dados carregados
+        return {
+            "dominio": dominio,
+            "periodo_analisado": f"{analise.get('periodo_dias', 30)} dias",
+            "cliente_especifico": analise.get("cliente_especifico"),
+            "nota": f"Estatísticas específicas incluídas nos dados de {dominio}"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao calcular estatísticas do domínio {dominio}: {e}")
+        return {"erro": str(e), "dominio": dominio} 
