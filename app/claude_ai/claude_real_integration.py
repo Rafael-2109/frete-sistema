@@ -379,12 +379,30 @@ Por favor, analise APENAS os dados do cliente/período especificado e forneça u
         elif "semana" in consulta_lower:
             analise["periodo_dias"] = 7
             
-        # ANÁLISE GEOGRÁFICA
-        ufs = ["sp", "rj", "mg", "rs", "pr", "sc", "go", "df", "ba", "pe"]
-        for uf in ufs:
-            if f" {uf}" in consulta_lower or f" {uf.upper()}" in consulta:
-                analise["filtro_geografico"] = uf.upper()
+        # ANÁLISE GEOGRÁFICA - DETECÇÃO RIGOROSA
+        # Buscar padrões específicos para UF para evitar falsos positivos
+        uf_patterns = [
+            r'\b(SP|RJ|MG|RS|PR|SC|GO|DF|BA|PE)\b',  # UF maiúscula isolada
+            r'\bUF\s+(SP|RJ|MG|RS|PR|SC|GO|DF|BA|PE)\b',  # "UF SP"
+            r'\b(São Paulo|Rio de Janeiro|Minas Gerais|Rio Grande do Sul|Paraná|Santa Catarina|Goiás|Distrito Federal|Bahia|Pernambuco)\b',  # Nome completo
+            r'\b(sp|rj|mg|rs|pr|sc|go|df|ba|pe)\s+(clientes?|entregas?|vendas?)\b'  # "sp clientes", "pe entregas"
+        ]
+        
+        for pattern in uf_patterns:
+            match = re.search(pattern, consulta, re.IGNORECASE)
+            if match:
+                uf_encontrada = match.group(1).upper()
+                # Mapear nomes completos para siglas
+                mapeamento_ufs = {
+                    'SÃO PAULO': 'SP', 'RIO DE JANEIRO': 'RJ', 'MINAS GERAIS': 'MG',
+                    'RIO GRANDE DO SUL': 'RS', 'PARANÁ': 'PR', 'SANTA CATARINA': 'SC',
+                    'GOIÁS': 'GO', 'DISTRITO FEDERAL': 'DF', 'BAHIA': 'BA', 'PERNAMBUCO': 'PE'
+                }
+                uf_final = mapeamento_ufs.get(uf_encontrada, uf_encontrada)
+                
+                analise["filtro_geografico"] = uf_final
                 analise["tipo_consulta"] = "geografico"
+                logger.info(f"🗺️ Filtro geográfico detectado: {uf_final}")
                 break
         
         # ANÁLISE DE FOCO DOS DADOS

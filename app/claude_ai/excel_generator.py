@@ -220,37 +220,53 @@ class ExcelGenerator:
             }
     
     def gerar_relatorio_entregas_pendentes(self, filtros=None):
-        """Gera Excel com entregas PENDENTES (não realizadas, incluindo agendamentos)"""
+        """Gera Excel com entregas PENDENTES (não realizadas + pedidos com agendamento não faturados)"""
         try:
             from app import db
             from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
+            from app.pedidos.models import Pedido
             
             hoje = date.today()
             
-            # Query para entregas PENDENTES (não entregues)
-            query = db.session.query(EntregaMonitorada).filter(
-                EntregaMonitorada.entregue == False,
-                # Incluir também entregas sem data prevista (sem agendamento)
-                # EntregaMonitorada.data_entrega_prevista.isnot(None)
+            # 🎯 DEFINIÇÃO EXPANDIDA DE ENTREGAS PENDENTES:
+            # 1. EntregaMonitorada com entregue = False
+            # 2. Pedidos com agendamento mas não faturados
+            
+            # Query 1: Entregas monitoradas pendentes
+            query_entregas = db.session.query(EntregaMonitorada).filter(
+                EntregaMonitorada.entregue == False
             )
             
-            # Aplicar filtros adicionais se fornecidos
+            # Query 2: Pedidos com agendamento mas não faturados
+            query_pedidos = db.session.query(Pedido).filter(
+                Pedido.agendamento.isnot(None),  # Tem agendamento
+                Pedido.nf.is_(None)  # Não foi faturado (sem NF)
+            )
+            
+            # Aplicar filtros às entregas monitoradas
             if filtros:
                 if filtros.get('uf'):
-                    query = query.filter(EntregaMonitorada.uf == filtros['uf'])
+                    query_entregas = query_entregas.filter(EntregaMonitorada.uf == filtros['uf'])
+                    query_pedidos = query_pedidos.filter(Pedido.uf_normalizada == filtros['uf'])
                 if filtros.get('cliente'):
-                    query = query.filter(EntregaMonitorada.cliente.ilike(f"%{filtros['cliente']}%"))
+                    query_entregas = query_entregas.filter(EntregaMonitorada.cliente.ilike(f"%{filtros['cliente']}%"))
+                    query_pedidos = query_pedidos.filter(Pedido.raz_social_red.ilike(f"%{filtros['cliente']}%"))
                 if filtros.get('vendedor'):
-                    query = query.filter(EntregaMonitorada.vendedor.ilike(f"%{filtros['vendedor']}%"))
+                    query_entregas = query_entregas.filter(EntregaMonitorada.vendedor.ilike(f"%{filtros['vendedor']}%"))
+                    # Para pedidos, o vendedor não está direto no modelo, então pular filtro
             
-            entregas = query.order_by(EntregaMonitorada.data_embarque.desc()).all()
+            # Executar as queries
+            entregas_monitoradas = query_entregas.order_by(EntregaMonitorada.data_embarque.desc()).all()
+            pedidos_agendados = query_pedidos.order_by(Pedido.agendamento.desc()).all()
             
-            if not entregas:
+            if not entregas_monitoradas and not pedidos_agendados:
                 return self._gerar_excel_vazio("Nenhuma entrega pendente encontrada")
             
-            # Preparar dados para Excel
+            # Preparar dados para Excel - UNIFICAR ambos os tipos
             dados = []
-            for entrega in entregas:
+            
+            # 1. Processar entregas monitoradas
+            for entrega in entregas_monitoradas:
                 # Calcular status da entrega
                 status_prazo = 'Sem agendamento'
                 dias_diferenca = 0
@@ -290,6 +306,7 @@ class ExcelGenerator:
                     status_agendamento = ultimo_agendamento.status or 'Aguardando aprovação'
                 
                 dados.append({
+                    'Tipo': 'Entrega Monitorada',
                     'NF': entrega.numero_nf,
                     'Cliente': entrega.cliente,
                     'Município': entrega.municipio or '',
@@ -310,7 +327,64 @@ class ExcelGenerator:
                     'Protocolo Agendamento': protocolo_agendamento,
                     'Status Agendamento': status_agendamento,
                     'Total Agendamentos': len(agendamentos),
-                    'Data Criacao': entrega.criado_em.strftime('%d/%m/%Y %H:%M') if entrega.criado_em else ''
+                    'Data Criacao': entrega.criado_em.strftime('%d/%m/%Y %H:%M') if entrega.criado_em else '',
+                    # Campos específicos de pedidos (vazios para entregas)
+                    'Num Pedido': '',
+                    'Data Expedicao': '',
+                    'Peso Total (kg)': 0,
+                    'Valor Pedido': 0
+                })
+            
+            # 2. Processar pedidos com agendamento não faturados
+            for pedido in pedidos_agendados:
+                # Calcular status do pedido com agendamento
+                dias_diferenca = 0
+                categoria = 'PEDIDO_AGENDADO'
+                status_prazo = 'Pedido com agendamento'
+                
+                if pedido.agendamento:
+                    dias_diferenca = (pedido.agendamento - hoje).days
+                    if dias_diferenca < 0:
+                        status_prazo = f'AGENDAMENTO ATRASADO ({abs(dias_diferenca)} dias)'
+                        categoria = 'AGENDAMENTO_ATRASADO'
+                    elif dias_diferenca == 0:
+                        status_prazo = 'AGENDADO PARA HOJE'
+                        categoria = 'AGENDADO_HOJE'
+                    elif dias_diferenca <= 2:
+                        status_prazo = f'Agendado próximo ({dias_diferenca} dias)'
+                        categoria = 'AGENDADO_PROXIMO'
+                    else:
+                        status_prazo = f'Agendado futuro ({dias_diferenca} dias)'
+                        categoria = 'AGENDADO_FUTURO'
+                
+                dados.append({
+                    'Tipo': 'Pedido Agendado',
+                    'NF': 'PENDENTE FATURAMENTO',
+                    'Cliente': pedido.raz_social_red or '',
+                    'Município': pedido.cidade_normalizada or pedido.nome_cidade or '',
+                    'UF': pedido.uf_normalizada or pedido.cod_uf or '',
+                    'Transportadora': pedido.transportadora or 'Não definida',
+                    'Vendedor': '',  # Pedidos não têm vendedor direto
+                    'Data Embarque': pedido.data_embarque.strftime('%d/%m/%Y') if pedido.data_embarque else '',
+                    'Data Prevista': pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
+                    'Status Prazo': status_prazo,
+                    'Categoria': categoria,
+                    'Dias até Prazo': dias_diferenca,
+                    'Valor NF': 0,  # Pedido ainda não faturado
+                    'Status Finalizacao': pedido.status_calculado or 'Pendente',
+                    'Pendencia Financeira': 'Não',  # Pedidos não têm pendência financeira
+                    # Dados de agendamento do pedido
+                    'Forma Agendamento': 'Agendamento Pedido',
+                    'Contato Agendamento': '',
+                    'Protocolo Agendamento': pedido.protocolo or '',
+                    'Status Agendamento': 'Agendado no Pedido',
+                    'Total Agendamentos': 1,
+                    'Data Criacao': pedido.criado_em.strftime('%d/%m/%Y %H:%M') if pedido.criado_em else '',
+                    # Campos específicos de pedidos
+                    'Num Pedido': pedido.num_pedido or '',
+                    'Data Expedicao': pedido.expedicao.strftime('%d/%m/%Y') if pedido.expedicao else '',
+                    'Peso Total (kg)': float(pedido.peso_total or 0),
+                    'Valor Pedido': float(pedido.valor_saldo_total or 0)
                 })
             
             # Criar DataFrame
@@ -349,11 +423,25 @@ class ExcelGenerator:
             # Retornar informações do arquivo
             file_url = url_for('static', filename=f'reports/{filename}')
             
-            # Estatísticas para retorno
+            # Estatísticas EXPANDIDAS para retorno
             total_pendentes = len(dados)
+            entregas_monitoradas_count = len([d for d in dados if d['Tipo'] == 'Entrega Monitorada'])
+            pedidos_agendados_count = len([d for d in dados if d['Tipo'] == 'Pedido Agendado'])
+            
+            # Estatísticas por categoria
             atrasadas = len([d for d in dados if d['Categoria'] == 'ATRASADA'])
+            vence_hoje = len([d for d in dados if d['Categoria'] == 'VENCE_HOJE'])
             sem_agendamento = len([d for d in dados if d['Categoria'] == 'SEM_AGENDAMENTO'])
             no_prazo = len([d for d in dados if d['Categoria'] == 'NO_PRAZO'])
+            
+            # Estatísticas específicas de pedidos
+            agendamentos_atrasados = len([d for d in dados if d['Categoria'] == 'AGENDAMENTO_ATRASADO'])
+            agendado_hoje = len([d for d in dados if d['Categoria'] == 'AGENDADO_HOJE'])
+            agendado_proximo = len([d for d in dados if d['Categoria'] == 'AGENDADO_PROXIMO'])
+            
+            # Calcular valores totais
+            valor_total_entregas = sum(d['Valor NF'] for d in dados if d['Tipo'] == 'Entrega Monitorada')
+            valor_total_pedidos = sum(d['Valor Pedido'] for d in dados if d['Tipo'] == 'Pedido Agendado')
             
             return {
                 'success': True,
@@ -361,15 +449,25 @@ class ExcelGenerator:
                 'filepath': filepath,
                 'file_url': file_url,
                 'total_registros': total_pendentes,
-                'valor_total': sum(d['Valor NF'] for d in dados),
+                'valor_total': valor_total_entregas + valor_total_pedidos,
                 'estatisticas': {
                     'total_pendentes': total_pendentes,
+                    'entregas_monitoradas': entregas_monitoradas_count,
+                    'pedidos_agendados': pedidos_agendados_count,
+                    # Estatísticas de entregas
                     'atrasadas': atrasadas,
+                    'vence_hoje': vence_hoje,
                     'sem_agendamento': sem_agendamento,
                     'no_prazo': no_prazo,
-                    'com_agendamento': total_pendentes - sem_agendamento
+                    # Estatísticas de pedidos
+                    'agendamentos_atrasados': agendamentos_atrasados,
+                    'agendado_hoje': agendado_hoje,
+                    'agendado_proximo': agendado_proximo,
+                    # Valores
+                    'valor_entregas': valor_total_entregas,
+                    'valor_pedidos': valor_total_pedidos
                 },
-                'message': f'Relatório de entregas pendentes gerado com {total_pendentes} registros'
+                'message': f'Relatório EXPANDIDO de entregas pendentes gerado: {entregas_monitoradas_count} entregas monitoradas + {pedidos_agendados_count} pedidos agendados = {total_pendentes} registros totais'
             }
             
         except Exception as e:
@@ -555,29 +653,62 @@ class ExcelGenerator:
         }
     
     def _criar_resumo_entregas_pendentes(self, df):
-        """Cria resumo das entregas pendentes"""
+        """Cria resumo EXPANDIDO das entregas pendentes (entregas + pedidos)"""
         if df.empty:
             return [{'Métrica': 'Nenhum dado', 'Valor': 0}]
         
-        # Contar por categoria
+        # Separar por tipo
+        entregas = df[df['Tipo'] == 'Entrega Monitorada']
+        pedidos = df[df['Tipo'] == 'Pedido Agendado']
+        
+        # Contar por categoria - ENTREGAS
         atrasadas = len(df[df['Categoria'] == 'ATRASADA'])
         vence_hoje = len(df[df['Categoria'] == 'VENCE_HOJE'])
         proximas = len(df[df['Categoria'] == 'PROXIMA'])
         no_prazo = len(df[df['Categoria'] == 'NO_PRAZO'])
         sem_agendamento = len(df[df['Categoria'] == 'SEM_AGENDAMENTO'])
         
+        # Contar por categoria - PEDIDOS
+        agendamentos_atrasados = len(df[df['Categoria'] == 'AGENDAMENTO_ATRASADO'])
+        agendado_hoje = len(df[df['Categoria'] == 'AGENDADO_HOJE'])
+        agendado_proximo = len(df[df['Categoria'] == 'AGENDADO_PROXIMO'])
+        agendado_futuro = len(df[df['Categoria'] == 'AGENDADO_FUTURO'])
+        
+        # Calcular valores
+        valor_entregas = entregas['Valor NF'].sum() if len(entregas) > 0 else 0
+        valor_pedidos = pedidos['Valor Pedido'].sum() if len(pedidos) > 0 else 0
+        
         resumo = [
-            {'Métrica': 'Total de Entregas Pendentes', 'Valor': len(df)},
-            {'Métrica': 'Valor Total (R$)', 'Valor': f"R$ {df['Valor NF'].sum():,.2f}"},
-            {'Métrica': '🔴 ATRASADAS', 'Valor': atrasadas},
-            {'Métrica': '⚠️ VENCEM HOJE', 'Valor': vence_hoje},
-            {'Métrica': '🟡 PRÓXIMAS (1-2 dias)', 'Valor': proximas},
-            {'Métrica': '🟢 NO PRAZO (3+ dias)', 'Valor': no_prazo},
-            {'Métrica': '⚪ SEM AGENDAMENTO', 'Valor': sem_agendamento},
-            {'Métrica': 'Clientes Envolvidos', 'Valor': df['Cliente'].nunique()},
-            {'Métrica': 'UFs Envolvidas', 'Valor': df['UF'].nunique()},
-            {'Métrica': 'Com Pendência Financeira', 'Valor': len(df[df['Pendencia Financeira'] == 'Sim'])},
-            {'Métrica': 'Com Agendamento Confirmado', 'Valor': len(df[df['Status Agendamento'] == 'Confirmado'])}
+            # TOTAIS GERAIS
+            {'Métrica': '📊 TOTAL GERAL', 'Valor': len(df)},
+            {'Métrica': '💰 Valor Total', 'Valor': f"R$ {valor_entregas + valor_pedidos:,.2f}"},
+            {'Métrica': '', 'Valor': ''},  # Linha vazia
+            
+            # ENTREGAS MONITORADAS
+            {'Métrica': '🚛 ENTREGAS MONITORADAS', 'Valor': len(entregas)},
+            {'Métrica': '└─ 🔴 Atrasadas', 'Valor': atrasadas},
+            {'Métrica': '└─ ⚠️ Vencem Hoje', 'Valor': vence_hoje},
+            {'Métrica': '└─ 🟡 Próximas (1-2 dias)', 'Valor': proximas},
+            {'Métrica': '└─ 🟢 No Prazo (3+ dias)', 'Valor': no_prazo},
+            {'Métrica': '└─ ⚪ Sem Agendamento', 'Valor': sem_agendamento},
+            {'Métrica': '└─ 💰 Valor Entregas', 'Valor': f"R$ {valor_entregas:,.2f}"},
+            {'Métrica': '', 'Valor': ''},  # Linha vazia
+            
+            # PEDIDOS AGENDADOS
+            {'Métrica': '📋 PEDIDOS AGENDADOS', 'Valor': len(pedidos)},
+            {'Métrica': '└─ 🔴 Agendamento Atrasado', 'Valor': agendamentos_atrasados},
+            {'Métrica': '└─ ⚠️ Agendado Hoje', 'Valor': agendado_hoje},
+            {'Métrica': '└─ 🟡 Agendado Próximo', 'Valor': agendado_proximo},
+            {'Métrica': '└─ 🟢 Agendado Futuro', 'Valor': agendado_futuro},
+            {'Métrica': '└─ 💰 Valor Pedidos', 'Valor': f"R$ {valor_pedidos:,.2f}"},
+            {'Métrica': '', 'Valor': ''},  # Linha vazia
+            
+            # ESTATÍSTICAS ADICIONAIS
+            {'Métrica': '📈 ESTATÍSTICAS GERAIS', 'Valor': ''},
+            {'Métrica': '└─ Clientes Envolvidos', 'Valor': df['Cliente'].nunique()},
+            {'Métrica': '└─ UFs Envolvidas', 'Valor': df['UF'].nunique()},
+            {'Métrica': '└─ Com Pendência Financeira', 'Valor': len(df[df['Pendencia Financeira'] == 'Sim'])},
+            {'Métrica': '└─ Com Agendamento Confirmado', 'Valor': len(df[df['Status Agendamento'] == 'Confirmado'])}
         ]
         
         return resumo
