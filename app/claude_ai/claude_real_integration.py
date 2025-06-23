@@ -346,20 +346,21 @@ Por favor, forneça uma resposta completa incluindo:
         
         # 🎯 NOVO: DETECÇÃO AUTOMÁTICA DE DOMÍNIO
         dominios = {
+            "pedidos": [
+                "pedido", "pedidos", "cotar", "cotação", "cotar frete", "faltam cotar",
+                "sem cotação", "aberto", "abertos", "num pedido", "valor pedido", 
+                "peso pedido", "expedição", "agenda", "protocolo", "rota", "sub rota", 
+                "separação", "pendente cotação", "aguardando cotação", "status aberto"
+            ],
             "fretes": [
-                "frete", "cotação", "cotado", "valor frete", "tabela frete", "freteiro",
-                "aprovação", "aprovado", "pendente aprovação", "cte", "conhecimento",
-                "conta corrente", "valor pago", "desconto", "multa"
+                "frete", "valor frete", "tabela frete", "freteiro", "aprovação", 
+                "aprovado", "pendente aprovação", "cte", "conhecimento", "conta corrente", 
+                "valor pago", "desconto", "multa", "cotação aprovada", "frete aprovado"
             ],
             "transportadoras": [
                 "transportadora", "transportador", "freteiro", "motorista", "veiculo",
                 "placa", "cnpj transportadora", "razão social", "expresso", "jadlog",
                 "rapidão", "mercúrio", "rodonaves", "jamef"
-            ],
-            "pedidos": [
-                "pedido", "cotação manual", "sem cotação", "aberto", "num pedido",
-                "valor pedido", "peso pedido", "expedição", "agenda", "protocolo",
-                "rota", "sub rota", "separação"
             ],
             "embarques": [
                 "embarque", "embarcado", "data embarque", "separação", "nota fiscal",
@@ -599,9 +600,50 @@ Por favor, forneça uma resposta completa incluindo:
             # FILTROS BASEADOS NO USUÁRIO (VENDEDOR)
             filtros_usuario = self._obter_filtros_usuario()
             
-            # CARREGAR DADOS ESPECÍFICOS POR FOCO
-            if "entregas_monitoradas" in analise["foco_dados"]:
-                # Usar cache específico para entregas se disponível
+            # 🎯 CARREGAR DADOS BASEADO NO DOMÍNIO DETECTADO
+            dominio = analise.get("dominio", "entregas")
+            logger.info(f"🎯 Carregando dados do domínio: {dominio}")
+            
+            if dominio == "pedidos":
+                # Carregar dados de pedidos
+                dados_pedidos = _carregar_dados_pedidos(analise, filtros_usuario, data_limite)
+                contexto["dados_especificos"]["pedidos"] = dados_pedidos
+                contexto["registros_carregados"] += dados_pedidos.get("registros_carregados", 0)
+                logger.info(f"📋 Pedidos carregados: {dados_pedidos.get('registros_carregados', 0)}")
+                
+            elif dominio == "fretes":
+                # Carregar dados de fretes
+                dados_fretes = _carregar_dados_fretes(analise, filtros_usuario, data_limite)
+                contexto["dados_especificos"]["fretes"] = dados_fretes
+                contexto["registros_carregados"] += dados_fretes.get("registros_carregados", 0)
+                logger.info(f"🚛 Fretes carregados: {dados_fretes.get('registros_carregados', 0)}")
+                
+            elif dominio == "transportadoras":
+                # Carregar dados de transportadoras
+                dados_transportadoras = _carregar_dados_transportadoras(analise, filtros_usuario, data_limite)
+                contexto["dados_especificos"]["transportadoras"] = dados_transportadoras
+                contexto["registros_carregados"] += dados_transportadoras.get("registros_carregados", 0)
+                
+            elif dominio == "embarques":
+                # Carregar dados de embarques
+                dados_embarques = _carregar_dados_embarques(analise, filtros_usuario, data_limite)
+                contexto["dados_especificos"]["embarques"] = dados_embarques
+                contexto["registros_carregados"] += dados_embarques.get("registros_carregados", 0)
+                
+            elif dominio == "faturamento":
+                # Carregar dados de faturamento
+                dados_faturamento = _carregar_dados_faturamento(analise, filtros_usuario, data_limite)
+                contexto["dados_especificos"]["faturamento"] = dados_faturamento
+                contexto["registros_carregados"] += dados_faturamento.get("registros_carregados", 0)
+                
+            elif dominio == "financeiro":
+                # Carregar dados financeiros
+                dados_financeiro = _carregar_dados_financeiro(analise, filtros_usuario, data_limite)
+                contexto["dados_especificos"]["financeiro"] = dados_financeiro
+                contexto["registros_carregados"] += dados_financeiro.get("registros_carregados", 0)
+                
+            else:
+                # Domínio "entregas" ou padrão - usar cache específico para entregas se disponível
                 if REDIS_DISPONIVEL:
                     entregas_cache = redis_cache.cache_entregas_cliente(
                         cliente=analise.get("cliente_especifico", ""),
@@ -630,12 +672,6 @@ Por favor, forneça uma resposta completa incluindo:
                     dados_entregas = self._carregar_entregas_banco(analise, filtros_usuario, data_limite)
                     contexto["dados_especificos"]["entregas"] = dados_entregas
                     contexto["registros_carregados"] += dados_entregas.get("total_registros", 0)
-            
-            # CARREGAR FRETES SE SOLICITADO
-            if "fretes" in analise["foco_dados"]:
-                dados_fretes = self._carregar_fretes_banco(analise, data_limite)
-                contexto["dados_especificos"]["fretes"] = dados_fretes
-                contexto["registros_carregados"] += dados_fretes.get("total_registros", 0)
             
             # ESTATÍSTICAS GERAIS COM REDIS CACHE
             if REDIS_DISPONIVEL:
@@ -1468,25 +1504,49 @@ def _carregar_dados_pedidos(analise: Dict[str, Any], filtros_usuario: Dict[str, 
         from app import db
         from app.pedidos.models import Pedido
         
-        # Query de pedidos
+        # Log da consulta para debug
+        cliente_filtro = analise.get("cliente_especifico")
+        logger.info(f"🔍 CONSULTA PEDIDOS: Cliente={cliente_filtro}, Período={analise.get('periodo_dias', 30)} dias")
+        
+        # Query de pedidos - expandir período para capturar mais dados
         query_pedidos = db.session.query(Pedido).filter(
             Pedido.expedicao >= data_limite.date()
         )
         
-        # Aplicar filtros
-        if analise.get("cliente_especifico") and not analise.get("correcao_usuario"):
+        # Aplicar filtros de cliente
+        if cliente_filtro and not analise.get("correcao_usuario"):
+            # Filtro mais abrangente para capturar variações do nome
+            filtro_cliente = f'%{cliente_filtro}%'
             query_pedidos = query_pedidos.filter(
-                Pedido.raz_social_red.ilike(f'%{analise["cliente_especifico"]}%')
+                Pedido.raz_social_red.ilike(filtro_cliente)
             )
+            logger.info(f"🎯 Filtro aplicado: raz_social_red ILIKE '{filtro_cliente}'")
         
-        pedidos = query_pedidos.order_by(Pedido.expedicao.desc()).limit(100).all()
+        # Buscar pedidos (aumentar limite para capturar mais registros)
+        pedidos = query_pedidos.order_by(Pedido.expedicao.desc()).limit(500).all()
         
-        # Estatísticas de pedidos
+        logger.info(f"📊 Total pedidos encontrados: {len(pedidos)}")
+        
+        # Classificar pedidos por status usando property do modelo
+        pedidos_abertos = []
+        pedidos_cotados = []  
+        pedidos_faturados = []
+        
+        for p in pedidos:
+            status_calc = p.status_calculado
+            if status_calc == 'ABERTO':
+                pedidos_abertos.append(p)
+            elif status_calc == 'COTADO':
+                pedidos_cotados.append(p)
+            elif status_calc == 'FATURADO':
+                pedidos_faturados.append(p)
+        
+        logger.info(f"📈 ABERTOS: {len(pedidos_abertos)}, COTADOS: {len(pedidos_cotados)}, FATURADOS: {len(pedidos_faturados)}")
+        
+        # Calcular estatísticas
         total_pedidos = len(pedidos)
-        pedidos_abertos = len([p for p in pedidos if not p.cotacao_id and not p.nf])
-        pedidos_cotados = len([p for p in pedidos if p.cotacao_id and not p.nf])
-        pedidos_faturados = len([p for p in pedidos if p.nf])
         valor_total = sum(float(p.valor_saldo_total or 0) for p in pedidos)
+        valor_total_abertos = sum(float(p.valor_saldo_total or 0) for p in pedidos_abertos)
         
         return {
             "tipo_dados": "pedidos",
@@ -1506,17 +1566,33 @@ def _carregar_dados_pedidos(analise: Dict[str, Any], filtros_usuario: Dict[str, 
                         "agendamento": p.agendamento.isoformat() if p.agendamento else None,
                         "protocolo": p.protocolo,
                         "nf": p.nf,
-                        "status": "FATURADO" if p.nf else ("COTADO" if p.cotacao_id else "ABERTO")
+                        "cotacao_id": p.cotacao_id,
+                        "status_calculado": p.status_calculado,
+                        "pendente_cotacao": p.pendente_cotacao
                     }
                     for p in pedidos
                 ],
+                "pedidos_abertos_detalhado": [
+                    {
+                        "num_pedido": p.num_pedido,
+                        "cliente": p.raz_social_red,
+                        "valor_total": float(p.valor_saldo_total or 0),
+                        "peso_total": float(p.peso_total or 0),
+                        "expedicao": p.expedicao.isoformat() if p.expedicao else None,
+                        "cidade": p.nome_cidade,
+                        "uf": p.cod_uf
+                    }
+                    for p in pedidos_abertos
+                ],
                 "estatisticas": {
                     "total_pedidos": total_pedidos,
-                    "pedidos_abertos": pedidos_abertos,
-                    "pedidos_cotados": pedidos_cotados,
-                    "pedidos_faturados": pedidos_faturados,
+                    "pedidos_abertos": len(pedidos_abertos),
+                    "pedidos_cotados": len(pedidos_cotados),
+                    "pedidos_faturados": len(pedidos_faturados),
                     "valor_total": valor_total,
-                    "percentual_faturamento": round((pedidos_faturados / total_pedidos * 100), 1) if total_pedidos > 0 else 0
+                    "valor_total_abertos": valor_total_abertos,
+                    "percentual_faturamento": round((len(pedidos_faturados) / total_pedidos * 100), 1) if total_pedidos > 0 else 0,
+                    "percentual_pendentes": round((len(pedidos_abertos) / total_pedidos * 100), 1) if total_pedidos > 0 else 0
                 }
             },
             "registros_carregados": total_pedidos
