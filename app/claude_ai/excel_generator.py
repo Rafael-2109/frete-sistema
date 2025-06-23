@@ -10,6 +10,7 @@ from datetime import datetime, date, timedelta
 from flask import current_app, url_for
 from io import BytesIO
 import logging
+from sqlalchemy import or_
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +23,10 @@ class ExcelGenerator:
     def _safe_url_for(self, filename):
         """Gera URL de forma segura, mesmo fora de contexto de request"""
         try:
-            return url_for('static', filename=f'reports/{filename}')
+            return url_for('claude_ai.download_excel', filename=filename)
         except RuntimeError:
             # Fallback para quando não está em contexto de request
-            return f'/static/reports/{filename}'
+            return f'/claude-ai/download/{filename}'
     
     def _ensure_output_dir(self):
         """Garante que o diretório de relatórios existe"""
@@ -250,9 +251,13 @@ class ExcelGenerator:
             # 1. EntregaMonitorada com entregue = False
             # 2. Pedidos com agendamento mas não faturados
             
-            # Query 1: Entregas monitoradas pendentes
+            # Query 1: Entregas monitoradas pendentes (não finalizadas)
             query_entregas = db.session.query(EntregaMonitorada).filter(
-                EntregaMonitorada.entregue == False
+                or_(
+                    EntregaMonitorada.status_finalizacao.is_(None),
+                    EntregaMonitorada.status_finalizacao == '',
+                    EntregaMonitorada.status_finalizacao == 'Pendente'
+                )
             )
             
             # Query 2: Pedidos com agendamento mas não faturados

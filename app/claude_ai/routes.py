@@ -1,4 +1,4 @@
-from flask import render_template, request, jsonify, current_app, flash, redirect, url_for
+from flask import render_template, request, jsonify, current_app, flash, redirect, url_for, send_file, abort
 from flask_login import login_required, current_user
 import subprocess
 import json
@@ -58,68 +58,7 @@ def chat_widget():
     """Widget de chat para incluir em outras páginas"""
     return render_template('claude_ai/widget.html')
 
-@claude_ai_bp.route('/api/query', methods=['POST'])
-@login_required
-def query_claude():
-    """API para enviar consultas ao Claude via MCP REAL"""
-    try:
-        data = request.get_json()
-        query = data.get('query', '').strip()
-        
-        if not query:
-            return jsonify({
-                'success': False,
-                'error': 'Query não pode estar vazia'
-            }), 400
-        
-        # 🚀 IMPLEMENTAÇÃO MCP SISTEMA ONLINE
-        mcp_connector = MCPSistemaOnline(current_app.root_path)
-        
-        try:
-            # Consulta otimizada para sistema online
-            resultado = mcp_connector.consulta_rapida(query)
-            
-            if resultado['success']:
-                return jsonify({
-                    'success': True,
-                    'response': resultado['response'],
-                    'timestamp': resultado['timestamp'],
-                    'user': current_user.nome,
-                    'source': resultado['source']
-                })
-            else:
-                # Em caso de erro, tenta fallback
-                resposta_fallback = simulate_mcp_response(query)
-                
-                return jsonify({
-                    'success': True,
-                    'response': f"⚠️ **Modo Fallback** (MCP temporariamente indisponível)\n\n{resposta_fallback}",
-                    'timestamp': datetime.now().isoformat(),
-                    'user': current_user.nome,
-                    'source': 'FALLBACK',
-                    'mcp_error': resultado.get('error', 'Erro desconhecido')
-                })
-                
-        except Exception as mcp_error:
-            # Em caso de erro total, usa fallback
-            current_app.logger.error(f"Erro MCP connector: {mcp_error}")
-            resposta_fallback = simulate_mcp_response(query)
-            
-            return jsonify({
-                'success': True,
-                'response': f"⚠️ **Modo Fallback** (Erro MCP)\n\n{resposta_fallback}",
-                'timestamp': datetime.now().isoformat(),
-                'user': current_user.nome,
-                'source': 'FALLBACK_ERROR',
-                'error_details': str(mcp_error)
-                         })
-        
-    except Exception as e:
-        current_app.logger.error(f"Erro na consulta Claude: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Erro interno do servidor'
-        }), 500
+# Removido - rota duplicada que usava MCP antigo
 
 def simulate_mcp_response(query):
     """Simula respostas do MCP baseado na query (placeholder)"""
@@ -499,7 +438,7 @@ def context_status():
 @claude_ai_bp.route('/api/query', methods=['POST'])
 @login_required
 def api_query():
-    """Processa consulta via API com contexto conversacional"""
+    """Processa consulta via API com contexto conversacional + fallback"""
     try:
         data = request.get_json()
         consulta = data.get('query', '').strip()
@@ -519,18 +458,34 @@ def api_query():
         # Log da consulta
         logger.info(f"🤖 Consulta Claude recebida de {current_user.nome}: '{consulta[:100]}...'")
         
-        # Processar com Claude REAL
-        resposta = processar_com_claude_real(consulta, user_context)
-        
-        return jsonify({
-            'response': resposta,
-            'timestamp': datetime.now().isoformat(),
-            'user': current_user.nome,
-            'context_enabled': True  # Indicar que contexto está ativo
-        })
+        try:
+            # Tentar processar com Claude REAL primeiro
+            resposta = processar_com_claude_real(consulta, user_context)
+            
+            return jsonify({
+                'response': resposta,
+                'timestamp': datetime.now().isoformat(),
+                'user': current_user.nome,
+                'context_enabled': True,
+                'source': 'CLAUDE_REAL'
+            })
+            
+        except Exception as claude_error:
+            # Em caso de erro com Claude Real, usar fallback
+            logger.warning(f"⚠️ Claude Real falhou, usando fallback: {claude_error}")
+            resposta_fallback = simulate_mcp_response(consulta)
+            
+            return jsonify({
+                'response': f"⚠️ **Modo Fallback** (Claude Real temporariamente indisponível)\n\n{resposta_fallback}",
+                'timestamp': datetime.now().isoformat(),
+                'user': current_user.nome,
+                'context_enabled': False,
+                'source': 'FALLBACK',
+                'error_details': str(claude_error)
+            })
         
     except Exception as e:
-        logger.error(f"❌ Erro na API query: {e}")
+        logger.error(f"❌ Erro crítico na API query: {e}")
         return jsonify({'error': 'Erro interno do servidor'}), 500
 
 # 🧠 SISTEMA DE SUGESTÕES INTELIGENTES - NOVA FUNCIONALIDADE
@@ -1142,3 +1097,37 @@ def processar_comando_excel():
             'error': str(e),
             'resposta_formatada': f"❌ Erro interno ao gerar Excel: {str(e)}"
         }), 500 
+
+@claude_ai_bp.route('/download/<filename>')
+@login_required
+def download_excel(filename):
+    """Download de arquivos Excel gerados pelo Claude AI"""
+    try:
+        from flask import send_file, abort
+        import os
+        from .excel_generator import get_excel_generator
+        
+        # Verificar se arquivo existe
+        excel_generator = get_excel_generator()
+        excel_generator._ensure_output_dir()
+        file_path = os.path.join(excel_generator.output_dir, filename)
+        
+        if not os.path.exists(file_path):
+            logger.warning(f"❌ Arquivo não encontrado: {filename}")
+            abort(404)
+        
+        # Verificar se arquivo pertence ao usuário (segurança básica)
+        # Arquivos são nomeados com timestamp, consideramos seguros por enquanto
+        
+        logger.info(f"📥 Download iniciado: {filename} por {current_user.nome}")
+        
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no download de {filename}: {e}")
+        abort(404) 
