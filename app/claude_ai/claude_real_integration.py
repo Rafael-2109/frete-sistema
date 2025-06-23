@@ -148,8 +148,6 @@ EXEMPLOS DE INTERPRETAÇÃO CORRETA:
 - "Entregas dos supermercados" → GRUPO_SUPERMERCADOS (múltiplos clientes)
 - "Entregas do Cliente ABC" → Cliente específico "Cliente ABC"
 - "Cliente ABC 001" → Filial específica do Cliente ABC
-- "Entregas do Assai em maio" → APENAS dados do Assai do mês de maio completo
-- "Performance de junho" → Análise do mês de junho inteiro
 - "Entregas dos supermercados" → GRUPO de supermercados (múltiplos clientes)
 
 🧠 **CONTEXTO CONVERSACIONAL**:
@@ -212,6 +210,29 @@ Responda sempre em português brasileiro com precisão industrial máxima e cont
             dados_contexto = self._carregar_contexto_inteligente(contexto_analisado)
             
             # Preparar mensagens para Claude real
+            tipo_analise = contexto_analisado.get('tipo_consulta', 'geral')
+            cliente_contexto = contexto_analisado.get('cliente_especifico')
+            periodo_dias = contexto_analisado.get('periodo_dias', 30)
+            correcao_usuario = contexto_analisado.get('correcao_usuario', False)
+            
+            # Construir instrução específica baseada no tipo de consulta
+            if correcao_usuario:
+                instrucao_especifica = f"""
+🚨 IMPORTANTE: O usuário FEZ UMA CORREÇÃO indicando que a interpretação anterior estava INCORRETA.
+Trate esta consulta como GERAL (todos os dados) e NÃO aplique filtros específicos de cliente.
+Analise os dados de TODOS os clientes disponíveis no período de {periodo_dias} dias."""
+            elif tipo_analise == "geral" and not cliente_contexto:
+                instrucao_especifica = f"""
+🌐 CONSULTA GERAL: Analise TODOS os dados disponíveis (todos os clientes) no período de {periodo_dias} dias.
+NÃO filtrar por cliente específico - mostrar dados agregados de todos os clientes."""
+            elif cliente_contexto:
+                instrucao_especifica = f"""
+🎯 CONSULTA ESPECÍFICA: Analise APENAS dados do cliente "{cliente_contexto}" no período de {periodo_dias} dias.
+NÃO misturar com dados de outros clientes."""
+            else:
+                instrucao_especifica = f"""
+📊 ANÁLISE PADRÃO: Analise os dados disponíveis no período de {periodo_dias} dias."""
+            
             messages = [
                 {
                     "role": "user", 
@@ -226,11 +247,11 @@ DADOS ESPECÍFICOS CARREGADOS:
 CONTEXTO DO USUÁRIO:
 {json.dumps(user_context or {}, indent=2, ensure_ascii=False)}
 
-IMPORTANTE: O usuário está perguntando especificamente sobre "{contexto_analisado.get('cliente_especifico', 'dados gerais')}" no período de "{contexto_analisado.get('periodo_dias', 7)} dias". 
+{instrucao_especifica}
 
 Se há HISTÓRICO CONVERSACIONAL acima, USE-O para manter continuidade da conversa.
 
-Por favor, analise APENAS os dados do cliente/período especificado e forneça uma resposta completa incluindo:
+Por favor, forneça uma resposta completa incluindo:
 - Datas de entrega realizadas
 - Cumprimento de prazos
 - Histórico de agendamentos e protocolos  
@@ -308,42 +329,88 @@ Por favor, analise APENAS os dados do cliente/período especificado e forneça u
             "periodo_dias": 30,  # Default 30 dias para análises mais completas
             "filtro_geografico": None,
             "foco_dados": [],
-            "metricas_solicitadas": []
+            "metricas_solicitadas": [],
+            "correcao_usuario": False
         }
         
-        # ANÁLISE DE CLIENTE ESPECÍFICO - RIGOROSA
-        
-        # DETECTAR CLIENTES ESPECÍFICOS POR NOME EXATO
-        if "assai" in consulta_lower:
-            analise["tipo_consulta"] = "cliente_especifico"
-            analise["cliente_especifico"] = "Assai"
-        elif "atacadão" in consulta_lower or "atacadao" in consulta_lower:
-            analise["tipo_consulta"] = "cliente_especifico" 
-            analise["cliente_especifico"] = "Atacadão"
-        elif "tenda" in consulta_lower:
-            analise["tipo_consulta"] = "cliente_especifico"
-            analise["cliente_especifico"] = "Tenda"
-        elif "carrefour" in consulta_lower:
-            analise["tipo_consulta"] = "cliente_especifico"
-            analise["cliente_especifico"] = "Carrefour"
-        
-        # Detectar grupos vs clientes específicos
-        elif re.search(r"supermercados|atacados|varejo", consulta_lower):
-            analise["tipo_consulta"] = "grupo_clientes"
-            analise["cliente_especifico"] = "GRUPO_CLIENTES"
-        
-        # Detectar filiais por padrões numéricos
-        filial_patterns = [
-            r"(\w+)\s*(\d{3,4})",  # Cliente 123, Loja 456
-            r"(\w+)\s*lj\s*(\d+)",  # Cliente LJ 189
-            r"filial\s*(\d+)"      # Filial 001
+        # 🚨 DETECÇÃO DE CORREÇÕES DO USUÁRIO - PRIMEIRA VERIFICAÇÃO
+        palavras_correcao = [
+            "não pedi", "não é", "não pedí", "não era", "não quero",
+            "me trouxe", "trouxe errado", "dados incorretos", "não é isso",
+            "não era isso", "errou", "equivocado", "incorreto", "engano",
+            "não específico", "não cliente", "de novo", "novamente", "corrigir",
+            "não mencionei", "não falei", "não disse", "veja que", "veja as"
         ]
         
-        for pattern in filial_patterns:
-            match = re.search(pattern, consulta_lower)
-            if match:
-                analise["tipo_consulta"] = "filial_especifica"
-                analise["filial_detectada"] = match.groups()
+        # Verificar se há palavras de correção
+        for palavra_correcao in palavras_correcao:
+            if palavra_correcao in consulta_lower:
+                analise["correcao_usuario"] = True
+                analise["tipo_consulta"] = "geral"  # Forçar consulta geral
+                analise["cliente_especifico"] = None  # Resetar cliente específico
+                logger.info(f"🚨 CORREÇÃO DETECTADA: Usuário corrigiu interpretação com '{palavra_correcao}'")
+                
+                # Se é correção, tratar como consulta geral sem filtros específicos
+                # Apenas analisar período e foco dos dados, mas SEM cliente específico
+                break
+        
+        # ANÁLISE DE CLIENTE ESPECÍFICO - APENAS SE NÃO HOUVER CORREÇÃO
+        if not analise["correcao_usuario"]:
+            # DETECTAR CLIENTES ESPECÍFICOS POR NOME EXATO
+            if "assai" in consulta_lower:
+                analise["tipo_consulta"] = "cliente_especifico"
+                analise["cliente_especifico"] = "Assai"
+                logger.info("🎯 Cliente específico detectado: Assai")
+            elif "atacadão" in consulta_lower or "atacadao" in consulta_lower:
+                analise["tipo_consulta"] = "cliente_especifico" 
+                analise["cliente_especifico"] = "Atacadão"
+                logger.info("🎯 Cliente específico detectado: Atacadão")
+            elif "tenda" in consulta_lower:
+                analise["tipo_consulta"] = "cliente_especifico"
+                analise["cliente_especifico"] = "Tenda"
+                logger.info("🎯 Cliente específico detectado: Tenda")
+            elif "carrefour" in consulta_lower:
+                analise["tipo_consulta"] = "cliente_especifico"
+                analise["cliente_especifico"] = "Carrefour"
+                logger.info("🎯 Cliente específico detectado: Carrefour")
+            
+            # Detectar grupos vs clientes específicos
+            elif re.search(r"supermercados|atacados|varejo", consulta_lower):
+                analise["tipo_consulta"] = "grupo_clientes"
+                analise["cliente_especifico"] = "GRUPO_CLIENTES"
+                logger.info("🎯 Grupo de clientes detectado")
+            
+            # Detectar filiais por padrões numéricos
+            else:
+                filial_patterns = [
+                    r"(\w+)\s*(\d{3,4})",  # Cliente 123, Loja 456
+                    r"(\w+)\s*lj\s*(\d+)",  # Cliente LJ 189
+                    r"filial\s*(\d+)"      # Filial 001
+                ]
+                
+                for pattern in filial_patterns:
+                    match = re.search(pattern, consulta_lower)
+                    if match:
+                        analise["tipo_consulta"] = "filial_especifica"
+                        analise["filial_detectada"] = match.groups()
+                        logger.info(f"🎯 Filial específica detectada: {match.groups()}")
+                        break
+        else:
+            logger.info("🚨 ANÁLISE DE CLIENTE IGNORADA: Usuário fez correção - usando consulta geral")
+        
+        # 🔍 DETECÇÃO DE CONSULTAS EXPLICITAMENTE GENÉRICAS
+        consultas_genericas = [
+            "entregas pendentes", "relatório", "excel", "exportar", "gere um relatório",
+            "todas as entregas", "dados gerais", "situação geral", "status geral",
+            "pendências", "atrasadas", "no prazo", "estatísticas", "resumo geral"
+        ]
+        
+        for consulta_generica in consultas_genericas:
+            if consulta_generica in consulta_lower:
+                if analise["tipo_consulta"] != "geral":
+                    logger.info(f"🔄 CORREÇÃO: Consulta '{consulta_generica}' detectada - forçando para geral")
+                    analise["tipo_consulta"] = "geral"
+                    analise["cliente_especifico"] = None
                 break
         
         # ANÁLISE TEMPORAL INTELIGENTE - CORRIGIDA
@@ -431,7 +498,14 @@ Por favor, analise APENAS os dados do cliente/período especificado e forneça u
             analise["metricas_solicitadas"].append("medias")
         if any(palavra in consulta_lower for palavra in ["reagenda", "agendamento", "protocolo"]):
             analise["metricas_solicitadas"].append("agendamentos")
-            
+        
+        # 📝 LOGS DE DEBUG DA ANÁLISE
+        logger.info(f"📊 ANÁLISE CONCLUÍDA: {analise['tipo_consulta'].upper()}")
+        logger.info(f"👤 Cliente: {analise['cliente_especifico'] or 'TODOS'}")
+        logger.info(f"📅 Período: {analise['periodo_dias']} dias")
+        logger.info(f"🚨 Correção: {'SIM' if analise['correcao_usuario'] else 'NÃO'}")
+        logger.info(f"🎯 Foco: {', '.join(analise['foco_dados']) if analise['foco_dados'] else 'PADRÃO'}")
+        
         return analise
     
     def _carregar_contexto_inteligente(self, analise: Dict[str, Any]) -> Dict[str, Any]:
@@ -569,9 +643,15 @@ Por favor, analise APENAS os dados do cliente/período especificado e forneça u
             EntregaMonitorada.data_embarque >= data_limite
         )
         
-        # Aplicar filtro de cliente específico - RIGOROSO
-        if analise.get("cliente_especifico"):
-            if analise["cliente_especifico"] == "GRUPO_CLIENTES":
+        # Aplicar filtro de cliente específico - APENAS SE ESPECIFICADO
+        cliente_especifico = analise.get("cliente_especifico")
+        correcao_usuario = analise.get("correcao_usuario", False)
+        
+        # Se houve correção do usuário, NÃO aplicar filtro de cliente
+        if not correcao_usuario and cliente_especifico:
+            logger.info(f"🎯 Aplicando filtro de cliente: {cliente_especifico}")
+            
+            if cliente_especifico == "GRUPO_CLIENTES":
                 # Filtro genérico para grupos de clientes
                 query_entregas = query_entregas.filter(
                     or_(
@@ -580,7 +660,7 @@ Por favor, analise APENAS os dados do cliente/período especificado e forneça u
                         EntregaMonitorada.cliente.ilike('%varejo%')
                     )
                 )
-            elif analise["cliente_especifico"] == "Assai":
+            elif cliente_especifico == "Assai":
                 # APENAS Assai - NUNCA Atacadão
                 query_entregas = query_entregas.filter(
                     and_(
@@ -589,7 +669,7 @@ Por favor, analise APENAS os dados do cliente/período especificado e forneça u
                         ~EntregaMonitorada.cliente.ilike('%atacadao%')
                     )
                 )
-            elif analise["cliente_especifico"] == "Atacadão":
+            elif cliente_especifico == "Atacadão":
                 # APENAS Atacadão - NUNCA Assai
                 query_entregas = query_entregas.filter(
                     and_(
@@ -603,8 +683,13 @@ Por favor, analise APENAS os dados do cliente/período especificado e forneça u
             else:
                 # Outros clientes específicos
                 query_entregas = query_entregas.filter(
-                    EntregaMonitorada.cliente.ilike(f'%{analise["cliente_especifico"]}%')
+                    EntregaMonitorada.cliente.ilike(f'%{cliente_especifico}%')
                 )
+        else:
+            if correcao_usuario:
+                logger.info("🚨 FILTRO DE CLIENTE IGNORADO: Usuário fez correção - buscando todos os clientes")
+            else:
+                logger.info("🌐 CONSULTA GERAL: Buscando dados de todos os clientes")
         
         # Aplicar filtro geográfico
         if analise.get("filtro_geografico"):

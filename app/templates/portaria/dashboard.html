@@ -301,7 +301,9 @@ document.addEventListener('DOMContentLoaded', function() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'X-CSRFToken': csrfToken
+        'X-CSRFToken': csrfToken,
+        'X-CSRF-Token': csrfToken,
+        'HTTP_X_CSRF_TOKEN': csrfToken
       },
       body: `cpf=${encodeURIComponent(cpf)}&csrf_token=${encodeURIComponent(csrfToken)}`
     })

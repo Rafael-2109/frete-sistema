@@ -98,10 +98,19 @@ def importar():
         arquivo = form.arquivo_excel.data
         
         try:
-            # 🌐 Usar sistema S3 para salvar arquivo
+            # 📖 Ler o arquivo UMA vez no início para evitar problemas de arquivo fechado
+            import tempfile
+            import io
+            
+            file_content = arquivo.read()
+            
+            # 🌐 Usar sistema S3 para salvar arquivo usando BytesIO
             storage = get_file_storage()
+            file_like = io.BytesIO(file_content)
+            file_like.filename = arquivo.filename  # Preservar nome original
+            
             file_path = storage.save_file(
-                file=arquivo,
+                file=file_like,
                 folder='separacao',
                 allowed_extensions=['xlsx', 'xls']
             )
@@ -110,11 +119,9 @@ def importar():
                 flash('❌ Erro ao salvar arquivo no sistema!', 'danger')
                 return redirect(request.url)
             
-            # 📁 Para processamento, salvar temporariamente local
-            import tempfile
+            # 📁 Para processamento, salvar temporariamente local usando os mesmos bytes
             with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as temp_file:
-                arquivo.seek(0)  # Reset pointer
-                temp_file.write(arquivo.read())
+                temp_file.write(file_content)
                 temp_filepath = temp_file.name
 
             # Processar arquivo Excel

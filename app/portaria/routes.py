@@ -4,6 +4,9 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 import os
 import traceback
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app import db
 
@@ -74,6 +77,10 @@ def buscar_motorista():
     """
     Busca motorista por CPF via AJAX
     """
+    # 🐛 Debug CSRF
+    logger.info(f"🔍 Headers: {dict(request.headers)}")
+    logger.info(f"🔍 Form data: {dict(request.form)}")
+    
     cpf = request.form.get('cpf', '').strip()
     
     if not cpf:
