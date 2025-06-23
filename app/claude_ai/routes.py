@@ -440,11 +440,30 @@ def context_status():
 def api_query():
     """Processa consulta via API com contexto conversacional + fallback"""
     try:
+        # Log detalhado da requisição para debug
+        logger.info(f"📥 Widget Request - Content-Type: {request.content_type}")
+        logger.info(f"📥 Widget Request - Headers CSRF: X-CSRFToken={bool(request.headers.get('X-CSRFToken'))}")
+        
         data = request.get_json()
+        if not data:
+            logger.error("❌ Widget: Nenhum JSON recebido")
+            return jsonify({'success': False, 'error': 'Dados JSON não recebidos'}), 400
+            
         consulta = data.get('query', '').strip()
+        csrf_token = data.get('csrf_token', '')
+        
+        logger.info(f"📝 Widget Query: '{consulta[:50]}...' (CSRF: {bool(csrf_token)})")
         
         if not consulta:
-            return jsonify({'error': 'Consulta vazia'}), 400
+            return jsonify({'success': False, 'error': 'Consulta vazia'}), 400
+        
+        # 🔒 VALIDAÇÃO CSRF INTELIGENTE para APIs JSON
+        from app.utils.csrf_helper import validate_api_csrf
+        
+        csrf_valid = validate_api_csrf(request, logger, graceful_mode=True)
+        if not csrf_valid:
+            logger.error("🔒 Widget: Falha crítica na validação CSRF")
+            return jsonify({'success': False, 'error': 'Token CSRF inválido'}), 403
         
         # Preparar contexto do usuário INCLUINDO USER_ID
         user_context = {
@@ -456,37 +475,48 @@ def api_query():
         }
         
         # Log da consulta
-        logger.info(f"🤖 Consulta Claude recebida de {current_user.nome}: '{consulta[:100]}...'")
+        logger.info(f"🤖 Widget: Consulta de {current_user.nome}: '{consulta[:100]}...'")
         
         try:
             # Tentar processar com Claude REAL primeiro
             resposta = processar_com_claude_real(consulta, user_context)
             
-            return jsonify({
+            logger.info(f"✅ Widget: Resposta Claude Real gerada ({len(resposta)} chars)")
+            
+            # Garantir que SEMPRE retornamos success: true quando der certo
+            response_data = {
+                'success': True,
                 'response': resposta,
                 'timestamp': datetime.now().isoformat(),
                 'user': current_user.nome,
                 'context_enabled': True,
                 'source': 'CLAUDE_REAL'
-            })
+            }
+            
+            logger.info(f"📤 Widget: Retornando resposta com success={response_data['success']}")
+            return jsonify(response_data)
             
         except Exception as claude_error:
             # Em caso de erro com Claude Real, usar fallback
-            logger.warning(f"⚠️ Claude Real falhou, usando fallback: {claude_error}")
+            logger.warning(f"⚠️ Widget: Claude Real falhou, usando fallback: {claude_error}")
             resposta_fallback = simulate_mcp_response(consulta)
             
-            return jsonify({
+            fallback_data = {
+                'success': True,  # Fallback ainda é considerado sucesso
                 'response': f"⚠️ **Modo Fallback** (Claude Real temporariamente indisponível)\n\n{resposta_fallback}",
                 'timestamp': datetime.now().isoformat(),
                 'user': current_user.nome,
                 'context_enabled': False,
                 'source': 'FALLBACK',
                 'error_details': str(claude_error)
-            })
+            }
+            
+            logger.info(f"📤 Widget: Retornando fallback com success={fallback_data['success']}")
+            return jsonify(fallback_data)
         
     except Exception as e:
-        logger.error(f"❌ Erro crítico na API query: {e}")
-        return jsonify({'error': 'Erro interno do servidor'}), 500
+        logger.error(f"❌ Widget: Erro crítico na API query: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': f'Erro interno: {str(e)}'}), 500
 
 # 🧠 SISTEMA DE SUGESTÕES INTELIGENTES - NOVA FUNCIONALIDADE
 

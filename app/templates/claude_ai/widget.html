@@ -471,27 +471,110 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading(true);
         
         try {
+            // Obter CSRF token de forma robusta
+            let csrfToken = '';
+            
+            // Tentar meta tag primeiro
+            const metaTag = document.querySelector('meta[name="csrf-token"]');
+            if (metaTag) {
+                csrfToken = metaTag.getAttribute('content');
+            } else {
+                // Fallback: buscar de input hidden (comum em formulários)
+                const hiddenInput = document.querySelector('input[name="csrf_token"]');
+                if (hiddenInput) {
+                    csrfToken = hiddenInput.value;
+                }
+            }
+            
+            // Headers dinâmicos baseado na disponibilidade do token
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            if (csrfToken) {
+                headers['X-CSRFToken'] = csrfToken;
+                headers['X-CSRF-Token'] = csrfToken;
+                headers['HTTP_X_CSRF_TOKEN'] = csrfToken;
+            }
+            
             // Chama API do Claude
-                            const response = await fetch('/claude-ai/api/query', {
+            const response = await fetch('/claude-ai/api/query', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                },
-                body: JSON.stringify({ query: message })
+                headers: headers,
+                body: JSON.stringify({ 
+                    query: message,
+                    csrf_token: csrfToken // Incluir no body também
+                })
             });
             
             const data = await response.json();
             
-            if (data.success) {
+            // Log detalhado para debug
+            console.log('📥 Widget: Resposta recebida:', {
+                success: data.success,
+                hasResponse: !!data.response,
+                source: data.source,
+                responseLength: data.response ? data.response.length : 0
+            });
+            
+            // Verificação robusta de sucesso
+            const isSuccess = (response.ok && data.response && data.response.length > 0);
+            
+            if (isSuccess) {
                 addMessage(data.response, 'bot');
+                
+                // Log do modo usado
+                const source = data.source || 'UNKNOWN';
+                console.log(`✅ Widget: Resposta do Claude [${source}]:`, data.response.substring(0, 100) + '...');
+                
             } else {
-                addMessage('❌ Erro: ' + (data.error || 'Não foi possível processar sua solicitação.'), 'bot');
+                // Erro mais detalhado
+                let errorMsg = '❌ Falha na resposta: ';
+                
+                if (!response.ok) {
+                    if (response.status === 400) {
+                        errorMsg += 'Requisição inválida. ';
+                    } else if (response.status === 403) {
+                        errorMsg += 'Token CSRF inválido. ';
+                    } else if (response.status === 500) {
+                        errorMsg += 'Erro interno do servidor. ';
+                    } else {
+                        errorMsg += `Status HTTP ${response.status}. `;
+                    }
+                } else {
+                    errorMsg += 'Resposta vazia ou inválida. ';
+                }
+                
+                errorMsg += data.error || 'Não foi possível processar sua solicitação.';
+                
+                // Adicionar informações de debug se disponíveis
+                if (data.source) {
+                    errorMsg += ` [Fonte: ${data.source}]`;
+                }
+                
+                addMessage(errorMsg, 'bot');
+                
+                // Log detalhado para debug
+                console.error('❌ Widget: Erro detalhado:', {
+                    responseOk: response.ok,
+                    status: response.status,
+                    statusText: response.statusText,
+                    hasResponse: !!data.response,
+                    responseLength: data.response ? data.response.length : 0,
+                    data: data,
+                    hasCSRF: !!csrfToken
+                });
             }
             
         } catch (error) {
-            console.error('Erro na consulta:', error);
-            addMessage('❌ Erro de conexão. Tente novamente.', 'bot');
+            console.error('❌ Erro na consulta Claude:', error);
+            
+            let errorDetails = error.name + ': ' + error.message;
+            if (error.message.includes('Failed to fetch')) {
+                errorDetails = 'Erro de conectividade. Verificar se o servidor está ativo.';
+            }
+            
+            addMessage(`❌ Erro de conexão: ${errorDetails}`, 'bot');
         } finally {
             showLoading(false);
         }
