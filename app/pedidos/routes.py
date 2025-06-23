@@ -47,6 +47,10 @@ def lista_pedidos():
     filtro_status = request.args.get('status')
     filtro_data = request.args.get('data')
     
+    # ✅ NOVO: Parâmetros de ordenação
+    sort_by = request.args.get('sort_by', 'expedicao')  # Default: ordenar por expedição
+    sort_order = request.args.get('sort_order', 'asc')  # Default: ascendente
+    
     # ✅ NOVO: Contadores para os botões de atalho por data
     hoje = datetime.now().date()
     contadores_data = {}
@@ -91,8 +95,11 @@ def lista_pedidos():
         'nf_cd': Pedido.query.filter(Pedido.nf_cd == True).count()
     }
 
-    # ✅ NOVO: Aplicar filtros de atalho
+    # ✅ APLICAR FILTROS DE ATALHO (botões) - SEMPRE PRIMEIRO
+    filtros_botao_aplicados = False
+    
     if filtro_status:
+        filtros_botao_aplicados = True
         if filtro_status == 'abertos':
             query = query.filter(
                 Pedido.cotacao_id.is_(None),
@@ -112,25 +119,23 @@ def lista_pedidos():
         # 'todos' não aplica filtro
     
     if filtro_data:
+        filtros_botao_aplicados = True
         try:
             data_selecionada = datetime.strptime(filtro_data, '%Y-%m-%d').date()
             query = query.filter(func.date(Pedido.expedicao) == data_selecionada)
         except ValueError:
             pass  # Ignora data inválida
-    
-    # Combina filtros de atalho com status se ambos estiverem presentes
-    if filtro_data and filtro_status == 'abertos':
-        # Já aplicou o filtro de data acima, só precisa do status aberto
-        query = query.filter(
-            Pedido.cotacao_id.is_(None),
-            Pedido.nf_cd == False,
-            (Pedido.nf.is_(None)) | (Pedido.nf == ""),  # ✅ CORRIGIDO: Exclui pedidos com NF
-            Pedido.data_embarque.is_(None)  # ✅ CORRIGIDO: Exclui pedidos embarcados
-        )
 
+    # ✅ PRESERVA filtros GET quando for POST do formulário
+    form_preservar_status = filtro_status
+    form_preservar_data = filtro_data
+    
+    # ✅ APLICAR FILTROS DO FORMULÁRIO (quando POST) OU PRESERVAR FILTROS DE BOTÃO
     # Se for POST do filtro_form, rodamos 'validate_on_submit' nele.
-    # Dependendo de como você quer, pode checar se "request.form" veio do filtro_form ou do outro.
-    if filtro_form.validate_on_submit():
+    # Se há filtros de botão mas não é POST, não aplica filtros do formulário
+    aplicar_filtros_formulario = filtro_form.validate_on_submit() or not filtros_botao_aplicados
+    
+    if aplicar_filtros_formulario and request.method == 'POST':
         # Filtros básicos
         if filtro_form.numero_pedido.data:
             query = query.filter(
@@ -214,15 +219,42 @@ def lista_pedidos():
         if filtro_form.expedicao_fim.data:
             query = query.filter(Pedido.expedicao <= filtro_form.expedicao_fim.data)
 
-    # Ordenação padrão seguindo a hierarquia
-    query = query.order_by(
-        Pedido.rota.asc(),
-        Pedido.cod_uf.asc(),
-        Pedido.sub_rota.asc(),
-        Pedido.expedicao.asc(),
-        Pedido.nome_cidade.asc(),
-        Pedido.cnpj_cpf.asc()
-    )
+    # ✅ NOVO: Ordenação dinâmica baseada em parâmetros
+    # Mapear campos de ordenação para atributos do modelo
+    campos_ordenacao = {
+        'num_pedido': Pedido.num_pedido,
+        'cnpj_cpf': Pedido.cnpj_cpf,
+        'raz_social_red': Pedido.raz_social_red,
+        'nome_cidade': Pedido.nome_cidade,
+        'cod_uf': Pedido.cod_uf,
+        'valor_saldo_total': Pedido.valor_saldo_total,
+        'peso_total': Pedido.peso_total,
+        'rota': Pedido.rota,
+        'sub_rota': Pedido.sub_rota,
+        'expedicao': Pedido.expedicao,
+        'agendamento': Pedido.agendamento,
+        'protocolo': Pedido.protocolo,
+        'nf': Pedido.nf,
+        'data_embarque': Pedido.data_embarque
+    }
+    
+    # Aplicar ordenação
+    if sort_by in campos_ordenacao:
+        campo_ordenacao = campos_ordenacao[sort_by]
+        if sort_order == 'desc':
+            query = query.order_by(campo_ordenacao.desc())
+        else:
+            query = query.order_by(campo_ordenacao.asc())
+    else:
+        # Ordenação padrão se campo inválido
+        query = query.order_by(
+            Pedido.rota.asc(),
+            Pedido.cod_uf.asc(),
+            Pedido.sub_rota.asc(),
+            Pedido.expedicao.asc(),
+            Pedido.nome_cidade.asc(),
+            Pedido.cnpj_cpf.asc()
+        )
 
     pedidos = query.all()
     
@@ -269,6 +301,40 @@ def lista_pedidos():
     for pedido in pedidos:
         pedido.ultimo_embarque = embarques_por_lote.get(pedido.separacao_lote_id)
         pedido.contato_agendamento = contatos_por_cnpj.get(pedido.cnpj_cpf)
+    
+    # ✅ NOVO: Funções auxiliares para URLs
+    def sort_url(campo):
+        """Gera URL para ordenação mantendo filtros atuais"""
+        from urllib.parse import urlencode
+        
+        # Captura todos os parâmetros atuais
+        params = dict(request.args)
+        
+        # Define nova ordem: se já está ordenando por este campo, inverte; senão, usa 'asc'
+        nova_ordem = 'asc'
+        if params.get('sort_by') == campo and params.get('sort_order') == 'asc':
+            nova_ordem = 'desc'
+        
+        params['sort_by'] = campo
+        params['sort_order'] = nova_ordem
+        
+        return url_for('pedidos.lista_pedidos') + '?' + urlencode(params)
+    
+    def filtro_url(**kwargs):
+        """Gera URL para filtros mantendo parâmetros atuais"""
+        from urllib.parse import urlencode
+        
+        # Captura todos os parâmetros atuais
+        params = dict(request.args)
+        
+        # Aplica as mudanças
+        for chave, valor in kwargs.items():
+            if valor is None:
+                params.pop(chave, None)  # Remove parâmetro
+            else:
+                params[chave] = valor  # Define/atualiza parâmetro
+        
+        return url_for('pedidos.lista_pedidos') + '?' + urlencode(params)
 
     return render_template(
         'pedidos/lista_pedidos.html',
@@ -278,7 +344,13 @@ def lista_pedidos():
         contadores_data=contadores_data,
         contadores_status=contadores_status,
         filtro_status_ativo=filtro_status,
-        filtro_data_ativo=filtro_data
+        filtro_data_ativo=filtro_data,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        form_preservar_status=form_preservar_status,
+        form_preservar_data=form_preservar_data,
+        sort_url=sort_url,
+        filtro_url=filtro_url
     )
 
 @pedidos_bp.route('/editar/<int:pedido_id>', methods=['GET', 'POST'])

@@ -94,6 +94,36 @@
     box-shadow: 0 4px 6px rgba(0,0,0,0.15);
 }
 
+/* ✅ NOVO: Estilos para colunas ordenáveis */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+
+.sortable:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sortable a {
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0.75rem;
+    margin: -0.75rem;
+    position: relative;
+}
+
+.sortable a:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+.sortable .fas {
+    font-size: 0.8rem;
+    margin-left: 5px;
+}
+
 .filtro-data {
     font-weight: 500;
     padding: 6px 12px;
@@ -221,8 +251,7 @@
                                 {% for key, dados in contadores_data.items() %}
                                 <div class="d-flex flex-column align-items-center filtro-pair">
                                     <!-- DATA -->
-                                    <a href="{{ url_for('pedidos.lista_pedidos',
-                                                        data=dados.data.strftime('%Y-%m-%d')) }}"
+                                    <a href="{{ filtro_url(data=dados.data.strftime('%Y-%m-%d'), status=None) }}"
                                     class="btn btn-sm filtro-data
                                         {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d') %}
                                         btn-primary
@@ -234,9 +263,7 @@
                                     <span class="badge bg-light text-dark">{{ dados.total }}</span>
                                     </a>
                                     <!-- ABERTO -->
-                                    <a href="{{ url_for('pedidos.lista_pedidos',
-                                                        data=dados.data.strftime('%Y-%m-%d'),
-                                                        status='abertos') }}"
+                                    <a href="{{ filtro_url(data=dados.data.strftime('%Y-%m-%d'), status='abertos') }}"
                                     class="btn btn-sm filtro-aberto mt-1
                                         {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d')
                                             and filtro_status_ativo == 'abertos' %}
@@ -276,7 +303,7 @@
                 <div class="col-md-6">
                     <div class="d-flex justify-content-end align-items-center gap-2">
                         <!-- Filtros de Status -->
-                        <a href="{{ url_for('pedidos.lista_pedidos', status='abertos') }}"
+                        <a href="{{ filtro_url(status='abertos') }}"
                             class="btn btn-sm filtro-status
                             {% if filtro_status_ativo == 'abertos' %}
                                 {% if contadores_status.abertos > 0 %}btn-danger{% else %}btn-info{% endif %}
@@ -286,7 +313,7 @@
                             <i class="fas fa-clock"></i> Abertos
                             <span class="badge bg-light text-dark">{{ contadores_status.abertos }}</span>
                         </a>
-                        <a href="{{ url_for('pedidos.lista_pedidos', status='cotados') }}"
+                        <a href="{{ filtro_url(status='cotados') }}"
                             class="btn btn-sm filtro-status
                             {% if filtro_status_ativo == 'cotados' %}
                                 {% if contadores_status.cotados > 0 %}btn-warning{% else %}btn-outline-warning{% endif %}
@@ -296,7 +323,7 @@
                             <i class="fas fa-calculator"></i> Cotados
                             <span class="badge bg-light text-dark">{{ contadores_status.cotados }}</span>
                         </a>
-                        <a href="{{ url_for('pedidos.lista_pedidos', status='nf_cd') }}"
+                        <a href="{{ filtro_url(status='nf_cd') }}"
                             class="btn btn-sm filtro-status
                             {% if filtro_status_ativo == 'nf_cd' %}
                                 {% if contadores_status.nf_cd > 0 %}btn-danger{% else %}btn-outline-danger{% endif %}
@@ -368,18 +395,118 @@
                     <th style="width: 80px;">
                         <i class="fas fa-flag"></i> Status
                     </th>
-                    <th style="width: 120px;">Nº Pedido</th>
-                    <th style="width: 140px;">CNPJ/CPF</th>
-                    <th>Razão Social</th>
-                    <th style="width: 120px;">Cidade</th>
-                    <th style="width: 40px;">UF</th>
-                    <th style="width: 100px;">Valor Total</th>
-                    <th style="width: 80px;">Peso (kg)</th>
-                    <th style="width: 70px;">Rota</th>
-                    <th style="width: 100px;"><i class="fas fa-truck"></i> Expedição</th>
-                    <th style="width: 100px;"><i class="fas fa-calendar"></i> Agenda</th>
+                    <!-- ✅ COLUNAS ORDENÁVEIS -->
+                    <th style="width: 120px;" class="sortable" data-sort="num_pedido">
+                        <a href="{{ sort_url('num_pedido') }}" class="text-white text-decoration-none">
+                            Nº Pedido
+                            {% if sort_by == 'num_pedido' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th style="width: 140px;" class="sortable" data-sort="cnpj_cpf">
+                        <a href="{{ sort_url('cnpj_cpf') }}" class="text-white text-decoration-none">
+                            CNPJ/CPF
+                            {% if sort_by == 'cnpj_cpf' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="sortable" data-sort="raz_social_red">
+                        <a href="{{ sort_url('raz_social_red') }}" class="text-white text-decoration-none">
+                            Razão Social
+                            {% if sort_by == 'raz_social_red' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th style="width: 120px;" class="sortable" data-sort="nome_cidade">
+                        <a href="{{ sort_url('nome_cidade') }}" class="text-white text-decoration-none">
+                            Cidade
+                            {% if sort_by == 'nome_cidade' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th style="width: 40px;" class="sortable" data-sort="cod_uf">
+                        <a href="{{ sort_url('cod_uf') }}" class="text-white text-decoration-none">
+                            UF
+                            {% if sort_by == 'cod_uf' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th style="width: 100px;" class="sortable" data-sort="valor_saldo_total">
+                        <a href="{{ sort_url('valor_saldo_total') }}" class="text-white text-decoration-none">
+                            Valor Total
+                            {% if sort_by == 'valor_saldo_total' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th style="width: 80px;" class="sortable" data-sort="peso_total">
+                        <a href="{{ sort_url('peso_total') }}" class="text-white text-decoration-none">
+                            Peso (kg)
+                            {% if sort_by == 'peso_total' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th style="width: 70px;" class="sortable" data-sort="rota">
+                        <a href="{{ sort_url('rota') }}" class="text-white text-decoration-none">
+                            Rota
+                            {% if sort_by == 'rota' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th style="width: 100px;" class="sortable" data-sort="expedicao">
+                        <a href="{{ sort_url('expedicao') }}" class="text-white text-decoration-none">
+                            <i class="fas fa-truck"></i> Expedição
+                            {% if sort_by == 'expedicao' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th style="width: 100px;" class="sortable" data-sort="agendamento">
+                        <a href="{{ sort_url('agendamento') }}" class="text-white text-decoration-none">
+                            <i class="fas fa-calendar"></i> Agenda
+                            {% if sort_by == 'agendamento' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
                     <th style="width: 90px;"><i class="fas fa-phone"></i> Agendamento</th>
-                    <th style="width: 80px;">NF</th>
+                    <th style="width: 80px;" class="sortable" data-sort="nf">
+                        <a href="{{ sort_url('nf') }}" class="text-white text-decoration-none">
+                            NF
+                            {% if sort_by == 'nf' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
                     <th style="width: 70px;">Ações</th>
 
                 </tr>
@@ -984,6 +1111,54 @@ function abrirEdicaoPedido(pedidoId) {
             alert('Erro ao carregar formulário de edição');
         });
 }
+
+// ✅ NOVAS FUNÇÕES: Geração de URLs com preservação de filtros
+window.sort_url = function(campo) {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Define ordem: se já está ordenando por este campo, inverte; senão, usa 'asc'
+    let novaOrdem = 'asc';
+    if (urlParams.get('sort_by') === campo && urlParams.get('sort_order') === 'asc') {
+        novaOrdem = 'desc';
+    }
+    
+    urlParams.set('sort_by', campo);
+    urlParams.set('sort_order', novaOrdem);
+    
+    return '{{ url_for("pedidos.lista_pedidos") }}?' + urlParams.toString();
+};
+
+window.filtro_url = function(opcoes = {}) {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Aplica as opções passadas
+    if (opcoes.status !== undefined) {
+        if (opcoes.status === null) {
+            urlParams.delete('status');
+        } else {
+            urlParams.set('status', opcoes.status);
+        }
+    }
+    
+    if (opcoes.data !== undefined) {
+        if (opcoes.data === null) {
+            urlParams.delete('data');
+        } else {
+            urlParams.set('data', opcoes.data);
+        }
+    }
+    
+    return '{{ url_for("pedidos.lista_pedidos") }}?' + urlParams.toString();
+};
+
+// ✅ NOVO: Torna as funções disponíveis no template Jinja
+window.addEventListener('DOMContentLoaded', function() {
+    // Expor funções para uso nos templates
+    window.templateHelpers = {
+        sort_url: window.sort_url,
+        filtro_url: window.filtro_url
+    };
+});
 </script>
 
 <style>
