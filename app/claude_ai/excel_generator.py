@@ -17,16 +17,32 @@ class ExcelGenerator:
     """Gerador de relatórios Excel baseado em comandos do Claude"""
     
     def __init__(self):
-        self.output_dir = os.path.join(current_app.static_folder, 'reports')
-        self._ensure_output_dir()
+        self.output_dir = None  # Será inicializado quando necessário
+    
+    def _safe_url_for(self, filename):
+        """Gera URL de forma segura, mesmo fora de contexto de request"""
+        try:
+            return url_for('static', filename=f'reports/{filename}')
+        except RuntimeError:
+            # Fallback para quando não está em contexto de request
+            return f'/static/reports/{filename}'
     
     def _ensure_output_dir(self):
         """Garante que o diretório de relatórios existe"""
         try:
+            if self.output_dir is None:
+                # Inicializar diretório apenas quando necessário (dentro do contexto da aplicação)
+                from flask import current_app
+                self.output_dir = os.path.join(current_app.static_folder, 'reports')
+            
             if not os.path.exists(self.output_dir):
                 os.makedirs(self.output_dir)
+                logger.info(f"📁 Diretório de relatórios criado: {self.output_dir}")
         except Exception as e:
             logger.error(f"Erro ao criar diretório de relatórios: {e}")
+            # Fallback para diretório temporário se falhar
+            import tempfile
+            self.output_dir = tempfile.gettempdir()
     
     def gerar_relatorio_entregas_atrasadas(self, filtros=None):
         """Gera Excel com entregas atrasadas e agendamento pendente"""
@@ -81,6 +97,7 @@ class ExcelGenerator:
             # Gerar arquivo Excel
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f'entregas_atrasadas_{timestamp}.xlsx'
+            self._ensure_output_dir()  # Garantir que diretório existe
             filepath = os.path.join(self.output_dir, filename)
             
             # Criar Excel com formatação
@@ -99,7 +116,7 @@ class ExcelGenerator:
                 acoes_df.to_excel(writer, sheet_name='Ações Recomendadas', index=False)
             
             # Retornar informações do arquivo
-            file_url = url_for('static', filename=f'reports/{filename}')
+            file_url = self._safe_url_for(filename)
             
             return {
                 'success': True,
@@ -178,6 +195,7 @@ class ExcelGenerator:
             # Criar arquivo Excel
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f'relatorio_{cliente.replace(" ", "_")}_{timestamp}.xlsx'
+            self._ensure_output_dir()  # Garantir que diretório existe
             filepath = os.path.join(self.output_dir, filename)
             
             with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
@@ -198,7 +216,7 @@ class ExcelGenerator:
                 if agendamentos:
                     pd.DataFrame(agendamentos).to_excel(writer, sheet_name='Agendamentos', index=False)
             
-            file_url = url_for('static', filename=f'reports/{filename}')
+            file_url = self._safe_url_for(filename)
             
             return {
                 'success': True,
@@ -393,6 +411,7 @@ class ExcelGenerator:
             # Gerar arquivo Excel
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f'entregas_pendentes_{timestamp}.xlsx'
+            self._ensure_output_dir()  # Garantir que diretório existe
             filepath = os.path.join(self.output_dir, filename)
             
             # Criar Excel com formatação
@@ -421,7 +440,7 @@ class ExcelGenerator:
                 acoes_df.to_excel(writer, sheet_name='Ações Prioritárias', index=False)
             
             # Retornar informações do arquivo
-            file_url = url_for('static', filename=f'reports/{filename}')
+            file_url = self._safe_url_for(filename)
             
             # Estatísticas EXPANDIDAS para retorno
             total_pendentes = len(dados)
@@ -637,16 +656,18 @@ class ExcelGenerator:
         """Gera Excel vazio com mensagem informativa"""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f'sem_dados_{timestamp}.xlsx'
+        self._ensure_output_dir()  # Garantir que diretório existe
         filepath = os.path.join(self.output_dir, filename)
         
         df = pd.DataFrame([{'Resultado': mensagem}])
         df.to_excel(filepath, index=False)
         
-        file_url = url_for('static', filename=f'reports/{filename}')
+        file_url = self._safe_url_for(filename)
         
         return {
             'success': True,
             'filename': filename,
+            'filepath': filepath,  # Adicionar campo filepath faltante
             'file_url': file_url,
             'total_registros': 0,
             'message': mensagem

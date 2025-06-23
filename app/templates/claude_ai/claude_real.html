@@ -482,6 +482,13 @@ function adicionarMensagem(type, content) {
 
 function formatMessage(text) {
     return text
+        // ✅ CORREÇÃO: Processar links em Markdown PRIMEIRO
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="btn btn-success btn-sm me-2" target="_blank"><i class="fas fa-download me-1"></i>$1</a>')
+        // Processar URLs simples também
+        .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" class="text-primary" target="_blank">$1</a>')
+        // Processar caminhos de arquivo locais
+        .replace(/\/static\/reports\/([^<\s]+)/g, '<a href="/static/reports/$1" class="btn btn-primary btn-sm me-2" target="_blank"><i class="fas fa-file-excel me-1"></i>Baixar Relatório</a>')
+        // Formatação de texto
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/### (.*?)$/gm, '<h6 class="text-primary">$1</h6>')
@@ -489,6 +496,16 @@ function formatMessage(text) {
         .replace(/# (.*?)$/gm, '<h4 class="text-primary">$1</h4>')
         .replace(/```([\s\S]*?)```/g, '<pre class="bg-light p-3 rounded border"><code>$1</code></pre>')
         .replace(/`(.*?)`/g, '<code class="bg-light px-2 py-1 rounded">$1</code>')
+        // Processar emojis de status
+        .replace(/✅/g, '<i class="fas fa-check-circle text-success"></i>')
+        .replace(/❌/g, '<i class="fas fa-times-circle text-danger"></i>')
+        .replace(/⚠️/g, '<i class="fas fa-exclamation-triangle text-warning"></i>')
+        .replace(/📊/g, '<i class="fas fa-chart-bar text-info"></i>')
+        .replace(/📈/g, '<i class="fas fa-chart-line text-success"></i>')
+        .replace(/📋/g, '<i class="fas fa-clipboard text-primary"></i>')
+        .replace(/🔗/g, '<i class="fas fa-link text-info"></i>')
+        .replace(/💰/g, '<i class="fas fa-dollar-sign text-success"></i>')
+        .replace(/📅/g, '<i class="fas fa-calendar text-primary"></i>')
         .replace(/\n/g, '<br>');
 }
 
