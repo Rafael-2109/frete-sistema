@@ -886,18 +886,42 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
 """
     
     def _is_excel_command(self, consulta: str) -> bool:
-        """Detecta se o comando é para gerar Excel"""
+        """🧠 DETECÇÃO INTELIGENTE DE COMANDOS EXCEL"""
         comandos_excel = [
+            # Comandos diretos de Excel
             'excel', 'planilha', 'xls', 'xlsx', 'exportar', 'export',
             'gerar relatório', 'gere relatório', 'gerar planilha',
-            'relatório em excel', 'baixar dados', 'download'
+            'relatório em excel', 'baixar dados', 'download',
+            
+            # 📋 ENTREGAS PENDENTES (específico)
+            'relatório de entregas pendentes',
+            'entregas pendentes', 'pendentes com agendamento',
+            'entregas não entregues', 'entregas aguardando',
+            
+            # 🔴 ENTREGAS ATRASADAS (específico)  
+            'relatório de entregas atrasadas',
+            'entregas atrasadas', 'entregas em atraso',
+            
+            # 📊 RELATÓRIOS GENÉRICOS
+            'relatório das entregas', 'relatório de monitoramento',
+            'dados das entregas', 'planilha das entregas'
         ]
         
         consulta_lower = consulta.lower()
-        return any(comando in consulta_lower for comando in comandos_excel)
+        
+        # Detectar comando direto
+        if any(comando in consulta_lower for comando in comandos_excel):
+            return True
+        
+        # Detecção contextual para padrões como:
+        # "Gere um relatório em excel das entregas pendentes"
+        if 'relatório' in consulta_lower and ('entrega' in consulta_lower or 'monitoramento' in consulta_lower):
+            return True
+            
+        return False
     
     def _processar_comando_excel(self, consulta: str, user_context: Dict = None) -> str:
-        """Processa comando de geração de Excel via API interna"""
+        """🧠 PROCESSAMENTO INTELIGENTE DE COMANDOS EXCEL"""
         try:
             from .excel_generator import get_excel_generator
             
@@ -906,8 +930,36 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
             excel_generator = get_excel_generator()
             consulta_lower = consulta.lower()
             
-            # Analisar comando e gerar Excel apropriado
-            if 'entregas atrasadas' in consulta_lower or 'atraso' in consulta_lower:
+            # 🎯 ANÁLISE INTELIGENTE DE COMANDOS (mesma lógica da rota API)
+            
+            # 1. ENTREGAS PENDENTES (prioritário - conceito diferente de atrasadas)
+            if any(palavra in consulta_lower for palavra in ['entregas pendentes', 'pendente', 'não entregue', 'aguardando entrega', 'pendentes com agendamento']):
+                logger.info("📋 CLAUDE: Detectado comando ENTREGAS PENDENTES")
+                
+                # Detectar filtros no comando
+                filtros = {}
+                if 'uf' in consulta_lower:
+                    import re
+                    match = re.search(r'uf\s+([A-Z]{2})', consulta.upper())
+                    if match:
+                        filtros['uf'] = match.group(1)
+                if 'cliente' in consulta_lower:
+                    import re
+                    match = re.search(r'cliente\s+([a-zA-Z\s]+)', consulta_lower)
+                    if match:
+                        filtros['cliente'] = match.group(1).strip()
+                if 'vendedor' in consulta_lower:
+                    import re
+                    match = re.search(r'vendedor\s+([a-zA-Z\s]+)', consulta_lower)
+                    if match:
+                        filtros['vendedor'] = match.group(1).strip()
+                        
+                resultado = excel_generator.gerar_relatorio_entregas_pendentes(filtros)
+                
+            # 2. ENTREGAS ATRASADAS (específico para atrasos)
+            elif any(palavra in consulta_lower for palavra in ['entregas atrasadas', 'atraso', 'atrasado', 'atrasada', 'em atraso']):
+                logger.info("🔴 CLAUDE: Detectado comando ENTREGAS ATRASADAS")
+                
                 # Detectar filtros no comando
                 filtros = {}
                 if 'cliente' in consulta_lower:
@@ -915,29 +967,121 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
                     match = re.search(r'cliente\s+([a-zA-Z\s]+)', consulta_lower)
                     if match:
                         filtros['cliente'] = match.group(1).strip()
+                if 'uf' in consulta_lower:
+                    import re
+                    match = re.search(r'uf\s+([A-Z]{2})', consulta.upper())
+                    if match:
+                        filtros['uf'] = match.group(1)
                 
                 resultado = excel_generator.gerar_relatorio_entregas_atrasadas(filtros)
                 
-            elif any(cliente in consulta_lower for cliente in ['assai', 'atacadão', 'carrefour', 'walmart']):
-                # Relatório de cliente específico
+            # 3. CLIENTE ESPECÍFICO
+            elif any(cliente in consulta_lower for cliente in ['assai', 'atacadão', 'carrefour', 'walmart', 'tenda', 'mateus', 'fort']):
+                logger.info("👤 CLAUDE: Detectado comando CLIENTE ESPECÍFICO")
+                
+                # Detectar cliente
                 cliente = None
-                for nome in ['assai', 'atacadão', 'carrefour', 'walmart']:
-                    if nome in consulta_lower:
-                        cliente = nome.title()
+                clientes_mapeamento = {
+                    'assai': 'Assai',
+                    'atacadão': 'Atacadão',
+                    'carrefour': 'Carrefour',
+                    'walmart': 'Walmart',
+                    'tenda': 'Tenda',
+                    'mateus': 'Mateus',
+                    'fort': 'Fort'
+                }
+                
+                for nome_comando, nome_real in clientes_mapeamento.items():
+                    if nome_comando in consulta_lower:
+                        cliente = nome_real
                         break
                 
                 if cliente:
-                    resultado = excel_generator.gerar_relatorio_cliente_especifico(cliente)
+                    # Detectar período se especificado
+                    periodo = 30  # padrão
+                    if 'últimos' in consulta_lower or 'ultimo' in consulta_lower:
+                        import re
+                        match = re.search(r'(\d+)\s*dias?', consulta_lower)
+                        if match:
+                            periodo = int(match.group(1))
+                    
+                    resultado = excel_generator.gerar_relatorio_cliente_especifico(cliente, periodo)
                 else:
-                    resultado = excel_generator.gerar_relatorio_entregas_atrasadas()
+                    # Fallback para entregas pendentes
+                    resultado = excel_generator.gerar_relatorio_entregas_pendentes()
+            
+            # 4. COMANDOS GENÉRICOS COM PALAVRAS-CHAVE EXCEL
+            elif any(palavra in consulta_lower for palavra in ['relatório', 'planilha', 'excel', 'exportar']):
+                logger.info("📊 CLAUDE: Detectado comando GENÉRICO - Default para ENTREGAS PENDENTES")
+                # Para comandos genéricos, usar entregas pendentes por ser mais abrangente
+                resultado = excel_generator.gerar_relatorio_entregas_pendentes()
             
             else:
-                # Comando genérico - gerar entregas atrasadas
-                resultado = excel_generator.gerar_relatorio_entregas_atrasadas()
+                logger.warning("⚠️ CLAUDE: Comando Excel não reconhecido - usando fallback ENTREGAS PENDENTES")
+                # Fallback para entregas pendentes (mais útil que atrasadas)
+                resultado = excel_generator.gerar_relatorio_entregas_pendentes()
             
             if resultado and resultado.get('success'):
+                # 🎯 RESPOSTA PERSONALIZADA POR TIPO DE RELATÓRIO
+                
+                # Determinar tipo de relatório pelo nome do arquivo
+                filename = resultado['filename']
+                is_pendentes = 'pendentes' in filename
+                is_atrasadas = 'atrasadas' in filename
+                is_cliente = any(cliente in filename.lower() for cliente in ['assai', 'atacadao', 'carrefour', 'tenda', 'mateus', 'fort', 'walmart'])
+                
+                # Título e descrição específicos
+                if is_pendentes:
+                    titulo_relatorio = "📋 **ENTREGAS PENDENTES - EXCEL GERADO!**"
+                    aba_principal = "Entregas Pendentes"
+                    descricao_especifica = """
+🎯 **DIFERENCIAL DESTE RELATÓRIO**:
+• 🟢 Entregas no prazo (ainda dentro do prazo previsto)
+• 🟡 Entregas próximas (vencem em 1-2 dias)
+• 🔴 Entregas atrasadas (já passaram do prazo)
+• ⚪ Entregas sem agendamento (precisam ser agendadas)
+
+📊 **INCLUI AGENDAMENTOS E PROTOCOLOS**:"""
+                    
+                    # Estatísticas específicas de pendentes se disponíveis
+                    estatisticas = resultado.get('estatisticas', {})
+                    if estatisticas:
+                        descricao_especifica += f"""
+• Total Pendentes: {estatisticas.get('total_pendentes', 0)}
+• ⚪ Sem Agendamento: {estatisticas.get('sem_agendamento', 0)}
+• 🟢 No Prazo: {estatisticas.get('no_prazo', 0)}
+• 🔴 Atrasadas: {estatisticas.get('atrasadas', 0)}
+• ✅ Com Agendamento: {estatisticas.get('com_agendamento', 0)}"""
+                    
+                elif is_atrasadas:
+                    titulo_relatorio = "🔴 **ENTREGAS ATRASADAS - EXCEL GERADO!**"
+                    aba_principal = "Entregas Atrasadas"
+                    descricao_especifica = """
+⚠️ **FOCO EM PROBLEMAS CRÍTICOS**:
+• Apenas entregas que JÁ passaram do prazo
+• Dias de atraso calculados automaticamente
+• Priorização por criticidade do atraso
+• Ações urgentes recomendadas"""
+                    
+                elif is_cliente:
+                    titulo_relatorio = "👤 **RELATÓRIO DE CLIENTE - EXCEL GERADO!**"
+                    aba_principal = "Dados do Cliente"
+                    cliente_nome = resultado.get('cliente', 'Cliente')
+                    periodo = resultado.get('periodo_dias', 30)
+                    descricao_especifica = f"""
+🎯 **ANÁLISE PERSONALIZADA COMPLETA**:
+• Cliente: {cliente_nome}
+• Período: {periodo} dias
+• Performance completa de entregas
+• Histórico de agendamentos e protocolos"""
+                    
+                else:
+                    titulo_relatorio = "📊 **RELATÓRIO EXCEL GERADO!**"
+                    aba_principal = "Dados Principais"
+                    descricao_especifica = ""
+                
                 # Retornar resposta formatada
-                return f"""📊 **EXCEL GERADO COM SUCESSO!**
+                return f"""{titulo_relatorio}
 
 ✅ **Arquivo**: `{resultado['filename']}`
 📈 **Registros**: {resultado['total_registros']}
@@ -947,9 +1091,11 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
 🔗 **DOWNLOAD**: [Clique aqui para baixar]({resultado['file_url']})
 
 📋 **Conteúdo do Relatório**:
-• **Aba "Entregas Atrasadas"**: Dados completos com NF, cliente, datas, prazos
+• **Aba "{aba_principal}"**: Dados completos com agendamentos e protocolos
 • **Aba "Resumo"**: Estatísticas executivas e KPIs principais  
-• **Aba "Ações Recomendadas"**: Lista priorizada de ações por criticidade
+• **Aba "Análise por Status"**: Categorização detalhada
+• **Aba "Status Agendamentos"**: Informações de agendamentos
+• **Aba "Ações Prioritárias"**: Lista priorizada de ações por criticidade{descricao_especifica}
 
 💡 **Como usar**: 
 1. Clique no link de download acima
@@ -958,16 +1104,17 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
 4. Use filtros do Excel para análises específicas
 
 🚀 **Funcionalidades Avançadas**:
-- Dados atualizados em tempo real
-- Cálculos automáticos de atrasos
-- Priorização de ações críticas
-- Análise de performance por cliente
+- Dados atualizados em tempo real do sistema
+- Informações completas de agendamentos e protocolos
+- Cálculos automáticos de prazos e status
+- Priorização inteligente de ações necessárias
+- Análise categórica por status de entrega
 
 ---
-🧠 **Powered by:** Claude 4 Sonnet + Excel Generator Real
+🧠 **Powered by:** Claude 4 Sonnet (Anthropic) - Modelo mais avançado disponível
 📊 **Dados:** Sistema de Fretes em tempo real
 🕒 **Processado:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
-⚡ **Modo:** Export Excel Automático"""
+⚡ **Modo:** IA Real Industrial + Export Excel Automático"""
             
             else:
                 return f"""❌ **ERRO AO GERAR EXCEL**
