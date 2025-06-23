@@ -101,7 +101,10 @@ def importar_tabela_frete():
         rejeitadas_sem_vinculo = []
         
         try:
-            df = pd.read_excel(arquivo)
+            # 📖 Ler o arquivo UMA vez para evitar problemas de arquivo fechado
+            import io
+            file_content = arquivo.read()
+            df = pd.read_excel(io.BytesIO(file_content))
             
             # ✅ LIMPEZA PRÉVIA: Substitui valores NaN por 0 em campos numéricos
             campos_numericos = ['VALOR', 'PESO', 'FRETE PESO', 'FRETE VALOR', 'GRIS', 'ADV', 

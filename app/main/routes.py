@@ -236,24 +236,45 @@ def favicon():
 @login_required
 def api_estatisticas_internas():
     """Estatísticas do sistema para dashboard interno (com autenticação de sessão)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
-        # Estatísticas básicas
+        logger.info("🔍 Iniciando coleta de estatísticas internas")
+        
+        # Estatísticas básicas com logs de debug
+        logger.info("📊 Contando embarques...")
         total_embarques = Embarque.query.count()
+        logger.info(f"📦 Total embarques: {total_embarques}")
+        
         embarques_ativos = Embarque.query.filter(Embarque.status == 'ativo').count()
+        logger.info(f"🟢 Embarques ativos: {embarques_ativos}")
         
+        logger.info("🚛 Contando fretes...")
         total_fretes = Frete.query.count()
-        fretes_pendentes = Frete.query.filter(Frete.status_aprovacao == 'pendente').count()
-        fretes_aprovados = Frete.query.filter(Frete.status_aprovacao == 'aprovado').count()
+        logger.info(f"📋 Total fretes: {total_fretes}")
         
+        fretes_pendentes = Frete.query.filter(Frete.status_aprovacao == 'pendente').count()
+        logger.info(f"⏳ Fretes pendentes: {fretes_pendentes}")
+        
+        fretes_aprovados = Frete.query.filter(Frete.status_aprovacao == 'aprovado').count()
+        logger.info(f"✅ Fretes aprovados: {fretes_aprovados}")
+        
+        logger.info("📦 Contando entregas...")
         total_entregas = EntregaMonitorada.query.count()
+        logger.info(f"📊 Total entregas: {total_entregas}")
+        
         entregas_entregues = EntregaMonitorada.query.filter(
             EntregaMonitorada.status_finalizacao == 'Entregue'
         ).count()
+        logger.info(f"✅ Entregas entregues: {entregas_entregues}")
         
         pendencias_financeiras = EntregaMonitorada.query.filter(
             EntregaMonitorada.pendencia_financeira == True
         ).count()
+        logger.info(f"💰 Pendências financeiras: {pendencias_financeiras}")
         
+        logger.info("🧮 Montando resultado...")
         resultado = {
             'embarques': {
                 'total': total_embarques,
@@ -274,6 +295,8 @@ def api_estatisticas_internas():
             }
         }
         
+        logger.info("✅ Estatísticas coletadas com sucesso")
+        
         return jsonify({
             'success': True,
             'data': resultado,
@@ -282,9 +305,15 @@ def api_estatisticas_internas():
         })
         
     except Exception as e:
+        logger.error(f"❌ Erro ao coletar estatísticas: {str(e)}")
+        logger.error(f"📍 Tipo do erro: {type(e)}")
+        import traceback
+        logger.error(f"🔍 Traceback completo: {traceback.format_exc()}")
+        
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'error_type': str(type(e))
         }), 500
 
 @main_bp.route('/api/embarques-internos', methods=['GET'])

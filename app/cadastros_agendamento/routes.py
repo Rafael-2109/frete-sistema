@@ -156,12 +156,18 @@ def importar_contatos():
                 flash("Nenhum arquivo selecionado.", "danger")
                 return redirect(request.url)
 
+            # 📖 Ler o arquivo UMA vez para evitar problemas de arquivo fechado
+            import io
+            file_content = file.read()
+            
+            # Salvar para backup local se necessário
             filename = secure_filename(file.filename)
             path = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(path)
+            with open(path, 'wb') as f:
+                f.write(file_content)
 
-            # Lê o arquivo Excel
-            df = pd.read_excel(path, dtype=str)  # Lê como string para evitar problemas
+            # Lê o arquivo Excel usando BytesIO
+            df = pd.read_excel(io.BytesIO(file_content), dtype=str)  # Lê como string para evitar problemas
             
             # Verifica se as colunas necessárias existem
             colunas_necessarias = ['CNPJ']
