@@ -9,7 +9,7 @@ from app.vinculos.forms import ConsultaVinculoForm
 from app.vinculos.models import CidadeAtendida
 from app.transportadoras.models import Transportadora
 from app.localidades.models import Cidade
-from app.utils.importacao.utils_importacao import salvar_temp
+from app.utils.importacao.utils_importacao import salvar_temp, limpar_temp
 from app.utils.importacao.importar_vinculos_web import validar_vinculos
 import io
 import openpyxl
@@ -30,20 +30,29 @@ def importar_vinculos():
 
     if upload_form.validate_on_submit():
         arquivo = upload_form.arquivo.data
-        caminho = salvar_temp(arquivo)
+        caminho = None
+        
+        try:
+            caminho = salvar_temp(arquivo)
+            linhas = validar_vinculos(caminho)
 
-        linhas = validar_vinculos(caminho)
+            for linha in linhas:
+                if linha.get('erro'):
+                    invalidos.append(linha)
+                else:
+                    validos.append(linha)
 
-        for linha in linhas:
-            if linha.get('erro'):
-                invalidos.append(linha)
-            else:
-                validos.append(linha)
+            session['vinculos_validos'] = validos
+            session['vinculos_invalidos'] = invalidos
 
-        session['vinculos_validos'] = validos
-        session['vinculos_invalidos'] = invalidos
-
-        preview = True
+            preview = True
+            
+        except Exception as e:
+            flash(f'Erro ao processar arquivo: {str(e)}', 'danger')
+        finally:
+            # 🗑️ Limpar arquivo temporário
+            if caminho:
+                limpar_temp(caminho)
 
     return render_template(
         'vinculo/importar_vinculos.html',
