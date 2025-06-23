@@ -1665,7 +1665,7 @@ def _carregar_dados_faturamento(analise: Dict[str, Any], filtros_usuario: Dict[s
         # Aplicar filtros
         if analise.get("cliente_especifico") and not analise.get("correcao_usuario"):
             query_faturamento = query_faturamento.filter(
-                RelatorioImportado.cliente.ilike(f'%{analise["cliente_especifico"]}%')
+                RelatorioImportado.nome_cliente.ilike(f'%{analise["cliente_especifico"]}%')
             )
         
         faturas = query_faturamento.order_by(RelatorioImportado.data_fatura.desc()).limit(100).all()
@@ -1681,7 +1681,7 @@ def _carregar_dados_faturamento(analise: Dict[str, Any], filtros_usuario: Dict[s
                     {
                         "id": f.id,
                         "numero_nf": f.numero_nf,
-                        "cliente": f.cliente,
+                        "cliente": f.nome_cliente,
                         "origem": f.origem,
                         "valor_total": float(f.valor_total or 0),
                         "data_fatura": f.data_fatura.isoformat() if f.data_fatura else None,
