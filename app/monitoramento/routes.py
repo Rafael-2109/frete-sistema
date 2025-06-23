@@ -1396,6 +1396,14 @@ def aplicar_filtros_exportacao(query, filtros):
 def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
     """Gera arquivo Excel com dados do monitoramento - sempre formato completo"""
     
+    def limpar_timezone(dt):
+        """Remove timezone de datetime para compatibilidade com Excel"""
+        if dt is None:
+            return None
+        if hasattr(dt, 'replace') and hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
+            return dt.replace(tzinfo=None)
+        return dt
+    
     # Prepara dados principais
     dados_principais = []
     dados_agendamentos = []
@@ -1448,14 +1456,14 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
             'transportadora': entrega.transportadora,
             'vendedor': entrega.vendedor,
             'valor_nf': entrega.valor_nf,
-            'data_embarque': entrega.data_embarque,
-            'data_entrega_prevista': entrega.data_entrega_prevista,
-            'data_agenda': entrega.data_agenda,
-            'data_hora_entrega_realizada': entrega.data_hora_entrega_realizada,
+            'data_embarque': limpar_timezone(entrega.data_embarque),
+            'data_entrega_prevista': limpar_timezone(entrega.data_entrega_prevista),
+            'data_agenda': limpar_timezone(entrega.data_agenda),
+            'data_hora_entrega_realizada': limpar_timezone(entrega.data_hora_entrega_realizada),
             # Substituir 'entregue' por 'status_finalizacao'
             'status_finalizacao': entrega.status_finalizacao,
             # Adicionar finalizado_em e finalizado_por após status_finalizacao
-            'finalizado_em': finalizado_em_brasil,
+            'finalizado_em': limpar_timezone(finalizado_em_brasil),
             'finalizado_por': entrega.finalizado_por,
             'lead_time': entrega.lead_time,
             'reagendar': entrega.reagendar,
@@ -1465,15 +1473,15 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
             'nova_nf': entrega.nova_nf,
             'observacao_operacional': entrega.observacao_operacional,
             'resposta_financeiro': entrega.resposta_financeiro,
-            'criado_em': entrega.criado_em,
+            'criado_em': limpar_timezone(entrega.criado_em),
             'criado_por': entrega.criado_por,
             'qtd_agendamentos': len(entrega.agendamentos),
-            'data_ultimo_agendamento': agendamento_recente.data_agendada if agendamento_recente else None,
+            'data_ultimo_agendamento': limpar_timezone(agendamento_recente.data_agendada if agendamento_recente else None),
             'protocolo_ultimo_agendamento': agendamento_recente.protocolo_agendamento if agendamento_recente else None,
             'qtd_eventos': qtd_eventos,
             'qtd_logs': len(entrega.logs),
             'ultimo_log_descricao': ultimo_log.descricao if ultimo_log else None,
-            'ultimo_log_data': ultimo_log.data_hora if ultimo_log else None,
+            'ultimo_log_data': limpar_timezone(ultimo_log.data_hora if ultimo_log else None),
             'qtd_custos_extras': len(entrega.custos_extras),
             'valor_total_custos_extras': custo_total,
             'qtd_comentarios': qtd_comentarios,
@@ -1485,7 +1493,7 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
             dados_agendamentos.append({
                 'numero_nf': entrega.numero_nf,
                 'cliente': entrega.cliente,
-                'data_agendada': ag.data_agendada,
+                'data_agendada': limpar_timezone(ag.data_agendada),
                 'hora_agendada': ag.hora_agendada,
                 'forma_agendamento': ag.forma_agendamento,
                 'contato_agendamento': ag.contato_agendamento,
@@ -1493,7 +1501,7 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'motivo': ag.motivo,
                 'observacao': ag.observacao,
                 'autor': ag.autor,
-                'criado_em': ag.criado_em
+                'criado_em': limpar_timezone(ag.criado_em)
             })
         
         # Eventos
@@ -1501,13 +1509,13 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
             dados_eventos.append({
                 'numero_nf': entrega.numero_nf,
                 'cliente': entrega.cliente,
-                'data_hora_chegada': ev.data_hora_chegada,
-                'data_hora_saida': ev.data_hora_saida,
+                'data_hora_chegada': limpar_timezone(ev.data_hora_chegada),
+                'data_hora_saida': limpar_timezone(ev.data_hora_saida),
                 'motorista': ev.motorista,
                 'tipo_evento': ev.tipo_evento,
                 'observacao': ev.observacao,
                 'autor': ev.autor,
-                'criado_em': ev.criado_em
+                'criado_em': limpar_timezone(ev.criado_em)
             })
         
         # Custos extras
@@ -1519,7 +1527,7 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'valor': custo.valor,
                 'motivo': custo.motivo,
                 'autor': custo.autor,
-                'criado_em': custo.criado_em
+                'criado_em': limpar_timezone(custo.criado_em)
             })
         
         # Logs
@@ -1528,7 +1536,7 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'numero_nf': entrega.numero_nf,
                 'cliente': entrega.cliente,
                 'autor': log.autor,
-                'data_hora': log.data_hora,
+                'data_hora': limpar_timezone(log.data_hora),
                 'tipo': log.tipo,
                 'descricao': log.descricao,
                 'lembrete_para': log.lembrete_para
@@ -1544,7 +1552,7 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                     'autor': comentario.autor,
                     'texto': comentario.texto,
                     'arquivo': comentario.arquivo,
-                    'criado_em': comentario.criado_em,
+                    'criado_em': limpar_timezone(comentario.criado_em),
                     'qtd_respostas': qtd_respostas
                 })
     
