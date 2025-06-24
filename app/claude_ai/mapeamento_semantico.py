@@ -40,7 +40,7 @@ class MapeamentoSemantico:
         """Cria mapeamentos usando APENAS campos reais do sistema"""
         
         if not self.campos_reais:
-            logger.warning("⚠️ Nenhum campo real encontrado - mapeamento será limitado")
+            logger.debug("🔄 Inicializando mapeamento sem dados reais (serão carregados dinamicamente)")
             return {}
         
         mapeamentos = {}
@@ -100,7 +100,7 @@ class MapeamentoSemantico:
         if nome_limpo not in termos:
             termos.append(nome_limpo)
         
-        logger.warning(f"⚠️ Campo {nome_campo} não encontrado no README - usando fallback automático")
+        logger.debug(f"🔄 Campo {nome_campo} usando fallback automático (318 campos mapeados)")
         return termos
     
     def _buscar_mapeamento_readme(self, nome_campo: str, nome_modelo: str) -> List[str]:

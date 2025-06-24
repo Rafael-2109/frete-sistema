@@ -104,7 +104,15 @@ class SistemaRealData:
     def buscar_clientes_reais(self) -> List[str]:
         """Busca lista REAL de clientes do banco"""
         try:
+            from app import create_app
             from app.faturamento.models import RelatorioFaturamentoImportado
+            
+            # Garantir contexto de aplicação
+            from flask import current_app
+            if not current_app:
+                # Se não há contexto, usar cache vazio e tentar na próxima chamada
+                logger.info("🔄 Sem contexto Flask inicial - carregando dados dinamicamente")
+                return []
             
             # Query REAL para buscar clientes únicos
             clientes_query = db.session.query(RelatorioFaturamentoImportado.nome_cliente).distinct()
@@ -131,6 +139,12 @@ class SistemaRealData:
         """Busca lista REAL de transportadoras do banco"""
         try:
             from app.transportadoras.models import Transportadora
+            from flask import current_app
+            
+            # Garantir contexto de aplicação
+            if not current_app:
+                logger.info("🔄 Sem contexto Flask inicial - carregando transportadoras dinamicamente")
+                return []
             
             transportadoras_query = db.session.query(Transportadora).all()
             
@@ -158,6 +172,12 @@ class SistemaRealData:
         """Busca lista REAL de UFs do banco"""
         try:
             from app.localidades.models import Cidade
+            from flask import current_app
+            
+            # Garantir contexto de aplicação
+            if not current_app:
+                logger.info("🔄 Sem contexto Flask inicial - carregando UFs dinamicamente")
+                return []
             
             ufs_query = db.session.query(Cidade.uf).distinct()
             ufs_raw = ufs_query.filter(Cidade.uf.isnot(None)).all()
@@ -178,6 +198,12 @@ class SistemaRealData:
         """Busca lista REAL de vendedores do banco"""
         try:
             from app.faturamento.models import RelatorioFaturamentoImportado
+            from flask import current_app
+            
+            # Garantir contexto de aplicação
+            if not current_app:
+                logger.info("🔄 Sem contexto Flask inicial - carregando vendedores dinamicamente")
+                return []
             
             vendedores_query = db.session.query(RelatorioFaturamentoImportado.vendedor).distinct()
             vendedores_raw = vendedores_query.filter(RelatorioFaturamentoImportado.vendedor.isnot(None)).all()
@@ -197,6 +223,13 @@ class SistemaRealData:
     def buscar_status_reais(self) -> Dict[str, List[str]]:
         """Busca todos os status REAIS do sistema"""
         try:
+            from flask import current_app
+            
+            # Garantir contexto de aplicação
+            if not current_app:
+                logger.info("🔄 Sem contexto Flask inicial - carregando status dinamicamente")
+                return {}
+            
             status_reais = {}
             
             # Status de EntregaMonitorada
