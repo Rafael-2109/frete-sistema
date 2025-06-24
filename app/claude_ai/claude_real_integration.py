@@ -189,19 +189,36 @@ NÃO misturar com dados de outros clientes."""
                 instrucao_especifica = f"""
 📊 ANÁLISE PADRÃO: Analise os dados disponíveis no período de {periodo_dias} dias."""
             
+            # Preparar dados de forma segura sem JSON que cause conflitos com {}
+            analise_texto = f"""
+• Tipo Consulta: {contexto_analisado.get('tipo_consulta', 'N/A')}
+• Cliente: {contexto_analisado.get('cliente_especifico', 'TODOS')}
+• Período: {contexto_analisado.get('periodo_dias', 30)} dias
+• Domínio: {contexto_analisado.get('dominio', 'entregas')}
+• Filtro UF: {contexto_analisado.get('filtro_geografico', 'N/A')}
+• Correção Usuário: {'SIM' if contexto_analisado.get('correcao_usuario') else 'NÃO'}"""
+
+            dados_texto = f"""
+• Registros Carregados: {dados_contexto.get('registros_carregados', 0)}
+• Fonte: {'Cache Redis' if dados_contexto.get('_from_cache') else 'Banco de Dados'}
+• Timestamp: {dados_contexto.get('timestamp', 'N/A')}
+• Dados Específicos: {', '.join(dados_contexto.get('dados_especificos', {}).keys())}"""
+
+            usuario_texto = f"""
+• User ID: {(user_context or {}).get('user_id', 'N/A')}
+• Filtro Cliente: {(user_context or {}).get('cliente_filter', 'N/A')}
+• Perfil: {(user_context or {}).get('perfil', 'N/A')}"""
+
             messages = [
                 {
                     "role": "user", 
                     "content": f"""CONSULTA DO USUÁRIO (com contexto conversacional): {consulta_com_contexto}
 
-ANÁLISE DA CONSULTA ORIGINAL:
-{json.dumps(contexto_analisado, indent=2, ensure_ascii=False)}
+ANÁLISE DA CONSULTA ORIGINAL:{analise_texto}
 
-DADOS ESPECÍFICOS CARREGADOS:
-{json.dumps(dados_contexto, indent=2, ensure_ascii=False)}
+DADOS ESPECÍFICOS CARREGADOS:{dados_texto}
 
-CONTEXTO DO USUÁRIO:
-{json.dumps(user_context or {}, indent=2, ensure_ascii=False)}
+CONTEXTO DO USUÁRIO:{usuario_texto}
 
 {instrucao_especifica}
 
