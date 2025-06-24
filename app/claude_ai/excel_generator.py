@@ -502,279 +502,275 @@ class ExcelGenerator:
                 'message': 'Erro ao gerar relatório Excel de entregas pendentes'
             }
     
-    def _criar_resumo_entregas_atrasadas(self, df):
-        """Cria resumo das entregas atrasadas"""
-        if df.empty:
-            return [{'Métrica': 'Nenhum dado', 'Valor': 0}]
-        
-        resumo = [
-            {'Métrica': 'Total de Entregas Atrasadas', 'Valor': len(df)},
-            {'Métrica': 'Valor Total (R$)', 'Valor': f"R$ {df['Valor NF'].sum():,.2f}"},
-            {'Métrica': 'Maior Atraso (dias)', 'Valor': df['Dias Atraso'].max()},
-            {'Métrica': 'Atraso Médio (dias)', 'Valor': f"{df['Dias Atraso'].mean():.1f}"},
-            {'Métrica': 'Clientes Afetados', 'Valor': df['Cliente'].nunique()},
-            {'Métrica': 'UFs Afetadas', 'Valor': df['UF'].nunique()},
-            {'Métrica': 'Com Pendência Financeira', 'Valor': len(df[df['Pendencia Financeira'] == 'Sim'])}
-        ]
-        
-        return resumo
-    
-    def _criar_acoes_recomendadas(self, df):
-        """Cria lista de ações recomendadas"""
-        if df.empty:
-            return [{'Prioridade': 'N/A', 'Ação': 'Nenhuma ação necessária', 'Cliente': ''}]
-        
-        acoes = []
-        
-        # Entregas com mais de 5 dias de atraso
-        criticas = df[df['Dias Atraso'] > 5]
-        for _, row in criticas.iterrows():
-            acoes.append({
-                'Prioridade': 'CRÍTICA',
-                'Ação': f'Contato urgente - {row["Dias Atraso"]} dias atraso',
-                'Cliente': row['Cliente'],
-                'NF': row['NF'],
-                'Valor': f"R$ {row['Valor NF']:,.2f}"
-            })
-        
-        # Entregas com pendência financeira
-        financeiras = df[df['Pendencia Financeira'] == 'Sim']
-        for _, row in financeiras.iterrows():
-            acoes.append({
-                'Prioridade': 'FINANCEIRA',
-                'Ação': 'Resolver pendência financeira',
-                'Cliente': row['Cliente'],
-                'NF': row['NF'],
-                'Valor': f"R$ {row['Valor NF']:,.2f}"
-            })
-        
-        # Entregas sem transportadora
-        sem_transp = df[df['Transportadora'] == 'Não definida']
-        for _, row in sem_transp.iterrows():
-            acoes.append({
-                'Prioridade': 'OPERACIONAL',
-                'Ação': 'Definir transportadora',
-                'Cliente': row['Cliente'],
-                'NF': row['NF'],
-                'Valor': f"R$ {row['Valor NF']:,.2f}"
-            })
-        
-        if not acoes:
-            acoes.append({
-                'Prioridade': 'BAIXA',
-                'Ação': 'Monitoramento de rotina',
-                'Cliente': 'Todos',
-                'NF': 'N/A',
-                'Valor': 'N/A'
-            })
-        
-        return acoes
-    
-    def _criar_resumo_cliente(self, df, cliente):
-        """Cria resumo executivo do cliente"""
-        if df.empty:
-            return [{'Métrica': 'Nenhum dado', 'Valor': 0}]
-        
-        entregues = df[df['Status'] == 'Entregue']
-        no_prazo = df[df['Status Prazo'] == 'No prazo']
-        
-        resumo = [
-            {'Métrica': 'Cliente', 'Valor': cliente},
-            {'Métrica': 'Total de Entregas', 'Valor': len(df)},
-            {'Métrica': 'Entregas Realizadas', 'Valor': len(entregues)},
-            {'Métrica': 'Taxa de Entrega (%)', 'Valor': f"{len(entregues)/len(df)*100:.1f}%"},
-            {'Métrica': 'Entregas no Prazo', 'Valor': len(no_prazo)},
-            {'Métrica': 'Taxa Pontualidade (%)', 'Valor': f"{len(no_prazo)/len(df)*100:.1f}%"},
-            {'Métrica': 'Valor Total (R$)', 'Valor': f"R$ {df['Valor NF'].sum():,.2f}"},
-            {'Métrica': 'Lead Time Médio (dias)', 'Valor': f"{df['Lead Time'].mean():.1f}"},
-            {'Métrica': 'UFs Atendidas', 'Valor': df['UF'].nunique()}
-        ]
-        
-        return resumo
-    
-    def _criar_analise_performance(self, df):
-        """Cria análise de performance"""
-        if df.empty:
-            return [{'Indicador': 'Sem dados', 'Resultado': 'N/A', 'Meta': 'N/A', 'Status': 'N/A'}]
-        
-        entregues = len(df[df['Status'] == 'Entregue'])
-        no_prazo = len(df[df['Status Prazo'] == 'No prazo'])
-        total = len(df)
-        
-        performance = [
-            {
-                'Indicador': 'Taxa de Entrega',
-                'Resultado': f"{entregues/total*100:.1f}%",
-                'Meta': '95%',
-                'Status': '✅ OK' if entregues/total >= 0.95 else '⚠️ Atenção'
-            },
-            {
-                'Indicador': 'Pontualidade',
-                'Resultado': f"{no_prazo/total*100:.1f}%",
-                'Meta': '85%',
-                'Status': '✅ OK' if no_prazo/total >= 0.85 else '⚠️ Atenção'
-            },
-            {
-                'Indicador': 'Lead Time Médio',
-                'Resultado': f"{df['Lead Time'].mean():.1f} dias",
-                'Meta': '≤ 5 dias',
-                'Status': '✅ OK' if df['Lead Time'].mean() <= 5 else '⚠️ Atenção'
-            }
-        ]
-        
-        return performance
-    
-    def _buscar_agendamentos_cliente(self, cliente, data_limite):
-        """Busca agendamentos do cliente"""
+    def gerar_relatorio_entregas_finalizadas(self, filtros=None, periodo_dias=30):
+        """📊 Gera relatório Excel de entregas FINALIZADAS/CONCLUÍDAS com performance"""
         try:
             from app import db
-            from app.monitoramento.models import AgendamentoEntrega, EntregaMonitorada
+            from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
+            from datetime import datetime, timedelta
+            import pandas as pd
             
-            agendamentos = db.session.query(AgendamentoEntrega).join(
-                EntregaMonitorada,
-                AgendamentoEntrega.entrega_id == EntregaMonitorada.id
-            ).filter(
-                EntregaMonitorada.cliente.ilike(f'%{cliente}%'),
-                AgendamentoEntrega.criado_em >= data_limite
-            ).all()
+            logger.info("✅ Gerando relatório de entregas FINALIZADAS")
             
+            # Data limite baseada no período
+            data_limite = datetime.now() - timedelta(days=periodo_dias)
+            
+            # Query principal - APENAS entregas FINALIZADAS/ENTREGUES
+            query = db.session.query(EntregaMonitorada).filter(
+                EntregaMonitorada.criado_em >= data_limite,
+                EntregaMonitorada.entregue == True,  # SOMENTE entregues
+                EntregaMonitorada.status_finalizacao.in_(['ENTREGUE', 'FINALIZADA'])  # Status finalizado
+            )
+            
+            # Aplicar filtros
+            if filtros:
+                if filtros.get('cliente'):
+                    query = query.filter(EntregaMonitorada.cliente.ilike(f"%{filtros['cliente']}%"))
+                    logger.info(f"✅ Filtro cliente aplicado: {filtros['cliente']}")
+                    
+                if filtros.get('uf'):
+                    query = query.filter(EntregaMonitorada.uf == filtros['uf'])
+                    
+                if filtros.get('vendedor'):
+                    query = query.filter(EntregaMonitorada.vendedor.ilike(f"%{filtros['vendedor']}%"))
+            
+            # Buscar entregas finalizadas
+            entregas = query.order_by(EntregaMonitorada.data_hora_entrega_realizada.desc()).all()
+            
+            logger.info(f"✅ Total entregas finalizadas encontradas: {len(entregas)}")
+            
+            if not entregas:
+                filtro_info = ""
+                if filtros and filtros.get('cliente'):
+                    filtro_info = f" para o cliente {filtros['cliente']}"
+                return self._gerar_excel_vazio(f'Nenhuma entrega finalizada encontrada nos últimos {periodo_dias} dias{filtro_info}')
+            
+            # Processar dados das entregas finalizadas
             dados = []
-            for ag in agendamentos:
+            hoje = datetime.now().date()
+            
+            for entrega in entregas:
+                # Calcular performance de prazo
+                if entrega.data_entrega_prevista and entrega.data_hora_entrega_realizada:
+                    prazo_previsto = entrega.data_entrega_prevista
+                    entrega_realizada = entrega.data_hora_entrega_realizada.date() if hasattr(entrega.data_hora_entrega_realizada, 'date') else entrega.data_hora_entrega_realizada
+                    
+                    dias_diferenca = (entrega_realizada - prazo_previsto).days
+                    
+                    if dias_diferenca <= 0:
+                        performance_prazo = 'NO PRAZO'
+                        performance_categoria = 'SUCESSO'
+                    elif dias_diferenca <= 2:
+                        performance_prazo = f'ATRASO LEVE ({dias_diferenca} dias)'
+                        performance_categoria = 'LEVE'
+                    else:
+                        performance_prazo = f'ATRASO SIGNIFICATIVO ({dias_diferenca} dias)'
+                        performance_categoria = 'SIGNIFICATIVO'
+                        
+                    # Calcular lead time real
+                    if entrega.data_embarque and entrega.data_hora_entrega_realizada:
+                        embarque_date = entrega.data_embarque.date() if hasattr(entrega.data_embarque, 'date') else entrega.data_embarque
+                        lead_time_real = (entrega_realizada - embarque_date).days
+                    else:
+                        lead_time_real = 0
+                else:
+                    performance_prazo = 'SEM PRAZO DEFINIDO'
+                    performance_categoria = 'SEM_DADOS'
+                    lead_time_real = 0
+                    dias_diferenca = 0
+                
+                # Buscar agendamentos desta entrega
+                agendamentos = db.session.query(AgendamentoEntrega).filter(
+                    AgendamentoEntrega.entrega_id == entrega.id
+                ).order_by(AgendamentoEntrega.criado_em.desc()).all()
+                
+                # Dados do último agendamento
+                ultimo_agendamento = agendamentos[0] if agendamentos else None
+                protocolo_agendamento = ultimo_agendamento.protocolo_agendamento if ultimo_agendamento else ''
+                forma_agendamento = ultimo_agendamento.forma_agendamento if ultimo_agendamento else ''
+                status_agendamento = ultimo_agendamento.status if ultimo_agendamento else 'Sem agendamento'
+                
                 dados.append({
-                    'NF': ag.entrega.numero_nf,
-                    'Data Agendada': ag.data_agendada.strftime('%d/%m/%Y') if ag.data_agendada else '',
-                    'Hora Agendada': ag.hora_agendada.strftime('%H:%M') if ag.hora_agendada else '',
-                    'Forma': ag.forma_agendamento or '',
-                    'Contato': ag.contato_agendamento or '',
-                    'Protocolo': ag.protocolo_agendamento or '',
-                    'Status': ag.status or 'Pendente',
-                    'Criado em': ag.criado_em.strftime('%d/%m/%Y %H:%M') if ag.criado_em else ''
+                    'NF': entrega.numero_nf,
+                    'Cliente': entrega.cliente,
+                    'Município': entrega.municipio or '',
+                    'UF': entrega.uf or '',
+                    'Transportadora': entrega.transportadora or 'Não definida',
+                    'Vendedor': entrega.vendedor or '',
+                    'Data Embarque': entrega.data_embarque.strftime('%d/%m/%Y') if entrega.data_embarque else '',
+                    'Data Prevista': entrega.data_entrega_prevista.strftime('%d/%m/%Y') if entrega.data_entrega_prevista else '',
+                    'Data Realizada': entrega.data_hora_entrega_realizada.strftime('%d/%m/%Y') if entrega.data_hora_entrega_realizada else '',
+                    'Performance Prazo': performance_prazo,
+                    'Categoria Performance': performance_categoria,
+                    'Dias Diferença': dias_diferenca,
+                    'Lead Time Real (dias)': lead_time_real,
+                    'Valor NF': float(entrega.valor_nf or 0),
+                    'Status Finalizacao': entrega.status_finalizacao or 'Entregue',
+                    'Pendencia Financeira': 'Sim' if entrega.pendencia_financeira else 'Não',
+                    # Dados de agendamento
+                    'Forma Agendamento': forma_agendamento,
+                    'Protocolo Agendamento': protocolo_agendamento,
+                    'Status Agendamento': status_agendamento,
+                    'Total Agendamentos': len(agendamentos),
+                    'Data Criacao': entrega.criado_em.strftime('%d/%m/%Y %H:%M') if entrega.criado_em else '',
+                    'Observacoes': entrega.observacao_operacional or ''
                 })
             
-            return dados
+            # Criar DataFrame
+            df = pd.DataFrame(dados)
+            
+            # Gerar arquivo Excel
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'entregas_finalizadas_{timestamp}.xlsx'
+            if filtros and filtros.get('cliente'):
+                cliente_safe = filtros['cliente'].replace(' ', '_').lower()
+                filename = f'entregas_finalizadas_{cliente_safe}_{timestamp}.xlsx'
+                
+            self._ensure_output_dir()
+            filepath = os.path.join(self.output_dir, filename)
+            
+            # Criar Excel com formatação
+            with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+                # Aba principal com dados
+                df.to_excel(writer, sheet_name='Entregas Finalizadas', index=False)
+                
+                # Aba de resumo executivo
+                resumo_dados = self._criar_resumo_entregas_finalizadas(df)
+                resumo_df = pd.DataFrame(resumo_dados)
+                resumo_df.to_excel(writer, sheet_name='Resumo Executivo', index=False)
+                
+                # Aba de análise de performance
+                performance_dados = self._criar_analise_performance_finalizadas(df)
+                performance_df = pd.DataFrame(performance_dados)
+                performance_df.to_excel(writer, sheet_name='Análise Performance', index=False)
+                
+                # Aba de agendamentos realizados
+                agendamentos_dados = self._criar_resumo_agendamentos_finalizados(df)
+                agendamentos_df = pd.DataFrame(agendamentos_dados)
+                agendamentos_df.to_excel(writer, sheet_name='Agendamentos', index=False)
+                
+                # Aba de estatísticas por transportadora
+                transp_dados = self._criar_analise_por_transportadora(df)
+                transp_df = pd.DataFrame(transp_dados)
+                transp_df.to_excel(writer, sheet_name='Por Transportadora', index=False)
+            
+            # Retornar informações do arquivo
+            file_url = self._safe_url_for(filename)
+            
+            # Calcular estatísticas de performance
+            total_finalizadas = len(dados)
+            no_prazo = len([d for d in dados if d['Categoria Performance'] == 'SUCESSO'])
+            atraso_leve = len([d for d in dados if d['Categoria Performance'] == 'LEVE'])
+            atraso_significativo = len([d for d in dados if d['Categoria Performance'] == 'SIGNIFICATIVO'])
+            
+            # Calcular médias
+            lead_time_medio = sum(d['Lead Time Real (dias)'] for d in dados if d['Lead Time Real (dias)'] > 0) / len([d for d in dados if d['Lead Time Real (dias)'] > 0]) if any(d['Lead Time Real (dias)'] > 0 for d in dados) else 0
+            valor_total = sum(d['Valor NF'] for d in dados)
+            
+            return {
+                'success': True,
+                'filename': filename,
+                'filepath': filepath,
+                'file_url': file_url,
+                'total_registros': total_finalizadas,
+                'valor_total': valor_total,
+                'periodo_dias': periodo_dias,
+                'cliente': filtros.get('cliente') if filtros else None,
+                'estatisticas': {
+                    'total_finalizadas': total_finalizadas,
+                    'no_prazo': no_prazo,
+                    'atraso_leve': atraso_leve,
+                    'atraso_significativo': atraso_significativo,
+                    'percentual_pontualidade': round((no_prazo / total_finalizadas * 100), 1) if total_finalizadas > 0 else 0,
+                    'lead_time_medio': round(lead_time_medio, 1),
+                    'valor_total': valor_total,
+                    'ticket_medio': round(valor_total / total_finalizadas, 2) if total_finalizadas > 0 else 0
+                },
+                'message': f'Relatório de entregas finalizadas gerado: {total_finalizadas} entregas nos últimos {periodo_dias} dias'
+            }
             
         except Exception as e:
-            logger.error(f"Erro ao buscar agendamentos: {e}")
-            return []
+            logger.error(f"Erro ao gerar relatório de entregas finalizadas: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Erro ao gerar relatório Excel de entregas finalizadas'
+            }
     
-    def _gerar_excel_vazio(self, mensagem):
-        """Gera Excel vazio com mensagem informativa"""
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'sem_dados_{timestamp}.xlsx'
-        self._ensure_output_dir()  # Garantir que diretório existe
-        filepath = os.path.join(self.output_dir, filename)
-        
-        df = pd.DataFrame([{'Resultado': mensagem}])
-        df.to_excel(filepath, index=False)
-        
-        file_url = self._safe_url_for(filename)
-        
-        return {
-            'success': True,
-            'filename': filename,
-            'filepath': filepath,  # Adicionar campo filepath faltante
-            'file_url': file_url,
-            'total_registros': 0,
-            'message': mensagem
-        }
-    
-    def _criar_resumo_entregas_pendentes(self, df):
-        """Cria resumo EXPANDIDO das entregas pendentes (entregas + pedidos)"""
+    def _criar_resumo_entregas_finalizadas(self, df):
+        """Cria resumo executivo das entregas finalizadas"""
         if df.empty:
             return [{'Métrica': 'Nenhum dado', 'Valor': 0}]
         
-        # Separar por tipo
-        entregas = df[df['Tipo'] == 'Entrega Monitorada']
-        pedidos = df[df['Tipo'] == 'Pedido Agendado']
+        # Contar por categoria de performance
+        no_prazo = len(df[df['Categoria Performance'] == 'SUCESSO'])
+        atraso_leve = len(df[df['Categoria Performance'] == 'LEVE'])
+        atraso_significativo = len(df[df['Categoria Performance'] == 'SIGNIFICATIVO'])
         
-        # Contar por categoria - ENTREGAS
-        atrasadas = len(df[df['Categoria'] == 'ATRASADA'])
-        vence_hoje = len(df[df['Categoria'] == 'VENCE_HOJE'])
-        proximas = len(df[df['Categoria'] == 'PROXIMA'])
-        no_prazo = len(df[df['Categoria'] == 'NO_PRAZO'])
-        sem_agendamento = len(df[df['Categoria'] == 'SEM_AGENDAMENTO'])
-        
-        # Contar por categoria - PEDIDOS
-        agendamentos_atrasados = len(df[df['Categoria'] == 'AGENDAMENTO_ATRASADO'])
-        agendado_hoje = len(df[df['Categoria'] == 'AGENDADO_HOJE'])
-        agendado_proximo = len(df[df['Categoria'] == 'AGENDADO_PROXIMO'])
-        agendado_futuro = len(df[df['Categoria'] == 'AGENDADO_FUTURO'])
-        
-        # Calcular valores
-        valor_entregas = entregas['Valor NF'].sum() if len(entregas) > 0 else 0
-        valor_pedidos = pedidos['Valor Pedido'].sum() if len(pedidos) > 0 else 0
+        # Calcular médias
+        lead_time_medio = df[df['Lead Time Real (dias)'] > 0]['Lead Time Real (dias)'].mean()
+        valor_total = df['Valor NF'].sum()
         
         resumo = [
             # TOTAIS GERAIS
-            {'Métrica': '📊 TOTAL GERAL', 'Valor': len(df)},
-            {'Métrica': '💰 Valor Total', 'Valor': f"R$ {valor_entregas + valor_pedidos:,.2f}"},
+            {'Métrica': '📊 TOTAL DE ENTREGAS FINALIZADAS', 'Valor': len(df)},
+            {'Métrica': '💰 Valor Total Entregue', 'Valor': f"R$ {valor_total:,.2f}"},
+            {'Métrica': '📈 Ticket Médio', 'Valor': f"R$ {valor_total/len(df):,.2f}"},
             {'Métrica': '', 'Valor': ''},  # Linha vazia
             
-            # ENTREGAS MONITORADAS
-            {'Métrica': '🚛 ENTREGAS MONITORADAS', 'Valor': len(entregas)},
-            {'Métrica': '└─ 🔴 Atrasadas', 'Valor': atrasadas},
-            {'Métrica': '└─ ⚠️ Vencem Hoje', 'Valor': vence_hoje},
-            {'Métrica': '└─ 🟡 Próximas (1-2 dias)', 'Valor': proximas},
-            {'Métrica': '└─ 🟢 No Prazo (3+ dias)', 'Valor': no_prazo},
-            {'Métrica': '└─ ⚪ Sem Agendamento', 'Valor': sem_agendamento},
-            {'Métrica': '└─ 💰 Valor Entregas', 'Valor': f"R$ {valor_entregas:,.2f}"},
+            # PERFORMANCE DE PRAZOS
+            {'Métrica': '🎯 PERFORMANCE DE PRAZOS', 'Valor': ''},
+            {'Métrica': '└─ ✅ Entregas no Prazo', 'Valor': no_prazo},
+            {'Métrica': '└─ 🟡 Atraso Leve (1-2 dias)', 'Valor': atraso_leve},
+            {'Métrica': '└─ 🔴 Atraso Significativo (3+ dias)', 'Valor': atraso_significativo},
+            {'Métrica': '└─ 📊 Taxa de Pontualidade', 'Valor': f"{no_prazo/len(df)*100:.1f}%"},
             {'Métrica': '', 'Valor': ''},  # Linha vazia
             
-            # PEDIDOS AGENDADOS
-            {'Métrica': '📋 PEDIDOS AGENDADOS', 'Valor': len(pedidos)},
-            {'Métrica': '└─ 🔴 Agendamento Atrasado', 'Valor': agendamentos_atrasados},
-            {'Métrica': '└─ ⚠️ Agendado Hoje', 'Valor': agendado_hoje},
-            {'Métrica': '└─ 🟡 Agendado Próximo', 'Valor': agendado_proximo},
-            {'Métrica': '└─ 🟢 Agendado Futuro', 'Valor': agendado_futuro},
-            {'Métrica': '└─ 💰 Valor Pedidos', 'Valor': f"R$ {valor_pedidos:,.2f}"},
-            {'Métrica': '', 'Valor': ''},  # Linha vazia
-            
-            # ESTATÍSTICAS ADICIONAIS
-            {'Métrica': '📈 ESTATÍSTICAS GERAIS', 'Valor': ''},
-            {'Métrica': '└─ Clientes Envolvidos', 'Valor': df['Cliente'].nunique()},
-            {'Métrica': '└─ UFs Envolvidas', 'Valor': df['UF'].nunique()},
-            {'Métrica': '└─ Com Pendência Financeira', 'Valor': len(df[df['Pendencia Financeira'] == 'Sim'])},
-            {'Métrica': '└─ Com Agendamento Confirmado', 'Valor': len(df[df['Status Agendamento'] == 'Confirmado'])}
+            # LEAD TIME
+            {'Métrica': '⚡ LEAD TIME REALIZADO', 'Valor': ''},
+            {'Métrica': '└─ Lead Time Médio', 'Valor': f"{lead_time_medio:.1f} dias" if not pd.isna(lead_time_medio) else "N/A"},
+            {'Métrica': '└─ Menor Lead Time', 'Valor': f"{df[df['Lead Time Real (dias)'] > 0]['Lead Time Real (dias)'].min():.0f} dias" if len(df[df['Lead Time Real (dias)'] > 0]) > 0 else "N/A"},
+            {'Métrica': '└─ Maior Lead Time', 'Valor': f"{df[df['Lead Time Real (dias)'] > 0]['Lead Time Real (dias)'].max():.0f} dias" if len(df[df['Lead Time Real (dias)'] > 0]) > 0 else "N/A"},
         ]
         
         return resumo
     
-    def _criar_analise_categorias(self, df):
-        """Cria análise detalhada por categoria de status"""
+    def _criar_analise_performance_finalizadas(self, df):
+        """Cria análise detalhada de performance das entregas finalizadas"""
         if df.empty:
-            return [{'Categoria': 'Sem dados', 'Quantidade': 0, 'Valor Total': 0, 'Percentual': '0%'}]
+            return [{'Categoria': 'Sem dados', 'Quantidade': 0, 'Percentual': '0%', 'Valor Total': 'R$ 0,00'}]
         
         categorias = []
-        total_valor = df['Valor NF'].sum()
         total_registros = len(df)
         
-        for categoria in ['ATRASADA', 'VENCE_HOJE', 'PROXIMA', 'NO_PRAZO', 'SEM_AGENDAMENTO']:
-            dados_categoria = df[df['Categoria'] == categoria]
+        # Análise por categoria de performance
+        for categoria in ['SUCESSO', 'LEVE', 'SIGNIFICATIVO', 'SEM_DADOS']:
+            dados_categoria = df[df['Categoria Performance'] == categoria]
             quantidade = len(dados_categoria)
-            valor_categoria = dados_categoria['Valor NF'].sum()
-            percentual = (quantidade / total_registros * 100) if total_registros > 0 else 0
-            
-            nome_categoria = {
-                'ATRASADA': '🔴 Atrasadas',
-                'VENCE_HOJE': '⚠️ Vencem Hoje',
-                'PROXIMA': '🟡 Próximas (1-2 dias)',
-                'NO_PRAZO': '🟢 No Prazo (3+ dias)',
-                'SEM_AGENDAMENTO': '⚪ Sem Agendamento'
-            }.get(categoria, categoria)
             
             if quantidade > 0:
+                valor_categoria = dados_categoria['Valor NF'].sum()
+                percentual = (quantidade / total_registros * 100)
+                
+                nome_categoria = {
+                    'SUCESSO': '✅ No Prazo',
+                    'LEVE': '🟡 Atraso Leve (1-2 dias)',
+                    'SIGNIFICATIVO': '🔴 Atraso Significativo (3+ dias)',
+                    'SEM_DADOS': '⚪ Sem Dados de Prazo'
+                }.get(categoria, categoria)
+                
                 categorias.append({
                     'Categoria': nome_categoria,
                     'Quantidade': quantidade,
-                    'Valor Total': f"R$ {valor_categoria:,.2f}",
                     'Percentual': f"{percentual:.1f}%",
-                    'Valor Médio': f"R$ {valor_categoria/quantidade:,.2f}" if quantidade > 0 else "R$ 0,00"
+                    'Valor Total': f"R$ {valor_categoria:,.2f}",
+                    'Valor Médio': f"R$ {valor_categoria/quantidade:,.2f}"
                 })
         
         return categorias
     
-    def _criar_resumo_agendamentos(self, df):
-        """Cria resumo dos status de agendamentos"""
+    def _criar_resumo_agendamentos_finalizados(self, df):
+        """Cria resumo dos agendamentos das entregas finalizadas"""
         if df.empty:
             return [{'Status Agendamento': 'Sem dados', 'Quantidade': 0}]
         
@@ -786,7 +782,8 @@ class ExcelGenerator:
                 'Confirmado': '✅',
                 'Aguardando aprovação': '⏳',
                 'Sem agendamento': '❌',
-                'Reagendado': '🔄'
+                'Reagendado': '🔄',
+                'Agendado no Pedido': '📋'
             }.get(status, '📋')
             
             resumo.append({
@@ -797,95 +794,37 @@ class ExcelGenerator:
         
         return resumo
     
-    def _criar_acoes_entregas_pendentes(self, df):
-        """Cria lista de ações prioritárias para entregas pendentes"""
+    def _criar_analise_por_transportadora(self, df):
+        """Cria análise de performance por transportadora"""
         if df.empty:
-            return [{'Prioridade': 'N/A', 'Ação': 'Nenhuma ação necessária', 'Cliente': ''}]
+            return [{'Transportadora': 'Sem dados', 'Entregas': 0}]
         
-        acoes = []
+        analise = []
         
-        # 1. CRÍTICAS - Entregas atrasadas
-        atrasadas = df[df['Categoria'] == 'ATRASADA']
-        for _, row in atrasadas.iterrows():
-            acoes.append({
-                'Prioridade': '🔴 CRÍTICA',
-                'Ação': f'URGENTE: Contato imediato - {abs(row["Dias até Prazo"])} dias atrasado',
-                'Cliente': row['Cliente'],
-                'NF': row['NF'],
-                'Valor': f"R$ {row['Valor NF']:,.2f}",
-                'Status Agendamento': row['Status Agendamento']
-            })
+        # Agrupar por transportadora
+        for transportadora in df['Transportadora'].unique():
+            dados_transp = df[df['Transportadora'] == transportadora]
+            
+            if len(dados_transp) > 0:
+                total_entregas = len(dados_transp)
+                no_prazo = len(dados_transp[dados_transp['Categoria Performance'] == 'SUCESSO'])
+                valor_total = dados_transp['Valor NF'].sum()
+                lead_time_medio = dados_transp[dados_transp['Lead Time Real (dias)'] > 0]['Lead Time Real (dias)'].mean()
+                
+                analise.append({
+                    'Transportadora': transportadora,
+                    'Total Entregas': total_entregas,
+                    'Entregas no Prazo': no_prazo,
+                    'Taxa Pontualidade': f"{no_prazo/total_entregas*100:.1f}%",
+                    'Valor Total': f"R$ {valor_total:,.2f}",
+                    'Valor Médio': f"R$ {valor_total/total_entregas:,.2f}",
+                    'Lead Time Médio': f"{lead_time_medio:.1f} dias" if not pd.isna(lead_time_medio) else "N/A"
+                })
         
-        # 2. URGENTES - Vencem hoje
-        vence_hoje = df[df['Categoria'] == 'VENCE_HOJE']
-        for _, row in vence_hoje.iterrows():
-            acoes.append({
-                'Prioridade': '⚠️ URGENTE',
-                'Ação': 'Entrega programada para HOJE - Confirmar status',
-                'Cliente': row['Cliente'],
-                'NF': row['NF'],
-                'Valor': f"R$ {row['Valor NF']:,.2f}",
-                'Status Agendamento': row['Status Agendamento']
-            })
+        # Ordenar por quantidade de entregas
+        analise.sort(key=lambda x: x['Total Entregas'], reverse=True)
         
-        # 3. ATENÇÃO - Próximas (1-2 dias)
-        proximas = df[df['Categoria'] == 'PROXIMA']
-        for _, row in proximas.iterrows():
-            acoes.append({
-                'Prioridade': '🟡 ATENÇÃO',
-                'Ação': f'Monitorar - Entrega em {row["Dias até Prazo"]} dias',
-                'Cliente': row['Cliente'],
-                'NF': row['NF'],
-                'Valor': f"R$ {row['Valor NF']:,.2f}",
-                'Status Agendamento': row['Status Agendamento']
-            })
-        
-        # 4. OPERACIONAL - Sem agendamento
-        sem_agendamento = df[df['Categoria'] == 'SEM_AGENDAMENTO']
-        for _, row in sem_agendamento.iterrows():
-            acoes.append({
-                'Prioridade': '⚪ OPERACIONAL',
-                'Ação': 'Realizar agendamento da entrega',
-                'Cliente': row['Cliente'],
-                'NF': row['NF'],
-                'Valor': f"R$ {row['Valor NF']:,.2f}",
-                'Status Agendamento': row['Status Agendamento']
-            })
-        
-        # 5. FINANCEIRAS - Pendências financeiras
-        pendencias_fin = df[df['Pendencia Financeira'] == 'Sim']
-        for _, row in pendencias_fin.iterrows():
-            acoes.append({
-                'Prioridade': '💰 FINANCEIRA',
-                'Ação': 'Resolver pendência financeira',
-                'Cliente': row['Cliente'],
-                'NF': row['NF'],
-                'Valor': f"R$ {row['Valor NF']:,.2f}",
-                'Status Agendamento': row['Status Agendamento']
-            })
-        
-        # Ordenar por prioridade
-        ordem_prioridade = {
-            '🔴 CRÍTICA': 1,
-            '⚠️ URGENTE': 2,
-            '🟡 ATENÇÃO': 3,
-            '💰 FINANCEIRA': 4,
-            '⚪ OPERACIONAL': 5
-        }
-        
-        acoes.sort(key=lambda x: ordem_prioridade.get(x['Prioridade'], 999))
-        
-        if not acoes:
-            acoes.append({
-                'Prioridade': '🟢 OK',
-                'Ação': 'Todas as entregas estão no prazo',
-                'Cliente': 'N/A',
-                'NF': 'N/A',
-                'Valor': 'N/A',
-                'Status Agendamento': 'N/A'
-            })
-        
-        return acoes
+        return analise
 
 # Instância global
 excel_generator = ExcelGenerator()

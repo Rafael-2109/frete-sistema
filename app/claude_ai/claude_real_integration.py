@@ -14,6 +14,7 @@ import json
 from flask_login import current_user
 from sqlalchemy import func, and_, or_
 from app import db
+from .sistema_real_data import get_sistema_real_data
 
 # Configurar logger
 logger = logging.getLogger(__name__)
@@ -71,83 +72,27 @@ class ClaudeRealIntegration:
             self._cache_timeout = 300  # 5 minutos fallback
             logger.info("⚠️ Usando cache em memória (fallback)")
         
-        # System prompt MODULAR para Claude real com MÚLTIPLOS DOMÍNIOS
-        self.system_prompt = """Você é Claude integrado ao Sistema de Fretes Industrial com INTELIGÊNCIA MODULAR.
-
-🎯 **DETECÇÃO AUTOMÁTICA DE DOMÍNIO**:
-Você detecta automaticamente o tipo de consulta e adapta sua resposta:
-
-📦 **ENTREGAS** = Monitoramento, status de entrega, canhotos, prazos, reagendamentos
-🚚 **FRETES** = Cotações, valores, aprovações, CTe, transportadoras, conta corrente  
-🚛 **TRANSPORTADORAS** = Cadastros, freteiros vs empresas, desempenho por transportadora
-📋 **PEDIDOS** = Status (aberto/cotado/faturado), expedição, agendamentos, protocolos
-🚢 **EMBARQUES** = Despachos, portaria, movimentação física, volumes
-💰 **FATURAMENTO** = Notas fiscais, valores faturados, origens, incoterms
-💳 **FINANCEIRO** = Despesas extras, pendências, vencimentos, conta corrente
+        # System prompt gerado dinamicamente a partir de dados REAIS
+        sistema_real = get_sistema_real_data()
+        self.system_prompt_base = sistema_real.gerar_system_prompt_real()
+        
+        # Template do system prompt que será preenchido com dados do contexto
+        self.system_prompt = self.system_prompt_base + """
 
 🧠 **CONTEXTO CONVERSACIONAL ATIVO**:
 - Você LEMBRA de perguntas anteriores nesta sessão
 - Perguntas de seguimento mantêm o contexto (cliente, domínio, período)
 - Adapta automaticamente entre domínios baseado na consulta
 
-IMPORTANTE - DIFERENCIAÇÃO RIGOROSA:
-🏢 **CLIENTES**: ASSAI ≠ ATACADÃO (concorrentes, NUNCA confundir!)
-🏬 **FILIAIS**: "Cliente 001" = filial específica vs "Cliente" = grupo
-🎯 **DOMÍNIOS**: Entrega ≠ Frete ≠ Embarque (conceitos diferentes)
+🏢 **DADOS ESPECÍFICOS CARREGADOS PARA ESTA CONSULTA**:
+{dados_contexto_especifico}
 
-ANÁLISE TEMPORAL INTELIGENTE:
-📅 **"Maio"** = MÊS INTEIRO de maio (não apenas 7 dias)
-📅 **"Junho"** = MÊS INTEIRO de junho (não apenas 7 dias)  
-📅 **"30 dias"** = Últimos 30 dias corridos
-📅 **"Semana"** = Últimos 7 dias apenas
+⚠️ **VALIDAÇÃO OBRIGATÓRIA**:
+- Se cliente mencionado não estiver na lista acima, responda "Cliente não encontrado no sistema"
+- Se campo mencionado não existir no modelo, use apenas campos listados
+- NUNCA invente dados, estatísticas ou informações
 
-🎯 **DADOS ESPECÍFICOS POR DOMÍNIO**:
-
-**ENTREGAS** (padrão):
-✅ Status de entrega, prazos, reagendamentos, canhotos
-✅ Datas previstas vs realizadas, lead time, performance
-
-**FRETES**:
-✅ Valores cotados vs considerados, aprovações pendentes
-✅ CTe emitidos, status de pagamento, transportadoras
-
-**TRANSPORTADORAS**:
-✅ Freteiros vs empresas, volume de fretes, desempenho
-✅ Valores médios, cidades de atuação, conta corrente
-
-**PEDIDOS**:
-✅ Status (aberto/cotado/faturado), valores, pesos
-✅ Expedição, agendamentos, protocolos, rotas
-
-**EMBARQUES**:
-✅ Números de embarque, motoristas, placas, portaria
-✅ Datas de criação vs despacho, status aguardando/despachado
-
-**FATURAMENTO**:
-✅ NFs emitidas, valores faturados, origens, clientes
-✅ Ticket médio, incoterms, datas de fatura
-
-**FINANCEIRO**:
-✅ Despesas extras, pendências, vencimentos
-✅ Valores pendentes, tipos de despesa, observações
-
-CONTEXTO ATUAL: {dados_contexto_especifico}
-
-INSTRUÇÕES CRÍTICAS:
-1. **DOMÍNIO AUTOMÁTICO** - Detecte o domínio e foque nos dados relevantes
-2. **PRECISÃO POR CONTEXTO** - Use métricas específicas do domínio
-3. **DADOS COMPLETOS** - Inclua todas as informações do domínio detectado
-4. **TRANSIÇÃO INTELIGENTE** - Se pergunta muda domínio, adapte automaticamente
-5. **CONTINUIDADE** - Mantenha contexto conversacional entre domínios
-6. **JAMAIS CONFUNDIR** - Clientes, domínios e conceitos são distintos
-
-EXEMPLOS DE ADAPTAÇÃO:
-- "Fretes do Assai" → DOMÍNIO: Fretes | CLIENTE: Assai específico
-- "Transportadoras freteiras" → DOMÍNIO: Transportadoras | FILTRO: freteiro=True  
-- "Pedidos sem cotação" → DOMÍNIO: Pedidos | FILTRO: status=aberto
-- "Embarques aguardando" → DOMÍNIO: Embarques | FILTRO: sem data_embarque
-
-Responda com inteligência contextual, adaptando automaticamente ao domínio detectado."""
+🎯 **OBJETIVO**: Ser 100% preciso usando APENAS dados reais fornecidos."""
     
     def processar_consulta_real(self, consulta: str, user_context: Dict = None) -> str:
         """Processa consulta usando Claude REAL com contexto inteligente e MEMÓRIA CONVERSACIONAL"""
@@ -158,6 +103,25 @@ Responda com inteligência contextual, adaptando automaticamente ao domínio det
         # 📊 DETECTAR COMANDOS DE EXPORT EXCEL
         if self._is_excel_command(consulta):
             return self._processar_comando_excel(consulta, user_context)
+        
+        # 🔍 DETECTAR CONSULTAS DE NFs ESPECÍFICAS (NOVA FUNCIONALIDADE)
+        import re
+        nfs_encontradas = re.findall(r'1\d{5}', consulta)
+        
+        if nfs_encontradas and len(nfs_encontradas) >= 2:  # Pelo menos 2 NFs
+            logger.info(f"🔍 PROCESSAMENTO: Consulta de NFs específicas detectada ({len(nfs_encontradas)} NFs)")
+            
+            # Processar consulta específica de NFs
+            resultado_nfs = self.consultar_posicao_nfs_especificas(consulta)
+            
+            # Adicionar ao contexto conversacional
+            if context_manager:
+                metadata = {'tipo': 'consulta_nfs', 'total_nfs': len(nfs_encontradas)}
+                context_manager.add_message(user_id, 'user', consulta, metadata)
+                context_manager.add_message(user_id, 'assistant', resultado_nfs, metadata)
+                logger.info(f"🧠 Consulta de NFs adicionada ao contexto para usuário {user_id}")
+            
+            return resultado_nfs
         
         # 🧠 SISTEMA DE CONTEXTO CONVERSACIONAL
         user_id = str(user_context.get('user_id', 'anonymous')) if user_context else 'anonymous'
@@ -323,8 +287,22 @@ Por favor, forneça uma resposta completa incluindo:
             "filtro_geografico": None,
             "foco_dados": [],
             "metricas_solicitadas": [],
-            "correcao_usuario": False
+            "correcao_usuario": False,
+            "consulta_nfs_especificas": False,  # NOVO: Flag para NFs específicas
+            "nfs_detectadas": []  # NOVO: Lista de NFs encontradas
         }
+        
+        # 🔍 DETECÇÃO DE CONSULTA DE NFs ESPECÍFICAS (NOVA PRIORIDADE)
+        import re
+        nfs_encontradas = re.findall(r'1\d{5}', consulta)  # NFs começam com 1 e têm 6 dígitos
+        
+        if nfs_encontradas and len(nfs_encontradas) >= 2:  # Pelo menos 2 NFs para ser consulta específica
+            analise["consulta_nfs_especificas"] = True
+            analise["nfs_detectadas"] = nfs_encontradas
+            analise["tipo_consulta"] = "nfs_especificas"
+            analise["dominio"] = "entregas"  # NFs sempre relacionadas a entregas
+            logger.info(f"🔍 CONSULTA DE NFs ESPECÍFICAS detectada: {len(nfs_encontradas)} NFs")
+            return analise  # Retornar imediatamente para consulta específica
         
         # 🚨 DETECÇÃO DE CORREÇÕES DO USUÁRIO - PRIMEIRA VERIFICAÇÃO
         palavras_correcao = [
@@ -1118,7 +1096,7 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
         return False
     
     def _processar_comando_excel(self, consulta: str, user_context: Dict = None) -> str:
-        """🧠 PROCESSAMENTO INTELIGENTE DE COMANDOS EXCEL"""
+        """🧠 PROCESSAMENTO INTELIGENTE DE COMANDOS EXCEL - VERSÃO CORRIGIDA"""
         try:
             from .excel_generator import get_excel_generator
             
@@ -1127,108 +1105,144 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
             excel_generator = get_excel_generator()
             consulta_lower = consulta.lower()
             
-            # 🎯 ANÁLISE INTELIGENTE DE COMANDOS (mesma lógica da rota API)
+            # 🎯 DETECÇÃO INTELIGENTE DE CLIENTE (PRIMEIRA PRIORIDADE)
+            cliente_detectado = None
+            cliente_filtro = None
             
-            # 1. ENTREGAS PENDENTES (prioritário - conceito diferente de atrasadas)
-            if any(palavra in consulta_lower for palavra in ['entregas pendentes', 'pendente', 'não entregue', 'aguardando entrega', 'pendentes com agendamento']):
+            # Usar sistema real de dados para detectar clientes
+            sistema_real = get_sistema_real_data()
+            
+            # Buscar clientes reais do banco
+            clientes_reais = sistema_real.buscar_clientes_reais()
+            
+            # Detectar cliente real na consulta
+            for cliente_real in clientes_reais:
+                # Busca case-insensitive por palavras do nome do cliente
+                palavras_cliente = cliente_real.lower().split()
+                for palavra in palavras_cliente:
+                    if len(palavra) > 3 and palavra in consulta_lower:  # Palavras com mais de 3 chars
+                        cliente_detectado = cliente_real
+                        cliente_filtro = cliente_real
+                        logger.info(f"🎯 CLIENTE REAL DETECTADO: {cliente_detectado}")
+                        break
+                if cliente_detectado:
+                    break
+            
+            # Lógica simples: se não encontrou cliente na lista real, seguir sem filtro específico
+            # Claude vai usar apenas os dados reais fornecidos no contexto
+            
+            # 🎯 ANÁLISE DE TIPO DE RELATÓRIO
+            
+            # 1. ENTREGAS FINALIZADAS (nova detecção)
+            if any(palavra in consulta_lower for palavra in ['finalizadas', 'finalizados', 'concluídas', 'concluidos', 'entregues', 'realizadas']):
+                logger.info("✅ CLAUDE: Detectado comando ENTREGAS FINALIZADAS")
+                
+                # Detectar período específico
+                periodo_dias = 30  # padrão
+                
+                # Detectar "maio", "junho", etc.
+                if 'maio' in consulta_lower:
+                    periodo_dias = 31
+                    # TODO: Implementar filtro específico por mês
+                elif 'junho' in consulta_lower:
+                    periodo_dias = 30
+                elif re.search(r'(\d+)\s*dias?', consulta_lower):
+                    match = re.search(r'(\d+)\s*dias?', consulta_lower)
+                    periodo_dias = int(match.group(1))
+                
+                # Preparar filtros
+                filtros = {}
+                if cliente_filtro:
+                    filtros['cliente'] = cliente_filtro
+                
+                # Usar função específica para entregas finalizadas
+                resultado = excel_generator.gerar_relatorio_entregas_finalizadas(filtros, periodo_dias)
+                
+            # 2. ENTREGAS PENDENTES 
+            elif any(palavra in consulta_lower for palavra in ['entregas pendentes', 'pendente', 'não entregue', 'aguardando entrega']):
                 logger.info("📋 CLAUDE: Detectado comando ENTREGAS PENDENTES")
                 
-                # Detectar filtros no comando
+                # Preparar filtros
                 filtros = {}
+                if cliente_filtro:
+                    filtros['cliente'] = cliente_filtro
+                    logger.info(f"📋 Aplicando filtro cliente: {cliente_filtro}")
+                
+                # Detectar outros filtros
                 if 'uf' in consulta_lower:
-                    import re
                     match = re.search(r'uf\s+([A-Z]{2})', consulta.upper())
                     if match:
                         filtros['uf'] = match.group(1)
-                if 'cliente' in consulta_lower:
-                    import re
-                    match = re.search(r'cliente\s+([a-zA-Z\s]+)', consulta_lower)
-                    if match:
-                        filtros['cliente'] = match.group(1).strip()
-                if 'vendedor' in consulta_lower:
-                    import re
-                    match = re.search(r'vendedor\s+([a-zA-Z\s]+)', consulta_lower)
-                    if match:
-                        filtros['vendedor'] = match.group(1).strip()
                         
                 resultado = excel_generator.gerar_relatorio_entregas_pendentes(filtros)
                 
-            # 2. ENTREGAS ATRASADAS (específico para atrasos)
+            # 3. ENTREGAS ATRASADAS
             elif any(palavra in consulta_lower for palavra in ['entregas atrasadas', 'atraso', 'atrasado', 'atrasada', 'em atraso']):
                 logger.info("🔴 CLAUDE: Detectado comando ENTREGAS ATRASADAS")
                 
-                # Detectar filtros no comando
+                # Preparar filtros
                 filtros = {}
-                if 'cliente' in consulta_lower:
-                    import re
-                    match = re.search(r'cliente\s+([a-zA-Z\s]+)', consulta_lower)
-                    if match:
-                        filtros['cliente'] = match.group(1).strip()
-                if 'uf' in consulta_lower:
-                    import re
-                    match = re.search(r'uf\s+([A-Z]{2})', consulta.upper())
-                    if match:
-                        filtros['uf'] = match.group(1)
+                if cliente_filtro:
+                    filtros['cliente'] = cliente_filtro
                 
                 resultado = excel_generator.gerar_relatorio_entregas_atrasadas(filtros)
                 
-            # 3. CLIENTE ESPECÍFICO
-            elif any(cliente in consulta_lower for cliente in ['assai', 'atacadão', 'carrefour', 'walmart', 'tenda', 'mateus', 'fort']):
-                logger.info("👤 CLAUDE: Detectado comando CLIENTE ESPECÍFICO")
+            # 4. CLIENTE ESPECÍFICO (quando só menciona cliente sem tipo específico)
+            elif cliente_detectado and not any(palavra in consulta_lower for palavra in ['pendente', 'atrasada', 'finalizadas']):
+                logger.info(f"👤 CLAUDE: Detectado comando CLIENTE ESPECÍFICO: {cliente_detectado}")
                 
-                # Detectar cliente
-                cliente = None
-                clientes_mapeamento = {
-                    'assai': 'Assai',
-                    'atacadão': 'Atacadão',
-                    'carrefour': 'Carrefour',
-                    'walmart': 'Walmart',
-                    'tenda': 'Tenda',
-                    'mateus': 'Mateus',
-                    'fort': 'Fort'
-                }
+                # Detectar período se especificado
+                periodo = 30  # padrão
+                if 'últimos' in consulta_lower or 'ultimo' in consulta_lower:
+                    match = re.search(r'(\d+)\s*dias?', consulta_lower)
+                    if match:
+                        periodo = int(match.group(1))
                 
-                for nome_comando, nome_real in clientes_mapeamento.items():
-                    if nome_comando in consulta_lower:
-                        cliente = nome_real
-                        break
+                resultado = excel_generator.gerar_relatorio_cliente_especifico(cliente_filtro, periodo)
                 
-                if cliente:
-                    # Detectar período se especificado
-                    periodo = 30  # padrão
-                    if 'últimos' in consulta_lower or 'ultimo' in consulta_lower:
-                        import re
-                        match = re.search(r'(\d+)\s*dias?', consulta_lower)
-                        if match:
-                            periodo = int(match.group(1))
-                    
-                    resultado = excel_generator.gerar_relatorio_cliente_especifico(cliente, periodo)
-                else:
-                    # Fallback para entregas pendentes
-                    resultado = excel_generator.gerar_relatorio_entregas_pendentes()
-            
-            # 4. COMANDOS GENÉRICOS COM PALAVRAS-CHAVE EXCEL
+            # 5. COMANDOS GENÉRICOS
             elif any(palavra in consulta_lower for palavra in ['relatório', 'planilha', 'excel', 'exportar']):
-                logger.info("📊 CLAUDE: Detectado comando GENÉRICO - Default para ENTREGAS PENDENTES")
-                # Para comandos genéricos, usar entregas pendentes por ser mais abrangente
-                resultado = excel_generator.gerar_relatorio_entregas_pendentes()
-            
-            else:
-                logger.warning("⚠️ CLAUDE: Comando Excel não reconhecido - usando fallback ENTREGAS PENDENTES")
-                # Fallback para entregas pendentes (mais útil que atrasadas)
-                resultado = excel_generator.gerar_relatorio_entregas_pendentes()
-            
-            if resultado and resultado.get('success'):
-                # 🎯 RESPOSTA PERSONALIZADA POR TIPO DE RELATÓRIO
+                logger.info("📊 CLAUDE: Detectado comando GENÉRICO")
                 
+                # Para comandos genéricos, verificar se há cliente
+                filtros = {}
+                if cliente_filtro:
+                    filtros['cliente'] = cliente_filtro
+                    
+                # Default para entregas pendentes (mais útil)
+                resultado = excel_generator.gerar_relatorio_entregas_pendentes(filtros)
+                
+            else:
+                logger.warning("⚠️ CLAUDE: Comando Excel não reconhecido - usando fallback")
+                
+                # Fallback inteligente baseado em cliente detectado
+                filtros = {}
+                if cliente_filtro:
+                    filtros['cliente'] = cliente_filtro
+                    
+                resultado = excel_generator.gerar_relatorio_entregas_pendentes(filtros)
+                
+            # 🎯 RESPOSTA MELHORADA (resto da função mantém igual)
+            if resultado and resultado.get('success'):
                 # Determinar tipo de relatório pelo nome do arquivo
                 filename = resultado['filename']
                 is_pendentes = 'pendentes' in filename
                 is_atrasadas = 'atrasadas' in filename
+                is_finalizadas = 'finalizadas' in filename
                 is_cliente = any(cliente in filename.lower() for cliente in ['assai', 'atacadao', 'carrefour', 'tenda', 'mateus', 'fort', 'walmart'])
                 
-                # Título e descrição específicos
-                if is_pendentes:
+                # Título específico baseado no tipo
+                if is_finalizadas:
+                    titulo_relatorio = "✅ **ENTREGAS FINALIZADAS - EXCEL GERADO!**"
+                    aba_principal = "Entregas Finalizadas"
+                    descricao_especifica = """
+🎯 **HISTÓRICO DE ENTREGAS REALIZADAS**:
+• ✅ Entregas concluídas com sucesso
+• 📊 Performance de pontualidade
+• 📈 Lead time médio realizado
+• 🎯 Análise de cumprimento de prazos"""
+                    
+                elif is_pendentes:
                     titulo_relatorio = "📋 **ENTREGAS PENDENTES - EXCEL GERADO!**"
                     aba_principal = "Entregas Pendentes"
                     descricao_especifica = """
@@ -1263,7 +1277,7 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
                 elif is_cliente:
                     titulo_relatorio = "👤 **RELATÓRIO DE CLIENTE - EXCEL GERADO!**"
                     aba_principal = "Dados do Cliente"
-                    cliente_nome = resultado.get('cliente', 'Cliente')
+                    cliente_nome = cliente_filtro or resultado.get('cliente', 'Cliente')
                     periodo = resultado.get('periodo_dias', 30)
                     descricao_especifica = f"""
 🎯 **ANÁLISE PERSONALIZADA COMPLETA**:
@@ -1277,13 +1291,18 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
                     aba_principal = "Dados Principais"
                     descricao_especifica = ""
                 
+                # Adicionar informação de filtro aplicado
+                info_filtro = ""
+                if cliente_filtro:
+                    info_filtro = f"\n🎯 **Filtro Aplicado**: Cliente = {cliente_filtro}"
+                
                 # Retornar resposta formatada
                 return f"""{titulo_relatorio}
 
 ✅ **Arquivo**: `{resultado['filename']}`
 📈 **Registros**: {resultado['total_registros']}
 💰 **Valor Total**: R$ {resultado.get('valor_total', 0):,.2f}
-📅 **Gerado**: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+📅 **Gerado**: {datetime.now().strftime('%d/%m/%Y %H:%M')}{info_filtro}
 
 🔗 **DOWNLOAD**: [Clique aqui para baixar]({resultado['file_url']})
 
@@ -1374,6 +1393,250 @@ Consulta recebida: "{consulta}"
 - Dados completos com reagendamentos
 
 🔄 **Por enquanto, usando sistema básico...**"""
+
+    def consultar_posicao_nfs_especificas(self, lista_nfs: str) -> str:
+        """🔍 Consulta posição específica de lista de NFs"""
+        try:
+            import re
+            from app import db
+            from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
+            from app.embarques.models import Embarque, EmbarqueItem
+            from app.pedidos.models import Pedido
+            
+            # Extrair números de NF da string
+            numeros_nf = re.findall(r'1\d{5}', lista_nfs)  # NFs começam com 1 e têm 6 dígitos
+            
+            if not numeros_nf:
+                return "❌ **NENHUMA NF VÁLIDA ENCONTRADA**\n\nFormato esperado: 6 dígitos começando com 1 (ex: 135497, 134451)"
+            
+            logger.info(f"🔍 Consultando posição de {len(numeros_nf)} NFs: {numeros_nf[:5]}...")
+            
+            resultados = []
+            nfs_encontradas = 0
+            
+            for nf in numeros_nf:
+                resultado_nf = {
+                    'nf': nf,
+                    'encontrada': False,
+                    'status': 'Não encontrada',
+                    'tipo': None,
+                    'detalhes': {}
+                }
+                
+                # 1. Buscar em Entregas Monitoradas
+                entrega = EntregaMonitorada.query.filter(
+                    EntregaMonitorada.numero_nf == nf
+                ).first()
+                
+                if entrega:
+                    resultado_nf['encontrada'] = True
+                    resultado_nf['tipo'] = 'Entrega Monitorada'
+                    resultado_nf['status'] = entrega.status_finalizacao or 'Pendente'
+                    
+                    # Buscar último agendamento
+                    ultimo_agendamento = AgendamentoEntrega.query.filter(
+                        AgendamentoEntrega.entrega_id == entrega.id
+                    ).order_by(AgendamentoEntrega.criado_em.desc()).first()
+                    
+                    resultado_nf['detalhes'] = {
+                        'cliente': entrega.cliente,
+                        'destino': entrega.destino,
+                        'uf': entrega.uf,
+                        'transportadora': entrega.transportadora,
+                        'vendedor': entrega.vendedor,
+                        'data_embarque': entrega.data_embarque.strftime('%d/%m/%Y') if entrega.data_embarque else None,
+                        'data_prevista': entrega.data_entrega_prevista.strftime('%d/%m/%Y') if entrega.data_entrega_prevista else None,
+                        'data_realizada': entrega.data_entrega_realizada.strftime('%d/%m/%Y') if entrega.data_entrega_realizada else None,
+                        'valor_nf': float(entrega.valor_nf or 0),
+                        'entregue': entrega.entregue,
+                        'pendencia_financeira': entrega.pendencia_financeira,
+                        'agendamento': {
+                            'protocolo': ultimo_agendamento.protocolo_agendamento if ultimo_agendamento else None,
+                            'forma': ultimo_agendamento.forma_agendamento if ultimo_agendamento else None,
+                            'status': ultimo_agendamento.status if ultimo_agendamento else None,
+                            'data_agendada': ultimo_agendamento.data_agendada.strftime('%d/%m/%Y') if ultimo_agendamento and ultimo_agendamento.data_agendada else None
+                        } if ultimo_agendamento else None,
+                        'observacoes': entrega.observacoes_entrega
+                    }
+                    nfs_encontradas += 1
+                
+                # 2. Se não encontrou em entregas, buscar em embarques (CORRIGIDO)
+                elif not resultado_nf['encontrada']:
+                    try:
+                        # CORREÇÃO: usar campo correto para data de criação
+                        embarque_item = db.session.query(EmbarqueItem).join(Embarque).filter(
+                            EmbarqueItem.numero_nf == nf
+                        ).first()
+                        
+                        if embarque_item and embarque_item.embarque:
+                            resultado_nf['encontrada'] = True
+                            resultado_nf['tipo'] = 'Embarque'
+                            resultado_nf['status'] = 'Embarcado' if embarque_item.embarque.data_embarque else 'Aguardando Embarque'
+                            
+                            resultado_nf['detalhes'] = {
+                                'numero_embarque': embarque_item.embarque.numero,
+                                'motorista': embarque_item.embarque.motorista,
+                                'placa_veiculo': embarque_item.embarque.placa_veiculo,
+                                'data_embarque': embarque_item.embarque.data_embarque.strftime('%d/%m/%Y %H:%M') if embarque_item.embarque.data_embarque else None,
+                                'status_embarque': embarque_item.embarque.status,
+                                'observacoes': embarque_item.embarque.observacoes,
+                                # CORREÇÃO: usar campo que existe
+                                'data_criacao': embarque_item.embarque.data_criacao.strftime('%d/%m/%Y %H:%M') if hasattr(embarque_item.embarque, 'data_criacao') and embarque_item.embarque.data_criacao else 'Data não disponível'
+                            }
+                            nfs_encontradas += 1
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao consultar embarque para NF {nf}: {e}")
+                
+                # 3. Se ainda não encontrou, buscar em pedidos
+                if not resultado_nf['encontrada']:
+                    pedido = Pedido.query.filter(Pedido.nf == nf).first()
+                    
+                    if pedido:
+                        resultado_nf['encontrada'] = True
+                        resultado_nf['tipo'] = 'Pedido'
+                        resultado_nf['status'] = pedido.status_calculado or 'Pendente'
+                        
+                        resultado_nf['detalhes'] = {
+                            'num_pedido': pedido.num_pedido,
+                            'cliente': pedido.raz_social_red,
+                            'cidade': pedido.nome_cidade,
+                            'uf': pedido.cod_uf,
+                            'valor_total': float(pedido.valor_saldo_total or 0),
+                            'peso_total': float(pedido.peso_total or 0),
+                            'expedicao': pedido.expedicao.strftime('%d/%m/%Y') if pedido.expedicao else None,
+                            'agendamento': pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else None,
+                            'protocolo': pedido.protocolo,
+                            'transportadora': pedido.transportadora,
+                            'cotacao_id': pedido.cotacao_id
+                        }
+                        nfs_encontradas += 1
+                
+                resultados.append(resultado_nf)
+            
+            # Montar resposta formatada
+            resposta = f"""🔍 **POSIÇÃO DE ENTREGAS - {len(numeros_nf)} NFs CONSULTADAS**
+
+📊 **RESUMO**: {nfs_encontradas} de {len(numeros_nf)} NFs encontradas ({nfs_encontradas/len(numeros_nf)*100:.1f}%)
+
+"""
+            
+            # Agrupar por tipo para melhor organização
+            tipos_grupos = {}
+            for resultado in resultados:
+                if resultado['encontrada']:
+                    tipo = resultado['tipo']
+                    if tipo not in tipos_grupos:
+                        tipos_grupos[tipo] = []
+                    tipos_grupos[tipo].append(resultado)
+            
+            # Exibir resultados encontrados por tipo
+            for tipo, nfs_tipo in tipos_grupos.items():
+                icon = {'Entrega Monitorada': '📦', 'Embarque': '🚛', 'Pedido': '📋'}.get(tipo, '📄')
+                resposta += f"## {icon} **{tipo.upper()}** ({len(nfs_tipo)} NFs)\n\n"
+                
+                for resultado in nfs_tipo:
+                    nf = resultado['nf']
+                    status = resultado['status']
+                    detalhes = resultado['detalhes']
+                    
+                    if tipo == 'Entrega Monitorada':
+                        status_icon = '✅' if detalhes.get('entregue') else '📦'
+                        pendencia_icon = '💰' if detalhes.get('pendencia_financeira') else ''
+                        
+                        resposta += f"""**NF {nf}** {status_icon} {pendencia_icon}
+• **Cliente**: {detalhes.get('cliente', 'N/A')}
+• **Status**: {status}
+• **Destino**: {detalhes.get('destino', 'N/A')} - {detalhes.get('uf', 'N/A')}
+• **Transportadora**: {detalhes.get('transportadora', 'N/A')}
+• **Vendedor**: {detalhes.get('vendedor', 'N/A')}
+• **Data Embarque**: {detalhes.get('data_embarque', 'Não embarcado')}
+• **Data Prevista**: {detalhes.get('data_prevista', 'Sem agendamento')}
+• **Data Realizada**: {detalhes.get('data_realizada', 'Não entregue')}
+• **Valor NF**: R$ {detalhes.get('valor_nf', 0):,.2f}"""
+                        
+                        if detalhes.get('agendamento'):
+                            agend = detalhes['agendamento']
+                            resposta += f"""
+• **Agendamento**: {agend.get('status', 'N/A')} - {agend.get('data_agendada', 'N/A')}
+• **Protocolo**: {agend.get('protocolo', 'N/A')}"""
+                        
+                        if detalhes.get('observacoes'):
+                            resposta += f"\n• **Observações**: {detalhes['observacoes']}"
+                            
+                    elif tipo == 'Embarque':
+                        status_icon = '🚛' if detalhes.get('data_embarque') else '⏳'
+                        
+                        resposta += f"""**NF {nf}** {status_icon}
+• **Status**: {status}
+• **Embarque**: #{detalhes.get('numero_embarque', 'N/A')}
+• **Motorista**: {detalhes.get('motorista', 'N/A')}
+• **Placa**: {detalhes.get('placa_veiculo', 'N/A')}
+• **Data Embarque**: {detalhes.get('data_embarque', 'Aguardando')}
+• **Criado em**: {detalhes.get('data_criacao', 'N/A')}"""
+                        
+                        if detalhes.get('observacoes'):
+                            resposta += f"\n• **Observações**: {detalhes['observacoes']}"
+                            
+                    elif tipo == 'Pedido':
+                        status_icon = {'ABERTO': '📋', 'COTADO': '💰', 'FATURADO': '📄'}.get(status, '📋')
+                        
+                        resposta += f"""**NF {nf}** {status_icon}
+• **Status**: {status}
+• **Pedido**: {detalhes.get('num_pedido', 'N/A')}
+• **Cliente**: {detalhes.get('cliente', 'N/A')}
+• **Destino**: {detalhes.get('cidade', 'N/A')} - {detalhes.get('uf', 'N/A')}
+• **Valor**: R$ {detalhes.get('valor_total', 0):,.2f}
+• **Peso**: {detalhes.get('peso_total', 0):,.1f} kg
+• **Expedição**: {detalhes.get('expedicao', 'N/A')}
+• **Agendamento**: {detalhes.get('agendamento', 'Sem agendamento')}
+• **Transportadora**: {detalhes.get('transportadora', 'Não definida')}"""
+                        
+                        if detalhes.get('protocolo'):
+                            resposta += f"\n• **Protocolo**: {detalhes['protocolo']}"
+                    
+                    resposta += "\n\n"
+            
+            # Listar NFs não encontradas
+            nfs_nao_encontradas = [r['nf'] for r in resultados if not r['encontrada']]
+            if nfs_nao_encontradas:
+                resposta += f"""❌ **NFs NÃO ENCONTRADAS** ({len(nfs_nao_encontradas)}):
+{', '.join(nfs_nao_encontradas)}
+
+💡 **Possíveis causas**:
+• NFs muito antigas (fora do período de retenção)
+• Números incorretos ou inválidos
+• NFs de outros sistemas/filiais
+• Ainda não processadas pelo sistema
+
+"""
+            
+            resposta += f"""---
+🔍 **CONSULTA FINALIZADA**
+📊 **Total consultado**: {len(numeros_nf)} NFs
+✅ **Encontradas**: {nfs_encontradas} NFs
+❌ **Não encontradas**: {len(nfs_nao_encontradas)} NFs
+📈 **Taxa de sucesso**: {nfs_encontradas/len(numeros_nf)*100:.1f}%
+
+---
+🧠 **Powered by:** Claude 4 Sonnet (Anthropic) - Consulta Específica de NFs
+🕒 **Processado:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+⚡ **Modo:** Busca Multi-Tabela (Entregas + Embarques + Pedidos)"""
+            
+            return resposta
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao consultar posição de NFs: {e}")
+            return f"""❌ **ERRO AO CONSULTAR POSIÇÃO DAS NFs**
+
+**Erro técnico**: {str(e)}
+
+🔧 **Soluções**:
+1. Verificar se os números das NFs estão corretos
+2. Tentar consulta com menos NFs por vez
+3. Contactar suporte se erro persistir
+
+💡 **Formato correto**: 6 dígitos começando com 1
+**Exemplo**: 135497, 134451, 136077"""
 
 # Instância global
 claude_integration = ClaudeRealIntegration()

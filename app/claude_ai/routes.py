@@ -985,20 +985,21 @@ def processar_comando_excel():
         elif any(cliente in comando for cliente in ['assai', 'atacadão', 'carrefour', 'tenda', 'mateus', 'fort']):
             logger.info("👤 Detectado: CLIENTE ESPECÍFICO")
             
-            # Detectar cliente
-            cliente = None
-            clientes_mapeamento = {
-                'assai': 'Assai',
-                'atacadão': 'Atacadão',
-                'carrefour': 'Carrefour',
-                'tenda': 'Tenda',
-                'mateus': 'Mateus',
-                'fort': 'Fort'
-            }
+            # Detectar cliente usando dados reais
+            from .sistema_real_data import get_sistema_real_data
+            sistema_real = get_sistema_real_data()
+            clientes_reais = sistema_real.buscar_clientes_reais()
             
-            for nome_comando, nome_real in clientes_mapeamento.items():
-                if nome_comando in comando:
-                    cliente = nome_real
+            cliente = None
+            for cliente_real in clientes_reais:
+                # Busca case-insensitive por palavras do nome do cliente
+                palavras_cliente = cliente_real.lower().split()
+                for palavra in palavras_cliente:
+                    if len(palavra) > 3 and palavra in comando:  # Palavras com mais de 3 chars
+                        cliente = cliente_real
+                        logger.info(f"🎯 Cliente real detectado no comando: {cliente}")
+                        break
+                if cliente:
                     break
             
             if cliente:
