@@ -246,25 +246,39 @@ class SistemaRealData:
         except ImportError:
             prompt_mapeamento = ""
         
-        # Construir prompt com dados REAIS
+        # Construir prompt com dados REAIS (CORRIGIDO - sem placeholders conflitantes)
+        
+        # Preparar dados formatados de forma segura
+        clientes_lista = '\n'.join([f"  - {c}" for c in clientes_reais[:20]])
+        clientes_mais = f"\n... e mais {len(clientes_reais) - 20} clientes" if len(clientes_reais) > 20 else ""
+        
+        transportadoras_lista = '\n'.join([f"  - {t['razao_social']}" for t in transportadoras_reais[:10]])
+        transportadoras_mais = f"\n... e mais {len(transportadoras_reais) - 10} transportadoras" if len(transportadoras_reais) > 10 else ""
+        
+        vendedores_lista = '\n'.join([f"  - {v}" for v in vendedores_reais[:15]])
+        vendedores_mais = f"\n... e mais {len(vendedores_reais) - 15} vendedores" if len(vendedores_reais) > 15 else ""
+        
+        # Converter status de forma segura
+        status_texto = []
+        for tipo, lista_status in status_reais.items():
+            status_texto.append(f"  - {tipo}: {', '.join(lista_status)}")
+        status_formatado = '\n'.join(status_texto)
+        
         prompt = f"""VOCÊ É O ASSISTENTE IA DO SISTEMA DE FRETES COM DADOS 100% REAIS.
 
 🏢 **CLIENTES REAIS DO SISTEMA** ({len(clientes_reais)} encontrados):
-{json.dumps(clientes_reais[:20], indent=2, ensure_ascii=False)}
-{"... e mais " + str(len(clientes_reais) - 20) + " clientes" if len(clientes_reais) > 20 else ""}
+{clientes_lista}{clientes_mais}
 
 🚛 **TRANSPORTADORAS REAIS** ({len(transportadoras_reais)} encontradas):
-{json.dumps([t['razao_social'] for t in transportadoras_reais[:10]], indent=2, ensure_ascii=False)}
-{"... e mais " + str(len(transportadoras_reais) - 10) + " transportadoras" if len(transportadoras_reais) > 10 else ""}
+{transportadoras_lista}{transportadoras_mais}
 
 🗺️ **UFs REAIS DO SISTEMA**: {', '.join(ufs_reais)}
 
 👤 **VENDEDORES REAIS** ({len(vendedores_reais)} encontrados):
-{json.dumps(vendedores_reais[:15], indent=2, ensure_ascii=False)}
-{"... e mais " + str(len(vendedores_reais) - 15) + " vendedores" if len(vendedores_reais) > 15 else ""}
+{vendedores_lista}{vendedores_mais}
 
 📊 **STATUS REAIS POR TIPO**:
-{json.dumps(status_reais, indent=2, ensure_ascii=False)}
+{status_formatado}
 
 {prompt_mapeamento}
 
