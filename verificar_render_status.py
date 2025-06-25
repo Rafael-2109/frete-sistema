@@ -73,7 +73,7 @@ def testar_rotas_avancadas():
     """Testa as rotas avançadas do sistema"""
     print("\n🚀 TESTANDO ROTAS AVANÇADAS...")
     
-    base_url = "https://frete-sistema.onrender.com"
+    base_url = "https://sistema-fretes.onrender.com"
     
     rotas_testar = [
         "/claude-ai/advanced-dashboard",
@@ -101,7 +101,7 @@ def testar_api_health():
     
     try:
         response = requests.get(
-            "https://frete-sistema.onrender.com/claude-ai/api/system-health-advanced",
+            "https://sistema-fretes.onrender.com/claude-ai/api/system-health-advanced",
             timeout=15
         )
         
@@ -137,7 +137,7 @@ def testar_consulta_simples():
     
     try:
         response = requests.post(
-            "https://frete-sistema.onrender.com/claude-ai/api/advanced-query",
+            "https://sistema-fretes.onrender.com/claude-ai/api/advanced-query",
             json={
                 "query": "Status geral do sistema hoje",
                 "test_mode": True

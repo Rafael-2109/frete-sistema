@@ -1573,4 +1573,219 @@ def api_system_health_advanced():
                 'overall_status': 'critical',
                 'error': str(e)
             }
+        }), 500
+
+@claude_ai_bp.route('/api/metricas-reais')
+@login_required
+def api_metricas_reais():
+    """📊 API para métricas REAIS do sistema baseadas no PostgreSQL"""
+    try:
+        from app import db
+        from sqlalchemy import text, func
+        from datetime import date, timedelta
+        
+        hoje = date.today()
+        ontem = hoje - timedelta(days=1)
+        semana_passada = hoje - timedelta(days=7)
+        
+        metricas = {
+            'timestamp': datetime.now().isoformat(),
+            'sistema': {},
+            'operacional': {},
+            'claude_ai': {},
+            'performance': {}
+        }
+        
+        # 🔍 MÉTRICAS DO SISTEMA
+        try:
+            # Uptime do sistema (baseado em registros recentes)
+            uptime_query = text("""
+                SELECT 
+                    COUNT(*) as total_registros_hoje,
+                    COUNT(DISTINCT DATE(criado_em)) as dias_ativos_ultimos_7
+                FROM pedidos 
+                WHERE criado_em >= CURRENT_DATE - INTERVAL '7 days'
+            """)
+            uptime_result = db.session.execute(uptime_query).fetchone()
+            
+            # Calcular uptime aproximado baseado na atividade
+            dias_ativos = uptime_result[1] if uptime_result[1] else 1
+            uptime_percentual = (dias_ativos / 7) * 100
+            
+            # Usuários ativos hoje
+            usuarios_ativos_query = text("""
+                SELECT COUNT(DISTINCT u.id) 
+                FROM usuarios u 
+                WHERE u.status = 'ativo' 
+                AND u.ultimo_login >= CURRENT_DATE - INTERVAL '1 day'
+            """)
+            usuarios_ativos_result = db.session.execute(usuarios_ativos_query).fetchone()
+            usuarios_ativos = usuarios_ativos_result[0] if usuarios_ativos_result[0] else 0
+            
+            metricas['sistema'] = {
+                'uptime_percentual': round(uptime_percentual, 1),
+                'usuarios_ativos_hoje': usuarios_ativos,
+                'registros_sistema_hoje': uptime_result[0] if uptime_result[0] else 0
+            }
+        except Exception as e:
+            logger.warning(f"Erro ao calcular métricas do sistema: {e}")
+            metricas['sistema'] = {'erro': str(e)}
+        
+        # 📦 MÉTRICAS OPERACIONAIS
+        try:
+            # Pedidos hoje
+            pedidos_hoje_query = text("""
+                SELECT 
+                    COUNT(*) as total_pedidos,
+                    COUNT(CASE WHEN status = 'ABERTO' THEN 1 END) as pedidos_abertos,
+                    SUM(valor_saldo_total) as valor_total,
+                    SUM(peso_total) as peso_total
+                FROM pedidos 
+                WHERE DATE(criado_em) = CURRENT_DATE
+            """)
+            pedidos_result = db.session.execute(pedidos_hoje_query).fetchone()
+            
+            # Embarques ativos
+            embarques_ativos_query = text("""
+                SELECT 
+                    COUNT(*) as embarques_ativos,
+                    COUNT(CASE WHEN data_embarque IS NULL THEN 1 END) as aguardando_embarque,
+                    SUM(peso_total) as peso_total_ativo,
+                    SUM(valor_total) as valor_total_ativo
+                FROM embarques 
+                WHERE status = 'ativo'
+            """)
+            embarques_result = db.session.execute(embarques_ativos_query).fetchone()
+            
+            # Fretes pendentes aprovação
+            fretes_pendentes_query = text("""
+                SELECT 
+                    COUNT(*) as fretes_pendentes,
+                    COUNT(CASE WHEN status = 'APROVADO' THEN 1 END) as fretes_aprovados,
+                    COUNT(CASE WHEN status = 'PAGO' THEN 1 END) as fretes_pagos
+                FROM fretes 
+                WHERE criado_em >= CURRENT_DATE - INTERVAL '30 days'
+            """)
+            fretes_result = db.session.execute(fretes_pendentes_query).fetchone()
+            
+            # Entregas monitoradas hoje
+            entregas_hoje_query = text("""
+                SELECT 
+                    COUNT(*) as total_entregas,
+                    COUNT(CASE WHEN entregue = true THEN 1 END) as entregas_concluidas,
+                    COUNT(CASE WHEN entregue = false AND data_prevista_entrega < CURRENT_DATE THEN 1 END) as entregas_atrasadas
+                FROM entregas_monitoradas 
+                WHERE DATE(criado_em) = CURRENT_DATE OR DATE(data_prevista_entrega) = CURRENT_DATE
+            """)
+            entregas_result = db.session.execute(entregas_hoje_query).fetchone()
+            
+            metricas['operacional'] = {
+                'pedidos_hoje': pedidos_result[0] if pedidos_result[0] else 0,
+                'pedidos_abertos': pedidos_result[1] if pedidos_result[1] else 0,
+                'valor_pedidos_hoje': float(pedidos_result[2]) if pedidos_result[2] else 0.0,
+                'embarques_ativos': embarques_result[0] if embarques_result[0] else 0,
+                'embarques_aguardando': embarques_result[1] if embarques_result[1] else 0,
+                'fretes_pendentes': fretes_result[0] if fretes_result[0] else 0,
+                'fretes_aprovados': fretes_result[1] if fretes_result[1] else 0,
+                'entregas_hoje': entregas_result[0] if entregas_result[0] else 0,
+                'entregas_concluidas': entregas_result[1] if entregas_result[1] else 0,
+                'entregas_atrasadas': entregas_result[2] if entregas_result[2] else 0
+            }
+        except Exception as e:
+            logger.warning(f"Erro ao calcular métricas operacionais: {e}")
+            metricas['operacional'] = {'erro': str(e)}
+        
+        # 🧠 MÉTRICAS CLAUDE AI (das tabelas avançadas)
+        try:
+            # Sessões de IA hoje
+            sessoes_ia_query = text("""
+                SELECT 
+                    COUNT(*) as sessoes_hoje,
+                    COUNT(DISTINCT user_id) as usuarios_unicos,
+                    AVG((metadata_jsonb->'metacognitive'->>'confidence_score')::decimal) as confianca_media
+                FROM ai_advanced_sessions 
+                WHERE DATE(created_at) = CURRENT_DATE
+            """)
+            sessoes_result = db.session.execute(sessoes_ia_query).fetchone()
+            
+            # Feedback de satisfação (últimos 7 dias)
+            feedback_query = text("""
+                SELECT 
+                    COUNT(*) as total_feedbacks,
+                    AVG(CASE 
+                        WHEN feedback_type = 'excellent' THEN 5
+                        WHEN feedback_type = 'good' THEN 4
+                        WHEN feedback_type = 'general' THEN 3
+                        WHEN feedback_type = 'improvement' THEN 2
+                        WHEN feedback_type = 'error' THEN 1
+                        ELSE 3
+                    END) as satisfacao_media
+                FROM ai_feedback_history 
+                WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+            """)
+            feedback_result = db.session.execute(feedback_query).fetchone()
+            
+            # Padrões de aprendizado ativos
+            patterns_query = text("""
+                SELECT 
+                    COUNT(*) as padroes_ativos,
+                    AVG(confidence_score) as confianca_padroes
+                FROM ai_learning_patterns 
+                WHERE is_active = true
+            """)
+            patterns_result = db.session.execute(patterns_query).fetchone()
+            
+            metricas['claude_ai'] = {
+                'sessoes_hoje': sessoes_result[0] if sessoes_result[0] else 0,
+                'usuarios_ia_unicos': sessoes_result[1] if sessoes_result[1] else 0,
+                'confianca_media': float(sessoes_result[2]) if sessoes_result[2] else 0.0,
+                'total_feedbacks': feedback_result[0] if feedback_result[0] else 0,
+                'satisfacao_media': float(feedback_result[1]) if feedback_result[1] else 3.0,
+                'padroes_aprendizado': patterns_result[0] if patterns_result[0] else 0
+            }
+        except Exception as e:
+            logger.warning(f"Erro ao calcular métricas Claude AI: {e}")
+            metricas['claude_ai'] = {'erro': str(e)}
+        
+        # ⚡ MÉTRICAS DE PERFORMANCE
+        try:
+            # Teste de performance do banco
+            start_time = datetime.now()
+            db.session.execute(text("SELECT COUNT(*) FROM pedidos LIMIT 1")).fetchone()
+            db_response_time = (datetime.now() - start_time).total_seconds()
+            
+            # Cálculo de eficiência operacional
+            eficiencia_query = text("""
+                SELECT 
+                    COUNT(*) as total_operacoes,
+                    COUNT(CASE WHEN status IN ('APROVADO', 'PAGO') THEN 1 END) as operacoes_bem_sucedidas
+                FROM fretes 
+                WHERE criado_em >= CURRENT_DATE - INTERVAL '7 days'
+            """)
+            eficiencia_result = db.session.execute(eficiencia_query).fetchone()
+            
+            total_ops = eficiencia_result[0] if eficiencia_result[0] else 1
+            ops_sucesso = eficiencia_result[1] if eficiencia_result[1] else 0
+            taxa_sucesso = (ops_sucesso / total_ops) * 100
+            
+            metricas['performance'] = {
+                'tempo_resposta_db': round(db_response_time * 1000, 0),  # em ms
+                'status_db': 'excelente' if db_response_time < 0.1 else 'bom' if db_response_time < 0.5 else 'lento',
+                'taxa_sucesso_operacoes': round(taxa_sucesso, 1),
+                'operacoes_7_dias': total_ops
+            }
+        except Exception as e:
+            logger.warning(f"Erro ao calcular métricas de performance: {e}")
+            metricas['performance'] = {'erro': str(e)}
+        
+        return jsonify({
+            'success': True,
+            'metricas': metricas
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao gerar métricas reais: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
         }), 500 

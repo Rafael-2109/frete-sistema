@@ -336,37 +336,97 @@ function verificarStatus() {
 function carregarStatusSistema() {
     const statusDiv = document.getElementById('system-status');
     
-    // Simular carregamento de status do sistema
-    setTimeout(() => {
-        statusDiv.innerHTML = `
-            <div class="row g-2 text-center">
-                <div class="col-6">
-                    <div class="p-2 bg-success bg-opacity-10 rounded">
-                        <h6 class="mb-0 text-success">98.5%</h6>
-                        <small class="text-muted">Uptime</small>
-                    </div>
-                </div>
-                <div class="col-6">
-                    <div class="p-2 bg-info bg-opacity-10 rounded">
-                        <h6 class="mb-0 text-info">1.2s</h6>
-                        <small class="text-muted">Resposta</small>
-                    </div>
-                </div>
-                <div class="col-6">
-                    <div class="p-2 bg-primary bg-opacity-10 rounded">
-                        <h6 class="mb-0 text-primary">247</h6>
-                        <small class="text-muted">Consultas hoje</small>
-                    </div>
-                </div>
-                <div class="col-6">
-                    <div class="p-2 bg-warning bg-opacity-10 rounded">
-                        <h6 class="mb-0 text-warning">4.8/5</h6>
-                        <small class="text-muted">Satisfação</small>
-                    </div>
+    // 🚀 CARREGAR MÉTRICAS REAIS DO POSTGRESQL
+    statusDiv.innerHTML = `
+        <div class="row g-2 text-center">
+            <div class="col-6">
+                <div class="p-2 bg-success bg-opacity-10 rounded">
+                    <div class="spinner-border spinner-border-sm text-success" role="status"></div>
+                    <small class="text-muted d-block">Uptime</small>
                 </div>
             </div>
-        `;
-    }, 1000);
+            <div class="col-6">
+                <div class="p-2 bg-info bg-opacity-10 rounded">
+                    <div class="spinner-border spinner-border-sm text-info" role="status"></div>
+                    <small class="text-muted d-block">Resposta</small>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="p-2 bg-primary bg-opacity-10 rounded">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    <small class="text-muted d-block">Consultas hoje</small>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="p-2 bg-warning bg-opacity-10 rounded">
+                    <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+                    <small class="text-muted d-block">Satisfação</small>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Buscar métricas reais da API
+    fetch('/claude-ai/api/metricas-reais')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.metricas) {
+                const metricas = data.metricas;
+                
+                // Calcular valores para exibição
+                const uptime = metricas.sistema?.uptime_percentual || 0;
+                const tempoResposta = metricas.performance?.tempo_resposta_db || 0;
+                const consultasHoje = metricas.claude_ai?.sessoes_hoje || 0;
+                const satisfacao = metricas.claude_ai?.satisfacao_media || 0;
+                
+                // Atualizar interface com dados reais
+                statusDiv.innerHTML = `
+                    <div class="row g-2 text-center">
+                        <div class="col-6">
+                            <div class="p-2 bg-success bg-opacity-10 rounded">
+                                <h6 class="mb-0 text-success">${uptime}%</h6>
+                                <small class="text-muted">Uptime</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 bg-info bg-opacity-10 rounded">
+                                <h6 class="mb-0 text-info">${tempoResposta}ms</h6>
+                                <small class="text-muted">Resposta</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 bg-primary bg-opacity-10 rounded">
+                                <h6 class="mb-0 text-primary">${consultasHoje}</h6>
+                                <small class="text-muted">Consultas hoje</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 bg-warning bg-opacity-10 rounded">
+                                <h6 class="mb-0 text-warning">${satisfacao.toFixed(1)}/5</h6>
+                                <small class="text-muted">Satisfação</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                console.log('✅ Métricas reais carregadas:', metricas);
+            } else {
+                throw new Error(data.error || 'Erro ao carregar métricas');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Erro ao carregar métricas reais:', error);
+            // Fallback para dados básicos
+            statusDiv.innerHTML = `
+                <div class="row g-2 text-center">
+                    <div class="col-12">
+                        <div class="p-2 bg-warning bg-opacity-10 rounded">
+                            <small class="text-muted">⚠️ Métricas indisponíveis</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
 }
 
 function usarSugestao(texto) {
