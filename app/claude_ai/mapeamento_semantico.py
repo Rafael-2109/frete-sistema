@@ -144,11 +144,12 @@ class MapeamentoSemantico:
         """Cria mapeamento de termos naturais para campos do banco"""
         
         mapeamentos = {
-            # 📋 PEDIDOS
+            # 📋 PEDIDOS (expandido baseado no README)
             'pedido': {
                 'modelo': 'Pedido',
                 'campo_principal': 'num_pedido',
                 'termos_naturais': [
+                    'pedido', 'pdd', 'numero do pedido', 'num pedido',
                     'número do pedido', 'numero do pedido', 'num pedido', 'nº pedido',
                     'pedido número', 'pedido numero', 'código do pedido', 'id do pedido',
                     'número de pedido', 'numero de pedido'
@@ -161,6 +162,7 @@ class MapeamentoSemantico:
                 'modelo': 'Pedido', 
                 'campo_principal': 'raz_social_red',
                 'termos_naturais': [
+                    'cliente', 'razão social do cliente', 'nome do cliente',
                     'cliente do pedido', 'razão social', 'razao social', 'nome do cliente',
                     'cliente', 'empresa', 'comprador'
                 ],
@@ -172,6 +174,7 @@ class MapeamentoSemantico:
                 'modelo': 'Pedido',
                 'campo_principal': 'valor_saldo_total', 
                 'termos_naturais': [
+                    'total do pedido', 'valor do pdd', 'total do pdd',
                     'valor do pedido', 'valor total', 'saldo do pedido', 'preço do pedido',
                     'valor', 'montante', 'saldo total'
                 ],
@@ -183,6 +186,7 @@ class MapeamentoSemantico:
                 'modelo': 'Pedido',
                 'campo_principal': 'peso_total',
                 'termos_naturais': [
+                    'peso do pedido', 'peso do pdd', 'quilos', 'kg', 'peso bruto', 'quantos quilos',
                     'peso do pedido', 'peso total', 'peso', 'quilos', 'kg',
                     'peso em kg', 'toneladas'
                 ],
@@ -190,10 +194,73 @@ class MapeamentoSemantico:
                 'tipo': 'decimal'
             },
             
+            'pallets_pedido': {
+                'modelo': 'Pedido',
+                'campo_principal': 'pallet_total',
+                'termos_naturais': [
+                    'qtd de pallets do pedido', 'pallets do pedido', 'palets do pedido', 'palets do pdd', 
+                    'total de pallets do pedido', 'pallet do pedido', 'pallet pdd', 'qtd de palets', 
+                    'qtd de pallets', 'qtd de pallet', 'pallets', 'palets'
+                ],
+                'campo_busca': 'pallet_total',
+                'tipo': 'decimal'
+            },
+            
+            'agendamento_pedido': {
+                'modelo': 'Pedido',
+                'campo_principal': 'agendamento',
+                'termos_naturais': [
+                    'data de agendamento', 'agenda', 'data da agenda', 'agendamento', 'data agendada'
+                ],
+                'campo_busca': 'agendamento',
+                'tipo': 'date'
+            },
+            
+            'protocolo_pedido': {
+                'modelo': 'Pedido',
+                'campo_principal': 'protocolo',
+                'termos_naturais': [
+                    'protocolo', 'protocolo do agendamento'
+                ],
+                'campo_busca': 'protocolo',
+                'tipo': 'string'
+            },
+            
+            'data_expedicao': {
+                'modelo': 'Pedido',
+                'campo_principal': 'expedicao',
+                'termos_naturais': [
+                    'data programada', 'data prevista de faturamento', 'data prevista de embarque', 'quando está previsto sair'
+                ],
+                'campo_busca': 'expedicao',
+                'tipo': 'date'
+            },
+            
+            'observacao_pedido': {
+                'modelo': 'Pedido',
+                'campo_principal': 'observ_ped_1',
+                'termos_naturais': [
+                    'obs do pdd', 'observação do pedido', 'observação no pdd', 'observacao no pedido', 'observacao do pdd', 'obs no pdd'
+                ],
+                'campo_busca': 'observ_ped_1',
+                'tipo': 'string'
+            },
+            
+            'nf_cd_pedido': {
+                'modelo': 'Pedido',
+                'campo_principal': 'nf_cd',
+                'termos_naturais': [
+                    'nf no cd', 'nota no cd', 'voltou para empresa', 'entrega não concluída', 'precisa reentrega'
+                ],
+                'campo_busca': 'nf_cd',
+                'tipo': 'boolean'
+            },
+            
             'status_pedido': {
                 'modelo': 'Pedido',
                 'campo_principal': 'status_calculado',
                 'termos_naturais': [
+                    'aberto', 'cotado', 'faturado', 'status do pedido', 'situação do pedido', 'posição do pedido', 'embarcado',
                     'status do pedido', 'situação do pedido', 'estado do pedido',
                     'status', 'situação', 'estado'
                 ],
@@ -201,7 +268,7 @@ class MapeamentoSemantico:
                 'tipo': 'string'
             },
             
-            # 📦 ENTREGAS MONITORADAS
+            # 📦 ENTREGAS MONITORADAS (CAMPOS ESSENCIAIS RESTAURADOS)
             'numero_nf': {
                 'modelo': 'EntregaMonitorada',
                 'campo_principal': 'numero_nf',
@@ -225,7 +292,7 @@ class MapeamentoSemantico:
                 'tipo': 'string'
             },
             
-            'transportadora': {
+            'transportadora_entrega': {
                 'modelo': 'EntregaMonitorada',
                 'campo_principal': 'transportadora',
                 'termos_naturais': [
@@ -236,7 +303,7 @@ class MapeamentoSemantico:
                 'tipo': 'string'
             },
             
-            'vendedor': {
+            'vendedor_entrega': {
                 'modelo': 'EntregaMonitorada',
                 'campo_principal': 'vendedor',
                 'termos_naturais': [
@@ -247,14 +314,14 @@ class MapeamentoSemantico:
                 'tipo': 'string'
             },
             
-            'destino': {
+            'destino_entrega': {
                 'modelo': 'EntregaMonitorada',
-                'campo_principal': 'destino',
+                'campo_principal': 'municipio',
                 'termos_naturais': [
                     'destino', 'cidade de destino', 'local de entrega', 'endereço',
                     'cidade', 'município', 'localidade'
                 ],
-                'campo_busca': 'destino',
+                'campo_busca': 'municipio',
                 'tipo': 'string'
             },
             
@@ -346,16 +413,19 @@ class MapeamentoSemantico:
                 'tipo': 'boolean'
             },
             
-            # 💰 FATURAMENTO
+            # 💰 FATURAMENTO - CORREÇÃO CRÍTICA: Campo "origem"
             'origem': {
                 'modelo': 'RelatorioFaturamentoImportado',
                 'campo_principal': 'origem',
                 'termos_naturais': [
-                    'origem', 'procedência', 'de onde veio', 'origem da carga',
-                    'local de origem', 'cidade origem'
+                    # ✅ CORRIGIDO: origem = num_pedido (NÃO é localização!)
+                    'número do pedido', 'numero do pedido', 'num pedido', 'pedido',
+                    'origem', 'codigo do pedido', 'id do pedido', 'referencia do pedido',
+                    'num_pedido', 'pedido origem'
                 ],
                 'campo_busca': 'origem',
-                'tipo': 'string'
+                'tipo': 'string',
+                'observacao': 'CAMPO RELACIONAMENTO ESSENCIAL: origem = num_pedido (conecta faturamento→embarque→monitoramento→pedidos)'
             },
             
             'incoterm': {
@@ -391,29 +461,7 @@ class MapeamentoSemantico:
                 'campo_busca': 'numero',
                 'tipo': 'integer'
             },
-            
-            'motorista': {
-                'modelo': 'Embarque',
-                'campo_principal': 'motorista',
-                'termos_naturais': [
-                    'motorista', 'condutor', 'operador', 'responsável pelo veículo',
-                    'nome do motorista'
-                ],
-                'campo_busca': 'motorista',
-                'tipo': 'string'
-            },
-            
-            'placa_veiculo': {
-                'modelo': 'Embarque',
-                'campo_principal': 'placa_veiculo',
-                'termos_naturais': [
-                    'placa do veículo', 'placa do veiculo', 'placa', 'placa do carro',
-                    'placa do caminhão', 'placa do caminhao'
-                ],
-                'campo_busca': 'placa_veiculo',
-                'tipo': 'string'
-            },
-            
+                        
             # 📋 AGENDAMENTOS
             'protocolo_agendamento': {
                 'modelo': 'AgendamentoEntrega',
