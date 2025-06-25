@@ -17,11 +17,12 @@ ON ai_advanced_sessions USING gin(metadata_jsonb);
 CREATE INDEX IF NOT EXISTS idx_ai_sessions_user_date 
 ON ai_advanced_sessions(user_id, created_at);
 
+-- Corrigido: Usar B-tree para campos TEXT extraídos do JSONB
 CREATE INDEX IF NOT EXISTS idx_ai_sessions_domain 
-ON ai_advanced_sessions USING gin((metadata_jsonb->'session_tags'->>'domain'));
+ON ai_advanced_sessions((metadata_jsonb->'session_tags'->>'domain'));
 
 CREATE INDEX IF NOT EXISTS idx_ai_sessions_confidence 
-ON ai_advanced_sessions USING gin((metadata_jsonb->'metacognitive'->>'confidence_score'));
+ON ai_advanced_sessions((metadata_jsonb->'metacognitive'->>'confidence_score'));
 
 -- Tabela para historico de feedback e learning
 CREATE TABLE IF NOT EXISTS ai_feedback_history (

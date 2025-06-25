@@ -5,6 +5,9 @@ claude_ai_bp = Blueprint('claude_ai', __name__, url_prefix='/claude-ai')
 # Import routes to register them with the blueprint
 from . import routes 
 
+# 🚀 SISTEMA AVANÇADO DE IA v2.0 - ROTAS AVANÇADAS ATIVADAS
+# Versão: 25/06/2025 - Sistema Multi-Agent + Human Learning + PostgreSQL JSONB
+
 # 🧠 Inicializar Sistema de Sugestões Inteligentes
 def init_intelligent_suggestions():
     """Inicializa sistema de sugestões inteligentes"""
