@@ -826,6 +826,226 @@ class ExcelGenerator:
         
         return analise
 
+    def _gerar_excel_vazio(self, mensagem):
+        """Gera arquivo Excel vazio com mensagem informativa quando não há dados"""
+        try:
+            import pandas as pd
+            
+            # Criar DataFrame com mensagem informativa
+            dados_vazio = [{
+                'Mensagem': mensagem,
+                'Data Consulta': datetime.now().strftime('%d/%m/%Y %H:%M'),
+                'Sistema': 'Sistema de Fretes - Claude AI',
+                'Status': 'Nenhum dado encontrado',
+                'Observação': 'Verifique os filtros ou período consultado'
+            }]
+            
+            df = pd.DataFrame(dados_vazio)
+            
+            # Gerar arquivo Excel
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'relatorio_vazio_{timestamp}.xlsx'
+            self._ensure_output_dir()
+            filepath = os.path.join(self.output_dir, filename)
+            
+            # Criar Excel simples
+            with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Informação', index=False)
+                
+                # Aba com instruções
+                instrucoes = pd.DataFrame([
+                    {'Instruções': 'Como usar o sistema de relatórios:'},
+                    {'Instruções': '1. Verifique se o cliente existe no sistema'},
+                    {'Instruções': '2. Confirme o período de consulta (padrão: 30 dias)'},
+                    {'Instruções': '3. Use comandos específicos como:'},
+                    {'Instruções': '   • "Gerar Excel de entregas atrasadas"'},
+                    {'Instruções': '   • "Exportar dados do [Cliente] para Excel"'},
+                    {'Instruções': '   • "Relatório de performance em planilha"'},
+                    {'Instruções': '4. Entre em contato com suporte se o problema persistir'}
+                ])
+                instrucoes.to_excel(writer, sheet_name='Como Usar', index=False)
+            
+            file_url = self._safe_url_for(filename)
+            
+            return {
+                'success': True,
+                'filename': filename,
+                'filepath': filepath,
+                'file_url': file_url,
+                'total_registros': 0,
+                'valor_total': 0,
+                'message': mensagem,
+                'tipo': 'relatorio_vazio',
+                'instrucoes': 'Arquivo Excel gerado com informações sobre a consulta sem dados'
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro ao gerar Excel vazio: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'message': f'Erro ao gerar relatório: {mensagem}'
+            }
+
+    # Métodos auxiliares para criação de resumos e análises
+    def _criar_resumo_entregas_atrasadas(self, df):
+        """Cria resumo das entregas atrasadas"""
+        if df.empty:
+            return [{'Métrica': 'Nenhum dado', 'Valor': 0}]
+        
+        total_entregas = len(df)
+        maior_atraso = df['Dias Atraso'].max()
+        valor_total = df['Valor NF'].sum()
+        atraso_medio = df['Dias Atraso'].mean()
+        
+        return [
+            {'Métrica': 'Total de Entregas Atrasadas', 'Valor': total_entregas},
+            {'Métrica': 'Maior Atraso (dias)', 'Valor': maior_atraso},
+            {'Métrica': 'Atraso Médio (dias)', 'Valor': f"{atraso_medio:.1f}"},
+            {'Métrica': 'Valor Total Atrasado', 'Valor': f"R$ {valor_total:,.2f}"},
+            {'Métrica': 'Valor Médio por NF', 'Valor': f"R$ {valor_total/total_entregas:,.2f}"}
+        ]
+    
+    def _criar_acoes_recomendadas(self, df):
+        """Cria lista de ações recomendadas baseadas nos dados"""
+        acoes = [
+            {'Prioridade': 'ALTA', 'Ação': 'Contatar clientes com entregas atrasadas há mais de 7 dias'},
+            {'Prioridade': 'ALTA', 'Ação': 'Verificar status com transportadoras das entregas mais atrasadas'},
+            {'Prioridade': 'MÉDIA', 'Ação': 'Reagendar entregas que ainda não possuem agendamento'},
+            {'Prioridade': 'MÉDIA', 'Ação': 'Resolver pendências financeiras que impedem entregas'},
+            {'Prioridade': 'BAIXA', 'Ação': 'Melhorar comunicação com clientes sobre prazos de entrega'}
+        ]
+        
+        if not df.empty:
+            # Adicionar ações específicas baseadas nos dados
+            pendencias_financeiras = len(df[df['Pendencia Financeira'] == 'Sim'])
+            if pendencias_financeiras > 0:
+                acoes.insert(1, {
+                    'Prioridade': 'CRÍTICA', 
+                    'Ação': f'Resolver {pendencias_financeiras} pendências financeiras identificadas'
+                })
+        
+        return acoes
+    
+    def _criar_resumo_entregas_pendentes(self, df):
+        """Cria resumo das entregas pendentes"""
+        if df.empty:
+            return [{'Métrica': 'Nenhum dado', 'Valor': 0}]
+        
+        total_pendentes = len(df)
+        entregas_monitoradas = len(df[df['Tipo'] == 'Entrega Monitorada'])
+        pedidos_agendados = len(df[df['Tipo'] == 'Pedido Agendado'])
+        
+        return [
+            {'Métrica': 'Total de Entregas Pendentes', 'Valor': total_pendentes},
+            {'Métrica': 'Entregas Monitoradas', 'Valor': entregas_monitoradas},
+            {'Métrica': 'Pedidos com Agendamento', 'Valor': pedidos_agendados},
+            {'Métrica': 'Valor Total Pendente', 'Valor': f"R$ {df['Valor NF'].sum() + df['Valor Pedido'].sum():,.2f}"}
+        ]
+    
+    def _criar_analise_categorias(self, df):
+        """Cria análise por categorias de status"""
+        if df.empty:
+            return [{'Categoria': 'Sem dados', 'Quantidade': 0}]
+        
+        categorias = df['Categoria'].value_counts()
+        analise = []
+        
+        for categoria, quantidade in categorias.items():
+            analise.append({
+                'Categoria': categoria,
+                'Quantidade': quantidade,
+                'Percentual': f"{quantidade/len(df)*100:.1f}%"
+            })
+        
+        return analise
+    
+    def _criar_resumo_agendamentos(self, df):
+        """Cria resumo dos agendamentos"""
+        if df.empty:
+            return [{'Status': 'Sem dados', 'Quantidade': 0}]
+        
+        status_agendamentos = df['Status Agendamento'].value_counts()
+        resumo = []
+        
+        for status, quantidade in status_agendamentos.items():
+            resumo.append({
+                'Status Agendamento': status,
+                'Quantidade': quantidade,
+                'Percentual': f"{quantidade/len(df)*100:.1f}%"
+            })
+        
+        return resumo
+    
+    def _criar_acoes_entregas_pendentes(self, df):
+        """Cria ações prioritárias para entregas pendentes"""
+        acoes = [
+            {'Prioridade': 'CRÍTICA', 'Ação': 'Processar entregas vencendo hoje'},
+            {'Prioridade': 'ALTA', 'Ação': 'Entrar em contato com clientes de entregas atrasadas'},
+            {'Prioridade': 'ALTA', 'Ação': 'Faturar pedidos com agendamento confirmado'},
+            {'Prioridade': 'MÉDIA', 'Ação': 'Confirmar agendamentos pendentes'},
+            {'Prioridade': 'BAIXA', 'Ação': 'Atualizar status de entregas no sistema'}
+        ]
+        
+        return acoes
+    
+    def _criar_resumo_cliente(self, df, cliente):
+        """Cria resumo executivo para cliente específico"""
+        if df.empty:
+            return [{'Métrica': 'Nenhum dado', 'Valor': 0}]
+        
+        total_entregas = len(df)
+        valor_total = df['Valor NF'].sum()
+        no_prazo = len(df[df['Status Prazo'].str.contains('No prazo', na=False)])
+        
+        return [
+            {'Métrica': f'Relatório Executivo - {cliente}', 'Valor': ''},
+            {'Métrica': 'Total de Entregas', 'Valor': total_entregas},
+            {'Métrica': 'Valor Total', 'Valor': f"R$ {valor_total:,.2f}"},
+            {'Métrica': 'Entregas no Prazo', 'Valor': no_prazo},
+            {'Métrica': 'Taxa de Pontualidade', 'Valor': f"{no_prazo/total_entregas*100:.1f}%"}
+        ]
+    
+    def _criar_analise_performance(self, df):
+        """Cria análise de performance"""
+        if df.empty:
+            return [{'Categoria': 'Sem dados', 'Quantidade': 0}]
+        
+        return [
+            {'Categoria': 'Performance em desenvolvimento', 'Quantidade': len(df)}
+        ]
+    
+    def _buscar_agendamentos_cliente(self, cliente, data_limite):
+        """Busca agendamentos de um cliente específico"""
+        try:
+            from app import db
+            from app.monitoramento.models import AgendamentoEntrega, EntregaMonitorada
+            
+            # Buscar agendamentos relacionados às entregas do cliente
+            agendamentos = db.session.query(AgendamentoEntrega).join(
+                EntregaMonitorada, AgendamentoEntrega.entrega_id == EntregaMonitorada.id
+            ).filter(
+                EntregaMonitorada.cliente.ilike(f'%{cliente}%'),
+                AgendamentoEntrega.criado_em >= data_limite
+            ).all()
+            
+            dados_agendamentos = []
+            for agendamento in agendamentos:
+                dados_agendamentos.append({
+                    'Protocolo': agendamento.protocolo_agendamento or '',
+                    'Data Agendada': agendamento.data_agendada.strftime('%d/%m/%Y') if agendamento.data_agendada else '',
+                    'Forma': agendamento.forma_agendamento or '',
+                    'Contato': agendamento.contato_agendamento or '',
+                    'Status': agendamento.status or 'Aguardando',
+                    'Criado em': agendamento.criado_em.strftime('%d/%m/%Y %H:%M') if agendamento.criado_em else ''
+                })
+            
+            return dados_agendamentos
+            
+        except Exception as e:
+            logger.error(f"Erro ao buscar agendamentos do cliente {cliente}: {e}")
+            return []
+
 # Instância global
 excel_generator = ExcelGenerator()
 
