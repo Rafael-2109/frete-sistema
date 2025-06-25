@@ -100,6 +100,33 @@ class ClaudeRealIntegration:
         if not self.modo_real:
             return self._fallback_simulado(consulta)
         
+        # 🧠 SISTEMA DE ENTENDIMENTO INTELIGENTE (INTEGRAÇÃO NOVA)
+        try:
+            from .enhanced_claude_integration import processar_consulta_com_ia_avancada
+            from .intelligent_query_analyzer import get_intelligent_analyzer
+            
+            # Usar sistema de entendimento inteligente
+            analyzer = get_intelligent_analyzer()
+            interpretacao = analyzer.analisar_consulta_inteligente(consulta)
+            
+            # Se a confiança é alta (>= 70%), usar processamento avançado
+            if interpretacao.confianca_interpretacao >= 0.7:
+                logger.info(f"🧠 ENTENDIMENTO INTELIGENTE: Usando IA avançada (confiança: {interpretacao.confianca_interpretacao:.1%})")
+                resultado_avancado = processar_consulta_com_ia_avancada(consulta, user_context, interpretacao)
+                
+                # Se resultado válido, usar sistema avançado
+                if resultado_avancado and not resultado_avancado.startswith("❌"):
+                    return resultado_avancado
+                else:
+                    logger.warning("⚠️ Sistema avançado falhou, usando sistema padrão como fallback")
+            else:
+                logger.info(f"🔄 CONFIANÇA BAIXA: Usando sistema padrão (confiança: {interpretacao.confianca_interpretacao:.1%})")
+        
+        except ImportError:
+            logger.warning("⚠️ Sistema de entendimento inteligente não disponível, usando sistema padrão")
+        except Exception as e:
+            logger.error(f"❌ Erro no sistema avançado: {e}, usando sistema padrão")
+        
         # 📊 DETECTAR COMANDOS DE EXPORT EXCEL
         if self._is_excel_command(consulta):
             return self._processar_comando_excel(consulta, user_context)
