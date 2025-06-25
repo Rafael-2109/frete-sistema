@@ -34,12 +34,28 @@
         color: #ddd;
         cursor: pointer;
         transition: all 0.3s ease;
+        text-shadow: 0 0 3px rgba(0,0,0,0.3);
+        margin: 0 2px;
+        display: inline-block;
     }
     
-    .star-rating:hover,
+    .star-rating:hover {
+        color: #ffeb3b;
+        transform: scale(1.2);
+        text-shadow: 0 0 10px rgba(255, 193, 7, 0.8);
+    }
+    
     .star-rating.active {
         color: #ffc107;
         transform: scale(1.1);
+        text-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
+        animation: starPulse 0.3s ease-out;
+    }
+    
+    @keyframes starPulse {
+        0% { transform: scale(1.1); }
+        50% { transform: scale(1.3); }
+        100% { transform: scale(1.1); }
     }
     
     .feedback-type-btn {
@@ -52,18 +68,47 @@
         transition: all 0.3s ease;
         margin: 0.5rem;
         min-width: 120px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .feedback-type-btn::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        transition: left 0.3s ease;
+        z-index: -1;
     }
     
     .feedback-type-btn:hover {
         border-color: #667eea;
         color: #667eea;
-        transform: translateY(-2px);
+        transform: translateY(-3px);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
     }
     
     .feedback-type-btn.active {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         border-color: #667eea;
         color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        animation: btnSelected 0.3s ease-out;
+    }
+    
+    .feedback-type-btn.active::before {
+        left: 0;
+    }
+    
+    @keyframes btnSelected {
+        0% { transform: translateY(-2px) scale(1); }
+        50% { transform: translateY(-2px) scale(1.05); }
+        100% { transform: translateY(-2px) scale(1); }
     }
     
     .session-info {
@@ -212,10 +257,12 @@
             <div class="feature-highlight">
                 <h6><i class="fas fa-cogs text-primary"></i> Funcionalidades IA Utilizadas</h6>
                 <div id="advancedFeatures">
-                    <span class="badge badge-primary m-1">🤖 Multi-Agent System</span>
-                    <span class="badge badge-info m-1">🧠 Análise Metacognitiva</span>
-                    <span class="badge badge-success m-1">🔄 Loop Semântico</span>
-                    <span class="badge badge-warning m-1">🏗️ Validação Estrutural</span>
+                    <span class="badge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin: 2px;">🤖 Multi-Agent System</span>
+                    <span class="badge" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; margin: 2px;">🧠 Análise Metacognitiva</span>
+                    <span class="badge" style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; margin: 2px;">🔄 Loop Semântico</span>
+                    <span class="badge" style="background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #212529; margin: 2px;">🏗️ Validação Estrutural</span>
+                    <span class="badge" style="background: linear-gradient(135deg, #fd7e14 0%, #dc6502 100%); color: white; margin: 2px;">🎯 Sistema Real Data</span>
+                    <span class="badge" style="background: linear-gradient(135deg, #6f42c1 0%, #59359a 100%); color: white; margin: 2px;">💡 Human Learning</span>
                 </div>
             </div>
             
@@ -224,14 +271,16 @@
                 <!-- Avaliação por Estrelas -->
                 <div class="rating-container">
                     <h5>Como você avalia a resposta?</h5>
-                    <div class="mb-3">
-                        <span class="star-rating" data-rating="1">⭐</span>
-                        <span class="star-rating" data-rating="2">⭐</span>
-                        <span class="star-rating" data-rating="3">⭐</span>
-                        <span class="star-rating" data-rating="4">⭐</span>
-                        <span class="star-rating" data-rating="5">⭐</span>
+                    <div class="mb-3" style="user-select: none;">
+                        <span class="star-rating" data-rating="1" title="Muito Ruim">⭐</span>
+                        <span class="star-rating" data-rating="2" title="Ruim">⭐</span>
+                        <span class="star-rating" data-rating="3" title="Regular">⭐</span>
+                        <span class="star-rating" data-rating="4" title="Bom">⭐</span>
+                        <span class="star-rating" data-rating="5" title="Excelente">⭐</span>
                     </div>
-                    <div id="ratingText" class="text-muted">Clique nas estrelas para avaliar</div>
+                    <div id="ratingText" class="text-muted" style="min-height: 25px; font-weight: 500;">
+                        <i class="fas fa-hand-pointer"></i> Clique nas estrelas para avaliar
+                    </div>
                 </div>
                 
                 <!-- Tipo de Feedback -->
@@ -398,10 +447,36 @@ function initializeFeedbackInterface() {
     
     // Inicializar botões de tipo
     document.querySelectorAll('.feedback-type-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
             selectedType = this.dataset.type;
             updateTypeSelection(selectedType);
             updateSpecificCategories(selectedType);
+            
+            // Feedback visual adicional
+            this.style.animation = 'btnSelected 0.3s ease-out';
+            setTimeout(() => {
+                this.style.animation = '';
+            }, 300);
+        });
+        
+        // Adicionar feedback hover mais claro
+        btn.addEventListener('mouseenter', function() {
+            if (!this.classList.contains('active')) {
+                this.style.borderColor = '#667eea';
+                this.style.color = '#667eea';
+                this.style.transform = 'translateY(-3px)';
+                this.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.3)';
+            }
+        });
+        
+        btn.addEventListener('mouseleave', function() {
+            if (!this.classList.contains('active')) {
+                this.style.borderColor = '#e9ecef';
+                this.style.color = '#6c757d';
+                this.style.transform = '';
+                this.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+            }
         });
     });
     
@@ -414,10 +489,21 @@ function initializeFeedbackInterface() {
 
 function updateStarRating(rating, hover = false) {
     document.querySelectorAll('.star-rating').forEach((star, index) => {
+        star.classList.remove('active');
+        star.style.color = '';
+        star.style.transform = '';
+        star.style.textShadow = '';
+        
         if (index < rating) {
             star.classList.add('active');
+            // Forçar estilo visual para garantir feedback
+            star.style.color = '#ffc107';
+            star.style.transform = 'scale(1.1)';
+            star.style.textShadow = '0 0 8px rgba(255, 193, 7, 0.6)';
         } else {
-            star.classList.remove('active');
+            star.style.color = '#ddd';
+            star.style.transform = 'scale(1)';
+            star.style.textShadow = '0 0 3px rgba(0,0,0,0.3)';
         }
     });
 }
@@ -436,8 +522,22 @@ function updateRatingText(rating) {
 function updateTypeSelection(type) {
     document.querySelectorAll('.feedback-type-btn').forEach(btn => {
         btn.classList.remove('active');
+        btn.style.transform = '';
+        btn.style.boxShadow = '';
     });
-    document.querySelector(`[data-type="${type}"]`).classList.add('active');
+    
+    const selectedBtn = document.querySelector(`[data-type="${type}"]`);
+    if (selectedBtn) {
+        selectedBtn.classList.add('active');
+        // Forçar estilo visual para garantir feedback
+        setTimeout(() => {
+            selectedBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            selectedBtn.style.color = 'white';
+            selectedBtn.style.borderColor = '#667eea';
+            selectedBtn.style.transform = 'translateY(-2px)';
+            selectedBtn.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.4)';
+        }, 10);
+    }
 }
 
 function updateSpecificCategories(type) {
