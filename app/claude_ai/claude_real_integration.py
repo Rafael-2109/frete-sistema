@@ -53,6 +53,7 @@ class ClaudeRealIntegration:
         
         if not self.api_key:
             logger.warning("⚠️ ANTHROPIC_API_KEY não configurada - usando modo simulado")
+            logger.warning("💡 Configure a variável de ambiente ANTHROPIC_API_KEY")
             self.client = None
             self.modo_real = False
         else:
@@ -60,6 +61,15 @@ class ClaudeRealIntegration:
                 self.client = anthropic.Anthropic(api_key=self.api_key)
                 self.modo_real = True
                 logger.info("🚀 Claude REAL conectado com sucesso!")
+                
+                # Testar conexão
+                test_response = self.client.messages.create(
+                    model="claude-3-5-sonnet-20241022",  # Modelo mais estável para teste
+                    max_tokens=10,
+                    messages=[{"role": "user", "content": "teste"}]
+                )
+                logger.info("✅ Conexão com Claude API validada!")
+                
             except Exception as e:
                 logger.error(f"❌ Erro ao conectar Claude real: {e}")
                 self.client = None
@@ -95,13 +105,35 @@ class ClaudeRealIntegration:
 - Se campo mencionado não existir no modelo, use apenas campos listados
 - NUNCA invente dados, estatísticas ou informações
 
-🎯 **OBJETIVO**: Ser 100% preciso usando APENAS dados reais fornecidos."""
+🔍 **PROCESSO OBRIGATÓRIO DE ANÁLISE**:
+1. PRIMEIRO: Analise TODOS os dados carregados antes de responder
+2. SEGUNDO: Identifique padrões, totais e estatísticas nos dados reais
+3. TERCEIRO: Baseie sua resposta EXCLUSIVAMENTE nos dados fornecidos
+4. QUARTO: Se perguntado sobre CNPJ, valores, datas - use os dados EXATOS fornecidos
+
+❌ **PROIBIDO**:
+- Responder com "provavelmente", "possivelmente", "talvez"
+- Dizer "você mencionou", "você sugeriu" - analise os DADOS
+- Inventar informações não presentes nos dados carregados
+- Fazer suposições - use apenas fatos dos dados
+
+✅ **SEMPRE**:
+- Cite números exatos dos dados carregados
+- Use CNPJs reais quando disponíveis
+- Mencione datas específicas dos registros
+- Baseie-se em estatísticas calculadas dos dados
+
+🎯 **OBJETIVO**: Ser um analista de dados preciso, não um assistente genérico."""
     
     def processar_consulta_real(self, consulta: str, user_context: Dict = None) -> str:
         """Processa consulta usando Claude REAL com contexto inteligente e MEMÓRIA CONVERSACIONAL"""
         
         if not self.modo_real:
             return self._fallback_simulado(consulta)
+        
+        # 🧠 SISTEMA DE CONTEXTO CONVERSACIONAL - DEFINIR NO INÍCIO
+        user_id = str(user_context.get('user_id', 'anonymous')) if user_context else 'anonymous'
+        context_manager = get_conversation_context()
         
         # 🧠 SISTEMA DE ENTENDIMENTO INTELIGENTE (INTEGRAÇÃO NOVA)
         try:
@@ -239,10 +271,6 @@ Não há entregas pendentes de agendamento no momento!
             
             return resultado_agendamentos
         
-        # 🧠 SISTEMA DE CONTEXTO CONVERSACIONAL
-        user_id = str(user_context.get('user_id', 'anonymous')) if user_context else 'anonymous'
-        context_manager = get_conversation_context()
-        
         # Construir prompt com contexto conversacional
         consulta_com_contexto = consulta
         if context_manager:
@@ -275,11 +303,38 @@ Não há entregas pendentes de agendamento no momento!
                 return resultado_cache
         
         try:
+            # 🧠 APLICAR CONHECIMENTO APRENDIDO
+            from .lifelong_learning import get_lifelong_learning
+            lifelong = get_lifelong_learning()
+            conhecimento_previo = lifelong.aplicar_conhecimento(consulta)
+            
             # Analisar consulta para contexto inteligente (usar consulta original)
             contexto_analisado = self._analisar_consulta(consulta)
             
+            # Enriquecer com conhecimento prévio
+            if conhecimento_previo['confianca_geral'] > 0.7:
+                logger.info(f"🧠 Aplicando conhecimento prévio (confiança: {conhecimento_previo['confianca_geral']:.1%})")
+                
+                # Aplicar padrões conhecidos
+                for padrao in conhecimento_previo['padroes_aplicaveis']:
+                    if padrao['tipo'] == 'cliente' and not contexto_analisado.get('cliente_especifico'):
+                        contexto_analisado['cliente_especifico'] = padrao['interpretacao'].get('cliente')
+                        logger.info(f"✅ Cliente detectado por padrão aprendido: {padrao['interpretacao'].get('cliente')}")
+                
+                # Aplicar grupos conhecidos
+                if conhecimento_previo['grupos_conhecidos'] and not contexto_analisado.get('grupo_empresarial'):
+                    grupo = conhecimento_previo['grupos_conhecidos'][0]
+                    contexto_analisado['tipo_consulta'] = 'grupo_empresarial'
+                    contexto_analisado['grupo_empresarial'] = grupo
+                    contexto_analisado['cliente_especifico'] = grupo['nome']
+                    contexto_analisado['filtro_sql'] = grupo['filtro']
+                    logger.info(f"✅ Grupo empresarial detectado por aprendizado: {grupo['nome']}")
+            
             # Carregar dados específicos baseados na análise (já usa Redis internamente)
             dados_contexto = self._carregar_contexto_inteligente(contexto_analisado)
+            
+            # 🎯 ARMAZENAR CONTEXTO PARA USO NO PROMPT (CRÍTICO!)
+            self._ultimo_contexto_carregado = dados_contexto
             
             # Preparar mensagens para Claude real
             tipo_analise = contexto_analisado.get('tipo_consulta', 'geral')
@@ -408,6 +463,17 @@ Por favor, forneça uma resposta completa incluindo:
                     ttl=300  # 5 minutos para respostas Claude
                 )
                 logger.info("💾 Resposta Claude salva no Redis cache")
+            
+            # 🧠 REGISTRAR APRENDIZADO VITALÍCIO
+            aprendizados = lifelong.aprender_com_interacao(
+                consulta=consulta,
+                interpretacao=contexto_analisado,
+                resposta=resposta_final,
+                usuario_id=user_context.get('user_id') if user_context else None
+            )
+            
+            if aprendizados.get('padroes_detectados'):
+                logger.info(f"🧠 Novos padrões aprendidos: {len(aprendizados['padroes_detectados'])}")
             
             return resposta_final
             
@@ -980,37 +1046,80 @@ Por favor, forneça uma resposta completa incluindo:
         }
     
     def _carregar_fretes_banco(self, analise: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
-        """Carrega fretes específicos do banco de dados"""
-        from app import db
-        from app.fretes.models import Frete
-        
-        query_fretes = db.session.query(Frete).filter(
-            Frete.criado_em >= data_limite
-        )
-        
-        if analise.get("cliente_especifico") and analise["cliente_especifico"] != "GRUPO_CLIENTES":
-            query_fretes = query_fretes.filter(
-                Frete.nome_cliente.ilike(f'%{analise["cliente_especifico"]}%')
+        """🚛 Carrega dados específicos de FRETES"""
+        try:
+            from app import db
+            from app.fretes.models import Frete, DespesaExtra
+            from app.transportadoras.models import Transportadora
+            
+            # Query de fretes
+            query_fretes = db.session.query(Frete).filter(
+                Frete.criado_em >= data_limite
             )
-        
-        fretes = query_fretes.order_by(Frete.criado_em.desc()).limit(50).all()
-        
-        return {
-            "registros": [
-                {
-                    "id": f.id,
-                    "cliente": f.nome_cliente,
-                    "uf_destino": f.uf_destino,
-                    "valor_cotado": float(f.valor_cotado or 0),
-                    "valor_considerado": float(f.valor_considerado or 0),
-                    "peso_total": float(f.peso_total or 0),
-                    "status": f.status,
-                    "data_criacao": f.criado_em.isoformat() if f.criado_em else None
-                }
-                for f in fretes
-            ],
-            "total_registros": len(fretes)
-        }
+            
+            # Aplicar filtros
+            if analise.get("cliente_especifico") and not analise.get("correcao_usuario"):
+                query_fretes = query_fretes.filter(
+                    Frete.nome_cliente.ilike(f'%{analise["cliente_especifico"]}%')
+                )
+            
+            fretes = query_fretes.order_by(Frete.criado_em.desc()).limit(500).all()
+            
+            # Estatísticas de fretes
+            total_fretes = len(fretes)
+            
+            # Contadores corrigidos baseados no campo status
+            fretes_aprovados = len([f for f in fretes if f.status == 'aprovado'])
+            fretes_pendentes = len([f for f in fretes if f.status == 'pendente' or f.requer_aprovacao])
+            fretes_pagos = len([f for f in fretes if f.status == 'pago'])
+            fretes_sem_cte = len([f for f in fretes if not f.numero_cte])
+            
+            valor_total_cotado = sum(float(f.valor_cotado or 0) for f in fretes)
+            valor_total_considerado = sum(float(f.valor_considerado or 0) for f in fretes)
+            valor_total_pago = sum(float(f.valor_pago or 0) for f in fretes)
+            
+            logger.info(f"🚛 Total fretes: {total_fretes} | Pendentes: {fretes_pendentes} | Sem CTE: {fretes_sem_cte}")
+            
+            return {
+                "tipo_dados": "fretes",
+                "fretes": {
+                    "registros": [
+                        {
+                            "id": f.id,
+                            "cliente": f.nome_cliente,
+                            "uf_destino": f.uf_destino,
+                            "transportadora": f.transportadora.razao_social if f.transportadora else "N/A",
+                            "valor_cotado": float(f.valor_cotado or 0),
+                            "valor_considerado": float(f.valor_considerado or 0),
+                            "valor_pago": float(f.valor_pago or 0),
+                            "peso_total": float(f.peso_total or 0),
+                            "status": f.status,
+                            "requer_aprovacao": f.requer_aprovacao,
+                            "numero_cte": f.numero_cte,
+                            "data_criacao": f.criado_em.isoformat() if f.criado_em else None,
+                            "vencimento": f.vencimento.isoformat() if f.vencimento else None
+                        }
+                        for f in fretes
+                    ],
+                    "estatisticas": {
+                        "total_fretes": total_fretes,
+                        "fretes_aprovados": fretes_aprovados,
+                        "fretes_pendentes": fretes_pendentes,
+                        "fretes_pagos": fretes_pagos,
+                        "fretes_sem_cte": fretes_sem_cte,
+                        "percentual_aprovacao": round((fretes_aprovados / total_fretes * 100), 1) if total_fretes > 0 else 0,
+                        "percentual_pendente": round((fretes_pendentes / total_fretes * 100), 1) if total_fretes > 0 else 0,
+                        "valor_total_cotado": valor_total_cotado,
+                        "valor_total_considerado": valor_total_considerado,
+                        "valor_total_pago": valor_total_pago
+                    }
+                },
+                "registros_carregados": total_fretes
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao carregar dados de fretes: {e}")
+            return {"erro": str(e), "tipo_dados": "fretes"}
     
     def _carregar_agendamentos(self, entregas: List) -> Dict[str, Any]:
         """Carrega informações de agendamentos e reagendamentos"""
@@ -1177,9 +1286,10 @@ Por favor, forneça uma resposta completa incluindo:
             return {"erro": str(e)}
     
     def _descrever_contexto_carregado(self, analise: Dict[str, Any]) -> str:
-        """Descreve o contexto carregado para o prompt"""
+        """Descreve o contexto carregado E INCLUI OS DADOS REAIS para o prompt"""
         descricao = []
         
+        # 📊 METADADOS DO CONTEXTO
         if analise.get("cliente_especifico"):
             descricao.append(f"- Dados específicos do cliente: {analise['cliente_especifico']}")
         
@@ -1197,6 +1307,55 @@ Por favor, forneça uma resposta completa incluindo:
         
         if analise.get("metricas_solicitadas"):
             descricao.append(f"- Métricas calculadas: {', '.join(analise['metricas_solicitadas'])}")
+        
+        # 🎯 DADOS REAIS CARREGADOS (CRÍTICO!)
+        if hasattr(self, '_ultimo_contexto_carregado') and self._ultimo_contexto_carregado:
+            dados = self._ultimo_contexto_carregado.get('dados_especificos', {})
+            
+            # ENTREGAS
+            if 'entregas' in dados:
+                entregas_data = dados['entregas']
+                descricao.append("\n📦 **DADOS DE ENTREGAS CARREGADOS:**")
+                descricao.append(f"- Total de entregas: {entregas_data.get('total_registros', 0)}")
+                
+                # Listar algumas entregas como exemplo
+                if entregas_data.get('entregas', []):
+                    descricao.append("- Exemplos de entregas:")
+                    for i, entrega in enumerate(entregas_data['entregas'][:5], 1):
+                        descricao.append(f"  {i}. NF {entrega.get('numero_nf')} - {entrega.get('cliente')} - Status: {entrega.get('status_finalizacao', 'Pendente')}")
+                
+                # Estatísticas
+                if entregas_data.get('estatisticas'):
+                    stats = entregas_data['estatisticas']
+                    descricao.append(f"- Entregas entregues: {stats.get('entregues', 0)}")
+                    descricao.append(f"- Entregas pendentes: {stats.get('pendentes', 0)}")
+                    descricao.append(f"- Entregas atrasadas: {stats.get('atrasadas', 0)}")
+            
+            # PEDIDOS
+            if 'pedidos' in dados:
+                pedidos_data = dados['pedidos']
+                descricao.append("\n📋 **DADOS DE PEDIDOS CARREGADOS:**")
+                descricao.append(f"- Total de pedidos: {pedidos_data.get('registros_carregados', 0)}")
+                
+                if pedidos_data.get('pedidos', []):
+                    descricao.append("- Status dos pedidos:")
+                    for status, qtd in pedidos_data.get('por_status', {}).items():
+                        descricao.append(f"  • {status}: {qtd}")
+            
+            # FRETES
+            if 'fretes' in dados:
+                fretes_data = dados['fretes']
+                descricao.append("\n🚛 **DADOS DE FRETES CARREGADOS:**")
+                descricao.append(f"- Total de fretes: {fretes_data.get('registros_carregados', 0)}")
+                descricao.append(f"- Valor total: R$ {fretes_data.get('valor_total', 0):,.2f}")
+            
+            # GRUPOS EMPRESARIAIS DETECTADOS
+            if analise.get('tipo_consulta') == 'grupo_empresarial':
+                grupo = analise.get('grupo_empresarial', {})
+                descricao.append(f"\n🏢 **GRUPO EMPRESARIAL DETECTADO:**")
+                descricao.append(f"- Grupo: {grupo.get('grupo_detectado')}")
+                descricao.append(f"- Tipo: {grupo.get('tipo_negocio')}")
+                descricao.append(f"- CNPJs conhecidos: {', '.join(grupo.get('cnpj_prefixos', []))}")
         
         return "\n".join(descricao) if descricao else "- Dados gerais do sistema"
     
@@ -1897,13 +2056,22 @@ def _carregar_dados_fretes(analise: Dict[str, Any], filtros_usuario: Dict[str, A
                 Frete.nome_cliente.ilike(f'%{analise["cliente_especifico"]}%')
             )
         
-        fretes = query_fretes.order_by(Frete.criado_em.desc()).limit(50).all()
+        fretes = query_fretes.order_by(Frete.criado_em.desc()).limit(500).all()
         
         # Estatísticas de fretes
         total_fretes = len(fretes)
-        fretes_aprovados = len([f for f in fretes if f.status_aprovacao == 'aprovado'])
-        fretes_pendentes = len([f for f in fretes if f.status_aprovacao == 'pendente'])
+        
+        # Contadores corrigidos baseados no campo status
+        fretes_aprovados = len([f for f in fretes if f.status == 'aprovado'])
+        fretes_pendentes = len([f for f in fretes if f.status == 'pendente' or f.requer_aprovacao])
+        fretes_pagos = len([f for f in fretes if f.status == 'pago'])
+        fretes_sem_cte = len([f for f in fretes if not f.numero_cte])
+        
         valor_total_cotado = sum(float(f.valor_cotado or 0) for f in fretes)
+        valor_total_considerado = sum(float(f.valor_considerado or 0) for f in fretes)
+        valor_total_pago = sum(float(f.valor_pago or 0) for f in fretes)
+        
+        logger.info(f"🚛 Total fretes: {total_fretes} | Pendentes: {fretes_pendentes} | Sem CTE: {fretes_sem_cte}")
         
         return {
             "tipo_dados": "fretes",
@@ -1913,13 +2081,16 @@ def _carregar_dados_fretes(analise: Dict[str, Any], filtros_usuario: Dict[str, A
                         "id": f.id,
                         "cliente": f.nome_cliente,
                         "uf_destino": f.uf_destino,
-                        "transportadora": f.transportadora,
+                        "transportadora": f.transportadora.razao_social if f.transportadora else "N/A",
                         "valor_cotado": float(f.valor_cotado or 0),
                         "valor_considerado": float(f.valor_considerado or 0),
+                        "valor_pago": float(f.valor_pago or 0),
                         "peso_total": float(f.peso_total or 0),
-                        "status_aprovacao": f.status_aprovacao,
-                        "cte": f.cte,
-                        "data_criacao": f.criado_em.isoformat() if f.criado_em else None
+                        "status": f.status,
+                        "requer_aprovacao": f.requer_aprovacao,
+                        "numero_cte": f.numero_cte,
+                        "data_criacao": f.criado_em.isoformat() if f.criado_em else None,
+                        "vencimento": f.vencimento.isoformat() if f.vencimento else None
                     }
                     for f in fretes
                 ],
@@ -1927,8 +2098,13 @@ def _carregar_dados_fretes(analise: Dict[str, Any], filtros_usuario: Dict[str, A
                     "total_fretes": total_fretes,
                     "fretes_aprovados": fretes_aprovados,
                     "fretes_pendentes": fretes_pendentes,
+                    "fretes_pagos": fretes_pagos,
+                    "fretes_sem_cte": fretes_sem_cte,
                     "percentual_aprovacao": round((fretes_aprovados / total_fretes * 100), 1) if total_fretes > 0 else 0,
-                    "valor_total_cotado": valor_total_cotado
+                    "percentual_pendente": round((fretes_pendentes / total_fretes * 100), 1) if total_fretes > 0 else 0,
+                    "valor_total_cotado": valor_total_cotado,
+                    "valor_total_considerado": valor_total_considerado,
+                    "valor_total_pago": valor_total_pago
                 }
             },
             "registros_carregados": total_fretes
