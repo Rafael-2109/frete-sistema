@@ -1261,7 +1261,25 @@ def api_advanced_feedback():
         query = data.get('query', '')
         response = data.get('response', '')
         feedback_text = data.get('feedback', '')
-        feedback_type = data.get('type', 'general')  # general, improvement, error, excellent
+        # Mapear tipos de feedback para valores válidos do enum FeedbackType
+        raw_feedback_type = data.get('type', 'general')
+        
+        # Mapeamento de tipos de feedback do front-end para o enum
+        feedback_type_mapping = {
+            'general': 'improvement',
+            'error': 'bug_report',
+            'excellent': 'positive',
+            'good': 'positive',
+            'improvement': 'improvement',
+            'correction': 'correction',
+            'negative': 'negative',
+            'bug': 'bug_report',
+            'bug_report': 'bug_report',
+            'positive': 'positive'
+        }
+        
+        # Usar o mapeamento ou default para 'improvement'
+        feedback_type = feedback_type_mapping.get(raw_feedback_type, 'improvement')
         rating = data.get('rating', 3)  # 1-5 stars
         
         if not session_id or not feedback_text:
@@ -1359,11 +1377,11 @@ def api_advanced_analytics():
                     severity,
                     COUNT(*) as feedback_count,
                     AVG(CASE 
-                        WHEN feedback_type = 'excellent' THEN 5
-                        WHEN feedback_type = 'good' THEN 4
-                        WHEN feedback_type = 'general' THEN 3
-                        WHEN feedback_type = 'improvement' THEN 2
-                        WHEN feedback_type = 'error' THEN 1
+                        WHEN feedback_type = 'positive' THEN 5
+                        WHEN feedback_type = 'improvement' THEN 3
+                        WHEN feedback_type = 'correction' THEN 2
+                        WHEN feedback_type = 'negative' THEN 1
+                        WHEN feedback_type = 'bug_report' THEN 1
                         ELSE 3
                     END) as avg_rating
                 FROM ai_feedback_history 
@@ -1716,11 +1734,11 @@ def api_metricas_reais():
                 SELECT 
                     COUNT(*) as total_feedbacks,
                     AVG(CASE 
-                        WHEN feedback_type = 'excellent' THEN 5
-                        WHEN feedback_type = 'good' THEN 4
-                        WHEN feedback_type = 'general' THEN 3
-                        WHEN feedback_type = 'improvement' THEN 2
-                        WHEN feedback_type = 'error' THEN 1
+                        WHEN feedback_type = 'positive' THEN 5
+                        WHEN feedback_type = 'improvement' THEN 3
+                        WHEN feedback_type = 'correction' THEN 2
+                        WHEN feedback_type = 'negative' THEN 1
+                        WHEN feedback_type = 'bug_report' THEN 1
                         ELSE 3
                     END) as satisfacao_media
                 FROM ai_feedback_history 

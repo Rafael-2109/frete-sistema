@@ -568,7 +568,7 @@ function updateCharts(analytics) {
             feedback.filter(f => f.type === 'good').reduce((sum, f) => sum + f.count, 0),
             feedback.filter(f => f.type === 'general').reduce((sum, f) => sum + f.count, 0),
             feedback.filter(f => f.type === 'improvement').reduce((sum, f) => sum + f.count, 0),
-            feedback.filter(f => f.type === 'error').reduce((sum, f) => sum + f.count, 0)
+                                    feedback.filter(f => f.type === 'bug_report').reduce((sum, f) => sum + f.count, 0)
         ];
         feedbackChart.data.datasets[0].data = feedbackCounts;
         feedbackChart.update();

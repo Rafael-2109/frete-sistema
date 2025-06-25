@@ -242,7 +242,7 @@ def api_estatisticas_internas():
     try:
         logger.info("🔍 Iniciando coleta de estatísticas internas")
         
-        # Estatísticas básicas com logs de debug
+        # Contar embarques
         logger.info("📊 Contando embarques...")
         total_embarques = Embarque.query.count()
         logger.info(f"📦 Total embarques: {total_embarques}")
@@ -250,16 +250,19 @@ def api_estatisticas_internas():
         embarques_ativos = Embarque.query.filter(Embarque.status == 'ativo').count()
         logger.info(f"🟢 Embarques ativos: {embarques_ativos}")
         
+        # Contar fretes
         logger.info("🚛 Contando fretes...")
         total_fretes = Frete.query.count()
         logger.info(f"📋 Total fretes: {total_fretes}")
         
-        fretes_pendentes = Frete.query.filter(Frete.status_aprovacao == 'pendente').count()
+        # Campo correto é 'status', não 'status_aprovacao'
+        fretes_pendentes = Frete.query.filter(Frete.status == 'pendente').count()
         logger.info(f"⏳ Fretes pendentes: {fretes_pendentes}")
         
-        fretes_aprovados = Frete.query.filter(Frete.status_aprovacao == 'aprovado').count()
+        fretes_aprovados = Frete.query.filter(Frete.status == 'aprovado').count()
         logger.info(f"✅ Fretes aprovados: {fretes_aprovados}")
         
+        # Contar entregas monitoradas
         logger.info("📦 Contando entregas...")
         total_entregas = EntregaMonitorada.query.count()
         logger.info(f"📊 Total entregas: {total_entregas}")

@@ -303,9 +303,9 @@
                             <i class="fas fa-lightbulb text-warning"></i><br>
                             Melhoria
                         </button>
-                        <button type="button" class="feedback-type-btn" data-type="error">
-                            <i class="fas fa-exclamation-triangle text-danger"></i><br>
-                            Erro
+                        <button type="button" class="feedback-type-btn" data-type="bug_report">
+                            <i class="fas fa-bug text-danger"></i><br>
+                            Bug/Erro
                         </button>
                     </div>
                 </div>
@@ -542,7 +542,7 @@ function updateTypeSelection(type) {
 
 function updateSpecificCategories(type) {
     const categoriesDiv = document.getElementById('specificCategories');
-    if (type === 'improvement' || type === 'error') {
+    if (type === 'improvement' || type === 'bug_report') {
         categoriesDiv.style.display = 'block';
     } else {
         categoriesDiv.style.display = 'none';

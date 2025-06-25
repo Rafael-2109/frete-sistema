@@ -722,8 +722,8 @@ class AdvancedAIIntegration:
         try:
             update_query = text("""
                 UPDATE ai_advanced_sessions 
-                SET metadata_jsonb = metadata_jsonb || :feedback_data::jsonb
-                WHERE session_id = :session_id
+                SET metadata_jsonb = metadata_jsonb || CAST(:feedback_data AS jsonb)
+                WHERE session_id = %(session_id)s
             """)
             
             feedback_data = json.dumps({
