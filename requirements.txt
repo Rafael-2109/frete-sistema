@@ -1,3 +1,9 @@
+# 🚀 SISTEMA DE FRETES - REQUIREMENTS PRINCIPAL
+# Versão com NLP integrado para melhor entendimento do usuário
+
+# ==========================================
+# CORE FRAMEWORK
+# ==========================================
 Flask==3.1.0
 Flask-SQLAlchemy==3.1.1
 Flask-Login==0.6.3
@@ -5,33 +11,76 @@ Flask-Migrate==4.1.0
 Flask-Session==0.8.0
 Flask-WTF==1.2.2
 WTForms==3.2.1
+
+# ==========================================
+# DATABASE & DATA PROCESSING
+# ==========================================
+psycopg2-binary==2.9.10
 pandas==2.2.3
 openpyxl==3.1.5
-unidecode==1.4.0
-python-dotenv==1.1.0
-psycopg2-binary==2.9.10
-gunicorn==21.2.0
 python-dateutil==2.9.0.post0
 pytz==2025.2
+requests==2.32.3
+
+# ==========================================
+# CLOUD & DEPLOYMENT
+# ==========================================
+gunicorn==21.2.0
+boto3==1.35.0
+python-dotenv==1.1.0
+psutil==5.9.6
+
+# ==========================================
+# CACHE & PERFORMANCE
+# ==========================================
+redis==5.0.8
 APScheduler==3.11.0
+
+# ==========================================
+# VALIDATION
+# ==========================================
 dnspython==2.7.0
 email-validator==2.2.0
-requests==2.32.3
-pytz==2025.2
-psutil==5.9.6
-boto3==1.35.0
 
-# Redis Cache
-redis==5.0.8
+# ==========================================
+# AI & CLAUDE INTEGRATION
+# ==========================================
+anthropic==0.54.0           # Claude 4 Sonnet API
+mcp==1.0.0                  # Model Context Protocol
+pydantic==2.11.7           # Data validation
+anyio==4.9.0               # Async support
 
-# Model Context Protocol
-mcp==1.0.0
-pydantic==2.11.7
-anyio==4.9.0
+# ==========================================
+# NLP PARA MELHOR ENTENDIMENTO (NOVO!)
+# ==========================================
+# Essas bibliotecas melhoram DRASTICAMENTE o entendimento:
+# - Correção ortográfica automática
+# - Fuzzy matching (encontra "Assaí" quando usuário digita "asai")
+# - Análise sintática e semântica
+# - Detecção de sinônimos
 
-# Claude Real API - Versão específica para Claude 4 Sonnet
-anthropic==0.54.0
+fuzzywuzzy==0.18.0         # Matching fuzzy de strings
+python-Levenshtein==0.25.0 # Algoritmo de distância (opcional mas recomendado)
+unidecode==1.4.0           # Remove acentos para comparação
 
-# Alternativas gratuitas (opcional)
-# ollama>=0.1.0  # Para Llama local
-# openai>=1.0.0  # Para GPT-4o mini
+# NLTK Simplificado (apenas o essencial)
+nltk==3.8.1                # Natural Language Toolkit
+
+# SpaCy - Processamento Avançado de Linguagem Natural
+spacy==3.7.4               # Engine principal de NLP
+# IMPORTANTE: Após instalar, execute:
+# python -m spacy download pt_core_news_sm
+# ou adicione no seu script de deploy:
+# import spacy; spacy.cli.download("pt_core_news_sm")
+
+# ==========================================
+# MACHINE LEARNING (OPCIONAL)
+# ==========================================
+# scikit-learn==1.4.0      # Para predições e clustering
+# numpy==1.26.4           # Computação científica
+
+# ==========================================
+# VISUALIZAÇÃO (OPCIONAL)
+# ==========================================
+# plotly==5.20.0          # Gráficos interativos
+# matplotlib==3.8.3       # Gráficos básicos

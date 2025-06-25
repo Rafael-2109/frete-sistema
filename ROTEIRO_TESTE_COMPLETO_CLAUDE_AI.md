@@ -477,16 +477,36 @@ Após executar todos os testes acima, o sistema Claude AI estará validado como:
 - **Feedback:** [`https://sistema-fretes.onrender.com/claude-ai/advanced-feedback-interface`](https://sistema-fretes.onrender.com/claude-ai/advanced-feedback-interface)
 
 ### **Como Testar:**
+
+#### **🖥️ TESTE LOCAL (sua máquina):**
 ```bash
 # Teste local
 python testar_claude_ai_completo.py
 
-# Teste em produção
+# Teste em produção (da sua máquina)
 python testar_claude_ai_completo.py --prod
 
 # Teste específico de produção
 python testar_producao_render.py
 ```
+
+#### **🚀 TESTE NO SHELL DO RENDER:**
+```bash
+# Opção 1: Script completo
+python testar_no_shell_render.py
+
+# Opção 2: Comandos rápidos (copie linha por linha)
+# Teste básico
+python -c "print('✅ Python funcionando!')"
+
+# Teste banco de dados
+python -c "from app import create_app, db; from app.auth.models import Usuario; app = create_app(); ctx = app.app_context(); ctx.push(); print(f'✅ Usuários: {Usuario.query.count()}')"
+
+# Teste análise inteligente
+python -c "from app import create_app; from app.claude_ai.intelligent_query_analyzer import get_intelligent_analyzer; app = create_app(); ctx = app.app_context(); ctx.push(); a = get_intelligent_analyzer(); r = a.analisar_consulta_inteligente('Quantas entregas?'); print(f'✅ IA: {r.intencao_principal.value}')"
+```
+
+📝 **Veja todos os comandos em:** `comandos_shell_render.txt`
 
 ---
 

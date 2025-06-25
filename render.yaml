@@ -2,7 +2,7 @@ services:
   - type: web
     name: sistema-fretes
     env: python
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: "chmod +x build.sh && ./build.sh"
     startCommand: "python init_db.py && flask db upgrade && gunicorn --bind 0.0.0.0:$PORT --workers 2 --worker-class sync --timeout 600 --max-requests 1000 --max-requests-jitter 100 --keep-alive 10 --preload --worker-tmp-dir /dev/shm run:app"
     envVars:
       - key: PYTHON_VERSION

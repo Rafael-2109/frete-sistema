@@ -13,6 +13,14 @@ from datetime import datetime, timedelta
 import json
 import difflib
 
+# Tentar importar NLP avançado
+try:
+    from .nlp_enhanced_analyzer import get_nlp_analyzer, AnaliseNLP
+    NLP_AVAILABLE = True
+except ImportError:
+    NLP_AVAILABLE = False
+    logging.warning("⚠️ NLP avançado não disponível. Instale com: pip install -r requirements_completo.txt")
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -381,10 +389,28 @@ class IntelligentQueryAnalyzer:
     def _normalizar_consulta(self, consulta: str) -> str:
         """Normaliza a consulta para análise"""
         
-        # Converter para minúsculas
-        normalizada = consulta.lower().strip()
+        # Se NLP disponível, usar análise avançada
+        if NLP_AVAILABLE:
+            nlp_analyzer = get_nlp_analyzer()
+            analise = nlp_analyzer.analisar_com_nlp(consulta)
+            
+            # Aplicar correções sugeridas pelo NLP
+            texto_corrigido = consulta.lower()
+            for erro, correcao in analise.correcoes_sugeridas.items():
+                texto_corrigido = texto_corrigido.replace(erro, correcao)
+            
+            logger.info(f"🧠 NLP aplicou {len(analise.correcoes_sugeridas)} correções")
+            
+            # Se teve correções significativas, usar texto corrigido
+            if analise.correcoes_sugeridas:
+                normalizada = texto_corrigido
+            else:
+                normalizada = consulta.lower().strip()
+        else:
+            # Converter para minúsculas
+            normalizada = consulta.lower().strip()
         
-        # Correções ortográficas comuns
+        # Correções ortográficas comuns (mesmo com NLP, aplicar extras)
         correcoes = {
             "assai": "assai",
             "asai": "assai", 
