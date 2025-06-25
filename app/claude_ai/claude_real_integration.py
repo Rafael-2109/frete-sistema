@@ -440,20 +440,22 @@ Por favor, forneça uma resposta completa incluindo:
         else:
             logger.info("🚨 ANÁLISE DE CLIENTE IGNORADA: Usuário fez correção - usando consulta geral")
         
-        # 🔍 DETECÇÃO DE CONSULTAS EXPLICITAMENTE GENÉRICAS
+        # 🔍 DETECÇÃO DE CONSULTAS EXPLICITAMENTE GENÉRICAS (CORRIGIDA)
+        # ⚠️ CORREÇÃO: Não forçar para geral se já tem cliente específico detectado
         consultas_genericas = [
-            "entregas pendentes", "relatório", "excel", "exportar", "gere um relatório",
             "todas as entregas", "dados gerais", "situação geral", "status geral",
-            "pendências", "atrasadas", "no prazo", "estatísticas", "resumo geral"
+            "resumo geral", "relatório geral", "análise completa", "todas as pendencias"
         ]
         
-        for consulta_generica in consultas_genericas:
-            if consulta_generica in consulta_lower:
-                if analise["tipo_consulta"] != "geral":
-                    logger.info(f"🔄 CORREÇÃO: Consulta '{consulta_generica}' detectada - forçando para geral")
+        # ✅ SÓ FORÇAR PARA GERAL SE NÃO HÁ CLIENTE ESPECÍFICO
+        if not analise.get("cliente_especifico"):
+            for consulta_generica in consultas_genericas:
+                if consulta_generica in consulta_lower:
+                    logger.info(f"🔄 CORREÇÃO: Consulta '{consulta_generica}' detectada - definindo como geral")
                     analise["tipo_consulta"] = "geral"
-                    analise["cliente_especifico"] = None
-                break
+                    break
+        else:
+            logger.info(f"🎯 MANTENDO CLIENTE ESPECÍFICO: {analise['cliente_especifico']} mesmo com palavras genéricas")
         
         # ANÁLISE TEMPORAL INTELIGENTE - CORRIGIDA
         if "maio" in consulta_lower:
@@ -724,8 +726,8 @@ Por favor, forneça uma resposta completa incluindo:
         cliente_especifico = analise.get("cliente_especifico")
         correcao_usuario = analise.get("correcao_usuario", False)
         
-        # Se houve correção do usuário, NÃO aplicar filtro de cliente
-        if not correcao_usuario and cliente_especifico:
+        # ✅ CORREÇÃO: Aplicar filtro de cliente se especificado (mesmo com correção)
+        if cliente_especifico:
             logger.info(f"🎯 Aplicando filtro de cliente: {cliente_especifico}")
             
             if cliente_especifico == "GRUPO_CLIENTES":
@@ -763,10 +765,7 @@ Por favor, forneça uma resposta completa incluindo:
                     EntregaMonitorada.cliente.ilike(f'%{cliente_especifico}%')
                 )
         else:
-            if correcao_usuario:
-                logger.info("🚨 FILTRO DE CLIENTE IGNORADO: Usuário fez correção - buscando todos os clientes")
-            else:
-                logger.info("🌐 CONSULTA GERAL: Buscando dados de todos os clientes")
+            logger.info("🌐 CONSULTA GERAL: Buscando dados de todos os clientes")
         
         # Aplicar filtro geográfico
         if analise.get("filtro_geografico"):
@@ -1113,16 +1112,67 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
         return False
     
     def _processar_comando_excel(self, consulta: str, user_context: Dict = None) -> str:
-        """🧠 PROCESSAMENTO INTELIGENTE DE COMANDOS EXCEL - VERSÃO CORRIGIDA"""
+        """🧠 PROCESSAMENTO INTELIGENTE DE COMANDOS EXCEL - VERSÃO CORRIGIDA COM CONTEXTO"""
         try:
             from .excel_generator import get_excel_generator
+            from .conversation_context import get_conversation_context
             
             logger.info(f"📊 Processando comando Excel: {consulta}")
             
             excel_generator = get_excel_generator()
             consulta_lower = consulta.lower()
             
-            # 🎯 DETECÇÃO INTELIGENTE DE GRUPOS EMPRESARIAIS (PRIMEIRA PRIORIDADE)
+            # 🧠 PRIMEIRO: VERIFICAR CONTEXTO CONVERSACIONAL
+            cliente_do_contexto = None
+            if user_context and user_context.get('user_id'):
+                try:
+                    context_manager = get_conversation_context()
+                    if context_manager:
+                        user_id = str(user_context['user_id'])
+                        history = context_manager.get_context(user_id)
+                        
+                        # Analisar últimas 5 mensagens para detectar cliente mencionado
+                        for msg in history[-5:]:
+                            content = msg.get('content', '').lower()
+                            
+                            # Detectar clientes principais nas mensagens anteriores
+                            if 'atacadão' in content or 'atacadao' in content:
+                                cliente_do_contexto = 'Atacadão'
+                                logger.info(f"🧠 CONTEXTO: Cliente Atacadão detectado na conversa anterior")
+                                break
+                            elif 'assai' in content and 'atacad' not in content:
+                                cliente_do_contexto = 'Assai'
+                                logger.info(f"🧠 CONTEXTO: Cliente Assai detectado na conversa anterior")
+                                break
+                            elif 'carrefour' in content:
+                                cliente_do_contexto = 'Carrefour'
+                                logger.info(f"🧠 CONTEXTO: Cliente Carrefour detectado na conversa anterior")
+                                break
+                            elif 'tenda' in content:
+                                cliente_do_contexto = 'Tenda'
+                                logger.info(f"🧠 CONTEXTO: Cliente Tenda detectado na conversa anterior")
+                                break
+                            elif 'mateus' in content:
+                                cliente_do_contexto = 'Mateus'
+                                logger.info(f"🧠 CONTEXTO: Cliente Mateus detectado na conversa anterior")
+                                break
+                            elif 'fort' in content:
+                                cliente_do_contexto = 'Fort'
+                                logger.info(f"🧠 CONTEXTO: Cliente Fort detectado na conversa anterior")
+                                break
+                            elif 'mercantil rodrigues' in content:
+                                cliente_do_contexto = 'Mercantil Rodrigues'
+                                logger.info(f"🧠 CONTEXTO: Cliente Mercantil Rodrigues detectado na conversa anterior")
+                                break
+                            elif 'walmart' in content:
+                                cliente_do_contexto = 'Walmart'
+                                logger.info(f"🧠 CONTEXTO: Cliente Walmart detectado na conversa anterior")
+                                break
+                                
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro ao acessar contexto conversacional: {e}")
+            
+            # 🎯 DETECÇÃO INTELIGENTE DE GRUPOS EMPRESARIAIS (SEGUNDA PRIORIDADE)
             cliente_detectado = None
             cliente_filtro = None
             tipo_deteccao = None
@@ -1171,42 +1221,67 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
                     'keywords': ['mercantil rodrigues', 'grupo mercantil rodrigues', 'mercantil', 'grupo mercantil'],
                     'descricao': 'Rede nordestina'
                 }
-
             }
             
-            # 1. DETECTAR GRUPOS EMPRESARIAIS USANDO SISTEMA AVANÇADO (PRIORIDADE ALTA)
-            from app.utils.grupo_empresarial import detectar_grupo_empresarial
+            # ✅ PRIORIDADE 1: USAR CLIENTE DO CONTEXTO CONVERSACIONAL
+            if cliente_do_contexto:
+                cliente_detectado = cliente_do_contexto
+                # Mapear para filtro SQL
+                cliente_lower = cliente_do_contexto.lower()
+                if 'atacadão' in cliente_lower or 'atacadao' in cliente_lower:
+                    cliente_filtro = '%atacad%'
+                elif 'assai' in cliente_lower:
+                    cliente_filtro = '%assai%'
+                elif 'carrefour' in cliente_lower:
+                    cliente_filtro = '%carrefour%'
+                elif 'tenda' in cliente_lower:
+                    cliente_filtro = '%tenda%'
+                elif 'mateus' in cliente_lower:
+                    cliente_filtro = '%mateus%'
+                elif 'fort' in cliente_lower:
+                    cliente_filtro = '%fort%'
+                elif 'mercantil rodrigues' in cliente_lower:
+                    cliente_filtro = '%mercantil rodrigues%'
+                elif 'walmart' in cliente_lower:
+                    cliente_filtro = '%walmart%'
+                else:
+                    cliente_filtro = f'%{cliente_do_contexto}%'
+                    
+                tipo_deteccao = 'CONTEXTO_CONVERSACIONAL'
+                logger.info(f"🧠 USANDO CONTEXTO: {cliente_detectado} (filtro: {cliente_filtro})")
             
-            resultado_grupo = detectar_grupo_empresarial(consulta)
-            if resultado_grupo:
-                cliente_detectado = resultado_grupo['grupo_detectado']
-                cliente_filtro = resultado_grupo['filtro_sql']
-                tipo_deteccao = resultado_grupo['tipo_deteccao']
-                logger.info(f"🏢 GRUPO EMPRESARIAL DETECTADO: {cliente_detectado}")
-                logger.info(f"📊 Método: {resultado_grupo.get('metodo_deteccao')} | Tipo: {resultado_grupo.get('tipo_negocio')}")
-                logger.info(f"🎯 Filtro aplicado: {cliente_filtro}")
+            # ✅ PRIORIDADE 2: DETECTAR CLIENTE NA CONSULTA ATUAL
+            elif not cliente_detectado:
+                # 1. DETECTAR GRUPOS EMPRESARIAIS USANDO SISTEMA AVANÇADO
+                from app.utils.grupo_empresarial import detectar_grupo_empresarial
                 
-                # Log estatísticas se disponíveis (ex: múltiplos CNPJs do Atacadão)
-                if resultado_grupo.get('estatisticas'):
-                    logger.info(f"📈 Estatísticas conhecidas: {resultado_grupo['estatisticas']}")
-            else:
-                # 2. SE NÃO DETECTOU GRUPO, BUSCAR CLIENTE ESPECÍFICO (FALLBACK)
-                # Usar sistema real de dados para detectar clientes específicos
-                sistema_real = get_sistema_real_data()
-                clientes_reais = sistema_real.buscar_clientes_reais()
-                
-                # Buscar cliente específico (loja individual)
-                for cliente_real in clientes_reais:
-                    # Busca mais rigorosa - nome completo ou palavras muito específicas
-                    if cliente_real.lower() in consulta_lower or len([p for p in cliente_real.lower().split() if len(p) > 6 and p in consulta_lower]) > 0:
-                        cliente_detectado = cliente_real
-                        cliente_filtro = cliente_real  # Filtro exato para cliente específico
-                        tipo_deteccao = 'CLIENTE_ESPECIFICO'
-                        logger.info(f"🏪 CLIENTE ESPECÍFICO DETECTADO: {cliente_detectado}")
-                        break
-            
-            # Lógica simples: se não encontrou cliente na lista real, seguir sem filtro específico
-            # Claude vai usar apenas os dados reais fornecidos no contexto
+                resultado_grupo = detectar_grupo_empresarial(consulta)
+                if resultado_grupo:
+                    cliente_detectado = resultado_grupo['grupo_detectado']
+                    cliente_filtro = resultado_grupo['filtro_sql']
+                    tipo_deteccao = resultado_grupo['tipo_deteccao']
+                    logger.info(f"🏢 GRUPO EMPRESARIAL DETECTADO: {cliente_detectado}")
+                    logger.info(f"📊 Método: {resultado_grupo.get('metodo_deteccao')} | Tipo: {resultado_grupo.get('tipo_negocio')}")
+                    logger.info(f"🎯 Filtro aplicado: {cliente_filtro}")
+                    
+                    # Log estatísticas se disponíveis (ex: múltiplos CNPJs do Atacadão)
+                    if resultado_grupo.get('estatisticas'):
+                        logger.info(f"📈 Estatísticas conhecidas: {resultado_grupo['estatisticas']}")
+                else:
+                    # 2. SE NÃO DETECTOU GRUPO, BUSCAR CLIENTE ESPECÍFICO (FALLBACK)
+                    # Usar sistema real de dados para detectar clientes específicos
+                    sistema_real = get_sistema_real_data()
+                    clientes_reais = sistema_real.buscar_clientes_reais()
+                    
+                    # Buscar cliente específico (loja individual)
+                    for cliente_real in clientes_reais:
+                        # Busca mais rigorosa - nome completo ou palavras muito específicas
+                        if cliente_real.lower() in consulta_lower or len([p for p in cliente_real.lower().split() if len(p) > 6 and p in consulta_lower]) > 0:
+                            cliente_detectado = cliente_real
+                            cliente_filtro = cliente_real  # Filtro exato para cliente específico
+                            tipo_deteccao = 'CLIENTE_ESPECIFICO'
+                            logger.info(f"🏪 CLIENTE ESPECÍFICO DETECTADO: {cliente_detectado}")
+                            break
             
             # 🎯 ANÁLISE DE TIPO DE RELATÓRIO
             
@@ -1298,7 +1373,7 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
                     filtros['cliente'] = cliente_filtro
                     
                 resultado = excel_generator.gerar_relatorio_entregas_pendentes(filtros)
-                
+            
             # 🎯 RESPOSTA MELHORADA (resto da função mantém igual)
             if resultado and resultado.get('success'):
                 # Determinar tipo de relatório pelo nome do arquivo
