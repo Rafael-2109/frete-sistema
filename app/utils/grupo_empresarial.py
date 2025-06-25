@@ -482,8 +482,47 @@ class GrupoEmpresarialDetector:
     'tipo': '{tipo_negocio}'
 }},"""
 
-# Instância global
+class GrupoEmpresarialService:
+    """Serviço para gerenciar grupos empresariais de transportadoras"""
+    
+    def __init__(self):
+        self.detector = GrupoEmpresarialDetector()
+        self._cache_grupos = {}
+    
+    def obter_transportadoras_grupo(self, transportadora_id: int) -> List[int]:
+        """
+        Retorna lista de IDs de transportadoras que pertencem ao mesmo grupo.
+        Por enquanto, retorna apenas o ID da própria transportadora.
+        
+        TODO: Implementar lógica de grupos empresariais baseada em CNPJ
+        """
+        try:
+            # Por enquanto, apenas retorna a própria transportadora
+            # Isso mantém o comportamento atual sem quebrar o sistema
+            return [transportadora_id]
+            
+            # TODO: Implementar lógica real de grupos:
+            # 1. Buscar transportadora por ID
+            # 2. Verificar CNPJ da transportadora
+            # 3. Detectar grupo empresarial usando detector.detectar_grupo_por_cnpj()
+            # 4. Buscar todas as transportadoras com CNPJs do mesmo grupo
+            # 5. Retornar lista de IDs
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter transportadoras do grupo para {transportadora_id}: {e}")
+            return [transportadora_id]  # Fallback seguro
+    
+    def detectar_grupo_na_consulta(self, consulta: str) -> Optional[Dict[str, Any]]:
+        """Detecta grupo empresarial na consulta"""
+        return self.detector.detectar_grupo_na_consulta(consulta)
+    
+    def detectar_grupo_por_cnpj(self, cnpj: str, nome_cliente: str = "") -> Optional[Dict[str, Any]]:
+        """Detecta grupo empresarial por CNPJ"""
+        return self.detector.detectar_grupo_por_cnpj(cnpj, nome_cliente)
+
+# Instâncias globais
 detector_grupos = GrupoEmpresarialDetector()
+grupo_service = GrupoEmpresarialService()  # ✅ CORREÇÃO: Objeto que estava faltando
 
 def detectar_grupo_empresarial(consulta: str) -> Optional[Dict[str, Any]]:
     """Função utilitária para detectar grupos empresariais"""
