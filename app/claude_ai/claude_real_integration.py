@@ -1122,28 +1122,88 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
             excel_generator = get_excel_generator()
             consulta_lower = consulta.lower()
             
-            # 🎯 DETECÇÃO INTELIGENTE DE CLIENTE (PRIMEIRA PRIORIDADE)
+            # 🎯 DETECÇÃO INTELIGENTE DE GRUPOS EMPRESARIAIS (PRIMEIRA PRIORIDADE)
             cliente_detectado = None
             cliente_filtro = None
+            tipo_deteccao = None
             
-            # Usar sistema real de dados para detectar clientes
-            sistema_real = get_sistema_real_data()
+            # 🏢 MAPEAMENTO DE GRUPOS EMPRESARIAIS
+            grupos_empresariais = {
+                'assai': {
+                    'nome_grupo': 'Rede Assai (Todas as Lojas)',
+                    'filtro_sql': '%assai%',
+                    'keywords': ['assai', 'rede assai'],
+                    'descricao': 'Rede de atacarejo com 300+ lojas'
+                },
+                'atacadao': {
+                    'nome_grupo': 'Grupo Atacadão (Todas as Lojas)', 
+                    'filtro_sql': '%atacad%',
+                    'keywords': ['atacadao', 'atacadão', 'grupo atacadao'],
+                    'descricao': 'Rede de atacarejo nacional'
+                },
+                'carrefour': {
+                    'nome_grupo': 'Grupo Carrefour (Todas as Unidades)',
+                    'filtro_sql': '%carrefour%', 
+                    'keywords': ['carrefour', 'grupo carrefour'],
+                    'descricao': 'Rede francesa de varejo'
+                },
+                'tenda': {
+                    'nome_grupo': 'Rede Tenda (Todas as Lojas)',
+                    'filtro_sql': '%tenda%',
+                    'keywords': ['tenda', 'rede tenda'],
+                    'descricao': 'Rede de atacarejo regional'
+                },
+                'mateus': {
+                    'nome_grupo': 'Grupo Mateus (Todas as Unidades)',
+                    'filtro_sql': '%mateus%',
+                    'keywords': ['mateus', 'grupo mateus'],
+                    'descricao': 'Rede nordestina'
+                },
+                'fort': {
+                    'nome_grupo': 'Grupo Fort (Todas as Unidades)',
+                    'filtro_sql': '%fort%',
+                    'keywords': ['fort', 'grupo fort', 'fort/comper', 'fort atacadista', 'comper'],
+                    'descricao': 'Rede nordestina'
+                },
+                'mercantil rodrigues': {
+                    'nome_grupo': 'Grupo Mercantil (Todas as Unidades)',
+                    'filtro_sql': '%mercantil rodrigues%',
+                    'keywords': ['mercantil rodrigues', 'grupo mercantil rodrigues', 'mercantil', 'grupo mercantil'],
+                    'descricao': 'Rede nordestina'
+                }
+
+            }
             
-            # Buscar clientes reais do banco
-            clientes_reais = sistema_real.buscar_clientes_reais()
+            # 1. DETECTAR GRUPOS EMPRESARIAIS USANDO SISTEMA AVANÇADO (PRIORIDADE ALTA)
+            from app.utils.grupo_empresarial import detectar_grupo_empresarial
             
-            # Detectar cliente real na consulta
-            for cliente_real in clientes_reais:
-                # Busca case-insensitive por palavras do nome do cliente
-                palavras_cliente = cliente_real.lower().split()
-                for palavra in palavras_cliente:
-                    if len(palavra) > 3 and palavra in consulta_lower:  # Palavras com mais de 3 chars
+            resultado_grupo = detectar_grupo_empresarial(consulta)
+            if resultado_grupo:
+                cliente_detectado = resultado_grupo['grupo_detectado']
+                cliente_filtro = resultado_grupo['filtro_sql']
+                tipo_deteccao = resultado_grupo['tipo_deteccao']
+                logger.info(f"🏢 GRUPO EMPRESARIAL DETECTADO: {cliente_detectado}")
+                logger.info(f"📊 Método: {resultado_grupo.get('metodo_deteccao')} | Tipo: {resultado_grupo.get('tipo_negocio')}")
+                logger.info(f"🎯 Filtro aplicado: {cliente_filtro}")
+                
+                # Log estatísticas se disponíveis (ex: múltiplos CNPJs do Atacadão)
+                if resultado_grupo.get('estatisticas'):
+                    logger.info(f"📈 Estatísticas conhecidas: {resultado_grupo['estatisticas']}")
+            else:
+                # 2. SE NÃO DETECTOU GRUPO, BUSCAR CLIENTE ESPECÍFICO (FALLBACK)
+                # Usar sistema real de dados para detectar clientes específicos
+                sistema_real = get_sistema_real_data()
+                clientes_reais = sistema_real.buscar_clientes_reais()
+                
+                # Buscar cliente específico (loja individual)
+                for cliente_real in clientes_reais:
+                    # Busca mais rigorosa - nome completo ou palavras muito específicas
+                    if cliente_real.lower() in consulta_lower or len([p for p in cliente_real.lower().split() if len(p) > 6 and p in consulta_lower]) > 0:
                         cliente_detectado = cliente_real
-                        cliente_filtro = cliente_real
-                        logger.info(f"🎯 CLIENTE REAL DETECTADO: {cliente_detectado}")
+                        cliente_filtro = cliente_real  # Filtro exato para cliente específico
+                        tipo_deteccao = 'CLIENTE_ESPECIFICO'
+                        logger.info(f"🏪 CLIENTE ESPECÍFICO DETECTADO: {cliente_detectado}")
                         break
-                if cliente_detectado:
-                    break
             
             # Lógica simples: se não encontrou cliente na lista real, seguir sem filtro específico
             # Claude vai usar apenas os dados reais fornecidos no contexto
