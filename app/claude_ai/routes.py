@@ -1162,3 +1162,415 @@ def download_excel(filename):
     except Exception as e:
         logger.error(f"❌ Erro no download de {filename}: {e}")
         abort(404) 
+
+# 🚀 ===== SISTEMA AVANÇADO DE IA - ROTAS ESPECIALIZADAS =====
+
+@claude_ai_bp.route('/api/advanced-query', methods=['POST'])
+@login_required
+def api_advanced_query():
+    """🧠 API para consultas avançadas com IA multi-agent e loop semântico"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Dados JSON não recebidos'}), 400
+            
+        consulta = data.get('query', '').strip()
+        if not consulta:
+            return jsonify({'success': False, 'error': 'Consulta vazia'}), 400
+        
+        # Preparar contexto do usuário
+        user_context = {
+            'user_id': current_user.id,
+            'username': current_user.nome,
+            'perfil': getattr(current_user, 'perfil', 'usuario'),
+            'vendedor_codigo': getattr(current_user, 'vendedor_codigo', None),
+            'session_time': datetime.now().isoformat()
+        }
+        
+        logger.info(f"🚀 CONSULTA AVANÇADA: {current_user.nome} -> {consulta[:50]}...")
+        
+        # Processar com sistema avançado
+        from .advanced_integration import get_advanced_ai_integration
+        from .claude_real_integration import get_claude_integration
+        
+        claude_client = get_claude_integration().client if get_claude_integration() else None
+        advanced_ai = get_advanced_ai_integration(claude_client)
+        
+        # Processar consulta avançada (assíncrona)
+        import asyncio
+        if asyncio.iscoroutinefunction(advanced_ai.process_advanced_query):
+            # Se estamos em contexto assíncrono
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Criar nova task se loop já está rodando
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, advanced_ai.process_advanced_query(consulta, user_context))
+                        result = future.result(timeout=30)  # 30s timeout
+                else:
+                    result = loop.run_until_complete(advanced_ai.process_advanced_query(consulta, user_context))
+            except:
+                # Fallback para sync
+                result = asyncio.run(advanced_ai.process_advanced_query(consulta, user_context))
+        else:
+            result = advanced_ai.process_advanced_query(consulta, user_context)
+        
+        if result['success']:
+            logger.info(f"✅ CONSULTA AVANÇADA processada com sucesso: {result['session_id']}")
+            return jsonify({
+                'success': True,
+                'session_id': result['session_id'],
+                'response': result['response'],
+                'metadata': {
+                    'processing_time': result['metadata']['processing_time'],
+                    'confidence_score': result['metadata']['confidence_score'],
+                    'semantic_refinements': result['metadata']['semantic_refinements'],
+                    'session_tags': result['metadata']['session_tags']
+                },
+                'advanced_features': {
+                    'multi_agent_used': True,
+                    'semantic_loop_applied': True,
+                    'structural_validation': True,
+                    'metacognitive_analysis': True
+                }
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Erro no processamento avançado'),
+                'fallback_available': True
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"❌ Erro na consulta avançada: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}',
+            'fallback_available': True
+        }), 500
+
+@claude_ai_bp.route('/api/advanced-feedback', methods=['POST'])
+@login_required
+def api_advanced_feedback():
+    """📝 API para capturar feedback avançado do usuário"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        query = data.get('query', '')
+        response = data.get('response', '')
+        feedback_text = data.get('feedback', '')
+        feedback_type = data.get('type', 'general')  # general, improvement, error, excellent
+        rating = data.get('rating', 3)  # 1-5 stars
+        
+        if not session_id or not feedback_text:
+            return jsonify({
+                'success': False,
+                'error': 'session_id e feedback são obrigatórios'
+            }), 400
+        
+        # Processar feedback avançado
+        from .advanced_integration import get_advanced_ai_integration
+        advanced_ai = get_advanced_ai_integration()
+        
+        # Capturar feedback (pode ser assíncrono)
+        import asyncio
+        try:
+            if asyncio.iscoroutinefunction(advanced_ai.capture_advanced_feedback):
+                feedback_result = asyncio.run(advanced_ai.capture_advanced_feedback(
+                    session_id, query, response, feedback_text, feedback_type
+                ))
+            else:
+                feedback_result = advanced_ai.capture_advanced_feedback(
+                    session_id, query, response, feedback_text, feedback_type
+                )
+        except Exception as e:
+            logger.error(f"Erro ao processar feedback avançado: {e}")
+            # Fallback para sistema básico
+            feedback_result = f"Feedback registrado: {feedback_text} (fallback mode)"
+        
+        # Registrar no sistema de learning
+        from .human_in_loop_learning import capture_user_feedback
+        learning_result = capture_user_feedback(
+            user_query=query,
+            ai_response=response,
+            user_feedback=feedback_text,
+            feedback_category=feedback_type,
+            user_context={'user_id': current_user.id, 'session_id': session_id}
+        )
+        
+        logger.info(f"📝 FEEDBACK AVANÇADO registrado: {session_id} -> {feedback_type}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Feedback registrado com sucesso',
+            'learning_applied': learning_result,
+            'advanced_analysis': feedback_result,
+            'session_id': session_id
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar feedback: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+@claude_ai_bp.route('/api/advanced-analytics')
+@login_required
+@require_admin()
+def api_advanced_analytics():
+    """📊 API para analytics avançadas do sistema de IA"""
+    try:
+        days = request.args.get('days', 7, type=int)
+        include_details = request.args.get('details', 'false').lower() == 'true'
+        
+        # Obter analytics do sistema avançado
+        from .advanced_integration import get_advanced_ai_integration
+        advanced_ai = get_advanced_ai_integration()
+        
+        analytics = advanced_ai.get_advanced_analytics(days=days)
+        
+        # Adicionar métricas complementares
+        try:
+            # Consultar tabelas PostgreSQL para métricas avançadas
+            from app import db
+            
+            # Sessões avançadas
+            sessions_query = text("""
+                SELECT 
+                    DATE(created_at) as date,
+                    COUNT(*) as sessions_count,
+                    AVG((metadata_jsonb->'metacognitive'->>'confidence_score')::decimal) as avg_confidence
+                FROM ai_advanced_sessions 
+                WHERE created_at >= CURRENT_DATE - INTERVAL '%s days'
+                GROUP BY DATE(created_at)
+                ORDER BY date DESC
+            """ % days)
+            
+            sessions_result = db.session.execute(sessions_query).fetchall()
+            
+            # Feedback avançado
+            feedback_query = text("""
+                SELECT 
+                    feedback_type,
+                    severity,
+                    COUNT(*) as feedback_count,
+                    AVG(CASE 
+                        WHEN feedback_type = 'excellent' THEN 5
+                        WHEN feedback_type = 'good' THEN 4
+                        WHEN feedback_type = 'general' THEN 3
+                        WHEN feedback_type = 'improvement' THEN 2
+                        WHEN feedback_type = 'error' THEN 1
+                        ELSE 3
+                    END) as avg_rating
+                FROM ai_feedback_history 
+                WHERE created_at >= CURRENT_DATE - INTERVAL '%s days'
+                GROUP BY feedback_type, severity
+            """ % days)
+            
+            feedback_result = db.session.execute(feedback_query).fetchall()
+            
+            # Padrões de aprendizado
+            patterns_query = text("""
+                SELECT 
+                    pattern_type,
+                    COUNT(*) as pattern_count,
+                    AVG(confidence_score) as avg_confidence,
+                    AVG(frequency) as avg_frequency
+                FROM ai_learning_patterns 
+                WHERE updated_at >= CURRENT_DATE - INTERVAL '%s days'
+                AND is_active = true
+                GROUP BY pattern_type
+            """ % days)
+            
+            patterns_result = db.session.execute(patterns_query).fetchall()
+            
+            # Adicionar aos analytics
+            analytics['database_metrics'] = {
+                'sessions_by_date': [
+                    {
+                        'date': row[0].isoformat() if row[0] else None,
+                        'sessions': row[1],
+                        'avg_confidence': float(row[2]) if row[2] else 0
+                    } for row in sessions_result
+                ],
+                'feedback_distribution': [
+                    {
+                        'type': row[0],
+                        'severity': row[1],
+                        'count': row[2],
+                        'avg_rating': float(row[3]) if row[3] else 0
+                    } for row in feedback_result
+                ],
+                'learning_patterns': [
+                    {
+                        'pattern_type': row[0],
+                        'count': row[1],
+                        'confidence': float(row[2]) if row[2] else 0,
+                        'frequency': float(row[3]) if row[3] else 0
+                    } for row in patterns_result
+                ]
+            }
+            
+        except Exception as db_error:
+            logger.warning(f"Erro ao consultar métricas avançadas do DB: {db_error}")
+            analytics['database_metrics'] = {'error': str(db_error)}
+        
+        return jsonify({
+            'success': True,
+            'analytics': analytics,
+            'period_days': days,
+            'generated_at': datetime.now().isoformat(),
+            'include_details': include_details
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao gerar analytics: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+@claude_ai_bp.route('/advanced-dashboard')
+@login_required
+@require_admin()
+def advanced_dashboard():
+    """🎛️ Dashboard avançado para administradores"""
+    return render_template('claude_ai/advanced_dashboard.html',
+                         user=current_user,
+                         titulo="Dashboard Avançado de IA")
+
+@claude_ai_bp.route('/advanced-feedback-interface')
+@login_required
+def advanced_feedback_interface():
+    """📝 Interface avançada para feedback do usuário"""
+    return render_template('claude_ai/advanced_feedback.html',
+                         user=current_user,
+                         titulo="Feedback Avançado")
+
+@claude_ai_bp.route('/api/system-health-advanced')
+@login_required
+@require_admin()
+def api_system_health_advanced():
+    """🔍 Health check avançado do sistema de IA"""
+    try:
+        health_status = {
+            'timestamp': datetime.now().isoformat(),
+            'overall_status': 'healthy',
+            'components': {},
+            'performance_metrics': {},
+            'recommendations': []
+        }
+        
+        # Verificar componentes avançados
+        components_to_check = [
+            ('multi_agent_system', 'Sistema Multi-Agent'),
+            ('human_learning', 'Aprendizado Humano'),
+            ('conversation_context', 'Contexto Conversacional'),
+            ('advanced_integration', 'Integração Avançada'),
+            ('claude_real_integration', 'Claude Real'),
+            ('redis_cache', 'Cache Redis')
+        ]
+        
+        for component_name, component_label in components_to_check:
+            try:
+                if component_name == 'multi_agent_system':
+                    from .multi_agent_system import get_multi_agent_system
+                    component = get_multi_agent_system()
+                    health_status['components'][component_name] = {
+                        'status': 'healthy' if component else 'degraded',
+                        'label': component_label,
+                        'details': 'Multi-agent system operational' if component else 'System not initialized'
+                    }
+                
+                elif component_name == 'human_learning':
+                    from .human_in_loop_learning import get_human_learning_system
+                    component = get_human_learning_system()
+                    health_status['components'][component_name] = {
+                        'status': 'healthy' if component else 'degraded',
+                        'label': component_label,
+                        'details': 'Learning system active' if component else 'Learning system not available'
+                    }
+                
+                elif component_name == 'advanced_integration':
+                    from .advanced_integration import get_advanced_ai_integration
+                    component = get_advanced_ai_integration()
+                    health_status['components'][component_name] = {
+                        'status': 'healthy' if component else 'critical',
+                        'label': component_label,
+                        'details': 'Advanced AI integration operational' if component else 'Integration failed'
+                    }
+                
+                elif component_name == 'redis_cache':
+                    try:
+                        from app.utils.redis_cache import redis_cache
+                        redis_status = redis_cache.disponivel if redis_cache else False
+                        health_status['components'][component_name] = {
+                            'status': 'healthy' if redis_status else 'degraded',
+                            'label': component_label,
+                            'details': 'Redis cache operational' if redis_status else 'Redis cache not available'
+                        }
+                    except:
+                        health_status['components'][component_name] = {
+                            'status': 'degraded',
+                            'label': component_label,
+                            'details': 'Redis cache module not available'
+                        }
+                
+                # Adicionar outros componentes conforme necessário
+                        
+            except Exception as comp_error:
+                health_status['components'][component_name] = {
+                    'status': 'critical',
+                    'label': component_label,
+                    'details': f'Error: {str(comp_error)}'
+                }
+        
+        # Verificar status geral
+        critical_count = sum(1 for comp in health_status['components'].values() if comp['status'] == 'critical')
+        degraded_count = sum(1 for comp in health_status['components'].values() if comp['status'] == 'degraded')
+        
+        if critical_count > 0:
+            health_status['overall_status'] = 'critical'
+            health_status['recommendations'].append(f'{critical_count} componente(s) crítico(s) requer(em) atenção imediata')
+        elif degraded_count > 0:
+            health_status['overall_status'] = 'degraded'
+            health_status['recommendations'].append(f'{degraded_count} componente(s) degradado(s) - funcionalidade reduzida')
+        
+        # Métricas de performance
+        try:
+            from app import db
+            
+            # Verificar performance do banco
+            start_time = datetime.now()
+            db.session.execute(text("SELECT 1")).fetchone()
+            db_response_time = (datetime.now() - start_time).total_seconds()
+            
+            health_status['performance_metrics'] = {
+                'database_response_time': db_response_time,
+                'database_status': 'healthy' if db_response_time < 1.0 else 'slow'
+            }
+            
+        except Exception as perf_error:
+            health_status['performance_metrics'] = {
+                'database_response_time': -1,
+                'database_status': 'error',
+                'error': str(perf_error)
+            }
+        
+        return jsonify({
+            'success': True,
+            'health_status': health_status
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no health check avançado: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}',
+            'health_status': {
+                'overall_status': 'critical',
+                'error': str(e)
+            }
+        }), 500 

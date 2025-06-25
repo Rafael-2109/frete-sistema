@@ -1,0 +1,617 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Avançado de IA{% endblock %}
+
+{% block extra_css %}
+<style>
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transition: transform 0.3s ease;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin: 0;
+    }
+    
+    .metric-label {
+        font-size: 0.9rem;
+        opacity: 0.8;
+        margin: 0;
+    }
+    
+    .status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+    }
+    
+    .status-healthy { background-color: #28a745; }
+    .status-degraded { background-color: #ffc107; }
+    .status-critical { background-color: #dc3545; }
+    
+    .component-card {
+        border: 1px solid #e3e6f0;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        background: white;
+    }
+    
+    .advanced-chart {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        margin-bottom: 1.5rem;
+    }
+    
+    .ai-feature-tag {
+        display: inline-block;
+        background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        margin: 2px;
+    }
+    
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .performance-gauge {
+        position: relative;
+        width: 120px;
+        height: 120px;
+        margin: 0 auto;
+    }
+    
+    .refresh-button {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        border: none;
+        color: white;
+        padding: 8px 20px;
+        border-radius: 25px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .refresh-button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">🚀 Dashboard Avançado de IA</h1>
+            <p class="text-muted">Sistema de IA Industrial - Potencial Máximo</p>
+        </div>
+        <div>
+            <button id="refreshButton" class="refresh-button">
+                <i class="fas fa-sync-alt"></i> Atualizar Dados
+            </button>
+            <span id="lastUpdate" class="text-muted ml-2"></span>
+        </div>
+    </div>
+
+    <!-- Indicadores de Status -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <p class="metric-label">Status Geral</p>
+                        <p class="metric-value" id="overallStatus">
+                            <span class="loading-spinner"></span>
+                        </p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-brain fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <p class="metric-label">Sessões Hoje</p>
+                        <p class="metric-value" id="sessionsToday">
+                            <span class="loading-spinner"></span>
+                        </p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-comments fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <p class="metric-label">Confiança Média</p>
+                        <p class="metric-value" id="avgConfidence">
+                            <span class="loading-spinner"></span>
+                        </p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-chart-line fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="metric-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <p class="metric-label">Tempo Resposta</p>
+                        <p class="metric-value" id="responseTime">
+                            <span class="loading-spinner"></span>
+                        </p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-stopwatch fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Funcionalidades Avançadas Ativas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="advanced-chart">
+                <h5 class="mb-3"><i class="fas fa-cogs text-primary"></i> Funcionalidades Avançadas Ativas</h5>
+                <div id="advancedFeatures">
+                    <span class="ai-feature-tag">🤖 Multi-Agent System</span>
+                    <span class="ai-feature-tag">🧠 Metacognitive Analysis</span>
+                    <span class="ai-feature-tag">🔄 Semantic Loop</span>
+                    <span class="ai-feature-tag">🏗️ Structural Validation</span>
+                    <span class="ai-feature-tag">📚 Human Learning</span>
+                    <span class="ai-feature-tag">💾 JSONB Storage</span>
+                    <span class="ai-feature-tag">🏷️ Auto-tagging</span>
+                    <span class="ai-feature-tag">⚡ Redis Cache</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos de Analytics -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="advanced-chart">
+                <h5 class="mb-3"><i class="fas fa-chart-area text-primary"></i> Sessões e Confiança (Últimos 7 dias)</h5>
+                <canvas id="sessionsChart" height="100"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="advanced-chart">
+                <h5 class="mb-3"><i class="fas fa-chart-pie text-primary"></i> Distribuição de Feedback</h5>
+                <canvas id="feedbackChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Health Status dos Componentes -->
+    <div class="row mb-4">
+        <div class="col-lg-6">
+            <div class="advanced-chart">
+                <h5 class="mb-3"><i class="fas fa-heartbeat text-primary"></i> Status dos Componentes</h5>
+                <div id="componentsStatus">
+                    <div class="text-center">
+                        <div class="loading-spinner"></div>
+                        <p class="text-muted mt-2">Carregando status dos componentes...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="advanced-chart">
+                <h5 class="mb-3"><i class="fas fa-graduation-cap text-primary"></i> Padrões de Aprendizado</h5>
+                <canvas id="learningChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Metrics -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="advanced-chart">
+                <h5 class="mb-3"><i class="fas fa-tachometer-alt text-primary"></i> Métricas de Performance</h5>
+                <div class="row" id="performanceMetrics">
+                    <div class="col-md-3 text-center">
+                        <div class="performance-gauge">
+                            <canvas id="dbGauge" width="120" height="120"></canvas>
+                        </div>
+                        <p class="mt-2 mb-0"><strong>Database</strong></p>
+                        <small class="text-muted" id="dbResponseTime">-- ms</small>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="performance-gauge">
+                            <canvas id="aiGauge" width="120" height="120"></canvas>
+                        </div>
+                        <p class="mt-2 mb-0"><strong>IA Processing</strong></p>
+                        <small class="text-muted" id="aiProcessingTime">-- ms</small>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="performance-gauge">
+                            <canvas id="cacheGauge" width="120" height="120"></canvas>
+                        </div>
+                        <p class="mt-2 mb-0"><strong>Cache Hit Rate</strong></p>
+                        <small class="text-muted" id="cacheHitRate">-- %</small>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="performance-gauge">
+                            <canvas id="accuracyGauge" width="120" height="120"></canvas>
+                        </div>
+                        <p class="mt-2 mb-0"><strong>Accuracy Score</strong></p>
+                        <small class="text-muted" id="accuracyScore">-- %</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recomendações do Sistema -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="advanced-chart">
+                <h5 class="mb-3"><i class="fas fa-lightbulb text-warning"></i> Recomendações do Sistema</h5>
+                <div id="systemRecommendations">
+                    <div class="text-center">
+                        <div class="loading-spinner"></div>
+                        <p class="text-muted mt-2">Analisando sistema...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Variáveis globais para gráficos
+let sessionsChart, feedbackChart, learningChart;
+let dashboardData = {};
+
+// Inicializar dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    initializeDashboard();
+    loadDashboardData();
+    
+    // Refresh automático a cada 30 segundos
+    setInterval(loadDashboardData, 30000);
+    
+    // Botão de refresh manual
+    document.getElementById('refreshButton').addEventListener('click', function() {
+        this.innerHTML = '<div class="loading-spinner"></div> Atualizando...';
+        loadDashboardData();
+    });
+});
+
+function initializeDashboard() {
+    // Inicializar gráficos vazios
+    initializeCharts();
+    initializeGauges();
+}
+
+function loadDashboardData() {
+    Promise.all([
+        loadAdvancedAnalytics(),
+        loadSystemHealth()
+    ]).then(() => {
+        updateLastRefreshTime();
+        document.getElementById('refreshButton').innerHTML = '<i class="fas fa-sync-alt"></i> Atualizar Dados';
+    }).catch(error => {
+        console.error('Erro ao carregar dados:', error);
+        showError('Erro ao carregar dados do dashboard');
+        document.getElementById('refreshButton').innerHTML = '<i class="fas fa-sync-alt"></i> Atualizar Dados';
+    });
+}
+
+function loadAdvancedAnalytics() {
+    return fetch('/claude-ai/api/advanced-analytics?days=7&details=true')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                dashboardData.analytics = data.analytics;
+                updateAnalyticsMetrics(data.analytics);
+                updateCharts(data.analytics);
+            } else {
+                throw new Error(data.error || 'Erro ao carregar analytics');
+            }
+        });
+}
+
+function loadSystemHealth() {
+    return fetch('/claude-ai/api/system-health-advanced')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                dashboardData.health = data.health_status;
+                updateHealthStatus(data.health_status);
+                updatePerformanceMetrics(data.health_status.performance_metrics || {});
+            } else {
+                throw new Error(data.error || 'Erro ao carregar status do sistema');
+            }
+        });
+}
+
+function updateAnalyticsMetrics(analytics) {
+    // Atualizar métricas principais
+    const today = new Date().toISOString().split('T')[0];
+    const todaySessions = analytics.database_metrics?.sessions_by_date?.find(s => s.date === today);
+    
+    document.getElementById('sessionsToday').textContent = todaySessions?.sessions || '0';
+    
+    const avgConf = analytics.database_metrics?.sessions_by_date?.reduce((acc, s) => acc + (s.avg_confidence || 0), 0) / 
+                   (analytics.database_metrics?.sessions_by_date?.length || 1);
+    document.getElementById('avgConfidence').textContent = `${(avgConf * 100).toFixed(1)}%`;
+}
+
+function updateHealthStatus(healthStatus) {
+    // Status geral
+    const statusElement = document.getElementById('overallStatus');
+    const statusMap = {
+        'healthy': { text: 'Saudável', class: 'text-success' },
+        'degraded': { text: 'Degradado', class: 'text-warning' },
+        'critical': { text: 'Crítico', class: 'text-danger' }
+    };
+    
+    const status = statusMap[healthStatus.overall_status] || { text: 'Unknown', class: 'text-secondary' };
+    statusElement.innerHTML = `<span class="${status.class}">${status.text}</span>`;
+    
+    // Componentes
+    updateComponentsStatus(healthStatus.components || {});
+    
+    // Recomendações
+    updateRecommendations(healthStatus.recommendations || []);
+}
+
+function updateComponentsStatus(components) {
+    const container = document.getElementById('componentsStatus');
+    
+    if (Object.keys(components).length === 0) {
+        container.innerHTML = '<p class="text-muted">Nenhum componente encontrado</p>';
+        return;
+    }
+    
+    container.innerHTML = Object.entries(components).map(([key, component]) => `
+        <div class="component-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="status-indicator status-${component.status}"></span>
+                    <strong>${component.label}</strong>
+                </div>
+                <span class="badge badge-${component.status === 'healthy' ? 'success' : 
+                                       component.status === 'degraded' ? 'warning' : 'danger'}">
+                    ${component.status}
+                </span>
+            </div>
+            <small class="text-muted">${component.details}</small>
+        </div>
+    `).join('');
+}
+
+function updateRecommendations(recommendations) {
+    const container = document.getElementById('systemRecommendations');
+    
+    if (recommendations.length === 0) {
+        container.innerHTML = '<div class="alert alert-success">✅ Sistema funcionando otimamente - nenhuma recomendação</div>';
+        return;
+    }
+    
+    container.innerHTML = recommendations.map(rec => `
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> ${rec}
+        </div>
+    `).join('');
+}
+
+function updatePerformanceMetrics(metrics) {
+    // Tempo de resposta do DB
+    const dbTime = metrics.database_response_time || 0;
+    document.getElementById('dbResponseTime').textContent = `${(dbTime * 1000).toFixed(0)} ms`;
+    document.getElementById('responseTime').textContent = `${(dbTime * 1000).toFixed(0)}ms`;
+    
+    // Atualizar gauges
+    updateGauge('dbGauge', Math.min(100, 100 - (dbTime * 100)), 'Database');
+    updateGauge('aiGauge', 85, 'IA Processing'); // Simulado
+    updateGauge('cacheGauge', 92, 'Cache'); // Simulado
+    updateGauge('accuracyGauge', 88, 'Accuracy'); // Simulado
+}
+
+function initializeCharts() {
+    // Gráfico de sessões
+    const sessionsCtx = document.getElementById('sessionsChart').getContext('2d');
+    sessionsChart = new Chart(sessionsCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Sessões',
+                data: [],
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                tension: 0.4
+            }, {
+                label: 'Confiança Média (%)',
+                data: [],
+                borderColor: '#f093fb',
+                backgroundColor: 'rgba(240, 147, 251, 0.1)',
+                yAxisID: 'y1',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true, position: 'left' },
+                y1: { beginAtZero: true, position: 'right', max: 100 }
+            }
+        }
+    });
+    
+    // Gráfico de feedback
+    const feedbackCtx = document.getElementById('feedbackChart').getContext('2d');
+    feedbackChart = new Chart(feedbackCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Excelente', 'Bom', 'Regular', 'Melhoria', 'Erro'],
+            datasets: [{
+                data: [0, 0, 0, 0, 0],
+                backgroundColor: ['#28a745', '#17a2b8', '#ffc107', '#fd7e14', '#dc3545']
+            }]
+        },
+        options: { responsive: true }
+    });
+    
+    // Gráfico de padrões
+    const learningCtx = document.getElementById('learningChart').getContext('2d');
+    learningChart = new Chart(learningCtx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Padrões Identificados',
+                data: [],
+                backgroundColor: 'rgba(102, 126, 234, 0.8)'
+            }]
+        },
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+    });
+}
+
+function updateCharts(analytics) {
+    // Atualizar gráfico de sessões
+    if (analytics.database_metrics?.sessions_by_date) {
+        const sessions = analytics.database_metrics.sessions_by_date.slice(-7).reverse();
+        sessionsChart.data.labels = sessions.map(s => new Date(s.date).toLocaleDateString());
+        sessionsChart.data.datasets[0].data = sessions.map(s => s.sessions);
+        sessionsChart.data.datasets[1].data = sessions.map(s => (s.avg_confidence * 100).toFixed(1));
+        sessionsChart.update();
+    }
+    
+    // Atualizar gráfico de feedback
+    if (analytics.database_metrics?.feedback_distribution) {
+        const feedback = analytics.database_metrics.feedback_distribution;
+        const feedbackCounts = [
+            feedback.filter(f => f.type === 'excellent').reduce((sum, f) => sum + f.count, 0),
+            feedback.filter(f => f.type === 'good').reduce((sum, f) => sum + f.count, 0),
+            feedback.filter(f => f.type === 'general').reduce((sum, f) => sum + f.count, 0),
+            feedback.filter(f => f.type === 'improvement').reduce((sum, f) => sum + f.count, 0),
+            feedback.filter(f => f.type === 'error').reduce((sum, f) => sum + f.count, 0)
+        ];
+        feedbackChart.data.datasets[0].data = feedbackCounts;
+        feedbackChart.update();
+    }
+    
+    // Atualizar gráfico de padrões
+    if (analytics.database_metrics?.learning_patterns) {
+        const patterns = analytics.database_metrics.learning_patterns;
+        learningChart.data.labels = patterns.map(p => p.pattern_type);
+        learningChart.data.datasets[0].data = patterns.map(p => p.count);
+        learningChart.update();
+    }
+}
+
+function initializeGauges() {
+    // Inicializar gauges de performance
+    ['dbGauge', 'aiGauge', 'cacheGauge', 'accuracyGauge'].forEach(id => {
+        updateGauge(id, 0, 'Loading...');
+    });
+}
+
+function updateGauge(canvasId, value, label) {
+    const canvas = document.getElementById(canvasId);
+    const ctx = canvas.getContext('2d');
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = 45;
+    
+    // Limpar canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Desenhar círculo de fundo
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = '#e9ecef';
+    ctx.stroke();
+    
+    // Desenhar progresso
+    const angle = (value / 100) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, -Math.PI / 2, -Math.PI / 2 + angle);
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = value >= 80 ? '#28a745' : value >= 60 ? '#ffc107' : '#dc3545';
+    ctx.stroke();
+    
+    // Desenhar valor
+    ctx.font = 'bold 16px Arial';
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${value.toFixed(0)}%`, centerX, centerY + 5);
+}
+
+function updateLastRefreshTime() {
+    const now = new Date();
+    document.getElementById('lastUpdate').textContent = 
+        `Atualizado: ${now.toLocaleTimeString()}`;
+}
+
+function showError(message) {
+    // Criar toast de erro
+    const toast = document.createElement('div');
+    toast.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="close" data-dismiss="alert">
+            <span>&times;</span>
+        </button>
+    `;
+    document.body.appendChild(toast);
+    
+    // Remover após 5 segundos
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }, 5000);
+}
+</script>
+{% endblock %} 

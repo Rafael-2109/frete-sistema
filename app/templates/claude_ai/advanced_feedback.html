@@ -1,0 +1,625 @@
+{% extends "base.html" %}
+
+{% block title %}Feedback Avançado - Sistema de IA{% endblock %}
+
+{% block extra_css %}
+<style>
+    .feedback-container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    
+    .feedback-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        text-align: center;
+    }
+    
+    .feedback-body {
+        padding: 2rem;
+    }
+    
+    .rating-container {
+        text-align: center;
+        margin: 1.5rem 0;
+    }
+    
+    .star-rating {
+        font-size: 2rem;
+        color: #ddd;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .star-rating:hover,
+    .star-rating.active {
+        color: #ffc107;
+        transform: scale(1.1);
+    }
+    
+    .feedback-type-btn {
+        border: 2px solid #e9ecef;
+        background: white;
+        color: #6c757d;
+        padding: 1rem 1.5rem;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin: 0.5rem;
+        min-width: 120px;
+    }
+    
+    .feedback-type-btn:hover {
+        border-color: #667eea;
+        color: #667eea;
+        transform: translateY(-2px);
+    }
+    
+    .feedback-type-btn.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-color: #667eea;
+        color: white;
+    }
+    
+    .session-info {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        border-left: 4px solid #667eea;
+    }
+    
+    .improvement-suggestion {
+        background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-left: 4px solid #fd7e14;
+    }
+    
+    .success-message {
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+        border-radius: 10px;
+        padding: 1.5rem;
+        text-align: center;
+        border-left: 4px solid #28a745;
+    }
+    
+    .submit-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        color: white;
+        padding: 12px 30px;
+        border-radius: 25px;
+        font-size: 1.1rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+    
+    .submit-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .submit-btn:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    
+    .feature-highlight {
+        background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-left: 4px solid #2196f3;
+    }
+    
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        display: none;
+    }
+    
+    .loading-content {
+        background: white;
+        padding: 2rem;
+        border-radius: 10px;
+        text-align: center;
+    }
+    
+    .loading-spinner {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 1rem;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .feedback-history {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-top: 2rem;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .feedback-item {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        border-left: 3px solid #667eea;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="feedback-container">
+        <!-- Header -->
+        <div class="feedback-header">
+            <h1><i class="fas fa-comments"></i> Feedback Avançado</h1>
+            <p class="mb-0">Ajude nosso sistema de IA a aprender e melhorar continuamente</p>
+        </div>
+        
+        <!-- Body -->
+        <div class="feedback-body">
+            <!-- Informações da Sessão -->
+            <div class="session-info" id="sessionInfo" style="display: none;">
+                <h5><i class="fas fa-info-circle text-primary"></i> Informações da Sessão</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <small class="text-muted">Session ID:</small><br>
+                        <code id="sessionId">--</code>
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-muted">Timestamp:</small><br>
+                        <span id="sessionTime">--</span>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">Sua consulta:</small><br>
+                    <em id="userQuery" class="text-dark">--</em>
+                </div>
+            </div>
+            
+            <!-- Funcionalidades Avançadas Utilizadas -->
+            <div class="feature-highlight">
+                <h6><i class="fas fa-cogs text-primary"></i> Funcionalidades IA Utilizadas</h6>
+                <div id="advancedFeatures">
+                    <span class="badge badge-primary m-1">🤖 Multi-Agent System</span>
+                    <span class="badge badge-info m-1">🧠 Análise Metacognitiva</span>
+                    <span class="badge badge-success m-1">🔄 Loop Semântico</span>
+                    <span class="badge badge-warning m-1">🏗️ Validação Estrutural</span>
+                </div>
+            </div>
+            
+            <!-- Formulário de Feedback -->
+            <form id="feedbackForm">
+                <!-- Avaliação por Estrelas -->
+                <div class="rating-container">
+                    <h5>Como você avalia a resposta?</h5>
+                    <div class="mb-3">
+                        <span class="star-rating" data-rating="1">⭐</span>
+                        <span class="star-rating" data-rating="2">⭐</span>
+                        <span class="star-rating" data-rating="3">⭐</span>
+                        <span class="star-rating" data-rating="4">⭐</span>
+                        <span class="star-rating" data-rating="5">⭐</span>
+                    </div>
+                    <div id="ratingText" class="text-muted">Clique nas estrelas para avaliar</div>
+                </div>
+                
+                <!-- Tipo de Feedback -->
+                <div class="mb-4">
+                    <h5>Tipo de Feedback</h5>
+                    <div class="d-flex flex-wrap justify-content-center">
+                        <button type="button" class="feedback-type-btn" data-type="excellent">
+                            <i class="fas fa-trophy text-warning"></i><br>
+                            Excelente
+                        </button>
+                        <button type="button" class="feedback-type-btn" data-type="good">
+                            <i class="fas fa-thumbs-up text-success"></i><br>
+                            Bom
+                        </button>
+                        <button type="button" class="feedback-type-btn" data-type="general">
+                            <i class="fas fa-comment text-info"></i><br>
+                            Geral
+                        </button>
+                        <button type="button" class="feedback-type-btn" data-type="improvement">
+                            <i class="fas fa-lightbulb text-warning"></i><br>
+                            Melhoria
+                        </button>
+                        <button type="button" class="feedback-type-btn" data-type="error">
+                            <i class="fas fa-exclamation-triangle text-danger"></i><br>
+                            Erro
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Comentário Detalhado -->
+                <div class="mb-4">
+                    <h5>Seu Feedback Detalhado</h5>
+                    <textarea class="form-control" id="feedbackText" rows="6" 
+                              placeholder="Descreva sua experiência, sugestões de melhoria, erros encontrados ou qualquer observação que possa ajudar nossa IA a aprender..."></textarea>
+                    <small class="form-text text-muted">
+                        <i class="fas fa-robot"></i> Seu feedback será usado para treinar e melhorar nosso sistema automaticamente
+                    </small>
+                </div>
+                
+                <!-- Categorias Específicas -->
+                <div class="mb-4" id="specificCategories" style="display: none;">
+                    <h6>Categorias Específicas</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="accuracyCheck">
+                                <label class="form-check-label" for="accuracyCheck">
+                                    Precisão dos Dados
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="speedCheck">
+                                <label class="form-check-label" for="speedCheck">
+                                    Velocidade de Resposta
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="clarityCheck">
+                                <label class="form-check-label" for="clarityCheck">
+                                    Clareza da Resposta
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="completenessCheck">
+                                <label class="form-check-label" for="completenessCheck">
+                                    Completude da Informação
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="contextCheck">
+                                <label class="form-check-label" for="contextCheck">
+                                    Compreensão do Contexto
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="usabilityCheck">
+                                <label class="form-check-label" for="usabilityCheck">
+                                    Facilidade de Uso
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sugestões de Melhoria -->
+                <div class="improvement-suggestion">
+                    <h6><i class="fas fa-lightbulb"></i> Sugestões para Melhorar</h6>
+                    <textarea class="form-control" id="improvementSuggestions" rows="3"
+                              placeholder="Como podemos melhorar? Que funcionalidades você gostaria de ver?"></textarea>
+                </div>
+                
+                <!-- Botão de Envio -->
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    <i class="fas fa-paper-plane"></i> Enviar Feedback
+                </button>
+            </form>
+            
+            <!-- Área de Sucesso -->
+            <div id="successArea" style="display: none;">
+                <div class="success-message">
+                    <h4><i class="fas fa-check-circle text-success"></i> Feedback Enviado com Sucesso!</h4>
+                    <p class="mb-3">Obrigado por ajudar nosso sistema de IA a aprender e melhorar!</p>
+                    <div id="learningResult" class="text-left">
+                        <!-- Resultado do aprendizado será inserido aqui -->
+                    </div>
+                    <button class="btn btn-outline-primary mt-3" onclick="resetForm()">
+                        <i class="fas fa-plus"></i> Enviar Outro Feedback
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Histórico de Feedback -->
+            <div class="feedback-history" id="feedbackHistory">
+                <h6><i class="fas fa-history"></i> Histórico de Feedback Recente</h6>
+                <div id="historyContent">
+                    <p class="text-muted text-center">Carregando histórico...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <h5>Processando seu feedback...</h5>
+        <p class="text-muted">Nosso sistema de IA está aprendendo com suas observações</p>
+    </div>
+</div>
+
+<script>
+let selectedRating = 0;
+let selectedType = '';
+let sessionData = {};
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeFeedbackInterface();
+    loadSessionData();
+    loadFeedbackHistory();
+});
+
+function initializeFeedbackInterface() {
+    // Inicializar avaliação por estrelas
+    document.querySelectorAll('.star-rating').forEach(star => {
+        star.addEventListener('click', function() {
+            selectedRating = parseInt(this.dataset.rating);
+            updateStarRating(selectedRating);
+            updateRatingText(selectedRating);
+        });
+        
+        star.addEventListener('mouseover', function() {
+            const rating = parseInt(this.dataset.rating);
+            updateStarRating(rating, true);
+        });
+    });
+    
+    // Reset stars on mouse leave
+    document.querySelector('.rating-container').addEventListener('mouseleave', function() {
+        updateStarRating(selectedRating);
+    });
+    
+    // Inicializar botões de tipo
+    document.querySelectorAll('.feedback-type-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            selectedType = this.dataset.type;
+            updateTypeSelection(selectedType);
+            updateSpecificCategories(selectedType);
+        });
+    });
+    
+    // Formulário de envio
+    document.getElementById('feedbackForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        submitFeedback();
+    });
+}
+
+function updateStarRating(rating, hover = false) {
+    document.querySelectorAll('.star-rating').forEach((star, index) => {
+        if (index < rating) {
+            star.classList.add('active');
+        } else {
+            star.classList.remove('active');
+        }
+    });
+}
+
+function updateRatingText(rating) {
+    const texts = {
+        1: 'Muito insatisfeito 😞',
+        2: 'Insatisfeito 😐',
+        3: 'Neutro 🙂',
+        4: 'Satisfeito 😊',
+        5: 'Muito satisfeito 🤩'
+    };
+    document.getElementById('ratingText').textContent = texts[rating] || 'Clique nas estrelas para avaliar';
+}
+
+function updateTypeSelection(type) {
+    document.querySelectorAll('.feedback-type-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelector(`[data-type="${type}"]`).classList.add('active');
+}
+
+function updateSpecificCategories(type) {
+    const categoriesDiv = document.getElementById('specificCategories');
+    if (type === 'improvement' || type === 'error') {
+        categoriesDiv.style.display = 'block';
+    } else {
+        categoriesDiv.style.display = 'none';
+    }
+}
+
+function loadSessionData() {
+    // Tentar obter dados da sessão do localStorage ou URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id') || localStorage.getItem('last_claude_session');
+    
+    if (sessionId) {
+        sessionData = {
+            session_id: sessionId,
+            query: localStorage.getItem('last_claude_query') || 'Consulta não disponível',
+            response: localStorage.getItem('last_claude_response') || 'Resposta não disponível',
+            timestamp: new Date().toISOString()
+        };
+        
+        // Mostrar informações da sessão
+        document.getElementById('sessionInfo').style.display = 'block';
+        document.getElementById('sessionId').textContent = sessionId;
+        document.getElementById('sessionTime').textContent = new Date().toLocaleString();
+        document.getElementById('userQuery').textContent = sessionData.query.substring(0, 200) + '...';
+    }
+}
+
+function submitFeedback() {
+    if (!selectedRating || !selectedType) {
+        alert('Por favor, selecione uma avaliação e tipo de feedback');
+        return;
+    }
+    
+    const feedbackText = document.getElementById('feedbackText').value;
+    if (!feedbackText.trim()) {
+        alert('Por favor, forneça um comentário detalhado');
+        return;
+    }
+    
+    // Mostrar loading
+    document.getElementById('loadingOverlay').style.display = 'flex';
+    
+    // Coletar dados específicos
+    const specificCategories = [];
+    document.querySelectorAll('#specificCategories input[type="checkbox"]:checked').forEach(checkbox => {
+        specificCategories.push(checkbox.id.replace('Check', ''));
+    });
+    
+    const feedbackData = {
+        session_id: sessionData.session_id || `feedback_${Date.now()}`,
+        query: sessionData.query || '',
+        response: sessionData.response || '',
+        rating: selectedRating,
+        type: selectedType,
+        feedback: feedbackText,
+        improvement_suggestions: document.getElementById('improvementSuggestions').value,
+        specific_categories: specificCategories,
+        timestamp: new Date().toISOString()
+    };
+    
+    // Enviar feedback
+    fetch('/claude-ai/api/advanced-feedback', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify(feedbackData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('loadingOverlay').style.display = 'none';
+        
+        if (data.success) {
+            showSuccessMessage(data);
+            loadFeedbackHistory(); // Recarregar histórico
+        } else {
+            alert('Erro ao enviar feedback: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        document.getElementById('loadingOverlay').style.display = 'none';
+        console.error('Erro:', error);
+        alert('Erro ao enviar feedback. Tente novamente.');
+    });
+}
+
+function showSuccessMessage(data) {
+    // Esconder formulário
+    document.getElementById('feedbackForm').style.display = 'none';
+    
+    // Mostrar área de sucesso
+    document.getElementById('successArea').style.display = 'block';
+    
+    // Mostrar resultado do aprendizado
+    const resultDiv = document.getElementById('learningResult');
+    resultDiv.innerHTML = `
+        <div class="alert alert-info">
+            <h6><i class="fas fa-brain"></i> Impacto do seu Feedback:</h6>
+            <p><strong>Sistema de Aprendizado:</strong> ${data.learning_applied || 'Feedback registrado no sistema'}</p>
+            <p><strong>Análise Avançada:</strong> ${data.advanced_analysis || 'Processamento em andamento'}</p>
+            <small class="text-muted">Session ID: ${data.session_id}</small>
+        </div>
+    `;
+}
+
+function resetForm() {
+    // Reset todas as variáveis
+    selectedRating = 0;
+    selectedType = '';
+    
+    // Reset visual
+    updateStarRating(0);
+    updateRatingText(0);
+    document.querySelectorAll('.feedback-type-btn').forEach(btn => btn.classList.remove('active'));
+    
+    // Reset campos
+    document.getElementById('feedbackText').value = '';
+    document.getElementById('improvementSuggestions').value = '';
+    document.querySelectorAll('#specificCategories input[type="checkbox"]').forEach(cb => cb.checked = false);
+    
+    // Mostrar formulário e esconder sucesso
+    document.getElementById('feedbackForm').style.display = 'block';
+    document.getElementById('successArea').style.display = 'none';
+}
+
+function loadFeedbackHistory() {
+    fetch('/claude-ai/api/advanced-analytics?days=7')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.analytics.database_metrics?.feedback_distribution) {
+                displayFeedbackHistory(data.analytics.database_metrics.feedback_distribution);
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar histórico:', error);
+            document.getElementById('historyContent').innerHTML = 
+                '<p class="text-muted text-center">Erro ao carregar histórico</p>';
+        });
+}
+
+function displayFeedbackHistory(feedbackData) {
+    const historyContent = document.getElementById('historyContent');
+    
+    if (!feedbackData || feedbackData.length === 0) {
+        historyContent.innerHTML = '<p class="text-muted text-center">Nenhum feedback recente</p>';
+        return;
+    }
+    
+    const totalFeedback = feedbackData.reduce((sum, item) => sum + item.count, 0);
+    
+    historyContent.innerHTML = `
+        <div class="text-center mb-3">
+            <h6>Total de Feedbacks: ${totalFeedback}</h6>
+        </div>
+        ${feedbackData.map(item => `
+            <div class="feedback-item">
+                <div class="d-flex justify-content-between">
+                    <span><strong>${item.type}</strong> (${item.severity})</span>
+                    <span class="badge badge-primary">${item.count}</span>
+                </div>
+                <small class="text-muted">Avaliação média: ${item.avg_rating.toFixed(1)}/5</small>
+            </div>
+        `).join('')}
+    `;
+}
+
+function getCSRFToken() {
+    return document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+}
+
+// Capturar dados da sessão do Claude quando disponível
+window.addEventListener('message', function(event) {
+    if (event.data.type === 'claude_session_data') {
+        sessionData = event.data.session;
+        loadSessionData();
+    }
+});
+</script>
+{% endblock %} 
