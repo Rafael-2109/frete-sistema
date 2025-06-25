@@ -6,6 +6,7 @@ import os
 import sys
 import logging
 from datetime import datetime
+from sqlalchemy import text
 from .mcp_connector import MCPSistemaOnline
 from . import claude_ai_bp
 from app.utils.auth_decorators import require_admin
@@ -1292,11 +1293,12 @@ def api_advanced_feedback():
         # Registrar no sistema de learning
         from .human_in_loop_learning import capture_user_feedback
         learning_result = capture_user_feedback(
-            user_query=query,
-            ai_response=response,
-            user_feedback=feedback_text,
-            feedback_category=feedback_type,
-            user_context={'user_id': current_user.id, 'session_id': session_id}
+            query=query,
+            response=response,
+            feedback=feedback_text,
+            feedback_type=feedback_type,
+            severity="medium",
+            context={'user_id': current_user.id, 'session_id': session_id}
         )
         
         logger.info(f"📝 FEEDBACK AVANÇADO registrado: {session_id} -> {feedback_type}")
@@ -1668,14 +1670,15 @@ def api_metricas_reais():
             """)
             fretes_result = db.session.execute(fretes_pendentes_query).fetchone()
             
-            # Entregas monitoradas hoje
+            # Entregas monitoradas - dados mais abrangentes
             entregas_hoje_query = text("""
                 SELECT 
                     COUNT(*) as total_entregas,
                     COUNT(CASE WHEN entregue = true THEN 1 END) as entregas_concluidas,
-                    COUNT(CASE WHEN entregue = false AND data_prevista_entrega < CURRENT_DATE THEN 1 END) as entregas_atrasadas
+                    COUNT(CASE WHEN entregue = false AND data_prevista_entrega < CURRENT_DATE THEN 1 END) as entregas_atrasadas,
+                    COUNT(CASE WHEN entregue = false THEN 1 END) as entregas_pendentes
                 FROM entregas_monitoradas 
-                WHERE DATE(criado_em) = CURRENT_DATE OR DATE(data_prevista_entrega) = CURRENT_DATE
+                WHERE data_prevista_entrega >= CURRENT_DATE - INTERVAL '30 days'
             """)
             entregas_result = db.session.execute(entregas_hoje_query).fetchone()
             

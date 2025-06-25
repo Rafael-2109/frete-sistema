@@ -136,6 +136,53 @@ class MetacognitiveAnalyzer:
         
         return coverage
     
+    def _interpret_user_feedback(self, user_feedback: str) -> float:
+        """Interpreta feedback do usuário e converte para score de satisfação"""
+        
+        feedback_lower = user_feedback.lower().strip()
+        
+        # Palavras positivas
+        positive_indicators = [
+            'excelente', 'ótimo', 'perfeito', 'correto', 'bom', 'certo', 
+            'satisfeito', 'útil', 'preciso', 'completo', 'obrigado'
+        ]
+        
+        # Palavras negativas  
+        negative_indicators = [
+            'errado', 'incorreto', 'não', 'ruim', 'péssimo', 'erro',
+            'problema', 'falhou', 'não encontrou', 'inútil', 'confuso'
+        ]
+        
+        # Palavras de melhoria
+        improvement_indicators = [
+            'melhorar', 'poderia', 'faltou', 'incompleto', 'mais', 
+            'detalhes', 'específico', 'expandir'
+        ]
+        
+        # Calcular score baseado nas palavras encontradas
+        positive_count = sum(1 for word in positive_indicators if word in feedback_lower)
+        negative_count = sum(1 for word in negative_indicators if word in feedback_lower)
+        improvement_count = sum(1 for word in improvement_indicators if word in feedback_lower)
+        
+        # Score base
+        if positive_count > negative_count:
+            base_score = 0.8
+        elif negative_count > positive_count:
+            base_score = 0.2
+        elif improvement_count > 0:
+            base_score = 0.6
+        else:
+            base_score = 0.5  # Neutro
+        
+        # Ajustar baseado na proporção
+        total_indicators = positive_count + negative_count + improvement_count
+        if total_indicators > 0:
+            satisfaction = (positive_count * 1.0 + improvement_count * 0.6 + negative_count * 0.1) / total_indicators
+        else:
+            satisfaction = base_score
+        
+        return min(max(satisfaction, 0.0), 1.0)  # Garantir entre 0-1
+    
     def _suggest_self_improvements(self, analysis: Dict[str, Any]) -> List[str]:
         """Sugere melhorias baseadas na auto-análise"""
         
