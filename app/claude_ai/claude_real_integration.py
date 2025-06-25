@@ -41,6 +41,9 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ Sistema de Contexto Conversacional não disponível: {e}")
 
+# 🏢 SISTEMA DE GRUPOS EMPRESARIAIS
+from app.utils.grupo_empresarial import GrupoEmpresarialDetector, detectar_grupo_empresarial
+
 class ClaudeRealIntegration:
     """Integração com Claude REAL da Anthropic"""
     
@@ -149,6 +152,92 @@ class ClaudeRealIntegration:
                 logger.info(f"🧠 Consulta de NFs adicionada ao contexto para usuário {user_id}")
             
             return resultado_nfs
+        
+        # 📅 DETECTAR CONSULTAS SOBRE AGENDAMENTOS PENDENTES
+        if any(termo in consulta.lower() for termo in ['agendamento pendente', 'agendamentos pendentes', 
+                                                        'precisam de agendamento', 'sem agendamento',
+                                                        'aguardando agendamento', 'com agendamento pendente']):
+            logger.info("📅 PROCESSAMENTO: Consulta sobre agendamentos pendentes detectada")
+            
+            # Usar dados reais do AlertEngine
+            from .alert_engine import get_alert_engine
+            alert_engine = get_alert_engine()
+            
+            # Obter dados de agendamentos pendentes
+            agendamentos_info = alert_engine._check_agendamentos_pendentes()
+            quantidade = agendamentos_info.get('quantidade', 0)
+            entregas_pendentes = agendamentos_info.get('entregas', [])
+            
+            if quantidade == 0:
+                resultado_agendamentos = f"""🤖 **CLAUDE 4 SONNET REAL**
+
+✅ **AGENDAMENTOS - SITUAÇÃO EXCELENTE**
+
+Não há entregas pendentes de agendamento no momento!
+
+📊 **STATUS ATUAL**:
+• Total de entregas pendentes de agendamento: **0**
+• Todas as entregas recentes estão com agendamento confirmado
+• Sistema monitorado em tempo real
+
+---
+🧠 **Powered by:** Claude 4 Sonnet (Anthropic) + Sistema de Alertas
+🕒 **Processado:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+⚡ **Fonte:** AlertEngine - Dados em tempo real"""
+            
+            else:
+                # Montar resposta com detalhes
+                resultado_agendamentos = f"""🤖 **CLAUDE 4 SONNET REAL**
+
+📅 **ENTREGAS COM AGENDAMENTO PENDENTE**
+
+🚨 **ATENÇÃO**: {quantidade} entrega{'s' if quantidade > 1 else ''} {'precisam' if quantidade > 1 else 'precisa'} de agendamento
+
+📊 **DETALHES DAS ENTREGAS PENDENTES**:
+"""
+                
+                # Listar até 10 entregas pendentes
+                for i, entrega in enumerate(entregas_pendentes[:10], 1):
+                    resultado_agendamentos += f"""
+{i}. **NF {entrega.get('numero_nf', 'N/A')}**
+   • Cliente: {entrega.get('cliente', 'N/A')}
+   • Status: ⏳ Aguardando agendamento"""
+                
+                if quantidade > 10:
+                    resultado_agendamentos += f"\n\n... e mais {quantidade - 10} entregas pendentes de agendamento"
+                
+                resultado_agendamentos += f"""
+
+🎯 **AÇÃO NECESSÁRIA**:
+1. Verificar forma de agendamento de cada cliente
+2. Entrar em contato para agendar entregas
+3. Registrar protocolos de agendamento no sistema
+
+💡 **CRITÉRIO USADO**:
+• Entregas embarcadas há mais de 3 dias
+• Sem data de entrega prevista definida
+• Status não finalizado
+
+📋 **COMO AGENDAR**:
+• Acesse o módulo de Monitoramento
+• Localize cada NF listada acima
+• Clique em "Agendar" para registrar o agendamento
+• Informe data, hora e protocolo
+
+---
+🧠 **Powered by:** Claude 4 Sonnet (Anthropic) + AlertEngine
+🕒 **Processado:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+⚡ **Fonte:** Sistema de Alertas em Tempo Real
+📊 **Critério:** Entregas sem data_entrega_prevista embarcadas há >3 dias"""
+            
+            # Adicionar ao contexto conversacional
+            if context_manager:
+                metadata = {'tipo': 'agendamentos_pendentes', 'quantidade': quantidade}
+                context_manager.add_message(user_id, 'user', consulta, metadata)
+                context_manager.add_message(user_id, 'assistant', resultado_agendamentos, metadata)
+                logger.info(f"🧠 Consulta de agendamentos adicionada ao contexto para usuário {user_id}")
+            
+            return resultado_agendamentos
         
         # 🧠 SISTEMA DE CONTEXTO CONVERSACIONAL
         user_id = str(user_context.get('user_id', 'anonymous')) if user_context else 'anonymous'
@@ -282,16 +371,25 @@ Por favor, forneça uma resposta completa incluindo:
             if dados_contexto.get('_from_cache'):
                 cache_indicator = " ⚡ (Dados em Cache)"
             
+            # 🏢 Indicador de grupo empresarial
+            grupo_indicator = ""
+            tipo_contexto = contexto_analisado.get('tipo_consulta', 'Geral').title()
+            if contexto_analisado.get('tipo_consulta') == 'grupo_empresarial':
+                grupo_info = contexto_analisado.get('grupo_empresarial', {})
+                tipo_contexto = f"Grupo {grupo_info.get('tipo_negocio', 'Empresarial').title()}"
+                if grupo_info.get('cnpj_prefixos'):
+                    grupo_indicator = f" | CNPJs: {', '.join(grupo_info['cnpj_prefixos'][:2])}..."
+            
             resposta_final = f"""🤖 **CLAUDE 4 SONNET REAL**{cache_indicator}
 
 {resultado}
 
 ---
 🧠 **Powered by:** Claude 4 Sonnet (Anthropic) - Modelo mais avançado disponível + Contexto Conversacional
-🎯 **Contexto:** {contexto_analisado.get('tipo_consulta', 'Geral').title()}
-📊 **Dados:** {contexto_analisado.get('periodo_dias', 7)} dias | {contexto_analisado.get('registros_carregados', 0)} registros
+🎯 **Contexto:** {tipo_contexto}{grupo_indicator}
+📊 **Dados:** {contexto_analisado.get('periodo_dias', 7)} dias | {dados_contexto.get('registros_carregados', 0)} registros
 🕒 **Processado:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
-⚡ **Modo:** IA Real Industrial{' + Redis Cache' if REDIS_DISPONIVEL else ''} + Memória Conversacional"""
+⚡ **Modo:** IA Real Industrial{' + Redis Cache' if REDIS_DISPONIVEL else ''} + Memória Conversacional + Grupos Empresariais"""
             
             # 🧠 ADICIONAR CONVERSA AO CONTEXTO
             if context_manager:
@@ -340,13 +438,24 @@ Por favor, forneça uma resposta completa incluindo:
         import re
         nfs_encontradas = re.findall(r'1\d{5}', consulta)  # NFs começam com 1 e têm 6 dígitos
         
-        if nfs_encontradas and len(nfs_encontradas) >= 2:  # Pelo menos 2 NFs para ser consulta específica
+        if nfs_encontradas and len(nfs_encontradas) >= 1:  # Pelo menos 1 NF para ser consulta específica
             analise["consulta_nfs_especificas"] = True
             analise["nfs_detectadas"] = nfs_encontradas
             analise["tipo_consulta"] = "nfs_especificas"
             analise["dominio"] = "entregas"  # NFs sempre relacionadas a entregas
             logger.info(f"🔍 CONSULTA DE NFs ESPECÍFICAS detectada: {len(nfs_encontradas)} NFs")
             return analise  # Retornar imediatamente para consulta específica
+        
+        # 📅 DETECÇÃO DE CONSULTA SOBRE AGENDAMENTOS PENDENTES
+        if any(termo in consulta_lower for termo in ['agendamento pendente', 'agendamentos pendentes', 
+                                                       'precisam de agendamento', 'sem agendamento',
+                                                       'agendar', 'aguardando agendamento', 
+                                                       'entregas com agendamento pendente']):
+            analise["tipo_consulta"] = "agendamentos_pendentes"
+            analise["dominio"] = "entregas"
+            analise["foco_dados"] = ["agendamentos_pendentes"]
+            logger.info("📅 CONSULTA SOBRE AGENDAMENTOS PENDENTES detectada")
+            return analise  # Processar como consulta específica
         
         # 🚨 DETECÇÃO DE CORREÇÕES DO USUÁRIO - PRIMEIRA VERIFICAÇÃO
         palavras_correcao = [
@@ -425,29 +534,31 @@ Por favor, forneça uma resposta completa incluindo:
         
         # ANÁLISE DE CLIENTE ESPECÍFICO - APENAS SE NÃO HOUVER CORREÇÃO
         if not analise["correcao_usuario"]:
-            # DETECTAR CLIENTES ESPECÍFICOS POR NOME EXATO
-            if "assai" in consulta_lower:
-                analise["tipo_consulta"] = "cliente_especifico"
-                analise["cliente_especifico"] = "Assai"
-                logger.info("🎯 Cliente específico detectado: Assai")
-            elif "atacadão" in consulta_lower or "atacadao" in consulta_lower:
-                analise["tipo_consulta"] = "cliente_especifico" 
-                analise["cliente_especifico"] = "Atacadão"
-                logger.info("🎯 Cliente específico detectado: Atacadão")
-            elif "tenda" in consulta_lower:
-                analise["tipo_consulta"] = "cliente_especifico"
-                analise["cliente_especifico"] = "Tenda"
-                logger.info("🎯 Cliente específico detectado: Tenda")
-            elif "carrefour" in consulta_lower:
-                analise["tipo_consulta"] = "cliente_especifico"
-                analise["cliente_especifico"] = "Carrefour"
-                logger.info("🎯 Cliente específico detectado: Carrefour")
+            # 🏢 USAR SISTEMA DE GRUPOS EMPRESARIAIS INTELIGENTE
+            detector_grupos = GrupoEmpresarialDetector()
+            grupo_detectado = detector_grupos.detectar_grupo_na_consulta(consulta)
             
-            # Detectar grupos vs clientes específicos
+            if grupo_detectado:
+                # GRUPO EMPRESARIAL DETECTADO!
+                analise["tipo_consulta"] = "grupo_empresarial"
+                analise["grupo_empresarial"] = grupo_detectado
+                analise["cliente_especifico"] = grupo_detectado['grupo_detectado']
+                analise["filtro_sql"] = grupo_detectado['filtro_sql']
+                analise["tipo_negocio"] = grupo_detectado.get('tipo_negocio', 'N/A')
+                analise["metodo_deteccao"] = grupo_detectado.get('metodo_deteccao', 'nome_padrao')
+                analise["cnpj_prefixos"] = grupo_detectado.get('cnpj_prefixos', [])
+                
+                logger.info(f"🏢 GRUPO EMPRESARIAL: {grupo_detectado['grupo_detectado']}")
+                logger.info(f"📊 Tipo: {grupo_detectado['tipo_negocio']} | Método: {grupo_detectado['metodo_deteccao']}")
+                logger.info(f"🔍 Filtro SQL: {grupo_detectado['filtro_sql']}")
+                if grupo_detectado.get('cnpj_prefixos'):
+                    logger.info(f"📋 CNPJs: {', '.join(grupo_detectado['cnpj_prefixos'])}")
+            
+            # Detectar grupos genéricos apenas se não detectou grupo específico
             elif re.search(r"supermercados|atacados|varejo", consulta_lower):
                 analise["tipo_consulta"] = "grupo_clientes"
                 analise["cliente_especifico"] = "GRUPO_CLIENTES"
-                logger.info("🎯 Grupo de clientes detectado")
+                logger.info("🎯 Grupo genérico de clientes detectado")
             
             # Detectar filiais por padrões numéricos
             else:
@@ -757,33 +868,42 @@ Por favor, forneça uma resposta completa incluindo:
         if cliente_especifico:
             logger.info(f"🎯 Aplicando filtro de cliente: {cliente_especifico}")
             
-            if cliente_especifico == "GRUPO_CLIENTES":
+            # 🏢 USAR FILTRO SQL DO GRUPO EMPRESARIAL SE DETECTADO
+            if analise.get("tipo_consulta") == "grupo_empresarial" and analise.get("filtro_sql"):
+                # GRUPO EMPRESARIAL - usar filtro SQL inteligente
+                filtro_sql = analise["filtro_sql"]
+                logger.info(f"🏢 GRUPO EMPRESARIAL: Aplicando filtro SQL: {filtro_sql}")
+                query_entregas = query_entregas.filter(
+                    EntregaMonitorada.cliente.ilike(filtro_sql)
+                )
+                
+                # 🎯 EXTRAIR CNPJs ÚNICOS DO GRUPO
+                if analise.get("cnpj_prefixos"):
+                    logger.info(f"📋 Grupo tem CNPJs conhecidos: {', '.join(analise['cnpj_prefixos'])}")
+                    # TODO: Implementar busca por CNPJ quando o campo estiver padronizado
+                    
+                # Se a pergunta for sobre CNPJ, marcar para responder diretamente
+                if any(termo in analise.get('consulta_original', '').lower() for termo in ['cnpj', 'cpf', 'documento']):
+                    # Buscar CNPJs únicos do grupo
+                    cnpjs_unicos = db.session.query(EntregaMonitorada.cnpj_cliente).filter(
+                        EntregaMonitorada.cliente.ilike(filtro_sql),
+                        EntregaMonitorada.cnpj_cliente != None,
+                        EntregaMonitorada.cnpj_cliente != ''
+                    ).distinct().limit(20).all()
+                    
+                    if cnpjs_unicos:
+                        cnpjs_formatados = [cnpj[0] for cnpj in cnpjs_unicos if cnpj[0]]
+                        logger.info(f"🎯 CNPJs únicos do grupo encontrados: {len(cnpjs_formatados)} CNPJs")
+                        analise['cnpjs_cliente'] = cnpjs_formatados
+                        analise['pergunta_sobre_cnpj'] = True
+                        
+            elif cliente_especifico == "GRUPO_CLIENTES":
                 # Filtro genérico para grupos de clientes
                 query_entregas = query_entregas.filter(
                     or_(
                         EntregaMonitorada.cliente.ilike('%atacado%'),
                         EntregaMonitorada.cliente.ilike('%supermercado%'),
                         EntregaMonitorada.cliente.ilike('%varejo%')
-                    )
-                )
-            elif cliente_especifico == "Assai":
-                # APENAS Assai - NUNCA Atacadão
-                query_entregas = query_entregas.filter(
-                    and_(
-                        EntregaMonitorada.cliente.ilike('%assai%'),
-                        ~EntregaMonitorada.cliente.ilike('%atacadão%'),
-                        ~EntregaMonitorada.cliente.ilike('%atacadao%')
-                    )
-                )
-            elif cliente_especifico == "Atacadão":
-                # APENAS Atacadão - NUNCA Assai
-                query_entregas = query_entregas.filter(
-                    and_(
-                        or_(
-                            EntregaMonitorada.cliente.ilike('%atacadão%'),
-                            EntregaMonitorada.cliente.ilike('%atacadao%')
-                        ),
-                        ~EntregaMonitorada.cliente.ilike('%assai%')
                     )
                 )
             else:
@@ -834,6 +954,7 @@ Por favor, forneça uma resposta completa incluindo:
                     "id": e.id,
                     "numero_nf": e.numero_nf,
                     "cliente": e.cliente,
+                    "cnpj_cliente": e.cnpj_cliente,  # 🎯 INCLUIR CNPJ
                     "uf": e.uf,
                     "municipio": e.municipio,
                     "transportadora": e.transportadora,
@@ -854,7 +975,8 @@ Por favor, forneça uma resposta completa incluindo:
             "total_periodo_completo": total_entregas_periodo,  # Total real no período
             "dados_limitados": len(entregas) < total_entregas_periodo,  # Se está limitado
             "metricas": metricas_entregas,
-            "agendamentos": agendamentos_info
+            "agendamentos": agendamentos_info,
+            "cnpjs_unicos": analise.get('cnpjs_cliente', [])  # 🎯 INCLUIR CNPJs ÚNICOS
         }
     
     def _carregar_fretes_banco(self, analise: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
@@ -1011,7 +1133,15 @@ Por favor, forneça uma resposta completa incluindo:
             
             # Aplicar filtros específicos
             if analise.get("cliente_especifico"):
-                if analise["cliente_especifico"] == "GRUPO_CLIENTES":
+                # 🏢 USAR FILTRO SQL DO GRUPO EMPRESARIAL SE DETECTADO
+                if analise.get("tipo_consulta") == "grupo_empresarial" and analise.get("filtro_sql"):
+                    # GRUPO EMPRESARIAL - usar filtro SQL inteligente
+                    filtro_sql = analise["filtro_sql"]
+                    logger.info(f"🏢 ESTATÍSTICAS - Aplicando filtro SQL do grupo: {filtro_sql}")
+                    query_base = query_base.filter(
+                        EntregaMonitorada.cliente.ilike(filtro_sql)
+                    )
+                elif analise["cliente_especifico"] == "GRUPO_CLIENTES":
                     # Filtro genérico para grupos de clientes
                     query_base = query_base.filter(
                         or_(
@@ -1020,27 +1150,8 @@ Por favor, forneça uma resposta completa incluindo:
                             EntregaMonitorada.cliente.ilike('%varejo%')
                         )
                     )
-                elif analise["cliente_especifico"] == "Assai":
-                    # APENAS Assai
-                    query_base = query_base.filter(
-                        and_(
-                            EntregaMonitorada.cliente.ilike('%assai%'),
-                            ~EntregaMonitorada.cliente.ilike('%atacadão%'),
-                            ~EntregaMonitorada.cliente.ilike('%atacadao%')
-                        )
-                    )
-                elif analise["cliente_especifico"] == "Atacadão":
-                    # APENAS Atacadão
-                    query_base = query_base.filter(
-                        and_(
-                            or_(
-                                EntregaMonitorada.cliente.ilike('%atacadão%'),
-                                EntregaMonitorada.cliente.ilike('%atacadao%')
-                            ),
-                            ~EntregaMonitorada.cliente.ilike('%assai%')
-                        )
-                    )
                 else:
+                    # Cliente específico sem grupo
                     query_base = query_base.filter(EntregaMonitorada.cliente.ilike(f'%{analise["cliente_especifico"]}%'))
             
             if filtros_usuario.get("vendedor_restricao"):
@@ -1094,13 +1205,14 @@ Por favor, forneça uma resposta completa incluindo:
         return """
 FERRAMENTAS AVANÇADAS DISPONÍVEIS:
 1. Análise contextual inteligente - Detecta automaticamente cliente, período, geografia
-2. Filtros por permissão - Vendedores veem apenas seus clientes
-3. Métricas calculadas - Performance, atrasos, comparações temporais
-4. Cache inteligente - Estatísticas otimizadas para consultas frequentes
-5. Diferenciação rigorosa - Assai ≠ Atacadão (nunca confunde)
-6. Análises temporais corretas - Mês = mês inteiro, não 7 dias
-7. Dados completos - Datas de entrega, prazos, reagendamentos, protocolos
-8. Histórico de agendamentos - Reagendas e protocolos completos
+2. Grupos empresariais inteligentes - Identifica automaticamente grupos e filiais
+3. Filtros por permissão - Vendedores veem apenas seus clientes
+4. Métricas calculadas - Performance, atrasos, comparações temporais
+5. Cache inteligente - Estatísticas otimizadas para consultas frequentes
+6. Detecção por CNPJ - Identifica grupos por prefixos de CNPJ conhecidos
+7. Análises temporais corretas - Mês = mês inteiro, não 7 dias
+8. Dados completos - Datas de entrega, prazos, reagendamentos, protocolos
+9. Histórico de agendamentos - Reagendas e protocolos completos
 """
     
     def _is_excel_command(self, consulta: str) -> bool:
@@ -1159,41 +1271,17 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
                         history = context_manager.get_context(user_id)
                         
                         # Analisar últimas 5 mensagens para detectar cliente mencionado
+                        detector_grupos = GrupoEmpresarialDetector()
+                        
                         for msg in history[-5:]:
-                            content = msg.get('content', '').lower()
+                            content = msg.get('content', '')
                             
-                            # Detectar clientes principais nas mensagens anteriores
-                            if 'atacadão' in content or 'atacadao' in content:
-                                cliente_do_contexto = 'Atacadão'
-                                logger.info(f"🧠 CONTEXTO: Cliente Atacadão detectado na conversa anterior")
-                                break
-                            elif 'assai' in content and 'atacad' not in content:
-                                cliente_do_contexto = 'Assai'
-                                logger.info(f"🧠 CONTEXTO: Cliente Assai detectado na conversa anterior")
-                                break
-                            elif 'carrefour' in content:
-                                cliente_do_contexto = 'Carrefour'
-                                logger.info(f"🧠 CONTEXTO: Cliente Carrefour detectado na conversa anterior")
-                                break
-                            elif 'tenda' in content:
-                                cliente_do_contexto = 'Tenda'
-                                logger.info(f"🧠 CONTEXTO: Cliente Tenda detectado na conversa anterior")
-                                break
-                            elif 'mateus' in content:
-                                cliente_do_contexto = 'Mateus'
-                                logger.info(f"🧠 CONTEXTO: Cliente Mateus detectado na conversa anterior")
-                                break
-                            elif 'fort' in content:
-                                cliente_do_contexto = 'Fort'
-                                logger.info(f"🧠 CONTEXTO: Cliente Fort detectado na conversa anterior")
-                                break
-                            elif 'mercantil rodrigues' in content:
-                                cliente_do_contexto = 'Mercantil Rodrigues'
-                                logger.info(f"🧠 CONTEXTO: Cliente Mercantil Rodrigues detectado na conversa anterior")
-                                break
-                            elif 'walmart' in content:
-                                cliente_do_contexto = 'Walmart'
-                                logger.info(f"🧠 CONTEXTO: Cliente Walmart detectado na conversa anterior")
+                            # Usar detector de grupos empresariais inteligente
+                            grupo_contexto = detector_grupos.detectar_grupo_na_consulta(content)
+                            if grupo_contexto:
+                                cliente_do_contexto = grupo_contexto['grupo_detectado']
+                                logger.info(f"🧠 CONTEXTO: {cliente_do_contexto} detectado na conversa anterior")
+                                logger.info(f"   Tipo: {grupo_contexto.get('tipo_negocio')} | Método: {grupo_contexto.get('metodo_deteccao')}")
                                 break
                                 
                 except Exception as e:
@@ -1204,78 +1292,25 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
             cliente_filtro = None
             tipo_deteccao = None
             
-            # 🏢 MAPEAMENTO DE GRUPOS EMPRESARIAIS
-            grupos_empresariais = {
-                'assai': {
-                    'nome_grupo': 'Rede Assai (Todas as Lojas)',
-                    'filtro_sql': '%assai%',
-                    'keywords': ['assai', 'rede assai'],
-                    'descricao': 'Rede de atacarejo com 300+ lojas'
-                },
-                'atacadao': {
-                    'nome_grupo': 'Grupo Atacadão (Todas as Lojas)', 
-                    'filtro_sql': '%atacad%',
-                    'keywords': ['atacadao', 'atacadão', 'grupo atacadao'],
-                    'descricao': 'Rede de atacarejo nacional'
-                },
-                'carrefour': {
-                    'nome_grupo': 'Grupo Carrefour (Todas as Unidades)',
-                    'filtro_sql': '%carrefour%', 
-                    'keywords': ['carrefour', 'grupo carrefour'],
-                    'descricao': 'Rede francesa de varejo'
-                },
-                'tenda': {
-                    'nome_grupo': 'Rede Tenda (Todas as Lojas)',
-                    'filtro_sql': '%tenda%',
-                    'keywords': ['tenda', 'rede tenda'],
-                    'descricao': 'Rede de atacarejo regional'
-                },
-                'mateus': {
-                    'nome_grupo': 'Grupo Mateus (Todas as Unidades)',
-                    'filtro_sql': '%mateus%',
-                    'keywords': ['mateus', 'grupo mateus'],
-                    'descricao': 'Rede nordestina'
-                },
-                'fort': {
-                    'nome_grupo': 'Grupo Fort (Todas as Unidades)',
-                    'filtro_sql': '%fort%',
-                    'keywords': ['fort', 'grupo fort', 'fort/comper', 'fort atacadista', 'comper'],
-                    'descricao': 'Rede nordestina'
-                },
-                'mercantil rodrigues': {
-                    'nome_grupo': 'Grupo Mercantil (Todas as Unidades)',
-                    'filtro_sql': '%mercantil rodrigues%',
-                    'keywords': ['mercantil rodrigues', 'grupo mercantil rodrigues', 'mercantil', 'grupo mercantil'],
-                    'descricao': 'Rede nordestina'
-                }
-            }
+
             
             # ✅ PRIORIDADE 1: USAR CLIENTE DO CONTEXTO CONVERSACIONAL
             if cliente_do_contexto:
-                cliente_detectado = cliente_do_contexto
-                # Mapear para filtro SQL
-                cliente_lower = cliente_do_contexto.lower()
-                if 'atacadão' in cliente_lower or 'atacadao' in cliente_lower:
-                    cliente_filtro = '%atacad%'
-                elif 'assai' in cliente_lower:
-                    cliente_filtro = '%assai%'
-                elif 'carrefour' in cliente_lower:
-                    cliente_filtro = '%carrefour%'
-                elif 'tenda' in cliente_lower:
-                    cliente_filtro = '%tenda%'
-                elif 'mateus' in cliente_lower:
-                    cliente_filtro = '%mateus%'
-                elif 'fort' in cliente_lower:
-                    cliente_filtro = '%fort%'
-                elif 'mercantil rodrigues' in cliente_lower:
-                    cliente_filtro = '%mercantil rodrigues%'
-                elif 'walmart' in cliente_lower:
-                    cliente_filtro = '%walmart%'
+                # Detectar grupo do contexto usando sistema inteligente
+                from app.utils.grupo_empresarial import detectar_grupo_empresarial
+                
+                resultado_contexto = detectar_grupo_empresarial(cliente_do_contexto)
+                if resultado_contexto:
+                    cliente_detectado = resultado_contexto['grupo_detectado']
+                    cliente_filtro = resultado_contexto['filtro_sql']
+                    tipo_deteccao = 'CONTEXTO_CONVERSACIONAL'
+                    logger.info(f"🧠 USANDO CONTEXTO: {cliente_detectado} (filtro: {cliente_filtro})")
                 else:
+                    # Fallback se não detectou grupo
+                    cliente_detectado = cliente_do_contexto
                     cliente_filtro = f'%{cliente_do_contexto}%'
-                    
-                tipo_deteccao = 'CONTEXTO_CONVERSACIONAL'
-                logger.info(f"🧠 USANDO CONTEXTO: {cliente_detectado} (filtro: {cliente_filtro})")
+                    tipo_deteccao = 'CONTEXTO_CONVERSACIONAL'
+                    logger.info(f"🧠 USANDO CONTEXTO DIRETO: {cliente_detectado}")
             
             # ✅ PRIORIDADE 2: DETECTAR CLIENTE NA CONSULTA ATUAL
             elif not cliente_detectado:
@@ -1408,7 +1443,13 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
                 is_pendentes = 'pendentes' in filename
                 is_atrasadas = 'atrasadas' in filename
                 is_finalizadas = 'finalizadas' in filename
-                is_cliente = any(cliente in filename.lower() for cliente in ['assai', 'atacadao', 'carrefour', 'tenda', 'mateus', 'fort', 'walmart'])
+                # Detectar se é relatório de cliente específico usando sistema de grupos
+                detector_grupos = GrupoEmpresarialDetector()
+                is_cliente = False
+                for grupo in detector_grupos.grupos_conhecidos.values():
+                    if any(keyword in filename.lower() for keyword in grupo.get('keywords', [])):
+                        is_cliente = True
+                        break
                 
                 # Título específico baseado no tipo
                 if is_finalizadas:
@@ -1816,6 +1857,8 @@ Consulta recebida: "{consulta}"
 
 💡 **Formato correto**: 6 dígitos começando com 1
 **Exemplo**: 135497, 134451, 136077"""
+
+
 
 # Instância global
 claude_integration = ClaudeRealIntegration()

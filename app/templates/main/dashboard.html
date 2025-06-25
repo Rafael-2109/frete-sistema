@@ -19,7 +19,7 @@
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Embarques Ativos
+                                Embarques Pendentes
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-embarques">
                                 <i class="fas fa-spinner fa-spin"></i>
@@ -34,39 +34,19 @@
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Fretes Aprovados
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="fretes-aprovados">
-                                <i class="fas fa-spinner fa-spin"></i>
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-warning shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Pendências Financeiras
+                                Fretes Pendentes
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="pendencias-financeiras">
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="fretes-pendentes">
                                 <i class="fas fa-spinner fa-spin"></i>
                             </div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                            <i class="fas fa-clock fa-2x text-gray-300"></i>
                         </div>
                     </div>
                 </div>
@@ -79,14 +59,34 @@
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                Entregas Realizadas
+                                Pedidos Abertos
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="entregas-realizadas">
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="pedidos-abertos">
                                 <i class="fas fa-spinner fa-spin"></i>
                             </div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-shipping-fast fa-2x text-gray-300"></i>
+                            <i class="fas fa-file-alt fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Entregas Pendentes
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="entregas-pendentes">
+                                <i class="fas fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-truck-loading fa-2x text-gray-300"></i>
                         </div>
                     </div>
                 </div>
@@ -98,11 +98,11 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow border-left-dark">
-                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-gradient-dark text-white">
-                    <h6 class="m-0 font-weight-bold">🤖 Claude AI - MCP v4.0</h6>
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-gradient-dark">
+                    <h6 class="m-0 font-weight-bold text-black">🤖 Claude AI - MCP v4.0</h6>
                     <div>
-                        <span class="badge badge-success">✅ ATIVO</span>
-                        <span class="badge badge-info ms-1">11 Ferramentas</span>
+                        <span class="badge badge-success text-black">✅ ATIVO</span>
+                        <span class="badge badge-info text-black ms-1">11 Ferramentas</span>
                     </div>
                 </div>
                 <div class="card-body">
@@ -113,14 +113,6 @@
                                 Consulte dados em <strong>linguagem natural</strong>, detecte anomalias, analise tendências e otimize rotas usando inteligência artificial conectada aos dados reais do sistema.
                             </p>
                             <div class="row">
-                                <div class="col-sm-6 mb-2">
-                                    <span class="badge badge-primary mr-1">📊 Análise de Tendências</span>
-                                    <span class="badge badge-success mr-1">🔍 Detecção de Anomalias</span>
-                                </div>
-                                <div class="col-sm-6 mb-2">
-                                    <span class="badge badge-warning mr-1">🗺️ Otimização de Rotas</span>
-                                    <span class="badge badge-info mr-1">💰 Previsão de Custos</span>
-                                </div>
                             </div>
                         </div>
                         <div class="col-md-4 text-center">
@@ -164,10 +156,6 @@
                                 <div class="bg-light p-3 rounded mb-2">
                                     <strong>"Análise de tendências dos últimos 30 dias"</strong>
                                     <br><small class="text-muted">→ Analytics avançado com dados reais</small>
-                                </div>
-                                <div class="bg-light p-3 rounded mb-2">
-                                    <strong>"Otimizar rotas para RJ e MG"</strong>
-                                    <br><small class="text-muted">→ Otimização baseada em histórico</small>
                                 </div>
                             </div>
                         </div>
@@ -278,20 +266,25 @@ async function carregarEstatisticas() {
             const stats = data.data;
             
             // Atualiza os cards
-            document.getElementById('total-embarques').textContent = stats.embarques.ativos;
-            document.getElementById('fretes-aprovados').textContent = 
-                `${stats.fretes.aprovados} (${stats.fretes.percentual_aprovacao}%)`;
-            document.getElementById('pendencias-financeiras').textContent = stats.entregas.pendencias_financeiras;
-            document.getElementById('entregas-realizadas').textContent = 
-                `${stats.entregas.entregues} (${stats.entregas.percentual_entrega}%)`;
+            // Embarques pendentes (sem data de embarque)
+            document.getElementById('total-embarques').textContent = stats.embarques.pendentes || '0';
+            
+            // Fretes pendentes
+            document.getElementById('fretes-pendentes').textContent = stats.fretes.pendentes_aprovacao || '0';
+            
+            // Pedidos abertos - será calculado na API
+            document.getElementById('pedidos-abertos').textContent = stats.pedidos?.abertos || '0';
+            
+            // Entregas pendentes (já vem calculado da API)
+            document.getElementById('entregas-pendentes').textContent = stats.entregas.pendentes || '0';
         }
     } catch (error) {
         console.error('Erro ao carregar estatísticas:', error);
         // Fallback visual
         document.getElementById('total-embarques').innerHTML = '<span class="text-danger">Erro</span>';
-        document.getElementById('fretes-aprovados').innerHTML = '<span class="text-danger">Erro</span>';
-        document.getElementById('pendencias-financeiras').innerHTML = '<span class="text-danger">Erro</span>';
-        document.getElementById('entregas-realizadas').innerHTML = '<span class="text-danger">Erro</span>';
+        document.getElementById('fretes-pendentes').innerHTML = '<span class="text-danger">Erro</span>';
+        document.getElementById('pedidos-abertos').innerHTML = '<span class="text-danger">Erro</span>';
+        document.getElementById('entregas-pendentes').innerHTML = '<span class="text-danger">Erro</span>';
     }
 }
 

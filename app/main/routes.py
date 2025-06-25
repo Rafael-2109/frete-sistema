@@ -250,6 +250,13 @@ def api_estatisticas_internas():
         embarques_ativos = Embarque.query.filter(Embarque.status == 'ativo').count()
         logger.info(f"🟢 Embarques ativos: {embarques_ativos}")
         
+        # Embarques pendentes (ativos sem data de embarque)
+        embarques_pendentes = Embarque.query.filter(
+            Embarque.status == 'ativo',
+            Embarque.data_embarque == None
+        ).count()
+        logger.info(f"⏳ Embarques pendentes: {embarques_pendentes}")
+        
         # Contar fretes
         logger.info("🚛 Contando fretes...")
         total_fretes = Frete.query.count()
@@ -272,16 +279,30 @@ def api_estatisticas_internas():
         ).count()
         logger.info(f"✅ Entregas entregues: {entregas_entregues}")
         
+        # Entregas pendentes (não entregues)
+        entregas_pendentes = EntregaMonitorada.query.filter(
+            EntregaMonitorada.entregue == False
+        ).count()
+        logger.info(f"📦 Entregas pendentes: {entregas_pendentes}")
+        
         pendencias_financeiras = EntregaMonitorada.query.filter(
             EntregaMonitorada.pendencia_financeira == True
         ).count()
         logger.info(f"💰 Pendências financeiras: {pendencias_financeiras}")
+        
+        # Contar pedidos abertos
+        logger.info("📋 Contando pedidos...")
+        pedidos_abertos = Pedido.query.filter(
+            Pedido.status == 'aberto'
+        ).count()
+        logger.info(f"📂 Pedidos abertos: {pedidos_abertos}")
         
         logger.info("🧮 Montando resultado...")
         resultado = {
             'embarques': {
                 'total': total_embarques,
                 'ativos': embarques_ativos,
+                'pendentes': embarques_pendentes,
                 'cancelados': total_embarques - embarques_ativos
             },
             'fretes': {
@@ -293,8 +314,12 @@ def api_estatisticas_internas():
             'entregas': {
                 'total_monitoradas': total_entregas,
                 'entregues': entregas_entregues,
+                'pendentes': entregas_pendentes,
                 'pendencias_financeiras': pendencias_financeiras,
                 'percentual_entrega': round((entregas_entregues / total_entregas * 100), 1) if total_entregas > 0 else 0
+            },
+            'pedidos': {
+                'abertos': pedidos_abertos
             }
         }
         

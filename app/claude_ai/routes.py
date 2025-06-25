@@ -1693,10 +1693,10 @@ def api_metricas_reais():
                 SELECT 
                     COUNT(*) as total_entregas,
                     COUNT(CASE WHEN entregue = true THEN 1 END) as entregas_concluidas,
-                    COUNT(CASE WHEN entregue = false AND data_prevista_entrega < CURRENT_DATE THEN 1 END) as entregas_atrasadas,
+                    COUNT(CASE WHEN entregue = false AND data_entrega_prevista < CURRENT_DATE THEN 1 END) as entregas_atrasadas,
                     COUNT(CASE WHEN entregue = false THEN 1 END) as entregas_pendentes
                 FROM entregas_monitoradas 
-                WHERE data_prevista_entrega >= CURRENT_DATE - INTERVAL '30 days'
+                WHERE data_entrega_prevista >= CURRENT_DATE - INTERVAL '30 days'
             """)
             entregas_result = db.session.execute(entregas_hoje_query).fetchone()
             
