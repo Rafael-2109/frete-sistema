@@ -1396,24 +1396,13 @@ def aplicar_filtros_exportacao(query, filtros):
 def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
     """Gera arquivo Excel com dados do monitoramento - sempre formato completo"""
     
-    # Cache para conversões de timezone (evita conversões repetidas)
-    timezone_cache = {}
-    
     def limpar_timezone(dt):
-        """Remove timezone de datetime para compatibilidade com Excel - VERSÃO CACHE"""
+        """Remove timezone de datetime para compatibilidade com Excel"""
         if dt is None:
             return None
-        if dt in timezone_cache:
-            return timezone_cache[dt]
-        
-        resultado = dt
         if hasattr(dt, 'replace') and hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
-            resultado = dt.replace(tzinfo=None)
-        
-        timezone_cache[dt] = resultado
-        return resultado
-    
-    print(f"🔥 INICIANDO GERAÇÃO EXCEL para {len(entregas)} entregas...")
+            return dt.replace(tzinfo=None)
+        return dt
     
     # Prepara dados principais
     dados_principais = []
@@ -1423,10 +1412,7 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
     dados_logs = []
     dados_comentarios = []
     
-    for i, entrega in enumerate(entregas):
-        if i % 1000 == 0 and i > 0:
-            print(f"📊 Processando entrega {i}/{len(entregas)}...")
-        
+    for entrega in entregas:
         # Agendamento mais recente
         agendamento_recente = None
         if entrega.agendamentos:
@@ -1620,8 +1606,6 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
             df_stats = pd.DataFrame(list(estatisticas.items()), columns=['Métrica', 'Valor'])
             df_stats.to_excel(writer, sheet_name='Estatísticas', index=False)
         
-        print(f"🎉 EXCEL GERADO em {timezone_cache.__len__()} conversões cache utilizadas")
-        
         return tmp_file.name
 
 @monitoramento_bp.route('/exportar', methods=['GET', 'POST'])
@@ -1709,25 +1693,12 @@ def exportar_entregas():
             # Aplica filtros
             query = aplicar_filtros_exportacao(query, filtros)
             
-            # 🚀 BUSCA OTIMIZADA - Carrega relacionamentos em uma query
-            # 🚀 QUERY OTIMIZADA: Carrega todos os relacionamentos de uma vez
-            from sqlalchemy.orm import joinedload
-            entregas = query.options(
-                joinedload(EntregaMonitorada.agendamentos),
-                joinedload(EntregaMonitorada.logs),
-                joinedload(EntregaMonitorada.eventos),
-                joinedload(EntregaMonitorada.custos_extras),
-                joinedload(EntregaMonitorada.comentarios)
-            ).order_by(EntregaMonitorada.numero_nf).all()
+            # Busca entregas
+            entregas = query.order_by(EntregaMonitorada.numero_nf).all()
             
             if not entregas:
                 flash('❌ Nenhuma entrega encontrada com os filtros especificados', 'warning')
                 return render_template('monitoramento/exportar_entregas.html', form=form)
-            
-            # 🚀 LOG DE PERFORMANCE
-            import time
-            start_time = time.time()
-            print(f"📊 INICIANDO EXPORTAÇÃO: {len(entregas)} entregas")
             
             # Gera arquivo Excel - sempre formato completo
             arquivo_path = gerar_excel_monitoramento(entregas, 'multiplas_abas')
@@ -1742,11 +1713,7 @@ def exportar_entregas():
                 nome_base = nome_arquivo.replace('.xlsx', '')
                 nome_arquivo = f'{nome_base}_vendedor_{current_user.vendedor_vinculado or current_user.nome.replace(" ", "_")}.xlsx'
             
-            # 🚀 LOG FINAL DE PERFORMANCE
-            total_time = time.time() - start_time
-            print(f"🎉 EXPORTAÇÃO CONCLUÍDA em {total_time:.2f}s")
-            
-            flash(f'✅ Exportação concluída! {len(entregas)} entregas exportadas em {total_time:.2f}s.', 'success')
+            flash(f'✅ Exportação concluída! {len(entregas)} entregas exportadas.', 'success')
             
             # Envia arquivo para download
             def cleanup_file():

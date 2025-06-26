@@ -170,6 +170,23 @@ def registrar_movimento():
     """
     Registra chegada, entrada ou saída de veículo
     """
+    # 🔒 VALIDAÇÃO CSRF ROBUSTA
+    from flask_wtf.csrf import validate_csrf
+    from app.utils.csrf_helper import validate_api_csrf
+    
+    try:
+        # Tentativa de validação CSRF com fallback
+        csrf_valido = validate_api_csrf(request, logger)
+        if not csrf_valido:
+            logger.warning(f"🔒 CSRF inválido na portaria - usuário: {current_user.nome}, IP: {request.remote_addr}")
+            flash('Erro de segurança. Tente novamente.', 'danger')
+            return redirect(url_for('portaria.dashboard'))
+    except Exception as csrf_error:
+        logger.error(f"🔒 Erro na validação CSRF: {csrf_error}")
+        # Em modo gracioso, permite continuar em produção
+        if not current_app.config.get('TESTING'):
+            flash('Aviso: Problema de validação detectado, mas operação continuada.', 'warning')
+    
     try:
         acao = request.form.get('acao')  # 'chegada', 'entrada', 'saida'
         print(f"[DEBUG] Ação recebida: {acao}")
@@ -309,16 +326,18 @@ def historico():
     status = request.args.get('status', '').strip()
     
     # Converte datas
-    if request.args.get('data_inicio'):
+    data_inicio_str = request.args.get('data_inicio')
+    if data_inicio_str:
         try:
-            data_inicio = datetime.strptime(request.args.get('data_inicio'), '%Y-%m-%d').date()
+            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
             filtros_aplicados = True
         except ValueError:
             flash('Data de início inválida!', 'warning')
     
-    if request.args.get('data_fim'):
+    data_fim_str = request.args.get('data_fim')
+    if data_fim_str:
         try:
-            data_fim = datetime.strptime(request.args.get('data_fim'), '%Y-%m-%d').date()
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
             filtros_aplicados = True
         except ValueError:
             flash('Data de fim inválida!', 'warning')

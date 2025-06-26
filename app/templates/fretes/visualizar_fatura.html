@@ -171,9 +171,9 @@
                             </td>
                             <td>
                                 {% if frete.embarque %}
-                                    <a href="{{ url_for('embarques.visualizar_embarque', embarque_id=frete.embarque.id) }}">
-                                        #{{ frete.embarque.numero }}
-                                    </a>
+                                                                    <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque.id) }}">
+                                    #{{ frete.embarque.numero }}
+                                </a>
                                 {% else %}
                                     N/A
                                 {% endif %}
