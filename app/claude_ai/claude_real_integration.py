@@ -147,7 +147,7 @@ class ClaudeRealIntegration:
             # Se a confiança é alta (>= 70%), usar processamento avançado
             if interpretacao.confianca_interpretacao >= 0.7:
                 logger.info(f"🧠 ENTENDIMENTO INTELIGENTE: Usando IA avançada (confiança: {interpretacao.confianca_interpretacao:.1%})")
-                resultado_avancado = processar_consulta_com_ia_avancada(consulta, user_context, interpretacao)
+                resultado_avancado = processar_consulta_com_ia_avancada(consulta, user_context)
                 
                 # Se resultado válido, usar sistema avançado
                 if resultado_avancado and not resultado_avancado.startswith("❌"):
@@ -1808,7 +1808,7 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
                 # Detectar se é relatório de cliente específico usando sistema de grupos
                 detector_grupos = GrupoEmpresarialDetector()
                 is_cliente = False
-                for grupo in detector_grupos.grupos_conhecidos.values():
+                for grupo in detector_grupos.grupos_manuais.values():
                     if any(keyword in filename.lower() for keyword in grupo.get('keywords', [])):
                         is_cliente = True
                         break
