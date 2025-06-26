@@ -455,6 +455,8 @@ def resolver_pendencia(id):
 @login_required
 @allow_vendedor_own_data()  # 🔒 VENDEDORES: Apenas dados próprios
 def listar_entregas():
+    from app.faturamento.models import RelatorioFaturamentoImportado
+    
     query = EntregaMonitorada.query
     
     # 🔒 FILTRO PARA VENDEDORES - Só vê seus dados
@@ -488,8 +490,10 @@ def listar_entregas():
         )
     elif status == 'sem_agendamento':
         subquery = db.session.query(AgendamentoEntrega.entrega_id).distinct()
-        # CNPJs que têm contato cadastrado MAS forma é diferente de "SEM AGENDAMENTO"
+        # ✅ CORRIGIDO: CNPJs que têm contato cadastrado E forma não é vazia E não é "SEM AGENDAMENTO"
         cnpjs_precisam_agendamento = db.session.query(ContatoAgendamento.cnpj).filter(
+            ContatoAgendamento.forma != None,
+            ContatoAgendamento.forma != '',
             ContatoAgendamento.forma != 'SEM AGENDAMENTO'
         )
         query = query.filter(
@@ -535,6 +539,10 @@ def listar_entregas():
 
     if status == 'com_comentarios':
         query = query.join(ComentarioNF).group_by(EntregaMonitorada.id)
+
+    # ✅ NOVO FILTRO: Vendedor
+    if vendedor := request.args.get('vendedor'):
+        query = query.filter(EntregaMonitorada.vendedor.ilike(f"%{vendedor}%"))
 
     if uf := request.args.get('uf'):
         query = query.filter(EntregaMonitorada.uf.ilike(f"%{uf}%"))
@@ -644,30 +652,58 @@ def listar_entregas():
 
     if agrupar:
         entregas_agrupadas = {
+            '✅ Entregues': [],
             '🔴 Atrasadas': [],
-            '⚠️ Sem Agendamento': [],
             '🔁 Reagendar': [],
             '🟡 Sem Previsão': [],
             '⚪ No Prazo': [],
-            '✅ Entregues': []
+            '⚠️ Sem Agendamento': []
         }
 
         for e in entregas:
-            if e.status_finalizacao == 'Entregue':
-                entregas_agrupadas['✅ Entregues'].append(e)
+            # ✅ CORREÇÃO: Status de finalização tem prioridade máxima
+            if e.status_finalizacao:
+                if e.status_finalizacao == 'Entregue':
+                    entregas_agrupadas['✅ Entregues'].append(e)
+                # Outros status de finalização (Cancelada, Devolvida, etc.) não entram no agrupamento
+            # ✅ CORREÇÃO: Reagendar tem segunda prioridade
             elif e.reagendar:
                 entregas_agrupadas['🔁 Reagendar'].append(e)
-            elif e.cnpj_cliente in contatos_agendamento and len(e.agendamentos) == 0:
-                entregas_agrupadas['⚠️ Sem Agendamento'].append(e)
+            # ✅ CORREÇÃO: Status baseado em data (apenas para não finalizadas)
             elif e.data_entrega_prevista and e.data_entrega_prevista < date.today():
                 entregas_agrupadas['🔴 Atrasadas'].append(e)
             elif not e.data_entrega_prevista:
                 entregas_agrupadas['🟡 Sem Previsão'].append(e)
             else:
                 entregas_agrupadas['⚪ No Prazo'].append(e)
+            
+            # ✅ CORREÇÃO: Agendamento pendente é critério INDEPENDENTE (não else)
+            # Verifica se precisa de agendamento independente do status de data
+            if (not e.status_finalizacao and 
+                e.cnpj_cliente in contatos_agendamento and 
+                len(e.agendamentos) == 0 and 
+                contatos_agendamento[e.cnpj_cliente].forma and
+                contatos_agendamento[e.cnpj_cliente].forma != '' and
+                contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO'):
+                # Se não estava em nenhum grupo ainda (entregas estranhas), coloca em agendamento
+                encontrado_em_grupo = False
+                for grupo in entregas_agrupadas.values():
+                    if e in grupo:
+                        encontrado_em_grupo = True
+                        break
+                if not encontrado_em_grupo:
+                    entregas_agrupadas['⚠️ Sem Agendamento'].append(e)
 
         # Remove grupos vazios
         entregas_agrupadas = {k: v for k, v in entregas_agrupadas.items() if v}
+        
+        # ✅ ENRIQUECER DADOS DAS ENTREGAS AGRUPADAS com origem e valor_nf
+        for grupo_entregas in entregas_agrupadas.values():
+            for entrega in grupo_entregas:
+                faturamento = RelatorioFaturamentoImportado.query.filter_by(numero_nf=entrega.numero_nf).first()
+                entrega.num_pedido = faturamento.origem if faturamento else None
+                if not entrega.valor_nf and faturamento:
+                    entrega.valor_nf = faturamento.valor_total
 
     # ✅ CALCULANDO CONTADORES DOS FILTROS
     contadores = {}
@@ -691,9 +727,11 @@ def listar_entregas():
         EntregaMonitorada.status_finalizacao == None
     ).count()
     
-    # Contador Sem Agendamento
+    # ✅ CORRIGIDO: Contador Sem Agendamento
     subquery_agendamentos = db.session.query(AgendamentoEntrega.entrega_id).distinct()
     cnpjs_precisam_agendamento = db.session.query(ContatoAgendamento.cnpj).filter(
+        ContatoAgendamento.forma != None,
+        ContatoAgendamento.forma != '',
         ContatoAgendamento.forma != 'SEM AGENDAMENTO'
     )
     contadores['sem_agendamento'] = EntregaMonitorada.query.filter(
@@ -711,6 +749,20 @@ def listar_entregas():
     per_page = 20
     paginacao = query.paginate(page=page, per_page=per_page)
 
+    # ✅ BUSCAR VENDEDORES ÚNICOS para dropdown
+    vendedores_unicos = db.session.query(RelatorioFaturamentoImportado.vendedor)\
+        .filter(RelatorioFaturamentoImportado.vendedor != None, RelatorioFaturamentoImportado.vendedor != '')\
+        .distinct().order_by(RelatorioFaturamentoImportado.vendedor).all()
+    vendedores_unicos = [v[0] for v in vendedores_unicos]
+
+    # ✅ ENRIQUECER DADOS DAS ENTREGAS com origem (número do pedido) e valor_nf
+    for entrega in paginacao.items:
+        faturamento = RelatorioFaturamentoImportado.query.filter_by(numero_nf=entrega.numero_nf).first()
+        entrega.num_pedido = faturamento.origem if faturamento else None
+        # Priorizar valor_nf da EntregaMonitorada, senão usar valor_total do faturamento
+        if not entrega.valor_nf and faturamento:
+            entrega.valor_nf = faturamento.valor_total
+
     return render_template(
         'monitoramento/listar_entregas.html',
         paginacao=paginacao,
@@ -720,7 +772,8 @@ def listar_entregas():
         current_date=date.today(),
         contatos_agendamento=contatos_agendamento,
         current_user=current_user,
-        contadores=contadores
+        contadores=contadores,
+        vendedores_unicos=vendedores_unicos
     )
 
 @monitoramento_bp.route('/sincronizar-todas-entregas', methods=['POST'])

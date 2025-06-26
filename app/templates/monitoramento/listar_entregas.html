@@ -305,6 +305,17 @@ body {
       <input type="text" name="cnpj_cliente" class="form-control" placeholder="CNPJ" 
              value="{{ request.args.get('cnpj_cliente', '') }}">
     </div>
+    <div class="col-md-2">
+      <label class="form-label">Vendedor</label>
+      <select name="vendedor" class="form-select">
+        <option value="">Todos os vendedores</option>
+        {% for vendedor in vendedores_unicos %}
+          <option value="{{ vendedor }}" {% if request.args.get('vendedor') == vendedor %}selected{% endif %}>
+            {{ vendedor }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
     <div class="col-md-1">
       <label class="form-label">UF</label>
       <input type="text" name="uf" class="form-control" placeholder="UF" 
@@ -644,7 +655,11 @@ body {
               <tbody>
                 {% for e in grupo %}
                 <tr>
-                  <td>{{ e.numero_nf }}</td>
+                  <td>
+                    <small class="text-muted">📋 {{ e.num_pedido or 'N/A' }}</small><br>
+                    {{ e.numero_nf }}<br>
+                    <small class="text-muted">💰 {{ 'R$ {:,.2f}'.format(e.valor_nf).replace(',', 'X').replace('.', ',').replace('X', '.') if e.valor_nf else 'N/A' }}</small>
+                  </td>
                   <td>{{ e.cnpj_cliente }}</td>
                   <td>
                     {{ e.cliente }}<br>
@@ -732,7 +747,7 @@ body {
                         </button>
                       {% endif %}
                       
-                      {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' and not e.status_finalizacao %}
+                      {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma and contatos_agendamento[e.cnpj_cliente].forma != '' and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' and not e.status_finalizacao %}
                         <span class="badge bg-danger">⚠️ Agend. Pendente</span>
                       {% endif %}
                       
@@ -877,7 +892,10 @@ body {
                 💬 {{ e.comentarios_pendentes(current_user.nome) }}
               </span>
             {% endif %}
-            {{ e.numero_nf }}</td>
+            <small class="text-muted">📋 {{ e.num_pedido or 'N/A' }}</small><br>
+            {{ e.numero_nf }}<br>
+            <small class="text-muted">💰 {{ 'R$ {:,.2f}'.format(e.valor_nf).replace(',', 'X').replace('.', ',').replace('X', '.') if e.valor_nf else 'N/A' }}</small>
+          </td>
           <td class="sticky-col-2">
             <small class="text-muted">{{ e.cnpj_cliente }}</small><br>
             {{ e.cliente }}<br>
@@ -996,7 +1014,7 @@ body {
                 </button>
               {% endif %}
               
-              {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' and not e.status_finalizacao %}
+              {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma and contatos_agendamento[e.cnpj_cliente].forma != '' and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' and not e.status_finalizacao %}
                 <span class="badge bg-danger">⚠️ Agend. Pendente</span>
               {% endif %}
               
