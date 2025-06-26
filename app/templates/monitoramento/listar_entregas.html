@@ -656,16 +656,21 @@ body {
                 {% for e in grupo %}
                 <tr>
                   <td>
-                    <small class="text-muted">📋 {{ e.num_pedido or 'N/A' }}</small><br>
+                    <small class="text-muted">{{ e.num_pedido or 'N/A' }}</small><br>
                     {{ e.numero_nf }}<br>
-                    <small class="text-muted">💰 {{ 'R$ {:,.2f}'.format(e.valor_nf).replace(',', 'X').replace('.', ',').replace('X', '.') if e.valor_nf else 'N/A' }}</small>
+                    <small class="text-muted">{{ 'R$ {:,.2f}'.format(e.valor_nf).replace(',', 'X').replace('.', ',').replace('X', '.') if e.valor_nf else 'N/A' }}</small>
                   </td>
                   <td>{{ e.cnpj_cliente }}</td>
                   <td>
                     {{ e.cliente }}<br>
                     <small class="text-muted">👤 {{ e.vendedor or 'Não informado' }}</small>
                   </td>
-                  <td>{{ e.transportadora }}</td>
+                  <td>
+                    {% if e.incoterm or e.modalidade %}
+                      <small class="text-muted">{{ e.incoterm or '' }}{% if e.incoterm and e.modalidade %} - {% endif %}{{ e.modalidade or '' }}</small><br>
+                    {% endif %}
+                    {{ e.transportadora }}
+                  </td>
                   <td>{{ e.uf }}</td>
                   <td>{{ e.municipio }}</td>
                   <td>{{ e.data_faturamento | formatar_data_segura if e.data_faturamento else '-' }}</td>
@@ -892,9 +897,9 @@ body {
                 💬 {{ e.comentarios_pendentes(current_user.nome) }}
               </span>
             {% endif %}
-            <small class="text-muted">📋 {{ e.num_pedido or 'N/A' }}</small><br>
+            <small class="text-muted">{{ e.num_pedido or 'N/A' }}</small><br>
             {{ e.numero_nf }}<br>
-            <small class="text-muted">💰 {{ 'R$ {:,.2f}'.format(e.valor_nf).replace(',', 'X').replace('.', ',').replace('X', '.') if e.valor_nf else 'N/A' }}</small>
+            <small class="text-muted">{{ 'R$ {:,.2f}'.format(e.valor_nf).replace(',', 'X').replace('.', ',').replace('X', '.') if e.valor_nf else 'N/A' }}</small>
           </td>
           <td class="sticky-col-2">
             <small class="text-muted">{{ e.cnpj_cliente }}</small><br>
@@ -902,6 +907,9 @@ body {
             <small class="text-muted">👤 {{ e.vendedor or 'Não informado' }}</small>
           </td>
           <td>
+            {% if e.incoterm or e.modalidade %}
+              <small class="text-muted">{{ e.incoterm or '' }}{% if e.incoterm and e.modalidade %} - {% endif %}{{ e.modalidade or '' }}</small><br>
+            {% endif %}
             {{ e.transportadora }}<br>
             <small class="text-muted">{{ e.uf }} - {{ e.municipio }}</small>
           </td>

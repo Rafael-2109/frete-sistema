@@ -456,6 +456,7 @@ def resolver_pendencia(id):
 @allow_vendedor_own_data()  # 🔒 VENDEDORES: Apenas dados próprios
 def listar_entregas():
     from app.faturamento.models import RelatorioFaturamentoImportado
+    from app.embarques.models import Embarque, EmbarqueItem  # ✅ Adicionar import
     
     query = EntregaMonitorada.query
     
@@ -704,6 +705,23 @@ def listar_entregas():
                 entrega.num_pedido = faturamento.origem if faturamento else None
                 if not entrega.valor_nf and faturamento:
                     entrega.valor_nf = faturamento.valor_total
+                
+                # ✅ ADICIONAR INCOTERM E MODALIDADE
+                entrega.incoterm = faturamento.incoterm if faturamento else None
+                
+                # Buscar modalidade do embarque/item do embarque
+                embarque_item = EmbarqueItem.query.filter_by(nota_fiscal=entrega.numero_nf).first()
+                if embarque_item:
+                    # Se modalidade está no item, usar do item
+                    if embarque_item.modalidade:
+                        entrega.modalidade = embarque_item.modalidade
+                    # Senão buscar do embarque principal
+                    elif embarque_item.embarque:
+                        entrega.modalidade = embarque_item.embarque.modalidade
+                    else:
+                        entrega.modalidade = None
+                else:
+                    entrega.modalidade = None
 
     # ✅ CALCULANDO CONTADORES DOS FILTROS
     contadores = {}
@@ -762,6 +780,23 @@ def listar_entregas():
         # Priorizar valor_nf da EntregaMonitorada, senão usar valor_total do faturamento
         if not entrega.valor_nf and faturamento:
             entrega.valor_nf = faturamento.valor_total
+        
+        # ✅ ADICIONAR INCOTERM E MODALIDADE
+        entrega.incoterm = faturamento.incoterm if faturamento else None
+        
+        # Buscar modalidade do embarque/item do embarque
+        embarque_item = EmbarqueItem.query.filter_by(nota_fiscal=entrega.numero_nf).first()
+        if embarque_item:
+            # Se modalidade está no item, usar do item
+            if embarque_item.modalidade:
+                entrega.modalidade = embarque_item.modalidade
+            # Senão buscar do embarque principal
+            elif embarque_item.embarque:
+                entrega.modalidade = embarque_item.embarque.modalidade
+            else:
+                entrega.modalidade = None
+        else:
+            entrega.modalidade = None
 
     return render_template(
         'monitoramento/listar_entregas.html',
