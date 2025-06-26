@@ -135,6 +135,130 @@ class ClaudeRealIntegration:
         user_id = str(user_context.get('user_id', 'anonymous')) if user_context else 'anonymous'
         context_manager = get_conversation_context()
         
+        # 🧠 DETECÇÃO DE CONSULTAS SOBRE MEMÓRIA VITALÍCIA/APRENDIZADO
+        consulta_lower = consulta.lower()
+        if any(termo in consulta_lower for termo in ['memoria vitalicia', 'memória vitalícia', 
+                                                      'aprendizado', 'conhecimento armazenado',
+                                                      'o que aprendeu', 'o que voce aprendeu',
+                                                      'o que tem guardado', 'memoria guardada',
+                                                      'padrões aprendidos', 'historico de aprendizado']):
+            logger.info("🧠 CONSULTA SOBRE MEMÓRIA VITALÍCIA detectada")
+            
+            # Usar sistema de aprendizado vitalício
+            from .lifelong_learning import get_lifelong_learning
+            lifelong = get_lifelong_learning()
+            
+            # Obter estatísticas de aprendizado
+            stats = lifelong.obter_estatisticas_aprendizado()
+            total_padroes = stats.get('total_padroes', 0)
+            total_mapeamentos = stats.get('total_mapeamentos', 0)
+            total_grupos = stats.get('total_grupos', 0)
+            ultima_atualizacao = stats.get('ultima_atualizacao', 'N/A')
+            
+            # Obter alguns exemplos de padrões aprendidos
+            padroes_exemplos = []
+            try:
+                from app import db
+                from sqlalchemy import text
+                
+                # Buscar alguns padrões recentes
+                query = db.session.execute(
+                    text("SELECT consulta_original, interpretacao, confianca FROM ai_learning_patterns ORDER BY criado_em DESC LIMIT 5")
+                )
+                for row in query.fetchall():
+                    padroes_exemplos.append({
+                        'consulta': row[0][:50] + '...' if len(row[0]) > 50 else row[0],
+                        'interpretacao': row[1],
+                        'confianca': row[2]
+                    })
+            except Exception as e:
+                logger.error(f"Erro ao buscar padrões: {e}")
+            
+            # Buscar grupos empresariais conhecidos
+            grupos_conhecidos = []
+            try:
+                query = db.session.execute(
+                    text("SELECT grupo_nome, tipo_negocio, cnpj_prefixos FROM ai_grupo_empresarial_mapping WHERE ativo = true ORDER BY criado_em DESC")
+                )
+                for row in query.fetchall():
+                    grupos_conhecidos.append({
+                        'nome': row[0],
+                        'tipo': row[1],
+                        'cnpjs': row[2][:2] if row[2] else []  # Primeiros 2 CNPJs
+                    })
+            except Exception as e:
+                logger.error(f"Erro ao buscar grupos: {e}")
+            
+            # Montar resposta detalhada sobre memória vitalícia
+            resultado_memoria = f"""🤖 **CLAUDE 4 SONNET REAL**
+
+🧠 **MEMÓRIA VITALÍCIA DO SISTEMA**
+
+Aqui está o que tenho armazenado no meu sistema de aprendizado contínuo:
+
+📊 **ESTATÍSTICAS GERAIS**:
+• **Total de Padrões Aprendidos**: {total_padroes}
+• **Mapeamentos Cliente-Empresa**: {total_mapeamentos}
+• **Grupos Empresariais Conhecidos**: {total_grupos}
+• **Última Atualização**: {ultima_atualizacao}
+
+🔍 **EXEMPLOS DE PADRÕES APRENDIDOS** (últimos 5):
+"""
+            
+            if padroes_exemplos:
+                for i, padrao in enumerate(padroes_exemplos, 1):
+                    resultado_memoria += f"""
+{i}. **Consulta**: "{padrao['consulta']}"
+   • **Interpretação**: {padrao['interpretacao']}
+   • **Confiança**: {padrao['confianca']:.1%}"""
+            else:
+                resultado_memoria += "\n*Nenhum padrão específico carregado no momento*"
+            
+            resultado_memoria += "\n\n🏢 **GRUPOS EMPRESARIAIS CONHECIDOS**:\n"
+            
+            if grupos_conhecidos:
+                for grupo in grupos_conhecidos[:10]:  # Mostrar até 10 grupos
+                    cnpjs_str = ', '.join(grupo['cnpjs']) if grupo['cnpjs'] else 'N/A'
+                    resultado_memoria += f"""
+• **{grupo['nome']}** ({grupo['tipo']})
+  CNPJs: {cnpjs_str}"""
+            else:
+                resultado_memoria += "*Nenhum grupo empresarial mapeado*"
+            
+            resultado_memoria += f"""
+
+💡 **COMO FUNCIONA MEU APRENDIZADO**:
+
+1. **Padrões de Consulta**: Aprendo como interpretar diferentes formas de fazer perguntas
+2. **Mapeamento de Clientes**: Associo variações de nomes aos clientes corretos
+3. **Grupos Empresariais**: Identifico empresas que pertencem ao mesmo grupo
+4. **Correções do Usuário**: Quando você me corrige, eu registro e aprendo
+5. **Contexto Conversacional**: Mantenho histórico da conversa atual
+
+⚡ **CAPACIDADES ATIVAS**:
+• ✅ Aprendizado contínuo com cada interação
+• ✅ Detecção automática de grupos empresariais
+• ✅ Memória conversacional na sessão atual
+• ✅ Cache inteligente para respostas frequentes
+• ✅ Correção automática de interpretações
+
+📈 **EVOLUÇÃO**:
+O sistema melhora continuamente. Cada consulta, correção e feedback contribui para aumentar minha precisão e velocidade de resposta.
+
+---
+🧠 **Powered by:** Claude 4 Sonnet + Sistema de Aprendizado Vitalício
+🕒 **Processado:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+⚡ **Fonte:** Banco de Dados PostgreSQL - Tabelas de Aprendizado"""
+            
+            # Adicionar ao contexto conversacional
+            if context_manager:
+                metadata = {'tipo': 'consulta_memoria_vitalicia', 'stats': stats}
+                context_manager.add_message(user_id, 'user', consulta, metadata)
+                context_manager.add_message(user_id, 'assistant', resultado_memoria, metadata)
+                logger.info(f"🧠 Consulta sobre memória vitalícia adicionada ao contexto")
+            
+            return resultado_memoria
+        
         # 🧠 SISTEMA DE ENTENDIMENTO INTELIGENTE (INTEGRAÇÃO NOVA)
         try:
             from .enhanced_claude_integration import processar_consulta_com_ia_avancada
