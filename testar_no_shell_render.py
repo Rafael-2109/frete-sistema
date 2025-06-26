@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 🚀 TESTE DIRETO NO SHELL DO RENDER
@@ -8,6 +8,7 @@ Execute este script no console do Render para testar funcionalidades
 import os
 import sys
 from datetime import datetime
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Configurar ambiente
 os.environ['FLASK_APP'] = 'run.py'
@@ -19,122 +20,193 @@ from app.claude_ai.intelligent_query_analyzer import get_intelligent_analyzer
 from app.claude_ai.multi_agent_system import get_multi_agent_system
 from app.claude_ai.human_in_loop_learning import HumanInLoopLearning
 from app.utils.grupo_empresarial import GrupoEmpresarial
+from sqlalchemy import text
+import json
 
 print("="*60)
 print("🚀 TESTE DIRETO NO SHELL DO RENDER")
 print("="*60)
 
-# Criar contexto da aplicação
-app = create_app()
-
-with app.app_context():
-    print("\n📊 TESTE 1: Conexão com Banco de Dados")
-    try:
-        # Contar usuários
-        user_count = Usuario.query.count()
-        print(f"✅ Banco conectado! Usuários cadastrados: {user_count}")
-    except Exception as e:
-        print(f"❌ Erro no banco: {e}")
+def testar_sistema():
+    """Testa e corrige o sistema de aprendizado"""
+    app = create_app()
     
-    print("\n🧠 TESTE 2: Análise Inteligente de Consultas")
-    try:
-        analyzer = get_intelligent_analyzer()
-        result = analyzer.analisar_consulta_inteligente("Quantas entregas do Assai estão atrasadas?")
-        print(f"✅ Análise funcionando!")
-        print(f"   Intenção: {result.intencao_principal}")
-        print(f"   Confiança: {result.confianca_interpretacao:.1%}")
-        if result.entidades_detectadas.get('grupos_empresariais'):
-            print(f"   Grupo detectado: {result.entidades_detectadas['grupos_empresariais'][0]['nome']}")
-    except Exception as e:
-        print(f"❌ Erro na análise: {e}")
-    
-    print("\n🏢 TESTE 3: Sistema de Grupos Empresariais")
-    try:
-        detector = GrupoEmpresarial()
+    with app.app_context():
+        print("\n🔍 VERIFICANDO TABELAS DE APRENDIZADO...")
         
-        # Testar detecção
-        testes = [
-            ("06.057.223/0001-00", "Assai"),
-            ("75.315.333/0001-00", "Atacadão"),
-            ("45.543.915/0001-00", "Carrefour")
+        # 1. Verificar se as tabelas existem
+        tabelas = [
+            'ai_knowledge_patterns',
+            'ai_semantic_mappings', 
+            'ai_learning_history',
+            'ai_grupos_empresariais',
+            'ai_business_contexts',
+            'ai_response_templates',
+            'ai_learning_metrics'
         ]
         
-        for cnpj, esperado in testes:
-            grupo = detector.detectar_grupo(cnpj=cnpj)
-            if grupo:
-                print(f"✅ {esperado}: {grupo['nome']} - {grupo['metodo_deteccao']}")
-            else:
-                print(f"❌ {esperado}: Não detectado")
-                
-    except Exception as e:
-        print(f"❌ Erro nos grupos: {e}")
-    
-    print("\n🤖 TESTE 4: Multi-Agent System")
-    try:
-        system = get_multi_agent_system()
-        print(f"✅ Multi-Agent inicializado com {len(system.agents)} agents")
-        for agent_name in system.agents.keys():
-            print(f"   • {agent_name}")
-    except Exception as e:
-        print(f"❌ Erro no Multi-Agent: {e}")
-    
-    print("\n🔄 TESTE 5: Human-in-the-Loop")
-    try:
-        hil = HumanInLoopLearning()
+        for tabela in tabelas:
+            try:
+                result = db.session.execute(
+                    text(f"SELECT COUNT(*) FROM {tabela}")
+                ).scalar()
+                print(f"✅ {tabela}: {result} registros")
+            except Exception as e:
+                print(f"❌ {tabela}: ERRO - {str(e)[:50]}...")
+                db.session.rollback()
         
-        # Simular feedback
-        feedback = hil.capture_user_feedback(
-            query="Teste shell Render",
-            response="Resposta teste",
-            feedback="Funcionando perfeitamente!",
-            feedback_type="positive",
-            severity=5,
-            context={"source": "shell_test"}
-        )
-        
-        if feedback:
-            print("✅ Human-in-the-Loop funcionando!")
-            print(f"   Feedback ID: {feedback.get('feedback_id')}")
-        else:
-            print("⚠️ Human-in-the-Loop sem resposta")
+        # 2. Corrigir grupos empresariais
+        print("\n🏢 VERIFICANDO GRUPOS EMPRESARIAIS...")
+        try:
+            # Verificar quantos grupos existem
+            count = db.session.execute(
+                text("SELECT COUNT(*) FROM ai_grupos_empresariais")
+            ).scalar()
             
-    except Exception as e:
-        print(f"❌ Erro no Human-in-the-Loop: {e}")
-    
-    print("\n🔍 TESTE 6: Variáveis de Ambiente")
-    env_vars = {
-        "DATABASE_URL": "✅" if os.environ.get("DATABASE_URL") else "❌",
-        "ANTHROPIC_API_KEY": "✅" if os.environ.get("ANTHROPIC_API_KEY") else "❌",
-        "REDIS_URL": "✅" if os.environ.get("REDIS_URL") else "⚠️ (opcional)",
-        "SECRET_KEY": "✅" if os.environ.get("SECRET_KEY") else "❌"
-    }
-    
-    for var, status in env_vars.items():
-        print(f"{status} {var}")
-    
-    print("\n📈 TESTE 7: Consulta Rápida de Dados")
-    try:
-        from app.pedidos.models import Pedido
-        from app.monitoramento.models import EntregaMonitorada
-        from app.fretes.models import Frete
+            print(f"Total de grupos: {count}")
+            
+            if count == 0:
+                print("Inserindo grupos iniciais...")
+                
+                # Inserir grupos básicos
+                grupos = [
+                    ('Assai', 'Atacarejo', ['06.057.223/'], ['assai', 'assaí']),
+                    ('Atacadão', 'Atacarejo', ['75.315.333/', '00.063.960/'], ['atacadao', 'atacadão']),
+                    ('Carrefour', 'Varejo', ['45.543.915/'], ['carrefour'])
+                ]
+                
+                for nome, tipo, cnpjs, palavras in grupos:
+                    try:
+                        db.session.execute(
+                            text("""
+                                INSERT INTO ai_grupos_empresariais 
+                                (nome_grupo, tipo_negocio, cnpj_prefixos, palavras_chave, 
+                                 filtro_sql, ativo)
+                                VALUES (:nome, :tipo, :cnpjs, :palavras, :filtro, TRUE)
+                                ON CONFLICT (nome_grupo) DO NOTHING
+                            """),
+                            {
+                                'nome': nome,
+                                'tipo': tipo,
+                                'cnpjs': cnpjs,
+                                'palavras': palavras,
+                                'filtro': f"cliente ILIKE '%{nome.lower()}%'"
+                            }
+                        )
+                        print(f"✅ Grupo {nome} inserido")
+                    except Exception as e:
+                        print(f"❌ Erro ao inserir {nome}: {e}")
+                        db.session.rollback()
+                
+                db.session.commit()
+                
+            # Listar grupos ativos
+            grupos = db.session.execute(
+                text("""
+                    SELECT nome_grupo, tipo_negocio, cnpj_prefixos, palavras_chave
+                    FROM ai_grupos_empresariais
+                    WHERE ativo IS TRUE
+                """)
+            ).fetchall()
+            
+            print("\nGrupos ativos:")
+            for grupo in grupos:
+                print(f"- {grupo.nome_grupo} ({grupo.tipo_negocio})")
+                
+        except Exception as e:
+            print(f"❌ Erro ao verificar grupos: {e}")
+            db.session.rollback()
         
-        pedidos = Pedido.query.count()
-        entregas = EntregaMonitorada.query.count()
-        fretes = Frete.query.count()
+        # 3. Adicionar padrões iniciais
+        print("\n📚 VERIFICANDO PADRÕES DE APRENDIZADO...")
+        try:
+            count = db.session.execute(
+                text("SELECT COUNT(*) FROM ai_knowledge_patterns")
+            ).scalar()
+            
+            print(f"Total de padrões: {count}")
+            
+            if count < 5:
+                print("Inserindo padrões básicos...")
+                
+                padroes = [
+                    ('intencao', 'melhor', {'acao': 'status', 'contexto': 'melhoria'}),
+                    ('periodo', 'hoje', {'periodo_dias': 0, 'tipo': 'dia_atual'}),
+                    ('periodo', 'ontem', {'periodo_dias': 1, 'tipo': 'dia_anterior'}),
+                    ('dominio', 'entregas', {'modelo': 'EntregaMonitorada', 'foco': 'monitoramento'}),
+                    ('dominio', 'pedidos', {'modelo': 'Pedido', 'foco': 'vendas'})
+                ]
+                
+                for tipo, texto, interp in padroes:
+                    try:
+                        db.session.execute(
+                            text("""
+                                INSERT INTO ai_knowledge_patterns 
+                                (pattern_type, pattern_text, interpretation, 
+                                 confidence, created_by)
+                                VALUES (:tipo, :texto, :interp::jsonb, 0.7, 'sistema')
+                                ON CONFLICT (pattern_type, pattern_text) DO NOTHING
+                            """),
+                            {
+                                'tipo': tipo,
+                                'texto': texto,
+                                'interp': json.dumps(interp)
+                            }
+                        )
+                        print(f"✅ Padrão '{texto}' inserido")
+                    except Exception as e:
+                        print(f"❌ Erro ao inserir padrão: {e}")
+                        db.session.rollback()
+                
+                db.session.commit()
+                
+        except Exception as e:
+            print(f"❌ Erro ao verificar padrões: {e}")
+            db.session.rollback()
         
-        print(f"✅ Dados no sistema:")
-        print(f"   Pedidos: {pedidos:,}")
-        print(f"   Entregas: {entregas:,}")
-        print(f"   Fretes: {fretes:,}")
+        # 4. Testar consulta problemática
+        print("\n🧪 TESTANDO CONSULTA DE GRUPOS...")
+        try:
+            consulta = "Melhorou agora?"
+            grupos = db.session.execute(
+                text("""
+                    SELECT nome_grupo, tipo_negocio, filtro_sql
+                    FROM ai_grupos_empresariais
+                    WHERE ativo IS TRUE
+                    AND palavras_chave IS NOT NULL
+                    AND array_length(palavras_chave, 1) > 0
+                    AND EXISTS (
+                        SELECT 1 FROM unnest(palavras_chave) AS palavra
+                        WHERE LOWER(:consulta) LIKE '%' || LOWER(palavra) || '%'
+                    )
+                """),
+                {"consulta": consulta}
+            ).fetchall()
+            
+            print(f"✅ Query executada com sucesso! {len(grupos)} grupos encontrados")
+            
+        except Exception as e:
+            print(f"❌ Erro na query: {e}")
+            db.session.rollback()
         
-    except Exception as e:
-        print(f"❌ Erro ao consultar dados: {e}")
-    
-    print("\n🎯 RESUMO:")
-    print("="*60)
-    print("✅ Testes concluídos!")
-    print(f"📅 Data/Hora: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-    print("\n💡 Dica: Para testar funcionalidades web, use o navegador:")
-    print(f"   https://sistema-fretes.onrender.com/claude-ai/real")
+        # 5. Verificar sistema de aprendizado
+        print("\n🧠 TESTANDO SISTEMA DE APRENDIZADO...")
+        try:
+            from app.claude_ai.lifelong_learning import get_lifelong_learning
+            
+            ll = get_lifelong_learning()
+            stats = ll.obter_estatisticas_aprendizado()
+            
+            print("Estatísticas do sistema:")
+            for key, value in stats.items():
+                print(f"  {key}: {value}")
+                
+        except Exception as e:
+            print(f"❌ Erro ao testar aprendizado: {e}")
+        
+        print("\n✅ TESTE CONCLUÍDO!")
+
+if __name__ == "__main__":
+    testar_sistema()
 
 print("\n🚀 Script finalizado!") 
