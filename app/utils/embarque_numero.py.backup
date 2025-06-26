@@ -3,10 +3,6 @@
 """
 Utilitário centralizado para geração de números de embarque.
 Evita duplicações e problemas de concorrência.
-
-VERSÃO CORRIGIDA: Sincroniza números com IDs para resolver dessincronização
-- Se ID estiver à frente do número, usa ID como base
-- Resolve problema onde Embarque #254 tinha ID 278
 """
 
 from app import db
@@ -32,15 +28,6 @@ def obter_proximo_numero_embarque():
             ultimo_numero = db.session.query(
                 db.func.coalesce(db.func.max(Embarque.numero), 0)
             ).scalar()
-            
-            # 🔧 CORREÇÃO: Sincronizar com IDs se necessário
-            ultimo_id = db.session.query(
-                db.func.coalesce(db.func.max(Embarque.id), 0)
-            ).scalar()
-            
-            # Se ID está à frente, usar ID como base para próximo número
-            if ultimo_id > ultimo_numero:
-                ultimo_numero = ultimo_id
             
             proximo_numero = ultimo_numero + 1
             
