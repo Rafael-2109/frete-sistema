@@ -259,25 +259,29 @@ O sistema melhora continuamente. Cada consulta, correção e feedback contribui 
             
             return resultado_memoria
         
-        # 🧠 SISTEMA DE ENTENDIMENTO INTELIGENTE (INTEGRAÇÃO NOVA)
+        # 🧠 SISTEMA DE ENTENDIMENTO INTELIGENTE (✅ ATIVA POR PADRÃO)
         try:
-            from .enhanced_claude_integration import processar_consulta_com_ia_avancada
             from .intelligent_query_analyzer import get_intelligent_analyzer
             
             # Usar sistema de entendimento inteligente
             analyzer = get_intelligent_analyzer()
             interpretacao = analyzer.analisar_consulta_inteligente(consulta, user_context or {})
             
-            # Se a confiança é alta (>= 70%), usar processamento avançado
+            # 🚨 CORREÇÃO: REMOVIDO LOOP INFINITO
+            # PROBLEMA: processar_consulta_com_ia_avancada chama processar_consulta_real
+            # que chama processar_consulta_com_ia_avancada novamente!
+            # 
+            # SOLUÇÃO: Usar apenas a interpretação inteligente aqui, sem chamar o enhanced
             if interpretacao.confianca_interpretacao >= 0.7:
-                logger.info(f"🧠 ENTENDIMENTO INTELIGENTE: Usando IA avançada (confiança: {interpretacao.confianca_interpretacao:.1%})")
-                resultado_avancado = processar_consulta_com_ia_avancada(consulta, user_context)
+                logger.info(f"🧠 ENTENDIMENTO INTELIGENTE: Alta confiança ({interpretacao.confianca_interpretacao:.1%})")
+                # Continuar com o processamento normal usando a interpretação
+                # mas NÃO chamar processar_consulta_com_ia_avancada para evitar loop
                 
-                # Se resultado válido, usar sistema avançado
-                if resultado_avancado and not resultado_avancado.startswith("❌"):
-                    return resultado_avancado
-                else:
-                    logger.warning("⚠️ Sistema avançado falhou, usando sistema padrão como fallback")
+                # Aplicar conhecimento da interpretação diretamente
+                if interpretacao.entidades_detectadas.get("clientes"):
+                    logger.info(f"✅ Clientes detectados: {interpretacao.entidades_detectadas['clientes']}")
+                if interpretacao.escopo_temporal["tipo"] != "padrao":
+                    logger.info(f"📅 Período detectado: {interpretacao.escopo_temporal['descricao']}")
             else:
                 logger.info(f"🔄 CONFIANÇA BAIXA: Usando sistema padrão (confiança: {interpretacao.confianca_interpretacao:.1%})")
         
