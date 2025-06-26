@@ -2489,40 +2489,103 @@ def _carregar_dados_pedidos(analise: Dict[str, Any], filtros_usuario: Dict[str, 
         return {"erro": str(e), "tipo_dados": "pedidos"}
 
 def _carregar_dados_embarques(analise: Dict[str, Any], filtros_usuario: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
-    """📦 Carrega dados específicos de EMBARQUES"""
+    """📦 Carrega dados específicos de EMBARQUES com inteligência para consultas específicas"""
     try:
         from app import db
         from app.embarques.models import Embarque, EmbarqueItem
+        from datetime import date
         
-        # Query de embarques
+        consulta_original = analise.get("consulta_original", "").lower()
+        
+        # 🧠 DETECÇÃO INTELIGENTE: Embarques pendentes para hoje
+        eh_consulta_pendentes_hoje = any(palavra in consulta_original for palavra in [
+            "pendente hoje", "pendentes hoje", "pendente pra hoje", "pendentes pra hoje",
+            "aguardando hoje", "faltam sair hoje", "ainda tem hoje", "hoje pendente"
+        ])
+        
+        # 🧠 DETECÇÃO INTELIGENTE: Embarques pendentes (geral)
+        eh_consulta_pendentes_geral = any(palavra in consulta_original for palavra in [
+            "pendente", "aguardando", "faltam sair", "ainda não saiu", "sem data embarque"
+        ]) and not eh_consulta_pendentes_hoje
+        
+        logger.info(f"🔍 CONSULTA EMBARQUES: Original='{consulta_original}' | Pendentes hoje={eh_consulta_pendentes_hoje} | Pendentes geral={eh_consulta_pendentes_geral}")
+        
+        # Query base de embarques
         query_embarques = db.session.query(Embarque).filter(
-                            Embarque.criado_em >= data_limite,
             Embarque.status == 'ativo'
         )
         
-        # CORREÇÃO: Carregar todos os embarques do período (sem limit inadequado)
+        # 🎯 FILTROS INTELIGENTES baseados na intenção detectada
+        if eh_consulta_pendentes_hoje:
+            # FILTRO ESPECÍFICO: Data prevista = HOJE + Ainda não saiu (data_embarque = null)
+            hoje = date.today()
+            query_embarques = query_embarques.filter(
+                Embarque.data_prevista_embarque == hoje,
+                Embarque.data_embarque.is_(None)
+            )
+            logger.info(f"🎯 Filtro aplicado: data_prevista_embarque = {hoje} AND data_embarque IS NULL")
+            
+        elif eh_consulta_pendentes_geral:
+            # FILTRO GERAL: Todos que ainda não saíram (data_embarque = null)
+            query_embarques = query_embarques.filter(
+                Embarque.data_embarque.is_(None)
+            )
+            logger.info(f"🎯 Filtro aplicado: data_embarque IS NULL (embarques aguardando)")
+            
+        else:
+            # FILTRO PADRÃO: Embarques do período
+            query_embarques = query_embarques.filter(
+                Embarque.criado_em >= data_limite
+            )
+            logger.info(f"🎯 Filtro aplicado: criado_em >= {data_limite} (embarques do período)")
+        
+        # Aplicar filtro de cliente se especificado
+        cliente_filtro = analise.get("cliente_especifico")
+        if cliente_filtro and not analise.get("correcao_usuario"):
+            # Buscar em embarque_itens pelo cliente
+            query_embarques = query_embarques.join(EmbarqueItem).filter(
+                EmbarqueItem.cliente.ilike(f'%{cliente_filtro}%')
+            ).distinct()
+            logger.info(f"🎯 Filtro de cliente aplicado: '{cliente_filtro}'")
+        
+        # Executar query
         embarques = query_embarques.order_by(Embarque.numero.desc()).all()
         
         logger.info(f"📦 Total embarques encontrados: {len(embarques)}")
         
-        # Estatísticas baseadas em TODOS os dados
+        # Estatísticas baseadas nos dados encontrados
         total_embarques = len(embarques)
         embarques_sem_data = len([e for e in embarques if not e.data_embarque])
         embarques_despachados = len([e for e in embarques if e.data_embarque])
+        embarques_hoje = len([e for e in embarques if e.data_prevista_embarque == date.today()])
+        embarques_pendentes_hoje = len([e for e in embarques if e.data_prevista_embarque == date.today() and not e.data_embarque])
+        
+        # Informações sobre itens dos embarques
+        total_itens = 0
+        clientes_envolvidos = set()
+        for embarque in embarques:
+            total_itens += len(embarque.itens_ativos)
+            for item in embarque.itens_ativos:
+                clientes_envolvidos.add(item.cliente)
         
         return {
             "tipo_dados": "embarques",
+            "tipo_consulta": "pendentes_hoje" if eh_consulta_pendentes_hoje else ("pendentes_geral" if eh_consulta_pendentes_geral else "periodo"),
             "embarques": {
                 "registros": [
                     {
                         "id": e.id,
                         "numero": e.numero,
-                        "motorista": e.motorista,
-                        "placa_veiculo": e.placa_veiculo,
+                        "transportadora": e.transportadora.razao_social if e.transportadora else "N/A",
+                        "motorista": e.nome_motorista or "N/A",
+                        "placa_veiculo": e.placa_veiculo or "N/A",
                         "data_criacao": e.criado_em.isoformat() if e.criado_em else None,
+                        "data_prevista": e.data_prevista_embarque.isoformat() if e.data_prevista_embarque else None,
                         "data_embarque": e.data_embarque.isoformat() if e.data_embarque else None,
-                        "status": "Despachado" if e.data_embarque else "Aguardando",
-                        "observacoes": e.observacoes
+                        "status": "Despachado" if e.data_embarque else "Aguardando Saída",
+                        "eh_hoje": e.data_prevista_embarque == date.today() if e.data_prevista_embarque else False,
+                        "total_nfs": len(e.itens_ativos),
+                        "observacoes": e.observacoes[:100] + "..." if e.observacoes and len(e.observacoes) > 100 else e.observacoes
                     }
                     for e in embarques
                 ],
@@ -2530,7 +2593,12 @@ def _carregar_dados_embarques(analise: Dict[str, Any], filtros_usuario: Dict[str
                     "total_embarques": total_embarques,
                     "embarques_despachados": embarques_despachados,
                     "embarques_aguardando": embarques_sem_data,
-                    "percentual_despachado": round((embarques_despachados / total_embarques * 100), 1) if total_embarques > 0 else 0
+                    "embarques_previstos_hoje": embarques_hoje,
+                    "embarques_pendentes_hoje": embarques_pendentes_hoje,
+                    "total_nfs": total_itens,
+                    "clientes_envolvidos": len(clientes_envolvidos),
+                    "percentual_despachado": round((embarques_despachados / total_embarques * 100), 1) if total_embarques > 0 else 0,
+                    "filtro_aplicado": "data_prevista_embarque = HOJE AND data_embarque IS NULL" if eh_consulta_pendentes_hoje else "data_embarque IS NULL" if eh_consulta_pendentes_geral else "embarques do período"
                 }
             },
             "registros_carregados": total_embarques
