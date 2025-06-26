@@ -437,31 +437,67 @@ class LifelongLearningSystem:
             
             # 2. Buscar grupos empresariais conhecidos
             try:
+                # Primeiro, buscar por palavras-chave usando ANY
                 grupos = db.session.execute(
                     text("""
-                        SELECT nome_grupo, tipo_negocio, filtro_sql, cnpj_prefixos
+                        SELECT nome_grupo, tipo_negocio, filtro_sql, 
+                               array_to_string(cnpj_prefixos, ',') as cnpjs_str,
+                               array_to_string(palavras_chave, ',') as palavras_str
                         FROM ai_grupos_empresariais
-                        WHERE ativo IS TRUE
-                        AND palavras_chave IS NOT NULL
-                        AND array_length(palavras_chave, 1) > 0
-                        AND EXISTS (
-                            SELECT 1 FROM unnest(palavras_chave) AS palavra
-                            WHERE LOWER(:consulta) LIKE '%' || LOWER(palavra) || '%'
+                        WHERE ativo = TRUE
+                        AND (
+                            -- Buscar em palavras_chave usando ANY
+                            EXISTS (
+                                SELECT 1 FROM unnest(palavras_chave) AS palavra
+                                WHERE LOWER(:consulta) LIKE '%' || LOWER(palavra) || '%'
+                            )
+                            OR 
+                            -- Buscar no nome do grupo
+                            nome_grupo ILIKE '%' || :consulta || '%'
                         )
+                        LIMIT 5
                     """),
                     {"consulta": consulta}
                 ).fetchall()
                 
                 for grupo in grupos:
+                    # Converter strings de volta para listas
+                    cnpjs = grupo.cnpjs_str.split(',') if grupo.cnpjs_str else []
+                    palavras = grupo.palavras_str.split(',') if grupo.palavras_str else []
+                    
                     conhecimento["grupos_conhecidos"].append({
                         "nome": grupo.nome_grupo,
                         "tipo": grupo.tipo_negocio,
                         "filtro": grupo.filtro_sql,
-                        "cnpjs": grupo.cnpj_prefixos if grupo.cnpj_prefixos else []
+                        "cnpjs": [c.strip() for c in cnpjs if c.strip()],
+                        "palavras": [p.strip() for p in palavras if p.strip()]
                     })
+                    
             except Exception as e:
                 logger.warning(f"Erro ao buscar grupos empresariais: {e}")
-                # Continua sem grupos, não é crítico
+                # Fallback: busca simples sem arrays
+                try:
+                    db.session.rollback()
+                    grupos = db.session.execute(
+                        text("""
+                            SELECT nome_grupo, tipo_negocio, filtro_sql
+                            FROM ai_grupos_empresariais
+                            WHERE ativo = TRUE
+                            ORDER BY nome_grupo
+                            LIMIT 3
+                        """)
+                    ).fetchall()
+                    
+                    for grupo in grupos:
+                        conhecimento["grupos_conhecidos"].append({
+                            "nome": grupo.nome_grupo,
+                            "tipo": grupo.tipo_negocio,
+                            "filtro": grupo.filtro_sql,
+                            "cnpjs": [],
+                            "palavras": []
+                        })
+                except:
+                    pass  # Ignora se ainda falhar
             
             # 3. Buscar mapeamentos semânticos
             mapeamentos = db.session.execute(
