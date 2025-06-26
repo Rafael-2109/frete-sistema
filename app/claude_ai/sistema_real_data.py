@@ -237,13 +237,15 @@ class SistemaRealData:
             status_entregas = db.session.query(EntregaMonitorada.status_finalizacao).distinct().all()
             status_reais['entregas'] = [s[0] for s in status_entregas if s[0]]
             
-            # Status de Pedidos (usando campo real)
+            # Status de Pedidos (usando campo real do banco)
             from app.pedidos.models import Pedido
             try:
-                status_pedidos = db.session.query(Pedido.status_calculado).distinct().all()
+                # CORREÇÃO: usar campo 'status' real do banco, não a property 'status_calculado'
+                status_pedidos = db.session.query(Pedido.status).distinct().all()
                 status_reais['pedidos'] = [s[0] for s in status_pedidos if s[0]]
+                logger.info(f"✅ Status de pedidos carregados: {status_reais['pedidos']}")
             except Exception as e:
-                logger.warning(f"Campo status_calculado não existe, tentando outros: {e}")
+                logger.warning(f"Erro ao carregar status de pedidos: {e}")
                 status_reais['pedidos'] = []
             
             # Status de Embarques
