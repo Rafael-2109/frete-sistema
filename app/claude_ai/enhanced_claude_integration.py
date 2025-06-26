@@ -58,7 +58,7 @@ class EnhancedClaudeIntegration:
         )
         
         # 2. VERIFICAR SE PRECISA DE ESCLARECIMENTO
-        if interpretacao.probabilidade_interpretacao < 0.6 or interpretacao.sugestoes_esclarecimento:
+        if interpretacao.probabilidade_interpretacao < 0.5 and interpretacao.sugestoes_esclarecimento:
             return self._gerar_resposta_esclarecimento(interpretacao)
         
         # 3. VERIFICAR URGÊNCIA CRÍTICA

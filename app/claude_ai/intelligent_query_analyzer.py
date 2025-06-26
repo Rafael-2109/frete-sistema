@@ -125,10 +125,13 @@ class IntelligentQueryAnalyzer:
             ],
             
             TipoInformacao.STATUS: [
-                r"(?:situação|status|posição|estado)\s+(?:do|da|dos|das)",
-                r"(?:como está|como estão|como anda|como andam)",
-                r"(?:em que pé|andamento|progresso)",
-                r"(?:qual o status|qual a situação)"
+                r"(?:status|situação|posição|andamento|progresso)\b",
+                r"(?:como está|como estão|está|estão|tem|têm)\b",
+                r"(?:atual|atualmente|agora|momento)\b",
+                r"(?:fase|etapa|estágio)\b",
+                r"(?:pendente|pendentes|aguardando|esperando)\b",
+                r"(?:o que tem|o que há|o que existe)\b",
+                r"(?:sair|saindo|para sair|pra sair)\b"
             ],
             
             TipoInformacao.HISTORICO: [
@@ -153,10 +156,12 @@ class IntelligentQueryAnalyzer:
             ],
             
             TipoInformacao.PROBLEMAS: [
-                r"(?:problema|problemas|erro|falha|issue)",
-                r"(?:atraso|atrasado|atrasada|pendente|pendência)",
-                r"(?:crítico|urgente|emergência|bloqueado)",
-                r"(?:não entregue|não chegou|não foi|falhou)"
+                r"(?:problema|problemas|erro|erros|falha|falhas|bug|bugs)\b",
+                r"(?:atraso|atrasado|atrasada|atrasados|atrasadas)\b",
+                r"(?:demora|demorado|demorada|demorados|demoradas)\b",
+                r"(?:urgente|urgentes|emergência|crítico|crítica)\b",
+                r"(?:reclamação|reclamações|queixa|queixas)\b",
+                r"(?:bloqueado|bloqueada|travado|travada|parado|parada)\b",
             ],
             
             TipoInformacao.METRICAS: [
@@ -919,16 +924,22 @@ class IntelligentQueryAnalyzer:
         total_entidades = sum(len(lista) for lista in entidades.values())
         probabilidade += min(total_entidades * 0.1, 0.3)
         
-        # Boost por especificidade temporal
-        if escopo_temporal["tipo"] != "padrao":
-            probabilidade += 0.1
+        # ✅ BOOST MAIOR por especificidade temporal
+        if escopo_temporal["tipo"] == "data_especifica":  # hoje, ontem, etc
+            probabilidade += 0.3  # Aumentado de 0.1 para 0.3
+        elif escopo_temporal["tipo"] != "padrao":
+            probabilidade += 0.2  # Aumentado de 0.1 para 0.2
         
         # Boost por clareza da intenção
         if intencao != TipoInformacao.LISTAGEM:  # LISTAGEM é padrão/genérico
             probabilidade += 0.1
         
-        # Penalidade por ambiguidade
-        if entidades["clientes"] and len(entidades["clientes"]) > 1:
+        # ✅ BOOST ADICIONAL para intenções bem definidas
+        if intencao in [TipoInformacao.VALOR, TipoInformacao.QUANTIDADE, TipoInformacao.STATUS]:
+            probabilidade += 0.1
+        
+        # Penalidade por ambiguidade (reduzida)
+        if entidades["clientes"] and len(entidades["clientes"]) > 2:  # Mudado de > 1 para > 2
             probabilidade -= 0.1
         
         return min(max(probabilidade, 0.1), 1.0)
@@ -973,26 +984,13 @@ class IntelligentQueryAnalyzer:
         
         sugestoes = []
         
-        # Se probabilidade baixa, sugerir esclarecimento
-        if probabilidade < 0.7:
+        # ✅ MUDANÇA: Só sugerir esclarecimento se probabilidade MUITO baixa
+        if probabilidade < 0.4:  # Mudado de 0.7 para 0.4
             sugestoes.append("Poderia ser mais específico sobre o que deseja saber?")
         
-        # Se não encontrou clientes específicos mas menciona "cliente"
-        if "cliente" in consulta and not entidades["clientes"]:
-            sugestoes.append("Qual cliente específico você gostaria de consultar? (ex: Assai, Atacadão, Carrefour)")
-        
-        # Se não especificou período temporal
-        if "período" in consulta or "tempo" in consulta:
-            if not any(entidades.get(k) for k in ["datas", "periodo"]):
-                sugestoes.append("Que período você gostaria de analisar? (ex: últimos 7 dias, junho, ontem)")
-        
-        # Se consulta muito genérica
-        if len(consulta.split()) <= 2:
+        # ✅ MUDANÇA: Só considerar genérica se for 1 palavra ou menos (não 2)
+        if len(consulta.split()) <= 1:  # Mudado de <= 2 para <= 1
             sugestoes.append("Gostaria de mais detalhes sobre sua consulta para dar uma resposta mais precisa")
-        
-        # Sugestões baseadas na intenção
-        if intencao == TipoInformacao.PROBLEMAS:
-            sugestoes.append("Que tipo de problema você gostaria de investigar? (atrasos, entregas pendentes, etc.)")
         
         return sugestoes
     
