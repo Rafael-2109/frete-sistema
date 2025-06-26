@@ -448,6 +448,25 @@ def create_app(config_name=None):
     
     # 🤖 Claude AI Integration
     app.register_blueprint(claude_ai_bp)
+    
+    # ✅ INICIALIZAR CLAUDE AI DE FORMA EXPLÍCITA
+    try:
+        # Tentar obter Redis cache se disponível
+        redis_cache_instance = None
+        try:
+            from app.utils.redis_cache import redis_cache
+            redis_cache_instance = redis_cache
+        except ImportError:
+            pass
+            
+        # Configurar Claude AI
+        from app.claude_ai import setup_claude_ai
+        if setup_claude_ai(app, redis_cache_instance):
+            app.logger.info("✅ Claude AI configurado com sucesso")
+        else:
+            app.logger.warning("⚠️ Claude AI configurado com funcionalidades limitadas")
+    except Exception as e:
+        app.logger.error(f"❌ Erro ao configurar Claude AI: {e}")
 
     # 🧱 Cria tabelas se ainda não existirem (em ambiente local)
     with app.app_context():

@@ -8,39 +8,50 @@ from . import routes
 # 🚀 SISTEMA AVANÇADO DE IA v2.0 - ROTAS AVANÇADAS ATIVADAS
 # Versão: 25/06/2025 - Sistema Multi-Agent + Human Learning + PostgreSQL JSONB
 
-# 🧠 Inicializar Sistema de Sugestões Inteligentes
-def init_intelligent_suggestions():
-    """Inicializa sistema de sugestões inteligentes"""
+# ✅ CORREÇÃO: Inicialização movida para função explícita
+# Evita problemas de inicialização circular
+
+def setup_claude_ai(app, redis_cache=None):
+    """
+    Configura o sistema Claude AI com a aplicação Flask
+    
+    Args:
+        app: Aplicação Flask
+        redis_cache: Instância do cache Redis (opcional)
+        
+    Returns:
+        bool: True se inicializado com sucesso
+    """
+    success = True
+    
+    # 🧠 Inicializar Sistema de Sugestões Inteligentes
     try:
         from .suggestion_engine import init_suggestion_engine
         
-        # Tentar importar Redis cache
-        try:
-            from app.utils.redis_cache import redis_cache
-            suggestion_engine = init_suggestion_engine(redis_cache)
-            if suggestion_engine:
-                print("🧠 Sistema de Sugestões Inteligentes inicializado com Redis")
-            else:
-                print("⚠️ Sistema de Sugestões sem Redis (fallback)")
-        except ImportError:
-            # Fallback sem Redis
-            suggestion_engine = init_suggestion_engine(None)
-            if suggestion_engine:
-                print("🧠 Sistema de Sugestões Inteligentes inicializado (sem Redis)")
-            else:
-                print("❌ Erro ao inicializar Sistema de Sugestões")
-        
-        # 📊 Configurar analisador de dados (será inicializado quando necessário)
-        try:
-            from .data_analyzer import init_data_analyzers
-            print("📊 Analisador de Dados configurado")
-        except ImportError as e:
-            print(f"⚠️ Analisador de dados não disponível: {e}")
+        suggestion_engine = init_suggestion_engine(redis_cache)
+        if suggestion_engine:
+            app.logger.info("🧠 Sistema de Sugestões Inteligentes inicializado" + 
+                          (" com Redis" if redis_cache else " (sem Redis)"))
+        else:
+            app.logger.warning("⚠️ Sistema de Sugestões sem Redis (fallback)")
+            success = False
                 
-    except ImportError:
-        print("⚠️ Sistema de Sugestões Inteligentes não disponível")
+    except ImportError as e:
+        app.logger.warning(f"⚠️ Sistema de Sugestões Inteligentes não disponível: {e}")
+        success = False
     except Exception as e:
-        print(f"❌ Erro ao inicializar sugestões: {e}")
+        app.logger.error(f"❌ Erro ao inicializar sugestões: {e}")
+        success = False
+    
+    # 📊 Configurar analisador de dados
+    try:
+        from .data_analyzer import init_data_analyzers
+        app.logger.info("📊 Analisador de Dados configurado")
+    except ImportError as e:
+        app.logger.warning(f"⚠️ Analisador de dados não disponível: {e}")
+        success = False
+        
+    return success
 
-# Inicializar sistema ao importar módulo
-init_intelligent_suggestions() 
+# ❌ REMOVIDO: Inicialização automática que causava problemas
+# init_intelligent_suggestions() 

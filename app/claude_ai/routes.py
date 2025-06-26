@@ -11,6 +11,7 @@ from .mcp_connector import MCPSistemaOnline
 from . import claude_ai_bp
 from app.utils.auth_decorators import require_admin
 from .claude_real_integration import processar_com_claude_real
+from .input_validator import InputValidator
 
 # Configurar logger
 logger = logging.getLogger(__name__)
@@ -446,12 +447,18 @@ def api_query():
         logger.info(f"📥 Widget Request - Headers CSRF: X-CSRFToken={bool(request.headers.get('X-CSRFToken'))}")
         
         data = request.get_json()
-        if not data:
-            logger.error("❌ Widget: Nenhum JSON recebido")
-            return jsonify({'success': False, 'error': 'Dados JSON não recebidos'}), 400
+        
+        # ✅ VALIDAR ENTRADA
+        valid, error_msg, validated_data = InputValidator.validate_json_request(
+            data,
+            required_fields=['query']
+        )
+        if not valid:
+            logger.error(f"❌ Widget: Validação falhou - {error_msg}")
+            return jsonify({'success': False, 'error': error_msg}), 400
             
-        consulta = data.get('query', '').strip()
-        csrf_token = data.get('csrf_token', '')
+        consulta = validated_data['query']
+        csrf_token = validated_data.get('csrf_token', '')
         
         logger.info(f"📝 Widget Query: '{consulta[:50]}...' (CSRF: {bool(csrf_token)})")
         
@@ -669,7 +676,7 @@ def suggestion_feedback():
         return jsonify({
             'success': False,
             'error': str(e)
-        })
+        }), 500
 
 @claude_ai_bp.route('/suggestions/dashboard')
 @login_required
@@ -931,59 +938,81 @@ def processar_comando_excel():
         from .excel_generator import get_excel_generator
         
         data = request.get_json()
-        comando = data.get('comando', '').lower()
+        
+        # ✅ VALIDAR ENTRADA
+        valid, error_msg, validated_data = InputValidator.validate_json_request(
+            data,
+            required_fields=['command']
+        )
+        if not valid:
+            return jsonify({
+                'success': False,
+                'error': error_msg
+            }), 400
+        
+        command = validated_data.get('command', validated_data.get('query', ''))
+        
+        # ✅ VALIDAR CLIENTE ESPECÍFICO SE FORNECIDO
+        client = validated_data.get('client')
+        if client:
+            valid, msg = InputValidator.validate_client_name(client)
+            if not valid:
+                return jsonify({
+                    'success': False,
+                    'error': f'Cliente inválido: {msg}'
+                }), 400
         
         excel_generator = get_excel_generator()
         resultado = None
         
         # 🧠 ANÁLISE INTELIGENTE DE COMANDOS EXCEL
-        logger.info(f"🔍 Analisando comando Excel: '{comando}'")
+        logger.info(f"🔍 Analisando comando Excel: '{command}'")
         
         # 1. ENTREGAS PENDENTES (prioritário - conceito diferente de atrasadas)
-        if any(palavra in comando for palavra in ['entregas pendentes', 'pendente', 'não entregue', 'aguardando entrega']):
+        if any(palavra in command for palavra in ['entregas pendentes', 'pendente', 'não entregue', 'aguardando entrega']):
             logger.info("📋 Detectado: ENTREGAS PENDENTES")
             
             # Detectar filtros no comando
             filtros = {}
-            if 'uf' in comando:
+            if 'uf' in command:
                 import re
-                match = re.search(r'uf\s+([A-Z]{2})', comando.upper())
+                match = re.search(r'uf\s+([A-Z]{2})', command.upper())
                 if match:
                     filtros['uf'] = match.group(1)
-            if 'cliente' in comando:
+            if 'cliente' in command:
                 import re
-                match = re.search(r'cliente\s+([a-zA-Z\s]+)', comando)
+                match = re.search(r'cliente\s+([a-zA-Z\s]+)', command)
                 if match:
                     filtros['cliente'] = match.group(1).strip()
-            if 'vendedor' in comando:
+            if 'vendedor' in command:
                 import re
-                match = re.search(r'vendedor\s+([a-zA-Z\s]+)', comando)
+                match = re.search(r'vendedor\s+([a-zA-Z\s]+)', command)
                 if match:
                     filtros['vendedor'] = match.group(1).strip()
                     
             resultado = excel_generator.gerar_relatorio_entregas_pendentes(filtros)
             
         # 2. ENTREGAS ATRASADAS (específico para atrasos)
-        elif any(palavra in comando for palavra in ['entregas atrasadas', 'atraso', 'atrasado', 'atrasada']):
+        elif any(palavra in command for palavra in ['entregas atrasadas', 'atraso', 'atrasado', 'atrasada']):
             logger.info("🔴 Detectado: ENTREGAS ATRASADAS")
             
             # Detectar filtros no comando
             filtros = {}
-            if 'cliente' in comando:
+            if 'cliente' in command:
                 import re
-                match = re.search(r'cliente\s+([a-zA-Z\s]+)', comando)
+                match = re.search(r'cliente\s+([a-zA-Z\s]+)', command)
                 if match:
                     filtros['cliente'] = match.group(1).strip()
-            if 'uf' in comando:
+            if 'uf' in command:
                 import re
-                match = re.search(r'uf\s+([A-Z]{2})', comando.upper())
+                match = re.search(r'uf\s+([A-Z]{2})', command.upper())
                 if match:
                     filtros['uf'] = match.group(1)
             
             resultado = excel_generator.gerar_relatorio_entregas_atrasadas(filtros)
             
         # 3. CLIENTE ESPECÍFICO
-        elif any(cliente in comando for cliente in ['assai', 'atacadão', 'carrefour', 'tenda', 'mateus', 'fort']):
+        elif any(cliente in command for cliente in ['assai', 'atacadão', 'carrefour', 'tenda', 'mateus', 'fort']):
             logger.info("👤 Detectado: CLIENTE ESPECÍFICO")
             
             # Detectar cliente usando dados reais
@@ -996,7 +1025,7 @@ def processar_comando_excel():
                 # Busca case-insensitive por palavras do nome do cliente
                 palavras_cliente = cliente_real.lower().split()
                 for palavra in palavras_cliente:
-                    if len(palavra) > 3 and palavra in comando:  # Palavras com mais de 3 chars
+                    if len(palavra) > 3 and palavra in command:  # Palavras com mais de 3 chars
                         cliente = cliente_real
                         logger.info(f"🎯 Cliente real detectado no comando: {cliente}")
                         break
@@ -1006,16 +1035,16 @@ def processar_comando_excel():
             if cliente:
                 # Detectar período se especificado
                 periodo = 30  # padrão
-                if 'últimos' in comando or 'ultimo' in comando:
+                if 'últimos' in command or 'ultimo' in command:
                     import re
-                    match = re.search(r'(\d+)\s*dias?', comando)
+                    match = re.search(r'(\d+)\s*dias?', command)
                     if match:
                         periodo = int(match.group(1))
                 
                 resultado = excel_generator.gerar_relatorio_cliente_especifico(cliente, periodo)
         
         # 4. COMANDOS GENÉRICOS COM PALAVRAS-CHAVE EXCEL
-        elif any(palavra in comando for palavra in ['relatório', 'planilha', 'excel', 'exportar']):
+        elif any(palavra in command for palavra in ['relatório', 'planilha', 'excel', 'exportar']):
             logger.info("📊 Detectado: COMANDO GENÉRICO - Default para ENTREGAS PENDENTES")
             # Para comandos genéricos, usar entregas pendentes por ser mais abrangente
             resultado = excel_generator.gerar_relatorio_entregas_pendentes()

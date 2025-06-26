@@ -159,17 +159,18 @@ class ClaudeRealIntegration:
             padroes_exemplos = []
             try:
                 from app import db
-                from sqlalchemy import text
+                from app.claude_ai.lifelong_learning import AILearningPattern
                 
-                # Buscar alguns padrões recentes
-                query = db.session.execute(
-                    text("SELECT consulta_original, interpretacao, confianca FROM ai_learning_patterns ORDER BY criado_em DESC LIMIT 5")
-                )
-                for row in query.fetchall():
+                # ✅ CORREÇÃO: Usar ORM ao invés de SQL puro
+                padroes = AILearningPattern.query.order_by(
+                    AILearningPattern.criado_em.desc()
+                ).limit(5).all()
+                
+                for padrao in padroes:
                     padroes_exemplos.append({
-                        'consulta': row[0][:50] + '...' if len(row[0]) > 50 else row[0],
-                        'interpretacao': row[1],
-                        'confianca': row[2]
+                        'consulta': padrao.consulta_original[:50] + '...' if len(padrao.consulta_original) > 50 else padrao.consulta_original,
+                        'interpretacao': padrao.interpretacao,
+                        'confianca': padrao.confianca
                     })
             except Exception as e:
                 logger.error(f"Erro ao buscar padrões: {e}")
@@ -177,14 +178,20 @@ class ClaudeRealIntegration:
             # Buscar grupos empresariais conhecidos
             grupos_conhecidos = []
             try:
-                query = db.session.execute(
-                    text("SELECT grupo_nome, tipo_negocio, cnpj_prefixos FROM ai_grupo_empresarial_mapping WHERE ativo = true ORDER BY criado_em DESC")
-                )
-                for row in query.fetchall():
+                from app.claude_ai.lifelong_learning import AIGrupoEmpresarialMapping
+                
+                # ✅ CORREÇÃO: Usar ORM ao invés de SQL puro
+                grupos = AIGrupoEmpresarialMapping.query.filter_by(
+                    ativo=True
+                ).order_by(
+                    AIGrupoEmpresarialMapping.criado_em.desc()
+                ).all()
+                
+                for grupo in grupos:
                     grupos_conhecidos.append({
-                        'nome': row[0],
-                        'tipo': row[1],
-                        'cnpjs': row[2][:2] if row[2] else []  # Primeiros 2 CNPJs
+                        'nome': grupo.grupo_nome,
+                        'tipo': grupo.tipo_negocio,
+                        'cnpjs': grupo.cnpj_prefixos[:2] if grupo.cnpj_prefixos else []  # Primeiros 2 CNPJs
                     })
             except Exception as e:
                 logger.error(f"Erro ao buscar grupos: {e}")
@@ -538,6 +545,7 @@ Por favor, forneça uma resposta completa incluindo:
                 model="claude-sonnet-4-20250514",  # Claude 4 Sonnet
                 max_tokens=4000,
                 temperature=0.1,  # Determinístico para dados críticos
+                timeout=30.0,  # ✅ TIMEOUT de 30 segundos
                 system=self.system_prompt.format(
                     dados_contexto_especifico=self._descrever_contexto_carregado(contexto_analisado)
                 ),
