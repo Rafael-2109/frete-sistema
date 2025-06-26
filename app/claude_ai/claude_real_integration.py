@@ -597,15 +597,25 @@ Por favor, forneça uma resposta completa incluindo:
             ]
         }
         
-        # Detectar domínio baseado nas palavras-chave (PERMITIR MÚLTIPLOS)
+        # ✅ CORREÇÃO: Detectar domínio baseado nas palavras-chave (MELHORADO)
         pontuacao_dominios = {}
         for dominio, palavras in dominios.items():
             pontos = 0
             for palavra in palavras:
-                if palavra in consulta_lower:
-                    pontos += 1
+                # 🔧 CORREÇÃO: Busca por palavra completa para evitar falsos positivos
+                if re.search(rf'\b{re.escape(palavra)}\b', consulta_lower):
+                    pontos += 2  # Peso maior para matches de palavra completa
+                elif palavra in consulta_lower:
+                    pontos += 1  # Peso menor para matches parciais
             if pontos > 0:
                 pontuacao_dominios[dominio] = pontos
+        
+        # 🎯 CORREÇÃO ESPECÍFICA: Priorizar "embarques" quando mencionado explicitamente
+        if "embarque" in consulta_lower or "embarques" in consulta_lower:
+            if "embarques" not in pontuacao_dominios:
+                pontuacao_dominios["embarques"] = 0
+            pontuacao_dominios["embarques"] += 5  # Bonus forte para embarques explícitos
+            logger.info("🎯 BONUS: +5 pontos para domínio 'embarques' (menção explícita)")
         
         # ✅ NOVO: Se múltiplos domínios foram detectados, habilitar multi-domínio
         if len(pontuacao_dominios) >= 2:

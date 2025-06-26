@@ -4,7 +4,11 @@ from datetime import datetime
 from sqlalchemy import and_, or_, desc, func
 import os
 import re
+import logging
 from werkzeug.utils import secure_filename
+
+# Configurar logger
+logger = logging.getLogger(__name__)
 from app.transportadoras.models import Transportadora
 from app.fretes.forms import LancamentoFreteirosForm
 from datetime import datetime
@@ -71,7 +75,6 @@ def index():
 @require_financeiro()  # 🔒 BLOQUEADO para vendedores
 def listar_fretes():
     """Lista todos os fretes com filtros"""
-    from app.transportadoras.models import Transportadora
     from sqlalchemy import cast, String
     
     form = FiltroFretesForm(request.args)
@@ -1239,9 +1242,29 @@ def editar_fatura(fatura_id):
 @login_required
 def visualizar_fatura(fatura_id):
     """Visualiza uma fatura sem permitir edição"""
-    fatura = FaturaFrete.query.get_or_404(fatura_id)
-    
-    return render_template('fretes/visualizar_fatura.html', fatura=fatura)
+    try:
+        logger.info(f"🔍 Tentando visualizar fatura ID: {fatura_id}")
+        
+        fatura = FaturaFrete.query.get_or_404(fatura_id)
+        
+        logger.info(f"✅ Fatura encontrada: {fatura.numero_fatura} - {fatura.transportadora.razao_social}")
+        
+        # Verificar se todos os métodos do modelo funcionam
+        total_fretes = fatura.total_fretes()
+        total_despesas = fatura.total_despesas_extras()
+        
+        logger.info(f"📊 Dados da fatura - Fretes: {total_fretes}, Despesas: {total_despesas}")
+        
+        return render_template('fretes/visualizar_fatura.html', fatura=fatura)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao visualizar fatura {fatura_id}: {str(e)}")
+        logger.error(f"❌ Detalhes do erro: {type(e).__name__}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        
+        flash(f'Erro ao visualizar fatura: {str(e)}', 'error')
+        return redirect(url_for('fretes.listar_faturas'))
 
 @fretes_bp.route('/faturas/<int:fatura_id>/excluir', methods=['POST'])
 @login_required

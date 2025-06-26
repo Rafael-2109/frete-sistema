@@ -448,6 +448,35 @@ class IntelligentQueryAnalyzer:
         
         pontuacoes = {}
         
+        # 🔧 CORREÇÃO: Priorizar padrões específicos de STATUS sobre LOCALIZACAO
+        # Para consultas como "Como estão os embarques" devem ser STATUS, não LOCALIZACAO
+        
+        # Verificar padrões de STATUS PRIMEIRO (maior prioridade)
+        padroes_status_prioritarios = [
+            r"como\s+está(?:o|ão|m)?\s+(?:os?|as?)\s+\w+",  # "como estão os embarques"
+            r"como\s+anda(?:m)?\s+(?:os?|as?)\s+\w+",       # "como andam as entregas"
+            r"situação\s+(?:do|da|dos|das)\s+\w+",           # "situação dos pedidos"
+            r"status\s+(?:do|da|dos|das)\s+\w+",             # "status das entregas"
+            r"(?:qual|como)\s+(?:o|a)\s+(?:situação|status|posição)"  # "qual o status"
+        ]
+        
+        # Se encontrar padrão de STATUS prioritário, definir como STATUS
+        for pattern in padroes_status_prioritarios:
+            if re.search(pattern, consulta, re.IGNORECASE):
+                logger.info(f"🎯 PADRÃO STATUS PRIORITÁRIO detectado: {pattern}")
+                return TipoInformacao.STATUS
+        
+        # Detectar padrões de EMBARQUES especificamente
+        if re.search(r"\bembarques?\b", consulta, re.IGNORECASE):
+            # Se menciona "embarques", é provável que seja STATUS ou LISTAGEM
+            if any(palavra in consulta.lower() for palavra in ["como", "status", "situação", "estão", "está"]):
+                logger.info("🎯 EMBARQUES + STATUS detectado")
+                return TipoInformacao.STATUS
+            else:
+                logger.info("🎯 EMBARQUES + LISTAGEM detectado")
+                return TipoInformacao.LISTAGEM
+        
+        # Continuar com detecção normal para outros casos
         for intencao, padroes in self.padroes_intencao.items():
             pontos = 0
             for pattern in padroes:
@@ -462,6 +491,14 @@ class IntelligentQueryAnalyzer:
             
             if pontos > 0:
                 pontuacoes[intencao] = pontos
+        
+        # 🔧 CORREÇÃO: Penalizar LOCALIZACAO se não tem palavras específicas de localização
+        if TipoInformacao.LOCALIZACAO in pontuacoes:
+            # Se não tem palavras explícitas de localização, reduzir pontuação drasticamente
+            palavras_localizacao_explicitas = ["onde", "local", "localização", "endereço", "fica", "localizado"]
+            if not any(palavra in consulta.lower() for palavra in palavras_localizacao_explicitas):
+                pontuacoes[TipoInformacao.LOCALIZACAO] = pontuacoes[TipoInformacao.LOCALIZACAO] * 0.1
+                logger.info("⚠️ LOCALIZACAO penalizada - sem palavras explícitas de localização")
         
         # Se não detectou nenhuma intenção específica, usar heurísticas
         if not pontuacoes:
