@@ -29,13 +29,14 @@ class TipoInformacao(Enum):
     """Tipos de informação que o usuário pode estar buscando"""
     LISTAGEM = "listagem"  # "quais são", "liste", "mostre"
     QUANTIDADE = "quantidade"  # "quantos", "quantas", "total"
+    VALOR = "valor"  # 🆕 "quanto faturou", "valor total", "receita", "R$"
     STATUS = "status"  # "situação", "como está", "posição"
     HISTORICO = "historico"  # "histórico", "evolução", "antes"
     COMPARACAO = "comparacao"  # "comparar", "diferença", "vs"
     DETALHAMENTO = "detalhamento"  # "detalhes", "completo", "informações"
     PROBLEMAS = "problemas"  # "atrasos", "problemas", "pendências"
     METRICAS = "metricas"  # "performance", "indicadores", "percentual"
-    PREVISAO = "previsao"  # "quando", "prazo", "estimativa"
+    PREVISAO = "previsao"  # "quando VAI", "prazo FUTURO", "estimativa FUTURA"
     LOCALIZACAO = "localizacao"  # "onde", "local", "endereço"
 
 class NivelDetalhamento(Enum):
@@ -113,6 +114,16 @@ class IntelligentQueryAnalyzer:
                 r"(?:tenho|temos)\s+(?:quantos?|quantas?)"
             ],
             
+            TipoInformacao.VALOR: [
+                r"(?:quanto\s+faturou|quanto\s+faturamos|quanto\s+vendeu|quanto\s+vendemos)",
+                r"(?:valor\s+total|valor\s+faturado|valor\s+de\s+faturamento)",
+                r"(?:receita|faturamento|vendas)\s+(?:total|do|da|de)",
+                r"(?:R\$|reais|valor\s+em\s+reais)",
+                r"(?:quanto\s+em\s+dinheiro|quanto\s+em\s+reais)",
+                r"(?:total\s+faturado|total\s+de\s+vendas)",
+                r"(?:quanto\s+foi|quanto\s+gerou|quanto\s+rendeu)"
+            ],
+            
             TipoInformacao.STATUS: [
                 r"(?:situação|status|posição|estado)\s+(?:do|da|dos|das)",
                 r"(?:como está|como estão|como anda|como andam)",
@@ -156,10 +167,10 @@ class IntelligentQueryAnalyzer:
             ],
             
             TipoInformacao.PREVISAO: [
-                r"(?:quando|que horas?|que dia|previsão)",
+                r"(?:quando\s+vai|quando\s+irá|quando\s+será)",
                 r"(?:vai|irá|será)\s+(?:entregar?|chegar?|partir?)",
-                r"(?:estimativa|prazo|tempo|duração)",
-                r"(?:prever|prognóstico|expectativa)"
+                r"(?:estimativa|prazo|tempo|duração)\s+(?:para|de)",
+                r"(?:prever|prognóstico|expectativa|projeção)"
             ],
             
             TipoInformacao.LOCALIZACAO: [
@@ -325,6 +336,17 @@ class IntelligentQueryAnalyzer:
         
         logger.info(f"🧠 Analisando consulta inteligente: '{consulta[:50]}...'")
         
+        # 🚨 VERIFICAÇÃO PRIORITÁRIA: Detectar se é uma correção ANTES de qualquer análise
+        consulta_lower = consulta.lower()
+        palavras_correcao = [
+            "não pedi", "não é", "não era", "não quero", "me trouxe", 
+            "trouxe errado", "dados incorretos", "não é isso", "errou",
+            "você entendeu errado", "interpretou errado", "não mencionei",
+            "voce entendeu errado", "incorreto", "equivocado", "engano"
+        ]
+        
+        eh_correcao = any(palavra in consulta_lower for palavra in palavras_correcao)
+        
         # 1. Pré-processamento e normalização
         consulta_normalizada = self._normalizar_consulta(consulta)
         
@@ -337,8 +359,21 @@ class IntelligentQueryAnalyzer:
         # 4. Avaliação de urgência
         urgencia = self._avaliar_urgencia(consulta_normalizada)
         
-        # 5. Extração de entidades de negócio
-        entidades = self._extrair_entidades_negocio(consulta_normalizada)
+        # 5. Extração de entidades de negócio - SE NÃO FOR CORREÇÃO
+        if eh_correcao:
+            logger.warning("🚨 CORREÇÃO DETECTADA: Ignorando extração de entidades")
+            entidades = {
+                "clientes": [],
+                "grupos_empresariais": [],
+                "produtos": [],
+                "localidades": [],
+                "documentos": [],
+                "status": [],
+                "pessoas": [],
+                "valores": []
+            }
+        else:
+            entidades = self._extrair_entidades_negocio(consulta_normalizada)
         
         # 6. Análise temporal
         escopo_temporal = self._analisar_escopo_temporal(consulta_normalizada)
@@ -448,7 +483,24 @@ class IntelligentQueryAnalyzer:
         
         pontuacoes = {}
         
-        # 🎯 PRIORIDADE 1: FATURAMENTO - Detectar primeiro palavras de faturamento
+        # 💰 PRIORIDADE 1: VALOR/FATURAMENTO - Detectar primeiro consultas sobre valores monetários
+        padroes_valor = [
+            r"\bquanto\s+fatur",               # "quanto faturou", "quanto faturamos"
+            r"\bquanto\s+vend",                # "quanto vendeu", "quanto vendemos"
+            r"\bquanto\s+foi\s+o\s+faturamento", # "quanto foi o faturamento"
+            r"\bvalor\s+(?:total|faturado)",   # "valor total", "valor faturado"
+            r"\bfaturamento\s+(?:total|de|do)", # "faturamento total", "faturamento de"
+            r"\breceita",                      # "receita"
+            r"\bR\$",                          # "R$"
+            r"\bquanto\s+(?:foi|gerou|rendeu)" # "quanto foi", "quanto gerou"
+        ]
+        
+        for pattern in padroes_valor:
+            if re.search(pattern, consulta, re.IGNORECASE):
+                logger.info(f"💰 VALOR/FATURAMENTO detectado: padrão '{pattern}'")
+                return TipoInformacao.VALOR
+        
+        # 🎯 PRIORIDADE 2: FATURAMENTO GERAL - Manter compatibilidade
         padroes_faturamento = [
             r"\bfaturad[oa]s?\b",              # "faturado", "faturada", "faturados"
             r"\bfaturamento\b",                # "faturamento"
@@ -463,9 +515,13 @@ class IntelligentQueryAnalyzer:
         for pattern in padroes_faturamento:
             if re.search(pattern, consulta, re.IGNORECASE):
                 logger.info(f"💰 FATURAMENTO detectado: padrão '{pattern}'")
-                return TipoInformacao.STATUS  # Faturamento é um tipo de status/informação
+                # Se tem "quanto" junto, é VALOR, senão é STATUS
+                if "quanto" in consulta.lower():
+                    return TipoInformacao.VALOR
+                else:
+                    return TipoInformacao.STATUS
         
-        # 🔧 PRIORIDADE 2: STATUS - Priorizar padrões específicos de STATUS sobre LOCALIZACAO
+        # 🔧 PRIORIDADE 3: STATUS - Priorizar padrões específicos de STATUS sobre LOCALIZACAO
         padroes_status_prioritarios = [
             r"como\s+está(?:o|ão|m)?\s+(?:os?|as?)\s+\w+",  # "como estão os embarques"
             r"como\s+anda(?:m)?\s+(?:os?|as?)\s+\w+",       # "como andam as entregas"
@@ -480,7 +536,7 @@ class IntelligentQueryAnalyzer:
                 logger.info(f"🎯 PADRÃO STATUS PRIORITÁRIO detectado: {pattern}")
                 return TipoInformacao.STATUS
         
-        # 🔧 PRIORIDADE 3: EMBARQUES - Detectar padrões de EMBARQUES especificamente
+        # 🔧 PRIORIDADE 4: EMBARQUES - Detectar padrões de EMBARQUES especificamente
         if re.search(r"\bembarques?\b", consulta, re.IGNORECASE):
             # Se menciona "embarques", é provável que seja STATUS ou LISTAGEM
             if any(palavra in consulta.lower() for palavra in ["como", "status", "situação", "estão", "está"]):
@@ -532,6 +588,13 @@ class IntelligentQueryAnalyzer:
                 pontuacoes[TipoInformacao.LOCALIZACAO] = pontuacoes[TipoInformacao.LOCALIZACAO] * 0.01
                 logger.info("⬇️ LOCALIZACAO drasticamente penalizada: sem palavras explícitas de localização")
         
+        # 🔧 CORREÇÃO: Evitar confusão entre VALOR e PREVISAO
+        if TipoInformacao.PREVISAO in pontuacoes and TipoInformacao.VALOR in pontuacoes:
+            # Se tem "quanto" + verbo no passado, é VALOR, não PREVISAO
+            if re.search(r"\bquanto\s+(?:foi|faturou|vendeu|gerou)", consulta, re.IGNORECASE):
+                del pontuacoes[TipoInformacao.PREVISAO]
+                logger.info("❌ PREVISAO removida: 'quanto' + verbo passado = VALOR")
+        
         # Se não detectou nenhuma intenção específica ou dicionário ficou vazio, usar heurísticas
         if not pontuacoes:
             if any(palavra in consulta for palavra in ["?", "como", "qual"]):
@@ -554,6 +617,7 @@ class IntelligentQueryAnalyzer:
         palavras_chave = {
             TipoInformacao.LISTAGEM: ["lista", "todos", "todas", "ver", "mostre"],
             TipoInformacao.QUANTIDADE: ["total", "soma", "contagem", "número"],
+            TipoInformacao.VALOR: ["faturou", "vendeu", "receita", "dinheiro", "reais", "R$", "montante", "valor"],
             TipoInformacao.STATUS: ["situação", "andamento", "progresso", "está"],
             TipoInformacao.HISTORICO: ["histórico", "antes", "passado", "evolução"],
             TipoInformacao.COMPARACAO: ["vs", "versus", "diferença", "comparação"],
@@ -699,6 +763,34 @@ class IntelligentQueryAnalyzer:
             "data_fim": None,
             "descricao": "Últimos 30 dias (padrão)"
         }
+        
+        consulta_lower = consulta.lower()
+        
+        # 📅 PRIORIDADE 1: Detectar "hoje" explicitamente
+        if re.search(r'\b(?:hoje|hj)\b', consulta_lower):
+            hoje = datetime.now().date()
+            escopo.update({
+                "tipo": "data_especifica",
+                "data_inicio": hoje,
+                "data_fim": hoje,
+                "periodo_dias": 1,
+                "descricao": "Hoje"
+            })
+            logger.info("📅 Período detectado: HOJE")
+            return escopo
+        
+        # 📅 PRIORIDADE 2: Detectar "ontem"
+        if re.search(r'\b(?:ontem)\b', consulta_lower):
+            ontem = datetime.now().date() - timedelta(days=1)
+            escopo.update({
+                "tipo": "data_especifica",
+                "data_inicio": ontem,
+                "data_fim": ontem,
+                "periodo_dias": 1,
+                "descricao": "Ontem"
+            })
+            logger.info("📅 Período detectado: ONTEM")
+            return escopo
         
         # Verificar padrões absolutos
         for pattern, info in self.padroes_temporais["absolutos"].items():
@@ -948,6 +1040,7 @@ class IntelligentQueryAnalyzer:
         instrucoes_especificas = {
             TipoInformacao.LISTAGEM: "Forneça uma lista organizada com os dados solicitados",
             TipoInformacao.QUANTIDADE: "Foque nos números e totais. Inclua percentuais quando relevante",
+            TipoInformacao.VALOR: "Apresente os valores monetários em R$ de forma clara. Inclua totais, médias e análises financeiras relevantes",
             TipoInformacao.STATUS: "Apresente a situação atual de forma clara e objetiva",
             TipoInformacao.PROBLEMAS: "Identifique problemas e sugira ações corretivas",
             TipoInformacao.METRICAS: "Inclua indicadores de performance e comparações",

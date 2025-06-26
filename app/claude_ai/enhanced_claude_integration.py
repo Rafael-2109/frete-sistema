@@ -267,6 +267,7 @@ Responda de forma DIRETA e ACIONÁVEL:
         icones_intencao = {
             TipoInformacao.LISTAGEM: "📋",
             TipoInformacao.QUANTIDADE: "🔢",
+            TipoInformacao.VALOR: "💰",
             TipoInformacao.STATUS: "📊",
             TipoInformacao.HISTORICO: "📈",
             TipoInformacao.PROBLEMAS: "⚠️",

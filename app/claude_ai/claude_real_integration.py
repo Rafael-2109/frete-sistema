@@ -584,7 +584,9 @@ Por favor, forneça uma resposta completa incluindo:
             ],
             "faturamento": [
                 "fatura", "faturado", "nota fiscal", "nf", "origem", "relatório",
-                "importado", "valor nf", "cliente faturamento", "status fatura"
+                "importado", "valor nf", "cliente faturamento", "status fatura",
+                "quanto faturou", "valor faturado", "receita", "vendas", "faturamento total",
+                "total faturado", "R$", "reais", "montante faturado", "valor total"
             ],
             "financeiro": [
                 "pendência", "pendente", "despesa extra", "documento", "vencimento",
@@ -597,18 +599,30 @@ Por favor, forneça uma resposta completa incluindo:
             ]
         }
         
-        # ✅ CORREÇÃO: Detectar domínio baseado nas palavras-chave (MELHORADO)
-        pontuacao_dominios = {}
-        for dominio, palavras in dominios.items():
-            pontos = 0
-            for palavra in palavras:
-                # 🔧 CORREÇÃO: Busca por palavra completa para evitar falsos positivos
-                if re.search(rf'\b{re.escape(palavra)}\b', consulta_lower):
-                    pontos += 2  # Peso maior para matches de palavra completa
-                elif palavra in consulta_lower:
-                    pontos += 1  # Peso menor para matches parciais
-            if pontos > 0:
-                pontuacao_dominios[dominio] = pontos
+        # 💰 PRIORIDADE ESPECIAL: Se tem "quanto faturou" ou similar, forçar domínio faturamento
+        padroes_faturamento_prioritarios = [
+            r"\bquanto\s+fatur", r"\bvalor\s+fatur", r"\bfaturamento\s+total",
+            r"\btotal\s+faturado", r"\breceita", r"\bvendas\s+total"
+        ]
+        
+        for padrao in padroes_faturamento_prioritarios:
+            if re.search(padrao, consulta_lower, re.IGNORECASE):
+                pontuacao_dominios = {"faturamento": 100}  # Força máxima para faturamento
+                logger.info(f"💰 DOMÍNIO FORÇADO: faturamento (padrão prioritário: {padrao})")
+                break
+        else:
+            # ✅ CORREÇÃO: Detectar domínio baseado nas palavras-chave (MELHORADO)
+            pontuacao_dominios = {}
+            for dominio, palavras in dominios.items():
+                pontos = 0
+                for palavra in palavras:
+                    # 🔧 CORREÇÃO: Busca por palavra completa para evitar falsos positivos
+                    if re.search(rf'\b{re.escape(palavra)}\b', consulta_lower):
+                        pontos += 2  # Peso maior para matches de palavra completa
+                    elif palavra in consulta_lower:
+                        pontos += 1  # Peso menor para matches parciais
+                if pontos > 0:
+                    pontuacao_dominios[dominio] = pontos
         
         # 🎯 CORREÇÃO ESPECÍFICA: Priorizar "embarques" quando mencionado explicitamente
         if "embarque" in consulta_lower or "embarques" in consulta_lower:
