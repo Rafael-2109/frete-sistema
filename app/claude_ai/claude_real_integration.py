@@ -8,13 +8,13 @@ import os
 import anthropic
 import logging
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta, date
-import json
 from flask_login import current_user
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_, or_, text
 from app import db
 from .sistema_real_data import get_sistema_real_data
+import json
 
 # Configurar logger
 logger = logging.getLogger(__name__)
@@ -125,7 +125,7 @@ class ClaudeRealIntegration:
 
 🎯 **OBJETIVO**: Ser um analista de dados preciso, não um assistente genérico."""
     
-    def processar_consulta_real(self, consulta: str, user_context: Dict = None) -> str:
+    def processar_consulta_real(self, consulta: str, user_context: Optional[Dict] = None) -> str:
         """Processa consulta usando Claude REAL com contexto inteligente e MEMÓRIA CONVERSACIONAL"""
         
         if not self.modo_real:
@@ -158,41 +158,54 @@ class ClaudeRealIntegration:
             # Obter alguns exemplos de padrões aprendidos
             padroes_exemplos = []
             try:
-                from app import db
-                from app.claude_ai.lifelong_learning import AILearningPattern
-                
-                # ✅ CORREÇÃO: Usar ORM ao invés de SQL puro
-                padroes = AILearningPattern.query.order_by(
-                    AILearningPattern.criado_em.desc()
-                ).limit(5).all()
+                # Buscar padrões diretamente via SQL (não existe classe AILearningPattern)
+                padroes = db.session.execute(
+                    text("""
+                        SELECT consulta_original, interpretacao_inicial, confianca
+                        FROM ai_learning_history
+                        WHERE interpretacao_inicial IS NOT NULL
+                        ORDER BY criado_em DESC
+                        LIMIT 5
+                    """)
+                ).fetchall()
                 
                 for padrao in padroes:
-                    padroes_exemplos.append({
-                        'consulta': padrao.consulta_original[:50] + '...' if len(padrao.consulta_original) > 50 else padrao.consulta_original,
-                        'interpretacao': padrao.interpretacao,
-                        'confianca': padrao.confianca
-                    })
+                    try:
+                        interpretacao = json.loads(padrao.interpretacao_inicial) if padrao.interpretacao_inicial else {}
+                        padroes_exemplos.append({
+                            'consulta': padrao.consulta_original[:50] + '...' if len(padrao.consulta_original) > 50 else padrao.consulta_original,
+                            'interpretacao': interpretacao,
+                            'confianca': padrao.confianca or 0.8
+                        })
+                    except:
+                        pass
             except Exception as e:
                 logger.error(f"Erro ao buscar padrões: {e}")
             
             # Buscar grupos empresariais conhecidos
             grupos_conhecidos = []
             try:
-                from app.claude_ai.lifelong_learning import AIGrupoEmpresarialMapping
-                
-                # ✅ CORREÇÃO: Usar ORM ao invés de SQL puro
-                grupos = AIGrupoEmpresarialMapping.query.filter_by(
-                    ativo=True
-                ).order_by(
-                    AIGrupoEmpresarialMapping.criado_em.desc()
-                ).all()
+                # Buscar grupos diretamente via SQL (não existe classe AIGrupoEmpresarialMapping)
+                grupos = db.session.execute(
+                    text("""
+                        SELECT nome_grupo, tipo_negocio, cnpj_prefixos
+                        FROM ai_grupos_empresariais
+                        WHERE ativo = TRUE
+                        ORDER BY criado_em DESC
+                        LIMIT 10
+                    """)
+                ).fetchall()
                 
                 for grupo in grupos:
-                    grupos_conhecidos.append({
-                        'nome': grupo.grupo_nome,
-                        'tipo': grupo.tipo_negocio,
-                        'cnpjs': grupo.cnpj_prefixos[:2] if grupo.cnpj_prefixos else []  # Primeiros 2 CNPJs
-                    })
+                    try:
+                        cnpjs = grupo.cnpj_prefixos if isinstance(grupo.cnpj_prefixos, list) else []
+                        grupos_conhecidos.append({
+                            'nome': grupo.nome_grupo,
+                            'tipo': grupo.tipo_negocio,
+                            'cnpjs': cnpjs[:2] if cnpjs else []  # Primeiros 2 CNPJs
+                        })
+                    except:
+                        pass
             except Exception as e:
                 logger.error(f"Erro ao buscar grupos: {e}")
             
@@ -417,7 +430,7 @@ Não há entregas pendentes de agendamento no momento!
             # Verificar se consulta similar já foi processada
             resultado_cache = redis_cache.cache_consulta_claude(
                 consulta=consulta,  # Usar consulta original para cache
-                cliente=user_context.get('cliente_filter') if user_context else None,
+                cliente=user_context.get('cliente_filter', '') if user_context else '',
                 periodo_dias=30  # padrão
             )
             
@@ -549,7 +562,7 @@ Por favor, forneça uma resposta completa incluindo:
                 system=self.system_prompt.format(
                     dados_contexto_especifico=self._descrever_contexto_carregado(contexto_analisado)
                 ),
-                messages=messages
+                messages=messages  # type: ignore  # API Anthropic aceita esse formato
             )
             
             resultado = response.content[0].text
@@ -593,7 +606,7 @@ Por favor, forneça uma resposta completa incluindo:
             if REDIS_DISPONIVEL:
                 redis_cache.cache_consulta_claude(
                     consulta=consulta,  # Consulta original para cache
-                    cliente=user_context.get('cliente_filter') if user_context else None,
+                    cliente=user_context.get('cliente_filter', '') if user_context else '',
                     periodo_dias=contexto_analisado.get('periodo_dias', 30),
                     resultado=resposta_final,
                     ttl=300  # 5 minutos para respostas Claude
@@ -773,12 +786,12 @@ Por favor, forneça uma resposta completa incluindo:
             analise["dominios_solicitados"] = list(pontuacao_dominios.keys())
             analise["tipo_consulta"] = "multi_dominio"
             # Usar o domínio com maior pontuação como principal
-            dominio_principal = max(pontuacao_dominios, key=pontuacao_dominios.get)
+            dominio_principal = max(pontuacao_dominios.keys(), key=lambda k: pontuacao_dominios[k])
             analise["dominio"] = dominio_principal
             logger.info(f"🌐 MÚLTIPLOS DOMÍNIOS detectados: {list(pontuacao_dominios.keys())} | Principal: {dominio_principal}")
         elif pontuacao_dominios:
             # Domínio único detectado
-            dominio_detectado = max(pontuacao_dominios, key=pontuacao_dominios.get)
+            dominio_detectado = max(pontuacao_dominios.keys(), key=lambda k: pontuacao_dominios[k])
             analise["dominio"] = dominio_detectado
             logger.info(f"🎯 Domínio detectado: {dominio_detectado} (pontos: {pontuacao_dominios})")
         else:
@@ -1163,14 +1176,20 @@ Por favor, forneça uma resposta completa incluindo:
             else:
                 # Fallback sem Redis
                 stats_key = f"stats_{analise.get('cliente_especifico', 'geral')}_{analise.get('periodo_dias', 30)}"
-                if stats_key not in self._cache or (datetime.now().timestamp() - self._cache[stats_key]["timestamp"]) > self._cache_timeout:
-                    estatisticas = self._calcular_estatisticas_especificas(analise, filtros_usuario)
-                    self._cache[stats_key] = {
-                        "data": estatisticas,
-                        "timestamp": datetime.now().timestamp()
-                    }
+                
+                # Verificar se _cache é um dict (fallback mode)
+                if isinstance(self._cache, dict):
+                    if stats_key not in self._cache or (datetime.now().timestamp() - self._cache[stats_key]["timestamp"]) > self._cache_timeout:
+                        estatisticas = self._calcular_estatisticas_especificas(analise, filtros_usuario)
+                        self._cache[stats_key] = {
+                            "data": estatisticas,
+                            "timestamp": datetime.now().timestamp()
+                        }
+                    else:
+                        estatisticas = self._cache[stats_key]["data"]
                 else:
-                    estatisticas = self._cache[stats_key]["data"]
+                    # Se não for dict, calcular sempre (sem cache)
+                    estatisticas = self._calcular_estatisticas_especificas(analise, filtros_usuario)
             
             contexto["estatisticas"] = estatisticas
             
@@ -1428,14 +1447,14 @@ Por favor, forneça uma resposta completa incluindo:
             logger.error(f"❌ Erro ao carregar agendamentos: {e}")
             return {"erro": str(e)}
     
-    def _verificar_prazo_entrega(self, entrega) -> bool:
+    def _verificar_prazo_entrega(self, entrega) -> Optional[bool]:
         """Verifica se entrega foi realizada no prazo"""
         if not entrega.data_hora_entrega_realizada or not entrega.data_entrega_prevista:
             return None
         
         return entrega.data_hora_entrega_realizada.date() <= entrega.data_entrega_prevista
     
-    def _calcular_dias_atraso(self, entrega) -> int:
+    def _calcular_dias_atraso(self, entrega) -> Optional[int]:
         """Calcula dias de atraso da entrega"""
         if not entrega.data_hora_entrega_realizada or not entrega.data_entrega_prevista:
             return None
@@ -1772,7 +1791,7 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
             
         return False
     
-    def _processar_comando_excel(self, consulta: str, user_context: Dict = None) -> str:
+    def _processar_comando_excel(self, consulta: str, user_context: Optional[Dict] = None) -> str:
         """🧠 PROCESSAMENTO INTELIGENTE DE COMANDOS EXCEL - VERSÃO CORRIGIDA COM CONTEXTO"""
         try:
             from .excel_generator import get_excel_generator
@@ -2385,7 +2404,7 @@ Consulta recebida: "{consulta}"
 # Instância global
 claude_integration = ClaudeRealIntegration()
 
-def processar_com_claude_real(consulta: str, user_context: Dict = None) -> str:
+def processar_com_claude_real(consulta: str, user_context: Optional[Dict] = None) -> str:
     """Função pública para processar com Claude real"""
     return claude_integration.processar_consulta_real(consulta, user_context)
 

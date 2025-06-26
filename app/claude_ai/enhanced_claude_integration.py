@@ -38,7 +38,7 @@ class EnhancedClaudeIntegration:
         
         logger.info("🚀 Integração Claude Melhorada inicializada com IA de entendimento")
     
-    def processar_consulta_inteligente(self, consulta: str, user_context: Dict = None) -> Dict[str, Any]:
+    def processar_consulta_inteligente(self, consulta: str, user_context: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Processa consulta com análise inteligente ANTES de enviar ao Claude
         
@@ -54,7 +54,7 @@ class EnhancedClaudeIntegration:
         
         # 1. ANÁLISE INTELIGENTE DA CONSULTA
         interpretacao = self.intelligent_analyzer.analisar_consulta_inteligente(
-            consulta, user_context
+            consulta, user_context or {}
         )
         
         # 2. VERIFICAR SE PRECISA DE ESCLARECIMENTO
@@ -144,7 +144,7 @@ class EnhancedClaudeIntegration:
             }
         }
     
-    def _processar_consulta_critica(self, interpretacao, user_context: Dict) -> Dict[str, Any]:
+    def _processar_consulta_critica(self, interpretacao, user_context: Optional[Dict] = None) -> Dict[str, Any]:
         """Processa consultas críticas com prioridade máxima"""
         
         logger.warning(f"🚨 Processando consulta CRÍTICA: {interpretacao.consulta_original}")
@@ -187,7 +187,7 @@ Responda de forma DIRETA e ACIONÁVEL:
             }
         }
     
-    def _otimizar_contexto_baseado_interpretacao(self, interpretacao, user_context: Dict) -> Dict[str, Any]:
+    def _otimizar_contexto_baseado_interpretacao(self, interpretacao, user_context: Optional[Dict] = None) -> Dict[str, Any]:
         """Otimiza o contexto baseado na interpretação inteligente"""
         
         contexto_otimizado = user_context.copy() if user_context else {}
@@ -345,7 +345,7 @@ Responda de forma DIRETA e ACIONÁVEL:
 # Instância global
 enhanced_claude = EnhancedClaudeIntegration()
 
-def processar_consulta_com_ia_avancada(consulta: str, user_context: Dict = None) -> str:
+def processar_consulta_com_ia_avancada(consulta: str, user_context: Optional[Dict] = None) -> str:
     """
     Função principal para processar consultas com IA avançada
     

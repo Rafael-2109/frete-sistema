@@ -68,7 +68,7 @@ class HumanInLoopLearning:
         
     def capture_feedback(self, query: str, response: str, user_feedback: str, 
                         feedback_type: str, severity: str = "medium", 
-                        context: Dict[str, Any] = None) -> str:
+                        context: Optional[Dict[str, Any]] = None) -> str:
         """Captura feedback do usuário sobre uma resposta"""
         
         try:
@@ -234,7 +234,7 @@ class HumanInLoopLearning:
         self.improvement_queue.append(improvement)
         logger.info(f"➕ Melhoria adicionada à fila: {pattern.pattern_type}")
     
-    def get_improvement_suggestions(self, priority_filter: str = None) -> List[Dict[str, Any]]:
+    def get_improvement_suggestions(self, priority_filter: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retorna sugestões de melhoria baseadas no aprendizado"""
         
         if priority_filter:
@@ -415,7 +415,7 @@ def get_human_learning_system() -> HumanInLoopLearning:
 
 def capture_user_feedback(query: str, response: str, feedback: str, 
                          feedback_type: str = "improvement", severity: str = "medium",
-                         context: Dict[str, Any] = None) -> str:
+                         context: Optional[Dict[str, Any]] = None) -> str:
     """Função helper para capturar feedback do usuário"""
     
     learning_system = get_human_learning_system()

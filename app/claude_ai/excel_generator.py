@@ -34,7 +34,12 @@ class ExcelGenerator:
             if self.output_dir is None:
                 # Inicializar diretório apenas quando necessário (dentro do contexto da aplicação)
                 from flask import current_app
-                self.output_dir = os.path.join(current_app.static_folder, 'reports')
+                if current_app and current_app.static_folder:
+                    self.output_dir = os.path.join(current_app.static_folder, 'reports')
+                else:
+                    # Fallback para diretório temporário
+                    import tempfile
+                    self.output_dir = os.path.join(tempfile.gettempdir(), 'reports')
             
             if not os.path.exists(self.output_dir):
                 os.makedirs(self.output_dir)
@@ -43,7 +48,7 @@ class ExcelGenerator:
             logger.error(f"Erro ao criar diretório de relatórios: {e}")
             # Fallback para diretório temporário se falhar
             import tempfile
-            self.output_dir = tempfile.gettempdir()
+            self.output_dir = os.path.join(tempfile.gettempdir(), 'reports')
     
     def gerar_relatorio_entregas_atrasadas(self, filtros=None):
         """Gera Excel com entregas atrasadas e agendamento pendente"""
@@ -99,7 +104,7 @@ class ExcelGenerator:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f'entregas_atrasadas_{timestamp}.xlsx'
             self._ensure_output_dir()  # Garantir que diretório existe
-            filepath = os.path.join(self.output_dir, filename)
+            filepath = os.path.join(str(self.output_dir), filename)
             
             # Criar Excel com formatação
             with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
@@ -197,7 +202,7 @@ class ExcelGenerator:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f'relatorio_{cliente.replace(" ", "_")}_{timestamp}.xlsx'
             self._ensure_output_dir()  # Garantir que diretório existe
-            filepath = os.path.join(self.output_dir, filename)
+            filepath = os.path.join(str(self.output_dir), filename)
             
             with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
                 # Aba: Entregas
@@ -417,7 +422,7 @@ class ExcelGenerator:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f'entregas_pendentes_{timestamp}.xlsx'
             self._ensure_output_dir()  # Garantir que diretório existe
-            filepath = os.path.join(self.output_dir, filename)
+            filepath = os.path.join(str(self.output_dir), filename)
             
             # Criar Excel com formatação
             with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
@@ -627,7 +632,7 @@ class ExcelGenerator:
                 filename = f'entregas_finalizadas_{cliente_safe}_{timestamp}.xlsx'
                 
             self._ensure_output_dir()
-            filepath = os.path.join(self.output_dir, filename)
+            filepath = os.path.join(str(self.output_dir), filename)
             
             # Criar Excel com formatação
             with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
@@ -846,7 +851,7 @@ class ExcelGenerator:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f'relatorio_vazio_{timestamp}.xlsx'
             self._ensure_output_dir()
-            filepath = os.path.join(self.output_dir, filename)
+            filepath = os.path.join(str(self.output_dir), filename)
             
             # Criar Excel simples
             with pd.ExcelWriter(filepath, engine='openpyxl') as writer:

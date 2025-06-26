@@ -327,7 +327,7 @@ class IntelligentQueryAnalyzer:
             ]
         }
     
-    def analisar_consulta_inteligente(self, consulta: str, contexto_usuario: Dict[str, Any] = None) -> InterpretacaoConsulta:
+    def analisar_consulta_inteligente(self, consulta: str, contexto_usuario: Optional[Dict[str, Any]] = None) -> InterpretacaoConsulta:
         """
         Análise inteligente completa da consulta do usuário
         

@@ -18,7 +18,7 @@ class ConversationMessage:
     role: str  # 'user' ou 'assistant'
     content: str
     timestamp: str
-    metadata: Dict[str, Any] = None
+    metadata: Optional[Dict[str, Any]] = None
     
     def to_dict(self):
         return asdict(self)
@@ -46,7 +46,7 @@ class ConversationContext:
         """Gera chave única para contexto do usuário no Redis"""
         return f"conversation_context:{user_id}"
     
-    def add_message(self, user_id: str, role: str, content: str, metadata: Dict[str, Any] = None) -> bool:
+    def add_message(self, user_id: str, role: str, content: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
         """
         Adiciona nova mensagem ao contexto da conversa
         

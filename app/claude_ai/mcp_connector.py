@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class MCPSistemaOnline:
     """Conector MCP otimizado para sistema online baseado no que funcionou"""
     
-    def __init__(self, app_root_path: str = None):
+    def __init__(self, app_root_path: Optional[str] = None):
         self.app_root_path = app_root_path or os.getcwd()
         self.timeout = 15
         logger.info("🚀 MCPSistemaOnline inicializado com timeout %ds", self.timeout)
@@ -106,7 +106,7 @@ class MCPSistemaOnline:
                 'source': 'ERROR'
             }
     
-    def _executar_ferramenta(self, tool_name: str, args: Dict[str, Any] = None) -> dict:
+    def _executar_ferramenta(self, tool_name: str, args: Optional[Dict[str, Any]] = None) -> dict:
         """Executa ferramenta MCP web"""
         try:
             if not MCP_WEB_AVAILABLE:
@@ -147,7 +147,7 @@ class MCPSistemaOnline:
             logger.error(f"Erro executando ferramenta {tool_name}: {e}")
             return self._fallback_response(tool_name, args)
     
-    def _fallback_response(self, tool_name: str, args: Dict[str, Any] = None) -> dict:
+    def _fallback_response(self, tool_name: str, args: Optional[Dict[str, Any]] = None) -> dict:
         """Resposta de fallback quando MCP não disponível"""
         fallback_responses = {
             'status_sistema': """🚀 **SISTEMA DE FRETES - MODO FALLBACK**

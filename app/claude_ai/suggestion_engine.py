@@ -22,7 +22,7 @@ class Suggestion:
     icon: str
     description: str
     user_profiles: List[str]  # Perfis que podem ver esta sugestão
-    context_keywords: List[str] = None  # Palavras-chave que ativam esta sugestão
+    context_keywords: Optional[List[str]] = None  # Palavras-chave que ativam esta sugestão
     
     def to_dict(self):
         return {
@@ -253,7 +253,22 @@ class SuggestionEngine:
             final_suggestions = prioritized[:6]
             
             # Converter para dict
-            return [s.to_dict() if hasattr(s, 'to_dict') else s for s in final_suggestions]
+            result = []
+            for s in final_suggestions:
+                if isinstance(s, Suggestion):
+                    result.append(s.to_dict())
+                else:
+                    # Fallback case - shouldn't happen
+                    result.append({
+                        "text": str(s),
+                        "category": "unknown",
+                        "priority": 1,
+                        "icon": "❓",
+                        "description": "Sugestão",
+                        "user_profiles": [],
+                        "context_keywords": []
+                    })
+            return result
             
         except Exception as e:
             logger.error(f"❌ Erro ao gerar sugestões: {e}")

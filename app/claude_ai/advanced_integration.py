@@ -488,7 +488,7 @@ class AdvancedAIIntegration:
         self.session_tags = {}
         self.advanced_metadata = {}
         
-    async def process_advanced_query(self, query: str, user_context: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def process_advanced_query(self, query: str, user_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Processa consulta usando todas as estratégias avançadas"""
         
         start_time = datetime.now()
@@ -504,7 +504,7 @@ class AdvancedAIIntegration:
             
             # FASE 2: Processamento Multi-Agent
             logger.info("🤖 FASE 2: Sistema Multi-Agent")
-            multi_agent_result = await self.multi_agent.process_query(refined_query, user_context)
+            multi_agent_result = await self.multi_agent.process_query(refined_query, user_context or {})
             
             # FASE 3: Validação Estrutural
             logger.info("🏗️ FASE 3: Validação Estrutural")

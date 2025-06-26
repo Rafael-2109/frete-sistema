@@ -455,7 +455,7 @@ class MultiAgentSystem:
         # Histórico de operações
         self.operation_history = []
         
-    async def process_query(self, query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def process_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Processa consulta usando sistema multi-agente"""
         
         start_time = datetime.now()

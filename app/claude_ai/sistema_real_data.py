@@ -322,9 +322,11 @@ class SistemaRealData:
         
         # Adicionar informações detalhadas dos modelos
         for nome_modelo, info_modelo in modelos_reais.items():
-            if 'campos' in info_modelo:
-                campos_nomes = [campo['nome'] for campo in info_modelo['campos']]
-                prompt += f"""
+            if isinstance(info_modelo, dict) and 'campos' in info_modelo:
+                campos_info = info_modelo.get('campos', [])
+                if isinstance(campos_info, list):
+                    campos_nomes = [campo['nome'] for campo in campos_info if isinstance(campo, dict) and 'nome' in campo]
+                    prompt += f"""
 **{nome_modelo}** (Tabela: {info_modelo.get('tabela_banco', 'N/A')}):
 • Campos: {', '.join(campos_nomes)}
 • Relacionamentos: {len(info_modelo.get('relacionamentos', []))}"""

@@ -11,7 +11,19 @@ from .mcp_connector import MCPSistemaOnline
 from . import claude_ai_bp
 from app.utils.auth_decorators import require_admin
 from .claude_real_integration import processar_com_claude_real
-from .input_validator import InputValidator
+
+# Import do InputValidator com fallback
+# NOTA: O Pylance pode reportar um falso positivo aqui sobre o import não resolvido.
+# Isso ocorre porque o Pylance tem dificuldade com imports relativos em Flask blueprints.
+# O import funciona corretamente quando executado pelo Flask - testado em testar_import_validator.py
+try:
+    from .input_validator import InputValidator  # type: ignore[import]
+except ImportError:
+    # Fallback se o arquivo não for encontrado
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    from input_validator import InputValidator  # Import absoluto no fallback
 
 # Configurar logger
 logger = logging.getLogger(__name__)
@@ -32,12 +44,6 @@ except ImportError:
     CONTEXT_AVAILABLE = False
     logger.warning("Contexto conversacional não disponível")
 
-# Importar MCP v4.0 Server
-try:
-    from .mcp_v4_server import mcp_v4_server, process_query
-    MCP_V4_AVAILABLE = True
-except ImportError:
-    MCP_V4_AVAILABLE = False
 
 # Importar Redis cache se disponível
 try:
@@ -1159,7 +1165,7 @@ def processar_comando_excel():
             'resposta_formatada': f"❌ Erro interno ao gerar Excel: {str(e)}"
         }), 500 
 
-@claude_ai_bp.route('/download/<filename>')
+@claude_ai_bp.route('/download/<filename>')  # type: ignore[misc]
 @login_required
 def download_excel(filename):
     """Download de arquivos Excel gerados pelo Claude AI"""
@@ -1170,8 +1176,14 @@ def download_excel(filename):
         
         # Verificar se arquivo existe
         excel_generator = get_excel_generator()
-        excel_generator._ensure_output_dir()
-        file_path = os.path.join(excel_generator.output_dir, filename)
+        
+        # Garantir que output_dir existe
+        if not hasattr(excel_generator, 'output_dir') or not excel_generator.output_dir:
+            excel_generator._ensure_output_dir()
+        
+        # Forçar tipo string para o diretório
+        output_dir = str(excel_generator.output_dir) if excel_generator.output_dir else '/tmp'
+        file_path = os.path.join(output_dir, filename)
         
         if not os.path.exists(file_path):
             logger.warning(f"❌ Arquivo não encontrado: {filename}")
@@ -1228,6 +1240,8 @@ def api_advanced_query():
         
         # Processar consulta avançada (assíncrona)
         import asyncio
+        
+        # Verificar se é coroutine ANTES de processar
         if asyncio.iscoroutinefunction(advanced_ai.process_advanced_query):
             # Se estamos em contexto assíncrono
             try:
@@ -1244,19 +1258,21 @@ def api_advanced_query():
                 # Fallback para sync
                 result = asyncio.run(advanced_ai.process_advanced_query(consulta, user_context))
         else:
+            # Se não é coroutine, chamar diretamente
             result = advanced_ai.process_advanced_query(consulta, user_context)
         
-        if result['success']:
-            logger.info(f"✅ CONSULTA AVANÇADA processada com sucesso: {result['session_id']}")
+        # Agora result é um dict, não uma Coroutine
+        if result and isinstance(result, dict) and result.get('success'):
+            logger.info(f"✅ CONSULTA AVANÇADA processada com sucesso: {result.get('session_id', 'N/A')}")
             return jsonify({
                 'success': True,
-                'session_id': result['session_id'],
-                'response': result['response'],
+                'session_id': result.get('session_id', ''),
+                'response': result.get('response', ''),
                 'metadata': {
-                    'processing_time': result['metadata']['processing_time'],
-                    'confidence_score': result['metadata']['confidence_score'],
-                    'semantic_refinements': result['metadata']['semantic_refinements'],
-                    'session_tags': result['metadata']['session_tags']
+                    'processing_time': result.get('metadata', {}).get('processing_time', 0),
+                    'confidence_score': result.get('metadata', {}).get('confidence_score', 0),
+                    'semantic_refinements': result.get('metadata', {}).get('semantic_refinements', 0),
+                    'session_tags': result.get('metadata', {}).get('session_tags', [])
                 },
                 'advanced_features': {
                     'multi_agent_used': True,
@@ -1268,7 +1284,7 @@ def api_advanced_query():
         else:
             return jsonify({
                 'success': False,
-                'error': result.get('error', 'Erro no processamento avançado'),
+                'error': result.get('error', 'Erro no processamento avançado') if isinstance(result, dict) else 'Erro no processamento',
                 'fallback_available': True
             }), 500
             
@@ -1657,8 +1673,14 @@ def api_metricas_reais():
             """)
             uptime_result = db.session.execute(uptime_query).fetchone()
             
-            # Calcular uptime aproximado baseado na atividade
-            dias_ativos = uptime_result[1] if uptime_result[1] else 1
+            # Verificar se há resultado antes de acessar índices
+            if uptime_result:
+                dias_ativos = uptime_result[1] if uptime_result[1] else 1
+                total_registros = uptime_result[0] if uptime_result[0] else 0
+            else:
+                dias_ativos = 1
+                total_registros = 0
+                
             uptime_percentual = (dias_ativos / 7) * 100
             
             # Usuários ativos hoje
@@ -1669,12 +1691,12 @@ def api_metricas_reais():
                 AND u.ultimo_login >= CURRENT_DATE - INTERVAL '1 day'
             """)
             usuarios_ativos_result = db.session.execute(usuarios_ativos_query).fetchone()
-            usuarios_ativos = usuarios_ativos_result[0] if usuarios_ativos_result[0] else 0
+            usuarios_ativos = usuarios_ativos_result[0] if usuarios_ativos_result and usuarios_ativos_result[0] else 0
             
             metricas['sistema'] = {
                 'uptime_percentual': round(uptime_percentual, 1),
                 'usuarios_ativos_hoje': usuarios_ativos,
-                'registros_sistema_hoje': uptime_result[0] if uptime_result[0] else 0
+                'registros_sistema_hoje': total_registros
             }
         except Exception as e:
             logger.warning(f"Erro ao calcular métricas do sistema: {e}")
@@ -1730,16 +1752,16 @@ def api_metricas_reais():
             entregas_result = db.session.execute(entregas_hoje_query).fetchone()
             
             metricas['operacional'] = {
-                'pedidos_hoje': pedidos_result[0] if pedidos_result[0] else 0,
-                'pedidos_abertos': pedidos_result[1] if pedidos_result[1] else 0,
-                'valor_pedidos_hoje': float(pedidos_result[2]) if pedidos_result[2] else 0.0,
-                'embarques_ativos': embarques_result[0] if embarques_result[0] else 0,
-                'embarques_aguardando': embarques_result[1] if embarques_result[1] else 0,
-                'fretes_pendentes': fretes_result[0] if fretes_result[0] else 0,
-                'fretes_aprovados': fretes_result[1] if fretes_result[1] else 0,
-                'entregas_hoje': entregas_result[0] if entregas_result[0] else 0,
-                'entregas_concluidas': entregas_result[1] if entregas_result[1] else 0,
-                'entregas_atrasadas': entregas_result[2] if entregas_result[2] else 0
+                'pedidos_hoje': pedidos_result[0] if pedidos_result and pedidos_result[0] else 0,
+                'pedidos_abertos': pedidos_result[1] if pedidos_result and pedidos_result[1] else 0,
+                'valor_pedidos_hoje': float(pedidos_result[2]) if pedidos_result and pedidos_result[2] else 0.0,
+                'embarques_ativos': embarques_result[0] if embarques_result and embarques_result[0] else 0,
+                'embarques_aguardando': embarques_result[1] if embarques_result and embarques_result[1] else 0,
+                'fretes_pendentes': fretes_result[0] if fretes_result and fretes_result[0] else 0,
+                'fretes_aprovados': fretes_result[1] if fretes_result and fretes_result[1] else 0,
+                'entregas_hoje': entregas_result[0] if entregas_result and entregas_result[0] else 0,
+                'entregas_concluidas': entregas_result[1] if entregas_result and entregas_result[1] else 0,
+                'entregas_atrasadas': entregas_result[2] if entregas_result and entregas_result[2] else 0
             }
         except Exception as e:
             logger.warning(f"Erro ao calcular métricas operacionais: {e}")
@@ -1786,12 +1808,12 @@ def api_metricas_reais():
             patterns_result = db.session.execute(patterns_query).fetchone()
             
             metricas['claude_ai'] = {
-                'sessoes_hoje': sessoes_result[0] if sessoes_result[0] else 0,
-                'usuarios_ia_unicos': sessoes_result[1] if sessoes_result[1] else 0,
-                'confianca_media': float(sessoes_result[2]) if sessoes_result[2] else 0.0,
-                'total_feedbacks': feedback_result[0] if feedback_result[0] else 0,
-                'satisfacao_media': float(feedback_result[1]) if feedback_result[1] else 3.0,
-                'padroes_aprendizado': patterns_result[0] if patterns_result[0] else 0
+                'sessoes_hoje': sessoes_result[0] if sessoes_result and sessoes_result[0] else 0,
+                'usuarios_ia_unicos': sessoes_result[1] if sessoes_result and sessoes_result[1] else 0,
+                'confianca_media': float(sessoes_result[2]) if sessoes_result and sessoes_result[2] else 0.0,
+                'total_feedbacks': feedback_result[0] if feedback_result and feedback_result[0] else 0,
+                'satisfacao_media': float(feedback_result[1]) if feedback_result and feedback_result[1] else 3.0,
+                'padroes_aprendizado': patterns_result[0] if patterns_result and patterns_result[0] else 0
             }
         except Exception as e:
             logger.warning(f"Erro ao calcular métricas Claude AI: {e}")
@@ -1814,8 +1836,8 @@ def api_metricas_reais():
             """)
             eficiencia_result = db.session.execute(eficiencia_query).fetchone()
             
-            total_ops = eficiencia_result[0] if eficiencia_result[0] else 1
-            ops_sucesso = eficiencia_result[1] if eficiencia_result[1] else 0
+            total_ops = eficiencia_result[0] if eficiencia_result and eficiencia_result[0] else 1
+            ops_sucesso = eficiencia_result[1] if eficiencia_result and eficiencia_result[1] else 0
             taxa_sucesso = (ops_sucesso / total_ops) * 100
             
             metricas['performance'] = {

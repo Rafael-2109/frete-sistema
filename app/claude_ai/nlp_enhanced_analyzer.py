@@ -5,7 +5,7 @@ Melhora significativa no entendimento usando SpaCy e NLTK
 """
 
 import logging
-from typing import Dict, List, Set, Tuple, Optional
+from typing import Dict, List, Set, Tuple, Optional, Any
 from dataclasses import dataclass
 import re
 
@@ -154,7 +154,7 @@ class NLPEnhancedAnalyzer:
             sentimento=sentimento
         )
     
-    def _aplicar_correcoes(self, texto: str) -> Dict[str, any]:
+    def _aplicar_correcoes(self, texto: str) -> Dict[str, Any]:
         """Aplica correções ortográficas comuns"""
         texto_corrigido = texto
         correcoes_aplicadas = {}

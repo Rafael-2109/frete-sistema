@@ -287,7 +287,7 @@ class LifelongLearningSystem:
             return None
     
     def _processar_feedback(self, consulta: str, interpretacao: Dict, 
-                           resposta: str, feedback: Dict, usuario_id: int) -> List[Dict]:
+                           resposta: str, feedback: Dict, usuario_id: Optional[int]) -> List[Dict]:
         """Processa feedback do usuário e aprende com correções"""
         correcoes = []
         
@@ -568,11 +568,11 @@ class LifelongLearningSystem:
             stats = {
                 "total_padroes": total_padroes or 0,
                 "padroes_confiaveis": padroes_confiaveis or 0,
-                "taxa_confianca": (padroes_confiaveis / total_padroes * 100) if total_padroes > 0 else 0,
+                "taxa_confianca": (padroes_confiaveis / total_padroes * 100) if total_padroes and total_padroes > 0 else 0,
                 "total_grupos": total_grupos or 0,
                 "total_mapeamentos": total_mapeamentos or 0,
                 "aprendizado_semanal": aprendizado_recente or 0,
-                "status": "ativo" if aprendizado_recente > 0 else "inativo"
+                "status": "ativo" if aprendizado_recente and aprendizado_recente > 0 else "inativo"
             }
             
             return stats
