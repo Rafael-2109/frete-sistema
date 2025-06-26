@@ -280,7 +280,7 @@ def inserir_dados_iniciais():
                     text("""
                         INSERT INTO ai_knowledge_patterns 
                         (pattern_type, pattern_text, interpretation, confidence, created_by)
-                        VALUES (:tipo, :texto, :interp::jsonb, :conf, 'sistema')
+                        VALUES (:tipo, :texto, CAST(:interp AS jsonb), :conf, 'sistema')
                         ON CONFLICT (pattern_type, pattern_text) DO UPDATE SET
                             interpretation = EXCLUDED.interpretation,
                             confidence = EXCLUDED.confidence
@@ -360,4 +360,4 @@ def verificar_resultado():
 
 if __name__ == "__main__":
     corrigir_campo_ativo()
-    verificar_resultado() 
+    # verificar_resultado() já é chamado dentro de corrigir_campo_ativo() quando apropriado 
