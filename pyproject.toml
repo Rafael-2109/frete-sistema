@@ -1,56 +1,20 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "frete-sistema"
 version = "1.0.0"
-description = "Sistema de Fretes com MCP Avançado"
+description = "Sistema de Gestão de Fretes"
 readme = "README.md"
-requires-python = ">=3.11"
-dependencies = [
-    "flask>=2.3.0",
-    "flask-sqlalchemy>=3.0.0",
-    "flask-login>=0.6.0",
-    "flask-wtf>=1.1.0",
-    "wtforms>=3.0.0",
-    "requests>=2.31.0",
-    "mcp>=1.0.0"
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
-    "mypy>=1.5.0"
-]
-
-[tool.setuptools]
-packages = ["app", "mcp", "mcp.mcp_avancado", "mcp.mcp_avancado.connectors", "mcp.mcp_avancado.tools", "mcp.mcp_avancado.core"]
-
-[tool.setuptools.package-dir]
-"mcp.mcp_avancado" = "mcp/mcp_avancado"
-"mcp.mcp_avancado.connectors" = "mcp/mcp_avancado/connectors"
-"mcp.mcp_avancado.tools" = "mcp/mcp_avancado/tools"
-"mcp.mcp_avancado.core" = "mcp/mcp_avancado/core"
+requires-python = ">=3.8"
 
 [tool.black]
-line-length = 88
-target-version = ['py311']
+line-length = 120
+target-version = ['py38']
+include = '\.pyi?$'
 
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-
-[[tool.mypy.overrides]]
-module = "mcp.*"
-ignore_missing_imports = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_classes = "Test*"
-python_functions = "test_*" 
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 120

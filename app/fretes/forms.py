@@ -3,6 +3,11 @@ from flask_wtf.file import FileField, FileAllowed
 from wtforms import StringField, FloatField, DateField, SelectField, TextAreaField, BooleanField, IntegerField, SubmitField
 from wtforms.validators import DataRequired, Optional, NumberRange, Length, ValidationError
 from app.fretes.models import DespesaExtra
+from app.utils.valores_brasileiros import validar_valor_brasileiro
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from wtforms.fields.core import UnboundField
 
 class FreteForm(FlaskForm):
     """Formulário para registro de frete"""
@@ -27,44 +32,32 @@ class FreteForm(FlaskForm):
     submit = SubmitField('Salvar Frete')
     
     def validate_valor_cte(self, field):
-        """Valida e converte valor com vírgula para float"""
+        """Valida valor CTe em formato brasileiro"""
         if field.data:
-            try:
-                # Remove pontos (milhares) e substitui vírgula por ponto (decimal)
-                valor_limpo = field.data.replace('.', '').replace(',', '.')
-                valor_float = float(valor_limpo)
-                if valor_float < 0:
-                    raise ValueError("Valor deve ser positivo")
-            except ValueError:
-                raise ValidationError('Valor inválido. Use formato: 1.234,56')
+            is_valid, error_msg = validar_valor_brasileiro(field.data)
+            if not is_valid:
+                raise ValidationError(error_msg)
     
     def validate_valor_considerado(self, field):
-        """Valida e converte valor com vírgula para float"""
+        """Valida valor considerado em formato brasileiro"""
         if field.data:
-            try:
-                valor_limpo = field.data.replace('.', '').replace(',', '.')
-                valor_float = float(valor_limpo)
-                if valor_float < 0:
-                    raise ValueError("Valor deve ser positivo")
-            except ValueError:
-                raise ValidationError('Valor inválido. Use formato: 1.234,56')
+            is_valid, error_msg = validar_valor_brasileiro(field.data)
+            if not is_valid:
+                raise ValidationError(error_msg)
     
     def validate_valor_pago(self, field):
-        """Valida e converte valor com vírgula para float"""
+        """Valida valor pago em formato brasileiro"""
         if field.data:
-            try:
-                valor_limpo = field.data.replace('.', '').replace(',', '.')
-                valor_float = float(valor_limpo)
-                if valor_float < 0:
-                    raise ValueError("Valor deve ser positivo")
-            except ValueError:
-                raise ValidationError('Valor inválido. Use formato: 1.234,56')
+            is_valid, error_msg = validar_valor_brasileiro(field.data)
+            if not is_valid:
+                raise ValidationError(error_msg)
 
 class FaturaFreteForm(FlaskForm):
     """Formulário para cadastro de fatura de frete"""
     numero_fatura = StringField('Número da Fatura', validators=[DataRequired(), Length(max=50)])
     data_emissao = DateField('Data de Emissão', validators=[DataRequired()])
-    valor_total_fatura = FloatField('Valor Total da Fatura', validators=[DataRequired(), NumberRange(min=0)])
+    valor_total_fatura = StringField('Valor Total da Fatura', validators=[DataRequired()],
+                                   description='Use vírgula como separador decimal (ex: 1.234,56)')
     vencimento = DateField('Vencimento', validators=[Optional()])
     
     # Upload do PDF
@@ -76,6 +69,13 @@ class FaturaFreteForm(FlaskForm):
     observacoes_conferencia = TextAreaField('Observações da Conferência')
     
     submit = SubmitField('Salvar Fatura')
+    
+    def validate_valor_total_fatura(self, field):
+        """Valida valor total da fatura em formato brasileiro"""
+        if field.data:
+            is_valid, error_msg = validar_valor_brasileiro(field.data)
+            if not is_valid:
+                raise ValidationError(error_msg)
 
 class ConferenciaFaturaForm(FlaskForm):
     """Formulário para conferência de fatura"""
@@ -184,6 +184,7 @@ class FiltroFretesForm(FlaskForm):
     nome_cliente = StringField('Nome do Cliente')
     numero_cte = StringField('Número CTe')
     numero_fatura = StringField('Número da Fatura')
+    numero_nf = StringField('Número da NF', description='Busca nos fretes que contêm esta NF')
     transportadora_id = SelectField('Transportadora', 
                                   choices=[],  # Será populado dinamicamente
                                   coerce=lambda x: x if x else None)
@@ -250,3 +251,31 @@ class LancamentoFreteirosForm(FlaskForm):
     data_vencimento = DateField('Data de Vencimento', validators=[DataRequired()])
     observacoes = TextAreaField('Observações')
     submit = SubmitField('Emitir Fatura')
+
+class FiltroFreteirosForm(FlaskForm):
+    """Formulário para filtros na listagem de freteiros"""
+    transportadora_id = SelectField('Transportadora', 
+                                  choices=[],  # Será populado dinamicamente
+                                  coerce=lambda x: x if x else None)
+    submit = SubmitField('Filtrar')
+
+class FiltroFaturasForm(FlaskForm):
+    """Formulário para filtros na listagem de faturas"""
+    numero_fatura = StringField('Número da Fatura')
+    transportadora_id = SelectField('Transportadora', 
+                                  choices=[],  # Será populado dinamicamente
+                                  coerce=lambda x: x if x else None)
+    numero_nf = StringField('Número da NF', description='Busca faturas que contêm fretes com esta NF')
+    status_conferencia = SelectField('Status',
+                                   choices=[
+                                       ('', 'Todos'),
+                                       ('PENDENTE', 'Pendente'),
+                                       ('EM_CONFERENCIA', 'Em Conferência'),
+                                       ('CONFERIDO', 'Conferido')
+                                   ])
+    data_emissao_de = DateField('Data Emissão - De')
+    data_emissao_ate = DateField('Data Emissão - Até')
+    data_vencimento_de = DateField('Vencimento - De')
+    data_vencimento_ate = DateField('Vencimento - Até')
+    
+    submit = SubmitField('Filtrar')

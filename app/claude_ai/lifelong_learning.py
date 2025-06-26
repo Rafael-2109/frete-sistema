@@ -502,10 +502,11 @@ class LifelongLearningSystem:
             # 3. Buscar mapeamentos semânticos
             mapeamentos = db.session.execute(
                 text("""
-                    SELECT DISTINCT campo_sistema, modelo
+                    SELECT DISTINCT campo_sistema, modelo, MAX(frequencia) as frequencia
                     FROM ai_semantic_mappings
                     WHERE LOWER(:consulta) LIKE '%' || LOWER(termo_usuario) || '%'
                     AND frequencia > 2
+                    GROUP BY campo_sistema, modelo
                     ORDER BY frequencia DESC
                     LIMIT 5
                 """),

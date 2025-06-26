@@ -455,11 +455,11 @@ document.addEventListener('DOMContentLoaded', function() {
         let status = 'Em análise';
         let statusClass = 'text-warning';
         
-        if (Math.abs(percentualDiferenca) <= 5) {
-            status = 'Diferença Aceitável';
+        if (Math.abs(percentualDiferenca) <= 0.5) {
+            status = 'Diferença Baixa';
             statusClass = 'text-success';
-        } else if (Math.abs(percentualDiferenca) > 10) {
-            status = 'Requer Aprovação';
+        } else if (Math.abs(percentualDiferenca) > 0.5) {
+            status = 'Diferença Alta';
             statusClass = 'text-danger';
         }
         

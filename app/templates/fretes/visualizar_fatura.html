@@ -156,6 +156,7 @@
                             <th>CTe</th>
                             <th>Cliente</th>
                             <th>Embarque</th>
+                            <th>NFs Incluídas</th>
                             <th>Valor CTe</th>
                             <th>Status</th>
                             <th>Ações</th>
@@ -175,6 +176,18 @@
                                     </a>
                                 {% else %}
                                     N/A
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if frete.numeros_nfs %}
+                                    <span class="badge badge-info" style="color: white; background-color: #17a2b8;" title="NFs deste frete">
+                                        {{ frete.quantidade_nfs or 0 }} NF(s)
+                                    </span>
+                                    <br><small class="text-muted" style="word-break: break-all;">
+                                        {{ frete.numeros_nfs[:50] }}{% if frete.numeros_nfs|length > 50 %}...{% endif %}
+                                    </small>
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
                                 {% endif %}
                             </td>
                             <td><strong>R$ {{ "%.2f"|format(frete.valor_cte or 0) }}</strong></td>
@@ -218,6 +231,7 @@
                             <th>Tipo</th>
                             <th>Frete</th>
                             <th>Cliente</th>
+                            <th>NFs Relacionadas</th>
                             <th>Documento</th>
                             <th>Valor</th>
                             <th>Vencimento</th>
@@ -240,6 +254,18 @@
                             </td>
                             <td title="{{ despesa.frete.nome_cliente }}">
                                 {{ despesa.frete.nome_cliente[:25] }}{% if despesa.frete.nome_cliente|length > 25 %}...{% endif %}
+                            </td>
+                            <td>
+                                {% if despesa.frete.numeros_nfs %}
+                                    <span class="badge badge-secondary" style="color: white; background-color: #6c757d;" title="NFs do frete relacionado">
+                                        {{ despesa.frete.quantidade_nfs or 0 }} NF(s)
+                                    </span>
+                                    <br><small class="text-muted" style="word-break: break-all;">
+                                        {{ despesa.frete.numeros_nfs[:30] }}{% if despesa.frete.numeros_nfs|length > 30 %}...{% endif %}
+                                    </small>
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
                             </td>
                             <td>{{ despesa.numero_documento or 'Pendente' }}</td>
                             <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>

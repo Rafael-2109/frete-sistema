@@ -1,0 +1,25 @@
+{
+    "folders": [
+        {
+            "name": "Sistema de Fretes",
+            "path": "."
+        }
+    ],
+    "settings": {
+        "python.interpreterPath": "C:\\Users\\rafael.nascimento\\Desktop\\Sistema Online\\frete_sistema\\venv\\Scripts\\python.exe",
+        "python.defaultInterpreterPath": "C:\\Users\\rafael.nascimento\\Desktop\\Sistema Online\\frete_sistema\\venv\\Scripts\\python.exe",
+        "python.analysis.extraPaths": [
+            "${workspaceFolder}/app",
+            "${workspaceFolder}/app/utils",
+            "${workspaceFolder}"
+        ]
+    },
+    "extensions": {
+        "recommendations": [
+            "ms-python.python",
+            "ms-python.pylance",
+            "ms-python.black-formatter",
+            "ms-python.flake8"
+        ]
+    }
+}

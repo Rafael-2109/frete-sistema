@@ -49,6 +49,13 @@
                             {{ form.numero_fatura(class="form-control") }}
                         </div>
                         <div class="col-md-3">
+                            {{ form.numero_nf.label(class="form-label") }}
+                            {{ form.numero_nf(class="form-control") }}
+                            {% if form.numero_nf.description %}
+                                <small class="form-text text-muted">{{ form.numero_nf.description }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3">
                             {{ form.transportadora_id.label(class="form-label") }}
                             {{ form.transportadora_id(class="form-control") }}
                         </div>

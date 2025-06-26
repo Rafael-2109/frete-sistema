@@ -12,6 +12,73 @@
         </div>
     </div>
 
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#filtrosFaturas" 
+                        aria-expanded="false">
+                    <i class="fas fa-filter"></i> Filtros
+                </button>
+            </h5>
+        </div>
+        <div class="collapse" id="filtrosFaturas">
+            <div class="card-body">
+                <form method="GET">
+                    <div class="row">
+                        <div class="col-md-3">
+                            {{ form.numero_fatura.label(class="form-label") }}
+                            {{ form.numero_fatura(class="form-control", placeholder="Ex: FAT001") }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.transportadora_id.label(class="form-label") }}
+                            {{ form.transportadora_id(class="form-control") }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.numero_nf.label(class="form-label") }}
+                            {{ form.numero_nf(class="form-control", placeholder="Ex: 123456") }}
+                            {% if form.numero_nf.description %}
+                                <small class="form-text text-muted">{{ form.numero_nf.description }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.status_conferencia.label(class="form-label") }}
+                            {{ form.status_conferencia(class="form-control") }}
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-3">
+                            {{ form.data_emissao_de.label(class="form-label") }}
+                            {{ form.data_emissao_de(class="form-control") }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.data_emissao_ate.label(class="form-label") }}
+                            {{ form.data_emissao_ate(class="form-control") }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.data_vencimento_de.label(class="form-label") }}
+                            {{ form.data_vencimento_de(class="form-control") }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.data_vencimento_ate.label(class="form-label") }}
+                            {{ form.data_vencimento_ate(class="form-control") }}
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-12 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            <a href="{{ url_for('fretes.listar_faturas') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Limpar
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Ações -->
     <div class="row mb-4">
         <div class="col-12">

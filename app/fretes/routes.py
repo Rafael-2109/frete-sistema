@@ -23,12 +23,13 @@ from app.fretes.models import (
 )
 from app.fretes.forms import (
     FreteForm, FaturaFreteForm, DespesaExtraForm,
-    FiltroFretesForm, LancamentoCteForm
+    FiltroFretesForm, LancamentoCteForm, FiltroFaturasForm, FiltroFreteirosForm
 )
 
 from app.transportadoras.models import Transportadora
 
 from app.utils.calculadora_frete import calcular_valor_frete_pela_tabela
+from app.utils.valores_brasileiros import converter_valor_brasileiro
 
 fretes_bp = Blueprint('fretes', __name__, url_prefix='/fretes')
 
@@ -96,6 +97,10 @@ def listar_fretes():
     
     if form.numero_fatura.data:
         query = query.join(FaturaFrete).filter(FaturaFrete.numero_fatura.ilike(f'%{form.numero_fatura.data}%'))
+    
+    # ✅ NOVO: Filtro por número da NF
+    if form.numero_nf.data:
+        query = query.filter(Frete.numeros_nfs.contains(form.numero_nf.data))
     
     # ✅ NOVO: Filtro por transportadora
     if form.transportadora_id.data:
@@ -496,21 +501,14 @@ def editar_frete(frete_id):
         form.vencimento.data = frete.fatura_frete.vencimento
     
     if form.validate_on_submit():
-        # ✅ FUNÇÃO PARA CONVERTER VALORES COM VÍRGULA
-        def converter_valor_brasileiro(valor_str):
-            """Converte valor brasileiro (1.234,56) para float"""
-            if not valor_str or valor_str.strip() == '':
-                return None
-            return float(valor_str.replace('.', '').replace(',', '.'))
-        
         frete.numero_cte = form.numero_cte.data
         # ✅ REMOVIDO: data_emissao_cte (conforme solicitado)
         frete.vencimento = form.vencimento.data
         
-        # ✅ CONVERTENDO VALORES COM VÍRGULA
-        frete.valor_cte = converter_valor_brasileiro(form.valor_cte.data)
-        frete.valor_considerado = converter_valor_brasileiro(form.valor_considerado.data)
-        frete.valor_pago = converter_valor_brasileiro(form.valor_pago.data)
+        # ✅ CONVERTENDO VALORES COM VÍRGULA usando função centralizada
+        frete.valor_cte = converter_valor_brasileiro(form.valor_cte.data) if form.valor_cte.data else None
+        frete.valor_considerado = converter_valor_brasileiro(form.valor_considerado.data) if form.valor_considerado.data else None
+        frete.valor_pago = converter_valor_brasileiro(form.valor_pago.data) if form.valor_pago.data else None
         
         frete.considerar_diferenca = form.considerar_diferenca.data
         frete.observacoes_aprovacao = form.observacoes_aprovacao.data
@@ -648,7 +646,7 @@ def analise_diferencas(frete_id):
     # ✅ APLICA VALOR MÍNIMO AO TOTAL LÍQUIDO - CORRETO conforme calculadora_frete.py linha 218
     frete_minimo_valor = frete.tabela_frete_minimo_valor or 0
     total_liquido = max(total_liquido_antes_minimo, frete_minimo_valor)
-    ajuste_minimo_valor = total_liquido - total_liquido_antes_minimo if total_liquido > total_liquido_antes_minimo else 0
+    ajuste_minimo_valor = total_liquido if total_liquido > total_liquido_antes_minimo else 0
     
     # ✅ ICMS correto (usando icms_destino) - percentual já está em decimal
     percentual_icms_cotacao = frete.tabela_icms_destino or 0
@@ -777,7 +775,7 @@ def analise_diferencas(frete_id):
             'nome': 'Ajuste Valor Mínimo',
             'valor_tabela': f'Mín: R$ {frete_minimo_valor:.2f}',
             'valor_usado': f'R$ {total_liquido_antes_minimo:.2f}',
-            'formula': f'max({total_liquido_antes_minimo:.2f}, {frete_minimo_valor:.2f}) - {total_liquido_antes_minimo:.2f}',
+            'formula': f'max({total_liquido_antes_minimo:.2f}, {frete_minimo_valor:.2f})',
             'valor_calculado': ajuste_minimo_valor,
             'unidade': 'R$',
             'tipo': 'ajuste',
@@ -813,14 +811,56 @@ def analise_diferencas(frete_id):
 @login_required
 @require_financeiro()  # 🔒 BLOQUEADO para vendedores
 def listar_faturas():
-    """Lista faturas de frete"""
-    faturas = FaturaFrete.query.order_by(desc(FaturaFrete.criado_em)).paginate(
+    """Lista faturas de frete com filtros"""
+    form = FiltroFaturasForm(request.args)
+    
+    # Popular choices de transportadoras no formulário
+    transportadoras = Transportadora.query.all()
+    form.transportadora_id.choices = [('', 'Todas as transportadoras')] + [(t.id, t.razao_social) for t in transportadoras]
+    
+    query = FaturaFrete.query
+    
+    # Aplicar filtros
+    if form.numero_fatura.data:
+        query = query.filter(FaturaFrete.numero_fatura.ilike(f'%{form.numero_fatura.data}%'))
+    
+    if form.transportadora_id.data:
+        try:
+            transportadora_id = int(form.transportadora_id.data)
+            query = query.filter(FaturaFrete.transportadora_id == transportadora_id)
+        except (ValueError, TypeError):
+            pass
+    
+    if form.numero_nf.data:
+        # Busca faturas que contêm fretes com esta NF
+        faturas_com_nf = db.session.query(Frete.fatura_frete_id).filter(
+            Frete.numeros_nfs.contains(form.numero_nf.data),
+            Frete.fatura_frete_id.isnot(None)
+        ).distinct().subquery()
+        query = query.filter(FaturaFrete.id.in_(faturas_com_nf))
+    
+    if form.status_conferencia.data:
+        query = query.filter(FaturaFrete.status_conferencia == form.status_conferencia.data)
+    
+    if form.data_emissao_de.data:
+        query = query.filter(FaturaFrete.data_emissao >= form.data_emissao_de.data)
+    
+    if form.data_emissao_ate.data:
+        query = query.filter(FaturaFrete.data_emissao <= form.data_emissao_ate.data)
+    
+    if form.data_vencimento_de.data:
+        query = query.filter(FaturaFrete.vencimento >= form.data_vencimento_de.data)
+    
+    if form.data_vencimento_ate.data:
+        query = query.filter(FaturaFrete.vencimento <= form.data_vencimento_ate.data)
+    
+    faturas = query.order_by(desc(FaturaFrete.criado_em)).paginate(
         page=request.args.get('page', 1, type=int),
         per_page=20,
         error_out=False
     )
     
-    return render_template('fretes/listar_faturas.html', faturas=faturas)
+    return render_template('fretes/listar_faturas.html', faturas=faturas, form=form)
 
 @fretes_bp.route('/faturas/nova', methods=['GET', 'POST'])
 @login_required
@@ -833,7 +873,7 @@ def nova_fatura():
             transportadora_id=request.form.get('transportadora_id'),
             numero_fatura=form.numero_fatura.data,
             data_emissao=form.data_emissao.data,
-            valor_total_fatura=form.valor_total_fatura.data,
+            valor_total_fatura=converter_valor_brasileiro(form.valor_total_fatura.data),
             vencimento=form.vencimento.data,
             observacoes_conferencia=form.observacoes_conferencia.data,
             criado_por=current_user.nome
@@ -1173,7 +1213,7 @@ def editar_fatura(fatura_id):
             # Atualiza dados da fatura
             fatura.numero_fatura = numero_fatura_novo
             fatura.data_emissao = datetime.strptime(request.form.get('data_emissao'), '%Y-%m-%d').date()
-            fatura.valor_total_fatura = float(request.form.get('valor_total_fatura').replace(',', '.'))
+            fatura.valor_total_fatura = converter_valor_brasileiro(request.form.get('valor_total_fatura'))
             fatura.vencimento = datetime.strptime(request.form.get('vencimento'), '%Y-%m-%d').date() if request.form.get('vencimento') else None
             fatura.transportadora_id = int(request.form.get('transportadora_id'))
             
@@ -2793,8 +2833,15 @@ def lancamento_freteiros():
     Mostra todos os freteiros com fretes e despesas extras pendentes
     """
     
-    # ✅ NOVO: Filtro por transportadora
-    filtro_transportadora = request.args.get('transportadora_id', type=int)
+    # Formulário de filtros
+    filtro_form = FiltroFreteirosForm(request.args)
+    
+    # Popular choices de transportadoras no formulário
+    todos_freteiros = Transportadora.query.filter_by(freteiro=True).order_by(Transportadora.razao_social).all()
+    filtro_form.transportadora_id.choices = [('', 'Todos os freteiros')] + [(t.id, t.razao_social) for t in todos_freteiros]
+    
+    # ✅ APLICAR FILTROS
+    filtro_transportadora = filtro_form.transportadora_id.data
     
     # Busca apenas transportadoras marcadas como freteiros
     query_freteiros = Transportadora.query.filter_by(freteiro=True)
@@ -2805,16 +2852,14 @@ def lancamento_freteiros():
     
     freteiros = query_freteiros.all()
     
-    # ✅ PARA O DROPDOWN: Busca todos os freteiros (para mostrar no filtro)
-    todos_freteiros = Transportadora.query.filter_by(freteiro=True).order_by(Transportadora.razao_social).all()
-    
     dados_freteiros = []
     
     for freteiro in freteiros:
-        # Busca fretes pendentes (sem número CTE ou com valor CTE vazio) - APENAS EMBARQUES ATIVOS
+        # ✅ FRETES PENDENTES - SEMPRE COM DATA DE EMBARQUE PREENCHIDA
         fretes_pendentes = Frete.query.join(Embarque).filter(
             Frete.transportadora_id == freteiro.id,
             Embarque.status == 'ativo',  # Apenas embarques ativos
+            Embarque.data_embarque.isnot(None),  # ✅ SEMPRE com data de embarque preenchida
             db.or_(
                 Frete.numero_cte.is_(None),
                 Frete.numero_cte == '',
@@ -2822,10 +2867,11 @@ def lancamento_freteiros():
             )
         ).all()
         
-        # Busca despesas extras pendentes (sem documento) - através do frete - APENAS EMBARQUES ATIVOS
+        # ✅ DESPESAS EXTRAS PENDENTES - SEMPRE COM DATA DE EMBARQUE PREENCHIDA  
         despesas_pendentes = db.session.query(DespesaExtra).join(Frete).join(Embarque).filter(
             Frete.transportadora_id == freteiro.id,
             Embarque.status == 'ativo',  # Apenas embarques ativos
+            Embarque.data_embarque.isnot(None),  # ✅ SEMPRE com data de embarque preenchida
             db.or_(
                 DespesaExtra.numero_documento.is_(None),
                 DespesaExtra.numero_documento == '',
@@ -2920,7 +2966,7 @@ def lancamento_freteiros():
     return render_template('fretes/lancamento_freteiros.html', 
                           dados_freteiros=dados_freteiros,
                           form=LancamentoFreteirosForm(),
-                          todos_freteiros=todos_freteiros,
+                          filtro_form=filtro_form,
                           filtro_selecionado=filtro_transportadora)
 
 @fretes_bp.route('/emitir_fatura_freteiro/<int:transportadora_id>', methods=['POST'])

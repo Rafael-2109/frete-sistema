@@ -6,44 +6,59 @@
 <div class="container-fluid">
     <h1><i class="fas fa-truck"></i> Lançamento de Fretes - Freteiros</h1>
     
-    <!-- ✅ NOVO: Filtro por Transportadora -->
+    <!-- ✅ FILTROS AVANÇADOS -->
     <div class="card mb-3">
-        <div class="card-body">
-            <div class="row align-items-end">
-                <div class="col-md-4">
-                    <label for="filtro_transportadora" class="form-label">Filtrar por Freteiro:</label>
-                    <select id="filtro_transportadora" class="form-select" onchange="aplicarFiltro()">
-                        <option value="">📋 Todos os Freteiros</option>
-                        {% for freteiro in todos_freteiros %}
-                            <option value="{{ freteiro.id }}" 
-                                    {% if filtro_selecionado == freteiro.id %}selected{% endif %}>
-                                {{ freteiro.razao_social }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <button type="button" class="btn btn-outline-secondary" onclick="limparFiltro()">
-                        <i class="fas fa-times"></i> Limpar
-                    </button>
-                </div>
-                <div class="col-md-6 text-end">
-                    {% if filtro_selecionado %}
-                        <small class="text-muted">
-                            <i class="fas fa-filter"></i> Filtrado por: 
-                            <strong>
-                                {% for f in todos_freteiros if f.id == filtro_selecionado %}{{ f.razao_social }}{% endfor %}
-                            </strong>
-                        </small>
-                    {% else %}
-                        <small class="text-muted">
-                            <i class="fas fa-list"></i> Mostrando {{ dados_freteiros|length }} freteiro(s) com pendências
-                        </small>
-                    {% endif %}
-                </div>
+        <div class="card-header">
+            <h5 class="mb-0">
+                <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#filtrosFreteiros" 
+                        aria-expanded="false">
+                    <i class="fas fa-filter"></i> Filtros
+                </button>
+            </h5>
+        </div>
+        <div class="collapse" id="filtrosFreteiros">
+            <div class="card-body">
+                <form method="GET">
+                    <div class="row align-items-end">
+                        <div class="col-md-8">
+                            {{ filtro_form.transportadora_id.label(class="form-label") }}
+                            {{ filtro_form.transportadora_id(class="form-select") }}
+                            <small class="form-text text-muted">
+                                <i class="fas fa-info-circle"></i> 
+                                Mostra apenas fretes de embarques que já saíram (com data de embarque preenchida)
+                            </small>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            <a href="{{ url_for('fretes.lancamento_freteiros') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Limpar
+                            </a>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
+    
+        <!-- Resumo dos Filtros Aplicados -->
+    {% if filtro_form.transportadora_id.data %}
+    <div class="alert alert-info">
+        <i class="fas fa-filter"></i> <strong>Filtro aplicado:</strong>
+        {% for choice_id, choice_name in filtro_form.transportadora_id.choices %}
+            {% if choice_id|string == filtro_form.transportadora_id.data|string %}
+                Freteiro: <strong>{{ choice_name }}</strong>
+            {% endif %}
+        {% endfor %}
+        | <strong>{{ dados_freteiros|length }}</strong> freteiro(s) com pendências encontrado(s)
+    </div>
+    {% else %}
+    <div class="alert alert-light">
+        <i class="fas fa-truck"></i> <strong>{{ dados_freteiros|length }}</strong> freteiro(s) com pendências encontrado(s)
+        <small class="text-muted">(apenas embarques com data de embarque preenchida)</small>
+    </div>
+    {% endif %}
     
     {% if not dados_freteiros %}
         <div class="alert alert-info">
@@ -784,26 +799,7 @@ document.addEventListener('DOMContentLoaded', function() {
         atualizarTotalGeral(transportadoraId);
     });
 
-    // ✅ NOVO: Funções para filtro de transportadora
-    function aplicarFiltro() {
-        const select = document.getElementById('filtro_transportadora');
-        const transportadoraId = select.value;
-        
-        const url = new URL(window.location);
-        if (transportadoraId) {
-            url.searchParams.set('transportadora_id', transportadoraId);
-        } else {
-            url.searchParams.delete('transportadora_id');
-        }
-        
-        window.location.href = url.toString();
-    }
-    
-    function limparFiltro() {
-        const url = new URL(window.location);
-        url.searchParams.delete('transportadora_id');
-        window.location.href = url.toString();
-    }
+    // ✅ Filtros agora são controlados pelo formulário HTML - funções antigas removidas
 });
 </script>
 
