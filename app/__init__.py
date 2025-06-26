@@ -483,10 +483,20 @@ def create_app(config_name=None):
     # ✅ MIDDLEWARE PARA LIMPAR CONEXÕES APÓS CADA REQUEST
     @app.teardown_appcontext
     def shutdown_session(exception=None):
-        """Limpa a sessão do banco após cada request"""
-        if exception:
-            db.session.rollback()
-        db.session.remove()
+        """Remove a sessão do banco ao final de cada requisição"""
+        try:
+            if exception is not None:
+                # Se houve erro, fazer rollback
+                db.session.rollback()
+            else:
+                # Se não houve erro, tentar commit de mudanças pendentes
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+        finally:
+            # Sempre remover a sessão
+            db.session.remove()
     
     # ✅ MIDDLEWARE DE LOGGING E PERFORMANCE
 

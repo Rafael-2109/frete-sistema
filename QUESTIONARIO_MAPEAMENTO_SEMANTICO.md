@@ -50,24 +50,24 @@ Grupo 3: _________________ | Inclui: _________________
 ## 3️⃣ LINGUAGEM DE STATUS
 
 ### A) Status de ENTREGA - Como vocês falam?
-- [ ] "Entregue" ou "Finalizada"?
-- [ ] "Pendente" ou "Em trânsito" ou "A caminho"?
-- [ ] "Atrasada" ou "Fora do prazo" ou "Vencida"?
-- [ ] "Devolvida" ou "Retornou" ou "Voltou"?
-- [ ] Outros: _________________
+- [ Entregue] "Entregue" ou "Finalizada"?
+- [ Pendente] "Pendente" ou "Em trânsito" ou "A caminho"?
+- [ Atrasada] "Atrasada" ou "Fora do prazo" ou "Vencida"?
+- [ Devolvida] "Devolvida" ou "Retornou" ou "Voltou"?
+- [ ] Outros: NF voltou pro CD, NF no CD_________________
 
 ### B) Status de PEDIDO - Como vocês falam?
-- [ ] "Aberto" ou "Aguardando cotação"?
-- [ ] "Cotado" ou "Com frete"?
-- [ ] "Embarcado" ou "Despachado" ou "Saiu"?
-- [ ] "Faturado" ou "Com NF"?
+- [ Aberto] "Aberto" ou "Aguardando cotação"?
+- [ Cotado, Contratado] "Cotado" ou "Com frete"?
+- [ Embarcado, Enviado] "Embarcado" ou "Despachado" ou "Saiu"?
+- [ Faturado] "Faturado" ou "Com NF"?
 - [ ] Outros: _________________
 
 ### C) Status de FRETE - Como vocês falam?
-- [ ] "Aprovado" ou "Liberado" ou "OK"?
-- [ ] "Pendente" ou "Aguardando aprovação"?
-- [ ] "Pago" ou "Quitado"?
-- [ ] "Sem CTE" ou "Falta documento"?
+- [ Conferido, Aprovado] "Aprovado" ou "Liberado" ou "OK"?
+- [ Pendente] "Pendente" ou "Aguardando aprovação"?
+- [ Pago] "Pago" ou "Quitado"?
+- [ Sem CTE] "Sem CTE" ou "Falta documento"?
 - [ ] Outros: _________________
 
 ---
@@ -95,10 +95,10 @@ Grupo 3: _________________ | Inclui: _________________
 ### A) Abreviações que usam:
 ```
 NF = Nota Fiscal
-CTE = _________________
-RED = _________________
-FOB = _________________
-CIF = _________________
+CTE = CTE_________________
+RED = Redespacho_________________
+FOB = FOB_________________
+CIF = CIF_________________
 Outras: _________________
 ```
 
@@ -117,7 +117,7 @@ Outros: _________________
 
 ### Como vocês pedem relatórios por período?
 - [ ] "Últimos 7 dias" ou "Última semana"?
-- [ ] "Este mês" ou "Mês atual" ou "Junho"?
+- [ Junho] "Este mês" ou "Mês atual" ou "Junho"?
 - [ ] "Hoje" ou "De hoje"?
 - [ ] "Ontem" ou "De ontem"?
 - [ ] "Últimos 30 dias" ou "Último mês"?

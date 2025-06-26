@@ -436,28 +436,32 @@ class LifelongLearningSystem:
                 })
             
             # 2. Buscar grupos empresariais conhecidos
-            grupos = db.session.execute(
-                text("""
-                    SELECT nome_grupo, tipo_negocio, filtro_sql, cnpj_prefixos
-                    FROM ai_grupos_empresariais
-                    WHERE ativo = TRUE
-                    AND (
-                        EXISTS (
+            try:
+                grupos = db.session.execute(
+                    text("""
+                        SELECT nome_grupo, tipo_negocio, filtro_sql, cnpj_prefixos
+                        FROM ai_grupos_empresariais
+                        WHERE ativo IS TRUE
+                        AND palavras_chave IS NOT NULL
+                        AND array_length(palavras_chave, 1) > 0
+                        AND EXISTS (
                             SELECT 1 FROM unnest(palavras_chave) AS palavra
                             WHERE LOWER(:consulta) LIKE '%' || LOWER(palavra) || '%'
                         )
-                    )
-                """),
-                {"consulta": consulta}
-            ).fetchall()
-            
-            for grupo in grupos:
-                conhecimento["grupos_conhecidos"].append({
-                    "nome": grupo.nome_grupo,
-                    "tipo": grupo.tipo_negocio,
-                    "filtro": grupo.filtro_sql,
-                    "cnpjs": grupo.cnpj_prefixos
-                })
+                    """),
+                    {"consulta": consulta}
+                ).fetchall()
+                
+                for grupo in grupos:
+                    conhecimento["grupos_conhecidos"].append({
+                        "nome": grupo.nome_grupo,
+                        "tipo": grupo.tipo_negocio,
+                        "filtro": grupo.filtro_sql,
+                        "cnpjs": grupo.cnpj_prefixos if grupo.cnpj_prefixos else []
+                    })
+            except Exception as e:
+                logger.warning(f"Erro ao buscar grupos empresariais: {e}")
+                # Continua sem grupos, não é crítico
             
             # 3. Buscar mapeamentos semânticos
             mapeamentos = db.session.execute(
