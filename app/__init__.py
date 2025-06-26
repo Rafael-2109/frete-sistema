@@ -8,6 +8,7 @@ from flask_wtf.csrf import CSRFProtect
 from flask_migrate import Migrate
 from config import Config, TestConfig
 import time
+from sqlalchemy import text
 
 # 🔄 Carrega as variáveis de ambiente do .env
 load_dotenv()
@@ -458,5 +459,30 @@ def create_app(config_name=None):
     from app.transportadoras.models import Transportadora
     from app.veiculos.models import Veiculo
     from app.cotacao.models import Cotacao
+
+    # ✅ MIDDLEWARE PARA RECONEXÃO AUTOMÁTICA DO BANCO
+    @app.before_request
+    def ensure_db_connection():
+        """Garante que a conexão com o banco está ativa"""
+        try:
+            # Testa a conexão com uma query simples
+            db.session.execute(text('SELECT 1'))
+        except Exception as e:
+            # Se falhar, reconecta
+            logger.warning(f"🔄 Reconectando ao banco: {str(e)}")
+            db.session.rollback()
+            db.session.remove()
+            # Força nova conexão
+            db.engine.dispose()
+    
+    # ✅ MIDDLEWARE PARA LIMPAR CONEXÕES APÓS CADA REQUEST
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):
+        """Limpa a sessão do banco após cada request"""
+        if exception:
+            db.session.rollback()
+        db.session.remove()
+    
+    # ✅ MIDDLEWARE DE LOGGING E PERFORMANCE
 
     return app

@@ -43,17 +43,22 @@ class Config:
     
     # Configurações condicionais baseadas no tipo de banco
     if IS_POSTGRESQL:
-        # Configurações para PostgreSQL (Render)
+        # Configurações para PostgreSQL (Render) - OTIMIZADAS PARA EVITAR EOF
         SQLALCHEMY_ENGINE_OPTIONS = {
-            'pool_pre_ping': True,
-            'pool_recycle': 200,
-            'pool_timeout': 30,
-            'max_overflow': 0,
-            'pool_size': 5,
+            'pool_pre_ping': True,  # Testa conexão antes de usar
+            'pool_recycle': 300,    # Recicla conexões a cada 5 minutos (era 200)
+            'pool_timeout': 10,     # Timeout mais curto para falhar rápido (era 30)
+            'max_overflow': 10,     # Permite mais conexões temporárias (era 0)
+            'pool_size': 10,        # Mais conexões no pool (era 5)
+            'echo_pool': False,     # Debug do pool (ativar se precisar)
             'connect_args': {
                 'sslmode': 'require',
-                'connect_timeout': 15,
+                'connect_timeout': 10,  # Timeout de conexão mais curto (era 15)
                 'application_name': 'frete_sistema',
+                'keepalives': 1,        # Ativa keepalive
+                'keepalives_idle': 30,  # Envia keepalive a cada 30s
+                'keepalives_interval': 10,  # Intervalo entre keepalives
+                'keepalives_count': 5,  # Tentativas antes de desistir
                 'options': '-c statement_timeout=60000 -c idle_in_transaction_session_timeout=300000'
             }
         }
