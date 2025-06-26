@@ -142,7 +142,7 @@ class ClaudeRealIntegration:
             
             # Usar sistema de entendimento inteligente
             analyzer = get_intelligent_analyzer()
-            interpretacao = analyzer.analisar_consulta_inteligente(consulta)
+            interpretacao = analyzer.analisar_consulta_inteligente(consulta, user_context or {})
             
             # Se a confiança é alta (>= 70%), usar processamento avançado
             if interpretacao.confianca_interpretacao >= 0.7:
