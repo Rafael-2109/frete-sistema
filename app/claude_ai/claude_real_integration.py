@@ -497,8 +497,27 @@ Por favor, forneça uma resposta completa incluindo:
             "metricas_solicitadas": [],
             "correcao_usuario": False,
             "consulta_nfs_especificas": False,  # NOVO: Flag para NFs específicas
-            "nfs_detectadas": []  # NOVO: Lista de NFs encontradas
+            "nfs_detectadas": [],  # NOVO: Lista de NFs encontradas
+            "multi_dominio": False,  # ✅ NOVO: Flag para análise multi-tabela
+            "dominios_solicitados": []  # ✅ NOVO: Lista de domínios detectados
         }
+        
+        # 🎯 DETECÇÃO DE CONSULTAS MULTI-DOMÍNIO (NOVA FUNCIONALIDADE)
+        consultas_completas = [
+            "status geral", "situação geral", "análise completa", "resumo completo",
+            "dados completos", "todas as informações", "relatório geral", "visão geral",
+            "análise multi", "cruzar dados", "comparar dados", "dados relacionados",
+            "informações completas", "status de tudo", "como está tudo", "relatório completo",
+            "dashboard completo", "visão 360", "análise 360", "panorama completo"
+        ]
+        
+        for consulta_completa in consultas_completas:
+            if consulta_completa in consulta_lower:
+                analise["multi_dominio"] = True
+                analise["tipo_consulta"] = "analise_completa"
+                analise["dominios_solicitados"] = ["entregas", "pedidos", "fretes", "embarques", "faturamento"]
+                logger.info(f"🌐 ANÁLISE MULTI-DOMÍNIO detectada: '{consulta_completa}'")
+                break
         
         # 🔍 DETECÇÃO DE CONSULTA DE NFs ESPECÍFICAS (NOVA PRIORIDADE)
         import re
@@ -541,7 +560,7 @@ Por favor, forneça uma resposta completa incluindo:
                 logger.info(f"🚨 CORREÇÃO DETECTADA: Usuário corrigiu interpretação com '{palavra_correcao}'")
                 break
         
-        # 🎯 NOVO: DETECÇÃO AUTOMÁTICA DE DOMÍNIO
+        # 🎯 DETECÇÃO AUTOMÁTICA DE DOMÍNIO (MELHORADA PARA MULTI-DOMÍNIO)
         dominios = {
             "pedidos": [
                 "pedido", "pedidos", "cotar", "cotação", "cotar frete", "faltam cotar",
@@ -578,7 +597,7 @@ Por favor, forneça uma resposta completa incluindo:
             ]
         }
         
-        # Detectar domínio baseado nas palavras-chave
+        # Detectar domínio baseado nas palavras-chave (PERMITIR MÚLTIPLOS)
         pontuacao_dominios = {}
         for dominio, palavras in dominios.items():
             pontos = 0
@@ -588,8 +607,17 @@ Por favor, forneça uma resposta completa incluindo:
             if pontos > 0:
                 pontuacao_dominios[dominio] = pontos
         
-        # Escolher domínio com maior pontuação
-        if pontuacao_dominios:
+        # ✅ NOVO: Se múltiplos domínios foram detectados, habilitar multi-domínio
+        if len(pontuacao_dominios) >= 2:
+            analise["multi_dominio"] = True
+            analise["dominios_solicitados"] = list(pontuacao_dominios.keys())
+            analise["tipo_consulta"] = "multi_dominio"
+            # Usar o domínio com maior pontuação como principal
+            dominio_principal = max(pontuacao_dominios, key=pontuacao_dominios.get)
+            analise["dominio"] = dominio_principal
+            logger.info(f"🌐 MÚLTIPLOS DOMÍNIOS detectados: {list(pontuacao_dominios.keys())} | Principal: {dominio_principal}")
+        elif pontuacao_dominios:
+            # Domínio único detectado
             dominio_detectado = max(pontuacao_dominios, key=pontuacao_dominios.get)
             analise["dominio"] = dominio_detectado
             logger.info(f"🎯 Domínio detectado: {dominio_detectado} (pontos: {pontuacao_dominios})")
@@ -749,6 +777,10 @@ Por favor, forneça uma resposta completa incluindo:
         
         # 📝 LOGS DE DEBUG DA ANÁLISE
         logger.info(f"📊 ANÁLISE CONCLUÍDA: {analise['tipo_consulta'].upper()}")
+        if analise.get("multi_dominio"):
+            logger.info(f"🌐 MULTI-DOMÍNIO: {', '.join(analise.get('dominios_solicitados', []))}")
+        else:
+            logger.info(f"🎯 DOMÍNIO ÚNICO: {analise['dominio']}")
         logger.info(f"👤 Cliente: {analise['cliente_especifico'] or 'TODOS'}")
         logger.info(f"📅 Período: {analise['periodo_dias']} dias")
         logger.info(f"🚨 Correção: {'SIM' if analise['correcao_usuario'] else 'NÃO'}")
@@ -803,76 +835,152 @@ Por favor, forneça uma resposta completa incluindo:
             
             # 🎯 CARREGAR DADOS BASEADO NO DOMÍNIO DETECTADO
             dominio = analise.get("dominio", "entregas")
-            logger.info(f"🎯 Carregando dados do domínio: {dominio}")
+            multi_dominio = analise.get("multi_dominio", False)
+            dominios_solicitados = analise.get("dominios_solicitados", [])
             
-            if dominio == "pedidos":
-                # Carregar dados de pedidos
-                dados_pedidos = _carregar_dados_pedidos(analise, filtros_usuario, data_limite)
-                contexto["dados_especificos"]["pedidos"] = dados_pedidos
-                contexto["registros_carregados"] += dados_pedidos.get("registros_carregados", 0)
-                logger.info(f"📋 Pedidos carregados: {dados_pedidos.get('registros_carregados', 0)}")
+            if multi_dominio and dominios_solicitados:
+                # ✅ MODO ANÁLISE COMPLETA - CARREGAR MÚLTIPLOS DOMÍNIOS
+                logger.info(f"🌐 CARREGANDO MÚLTIPLOS DOMÍNIOS: {', '.join(dominios_solicitados)}")
                 
-            elif dominio == "fretes":
-                # Carregar dados de fretes
-                dados_fretes = _carregar_dados_fretes(analise, filtros_usuario, data_limite)
-                contexto["dados_especificos"]["fretes"] = dados_fretes
-                contexto["registros_carregados"] += dados_fretes.get("registros_carregados", 0)
-                logger.info(f"🚛 Fretes carregados: {dados_fretes.get('registros_carregados', 0)}")
+                for dominio_item in dominios_solicitados:
+                    try:
+                        if dominio_item == "pedidos":
+                            dados_pedidos = _carregar_dados_pedidos(analise, filtros_usuario, data_limite)
+                            contexto["dados_especificos"]["pedidos"] = dados_pedidos
+                            contexto["registros_carregados"] += dados_pedidos.get("registros_carregados", 0)
+                            logger.info(f"📋 Pedidos carregados: {dados_pedidos.get('registros_carregados', 0)}")
+                            
+                        elif dominio_item == "fretes":
+                            dados_fretes = _carregar_dados_fretes(analise, filtros_usuario, data_limite)
+                            contexto["dados_especificos"]["fretes"] = dados_fretes
+                            contexto["registros_carregados"] += dados_fretes.get("registros_carregados", 0)
+                            logger.info(f"🚛 Fretes carregados: {dados_fretes.get('registros_carregados', 0)}")
+                            
+                        elif dominio_item == "transportadoras":
+                            dados_transportadoras = _carregar_dados_transportadoras(analise, filtros_usuario, data_limite)
+                            contexto["dados_especificos"]["transportadoras"] = dados_transportadoras
+                            contexto["registros_carregados"] += dados_transportadoras.get("registros_carregados", 0)
+                            logger.info(f"🚚 Transportadoras carregadas: {dados_transportadoras.get('registros_carregados', 0)}")
+                            
+                        elif dominio_item == "embarques":
+                            dados_embarques = _carregar_dados_embarques(analise, filtros_usuario, data_limite)
+                            contexto["dados_especificos"]["embarques"] = dados_embarques
+                            contexto["registros_carregados"] += dados_embarques.get("registros_carregados", 0)
+                            logger.info(f"📦 Embarques carregados: {dados_embarques.get('registros_carregados', 0)}")
+                            
+                        elif dominio_item == "faturamento":
+                            dados_faturamento = _carregar_dados_faturamento(analise, filtros_usuario, data_limite)
+                            contexto["dados_especificos"]["faturamento"] = dados_faturamento
+                            contexto["registros_carregados"] += dados_faturamento.get("registros_carregados", 0)
+                            logger.info(f"💰 Faturamento carregado: {dados_faturamento.get('registros_carregados', 0)}")
+                            
+                        elif dominio_item == "financeiro":
+                            dados_financeiro = _carregar_dados_financeiro(analise, filtros_usuario, data_limite)
+                            contexto["dados_especificos"]["financeiro"] = dados_financeiro
+                            contexto["registros_carregados"] += dados_financeiro.get("registros_carregados", 0)
+                            logger.info(f"💳 Financeiro carregado: {dados_financeiro.get('registros_carregados', 0)}")
+                            
+                        elif dominio_item == "entregas":
+                            # Carregar entregas com cache Redis se disponível
+                            if REDIS_DISPONIVEL:
+                                entregas_cache = redis_cache.cache_entregas_cliente(
+                                    cliente=analise.get("cliente_especifico", ""),
+                                    periodo_dias=analise.get("periodo_dias", 30)
+                                )
+                                if entregas_cache:
+                                    contexto["dados_especificos"]["entregas"] = entregas_cache
+                                    contexto["registros_carregados"] += entregas_cache.get("total_registros", 0)
+                                    logger.info("🎯 CACHE HIT: Entregas carregadas do Redis")
+                                else:
+                                    dados_entregas = self._carregar_entregas_banco(analise, filtros_usuario, data_limite)
+                                    contexto["dados_especificos"]["entregas"] = dados_entregas
+                                    contexto["registros_carregados"] += dados_entregas.get("total_registros", 0)
+                                    logger.info(f"📦 Entregas carregadas: {dados_entregas.get('total_registros', 0)}")
+                            else:
+                                dados_entregas = self._carregar_entregas_banco(analise, filtros_usuario, data_limite)
+                                contexto["dados_especificos"]["entregas"] = dados_entregas
+                                contexto["registros_carregados"] += dados_entregas.get("total_registros", 0)
+                                logger.info(f"📦 Entregas carregadas: {dados_entregas.get('total_registros', 0)}")
+                                
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao carregar domínio {dominio_item}: {e}")
+                        # Continuar carregando outros domínios mesmo se um falhar
+                        continue
                 
-            elif dominio == "transportadoras":
-                # Carregar dados de transportadoras
-                dados_transportadoras = _carregar_dados_transportadoras(analise, filtros_usuario, data_limite)
-                contexto["dados_especificos"]["transportadoras"] = dados_transportadoras
-                contexto["registros_carregados"] += dados_transportadoras.get("registros_carregados", 0)
-                
-            elif dominio == "embarques":
-                # Carregar dados de embarques
-                dados_embarques = _carregar_dados_embarques(analise, filtros_usuario, data_limite)
-                contexto["dados_especificos"]["embarques"] = dados_embarques
-                contexto["registros_carregados"] += dados_embarques.get("registros_carregados", 0)
-                
-            elif dominio == "faturamento":
-                # Carregar dados de faturamento
-                dados_faturamento = _carregar_dados_faturamento(analise, filtros_usuario, data_limite)
-                contexto["dados_especificos"]["faturamento"] = dados_faturamento
-                contexto["registros_carregados"] += dados_faturamento.get("registros_carregados", 0)
-                
-            elif dominio == "financeiro":
-                # Carregar dados financeiros
-                dados_financeiro = _carregar_dados_financeiro(analise, filtros_usuario, data_limite)
-                contexto["dados_especificos"]["financeiro"] = dados_financeiro
-                contexto["registros_carregados"] += dados_financeiro.get("registros_carregados", 0)
+                logger.info(f"✅ ANÁLISE COMPLETA: {len(contexto['dados_especificos'])} domínios carregados | Total: {contexto['registros_carregados']} registros")
                 
             else:
-                # Domínio "entregas" ou padrão - usar cache específico para entregas se disponível
-                if REDIS_DISPONIVEL:
-                    entregas_cache = redis_cache.cache_entregas_cliente(
-                        cliente=analise.get("cliente_especifico", ""),
-                        periodo_dias=analise.get("periodo_dias", 30)
-                    )
-                    if entregas_cache:
-                        contexto["dados_especificos"]["entregas"] = entregas_cache
-                        contexto["registros_carregados"] += entregas_cache.get("total_registros", 0)
-                        logger.info("🎯 CACHE HIT: Entregas carregadas do Redis")
+                # 🎯 MODO DOMÍNIO ÚNICO - COMPORTAMENTO ORIGINAL
+                logger.info(f"🎯 Carregando dados do domínio: {dominio}")
+                
+                if dominio == "pedidos":
+                    # Carregar dados de pedidos
+                    dados_pedidos = _carregar_dados_pedidos(analise, filtros_usuario, data_limite)
+                    contexto["dados_especificos"]["pedidos"] = dados_pedidos
+                    contexto["registros_carregados"] += dados_pedidos.get("registros_carregados", 0)
+                    logger.info(f"📋 Pedidos carregados: {dados_pedidos.get('registros_carregados', 0)}")
+                    
+                elif dominio == "fretes":
+                    # Carregar dados de fretes
+                    dados_fretes = _carregar_dados_fretes(analise, filtros_usuario, data_limite)
+                    contexto["dados_especificos"]["fretes"] = dados_fretes
+                    contexto["registros_carregados"] += dados_fretes.get("registros_carregados", 0)
+                    logger.info(f"🚛 Fretes carregados: {dados_fretes.get('registros_carregados', 0)}")
+                    
+                elif dominio == "transportadoras":
+                    # Carregar dados de transportadoras
+                    dados_transportadoras = _carregar_dados_transportadoras(analise, filtros_usuario, data_limite)
+                    contexto["dados_especificos"]["transportadoras"] = dados_transportadoras
+                    contexto["registros_carregados"] += dados_transportadoras.get("registros_carregados", 0)
+                    
+                elif dominio == "embarques":
+                    # Carregar dados de embarques
+                    dados_embarques = _carregar_dados_embarques(analise, filtros_usuario, data_limite)
+                    contexto["dados_especificos"]["embarques"] = dados_embarques
+                    contexto["registros_carregados"] += dados_embarques.get("registros_carregados", 0)
+                    
+                elif dominio == "faturamento":
+                    # Carregar dados de faturamento
+                    dados_faturamento = _carregar_dados_faturamento(analise, filtros_usuario, data_limite)
+                    contexto["dados_especificos"]["faturamento"] = dados_faturamento
+                    contexto["registros_carregados"] += dados_faturamento.get("registros_carregados", 0)
+                    
+                elif dominio == "financeiro":
+                    # Carregar dados financeiros
+                    dados_financeiro = _carregar_dados_financeiro(analise, filtros_usuario, data_limite)
+                    contexto["dados_especificos"]["financeiro"] = dados_financeiro
+                    contexto["registros_carregados"] += dados_financeiro.get("registros_carregados", 0)
+                    
+                else:
+                    # Domínio "entregas" ou padrão - usar cache específico para entregas se disponível
+                    if REDIS_DISPONIVEL:
+                        entregas_cache = redis_cache.cache_entregas_cliente(
+                            cliente=analise.get("cliente_especifico", ""),
+                            periodo_dias=analise.get("periodo_dias", 30)
+                        )
+                        if entregas_cache:
+                            contexto["dados_especificos"]["entregas"] = entregas_cache
+                            contexto["registros_carregados"] += entregas_cache.get("total_registros", 0)
+                            logger.info("🎯 CACHE HIT: Entregas carregadas do Redis")
+                        else:
+                            # Cache miss - carregar do banco e salvar no cache
+                            dados_entregas = self._carregar_entregas_banco(analise, filtros_usuario, data_limite)
+                            contexto["dados_especificos"]["entregas"] = dados_entregas
+                            contexto["registros_carregados"] += dados_entregas.get("total_registros", 0)
+                            
+                            # Salvar no cache Redis
+                            redis_cache.cache_entregas_cliente(
+                                cliente=analise.get("cliente_especifico", ""),
+                                periodo_dias=analise.get("periodo_dias", 30),
+                                entregas=dados_entregas,
+                                ttl=120  # 2 minutos para entregas
+                            )
+                            logger.info("💾 Entregas salvas no Redis cache")
                     else:
-                        # Cache miss - carregar do banco e salvar no cache
+                        # Redis não disponível - carregar diretamente do banco
                         dados_entregas = self._carregar_entregas_banco(analise, filtros_usuario, data_limite)
                         contexto["dados_especificos"]["entregas"] = dados_entregas
                         contexto["registros_carregados"] += dados_entregas.get("total_registros", 0)
-                        
-                        # Salvar no cache Redis
-                        redis_cache.cache_entregas_cliente(
-                            cliente=analise.get("cliente_especifico", ""),
-                            periodo_dias=analise.get("periodo_dias", 30),
-                            entregas=dados_entregas,
-                            ttl=120  # 2 minutos para entregas
-                        )
-                        logger.info("💾 Entregas salvas no Redis cache")
-                else:
-                    # Redis não disponível - carregar diretamente do banco
-                    dados_entregas = self._carregar_entregas_banco(analise, filtros_usuario, data_limite)
-                    contexto["dados_especificos"]["entregas"] = dados_entregas
-                    contexto["registros_carregados"] += dados_entregas.get("total_registros", 0)
             
             # ESTATÍSTICAS GERAIS COM REDIS CACHE
             if REDIS_DISPONIVEL:
@@ -1289,6 +1397,14 @@ Por favor, forneça uma resposta completa incluindo:
         """Descreve o contexto carregado E INCLUI OS DADOS REAIS para o prompt"""
         descricao = []
         
+        # 🌐 INDICAR SE É ANÁLISE MULTI-DOMÍNIO
+        if analise.get("multi_dominio"):
+            dominios_carregados = analise.get("dominios_solicitados", [])
+            descricao.append(f"🌐 **ANÁLISE MULTI-DOMÍNIO ATIVA** - {len(dominios_carregados)} domínios carregados:")
+            descricao.append(f"   Domínios: {', '.join(dominios_carregados)}")
+        else:
+            descricao.append(f"🎯 **ANÁLISE FOCADA** - Domínio: {analise.get('dominio', 'entregas')}")
+        
         # 📊 METADADOS DO CONTEXTO
         if analise.get("cliente_especifico"):
             descricao.append(f"- Dados específicos do cliente: {analise['cliente_especifico']}")
@@ -1311,43 +1427,129 @@ Por favor, forneça uma resposta completa incluindo:
         # 🎯 DADOS REAIS CARREGADOS (CRÍTICO!)
         if hasattr(self, '_ultimo_contexto_carregado') and self._ultimo_contexto_carregado:
             dados = self._ultimo_contexto_carregado.get('dados_especificos', {})
+            total_registros = self._ultimo_contexto_carregado.get('registros_carregados', 0)
+            
+            # RESUMO GERAL PARA ANÁLISE MULTI-DOMÍNIO
+            if analise.get("multi_dominio") and len(dados) > 1:
+                descricao.append(f"\n📊 **RESUMO CONSOLIDADO** - Total: {total_registros} registros:")
+                for dominio_nome, dominio_dados in dados.items():
+                    if dominio_nome in ['entregas', 'pedidos', 'fretes', 'embarques', 'faturamento', 'financeiro', 'transportadoras']:
+                        count = dominio_dados.get('registros_carregados') or dominio_dados.get('total_registros', 0)
+                        descricao.append(f"   • {dominio_nome.title()}: {count} registros")
+            
+            # DETALHES POR DOMÍNIO
             
             # ENTREGAS
             if 'entregas' in dados:
                 entregas_data = dados['entregas']
                 descricao.append("\n📦 **DADOS DE ENTREGAS CARREGADOS:**")
-                descricao.append(f"- Total de entregas: {entregas_data.get('total_registros', 0)}")
+                total_entregas = entregas_data.get('total_registros') or entregas_data.get('registros_carregados', 0)
+                descricao.append(f"- Total de entregas: {total_entregas}")
                 
-                # Listar algumas entregas como exemplo
-                if entregas_data.get('entregas', []):
+                # Listar algumas entregas como exemplo (apenas se não for multi-domínio para evitar verbosidade)
+                if not analise.get("multi_dominio") and entregas_data.get('registros', []):
                     descricao.append("- Exemplos de entregas:")
-                    for i, entrega in enumerate(entregas_data['entregas'][:5], 1):
-                        descricao.append(f"  {i}. NF {entrega.get('numero_nf')} - {entrega.get('cliente')} - Status: {entrega.get('status_finalizacao', 'Pendente')}")
+                    for i, entrega in enumerate(entregas_data['registros'][:5], 1):
+                        status = entrega.get('status_finalizacao', 'Pendente')
+                        descricao.append(f"  {i}. NF {entrega.get('numero_nf')} - {entrega.get('cliente')} - Status: {status}")
                 
-                # Estatísticas
-                if entregas_data.get('estatisticas'):
-                    stats = entregas_data['estatisticas']
-                    descricao.append(f"- Entregas entregues: {stats.get('entregues', 0)}")
-                    descricao.append(f"- Entregas pendentes: {stats.get('pendentes', 0)}")
-                    descricao.append(f"- Entregas atrasadas: {stats.get('atrasadas', 0)}")
+                # Estatísticas básicas
+                if entregas_data.get('metricas'):
+                    stats = entregas_data['metricas']
+                    entregues = stats.get('entregas_realizadas', 0)
+                    no_prazo = stats.get('entregas_no_prazo', 0)
+                    atrasadas = stats.get('entregas_atrasadas', 0)
+                    percentual_prazo = stats.get('percentual_no_prazo', 0)
+                    descricao.append(f"- Performance: {entregues} realizadas | {percentual_prazo}% no prazo | {atrasadas} atrasadas")
             
             # PEDIDOS
             if 'pedidos' in dados:
                 pedidos_data = dados['pedidos']
                 descricao.append("\n📋 **DADOS DE PEDIDOS CARREGADOS:**")
-                descricao.append(f"- Total de pedidos: {pedidos_data.get('registros_carregados', 0)}")
+                total_pedidos = pedidos_data.get('registros_carregados', 0)
+                descricao.append(f"- Total de pedidos: {total_pedidos}")
                 
-                if pedidos_data.get('pedidos', []):
-                    descricao.append("- Status dos pedidos:")
-                    for status, qtd in pedidos_data.get('por_status', {}).items():
-                        descricao.append(f"  • {status}: {qtd}")
+                if 'pedidos' in pedidos_data:
+                    pedidos_stats = pedidos_data['pedidos'].get('estatisticas', {})
+                    abertos = pedidos_stats.get('pedidos_abertos', 0)
+                    cotados = pedidos_stats.get('pedidos_cotados', 0)
+                    faturados = pedidos_stats.get('pedidos_faturados', 0)
+                    valor_total = pedidos_stats.get('valor_total', 0)
+                    descricao.append(f"- Status: {abertos} abertos | {cotados} cotados | {faturados} faturados")
+                    descricao.append(f"- Valor total: R$ {valor_total:,.2f}")
             
             # FRETES
             if 'fretes' in dados:
                 fretes_data = dados['fretes']
                 descricao.append("\n🚛 **DADOS DE FRETES CARREGADOS:**")
-                descricao.append(f"- Total de fretes: {fretes_data.get('registros_carregados', 0)}")
-                descricao.append(f"- Valor total: R$ {fretes_data.get('valor_total', 0):,.2f}")
+                total_fretes = fretes_data.get('registros_carregados', 0)
+                descricao.append(f"- Total de fretes: {total_fretes}")
+                
+                if 'fretes' in fretes_data:
+                    fretes_stats = fretes_data['fretes'].get('estatisticas', {})
+                    aprovados = fretes_stats.get('fretes_aprovados', 0)
+                    pendentes = fretes_stats.get('fretes_pendentes', 0)
+                    pagos = fretes_stats.get('fretes_pagos', 0)
+                    valor_cotado = fretes_stats.get('valor_total_cotado', 0)
+                    valor_pago = fretes_stats.get('valor_total_pago', 0)
+                    descricao.append(f"- Status: {aprovados} aprovados | {pendentes} pendentes | {pagos} pagos")
+                    descricao.append(f"- Valor cotado: R$ {valor_cotado:,.2f} | Valor pago: R$ {valor_pago:,.2f}")
+            
+            # EMBARQUES
+            if 'embarques' in dados:
+                embarques_data = dados['embarques']
+                descricao.append("\n📦 **DADOS DE EMBARQUES CARREGADOS:**")
+                total_embarques = embarques_data.get('registros_carregados', 0)
+                descricao.append(f"- Total de embarques: {total_embarques}")
+                
+                if 'embarques' in embarques_data:
+                    embarques_stats = embarques_data['embarques'].get('estatisticas', {})
+                    despachados = embarques_stats.get('embarques_despachados', 0)
+                    aguardando = embarques_stats.get('embarques_aguardando', 0)
+                    percentual_despachado = embarques_stats.get('percentual_despachado', 0)
+                    descricao.append(f"- Status: {despachados} despachados | {aguardando} aguardando | {percentual_despachado}% despachado")
+            
+            # FATURAMENTO
+            if 'faturamento' in dados:
+                faturamento_data = dados['faturamento']
+                descricao.append("\n💰 **DADOS DE FATURAMENTO CARREGADOS:**")
+                total_faturas = faturamento_data.get('registros_carregados', 0)
+                descricao.append(f"- Total de faturas: {total_faturas}")
+                
+                if 'faturamento' in faturamento_data:
+                    fatura_stats = faturamento_data['faturamento'].get('estatisticas', {})
+                    valor_faturado = fatura_stats.get('valor_total_faturado', 0)
+                    ticket_medio = fatura_stats.get('ticket_medio', 0)
+                    descricao.append(f"- Valor total faturado: R$ {valor_faturado:,.2f}")
+                    descricao.append(f"- Ticket médio: R$ {ticket_medio:,.2f}")
+            
+            # TRANSPORTADORAS
+            if 'transportadoras' in dados:
+                transp_data = dados['transportadoras']
+                descricao.append("\n🚚 **DADOS DE TRANSPORTADORAS CARREGADOS:**")
+                total_transp = transp_data.get('registros_carregados', 0)
+                descricao.append(f"- Total de transportadoras: {total_transp}")
+                
+                if 'transportadoras' in transp_data:
+                    transp_stats = transp_data['transportadoras'].get('estatisticas', {})
+                    freteiros = transp_stats.get('freteiros', 0)
+                    empresas = transp_stats.get('empresas', 0)
+                    descricao.append(f"- Tipos: {empresas} empresas | {freteiros} freteiros")
+            
+            # FINANCEIRO
+            if 'financeiro' in dados:
+                fin_data = dados['financeiro']
+                descricao.append("\n💳 **DADOS FINANCEIROS CARREGADOS:**")
+                total_fin = fin_data.get('registros_carregados', 0)
+                descricao.append(f"- Total de registros financeiros: {total_fin}")
+                
+                if 'financeiro' in fin_data:
+                    fin_stats = fin_data['financeiro'].get('estatisticas', {})
+                    total_despesas = fin_stats.get('total_despesas', 0)
+                    valor_despesas = fin_stats.get('valor_total_despesas', 0)
+                    pendencias = fin_stats.get('total_pendencias', 0)
+                    descricao.append(f"- Despesas extras: {total_despesas} (R$ {valor_despesas:,.2f})")
+                    descricao.append(f"- Pendências financeiras: {pendencias}")
             
             # GRUPOS EMPRESARIAIS DETECTADOS
             if analise.get('tipo_consulta') == 'grupo_empresarial':
@@ -1355,7 +1557,8 @@ Por favor, forneça uma resposta completa incluindo:
                 descricao.append(f"\n🏢 **GRUPO EMPRESARIAL DETECTADO:**")
                 descricao.append(f"- Grupo: {grupo.get('grupo_detectado')}")
                 descricao.append(f"- Tipo: {grupo.get('tipo_negocio')}")
-                descricao.append(f"- CNPJs conhecidos: {', '.join(grupo.get('cnpj_prefixos', []))}")
+                if grupo.get('cnpj_prefixos'):
+                    descricao.append(f"- CNPJs conhecidos: {', '.join(grupo.get('cnpj_prefixos', []))}")
         
         return "\n".join(descricao) if descricao else "- Dados gerais do sistema"
     
