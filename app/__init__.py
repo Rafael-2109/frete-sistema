@@ -474,6 +474,11 @@ def create_app(config_name=None):
             db.session.remove()
             # Força nova conexão
             db.engine.dispose()
+            # Tenta novamente
+            try:
+                db.session.execute(text('SELECT 1'))
+            except:
+                pass
     
     # ✅ MIDDLEWARE PARA LIMPAR CONEXÕES APÓS CADA REQUEST
     @app.teardown_appcontext

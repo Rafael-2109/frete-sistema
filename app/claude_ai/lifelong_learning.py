@@ -420,10 +420,7 @@ class LifelongLearningSystem:
                     SELECT pattern_type, pattern_text, interpretation, confidence
                     FROM ai_knowledge_patterns
                     WHERE confidence > :threshold
-                    AND (
-                        LOWER(:consulta) LIKE '%' || LOWER(pattern_text) || '%'
-                        OR SIMILARITY(LOWER(:consulta), LOWER(pattern_text)) > 0.3
-                    )
+                    AND LOWER(:consulta) LIKE '%' || LOWER(pattern_text) || '%'
                     ORDER BY confidence DESC, usage_count DESC
                     LIMIT 10
                 """),
