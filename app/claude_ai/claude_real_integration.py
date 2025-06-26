@@ -2073,7 +2073,7 @@ Consulta recebida: "{consulta}"
                                 'status_embarque': embarque_item.embarque.status,
                                 'observacoes': embarque_item.embarque.observacoes,
                                 # CORREÇÃO: usar campo que existe
-                                'data_criacao': embarque_item.embarque.data_criacao.strftime('%d/%m/%Y %H:%M') if hasattr(embarque_item.embarque, 'data_criacao') and embarque_item.embarque.data_criacao else 'Data não disponível'
+                                'data_criacao': embarque_item.embarque.criado_em.strftime('%d/%m/%Y %H:%M') if hasattr(embarque_item.embarque, 'criado_em') and embarque_item.embarque.criado_em else 'Data não disponível'
                             }
                             nfs_encontradas += 1
                     except Exception as e:
@@ -2496,7 +2496,7 @@ def _carregar_dados_embarques(analise: Dict[str, Any], filtros_usuario: Dict[str
         
         # Query de embarques
         query_embarques = db.session.query(Embarque).filter(
-            Embarque.data_criacao >= data_limite,
+                            Embarque.criado_em >= data_limite,
             Embarque.status == 'ativo'
         )
         
@@ -2519,7 +2519,7 @@ def _carregar_dados_embarques(analise: Dict[str, Any], filtros_usuario: Dict[str
                         "numero": e.numero,
                         "motorista": e.motorista,
                         "placa_veiculo": e.placa_veiculo,
-                        "data_criacao": e.data_criacao.isoformat() if e.data_criacao else None,
+                        "data_criacao": e.criado_em.isoformat() if e.criado_em else None,
                         "data_embarque": e.data_embarque.isoformat() if e.data_embarque else None,
                         "status": "Despachado" if e.data_embarque else "Aguardando",
                         "observacoes": e.observacoes

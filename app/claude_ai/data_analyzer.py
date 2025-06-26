@@ -233,7 +233,7 @@ class GeralDataAnalyzer:
                     Embarque.data_embarque.is_(None)  # Ainda não saiu
                 )
             ).order_by(
-                Embarque.data_criacao.desc()
+                Embarque.criado_em.desc()
             ).limit(limite).all()
             
             embarques = []
@@ -242,7 +242,7 @@ class GeralDataAnalyzer:
                     'numero_embarque': embarque.numero_embarque,
                     'transportadora': embarque.transportadora.razao_social if embarque.transportadora else 'N/A',
                     'total_nfs': len(embarque.itens) if embarque.itens else 0,
-                    'data_criacao': embarque.data_criacao.strftime('%d/%m/%Y %H:%M') if embarque.data_criacao else 'N/A',
+                    'data_criacao': embarque.criado_em.strftime('%d/%m/%Y %H:%M') if embarque.criado_em else 'N/A',
                     'observacoes': embarque.observacoes[:50] + '...' if embarque.observacoes and len(embarque.observacoes) > 50 else embarque.observacoes
                 })
             

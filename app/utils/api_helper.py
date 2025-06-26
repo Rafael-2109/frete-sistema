@@ -284,7 +284,7 @@ class APIDataHelper:
             embarques_sem_data = Embarque.query.filter(
                 Embarque.status == 'ativo',
                 Embarque.data_embarque.is_(None),
-                Embarque.data_criacao < datetime.now() - timedelta(days=1)
+                Embarque.criado_em < datetime.now() - timedelta(days=1)
             ).count()
             
             if embarques_sem_data > 0:
