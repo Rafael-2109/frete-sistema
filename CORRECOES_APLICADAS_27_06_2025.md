@@ -58,13 +58,12 @@
 
 ### Problema principal:
 - **Alerta funcionava** mas **filtro não** devido a diferenças na implementação
-- Alerta usava dicionário Python sem limpeza de CNPJ
-- Filtro usava SQL com `func.replace` para limpar CNPJs
+- Implementação SQL complexa não funcionava corretamente
 
 ### Solução implementada:
-- **Dicionário híbrido**: Criado com CNPJs originais E limpos para compatibilidade
-- **Template atualizado**: Verificação com CNPJs limpos em ambas as tabelas (agrupada e normal)
-- **Sincronização**: Alerta e filtro agora usam exatamente a mesma lógica
+- **SIMPLIFICADO COMPLETAMENTE**: Alerta, filtro e contador agora usam exatamente a mesma lógica
+- **Sem SQL complexo**: Usa lista Python simples igual ao badge que funciona
+- **Dicionário híbrido**: Mantido para compatibilidade com CNPJs com/sem máscaras
 
 ### Como funciona agora:
 O filtro mostra TODAS as entregas que:

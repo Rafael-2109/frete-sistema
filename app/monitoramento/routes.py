@@ -508,31 +508,36 @@ def listar_entregas():
             EntregaMonitorada.status_finalizacao == None
         )
     elif status == 'sem_agendamento':
-        # Para o filtro sem_agendamento, mostrar TODAS as entregas que precisam de agendamento
-        # independente de outros status (atrasada, no prazo, etc)
-        
-        # Primeiro, limpar a query base para pegar todas as entregas
+        # ✅ SIMPLIFICADO: Usar exatamente a mesma lógica que funciona no badge
+        # Primeiro, pegar todas as entregas base
         query = EntregaMonitorada.query
         
         # Reaplicar filtro de vendedor se necessário
         if vendedor_filtro is not None:
             query = query.filter(EntregaMonitorada.vendedor.ilike(f'%{vendedor_filtro}%'))
         
-        # USAR EXATAMENTE A MESMA LÓGICA DO CONTADOR
-        subquery_agendamentos = db.session.query(AgendamentoEntrega.entrega_id).distinct()
-        
-        # Remover máscaras de CNPJ para comparação - igual ao contador
-        cnpjs_precisam_agendamento = db.session.query(
-            func.replace(func.replace(func.replace(ContatoAgendamento.cnpj, '.', ''), '-', ''), '/', '')
-        ).filter(
+        # Buscar CNPJs que precisam de agendamento (mesma lógica do dicionário)
+        contatos_que_precisam = ContatoAgendamento.query.filter(
             ContatoAgendamento.forma != None,
             ContatoAgendamento.forma != '',
             ContatoAgendamento.forma != 'SEM AGENDAMENTO'
-        ).subquery()
+        ).all()
         
+        # Criar lista de CNPJs (original e limpo - mesma lógica do template)
+        cnpjs_validos = []
+        for contato in contatos_que_precisam:
+            cnpjs_validos.append(contato.cnpj)
+            if contato.cnpj:
+                cnpj_limpo = contato.cnpj.replace('.', '').replace('-', '').replace('/', '')
+                cnpjs_validos.append(cnpj_limpo)
+        
+        # Filtrar entregas usando a mesma lógica do badge
         query = query.filter(
-            func.replace(func.replace(func.replace(EntregaMonitorada.cnpj_cliente, '.', ''), '-', ''), '/', '').in_(cnpjs_precisam_agendamento),
-            ~EntregaMonitorada.id.in_(subquery_agendamentos),
+            # CNPJ está na lista (original ou limpo)
+            db.or_(*[EntregaMonitorada.cnpj_cliente == cnpj for cnpj in cnpjs_validos]) if cnpjs_validos else db.text('1=0'),
+            # Sem agendamentos (len == 0)
+            ~EntregaMonitorada.id.in_(db.session.query(AgendamentoEntrega.entrega_id).distinct()),
+            # Não finalizada
             EntregaMonitorada.status_finalizacao == None
         )
     elif status == 'reagendar':
@@ -786,22 +791,31 @@ def listar_entregas():
         EntregaMonitorada.status_finalizacao == None
     ).count()
     
-    # ✅ CORRIGIDO: Contador Sem Agendamento
-    subquery_agendamentos = db.session.query(AgendamentoEntrega.entrega_id).distinct()
-    # Remover máscaras de CNPJ para comparação
-    cnpjs_precisam_agendamento = db.session.query(
-        func.replace(func.replace(func.replace(ContatoAgendamento.cnpj, '.', ''), '-', ''), '/', '')
-    ).filter(
+    # ✅ CONTADOR SIMPLIFICADO: Mesma lógica do filtro e badge
+    # Buscar CNPJs que precisam de agendamento
+    contatos_contador = ContatoAgendamento.query.filter(
         ContatoAgendamento.forma != None,
         ContatoAgendamento.forma != '',
         ContatoAgendamento.forma != 'SEM AGENDAMENTO'
-    ).subquery()
+    ).all()
     
-    contadores['sem_agendamento'] = EntregaMonitorada.query.filter(
-        func.replace(func.replace(func.replace(EntregaMonitorada.cnpj_cliente, '.', ''), '-', ''), '/', '').in_(cnpjs_precisam_agendamento),
-        ~EntregaMonitorada.id.in_(subquery_agendamentos),
-        EntregaMonitorada.status_finalizacao == None
-    ).count()
+    # Criar lista de CNPJs válidos
+    cnpjs_contador = []
+    for contato in contatos_contador:
+        cnpjs_contador.append(contato.cnpj)
+        if contato.cnpj:
+            cnpj_limpo = contato.cnpj.replace('.', '').replace('-', '').replace('/', '')
+            cnpjs_contador.append(cnpj_limpo)
+    
+    # Contar entregas usando a mesma lógica
+    if cnpjs_contador:
+        contadores['sem_agendamento'] = EntregaMonitorada.query.filter(
+            db.or_(*[EntregaMonitorada.cnpj_cliente == cnpj for cnpj in cnpjs_contador]),
+            ~EntregaMonitorada.id.in_(db.session.query(AgendamentoEntrega.entrega_id).distinct()),
+            EntregaMonitorada.status_finalizacao == None
+        ).count()
+    else:
+        contadores['sem_agendamento'] = 0
     
     # Contador NF no CD
     contadores['nf_cd'] = EntregaMonitorada.query.filter(
