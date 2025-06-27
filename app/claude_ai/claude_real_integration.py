@@ -121,6 +121,16 @@ class ClaudeRealIntegration:
             self.ml_models = get_ml_models_system()
             logger.info("🤖 Modelos ML Reais (predição + anomalia) carregados!")
             
+            # 🧑‍🤝‍🧑 HUMAN-IN-THE-LOOP LEARNING (ÓRFÃO CRÍTICO!)
+            from .human_in_loop_learning import get_human_learning_system
+            self.human_learning = get_human_learning_system()
+            logger.info("🧑‍🤝‍🧑 Human-in-the-Loop Learning (Sistema Órfão Crítico) carregado!")
+            
+            # 🛡️ INPUT VALIDATOR (Sistema de Validação)
+            from .input_validator import InputValidator
+            self.input_validator = InputValidator()
+            logger.info("🛡️ Input Validator (Validação de Entrada) carregado!")
+            
         except Exception as e:
             logger.warning(f"⚠️ Sistemas Avançados não disponíveis: {e}")
             self.multi_agent_system = None
@@ -130,6 +140,8 @@ class ClaudeRealIntegration:
             self.enhanced_claude = None
             self.suggestion_engine = None
             self.ml_models = None
+            self.human_learning = None
+            self.input_validator = None
 
         # System prompt gerado dinamicamente a partir de dados REAIS
         sistema_real = get_sistema_real_data()
@@ -145,6 +157,13 @@ Analise os dados acima e forneça insights úteis. Explore padrões, tendências
         
         if not self.modo_real:
             return self._fallback_simulado(consulta)
+        
+        # 🛡️ VALIDAÇÃO DE ENTRADA (ORPHAN SYSTEM INTEGRATION)
+        if self.input_validator:
+            valid, error_msg = self.input_validator.validate_query(consulta)
+            if not valid:
+                logger.warning(f"🛡️ CONSULTA INVÁLIDA: {error_msg}")
+                return f"❌ **Erro de Validação**: {error_msg}\n\nPor favor, reformule sua consulta seguindo as diretrizes de segurança."
         
         # 🧠 SISTEMA DE CONTEXTO CONVERSACIONAL - DEFINIR NO INÍCIO
         user_id = str(user_context.get('user_id', 'anonymous')) if user_context else 'anonymous'
@@ -585,7 +604,27 @@ NÃO misturar com dados de outros clientes."""
                 except Exception as e:
                     logger.warning(f"⚠️ Modelos ML falharam: {e}")
             
-            # 🚀 FASE 4: IA AVANÇADA (Sistema Industrial Completo - Metacognitivo + Loop Semântico)
+            # 🏗️ FASE 4: STRUCTURAL AI VALIDATION (ÓRFÃO INTEGRADO!)
+            structural_validation = None
+            if self.advanced_ai_system and hasattr(self.advanced_ai_system, 'structural_ai'):
+                try:
+                    logger.info("🏗️ Aplicando Validação Estrutural...")
+                    structural_ai = self.advanced_ai_system.structural_ai
+                    
+                    if hasattr(structural_ai, 'validate_business_logic'):
+                        structural_validation = structural_ai.validate_business_logic(dados_contexto)
+                        
+                        if not structural_validation.get('structural_consistency', True):
+                            logger.warning("🚨 Problemas estruturais detectados nos dados!")
+                            # Adicionar warnings à resposta
+                            violations = structural_validation.get('business_flow_violations', [])
+                            if violations:
+                                logger.warning(f"🚨 Violações detectadas: {', '.join(violations)}")
+                                dados_contexto['structural_warnings'] = violations
+                except Exception as e:
+                    logger.warning(f"⚠️ Validação Estrutural falhou: {e}")
+            
+            # 🚀 FASE 5: IA AVANÇADA (Sistema Industrial Completo - Metacognitivo + Loop Semântico)
             advanced_result = None
             if not enhanced_result and self.advanced_ai_system and hasattr(self.advanced_ai_system, 'process_advanced_query'):
                 try:
@@ -738,6 +777,28 @@ Claude 4 Sonnet | {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
             
             if aprendizados.get('padroes_detectados'):
                 logger.info(f"🧠 Novos padrões aprendidos: {len(aprendizados['padroes_detectados'])}")
+            
+            # 🧑‍🤝‍🧑 HUMAN-IN-THE-LOOP LEARNING (ÓRFÃO INTEGRADO!)
+            if self.human_learning:
+                try:
+                    # Capturar interação automaticamente para análise de padrões
+                    feedback_automatic = self.human_learning.capture_feedback(
+                        query=consulta,
+                        response=resposta_final,
+                        user_feedback="Interação processada automaticamente",
+                        feedback_type="positive",  # Assumir positivo se não há erro
+                        severity="low",
+                        context={
+                            'user_id': user_context.get('user_id') if user_context else None,
+                            'automatic': True,
+                            'processing_source': 'claude_real_integration',
+                            'interpretation': contexto_analisado,
+                            'timestamp': datetime.now().isoformat()
+                        }
+                    )
+                    logger.info(f"🧑‍🤝‍🧑 Interação capturada para Human Learning: {feedback_automatic}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Human Learning falhou na captura automática: {e}")
             
             return resposta_final
             
