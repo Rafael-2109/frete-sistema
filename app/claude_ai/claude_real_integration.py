@@ -85,14 +85,21 @@ class ClaudeRealIntegration:
             self._cache_timeout = 300  # 5 minutos fallback
             logger.info("⚠️ Usando cache em memória (fallback)")
         
-        # Sistema Multi-Agente para validação lógica avançada
+        # Sistemas Avançados de IA Industrial
         try:
             from .multi_agent_system import get_multi_agent_system
             self.multi_agent_system = get_multi_agent_system(self.client)
             logger.info("🤖 Sistema Multi-Agente carregado com sucesso!")
+            
+            # Sistema Avançado Completo (Metacognitivo + Loop Semântico + Validação Estrutural)
+            from .advanced_integration import get_advanced_ai_integration
+            self.advanced_ai_system = get_advanced_ai_integration(self.client)
+            logger.info("🚀 Sistema IA Avançado (Metacognitivo + Loop Semântico) carregado!")
+            
         except Exception as e:
-            logger.warning(f"⚠️ Sistema Multi-Agente não disponível: {e}")
+            logger.warning(f"⚠️ Sistemas Avançados não disponíveis: {e}")
             self.multi_agent_system = None
+            self.advanced_ai_system = None
 
         # System prompt gerado dinamicamente a partir de dados REAIS
         sistema_real = get_sistema_real_data()
@@ -497,11 +504,59 @@ NÃO misturar com dados de outros clientes."""
                 }
             ]
             
-            # 🤖 FASE MULTI-AGENTE: Validação lógica avançada
-            multi_agent_result = None
-            if self.multi_agent_system and hasattr(self.multi_agent_system, 'process_query'):
+            # 🚀 FASE IA AVANÇADA: Sistema Industrial Completo
+            advanced_result = None
+            
+            # Tentar usar Sistema IA Avançado primeiro (mais sofisticado)
+            if self.advanced_ai_system and hasattr(self.advanced_ai_system, 'process_advanced_query'):
                 try:
-                    logger.info("🤖 Iniciando análise Multi-Agente...")
+                    logger.info("🚀 Iniciando processamento IA AVANÇADA...")
+                    
+                    # Preparar contexto para sistema avançado
+                    advanced_context = {
+                        'dados_carregados': dados_contexto,
+                        'tipo_consulta': tipo_analise,
+                        'cliente_especifico': cliente_contexto,
+                        'periodo_dias': periodo_dias,
+                        'user_context': user_context or {},
+                        'correcao_usuario': correcao_usuario,
+                        'debug': False  # Ativar para debug detalhado
+                    }
+                    
+                    # Executar processamento avançado (assíncrono)
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        advanced_result = loop.run_until_complete(
+                            self.advanced_ai_system.process_advanced_query(consulta, advanced_context)
+                        )
+                        logger.info("✅ IA Avançada concluída com sucesso!")
+                    finally:
+                        loop.close()
+                    
+                    # Verificar se sistema avançado forneceu resposta satisfatória
+                    if (advanced_result and 
+                        advanced_result.get('success') and 
+                        advanced_result.get('advanced_metadata', {}).get('metacognitive_score', 0) >= 0.6):
+                        
+                        score = advanced_result['advanced_metadata']['metacognitive_score']
+                        logger.info(f"🎯 IA Avançada forneceu resposta válida (score metacognitivo: {score:.2f})")
+                        resultado = advanced_result['response']
+                        
+                    else:
+                        logger.info("⚠️ IA Avançada não atingiu score adequado, tentando Multi-Agente...")
+                        advanced_result = None
+                        
+                except Exception as e:
+                    logger.error(f"❌ Erro na IA Avançada: {e}, tentando Multi-Agente...")
+                    advanced_result = None
+            
+            # 🤖 FALLBACK: Sistema Multi-Agente se IA Avançada falhar
+            multi_agent_result = None
+            if not advanced_result and self.multi_agent_system and hasattr(self.multi_agent_system, 'process_query'):
+                try:
+                    logger.info("🤖 Iniciando análise Multi-Agente (fallback)...")
                     
                     # Preparar contexto para multi-agente
                     context_for_agents = {
@@ -551,8 +606,8 @@ NÃO misturar com dados de outros clientes."""
                     logger.error(f"❌ Erro no Multi-Agente: {e}, usando Claude padrão")
                     multi_agent_result = None
             
-            # Se multi-agente não funcionou, usar Claude padrão
-            if not multi_agent_result:
+            # Se ambos sistemas avançados falharam, usar Claude padrão
+            if not advanced_result and not multi_agent_result:
                 # Chamar Claude REAL (agora Claude 4 Sonnet!)
                 response = self.client.messages.create(
                     model="claude-sonnet-4-20250514",  # Claude 4 Sonnet
