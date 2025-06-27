@@ -85,6 +85,15 @@ class ClaudeRealIntegration:
             self._cache_timeout = 300  # 5 minutos fallback
             logger.info("⚠️ Usando cache em memória (fallback)")
         
+        # Sistema Multi-Agente para validação lógica avançada
+        try:
+            from .multi_agent_system import get_multi_agent_system
+            self.multi_agent_system = get_multi_agent_system(self.client)
+            logger.info("🤖 Sistema Multi-Agente carregado com sucesso!")
+        except Exception as e:
+            logger.warning(f"⚠️ Sistema Multi-Agente não disponível: {e}")
+            self.multi_agent_system = None
+
         # System prompt gerado dinamicamente a partir de dados REAIS
         sistema_real = get_sistema_real_data()
         self.system_prompt = """Você é um especialista em análise de dados de logística e fretes.
@@ -488,19 +497,75 @@ NÃO misturar com dados de outros clientes."""
                 }
             ]
             
-            # Chamar Claude REAL (agora Claude 4 Sonnet!)
-            response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",  # Claude 4 Sonnet
-                max_tokens=4000,  # Restaurado para análises completas
-                temperature=0.0,  # Máxima precisão - sem criatividade
-                timeout=120.0,  # 2 minutos para análises profundas
-                system=self.system_prompt.format(
-                    dados_contexto_especifico=self._descrever_contexto_carregado(contexto_analisado)
-                ),
-                messages=messages  # type: ignore
-            )
+            # 🤖 FASE MULTI-AGENTE: Validação lógica avançada
+            multi_agent_result = None
+            if self.multi_agent_system and hasattr(self.multi_agent_system, 'process_query'):
+                try:
+                    logger.info("🤖 Iniciando análise Multi-Agente...")
+                    
+                    # Preparar contexto para multi-agente
+                    context_for_agents = {
+                        'dados_carregados': dados_contexto,
+                        'tipo_consulta': tipo_analise,
+                        'cliente_especifico': cliente_contexto,
+                        'periodo_dias': periodo_dias,
+                        'user_context': user_context or {}
+                    }
+                    
+                    # Executar análise multi-agente (assíncrona)
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        multi_agent_result = loop.run_until_complete(
+                            self.multi_agent_system.process_query(consulta, context_for_agents)
+                        )
+                        logger.info("✅ Análise Multi-Agente concluída com sucesso!")
+                    finally:
+                        loop.close()
+                    
+                    # Verificar se multi-agente forneceu resposta satisfatória
+                    if (multi_agent_result and 
+                        multi_agent_result.get('success') and 
+                        multi_agent_result.get('metadata', {}).get('validation_score', 0) >= 0.7):
+                        
+                        logger.info(f"🎯 Multi-Agente forneceu resposta válida (score: {multi_agent_result['metadata']['validation_score']:.2f})")
+                        resultado = multi_agent_result['response']
+                        
+                        # Adicionar metadata do multi-agente
+                        metadata_info = multi_agent_result.get('metadata', {})
+                        agents_used = metadata_info.get('agents_used', 0)
+                        processing_time = metadata_info.get('processing_time', 0)
+                        
+                        resultado += f"\n\n---\n🤖 **Multi-Agent Analysis**\n"
+                        resultado += f"• Agentes especializados: {agents_used}\n"
+                        resultado += f"• Score de validação: {metadata_info.get('validation_score', 0):.1%}\n"
+                        resultado += f"• Tempo de processamento: {processing_time:.1f}s\n"
+                        resultado += f"• Claude 4 Sonnet | {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+                        
+                    else:
+                        logger.info("⚠️ Multi-Agente não forneceu resposta adequada, usando Claude padrão")
+                        multi_agent_result = None
+                        
+                except Exception as e:
+                    logger.error(f"❌ Erro no Multi-Agente: {e}, usando Claude padrão")
+                    multi_agent_result = None
             
-            resultado = response.content[0].text
+            # Se multi-agente não funcionou, usar Claude padrão
+            if not multi_agent_result:
+                # Chamar Claude REAL (agora Claude 4 Sonnet!)
+                response = self.client.messages.create(
+                    model="claude-sonnet-4-20250514",  # Claude 4 Sonnet
+                    max_tokens=4000,  # Restaurado para análises completas
+                    temperature=0.0,  # Máxima precisão - sem criatividade
+                    timeout=120.0,  # 2 minutos para análises profundas
+                    system=self.system_prompt.format(
+                        dados_contexto_especifico=self._descrever_contexto_carregado(contexto_analisado)
+                    ),
+                    messages=messages  # type: ignore
+                )
+                
+                resultado = response.content[0].text
             
             # Log da interação
             logger.info(f"✅ Claude REAL (4.0) processou: '{consulta[:50]}...'")
