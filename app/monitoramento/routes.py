@@ -532,7 +532,7 @@ def listar_entregas():
     if status == 'nf_cd':
         query = query.filter(EntregaMonitorada.nf_cd == True)
 
-    # ✅ CORRIGIDO: Filtro sem_agendamento como IF independente (não elif)
+    # ✅ CORRIGIDO: Filtro sem_agendamento como IF independente - USAR CAMPO DIRETO
     if status == 'sem_agendamento':
         # Buscar CNPJs que precisam de agendamento (mesma lógica do dicionário)
         contatos_que_precisam = ContatoAgendamento.query.filter(
@@ -549,13 +549,13 @@ def listar_entregas():
                 cnpj_limpo = contato.cnpj.replace('.', '').replace('-', '').replace('/', '')
                 cnpjs_validos.append(cnpj_limpo)
         
-        # Aplicar filtros mantendo query existente
+        # ✅ USAR CAMPO DIRETO como nos pedidos (muito mais simples e eficiente)
         if cnpjs_validos:
             query = query.filter(
                 # CNPJ está na lista (original ou limpo)
                 db.or_(*[EntregaMonitorada.cnpj_cliente == cnpj for cnpj in cnpjs_validos]),
-                # Sem agendamentos (len == 0)
-                ~EntregaMonitorada.id.in_(db.session.query(AgendamentoEntrega.entrega_id).distinct()),
+                # ✅ CORREÇÃO CRÍTICA: Usar campo direto data_agenda ao invés de subquery
+                EntregaMonitorada.data_agenda.is_(None),  # Sem data de agendamento
                 # Não finalizada
                 EntregaMonitorada.status_finalizacao == None
             )
@@ -790,7 +790,7 @@ def listar_entregas():
         EntregaMonitorada.status_finalizacao == None
     ).count()
     
-    # ✅ CONTADOR SIMPLIFICADO: Mesma lógica do filtro e badge
+    # ✅ CONTADOR SIMPLIFICADO: Mesma lógica do filtro usando campo direto
     # Buscar CNPJs que precisam de agendamento
     contatos_contador = ContatoAgendamento.query.filter(
         ContatoAgendamento.forma != None,
@@ -806,11 +806,11 @@ def listar_entregas():
             cnpj_limpo = contato.cnpj.replace('.', '').replace('-', '').replace('/', '')
             cnpjs_contador.append(cnpj_limpo)
     
-    # Contar entregas usando a mesma lógica
+    # ✅ USAR CAMPO DIRETO para o contador também (consistente com filtro)
     if cnpjs_contador:
         contadores['sem_agendamento'] = EntregaMonitorada.query.filter(
             db.or_(*[EntregaMonitorada.cnpj_cliente == cnpj for cnpj in cnpjs_contador]),
-            ~EntregaMonitorada.id.in_(db.session.query(AgendamentoEntrega.entrega_id).distinct()),
+            EntregaMonitorada.data_agenda.is_(None),  # Sem data de agendamento (campo direto)
             EntregaMonitorada.status_finalizacao == None
         ).count()
     else:

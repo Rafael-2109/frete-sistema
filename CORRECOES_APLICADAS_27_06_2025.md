@@ -82,13 +82,17 @@
 - **Preservação de Estado**: URLs e JavaScript mantêm todos filtros ao navegar
 - **Error Recovery**: JavaScript regenera tokens CSRF automaticamente quando falham
 
-#### 10. **Filtro "Agend. Pendente" no Monitoramento - CAUSA RAIZ CORRIGIDA**
-- **Problema Real Identificado**: O filtro estava dentro de um `elif` ao invés de `if` independente
-- **Causa Raiz**: `elif status == 'sem_agendamento':` nunca executava se outros status fossem aplicados primeiro
-- **Correção Definitiva**: Movido para `if status == 'sem_agendamento':` como filtro independente
-- **Insight do Usuário**: "Ele não é elif é apenas IF" - diagnóstico perfeito!
-- **Arquivo**: `app/monitoramento/routes.py` (movido para após linha 532)
-- **Resultado**: Filtro agora funciona corretamente como filtro independente
+#### 10. **Filtro "Agend. Pendente" no Monitoramento - CAUSA RAIZ REAL CORRIGIDA**
+- **Problema Real**: Usava subquery complexa `~EntregaMonitorada.id.in_(AgendamentoEntrega.entrega_id)` ao invés de campo direto
+- **Diagnóstico do Usuário**: "Agend. Pendente não funciona no monitoramento, mas funciona nos pedidos"
+- **Diferença Crítica**: Pedidos usa `Pedido.agendamento.is_(None)` (campo direto), monitoramento usava subquery
+- **Correção Definitiva**: Trocado para `EntregaMonitorada.data_agenda.is_(None)` (campo direto)
+- **Benefícios**: 
+  1. Consistência entre pedidos e monitoramento
+  2. Query muito mais eficiente (sem subquery)
+  3. Funcionalidade idêntica ao que funciona nos pedidos
+- **Arquivos**: `app/monitoramento/routes.py` (filtro + contador corrigidos)
+- **Resultado**: Filtro "Agend. Pendente" agora funciona corretamente no monitoramento
 
 #### 11. **Sistema CSRF Ultra-Robusto Implementado - RESOLVIDO**
 - **Problema**: Erros frequentes de "CSRF token missing" causando falhas em formulários
