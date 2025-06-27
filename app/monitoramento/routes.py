@@ -507,15 +507,33 @@ def listar_entregas():
             EntregaMonitorada.data_entrega_prevista == None,
             EntregaMonitorada.status_finalizacao == None
         )
-    elif status == 'sem_agendamento':
-        # ✅ SIMPLIFICADO: Usar exatamente a mesma lógica que funciona no badge
-        # Primeiro, pegar todas as entregas base
-        query = EntregaMonitorada.query
-        
-        # Reaplicar filtro de vendedor se necessário
-        if vendedor_filtro is not None:
-            query = query.filter(EntregaMonitorada.vendedor.ilike(f'%{vendedor_filtro}%'))
-        
+
+    if status == 'reagendar':
+        query = query.filter(
+            EntregaMonitorada.reagendar == True,
+            EntregaMonitorada.status_finalizacao == None
+        )
+    if status == 'pendencia_financeira':
+        query = query.join(PendenciaFinanceiraNF, PendenciaFinanceiraNF.entrega_id == EntregaMonitorada.id)
+        # Pendências não respondidas OU com resposta apagada
+        query = query.filter(
+            db.or_(
+                PendenciaFinanceiraNF.respondida_em == None,
+                PendenciaFinanceiraNF.resposta_excluida_em != None
+            )
+        )
+    # ✅ NOVOS FILTROS DE STATUS ESPECÍFICOS
+    if status == 'troca_nf':
+        query = query.filter(EntregaMonitorada.status_finalizacao == 'Troca de NF')
+    elif status == 'cancelada':
+        query = query.filter(EntregaMonitorada.status_finalizacao == 'Cancelada')
+    elif status == 'devolvida':
+        query = query.filter(EntregaMonitorada.status_finalizacao == 'Devolvida')
+    if status == 'nf_cd':
+        query = query.filter(EntregaMonitorada.nf_cd == True)
+
+    # ✅ CORRIGIDO: Filtro sem_agendamento como IF independente (não elif)
+    if status == 'sem_agendamento':
         # Buscar CNPJs que precisam de agendamento (mesma lógica do dicionário)
         contatos_que_precisam = ContatoAgendamento.query.filter(
             ContatoAgendamento.forma != None,
@@ -531,38 +549,19 @@ def listar_entregas():
                 cnpj_limpo = contato.cnpj.replace('.', '').replace('-', '').replace('/', '')
                 cnpjs_validos.append(cnpj_limpo)
         
-        # Filtrar entregas usando a mesma lógica do badge
-        query = query.filter(
-            # CNPJ está na lista (original ou limpo)
-            db.or_(*[EntregaMonitorada.cnpj_cliente == cnpj for cnpj in cnpjs_validos]) if cnpjs_validos else db.text('1=0'),
-            # Sem agendamentos (len == 0)
-            ~EntregaMonitorada.id.in_(db.session.query(AgendamentoEntrega.entrega_id).distinct()),
-            # Não finalizada
-            EntregaMonitorada.status_finalizacao == None
-        )
-    elif status == 'reagendar':
-        query = query.filter(
-            EntregaMonitorada.reagendar == True,
-            EntregaMonitorada.status_finalizacao == None
-        )
-    elif status == 'pendencia_financeira':
-        query = query.join(PendenciaFinanceiraNF, PendenciaFinanceiraNF.entrega_id == EntregaMonitorada.id)
-        # Pendências não respondidas OU com resposta apagada
-        query = query.filter(
-            db.or_(
-                PendenciaFinanceiraNF.respondida_em == None,
-                PendenciaFinanceiraNF.resposta_excluida_em != None
+        # Aplicar filtros mantendo query existente
+        if cnpjs_validos:
+            query = query.filter(
+                # CNPJ está na lista (original ou limpo)
+                db.or_(*[EntregaMonitorada.cnpj_cliente == cnpj for cnpj in cnpjs_validos]),
+                # Sem agendamentos (len == 0)
+                ~EntregaMonitorada.id.in_(db.session.query(AgendamentoEntrega.entrega_id).distinct()),
+                # Não finalizada
+                EntregaMonitorada.status_finalizacao == None
             )
-        )
-    # ✅ NOVOS FILTROS DE STATUS ESPECÍFICOS
-    elif status == 'troca_nf':
-        query = query.filter(EntregaMonitorada.status_finalizacao == 'Troca de NF')
-    elif status == 'cancelada':
-        query = query.filter(EntregaMonitorada.status_finalizacao == 'Cancelada')
-    elif status == 'devolvida':
-        query = query.filter(EntregaMonitorada.status_finalizacao == 'Devolvida')
-    elif status == 'nf_cd':
-        query = query.filter(EntregaMonitorada.nf_cd == True)
+        else:
+            # Se não há CNPJs válidos, não mostrar nenhuma entrega
+            query = query.filter(db.text('1=0'))
 
     if numero_nf := request.args.get('numero_nf'):
         query = query.filter(EntregaMonitorada.numero_nf.ilike(f"%{numero_nf}%"))

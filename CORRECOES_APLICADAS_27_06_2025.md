@@ -82,10 +82,31 @@
 - **Preservação de Estado**: URLs e JavaScript mantêm todos filtros ao navegar
 - **Error Recovery**: JavaScript regenera tokens CSRF automaticamente quando falham
 
+#### 10. **Filtro "Agend. Pendente" no Monitoramento - CAUSA RAIZ CORRIGIDA**
+- **Problema Real Identificado**: O filtro estava dentro de um `elif` ao invés de `if` independente
+- **Causa Raiz**: `elif status == 'sem_agendamento':` nunca executava se outros status fossem aplicados primeiro
+- **Correção Definitiva**: Movido para `if status == 'sem_agendamento':` como filtro independente
+- **Insight do Usuário**: "Ele não é elif é apenas IF" - diagnóstico perfeito!
+- **Arquivo**: `app/monitoramento/routes.py` (movido para após linha 532)
+- **Resultado**: Filtro agora funciona corretamente como filtro independente
+
+#### 11. **Sistema CSRF Ultra-Robusto Implementado - RESOLVIDO**
+- **Problema**: Erros frequentes de "CSRF token missing" causando falhas em formulários
+- **Melhorias JavaScript Implementadas**:
+  1. **Detecção automática**: Sistema detecta erros CSRF e recarrega página automaticamente
+  2. **Criação automática**: Cria inputs CSRF automaticamente se não existirem em formulários
+  3. **Múltiplos headers**: X-CSRFToken, X-CSRF-Token, HTTP_X_CSRF_TOKEN para máxima compatibilidade
+  4. **Interceptação AJAX**: Adiciona tokens automaticamente em requisições fetch/AJAX
+  5. **Logs informativos**: Console logs para debug de problemas CSRF
+- **Arquivo**: `app/templates/base.html` (JavaScript ultra-melhorado)
+- **Arquivo**: `app/utils/csrf_helper.py` (validação mais robusta)
+- **Resultado**: Sistema muito mais robusto contra erros CSRF, recovery automático
+
 ### Status Final:
-✅ **TODAS AS 9 CORREÇÕES IMPLEMENTADAS COM SUCESSO**
+✅ **TODAS AS 11 CORREÇÕES IMPLEMENTADAS COM SUCESSO**
 - 6 problemas originais do usuário resolvidos
-- 3 novos problemas críticos detectados e corrigidos
-- Sistema robusto contra erros CSRF
-- Filtros e contadores funcionando perfeitamente
-- Pronto para deploy no Render com aplicação automática 
+- 5 novos problemas críticos detectados e corrigidos (incluindo CSRF definitivo)
+- Sistema ultra-robusto contra erros CSRF com recovery automático
+- Filtros e contadores funcionando perfeitamente em pedidos E monitoramento
+- JavaScript robusto para interceptação de formulários e AJAX
+- Pronto para deploy no Render com máxima estabilidade 
