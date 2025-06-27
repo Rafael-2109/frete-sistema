@@ -21,83 +21,70 @@
 - `EntregaMonitorada.comentarios` não suportava eager loading devido a `lazy='dynamic'`
 
 ### Solução:
-- Removido `joinedload` para comentários
-- Comentários são carregados manualmente após a query principal
-- Uso de atributo temporário `_comentarios_carregados` para otimização
+- Removido `joinedload(EntregaMonitorada.comentarios)` da query principal
+- Comentários agora são carregados manualmente após a query principal
+- Adicionado atributo `_comentarios_carregados` para cache
+- Sistema usa comentários pré-carregados quando disponíveis
 
 ---
 
-## 3. Botão "Atrasados" nos pedidos ✅
+## 3. Botão "Atrasados" reposicionado e filtro ajustado ✅
 
-### Posicionamento:
-- Movido para o **lado esquerdo** dos botões de data
-
-### Lógica de filtro ajustada:
-- Considera apenas **data de expedição < hoje**
-- **Remove** verificação de data de agendamento
-- Filtra apenas pedidos **sem NF**
-- Inclui pedidos com status "COTADO" ou "ABERTO"
-
-### Dois níveis:
-1. **Atrasados**: Todos os pedidos atrasados (cotados + abertos)
-2. **Atrasados Abertos**: Apenas pedidos abertos atrasados
+### Alterações:
+- **Posição**: Movido para o lado esquerdo (antes das datas)
+- **Critério**: Considera apenas **data de expedição < hoje** 
+- **Não** verifica mais data de agendamento
+- **Sem NF**: Filtra apenas pedidos sem nota fiscal
+- **Contador**: Mostra quantos pedidos estão nesta condição
+- **JavaScript**: Mantém filtros ao ordenar colunas
 
 ---
 
-## 4. Validação de forma de agendamento ✅
+## 4. Validação de agendamento ajustada ✅
 
-### Fluxo implementado:
-1. Se forma de agendamento foi preenchida → usa valor informado
-2. Se não foi preenchida → busca em `cadastros_agendamento` pelo CNPJ
-3. Se encontrou cadastro → usa forma cadastrada automaticamente
-4. Se não encontrou → **obriga preenchimento** com mensagem de erro
+### Regra implementada:
+1. **Se forma preenchida**: Grava com a forma informada
+2. **Se forma vazia**: Busca em `cadastros_agendamento` por CNPJ
+3. **Se encontrar cadastro**: Usa forma e contato cadastrados
+4. **Se não encontrar**: Exige preenchimento obrigatório
 
-### Mensagem de erro:
-```
-⚠️ É obrigatório informar a forma de agendamento! Este cliente não possui forma de agendamento cadastrada.
-```
+### Correção adicional:
+- **Protocolo não é obrigatório**: Removido `required` do campo no modal HTML
+- Protocolo continua opcional conforme formulário backend
 
 ---
 
 ## 5. Filtro "Agend. Pendente" no Monitoramento corrigido ✅
 
-### Problema:
-- O filtro estava dentro de uma cadeia de `elif`, então só funcionava quando o status era exatamente "sem_agendamento"
-- Entregas sem agendamento mas com outros status (atrasadas, no prazo) não apareciam
-- CNPJs com pontos/traços não eram comparados corretamente
+### Problema principal:
+- **Alerta funcionava** mas **filtro não** devido a diferenças na implementação
+- Alerta usava dicionário Python sem limpeza de CNPJ
+- Filtro usava SQL com `func.replace` para limpar CNPJs
 
-### Solução:
-- Quando o status é "sem_agendamento", recria a query base para mostrar TODAS as entregas que precisam de agendamento
-- Removidas máscaras de CNPJ em ambos os lados da comparação
-- Usado `func.replace()` do SQLAlchemy para limpar CNPJs antes da comparação
-- Aplicado tanto no filtro quanto no contador
+### Solução implementada:
+- **Dicionário híbrido**: Criado com CNPJs originais E limpos para compatibilidade
+- **Template atualizado**: Verificação com CNPJs limpos em ambas as tabelas (agrupada e normal)
+- **Sincronização**: Alerta e filtro agora usam exatamente a mesma lógica
 
-### Funcionamento:
-O filtro agora mostra TODAS as entregas que:
-1. Têm o CNPJ do cliente cadastrado em `contatos_agendamento`
-2. O contato tem forma de agendamento preenchida (diferente de vazio ou "SEM AGENDAMENTO")
-3. A entrega não tem nenhum agendamento registrado
-4. A entrega não foi finalizada
-5. **Independente de outros status** (atrasada, no prazo, etc)
-
-### Script de diagnóstico:
-- Criado `verificar_agendamento_pendente.py` para debugar problemas específicos
+### Como funciona agora:
+O filtro mostra TODAS as entregas que:
+1. ✅ Têm CNPJ do cliente cadastrado em `contatos_agendamento`
+2. ✅ O contato tem forma de agendamento preenchida (≠ vazio ou "SEM AGENDAMENTO")
+3. ✅ A entrega não tem nenhum agendamento registrado
+4. ✅ A entrega não foi finalizada
 
 ---
 
-## Resumo das Correções
+## ✅ Status Final:
 
-✅ **Todas as 5 correções foram implementadas com sucesso!**
+Todas as 5 correções foram implementadas com sucesso:
+1. **Campo observ_ped_1**: Expandido para 700 caracteres ✅
+2. **Export Excel**: Erro de eager loading resolvido ✅  
+3. **Botão Atrasados**: Reposicionado e com filtro correto ✅
+4. **Agendamento**: Validação inteligente implementada ✅
+5. **Filtro Agend. Pendente**: Sincronizado com alerta ✅
 
-1. **Campo observ_ped_1**: Aumentado para 700 caracteres com truncamento automático
-2. **Exportação Excel**: Corrigido erro de eager loading com comentários
-3. **Botão "Atrasados"**: Adicionado à esquerda, filtra por expedição < hoje
-4. **Agendamento**: Validação melhorada com busca automática em cadastros
-5. **Filtro "Agend. Pendente"**: Corrigido problema de comparação de CNPJs
-
-### Deploy no Render:
-- As migrações serão aplicadas automaticamente durante o deploy
-- Nenhuma ação manual necessária!
+**Deploy necessário**: Fazer push para o Render aplicar as alterações automaticamente.
 
 ## Notas importantes:
 

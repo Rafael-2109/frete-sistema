@@ -679,7 +679,15 @@ def listar_entregas():
 
     # ------------------------------
     # Montagem do dicionário de contatos de agendamento
-    contatos_agendamento = {c.cnpj: c for c in ContatoAgendamento.query.all()}
+    # ✅ CORRIGIDO: Criar dicionário com CNPJs limpos para ser compatível com o filtro
+    contatos_agendamento = {}
+    for c in ContatoAgendamento.query.all():
+        # CNPJ original (para compatibilidade)
+        contatos_agendamento[c.cnpj] = c
+        # CNPJ limpo (para funcionar com o filtro)
+        if c.cnpj:
+            cnpj_limpo = c.cnpj.replace('.', '').replace('-', '').replace('/', '')
+            contatos_agendamento[cnpj_limpo] = c
 
     agrupar = request.args.get('agrupar') == 'status'
     entregas_agrupadas = defaultdict(list)

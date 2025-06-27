@@ -752,7 +752,10 @@ body {
                         </button>
                       {% endif %}
                       
-                      {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma and contatos_agendamento[e.cnpj_cliente].forma != '' and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' and not e.status_finalizacao %}
+                      {# ✅ CORRIGIDO: Verificar agendamento pendente com CNPJ limpo #}
+                      {% set cnpj_limpo = e.cnpj_cliente.replace('.', '').replace('-', '').replace('/', '') if e.cnpj_cliente else '' %}
+                      {% set contato = contatos_agendamento.get(cnpj_limpo) or contatos_agendamento.get(e.cnpj_cliente) %}
+                      {% if contato and e.agendamentos|length == 0 and contato.forma and contato.forma != '' and contato.forma != 'SEM AGENDAMENTO' and not e.status_finalizacao %}
                         <span class="badge bg-danger">⚠️ Agend. Pendente</span>
                       {% endif %}
                       
@@ -1022,7 +1025,10 @@ body {
                 </button>
               {% endif %}
               
-              {% if e.cnpj_cliente in contatos_agendamento and e.agendamentos|length == 0 and contatos_agendamento[e.cnpj_cliente].forma and contatos_agendamento[e.cnpj_cliente].forma != '' and contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO' and not e.status_finalizacao %}
+              {# ✅ CORRIGIDO: Verificar agendamento pendente com CNPJ limpo #}
+              {% set cnpj_limpo = e.cnpj_cliente.replace('.', '').replace('-', '').replace('/', '') if e.cnpj_cliente else '' %}
+              {% set contato = contatos_agendamento.get(cnpj_limpo) or contatos_agendamento.get(e.cnpj_cliente) %}
+              {% if contato and e.agendamentos|length == 0 and contato.forma and contato.forma != '' and contato.forma != 'SEM AGENDAMENTO' and not e.status_finalizacao %}
                 <span class="badge bg-danger">⚠️ Agend. Pendente</span>
               {% endif %}
               
@@ -1253,7 +1259,7 @@ body {
               <div class="row mt-3">
                 <div class="col-md-6">
                   <label for="forma-agendamento" class="form-label">Forma</label>
-                  <select id="forma-agendamento" class="form-select" required>
+                  <select id="forma-agendamento" class="form-select">
                     <option value="">Selecione...</option>
                     <option value="Portal">Portal</option>
                     <option value="Telefone">Telefone</option>
@@ -1263,7 +1269,7 @@ body {
                 </div>
                 <div class="col-md-6">
                   <label for="protocolo-agendamento" class="form-label">Protocolo</label>
-                  <input type="text" id="protocolo-agendamento" class="form-control" placeholder="Protocolo...">
+                  <input type="text" id="protocolo-agendamento" class="form-control" placeholder="Protocolo (opcional)...">
                 </div>
               </div>
               
