@@ -508,15 +508,31 @@ def listar_entregas():
             EntregaMonitorada.status_finalizacao == None
         )
     elif status == 'sem_agendamento':
+        # Para o filtro sem_agendamento, mostrar TODAS as entregas que precisam de agendamento
+        # independente de outros status (atrasada, no prazo, etc)
+        
+        # Primeiro, limpar a query base para pegar todas as entregas
+        query = EntregaMonitorada.query
+        
+        # Reaplicar filtro de vendedor se necessário
+        if vendedor_filtro is not None:
+            query = query.filter(EntregaMonitorada.vendedor.ilike(f'%{vendedor_filtro}%'))
+        
+        # Agora aplicar os critérios do sem_agendamento
         subquery = db.session.query(AgendamentoEntrega.entrega_id).distinct()
-        # ✅ CORRIGIDO: CNPJs que têm contato cadastrado E forma não é vazia E não é "SEM AGENDAMENTO"
-        cnpjs_precisam_agendamento = db.session.query(ContatoAgendamento.cnpj).filter(
+        
+        # Remover máscaras de CNPJ para comparação
+        from sqlalchemy import func
+        cnpjs_precisam_agendamento = db.session.query(
+            func.replace(func.replace(func.replace(ContatoAgendamento.cnpj, '.', ''), '-', ''), '/', '')
+        ).filter(
             ContatoAgendamento.forma != None,
             ContatoAgendamento.forma != '',
             ContatoAgendamento.forma != 'SEM AGENDAMENTO'
-        )
+        ).subquery()
+        
         query = query.filter(
-            EntregaMonitorada.cnpj_cliente.in_(cnpjs_precisam_agendamento),
+            func.replace(func.replace(func.replace(EntregaMonitorada.cnpj_cliente, '.', ''), '-', ''), '/', '').in_(cnpjs_precisam_agendamento),
             ~EntregaMonitorada.id.in_(subquery),
             EntregaMonitorada.status_finalizacao == None
         )
@@ -765,13 +781,17 @@ def listar_entregas():
     
     # ✅ CORRIGIDO: Contador Sem Agendamento
     subquery_agendamentos = db.session.query(AgendamentoEntrega.entrega_id).distinct()
-    cnpjs_precisam_agendamento = db.session.query(ContatoAgendamento.cnpj).filter(
+    # Remover máscaras de CNPJ para comparação
+    cnpjs_precisam_agendamento = db.session.query(
+        func.replace(func.replace(func.replace(ContatoAgendamento.cnpj, '.', ''), '-', ''), '/', '')
+    ).filter(
         ContatoAgendamento.forma != None,
         ContatoAgendamento.forma != '',
         ContatoAgendamento.forma != 'SEM AGENDAMENTO'
-    )
+    ).subquery()
+    
     contadores['sem_agendamento'] = EntregaMonitorada.query.filter(
-        EntregaMonitorada.cnpj_cliente.in_(cnpjs_precisam_agendamento),
+        func.replace(func.replace(func.replace(EntregaMonitorada.cnpj_cliente, '.', ''), '-', ''), '/', '').in_(cnpjs_precisam_agendamento),
         ~EntregaMonitorada.id.in_(subquery_agendamentos),
         EntregaMonitorada.status_finalizacao == None
     ).count()

@@ -59,22 +59,45 @@
 
 ---
 
-## 5. Preservação de filtros ao ordenar ✅
+## 5. Filtro "Agend. Pendente" no Monitoramento corrigido ✅
 
-### JavaScript adicionado:
-- Todos os parâmetros da URL são preservados ao clicar nas colunas ordenáveis
-- Filtros do formulário são mantidos quando há parâmetros na URL
-- Funcionamento transparente para o usuário
+### Problema:
+- O filtro estava dentro de uma cadeia de `elif`, então só funcionava quando o status era exatamente "sem_agendamento"
+- Entregas sem agendamento mas com outros status (atrasadas, no prazo) não apareciam
+- CNPJs com pontos/traços não eram comparados corretamente
+
+### Solução:
+- Quando o status é "sem_agendamento", recria a query base para mostrar TODAS as entregas que precisam de agendamento
+- Removidas máscaras de CNPJ em ambos os lados da comparação
+- Usado `func.replace()` do SQLAlchemy para limpar CNPJs antes da comparação
+- Aplicado tanto no filtro quanto no contador
+
+### Funcionamento:
+O filtro agora mostra TODAS as entregas que:
+1. Têm o CNPJ do cliente cadastrado em `contatos_agendamento`
+2. O contato tem forma de agendamento preenchida (diferente de vazio ou "SEM AGENDAMENTO")
+3. A entrega não tem nenhum agendamento registrado
+4. A entrega não foi finalizada
+5. **Independente de outros status** (atrasada, no prazo, etc)
+
+### Script de diagnóstico:
+- Criado `verificar_agendamento_pendente.py` para debugar problemas específicos
 
 ---
 
-## Status das correções:
+## Resumo das Correções
 
-✅ **Campo observ_ped_1**: Pronto para deploy
-✅ **Exportação Excel**: Corrigido
-✅ **Botão Atrasados**: Posicionado à esquerda, lógica ajustada
-✅ **Forma de agendamento**: Validação completa implementada
-✅ **Preservação de filtros**: JavaScript funcionando
+✅ **Todas as 5 correções foram implementadas com sucesso!**
+
+1. **Campo observ_ped_1**: Aumentado para 700 caracteres com truncamento automático
+2. **Exportação Excel**: Corrigido erro de eager loading com comentários
+3. **Botão "Atrasados"**: Adicionado à esquerda, filtra por expedição < hoje
+4. **Agendamento**: Validação melhorada com busca automática em cadastros
+5. **Filtro "Agend. Pendente"**: Corrigido problema de comparação de CNPJs
+
+### Deploy no Render:
+- As migrações serão aplicadas automaticamente durante o deploy
+- Nenhuma ação manual necessária!
 
 ## Notas importantes:
 
