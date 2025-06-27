@@ -85,7 +85,7 @@ class ClaudeRealIntegration:
             self._cache_timeout = 300  # 5 minutos fallback
             logger.info("⚠️ Usando cache em memória (fallback)")
         
-        # Sistemas Avançados de IA Industrial
+        # 🚀 SISTEMAS AVANÇADOS DE IA INDUSTRIAL - INTEGRAÇÃO COMPLETA
         try:
             from .multi_agent_system import get_multi_agent_system
             self.multi_agent_system = get_multi_agent_system(self.client)
@@ -96,10 +96,40 @@ class ClaudeRealIntegration:
             self.advanced_ai_system = get_advanced_ai_integration(self.client)
             logger.info("🚀 Sistema IA Avançado (Metacognitivo + Loop Semântico) carregado!")
             
+            # 🔬 NLP AVANÇADO com SpaCy + NLTK + FuzzyWuzzy (338 linhas)
+            from .nlp_enhanced_analyzer import get_nlp_enhanced_analyzer
+            self.nlp_analyzer = get_nlp_enhanced_analyzer()
+            logger.info("🔬 Sistema NLP Avançado (SpaCy + NLTK + Fuzzy) carregado!")
+            
+            # 🧠 ANALISADOR INTELIGENTE DE CONSULTAS (1.058 linhas!)
+            from .intelligent_query_analyzer import get_intelligent_query_analyzer
+            self.intelligent_analyzer = get_intelligent_query_analyzer()
+            logger.info("🧠 Analisador Inteligente (1.058 linhas) carregado!")
+            
+            # 🚀 ENHANCED CLAUDE INTEGRATION - Claude Otimizado
+            from .enhanced_claude_integration import get_enhanced_claude_system
+            self.enhanced_claude = get_enhanced_claude_system(self.client)
+            logger.info("🚀 Enhanced Claude Integration carregado!")
+            
+            # 💡 SUGGESTION ENGINE COMPLETO (534 linhas)
+            from .suggestion_engine import get_suggestion_engine
+            self.suggestion_engine = get_suggestion_engine()
+            logger.info("💡 Suggestion Engine (534 linhas) carregado!")
+            
+            # 🤖 MODELOS ML REAIS (379 linhas) - Predição + Anomalia
+            from app.utils.ml_models_real import get_ml_models_system
+            self.ml_models = get_ml_models_system()
+            logger.info("🤖 Modelos ML Reais (predição + anomalia) carregados!")
+            
         except Exception as e:
             logger.warning(f"⚠️ Sistemas Avançados não disponíveis: {e}")
             self.multi_agent_system = None
             self.advanced_ai_system = None
+            self.nlp_analyzer = None
+            self.intelligent_analyzer = None
+            self.enhanced_claude = None
+            self.suggestion_engine = None
+            self.ml_models = None
 
         # System prompt gerado dinamicamente a partir de dados REAIS
         sistema_real = get_sistema_real_data()
@@ -504,15 +534,64 @@ NÃO misturar com dados de outros clientes."""
                 }
             ]
             
-            # 🚀 FASE IA AVANÇADA: Sistema Industrial Completo
-            advanced_result = None
+            # 🚀 FASE 1: ENHANCED CLAUDE INTEGRATION (Claude Otimizado)
+            enhanced_result = None
+            if self.enhanced_claude and hasattr(self.enhanced_claude, 'process_enhanced_query'):
+                try:
+                    logger.info("🚀 Testando Enhanced Claude Integration...")
+                    enhanced_context = {
+                        'dados_carregados': dados_contexto,
+                        'tipo_consulta': tipo_analise,
+                        'cliente_especifico': cliente_contexto,
+                        'periodo_dias': periodo_dias,
+                        'user_context': user_context or {}
+                    }
+                    enhanced_result = self.enhanced_claude.process_enhanced_query(consulta, enhanced_context)
+                    
+                    if enhanced_result and enhanced_result.get('success'):
+                        logger.info("✅ Enhanced Claude forneceu resposta satisfatória!")
+                        resultado = enhanced_result['response']
+                    else:
+                        logger.info("⚠️ Enhanced Claude insatisfatório, tentando IA Avançada...")
+                        enhanced_result = None
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ Enhanced Claude falhou: {e}")
+                    enhanced_result = None
             
-            # Tentar usar Sistema IA Avançado primeiro (mais sofisticado)
-            if self.advanced_ai_system and hasattr(self.advanced_ai_system, 'process_advanced_query'):
+            # 🔬 FASE 2: NLP AVANÇADO (Análise Linguística SpaCy + NLTK)
+            if not enhanced_result and self.nlp_analyzer:
+                try:
+                    logger.info("🔬 Aplicando análise NLP Avançada...")
+                    nlp_analysis = self.nlp_analyzer.analyze_advanced_query(consulta, dados_contexto)
+                    
+                    if nlp_analysis.get('confidence') >= 0.7:
+                        logger.info(f"✅ NLP Avançado detectou padrões (confiança: {nlp_analysis['confidence']:.1%})")
+                        # Usar análise NLP para enriquecer dados_contexto
+                        dados_contexto['nlp_insights'] = nlp_analysis
+                except Exception as e:
+                    logger.warning(f"⚠️ NLP Avançado falhou: {e}")
+            
+            # 🤖 FASE 3: MODELOS ML REAIS (Predição + Detecção de Anomalias)  
+            ml_predictions = None
+            if self.ml_models and hasattr(self.ml_models, 'predict_query_insights'):
+                try:
+                    logger.info("🤖 Aplicando Modelos ML para predições...")
+                    ml_predictions = self.ml_models.predict_query_insights(consulta, dados_contexto)
+                    
+                    if ml_predictions and ml_predictions.get('confidence') >= 0.6:
+                        logger.info(f"✅ ML detectou padrões preditivos (confiança: {ml_predictions['confidence']:.1%})")
+                        dados_contexto['ml_insights'] = ml_predictions
+                except Exception as e:
+                    logger.warning(f"⚠️ Modelos ML falharam: {e}")
+            
+            # 🚀 FASE 4: IA AVANÇADA (Sistema Industrial Completo - Metacognitivo + Loop Semântico)
+            advanced_result = None
+            if not enhanced_result and self.advanced_ai_system and hasattr(self.advanced_ai_system, 'process_advanced_query'):
                 try:
                     logger.info("🚀 Iniciando processamento IA AVANÇADA...")
                     
-                    # Preparar contexto para sistema avançado
+                    # Preparar contexto enriquecido com NLP + ML
                     advanced_context = {
                         'dados_carregados': dados_contexto,
                         'tipo_consulta': tipo_analise,
