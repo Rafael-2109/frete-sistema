@@ -273,6 +273,52 @@
     }
   });
   
+  // ✅ FUNCÇÃO GLOBAL para obter token CSRF
+  function getCSRFToken() {
+    // Primeiro tenta pegar do meta tag
+    const metaToken = document.querySelector('meta[name="csrf-token"]');
+    if (metaToken) {
+      return metaToken.getAttribute('content');
+    }
+    
+    // Fallback: busca em formulários existentes
+    const formToken = document.querySelector('input[name="csrf_token"]');
+    if (formToken) {
+      return formToken.value;
+    }
+    
+    return null;
+  }
+  
+  // ✅ FUNÇÃO para regenerar token CSRF via AJAX
+  function regenerateCSRFToken() {
+    return fetch('/auth/regenerate_csrf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }).then(response => response.json()).then(data => {
+      if (data.csrf_token) {
+        // Atualiza meta tag
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        if (metaTag) {
+          metaTag.setAttribute('content', data.csrf_token);
+        }
+        
+        // Atualiza todos os inputs de CSRF
+        document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+          input.value = data.csrf_token;
+        });
+        
+        return data.csrf_token;
+      }
+      return null;
+    }).catch(error => {
+      console.error('Erro ao regenerar token CSRF:', error);
+      return null;
+    });
+  }
+  
   // Intercepta submissões de formulários para verificar CSRF
   document.addEventListener('submit', function(event) {
     const form = event.target;
@@ -280,16 +326,48 @@
     
     if (csrfInput && !csrfInput.value) {
       event.preventDefault();
-      const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+      const token = getCSRFToken();
       if (token) {
         csrfInput.value = token;
         form.submit();
       } else {
-        alert('Sua sessão expirou. Por favor, recarregue a página.');
-        window.location.reload();
+        // Tenta regenerar o token
+        regenerateCSRFToken().then(newToken => {
+          if (newToken) {
+            csrfInput.value = newToken;
+            form.submit();
+          } else {
+            alert('Erro de segurança detectado. Por favor, recarregue a página.');
+            window.location.reload();
+          }
+        });
       }
     }
   });
+  
+  // ✅ INTERCEPTA REQUISIÇÕES AJAX para adicionar token CSRF
+  const originalFetch = window.fetch;
+  window.fetch = function(...args) {
+    const [url, options = {}] = args;
+    
+    // Se é POST e não tem Content-Type definido
+    if (options.method === 'POST' && !options.headers?.['Content-Type']) {
+      options.headers = options.headers || {};
+      
+      const token = getCSRFToken();
+      if (token) {
+        // Se está enviando form data
+        if (options.body instanceof FormData) {
+          options.body.append('csrf_token', token);
+        } else {
+          // Se está enviando JSON ou outros formatos
+          options.headers['X-CSRFToken'] = token;
+        }
+      }
+    }
+    
+    return originalFetch.apply(this, [url, options]);
+  };
 </script>
 
 {% block scripts %}{% endblock %}

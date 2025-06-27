@@ -111,6 +111,32 @@ def lista_pedidos():
             Pedido.expedicao < hoje
         ).count()
     }
+    
+    # ✅ NOVO: Contador de pedidos com agendamento pendente
+    # Buscar CNPJs que precisam de agendamento
+    contatos_agendamento_count = ContatoAgendamento.query.filter(
+        ContatoAgendamento.forma != None,
+        ContatoAgendamento.forma != '',
+        ContatoAgendamento.forma != 'SEM AGENDAMENTO'
+    ).all()
+    
+    # Criar lista de CNPJs válidos para agendamento
+    cnpjs_validos_agendamento = []
+    for contato in contatos_agendamento_count:
+        if contato.cnpj:
+            cnpjs_validos_agendamento.append(contato.cnpj)
+    
+    # Contar pedidos sem agendamento que deveriam ter
+    if cnpjs_validos_agendamento:
+        contadores_status['agend_pendente'] = Pedido.query.filter(
+            Pedido.cnpj_cpf.in_(cnpjs_validos_agendamento),
+            (Pedido.agendamento.is_(None)),  # Sem data de agendamento
+            Pedido.nf_cd == False,  # Não está no CD
+            (Pedido.nf.is_(None)) | (Pedido.nf == ""),  # Sem NF
+            Pedido.data_embarque.is_(None)  # Não embarcado
+        ).count()
+    else:
+        contadores_status['agend_pendente'] = 0
 
     # ✅ APLICAR FILTROS DE ATALHO (botões) - SEMPRE PRIMEIRO
     filtros_botao_aplicados = False
@@ -152,6 +178,19 @@ def lista_pedidos():
                 Pedido.nf_cd == False,
                 Pedido.expedicao < hoje
             )
+        elif filtro_status == 'agend_pendente':
+            # ✅ NOVO: Filtro para pedidos com agendamento pendente
+            if cnpjs_validos_agendamento:
+                query = query.filter(
+                    Pedido.cnpj_cpf.in_(cnpjs_validos_agendamento),
+                    (Pedido.agendamento.is_(None)),  # Sem data de agendamento
+                    Pedido.nf_cd == False,  # Não está no CD
+                    (Pedido.nf.is_(None)) | (Pedido.nf == ""),  # Sem NF
+                    Pedido.data_embarque.is_(None)  # Não embarcado
+                )
+            else:
+                # Se não há CNPJs válidos, retorna query vazia
+                query = query.filter(Pedido.id == -1)
         # 'todos' não aplica filtro
     
     if filtro_data:
@@ -338,13 +377,38 @@ def lista_pedidos():
         pedido.ultimo_embarque = embarques_por_lote.get(pedido.separacao_lote_id)
         pedido.contato_agendamento = contatos_por_cnpj.get(pedido.cnpj_cpf)
     
-    # ✅ NOVO: Funções auxiliares para URLs
+    # ✅ CORRIGIDO: Funções auxiliares para URLs com preservação completa de filtros
     def sort_url(campo):
-        """Gera URL para ordenação mantendo filtros atuais"""
+        """Gera URL para ordenação mantendo TODOS os filtros atuais"""
         from urllib.parse import urlencode
         
-        # Captura todos os parâmetros atuais
-        params = dict(request.args)
+        # Captura TODOS os parâmetros atuais (incluindo filtros de formulário)
+        params = {}
+        
+        # Primeiro, pega parâmetros da URL
+        for key, value in request.args.items():
+            params[key] = value
+        
+        # Depois, se foi POST com filtros, pega os dados do formulário também
+        if request.method == 'POST' and filtro_form.validate():
+            if filtro_form.numero_pedido.data:
+                params['numero_pedido'] = filtro_form.numero_pedido.data
+            if filtro_form.cnpj_cpf.data:
+                params['cnpj_cpf'] = filtro_form.cnpj_cpf.data
+            if filtro_form.cliente.data:
+                params['cliente'] = filtro_form.cliente.data
+            if filtro_form.uf.data:
+                params['uf'] = filtro_form.uf.data
+            if filtro_form.status.data:
+                params['status'] = filtro_form.status.data
+            if filtro_form.rota.data:
+                params['rota'] = filtro_form.rota.data
+            if filtro_form.sub_rota.data:
+                params['sub_rota'] = filtro_form.sub_rota.data
+            if filtro_form.expedicao_inicio.data:
+                params['expedicao_inicio'] = filtro_form.expedicao_inicio.data.strftime('%Y-%m-%d')
+            if filtro_form.expedicao_fim.data:
+                params['expedicao_fim'] = filtro_form.expedicao_fim.data.strftime('%Y-%m-%d')
         
         # Define nova ordem: se já está ordenando por este campo, inverte; senão, usa 'asc'
         nova_ordem = 'asc'
@@ -357,13 +421,38 @@ def lista_pedidos():
         return url_for('pedidos.lista_pedidos') + '?' + urlencode(params)
     
     def filtro_url(**kwargs):
-        """Gera URL para filtros mantendo parâmetros atuais"""
+        """Gera URL para filtros mantendo TODOS os parâmetros atuais"""
         from urllib.parse import urlencode
         
-        # Captura todos os parâmetros atuais
-        params = dict(request.args)
+        # Captura TODOS os parâmetros atuais
+        params = {}
         
-        # Aplica as mudanças
+        # Primeiro, pega parâmetros da URL
+        for key, value in request.args.items():
+            params[key] = value
+        
+        # Depois, se foi POST com filtros, preserva os dados do formulário
+        if request.method == 'POST' and filtro_form.validate():
+            if filtro_form.numero_pedido.data:
+                params['numero_pedido'] = filtro_form.numero_pedido.data
+            if filtro_form.cnpj_cpf.data:
+                params['cnpj_cpf'] = filtro_form.cnpj_cpf.data
+            if filtro_form.cliente.data:
+                params['cliente'] = filtro_form.cliente.data
+            if filtro_form.uf.data:
+                params['uf'] = filtro_form.uf.data
+            if filtro_form.status.data:
+                params['status'] = filtro_form.status.data
+            if filtro_form.rota.data:
+                params['rota'] = filtro_form.rota.data
+            if filtro_form.sub_rota.data:
+                params['sub_rota'] = filtro_form.sub_rota.data
+            if filtro_form.expedicao_inicio.data:
+                params['expedicao_inicio'] = filtro_form.expedicao_inicio.data.strftime('%Y-%m-%d')
+            if filtro_form.expedicao_fim.data:
+                params['expedicao_fim'] = filtro_form.expedicao_fim.data.strftime('%Y-%m-%d')
+        
+        # Aplica as mudanças específicas solicitadas
         for chave, valor in kwargs.items():
             if valor is None:
                 params.pop(chave, None)  # Remove parâmetro

@@ -362,6 +362,18 @@
                             <span class="badge bg-light text-dark">{{ contadores_status.nf_cd }}</span>
                         </a>
                         
+                        <!-- ✅ NOVO: Botão Agend. Pendente -->
+                        <a href="{{ filtro_url(status='agend_pendente') }}"
+                            class="btn btn-sm filtro-status
+                            {% if filtro_status_ativo == 'agend_pendente' %}
+                                {% if contadores_status.agend_pendente > 0 %}btn-warning{% else %}btn-outline-warning{% endif %}
+                            {% else %}
+                                {% if contadores_status.agend_pendente > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
+                            {% endif %}">
+                            <i class="fas fa-calendar-times"></i> Agend. Pendente
+                            <span class="badge bg-light text-dark">{{ contadores_status.agend_pendente }}</span>
+                        </a>
+                        
                         <!-- Contador de pedidos selecionados -->
                         <span id="selected-count" class="badge bg-success me-2" style="display: none;"></span>
                     </div>
@@ -1188,40 +1200,145 @@ window.addEventListener('DOMContentLoaded', function() {
     };
 });
 
-// Script para preservar filtros ao ordenar
+// ✅ SCRIPT MELHORADO para preservar filtros ao ordenar e usar botões
 document.addEventListener('DOMContentLoaded', function() {
-    // Pega todos os parâmetros da URL atual
-    const urlParams = new URLSearchParams(window.location.search);
-    
-    // Atualiza todos os links de ordenação para incluir os filtros atuais
-    document.querySelectorAll('.sortable a').forEach(link => {
-        const href = new URL(link.href, window.location.origin);
+    // Função para capturar TODOS os filtros ativos (URL + formulário)
+    function capturarTodosFiltros() {
+        const filtros = {};
         
-        // Preserva todos os parâmetros exceto sort_by e sort_order
+        // 1. Filtros da URL
+        const urlParams = new URLSearchParams(window.location.search);
         urlParams.forEach((value, key) => {
-            if (key !== 'sort_by' && key !== 'sort_order') {
-                href.searchParams.set(key, value);
+            filtros[key] = value;
+        });
+        
+        // 2. Filtros do formulário (se preenchidos)
+        const campos = [
+            'numero_pedido', 'cnpj_cpf', 'cliente', 'uf', 'status', 
+            'rota', 'sub_rota', 'expedicao_inicio', 'expedicao_fim'
+        ];
+        
+        campos.forEach(campo => {
+            const elemento = document.getElementById(campo);
+            if (elemento && elemento.value) {
+                filtros[campo] = elemento.value;
             }
         });
         
-        link.href = href.toString();
-    });
+        return filtros;
+    }
     
-    // Também preserva filtros ao submeter o formulário
-    const filtroForm = document.querySelector('form[method="POST"]');
-    if (filtroForm) {
-        // Adiciona campos hidden para preservar filtros de URL quando submeter o form
-        urlParams.forEach((value, key) => {
-            if (!filtroForm.querySelector(`input[name="${key}"]`) && 
-                !filtroForm.querySelector(`select[name="${key}"]`)) {
-                const hiddenInput = document.createElement('input');
-                hiddenInput.type = 'hidden';
-                hiddenInput.name = key;
-                hiddenInput.value = value;
-                filtroForm.appendChild(hiddenInput);
+    // Função para gerar URL completa com filtros
+    function gerarUrlComFiltros(parametrosNovos = {}) {
+        const filtros = capturarTodosFiltros();
+        
+        // Aplica novos parâmetros
+        Object.assign(filtros, parametrosNovos);
+        
+        // Remove parâmetros nulos
+        Object.keys(filtros).forEach(key => {
+            if (filtros[key] === null || filtros[key] === undefined || filtros[key] === '') {
+                delete filtros[key];
+            }
+        });
+        
+        const params = new URLSearchParams(filtros);
+        return '{{ url_for("pedidos.lista_pedidos") }}?' + params.toString();
+    }
+    
+    // Atualiza links de ordenação
+    function atualizarLinksOrdenacao() {
+        document.querySelectorAll('.sortable a').forEach(link => {
+            const campo = link.closest('.sortable').dataset.sort;
+            if (campo) {
+                const filtros = capturarTodosFiltros();
+                
+                // Define ordem
+                let novaOrdem = 'asc';
+                if (filtros.sort_by === campo && filtros.sort_order === 'asc') {
+                    novaOrdem = 'desc';
+                }
+                
+                link.href = gerarUrlComFiltros({
+                    sort_by: campo,
+                    sort_order: novaOrdem
+                });
             }
         });
     }
+    
+    // Atualiza botões de filtro
+    function atualizarBotoesFiltro() {
+        // Botões de status
+        document.querySelectorAll('.filtro-status').forEach(btn => {
+            if (btn.href) {
+                const url = new URL(btn.href);
+                const status = url.searchParams.get('status');
+                
+                btn.href = gerarUrlComFiltros({ status: status });
+            }
+        });
+        
+        // Botões de data
+        document.querySelectorAll('.filtro-data').forEach(btn => {
+            if (btn.href) {
+                const url = new URL(btn.href);
+                const data = url.searchParams.get('data');
+                const status = url.searchParams.get('status');
+                
+                btn.href = gerarUrlComFiltros({ 
+                    data: data,
+                    status: status
+                });
+            }
+        });
+        
+        // Botões "Aberto"
+        document.querySelectorAll('.filtro-aberto').forEach(btn => {
+            if (btn.href) {
+                const url = new URL(btn.href);
+                const data = url.searchParams.get('data');
+                const status = url.searchParams.get('status');
+                
+                btn.href = gerarUrlComFiltros({ 
+                    data: data,
+                    status: status
+                });
+            }
+        });
+    }
+    
+    // Executa ao carregar
+    atualizarLinksOrdenacao();
+    atualizarBotoesFiltro();
+    
+    // Reexecuta quando campos de filtro mudam
+    const camposFiltro = document.querySelectorAll('#numero_pedido, #cnpj_cpf, #cliente, #uf, #status, #rota, #sub_rota, #expedicao_inicio, #expedicao_fim');
+    camposFiltro.forEach(campo => {
+        campo.addEventListener('input', function() {
+            setTimeout(() => {
+                atualizarLinksOrdenacao();
+                atualizarBotoesFiltro();
+            }, 100);
+        });
+        
+        campo.addEventListener('change', function() {
+            setTimeout(() => {
+                atualizarLinksOrdenacao();
+                atualizarBotoesFiltro();
+            }, 100);
+        });
+    });
+    
+    // ✅ INTERCEPT dos links de filtro para aplicar filtros imediatamente
+    document.querySelectorAll('.filtro-data, .filtro-aberto, .filtro-status').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Redireciona com TODOS os filtros preservados
+            window.location.href = this.href;
+        });
+    });
 });
 </script>
 
