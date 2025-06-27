@@ -273,6 +273,24 @@ def adicionar_agendamento(id):
     form_agendamento = AgendamentoEntregaForm()
 
     if form_agendamento.validate_on_submit():
+        # Verifica se forma de agendamento foi preenchida
+        forma_agendamento = form_agendamento.forma_agendamento.data
+        
+        # Se não foi preenchida, busca nos cadastros de agendamento
+        if not forma_agendamento or forma_agendamento.strip() == '':
+            contato_cadastrado = ContatoAgendamento.query.filter_by(cnpj=entrega.cnpj_cliente).first()
+            
+            if contato_cadastrado and contato_cadastrado.forma:
+                # Usa a forma cadastrada
+                forma_agendamento = contato_cadastrado.forma
+                # Preenche também o contato se não foi informado
+                if not form_agendamento.contato_agendamento.data:
+                    form_agendamento.contato_agendamento.data = contato_cadastrado.contato
+            else:
+                # Se não houver cadastro, exige preenchimento
+                flash('⚠️ É obrigatório informar a forma de agendamento! Este cliente não possui forma de agendamento cadastrada.', 'danger')
+                return redirect(url_for('monitoramento.visualizar_entrega', id=entrega.id))
+        
         # Determina o status baseado no checkbox
         status = 'confirmado' if form_agendamento.criar_confirmado.data else 'aguardando'
         
@@ -280,7 +298,7 @@ def adicionar_agendamento(id):
             entrega_id=entrega.id,
             data_agendada=form_agendamento.data_agendada.data,
             hora_agendada=form_agendamento.hora_agendada.data,
-            forma_agendamento=form_agendamento.forma_agendamento.data,
+            forma_agendamento=forma_agendamento,  # Usa a forma validada
             contato_agendamento=form_agendamento.contato_agendamento.data,
             protocolo_agendamento=form_agendamento.protocolo_agendamento.data,
             motivo=form_agendamento.motivo.data,
@@ -1530,7 +1548,11 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
         
         # Conta eventos, comentários
         qtd_eventos = len(entrega.eventos)
-        qtd_comentarios = len([c for c in entrega.comentarios if c.resposta_a_id is None])
+        # Usar comentários pré-carregados se disponíveis, senão fazer query
+        if hasattr(entrega, '_comentarios_carregados'):
+            qtd_comentarios = len(entrega._comentarios_carregados)
+        else:
+            qtd_comentarios = len([c for c in entrega.comentarios if c.resposta_a_id is None])
         
         # Formatar data de faturamento para dd/mm/aaaa
         data_faturamento_formatada = ''
@@ -1645,18 +1667,24 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
             })
         
         # Comentários
-        for comentario in entrega.comentarios:
-            if comentario.resposta_a_id is None:
-                qtd_respostas = len(comentario.respostas)
-                dados_comentarios.append({
-                    'numero_nf': entrega.numero_nf,
-                    'cliente': entrega.cliente,
-                    'autor': comentario.autor,
-                    'texto': comentario.texto,
-                    'arquivo': comentario.arquivo,
-                    'criado_em': limpar_timezone(comentario.criado_em),
-                    'qtd_respostas': qtd_respostas
-                })
+        # Usar comentários pré-carregados se disponíveis
+        comentarios_lista = []
+        if hasattr(entrega, '_comentarios_carregados'):
+            comentarios_lista = entrega._comentarios_carregados
+        else:
+            comentarios_lista = [c for c in entrega.comentarios if c.resposta_a_id is None]
+            
+        for comentario in comentarios_lista:
+            qtd_respostas = len(comentario.respostas)
+            dados_comentarios.append({
+                'numero_nf': entrega.numero_nf,
+                'cliente': entrega.cliente,
+                'autor': comentario.autor,
+                'texto': comentario.texto,
+                'arquivo': comentario.arquivo,
+                'criado_em': limpar_timezone(comentario.criado_em),
+                'qtd_respostas': qtd_respostas
+            })
     
     # Cria DataFrame principal
     df_principal = pd.DataFrame(dados_principais)
@@ -1804,9 +1832,16 @@ def exportar_entregas():
                 joinedload(EntregaMonitorada.agendamentos),
                 joinedload(EntregaMonitorada.logs),
                 joinedload(EntregaMonitorada.eventos),
-                joinedload(EntregaMonitorada.custos_extras),
-                joinedload(EntregaMonitorada.comentarios)
+                joinedload(EntregaMonitorada.custos_extras)
+                # Removido joinedload(EntregaMonitorada.comentarios) devido a lazy='dynamic'
             ).order_by(EntregaMonitorada.numero_nf).all()
+            
+            # Carregar comentários manualmente após a query principal
+            for entrega in entregas:
+                # Como comentarios tem lazy='dynamic', carregamos após
+                entrega._comentarios_carregados = entrega.comentarios.filter(
+                    ComentarioNF.resposta_a_id == None
+                ).all()
             
             if not entregas:
                 flash('❌ Nenhuma entrega encontrada com os filtros especificados', 'warning')

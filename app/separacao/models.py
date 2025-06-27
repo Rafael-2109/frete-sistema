@@ -23,7 +23,7 @@ class Separacao(db.Model):
 
     rota          = db.Column(db.String(50), nullable=True)
     sub_rota      = db.Column(db.String(50), nullable=True)
-    observ_ped_1  = db.Column(db.String(255), nullable=True)
+    observ_ped_1  = db.Column(db.String(700), nullable=True)
     roteirizacao  = db.Column(db.String(255), nullable=True)
     expedicao     = db.Column(db.Date, nullable=True)
     agendamento   = db.Column(db.Date, nullable=True)

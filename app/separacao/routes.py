@@ -135,6 +135,13 @@ def importar():
                     qtd_saldo = 0  # se quiser forçar 0 caso não parse
 
                 try:
+                    # Truncar observ_ped_1 se for maior que 700 caracteres
+                    observ_ped_1_value = parse_str(row.get('OBSERV_PED_1'))
+                    if observ_ped_1_value is not None and len(observ_ped_1_value) > 700:
+                        original_length = len(observ_ped_1_value)
+                        observ_ped_1_value = observ_ped_1_value[:700]
+                        print(f"⚠️ Linha {i}: Campo observ_ped_1 truncado de {original_length} para 700 caracteres")
+                    
                     pedido = Separacao(
                         num_pedido      = parse_str(row.get('NUM_PEDIDO')),
                         data_pedido     = parse_date(row.get('DATA_PEDIDO')),
@@ -152,7 +159,7 @@ def importar():
 
                         rota            = parse_str(row.get('ROTA')),
                         sub_rota        = parse_str(row.get('SUB-ROTA')),
-                        observ_ped_1    = parse_str(row.get('OBSERV_PED_1')),
+                        observ_ped_1    = observ_ped_1_value,
                         roteirizacao    = parse_str(row.get('ROTEIRIZAÇÃO')),
 
                         expedicao       = parse_date(row.get('EXPEDIÇÃO')),

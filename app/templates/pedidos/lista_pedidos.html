@@ -248,6 +248,34 @@
                             {# ▸ CENTRO – Datas + Aberto mais compactos #}
                             <div class="col">
                             <div class="d-flex flex-wrap justify-content-center gap-1">
+                                <!-- BOTÃO ATRASADOS (movido para o início) -->
+                                <div class="d-flex flex-column align-items-center filtro-pair">
+                                    <!-- ATRASADOS -->
+                                    <a href="{{ filtro_url(status='atrasados') }}"
+                                    class="btn btn-sm filtro-data
+                                        {% if filtro_status_ativo == 'atrasados' %}
+                                        btn-danger
+                                        {% elif contadores_status.atrasados > 0 %}
+                                        btn-outline-danger
+                                        {% else %}btn-outline-secondary{% endif %}">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Atrasados
+                                    <span class="badge bg-light text-dark">{{ contadores_status.atrasados }}</span>
+                                    </a>
+                                    <!-- ABERTO -->
+                                    <a href="{{ filtro_url(status='atrasados_abertos') }}"
+                                    class="btn btn-sm filtro-aberto mt-1
+                                        {% if filtro_status_ativo == 'atrasados_abertos' %}
+                                        btn-warning
+                                        {% elif contadores_status.atrasados_abertos > 0 %}
+                                        btn-danger
+                                        {% else %}btn-outline-warning{% endif %}">
+                                    <i class="fas fa-clock"></i> Aberto
+                                    <span class="badge bg-light text-dark">{{ contadores_status.atrasados_abertos }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- BOTÕES DE DATA -->
                                 {% for key, dados in contadores_data.items() %}
                                 <div class="d-flex flex-column align-items-center filtro-pair">
                                     <!-- DATA -->
@@ -1158,6 +1186,42 @@ window.addEventListener('DOMContentLoaded', function() {
         sort_url: window.sort_url,
         filtro_url: window.filtro_url
     };
+});
+
+// Script para preservar filtros ao ordenar
+document.addEventListener('DOMContentLoaded', function() {
+    // Pega todos os parâmetros da URL atual
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Atualiza todos os links de ordenação para incluir os filtros atuais
+    document.querySelectorAll('.sortable a').forEach(link => {
+        const href = new URL(link.href, window.location.origin);
+        
+        // Preserva todos os parâmetros exceto sort_by e sort_order
+        urlParams.forEach((value, key) => {
+            if (key !== 'sort_by' && key !== 'sort_order') {
+                href.searchParams.set(key, value);
+            }
+        });
+        
+        link.href = href.toString();
+    });
+    
+    // Também preserva filtros ao submeter o formulário
+    const filtroForm = document.querySelector('form[method="POST"]');
+    if (filtroForm) {
+        // Adiciona campos hidden para preservar filtros de URL quando submeter o form
+        urlParams.forEach((value, key) => {
+            if (!filtroForm.querySelector(`input[name="${key}"]`) && 
+                !filtroForm.querySelector(`select[name="${key}"]`)) {
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = key;
+                hiddenInput.value = value;
+                filtroForm.appendChild(hiddenInput);
+            }
+        });
+    }
 });
 </script>
 

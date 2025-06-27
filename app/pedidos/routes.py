@@ -92,7 +92,24 @@ def lista_pedidos():
             (Pedido.nf.is_(None)) | (Pedido.nf == ""),
             Pedido.nf_cd == False
         ).count(),
-        'nf_cd': Pedido.query.filter(Pedido.nf_cd == True).count()
+        'nf_cd': Pedido.query.filter(Pedido.nf_cd == True).count(),
+        # Contador de atrasados (cotados ou abertos com expedição < hoje)
+        'atrasados': Pedido.query.filter(
+            db.or_(
+                db.and_(Pedido.cotacao_id.isnot(None), Pedido.data_embarque.is_(None), (Pedido.nf.is_(None)) | (Pedido.nf == "")),  # COTADO
+                db.and_(Pedido.cotacao_id.is_(None), (Pedido.nf.is_(None)) | (Pedido.nf == ""))  # ABERTO
+            ),
+            Pedido.nf_cd == False,
+            Pedido.expedicao < hoje,
+            (Pedido.nf.is_(None)) | (Pedido.nf == "")  # Sem NF
+        ).count(),
+        # Contador de atrasados apenas abertos
+        'atrasados_abertos': Pedido.query.filter(
+            Pedido.cotacao_id.is_(None),
+            (Pedido.nf.is_(None)) | (Pedido.nf == ""),
+            Pedido.nf_cd == False,
+            Pedido.expedicao < hoje
+        ).count()
     }
 
     # ✅ APLICAR FILTROS DE ATALHO (botões) - SEMPRE PRIMEIRO
@@ -116,6 +133,25 @@ def lista_pedidos():
             )
         elif filtro_status == 'nf_cd':
             query = query.filter(Pedido.nf_cd == True)
+        elif filtro_status == 'atrasados':
+            # Pedidos cotados ou abertos com expedição < hoje (sem NF)
+            query = query.filter(
+                db.or_(
+                    db.and_(Pedido.cotacao_id.isnot(None), Pedido.data_embarque.is_(None), (Pedido.nf.is_(None)) | (Pedido.nf == "")),  # COTADO
+                    db.and_(Pedido.cotacao_id.is_(None), (Pedido.nf.is_(None)) | (Pedido.nf == ""))  # ABERTO
+                ),
+                Pedido.nf_cd == False,
+                Pedido.expedicao < hoje,
+                (Pedido.nf.is_(None)) | (Pedido.nf == "")  # Sem NF
+            )
+        elif filtro_status == 'atrasados_abertos':
+            # Apenas abertos com expedição < hoje (sem NF)
+            query = query.filter(
+                Pedido.cotacao_id.is_(None),
+                (Pedido.nf.is_(None)) | (Pedido.nf == ""),
+                Pedido.nf_cd == False,
+                Pedido.expedicao < hoje
+            )
         # 'todos' não aplica filtro
     
     if filtro_data:
