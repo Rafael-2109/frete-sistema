@@ -373,6 +373,11 @@ class FreteMLModelsReal:
 # Instância global
 ml_models_real = FreteMLModelsReal()
 
+# FUNÇÃO GET_ ÓRFÃ CRÍTICA - ESTAVA FALTANDO!
+def get_ml_models_system() -> FreteMLModelsReal:
+    """Retorna instância do sistema ML real - FUNÇÃO ÓRFÃ RECUPERADA"""
+    return ml_models_real
+
 # Funções de conveniência que usam dados reais
 def predict_delay_real(embarque_data: Dict[str, Any]) -> Dict[str, Any]:
     """Predição de atraso com dados reais"""

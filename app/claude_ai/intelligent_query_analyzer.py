@@ -1055,4 +1055,9 @@ intelligent_analyzer = IntelligentQueryAnalyzer()
 
 def get_intelligent_analyzer() -> IntelligentQueryAnalyzer:
     """Retorna instância do analisador inteligente"""
+    return intelligent_analyzer
+
+# FUNÇÃO GET_ ÓRFÃ CRÍTICA - ESTAVA FALTANDO!
+def get_intelligent_query_analyzer() -> IntelligentQueryAnalyzer:
+    """Retorna instância do analisador inteligente - FUNÇÃO ÓRFÃ RECUPERADA"""
     return intelligent_analyzer 

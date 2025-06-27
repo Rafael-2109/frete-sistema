@@ -343,7 +343,7 @@ Responda de forma DIRETA e ACIONÁVEL:
         return coerencia
 
 # Instância global
-enhanced_claude = EnhancedClaudeIntegration()
+enhanced_claude_integration = EnhancedClaudeIntegration()
 
 def processar_consulta_com_ia_avancada(consulta: str, user_context: Optional[Dict] = None) -> str:
     """
@@ -357,11 +357,16 @@ def processar_consulta_com_ia_avancada(consulta: str, user_context: Optional[Dic
         Resposta processada com IA avançada
     """
     
-    resultado = enhanced_claude.processar_consulta_inteligente(consulta, user_context)
+    resultado = enhanced_claude_integration.processar_consulta_inteligente(consulta, user_context)
     
     # Se requer esclarecimento, retornar resposta de esclarecimento
     if resultado.get("metadados", {}).get("requer_esclarecimento"):
         return resultado["resposta"]
     
     # Senão, retornar resposta processada normalmente
-    return resultado["resposta"] 
+    return resultado["resposta"]
+
+# FUNÇÃO GET_ ÓRFÃ CRÍTICA - ESTAVA FALTANDO!
+def get_enhanced_claude_system(claude_client=None) -> EnhancedClaudeIntegration:
+    """Retorna instância do sistema Enhanced Claude - FUNÇÃO ÓRFÃ RECUPERADA"""
+    return enhanced_claude_integration 

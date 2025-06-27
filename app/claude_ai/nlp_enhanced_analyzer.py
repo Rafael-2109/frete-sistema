@@ -335,4 +335,9 @@ def get_nlp_analyzer() -> NLPEnhancedAnalyzer:
     global _nlp_analyzer
     if _nlp_analyzer is None:
         _nlp_analyzer = NLPEnhancedAnalyzer()
-    return _nlp_analyzer 
+    return _nlp_analyzer
+
+# FUNÇÃO GET_ ÓRFÃ CRÍTICA - ESTAVA FALTANDO!
+def get_nlp_enhanced_analyzer() -> NLPEnhancedAnalyzer:
+    """Retorna instância do analisador NLP avançado - FUNÇÃO ÓRFÃ RECUPERADA"""
+    return get_nlp_analyzer() 
