@@ -131,6 +131,19 @@ class ClaudeRealIntegration:
             self.input_validator = InputValidator()
             logger.info("🛡️ Input Validator (Validação de Entrada) carregado!")
             
+            # ⚙️ AI CONFIGURATION (Sistema de Configuração AI Órfão)
+            try:
+                import config_ai
+                if config_ai.AIConfig.validate_config():
+                    self.ai_config = config_ai.AIConfig()
+                    logger.info("⚙️ AI Configuration (Sistema Órfão) carregado e validado!")
+                else:
+                    self.ai_config = None
+                    logger.warning("⚠️ AI Configuration não passou na validação")
+            except ImportError:
+                self.ai_config = None
+                logger.warning("⚠️ config_ai.py não encontrado")
+            
         except Exception as e:
             logger.warning(f"⚠️ Sistemas Avançados não disponíveis: {e}")
             self.multi_agent_system = None
@@ -142,6 +155,7 @@ class ClaudeRealIntegration:
             self.ml_models = None
             self.human_learning = None
             self.input_validator = None
+            self.ai_config = None
 
         # System prompt gerado dinamicamente a partir de dados REAIS
         sistema_real = get_sistema_real_data()
