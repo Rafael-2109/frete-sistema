@@ -518,10 +518,10 @@ def listar_entregas():
         if vendedor_filtro is not None:
             query = query.filter(EntregaMonitorada.vendedor.ilike(f'%{vendedor_filtro}%'))
         
-        # Agora aplicar os critérios do sem_agendamento
-        subquery = db.session.query(AgendamentoEntrega.entrega_id).distinct()
+        # USAR EXATAMENTE A MESMA LÓGICA DO CONTADOR
+        subquery_agendamentos = db.session.query(AgendamentoEntrega.entrega_id).distinct()
         
-        # Remover máscaras de CNPJ para comparação
+        # Remover máscaras de CNPJ para comparação - igual ao contador
         cnpjs_precisam_agendamento = db.session.query(
             func.replace(func.replace(func.replace(ContatoAgendamento.cnpj, '.', ''), '-', ''), '/', '')
         ).filter(
@@ -532,7 +532,7 @@ def listar_entregas():
         
         query = query.filter(
             func.replace(func.replace(func.replace(EntregaMonitorada.cnpj_cliente, '.', ''), '-', ''), '/', '').in_(cnpjs_precisam_agendamento),
-            ~EntregaMonitorada.id.in_(subquery),
+            ~EntregaMonitorada.id.in_(subquery_agendamentos),
             EntregaMonitorada.status_finalizacao == None
         )
     elif status == 'reagendar':
