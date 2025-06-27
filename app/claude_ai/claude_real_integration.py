@@ -170,6 +170,20 @@ class ClaudeRealIntegration:
             self.system_alerts = get_system_alerts()
             logger.info("🌐 API Helper (System Alerts) carregado!")
             
+            # 📋 AI LOGGER (ÓRFÃO CRÍTICO!)
+            from app.utils.ai_logging import ai_logger, AILogger
+            self.ai_logger = ai_logger
+            logger.info("📋 AI Logger (Sistema de Logging IA/ML - 543 linhas) carregado!")
+            
+            # 🧠 INTELLIGENT CACHE (ÓRFÃO CRÍTICO!)
+            try:
+                from app.utils.redis_cache import intelligent_cache
+                self.intelligent_cache = intelligent_cache
+                logger.info("🧠 Intelligent Cache (Cache Categorizado Avançado) carregado!")
+            except ImportError:
+                logger.warning("⚠️ Intelligent Cache não disponível - usando cache básico")
+                self.intelligent_cache = None
+            
         except Exception as e:
             logger.warning(f"⚠️ Sistemas Avançados não disponíveis: {e}")
             self.multi_agent_system = None
@@ -188,6 +202,8 @@ class ClaudeRealIntegration:
             self.mapeamento_semantico = None
             self.mcp_connector = None
             self.system_alerts = None
+            self.ai_logger = None
+            self.intelligent_cache = None
 
         # System prompt gerado dinamicamente a partir de dados REAIS
         sistema_real = get_sistema_real_data()
@@ -508,14 +524,20 @@ Não há entregas pendentes de agendamento no momento!
             consulta_com_contexto = context_manager.build_context_prompt(user_id, consulta)
             logger.info(f"🧠 Contexto conversacional aplicado para usuário {user_id}")
         
-        # REDIS CACHE PARA CONSULTAS CLAUDE (usando consulta original para cache)
-        if REDIS_DISPONIVEL:
-            # Verificar se consulta similar já foi processada
-            resultado_cache = redis_cache.cache_consulta_claude(
-                consulta=consulta,  # Usar consulta original para cache
-                cliente=user_context.get('cliente_filter', '') if user_context else '',
-                periodo_dias=30  # padrão
-            )
+        # 🧠 INTELLIGENT CACHE PARA CONSULTAS CLAUDE (ÓRFÃO INTEGRADO!)
+        if REDIS_DISPONIVEL and self.intelligent_cache:
+            # Usar cache inteligente categorizado
+            cache_category = 'query_results'
+            cache_key = f"claude_consulta_{hash(consulta)}"
+            
+            resultado_cache = self.intelligent_cache.get(cache_key, cache_category)
+            if not resultado_cache:
+                # Fallback para cache tradicional
+                resultado_cache = redis_cache.cache_consulta_claude(
+                    consulta=consulta,  # Usar consulta original para cache
+                    cliente=user_context.get('cliente_filter', '') if user_context else '',
+                    periodo_dias=30  # padrão
+                )
             
             if resultado_cache:
                 logger.info("🎯 CACHE HIT: Resposta Claude carregada do Redis")
@@ -534,6 +556,15 @@ Não há entregas pendentes de agendamento no momento!
                 return resultado_cache
         
         try:
+            # 📋 LOG AI OPERATION START (ÓRFÃO INTEGRADO!)
+            start_time = datetime.now()
+            if self.ai_logger:
+                self.ai_logger.log_user_interaction(
+                    user_id=user_context.get('user_id', 'anonymous') if user_context else 'anonymous',
+                    action='consulta_claude_ai',
+                    query=consulta[:100] + '...' if len(consulta) > 100 else consulta
+                )
+            
             # 🧠 APLICAR CONHECIMENTO APRENDIDO
             from .lifelong_learning import get_lifelong_learning
             lifelong = get_lifelong_learning()
@@ -886,6 +917,27 @@ Claude 4 Sonnet | {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
                     logger.info(f"🧑‍🤝‍🧑 Interação capturada para Human Learning: {feedback_automatic}")
                 except Exception as e:
                     logger.warning(f"⚠️ Human Learning falhou na captura automática: {e}")
+            
+            # 📋 LOG AI OPERATION COMPLETE (ÓRFÃO INTEGRADO!)
+            if self.ai_logger:
+                try:
+                    operation_duration = (datetime.now() - start_time).total_seconds()
+                    self.ai_logger.log_ai_insight(
+                        insight_type='consulta_claude_processada',
+                        confidence=0.85,
+                        impact='medium',
+                        description=f'Consulta processada com sucesso em {operation_duration:.2f}s'
+                    )
+                    
+                    # Log de performance da operação completa
+                    self.ai_logger.log_performance(
+                        component='claude_real_integration',
+                        operation='processar_consulta_real',
+                        duration=operation_duration
+                    )
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro no logging AI: {e}")
             
             return resposta_final
             
