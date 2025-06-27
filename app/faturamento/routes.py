@@ -118,11 +118,19 @@ def importar_relatorio():
 
                 nfs_importadas = []
                 linhas_ignoradas = 0
+                nfs_duplicatas = 0
+                
+                # 🔍 DEBUG: Mostrar colunas disponíveis no Excel
+                print(f"[DEBUG] 📋 Colunas disponíveis no Excel: {list(df.columns)}")
+                print(f"[DEBUG] 📊 Total de linhas no Excel: {len(df)}")
 
-                for _, row in df.iterrows():
+                for index, row in df.iterrows():
+                    linha_num = index + 2  # +2 porque Excel começa na linha 1 e tem header
+                    
                     # Validação 1: Número da NF não pode estar vazio
                     numero_nf_raw = row.get("Número da Nota Fiscal")
                     if pd.isna(numero_nf_raw) or str(numero_nf_raw).strip() == '' or str(numero_nf_raw).lower() == 'nan':
+                        print(f"[DEBUG] ❌ Linha {linha_num}: NF vazia ou inválida: '{numero_nf_raw}'")
                         linhas_ignoradas += 1
                         continue
                         
@@ -131,13 +139,18 @@ def importar_relatorio():
                     # Validação 2: Origem (pedido) não pode estar vazio - campo crítico
                     origem = row.get("Origem")
                     if pd.isna(origem) or str(origem).strip() == '' or str(origem).lower() == 'nan':
+                        print(f"[DEBUG] ❌ Linha {linha_num}: Origem vazia para NF {numero_nf}: '{origem}'")
                         linhas_ignoradas += 1
                         continue
                     
                     # Verifica se NF já existe
                     existe = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).first()
                     if existe:
+                        print(f"[DEBUG] ⚠️ Linha {linha_num}: NF {numero_nf} já existe no banco")
+                        nfs_duplicatas += 1
                         continue
+                    
+                    print(f"[DEBUG] ✅ Linha {linha_num}: NF {numero_nf} será importada (Origem: {origem})")
 
                     nf = RelatorioFaturamentoImportado(
                         numero_nf=numero_nf,
@@ -216,12 +229,27 @@ def importar_relatorio():
                 
                 print(f"[DEBUG] Sincronização: {nfs_sincronizadas} NFs normais + {nfs_em_embarques_sincronizadas} NFs de embarques")
 
-                # Mensagens de resultado
-                flash(f'✅ Relatório importado com sucesso! {len(nfs_importadas)} NFs processadas.', 'success')
+                # 📊 ESTATÍSTICAS DETALHADAS DE IMPORTAÇÃO
+                print(f"\n[DEBUG] 📊 RESUMO DA IMPORTAÇÃO:")
+                print(f"[DEBUG] 📋 Total de linhas no Excel: {len(df)}")
+                print(f"[DEBUG] ✅ NFs importadas: {len(nfs_importadas)}")
+                print(f"[DEBUG] ❌ Linhas ignoradas (campos vazios): {linhas_ignoradas}")
+                print(f"[DEBUG] ⚠️ NFs duplicatas: {nfs_duplicatas}")
+                print(f"[DEBUG] 🔄 Total processado: {len(nfs_importadas) + linhas_ignoradas + nfs_duplicatas}")
+                
+                # Mensagens de resultado melhoradas
+                if len(nfs_importadas) > 0:
+                    flash(f'✅ Relatório importado com sucesso! {len(nfs_importadas)} NFs processadas.', 'success')
+                else:
+                    flash(f'⚠️ Nenhuma NF foi importada! Verifique os logs para detalhes.', 'warning')
+                
                 flash(f'📁 Arquivo salvo no sistema de armazenamento.', 'info')
                 
                 if linhas_ignoradas > 0:
                     flash(f'⚠️ {linhas_ignoradas} linhas foram ignoradas (NF ou Origem vazios).', 'warning')
+                
+                if nfs_duplicatas > 0:
+                    flash(f'🔄 {nfs_duplicatas} NFs já existiam no banco (duplicatas).', 'info')
                 
                 return redirect(url_for('faturamento.importar_relatorio'))
 
