@@ -273,34 +273,31 @@ def adicionar_agendamento(id):
     form_agendamento = AgendamentoEntregaForm()
 
     if form_agendamento.validate_on_submit():
-        # Verifica se forma de agendamento foi preenchida
+        # ✅ VALIDAÇÃO SIMPLIFICADA: Apenas campos obrigatórios
         forma_agendamento = form_agendamento.forma_agendamento.data
+        data_agendada = form_agendamento.data_agendada.data
         
-        # Se não foi preenchida, busca nos cadastros de agendamento
+        # ✅ BLOQUEIO SIMPLES: Forma de agendamento obrigatória
         if not forma_agendamento or forma_agendamento.strip() == '':
-            contato_cadastrado = ContatoAgendamento.query.filter_by(cnpj=entrega.cnpj_cliente).first()
-            
-            if contato_cadastrado and contato_cadastrado.forma:
-                # Usa a forma cadastrada
-                forma_agendamento = contato_cadastrado.forma
-                # Preenche também o contato se não foi informado
-                if not form_agendamento.contato_agendamento.data:
-                    form_agendamento.contato_agendamento.data = contato_cadastrado.contato
-            else:
-                # Se não houver cadastro, exige preenchimento
-                flash('⚠️ É obrigatório informar a forma de agendamento! Este cliente não possui forma de agendamento cadastrada.', 'danger')
-                return redirect(url_for('monitoramento.visualizar_entrega', id=entrega.id))
+            flash('⚠️ É obrigatório informar a forma de agendamento!', 'danger')
+            return redirect(url_for('monitoramento.visualizar_entrega', id=entrega.id))
         
-        # Determina o status baseado no checkbox
+        # ✅ BLOQUEIO SIMPLES: Data obrigatória
+        if not data_agendada:
+            flash('⚠️ É obrigatório informar a data do agendamento!', 'danger')
+            return redirect(url_for('monitoramento.visualizar_entrega', id=entrega.id))
+        
+        # ✅ Determina o status baseado no checkbox
         status = 'confirmado' if form_agendamento.criar_confirmado.data else 'aguardando'
         
+        # ✅ CRIAR AGENDAMENTO (protocolo é opcional)
         ag = AgendamentoEntrega(
             entrega_id=entrega.id,
-            data_agendada=form_agendamento.data_agendada.data,
+            data_agendada=data_agendada,
             hora_agendada=form_agendamento.hora_agendada.data,
-            forma_agendamento=forma_agendamento,  # Usa a forma validada
+            forma_agendamento=forma_agendamento,
             contato_agendamento=form_agendamento.contato_agendamento.data,
-            protocolo_agendamento=form_agendamento.protocolo_agendamento.data,
+            protocolo_agendamento=form_agendamento.protocolo_agendamento.data,  # Opcional
             motivo=form_agendamento.motivo.data,
             observacao=form_agendamento.observacao.data,
             autor=current_user.nome,
@@ -314,13 +311,15 @@ def adicionar_agendamento(id):
         
         db.session.add(ag)
 
-        entrega.data_agenda = form_agendamento.data_agendada.data
-        entrega.data_entrega_prevista = form_agendamento.data_agendada.data
+        # ✅ Atualiza campos da entrega
+        entrega.data_agenda = data_agendada
+        entrega.data_entrega_prevista = data_agendada
         db.session.commit()
 
         session['feedback'] = 'agendamento'
+        flash('✅ Agendamento criado com sucesso!', 'success')
     else:
-        flash('Erro ao validar Agendamento.', 'danger')
+        flash('❌ Erro ao validar agendamento. Verifique os campos obrigatórios.', 'danger')
 
     return redirect(url_for('monitoramento.visualizar_entrega', id=entrega.id))
 
