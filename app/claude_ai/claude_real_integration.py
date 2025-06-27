@@ -123,6 +123,21 @@ class ClaudeRealIntegration:
 - Mencione datas específicas dos registros
 - Baseie-se em estatísticas calculadas dos dados
 
+⚠️ **IMPORTANTE SOBRE DADOS PARCIAIS**:
+- Por padrão, o sistema carrega apenas últimos 30 dias
+- Para perguntas sobre "total de clientes", use dados_especificos['sistema_completo']
+- SEMPRE mencione se os dados são parciais (ex: "nos últimos 30 dias")
+- Se perguntarem sobre um cliente/grupo não mencionado, ele PODE existir fora do período
+
+✅ **RESPOSTAS CORRETAS**:
+- "Nos últimos 30 dias, identifiquei X clientes ativos"
+- "O sistema tem Y clientes cadastrados no total"
+- "Analisando os dados carregados (30 dias)..."
+
+❌ **RESPOSTAS ERRADAS**:
+- "O sistema tem apenas 3 grupos" (sem mencionar período)
+- "Total de clientes: 78" (quando são só os últimos 30 dias)
+
 🎯 **OBJETIVO**: Ser um analista de dados preciso, não um assistente genérico."""
     
     def processar_consulta_real(self, consulta: str, user_context: Optional[Dict] = None) -> str:
@@ -806,20 +821,47 @@ Por favor, forneça uma resposta completa incluindo:
             grupo_detectado = detector_grupos.detectar_grupo_na_consulta(consulta)
             
             if grupo_detectado:
-                # GRUPO EMPRESARIAL DETECTADO!
-                analise["tipo_consulta"] = "grupo_empresarial"
-                analise["grupo_empresarial"] = grupo_detectado
-                analise["cliente_especifico"] = grupo_detectado['grupo_detectado']
-                analise["filtro_sql"] = grupo_detectado['filtro_sql']
-                analise["tipo_negocio"] = grupo_detectado.get('tipo_negocio', 'N/A')
-                analise["metodo_deteccao"] = grupo_detectado.get('metodo_deteccao', 'nome_padrao')
-                analise["cnpj_prefixos"] = grupo_detectado.get('cnpj_prefixos', [])
+                # 🔧 CORREÇÃO: Validar campo metodo_deteccao
+                if not grupo_detectado.get('metodo_deteccao'):
+                    grupo_detectado['metodo_deteccao'] = 'auto_detectado'
+                    logger.warning(f"⚠️ Campo metodo_deteccao ausente, usando padrão: auto_detectado")
                 
-                logger.info(f"🏢 GRUPO EMPRESARIAL: {grupo_detectado['grupo_detectado']}")
-                logger.info(f"📊 Tipo: {grupo_detectado['tipo_negocio']} | Método: {grupo_detectado['metodo_deteccao']}")
-                logger.info(f"🔍 Filtro SQL: {grupo_detectado['filtro_sql']}")
-                if grupo_detectado.get('cnpj_prefixos'):
-                    logger.info(f"📋 CNPJs: {', '.join(grupo_detectado['cnpj_prefixos'])}")
+                # 🔍 VALIDAR SE GRUPO AUTO-DETECTADO TEM DADOS REAIS
+                if grupo_detectado.get('tipo_deteccao') == 'GRUPO_AUTOMATICO':
+                    # Verificar se existem dados para esse grupo
+                    from app import db
+                    from app.monitoramento.models import EntregaMonitorada
+                    
+                    filtro_sql = grupo_detectado.get('filtro_sql', '')
+                    if filtro_sql:
+                        # Verificar se há registros com esse filtro
+                        count = db.session.query(EntregaMonitorada).filter(
+                            EntregaMonitorada.cliente.ilike(filtro_sql)
+                        ).limit(1).count()
+                        
+                        if count == 0:
+                            logger.warning(f"⚠️ Grupo auto-detectado '{grupo_detectado['grupo_detectado']}' não tem dados reais")
+                            logger.info("🔄 Ignorando grupo sem dados e continuando análise geral")
+                            # Não processar grupos sem dados
+                            grupo_detectado = None
+                            analise["tipo_consulta"] = "geral"
+                            analise["cliente_especifico"] = None
+                
+                # GRUPO EMPRESARIAL DETECTADO!
+                if grupo_detectado:
+                    analise["tipo_consulta"] = "grupo_empresarial"
+                    analise["grupo_empresarial"] = grupo_detectado
+                    analise["cliente_especifico"] = grupo_detectado['grupo_detectado']
+                    analise["filtro_sql"] = grupo_detectado['filtro_sql']
+                    analise["tipo_negocio"] = grupo_detectado.get('tipo_negocio', 'N/A')
+                    analise["metodo_deteccao"] = grupo_detectado.get('metodo_deteccao', 'nome_padrao')
+                    analise["cnpj_prefixos"] = grupo_detectado.get('cnpj_prefixos', [])
+                    
+                    logger.info(f"🏢 GRUPO EMPRESARIAL: {grupo_detectado['grupo_detectado']}")
+                    logger.info(f"📊 Tipo: {grupo_detectado.get('tipo_negocio', 'N/A')} | Método: {grupo_detectado.get('metodo_deteccao', 'auto_detectado')}")
+                    logger.info(f"🔍 Filtro SQL: {grupo_detectado['filtro_sql']}")
+                    if grupo_detectado.get('cnpj_prefixos'):
+                        logger.info(f"📋 CNPJs: {', '.join(grupo_detectado['cnpj_prefixos'])}")
             
             # Detectar grupos genéricos apenas se não detectou grupo específico
             elif re.search(r"supermercados|atacados|varejo", consulta_lower):
@@ -861,6 +903,20 @@ Por favor, forneça uma resposta completa incluindo:
                     break
         else:
             logger.info(f"🎯 MANTENDO CLIENTE ESPECÍFICO: {analise['cliente_especifico']} mesmo com palavras genéricas")
+        
+        # 🆕 DETECTAR PERGUNTAS SOBRE TOTAL DE CLIENTES
+        perguntas_total_clientes = [
+            "quantos clientes", "total de clientes", "quantidade de clientes",
+            "numero de clientes", "número de clientes", "clientes existem",
+            "clientes no sistema", "clientes cadastrados", "clientes tem"
+        ]
+        
+        for pergunta in perguntas_total_clientes:
+            if pergunta in consulta_lower:
+                analise["pergunta_total_clientes"] = True
+                analise["requer_dados_completos"] = True
+                logger.info("🌐 PERGUNTA SOBRE TOTAL DE CLIENTES DETECTADA")
+                break
         
         # ANÁLISE TEMPORAL INTELIGENTE - CORRIGIDA
         if "maio" in consulta_lower:
@@ -1154,6 +1210,18 @@ Por favor, forneça uma resposta completa incluindo:
                         dados_entregas = self._carregar_entregas_banco(analise, filtros_usuario, data_limite)
                         contexto["dados_especificos"]["entregas"] = dados_entregas
                         contexto["registros_carregados"] += dados_entregas.get("total_registros", 0)
+            
+            # 🆕 SE PERGUNTA SOBRE TOTAL, CARREGAR DADOS COMPLETOS
+            if analise.get("pergunta_total_clientes"):
+                logger.info("🌐 CARREGANDO DADOS COMPLETOS DO SISTEMA...")
+                dados_completos = self._carregar_todos_clientes_sistema()
+                contexto["dados_especificos"]["sistema_completo"] = dados_completos
+                contexto["_dados_completos_carregados"] = True
+                
+                # Adicionar lista de TODOS os grupos ao contexto
+                if dados_completos.get('principais_grupos'):
+                    contexto["_grupos_existentes"] = dados_completos['principais_grupos']
+                    logger.info(f"📊 Grupos no sistema: {', '.join(dados_completos['principais_grupos'])}")
             
             # ESTATÍSTICAS GERAIS COM REDIS CACHE
             if REDIS_DISPONIVEL:
@@ -1738,6 +1806,25 @@ Por favor, forneça uma resposta completa incluindo:
                 descricao.append(f"- Tipo: {grupo.get('tipo_negocio')}")
                 if grupo.get('cnpj_prefixos'):
                     descricao.append(f"- CNPJs conhecidos: {', '.join(grupo.get('cnpj_prefixos', []))}")
+            
+            # 🆕 DADOS COMPLETOS DO SISTEMA (se carregados)
+            if 'sistema_completo' in dados:
+                sistema_data = dados['sistema_completo']
+                if sistema_data.get('_metodo_completo'):
+                    descricao.append("\n🌐 **DADOS COMPLETOS DO SISTEMA CARREGADOS:**")
+                    descricao.append(f"- Total de clientes no sistema: {sistema_data.get('total_clientes_sistema', 0)}")
+                    descricao.append(f"- Clientes ativos (30 dias): {sistema_data.get('clientes_ativos_30_dias', 0)}")
+                    descricao.append(f"- Total de grupos empresariais: {sistema_data.get('total_grupos', 0)}")
+                    descricao.append(f"- Clientes com CNPJ cadastrado: {sistema_data.get('clientes_com_cnpj', 0)}")
+                    
+                    # Listar principais grupos
+                    principais = sistema_data.get('principais_grupos', [])
+                    if principais:
+                        descricao.append(f"- Principais grupos: {', '.join(principais[:10])}")
+                        if len(principais) > 10:
+                            descricao.append(f"  ...e mais {len(principais) - 10} grupos")
+                    
+                    descricao.append("\n⚠️ **NOTA**: Estes são dados COMPLETOS do sistema, não apenas últimos 30 dias")
         
         return "\n".join(descricao) if descricao else "- Dados gerais do sistema"
     
@@ -2399,7 +2486,120 @@ Consulta recebida: "{consulta}"
 💡 **Formato correto**: 6 dígitos começando com 1
 **Exemplo**: 135497, 134451, 136077"""
 
-
+    def _carregar_todos_clientes_sistema(self) -> Dict[str, Any]:
+        """
+        🆕 Carrega TODOS os clientes do sistema, não apenas últimos 30 dias
+        CRÍTICO: Para perguntas sobre "quantos clientes", "todos clientes", etc.
+        """
+        try:
+            from app import db
+            from app.faturamento.models import RelatorioFaturamentoImportado
+            from app.monitoramento.models import EntregaMonitorada
+            from app.pedidos.models import Pedido
+            from app.utils.grupo_empresarial import GrupoEmpresarialDetector
+            
+            logger.info("🌐 CARREGANDO TODOS OS CLIENTES DO SISTEMA...")
+            
+            # 1. Clientes de faturamento (fonte mais completa)
+            clientes_faturamento = db.session.query(
+                RelatorioFaturamentoImportado.nome_cliente,
+                RelatorioFaturamentoImportado.cnpj_cliente
+            ).filter(
+                RelatorioFaturamentoImportado.nome_cliente != None,
+                RelatorioFaturamentoImportado.nome_cliente != ''
+            ).distinct().all()
+            
+            # 2. Clientes de entregas monitoradas (todas, sem filtro de data)
+            clientes_entregas = db.session.query(
+                EntregaMonitorada.cliente
+            ).filter(
+                EntregaMonitorada.cliente != None,
+                EntregaMonitorada.cliente != ''
+            ).distinct().all()
+            
+            # 3. Clientes de pedidos
+            clientes_pedidos = db.session.query(
+                Pedido.nome_cliente
+            ).filter(
+                Pedido.nome_cliente != None,
+                Pedido.nome_cliente != ''
+            ).distinct().all()
+            
+            # Unificar todos os clientes
+            todos_clientes = set()
+            
+            # Adicionar de faturamento (com CNPJ)
+            clientes_com_cnpj = {}
+            for nome, cnpj in clientes_faturamento:
+                if nome:
+                    todos_clientes.add(nome)
+                    if cnpj:
+                        clientes_com_cnpj[nome] = cnpj
+            
+            # Adicionar de entregas
+            for (cliente,) in clientes_entregas:
+                if cliente:
+                    todos_clientes.add(cliente)
+            
+            # Adicionar de pedidos
+            for (cliente,) in clientes_pedidos:
+                if cliente:
+                    todos_clientes.add(cliente)
+            
+            # Detectar grupos empresariais
+            detector = GrupoEmpresarialDetector()
+            grupos_detectados = {}
+            clientes_por_grupo = {}
+            
+            for cliente in todos_clientes:
+                # Verificar se é parte de um grupo
+                resultado_grupo = detector.detectar_grupo_na_consulta(cliente)
+                if resultado_grupo:
+                    grupo_nome = resultado_grupo['grupo_detectado']
+                    if grupo_nome not in grupos_detectados:
+                        grupos_detectados[grupo_nome] = {
+                            'total_filiais': 0,
+                            'filiais_exemplo': [],
+                            'cnpj_prefixos': resultado_grupo.get('cnpj_prefixos', [])
+                        }
+                    grupos_detectados[grupo_nome]['total_filiais'] += 1
+                    if len(grupos_detectados[grupo_nome]['filiais_exemplo']) < 5:
+                        grupos_detectados[grupo_nome]['filiais_exemplo'].append(cliente)
+                    
+                    # Mapear cliente para grupo
+                    clientes_por_grupo[cliente] = grupo_nome
+            
+            # Contar clientes com entregas nos últimos 30 dias
+            data_limite = datetime.now() - timedelta(days=30)
+            clientes_ativos_30d = db.session.query(
+                EntregaMonitorada.cliente
+            ).filter(
+                EntregaMonitorada.data_embarque >= data_limite,
+                EntregaMonitorada.cliente != None
+            ).distinct().count()
+            
+            logger.info(f"✅ TOTAL DE CLIENTES NO SISTEMA: {len(todos_clientes)}")
+            logger.info(f"📊 Grupos empresariais detectados: {len(grupos_detectados)}")
+            logger.info(f"🕐 Clientes ativos (30 dias): {clientes_ativos_30d}")
+            
+            return {
+                'total_clientes_sistema': len(todos_clientes),
+                'clientes_ativos_30_dias': clientes_ativos_30d,
+                'grupos_empresariais': grupos_detectados,
+                'total_grupos': len(grupos_detectados),
+                'clientes_com_cnpj': len(clientes_com_cnpj),
+                'fontes_dados': {
+                    'faturamento': len(clientes_faturamento),
+                    'entregas': len(clientes_entregas),
+                    'pedidos': len(clientes_pedidos)
+                },
+                'principais_grupos': list(grupos_detectados.keys())[:10],
+                '_metodo_completo': True
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao carregar todos os clientes: {e}")
+            return {'erro': str(e), '_metodo_completo': False}
 
 # Instância global
 claude_integration = ClaudeRealIntegration()
@@ -2928,4 +3128,4 @@ def _calcular_estatisticas_por_dominio(analise: Dict[str, Any], filtros_usuario:
         
     except Exception as e:
         logger.error(f"❌ Erro ao calcular estatísticas do domínio {dominio}: {e}")
-        return {"erro": str(e), "dominio": dominio} 
+        return {"erro": str(e), "dominio": dominio}

@@ -105,6 +105,16 @@ class GrupoEmpresarialDetector:
                 'keywords': ['mercantil rodrigues', 'grupo mercantil rodrigues', 'mercantil', 'grupo mercantil'],
                 'descricao': 'Rede nordestina',
                 'tipo': 'regional',
+            },
+            'mercadao': {
+                'nome_grupo': 'Rede Mercadão (Todas as Lojas)',
+                'filtro_sql': '%mercad%',
+                'keywords': ['mercadao', 'mercadão', 'rede mercadao', 'rede mercadão'],
+                'descricao': 'Rede de supermercados com 10+ lojas',
+                'tipo': 'supermercado',
+                'cnpj_prefixos': [],  # Adicionar quando descobrir CNPJs
+                'metodo_deteccao': 'nome_padrao',
+                'filiais_conhecidas': ['LJ 01', 'LJ 02', 'LJ 03', 'LJ 04', 'LJ 05', 'LJ 06', 'LJ 07', 'LJ 08', 'LJ 09', 'LJ 10', 'LJ 11', 'LJ 12', 'LJ 13']
             }
         }
     
