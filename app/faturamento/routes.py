@@ -228,14 +228,6 @@ def importar_relatorio():
                     print(f"Erro ao sincronizar NFs pendentes: {e}")
                 
                 print(f"[DEBUG] Sincronização: {nfs_sincronizadas} NFs normais + {nfs_em_embarques_sincronizadas} NFs de embarques")
-
-                # 📊 ESTATÍSTICAS DETALHADAS DE IMPORTAÇÃO
-                print(f"\n[DEBUG] 📊 RESUMO DA IMPORTAÇÃO:")
-                print(f"[DEBUG] 📋 Total de linhas no Excel: {len(df)}")
-                print(f"[DEBUG] ✅ NFs importadas: {len(nfs_importadas)}")
-                print(f"[DEBUG] ❌ Linhas ignoradas (campos vazios): {linhas_ignoradas}")
-                print(f"[DEBUG] ⚠️ NFs duplicatas: {nfs_duplicatas}")
-                print(f"[DEBUG] 🔄 Total processado: {len(nfs_importadas) + linhas_ignoradas + nfs_duplicatas}")
                 
                 # Mensagens de resultado melhoradas
                 if len(nfs_importadas) > 0:

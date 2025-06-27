@@ -238,7 +238,7 @@ def claude_real():
             # 🔒 VALIDAÇÃO CSRF INTELIGENTE para APIs JSON
             from app.utils.csrf_helper import validate_api_csrf
             
-            csrf_valid = validate_api_csrf(request, logger, graceful_mode=True)
+            csrf_valid = validate_api_csrf(request, logger)
             if not csrf_valid:
                 logger.error("🔒 Falha crítica na validação CSRF")
                 return jsonify({'error': 'Token CSRF inválido'}), 400
@@ -474,7 +474,7 @@ def api_query():
         # 🔒 VALIDAÇÃO CSRF INTELIGENTE para APIs JSON
         from app.utils.csrf_helper import validate_api_csrf
         
-        csrf_valid = validate_api_csrf(request, logger, graceful_mode=True)
+        csrf_valid = validate_api_csrf(request, logger)
         if not csrf_valid:
             logger.error("🔒 Widget: Falha crítica na validação CSRF")
             return jsonify({'success': False, 'error': 'Token CSRF inválido'}), 403
