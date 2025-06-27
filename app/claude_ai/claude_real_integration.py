@@ -144,6 +144,32 @@ class ClaudeRealIntegration:
                 self.ai_config = None
                 logger.warning("⚠️ config_ai.py não encontrado")
             
+            # 📊 DATA ANALYZER (ÓRFÃO CRÍTICO!)
+            from .data_analyzer import get_vendedor_analyzer, get_geral_analyzer
+            self.vendedor_analyzer = get_vendedor_analyzer()
+            self.geral_analyzer = get_geral_analyzer()
+            logger.info("📊 Data Analyzer (VendedorDataAnalyzer + GeralDataAnalyzer) carregado!")
+            
+            # 🚨 ALERT ENGINE (ÓRFÃO CRÍTICO!)
+            from .alert_engine import get_alert_engine
+            self.alert_engine = get_alert_engine()
+            logger.info("🚨 Alert Engine (Sistema de Alertas) carregado!")
+            
+            # 🗺️ MAPEAMENTO SEMÂNTICO (ÓRFÃO CRÍTICO!)
+            from .mapeamento_semantico import get_mapeamento_semantico
+            self.mapeamento_semantico = get_mapeamento_semantico()
+            logger.info("🗺️ Mapeamento Semântico (742 linhas) carregado!")
+            
+            # 🔗 MCP CONNECTOR (ÓRFÃO CRÍTICO!)
+            from .mcp_connector import MCPSistemaOnline
+            self.mcp_connector = MCPSistemaOnline()
+            logger.info("🔗 MCP Connector (Sistema Online) carregado!")
+            
+            # 🌐 API HELPER (ÓRFÃO DE UTILS!)
+            from app.utils.api_helper import get_system_alerts
+            self.system_alerts = get_system_alerts()
+            logger.info("🌐 API Helper (System Alerts) carregado!")
+            
         except Exception as e:
             logger.warning(f"⚠️ Sistemas Avançados não disponíveis: {e}")
             self.multi_agent_system = None
@@ -156,6 +182,12 @@ class ClaudeRealIntegration:
             self.human_learning = None
             self.input_validator = None
             self.ai_config = None
+            self.vendedor_analyzer = None
+            self.geral_analyzer = None
+            self.alert_engine = None
+            self.mapeamento_semantico = None
+            self.mcp_connector = None
+            self.system_alerts = None
 
         # System prompt gerado dinamicamente a partir de dados REAIS
         sistema_real = get_sistema_real_data()
@@ -381,15 +413,18 @@ O sistema melhora continuamente. Cada consulta, correção e feedback contribui 
             
             return resultado_nfs
         
-        # 📅 DETECTAR CONSULTAS SOBRE AGENDAMENTOS PENDENTES
+                    # 📅 DETECTAR CONSULTAS SOBRE AGENDAMENTOS PENDENTES
         if any(termo in consulta.lower() for termo in ['agendamento pendente', 'agendamentos pendentes', 
                                                         'precisam de agendamento', 'sem agendamento',
                                                         'aguardando agendamento', 'com agendamento pendente']):
             logger.info("📅 PROCESSAMENTO: Consulta sobre agendamentos pendentes detectada")
             
-            # Usar dados reais do AlertEngine
-            from .alert_engine import get_alert_engine
-            alert_engine = get_alert_engine()
+            # Usar Alert Engine integrado (ÓRFÃO RECUPERADO!)
+            if self.alert_engine:
+                alert_engine = self.alert_engine
+            else:
+                from .alert_engine import get_alert_engine
+                alert_engine = get_alert_engine()
             
             # Obter dados de agendamentos pendentes
             agendamentos_info = alert_engine._check_agendamentos_pendentes()
@@ -507,6 +542,19 @@ Não há entregas pendentes de agendamento no momento!
             # Analisar consulta para contexto inteligente (usar consulta original)
             contexto_analisado = self._analisar_consulta(consulta)
             
+            # 🗺️ ENRIQUECER COM MAPEAMENTO SEMÂNTICO (ÓRFÃO RECUPERADO!)
+            if self.mapeamento_semantico and hasattr(self.mapeamento_semantico, 'mapear_termos_semanticos'):
+                try:
+                    logger.info("🗺️ Aplicando Mapeamento Semântico...")
+                    termos_mapeados = self.mapeamento_semantico.mapear_termos_semanticos(consulta)
+                    
+                    if termos_mapeados and termos_mapeados.get('campos_detectados'):
+                        logger.info(f"✅ Campos mapeados semanticamente: {list(termos_mapeados['campos_detectados'].keys())}")
+                        # Enriquecer contexto com mapeamento semântico
+                        contexto_analisado['mapeamento_semantico'] = termos_mapeados
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro no mapeamento semântico: {e}")
+            
             # Enriquecer com conhecimento prévio
             if conhecimento_previo['confianca_geral'] > 0.7:
                 logger.info(f"🧠 Aplicando conhecimento prévio (confiança: {conhecimento_previo['confianca_geral']:.1%})")
@@ -528,6 +576,31 @@ Não há entregas pendentes de agendamento no momento!
             
             # Carregar dados específicos baseados na análise (já usa Redis internamente)
             dados_contexto = self._carregar_contexto_inteligente(contexto_analisado)
+            
+            # 📊 ENRIQUECER COM DATA ANALYZER (ÓRFÃO RECUPERADO!)
+            if user_context and user_context.get('vendedor_codigo') and self.vendedor_analyzer:
+                try:
+                    logger.info("📊 Aplicando VendedorDataAnalyzer...")
+                    vendedor_codigo = user_context.get('vendedor_codigo')
+                    analise_vendedor = self.vendedor_analyzer.analisar_vendedor_completo(vendedor_codigo)
+                    
+                    if analise_vendedor and analise_vendedor.get('total_clientes', 0) > 0:
+                        logger.info(f"✅ Análise de vendedor: {analise_vendedor['total_clientes']} clientes encontrados")
+                        dados_contexto['analise_vendedor'] = analise_vendedor
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro no VendedorDataAnalyzer: {e}")
+            
+            # 📊 APLICAR GERAL DATA ANALYZER quando necessário
+            if contexto_analisado.get('tipo_consulta') == 'geral' and self.geral_analyzer:
+                try:
+                    logger.info("📊 Aplicando GeralDataAnalyzer...")
+                    analise_geral = self.geral_analyzer.analisar_sistema_completo()
+                    
+                    if analise_geral and analise_geral.get('total_entregas', 0) > 0:
+                        logger.info(f"✅ Análise geral: {analise_geral['total_entregas']} entregas no sistema")
+                        dados_contexto['analise_geral'] = analise_geral
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro no GeralDataAnalyzer: {e}")
             
             # 🎯 ARMAZENAR CONTEXTO PARA USO NO PROMPT (CRÍTICO!)
             self._ultimo_contexto_carregado = dados_contexto
