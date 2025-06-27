@@ -522,7 +522,6 @@ def listar_entregas():
         subquery = db.session.query(AgendamentoEntrega.entrega_id).distinct()
         
         # Remover máscaras de CNPJ para comparação
-        from sqlalchemy import func
         cnpjs_precisam_agendamento = db.session.query(
             func.replace(func.replace(func.replace(ContatoAgendamento.cnpj, '.', ''), '-', ''), '/', '')
         ).filter(
