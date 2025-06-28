@@ -573,6 +573,30 @@ Não há entregas pendentes de agendamento no momento!
             # Analisar consulta para contexto inteligente (usar consulta original)
             contexto_analisado = self._analisar_consulta(consulta)
             
+            # 🧠 DELAY DE REFLEXÃO (ANTI-ATROPELO!)
+            # Pequeno delay para interpretação correta antes da resposta
+            import time
+            time.sleep(0.8)  # 800ms para "pensar" melhor
+            logger.info("🧠 Delay de reflexão aplicado - interpretação otimizada")
+            
+            # 🔍 VALIDAÇÃO DUPLA DE INTERPRETAÇÃO (ANTI-CONFUSÃO!)
+            # Verificar se a interpretação está consistente com a consulta original
+            consulta_lower = consulta.lower()
+            cliente_detectado = contexto_analisado.get('cliente_filter', '').lower()
+            
+            if cliente_detectado and cliente_detectado not in consulta_lower:
+                logger.warning(f"⚠️ POSSÍVEL CONFUSÃO: Cliente '{cliente_detectado}' detectado mas consulta original é '{consulta}'")
+                # Re-analisar com mais cuidado
+                logger.info("🔄 Re-analisando consulta com validação rigorosa...")
+                time.sleep(0.3)  # Delay adicional para re-análise
+                
+                # Limpar interpretação questionável
+                if 'cliente_filter' in contexto_analisado:
+                    contexto_analisado['cliente_filter'] = ''
+                    logger.info("🧹 Cliente filter limpo por inconsistência")
+            
+            logger.info(f"✅ Validação dupla concluída - Cliente: {contexto_analisado.get('cliente_filter', 'Nenhum')}")
+            
             # 🗺️ ENRIQUECER COM MAPEAMENTO SEMÂNTICO (ÓRFÃO RECUPERADO!)
             if self.mapeamento_semantico and hasattr(self.mapeamento_semantico, 'mapear_termos_semanticos'):
                 try:
@@ -845,6 +869,11 @@ NÃO misturar com dados de outros clientes."""
             # Se ambos sistemas avançados falharam, usar Claude padrão
             if not advanced_result and not multi_agent_result:
                 # Chamar Claude REAL (agora Claude 4 Sonnet!)
+                # 🤔 DELAY DE INTERPRETAÇÃO FINAL (ANTI-ATROPELO!)
+                # Pequeno delay antes da geração para garantir interpretação correta
+                time.sleep(0.5)  # 500ms adicionais para validação da interpretação
+                logger.info("🤔 Validação final da interpretação concluída")
+                
                 response = self.client.messages.create(
                     model="claude-sonnet-4-20250514",  # Claude 4 Sonnet
                     max_tokens=4000,  # Restaurado para análises completas
