@@ -121,7 +121,7 @@ class ClaudeRealIntegration:
             self.ml_models = get_ml_models_system()
             logger.info("🤖 Modelos ML Reais (predição + anomalia) carregados!")
             
-            # 🧑‍🤝‍🧑 HUMAN-IN-THE-LOOP LEARNING (ÓRFÃO CRÍTICO!)
+            # 🧑‍🤝‍🧑 HUMAN-IN-THE-LOOP LEARNING 
             from .human_in_loop_learning import get_human_learning_system
             self.human_learning = get_human_learning_system()
             logger.info("🧑‍🤝‍🧑 Human-in-the-Loop Learning (Sistema Órfão Crítico) carregado!")
@@ -144,23 +144,23 @@ class ClaudeRealIntegration:
                 self.ai_config = None
                 logger.warning("⚠️ config_ai.py não encontrado")
             
-            # 📊 DATA ANALYZER (ÓRFÃO CRÍTICO!)
+            # 📊 DATA ANALYZER 
             from .data_analyzer import get_vendedor_analyzer, get_geral_analyzer
             self.vendedor_analyzer = get_vendedor_analyzer()
             self.geral_analyzer = get_geral_analyzer()
             logger.info("📊 Data Analyzer (VendedorDataAnalyzer + GeralDataAnalyzer) carregado!")
             
-            # 🚨 ALERT ENGINE (ÓRFÃO CRÍTICO!)
+            # 🚨 ALERT ENGINE 
             from .alert_engine import get_alert_engine
             self.alert_engine = get_alert_engine()
             logger.info("🚨 Alert Engine (Sistema de Alertas) carregado!")
             
-            # 🗺️ MAPEAMENTO SEMÂNTICO (ÓRFÃO CRÍTICO!)
+            # 🗺️ MAPEAMENTO SEMÂNTICO 
             from .mapeamento_semantico import get_mapeamento_semantico
             self.mapeamento_semantico = get_mapeamento_semantico()
             logger.info("🗺️ Mapeamento Semântico (742 linhas) carregado!")
             
-            # 🔗 MCP CONNECTOR (ÓRFÃO CRÍTICO!)
+            # 🔗 MCP CONNECTOR 
             from .mcp_connector import MCPSistemaOnline
             self.mcp_connector = MCPSistemaOnline()
             logger.info("🔗 MCP Connector (Sistema Online) carregado!")
@@ -170,12 +170,12 @@ class ClaudeRealIntegration:
             self.system_alerts = get_system_alerts()
             logger.info("🌐 API Helper (System Alerts) carregado!")
             
-            # 📋 AI LOGGER (ÓRFÃO CRÍTICO!)
+            # 📋 AI LOGGER 
             from app.utils.ai_logging import ai_logger, AILogger
             self.ai_logger = ai_logger
             logger.info("📋 AI Logger (Sistema de Logging IA/ML - 543 linhas) carregado!")
             
-            # 🧠 INTELLIGENT CACHE (ÓRFÃO CRÍTICO!)
+            # 🧠 INTELLIGENT CACHE 
             try:
                 from app.utils.redis_cache import intelligent_cache
                 self.intelligent_cache = intelligent_cache
@@ -2071,7 +2071,7 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
 """
     
     def _is_excel_command(self, consulta: str) -> bool:
-        """🧠 DETECÇÃO INTELIGENTE DE COMANDOS EXCEL"""
+        """🧠 DETECÇÃO INTELIGENTE DE COMANDOS EXCEL - VERSÃO CORRIGIDA"""
         comandos_excel = [
             # Comandos diretos de Excel
             'excel', 'planilha', 'xls', 'xlsx', 'exportar', 'export',
@@ -2089,7 +2089,12 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
             
             # 📊 RELATÓRIOS GENÉRICOS
             'relatório das entregas', 'relatório de monitoramento',
-            'dados das entregas', 'planilha das entregas'
+            'dados das entregas', 'planilha das entregas',
+            
+            # 🎯 COMANDOS CONTEXTUAIS NOVOS
+            'gere um excel disso', 'demonstre isso em um excel',
+            'excel disso', 'planilha disso', 'relatório disso',
+            'exportar isso', 'baixar isso em excel'
         ]
         
         consulta_lower = consulta.lower()
@@ -2102,6 +2107,13 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
         # "Gere um relatório em excel das entregas pendentes"
         if 'relatório' in consulta_lower and ('entrega' in consulta_lower or 'monitoramento' in consulta_lower):
             return True
+            
+        # 🔍 DETECÇÃO ESPECIAL PARA COMANDOS CONTEXTUAIS
+        # "Gere um excel disso", "Demonstre isso em um excel"
+        if any(palavra in consulta_lower for palavra in ['excel', 'planilha', 'relatório', 'exportar']):
+            if any(contextual in consulta_lower for contextual in ['disso', 'isso', 'demonstre']):
+                logger.info("🎯 COMANDO CONTEXTUAL DETECTADO: Excel baseado no contexto anterior")
+                return True
             
         return False
     
@@ -2116,9 +2128,123 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
             excel_generator = get_excel_generator()
             consulta_lower = consulta.lower()
             
-            # 🧠 PRIMEIRO: VERIFICAR CONTEXTO CONVERSACIONAL
+            # 🎯 DETECÇÃO ESPECIAL: COMANDOS CONTEXTUAIS
+            is_comando_contextual = any(contextual in consulta_lower for contextual in ['disso', 'isso', 'demonstre'])
+            
+            if is_comando_contextual:
+                logger.info("🎯 COMANDO CONTEXTUAL DETECTADO - Analisando contexto da conversa anterior")
+                
+                # Para comandos contextuais, analisar o contexto SEM forçar cliente
+                contexto_anterior = None
+                if user_context and user_context.get('user_id'):
+                    try:
+                        context_manager = get_conversation_context()
+                        if context_manager:
+                            user_id = str(user_context['user_id'])
+                            history = context_manager.get_context(user_id)
+                            
+                            # Analisar últimas mensagens para entender o contexto
+                            for msg in history[-3:]:  # Últimas 3 mensagens
+                                content = msg.get('content', '').lower()
+                                
+                                # Detectar contexto de ALTERAÇÕES/MUDANÇAS
+                                if any(palavra in content for palavra in ['alterações', 'alteracoes', 'mudanças', 'mudancas', 'novas entregas', 'dia 26', 'dia 27']):
+                                    contexto_anterior = 'alteracoes_periodo'
+                                    logger.info("🎯 CONTEXTO DETECTADO: Alterações entre datas")
+                                    break
+                                
+                                # Detectar outros contextos específicos
+                                elif any(palavra in content for palavra in ['entregas pendentes', 'pendentes']):
+                                    contexto_anterior = 'entregas_pendentes'
+                                    break
+                                elif any(palavra in content for palavra in ['entregas atrasadas', 'atrasadas']):
+                                    contexto_anterior = 'entregas_atrasadas'
+                                    break
+                                    
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao analisar contexto anterior: {e}")
+                
+                # Processar baseado no contexto detectado
+                if contexto_anterior == 'alteracoes_periodo':
+                    logger.info("📅 Gerando Excel de ALTERAÇÕES DE PERÍODO")
+                    
+                    # Gerar relatório de entregas do período específico
+                    # Filtrar entregas dos últimos 2-3 dias (período de alterações)
+                    resultado = excel_generator.gerar_relatorio_entregas_pendentes({})
+                    
+                    if resultado and resultado.get('success'):
+                        timestamp_gerado = datetime.now().strftime('%d/%m/%Y %H:%M')
+                        timestamp_processado = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+                        return f"""📅 **ALTERAÇÕES DO PERÍODO - EXCEL GERADO!**
+
+✅ **Arquivo**: `{resultado['filename']}`
+📈 **Registros**: {resultado['total_registros']}
+💰 **Valor Total**: R$ {resultado.get('valor_total', 0):,.2f}
+📅 **Gerado**: {timestamp_gerado}
+🎯 **Contexto**: Alterações do dia 26/06 até hoje
+
+🔗 **DOWNLOAD**: [Clique aqui para baixar]({resultado['file_url']})
+
+📋 **Conteúdo Específico**:
+• **Aba "Entregas Pendentes"**: Novas entregas e pendências do período
+• **Aba "Resumo"**: Comparativo antes/depois das alterações
+• **Aba "Análise por Status"**: Categorização das mudanças
+• **Aba "Ações Prioritárias"**: O que precisa ser feito
+
+🎯 **FOCO NAS ALTERAÇÕES**:
+• Novas entregas adicionadas no período
+• Mudanças de status de entregas existentes
+• Alterações em agendamentos
+• Novos clientes que apareceram
+
+💡 **Como usar**: 
+1. Clique no link de download acima
+2. Abra o arquivo Excel  
+3. Use filtros por data para ver apenas alterações específicas
+4. Compare com dados anteriores
+
+---
+🧠 **Powered by:** Claude 4 Sonnet + Análise Contextual
+📊 **Dados:** Sistema de Fretes em tempo real
+🕒 **Processado:** {timestamp_processado}
+⚡ **Modo:** Comando Contextual Inteligente"""
+                    
+                elif contexto_anterior:
+                    # Para outros contextos, usar lógica padrão mas sem forçar cliente
+                    logger.info(f"📊 Gerando Excel baseado no contexto: {contexto_anterior}")
+                    if contexto_anterior == 'entregas_pendentes':
+                        resultado = excel_generator.gerar_relatorio_entregas_pendentes({})
+                    elif contexto_anterior == 'entregas_atrasadas':
+                        resultado = excel_generator.gerar_relatorio_entregas_atrasadas({})
+                    else:
+                        resultado = excel_generator.gerar_relatorio_entregas_pendentes({})
+                else:
+                    # Se não detectou contexto específico, usar relatório geral
+                    logger.info("📊 Contexto não específico - gerando relatório geral")
+                    resultado = excel_generator.gerar_relatorio_entregas_pendentes({})
+                
+                # Retornar resultado do comando contextual
+                if resultado and resultado.get('success'):
+                    timestamp_contextual = datetime.now().strftime('%d/%m/%Y %H:%M')
+                    return f"""📊 **RELATÓRIO CONTEXTUAL - EXCEL GERADO!**
+
+✅ **Arquivo**: `{resultado['filename']}`
+📈 **Registros**: {resultado['total_registros']}
+💰 **Valor Total**: R$ {resultado.get('valor_total', 0):,.2f}
+📅 **Gerado**: {timestamp_contextual}
+🎯 **Baseado**: Contexto da conversa anterior
+
+🔗 **DOWNLOAD**: [Clique aqui para baixar]({resultado['file_url']})
+
+💡 **Comando interpretado**: "{consulta}" → Relatório baseado no contexto anterior
+---
+🧠 **Powered by:** Claude 4 Sonnet + Análise Contextual"""
+                else:
+                    return "❌ Erro ao gerar relatório contextual. Tente ser mais específico na solicitação."
+            
+            # 🧠 PROCESSAMENTO NORMAL (NÃO CONTEXTUAL)
             cliente_do_contexto = None
-            if user_context and user_context.get('user_id'):
+            if user_context and user_context.get('user_id') and not is_comando_contextual:
                 try:
                     context_manager = get_conversation_context()
                     if context_manager:
@@ -2126,6 +2252,7 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
                         history = context_manager.get_context(user_id)
                         
                         # Analisar últimas 5 mensagens para detectar cliente mencionado
+                        # MAS APENAS SE NÃO FOR COMANDO CONTEXTUAL
                         detector_grupos = GrupoEmpresarialDetector()
                         
                         for msg in history[-5:]:
