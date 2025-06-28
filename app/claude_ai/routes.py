@@ -1194,6 +1194,11 @@ def download_excel(filename):
         
         logger.info(f"📥 Download iniciado: {filename} por {current_user.nome}")
         
+        # Verificar se arquivo não está corrompido (básico)
+        if os.path.getsize(file_path) < 1024:  # Menor que 1KB pode estar corrompido
+            logger.error(f"❌ Arquivo muito pequeno (possível corrupção): {filename}")
+            abort(404)
+        
         return send_file(
             file_path,
             as_attachment=True,
