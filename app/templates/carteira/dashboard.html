@@ -119,7 +119,7 @@
         </div>
         
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('faturamento.listar_produtos') }}" class="btn btn-primary btn-lg btn-block">
+            <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="btn btn-primary btn-lg btn-block">
                 <i class="fas fa-file-invoice-dollar"></i><br>
                 Faturamento<br>por Produto
             </a>
@@ -175,21 +175,21 @@
         </div>
         
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('producao.importar_programacao') }}" class="btn btn-outline-success btn-lg btn-block">
+            <a href="{{ url_for('producao.importar_producao') }}" class="btn btn-outline-success btn-lg btn-block">
                 <i class="fas fa-file-excel"></i><br>
                 Importar<br>Programação
             </a>
         </div>
         
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('estoque.importar_movimentacoes') }}" class="btn btn-outline-info btn-lg btn-block">
+            <a href="{{ url_for('estoque.importar_estoque') }}" class="btn btn-outline-info btn-lg btn-block">
                 <i class="fas fa-file-excel"></i><br>
                 Importar<br>Movimentações
             </a>
         </div>
         
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-outline-warning btn-lg btn-block">
+            <a href="{{ url_for('producao.importar_producao') }}" class="btn btn-outline-warning btn-lg btn-block">
                 <i class="fas fa-file-excel"></i><br>
                 Importar<br>Palletização
             </a>

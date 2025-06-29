@@ -85,7 +85,7 @@
                                 <button type="submit" class="btn btn-primary">
                                     <i class="fas fa-search"></i> Pesquisar
                                 </button>
-                                <a href="{{ url_for('faturamento.listar_produtos') }}" class="btn btn-secondary">
+                                <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="btn btn-secondary">
                                     <i class="fas fa-eraser"></i> Limpar Filtros
                                 </a>
                                 <a href="{{ url_for('faturamento.importar_produtos') }}" class="btn btn-success ml-3">
@@ -236,7 +236,7 @@
                             <ul class="pagination justify-content-center">
                                 {% if pagination.has_prev %}
                                 <li class="page-item">
-                                    <a class="page-link" href="{{ url_for('faturamento.listar_produtos', page=pagination.prev_num, **request.args) }}">Anterior</a>
+                                    <a class="page-link" href="{{ url_for('faturamento.listar_faturamento_produtos', page=pagination.prev_num, **request.args) }}">Anterior</a>
                                 </li>
                                 {% endif %}
 
@@ -244,7 +244,7 @@
                                     {% if page_num %}
                                         {% if page_num != pagination.page %}
                                         <li class="page-item">
-                                            <a class="page-link" href="{{ url_for('faturamento.listar_produtos', page=page_num, **request.args) }}">{{ page_num }}</a>
+                                            <a class="page-link" href="{{ url_for('faturamento.listar_faturamento_produtos', page=page_num, **request.args) }}">{{ page_num }}</a>
                                         </li>
                                         {% else %}
                                         <li class="page-item active">
@@ -260,7 +260,7 @@
 
                                 {% if pagination.has_next %}
                                 <li class="page-item">
-                                    <a class="page-link" href="{{ url_for('faturamento.listar_produtos', page=pagination.next_num, **request.args) }}">Próximo</a>
+                                    <a class="page-link" href="{{ url_for('faturamento.listar_faturamento_produtos', page=pagination.next_num, **request.args) }}">Próximo</a>
                                 </li>
                                 {% endif %}
                             </ul>
@@ -297,7 +297,7 @@ document.getElementById('data_fim').addEventListener('change', function() {
 function exportarExcel() {
     const params = new URLSearchParams(window.location.search);
     params.set('export', 'excel');
-    window.location.href = '{{ url_for("faturamento.listar_produtos") }}?' + params.toString();
+    window.location.href = '{{ url_for("faturamento.listar_faturamento_produtos") }}?' + params.toString();
 }
 
 // Tooltips nos códigos de produto

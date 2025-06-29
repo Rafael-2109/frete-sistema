@@ -12,19 +12,77 @@ estoque_bp = Blueprint('estoque', __name__, url_prefix='/estoque')
 def index():
     """Dashboard do módulo estoque"""
     try:
+        from sqlalchemy import func, extract
+        from datetime import datetime
+        
         # ✅ SEGURO: Verifica se tabela existe antes de fazer query
         if db.engine.has_table('movimentacao_estoque'):
             total_movimentacoes = MovimentacaoEstoque.query.count()
-            movimentacoes_recentes = MovimentacaoEstoque.query.limit(5).count()
+            
+            # Movimentações do mês atual
+            mes_atual = datetime.now().month
+            ano_atual = datetime.now().year
+            
+            entradas_mes = MovimentacaoEstoque.query.filter(
+                MovimentacaoEstoque.tipo_movimentacao.ilike('%entrada%'),
+                extract('month', MovimentacaoEstoque.data_movimentacao) == mes_atual,
+                extract('year', MovimentacaoEstoque.data_movimentacao) == ano_atual
+            ).count()
+            
+            saidas_mes = MovimentacaoEstoque.query.filter(
+                MovimentacaoEstoque.tipo_movimentacao.ilike('%saida%'),
+                extract('month', MovimentacaoEstoque.data_movimentacao) == mes_atual,
+                extract('year', MovimentacaoEstoque.data_movimentacao) == ano_atual
+            ).count()
+            
+            # Produtos únicos movimentados
+            produtos_movimentados = MovimentacaoEstoque.query.with_entities(
+                MovimentacaoEstoque.cod_produto
+            ).distinct().count()
+            
+            # Locais únicos de movimentação
+            locais_movimentacao = MovimentacaoEstoque.query.with_entities(
+                MovimentacaoEstoque.local_movimentacao
+            ).filter(MovimentacaoEstoque.local_movimentacao.isnot(None)).distinct().count()
+            
+            # Quantidade total movimentada
+            qtd_total_movimentada = db.session.query(
+                func.sum(MovimentacaoEstoque.qtd_movimentacao)
+            ).scalar() or 0
+            
+            # Movimentações recentes (últimos 10 registros)
+            movimentacoes_recentes = MovimentacaoEstoque.query.order_by(
+                MovimentacaoEstoque.data_movimentacao.desc()
+            ).limit(10).all()
+            
+            # Tipos de movimentação do último mês
+            tipos_movimentacao = db.session.query(
+                MovimentacaoEstoque.tipo_movimentacao,
+                func.count(MovimentacaoEstoque.id).label('quantidade')
+            ).filter(
+                extract('month', MovimentacaoEstoque.data_movimentacao) == mes_atual,
+                extract('year', MovimentacaoEstoque.data_movimentacao) == ano_atual
+            ).group_by(MovimentacaoEstoque.tipo_movimentacao).all()
         else:
-            total_movimentacoes = movimentacoes_recentes = 0
+            total_movimentacoes = entradas_mes = saidas_mes = produtos_movimentados = 0
+            locais_movimentacao = qtd_total_movimentada = 0
+            movimentacoes_recentes = tipos_movimentacao = []
+            
     except Exception as e:
         # ✅ FALLBACK: Se der erro, zera tudo
-        total_movimentacoes = movimentacoes_recentes = 0
+        total_movimentacoes = entradas_mes = saidas_mes = produtos_movimentados = 0
+        locais_movimentacao = qtd_total_movimentada = 0
+        movimentacoes_recentes = tipos_movimentacao = []
     
     return render_template('estoque/dashboard.html',
                          total_movimentacoes=total_movimentacoes,
-                         movimentacoes_recentes=movimentacoes_recentes)
+                         entradas_mes=entradas_mes,
+                         saidas_mes=saidas_mes,
+                         produtos_movimentados=produtos_movimentados,
+                         locais_movimentacao=locais_movimentacao,
+                         qtd_total_movimentada=qtd_total_movimentada,
+                         movimentacoes_recentes=movimentacoes_recentes,
+                         tipos_movimentacao=tipos_movimentacao)
 
 @estoque_bp.route('/movimentacoes')
 @login_required

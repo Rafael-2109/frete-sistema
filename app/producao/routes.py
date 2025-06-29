@@ -12,18 +12,68 @@ producao_bp = Blueprint('producao', __name__, url_prefix='/producao')
 def index():
     """Dashboard do módulo produção"""
     try:
+        from sqlalchemy import func
+        
         # ✅ SEGURO: Verifica se tabelas existem antes de fazer query
-        total_ops = ProgramacaoProducao.query.count() if db.engine.has_table('programacao_producao') else 0
-        ops_atrasadas = ProgramacaoProducao.query.filter_by(status='PROGRAMADA').count() if db.engine.has_table('programacao_producao') else 0
-        total_produtos_palletizados = CadastroPalletizacao.query.filter_by(ativo=True).count() if db.engine.has_table('cadastro_palletizacao') else 0
+        if db.engine.has_table('programacao_producao'):
+            total_programacao = ProgramacaoProducao.query.count()
+            
+            # Produtos únicos programados
+            produtos_programados = ProgramacaoProducao.query.with_entities(
+                ProgramacaoProducao.cod_produto
+            ).distinct().count()
+            
+            # Linhas de produção únicas
+            linhas_producao = ProgramacaoProducao.query.with_entities(
+                ProgramacaoProducao.linha_producao
+            ).filter(ProgramacaoProducao.linha_producao.isnot(None)).distinct().count()
+            
+            # Quantidade total programada
+            qtd_total_programada = db.session.query(
+                func.sum(ProgramacaoProducao.qtd_programada)
+            ).scalar() or 0
+            
+            # Programação recente (últimos 10)
+            programacao_recente = ProgramacaoProducao.query.order_by(
+                ProgramacaoProducao.data_programacao.desc()
+            ).limit(10).all()
+        else:
+            total_programacao = produtos_programados = linhas_producao = 0
+            qtd_total_programada = 0
+            programacao_recente = []
+        
+        # Dados de palletização
+        if db.engine.has_table('cadastro_palletizacao'):
+            produtos_palletizados = CadastroPalletizacao.query.filter_by(ativo=True).count()
+            
+            # Peso total estimado (soma dos pesos)
+            peso_total_estimado = db.session.query(
+                func.sum(CadastroPalletizacao.peso_bruto)
+            ).filter_by(ativo=True).scalar() or 0
+            
+            # Palletização recente (últimos 10)
+            palletizacao_recente = CadastroPalletizacao.query.filter_by(
+                ativo=True
+            ).order_by(CadastroPalletizacao.updated_at.desc()).limit(10).all()
+        else:
+            produtos_palletizados = peso_total_estimado = 0
+            palletizacao_recente = []
+            
     except Exception as e:
         # ✅ FALLBACK: Se der erro, zera tudo
-        total_ops = ops_atrasadas = total_produtos_palletizados = 0
+        total_programacao = produtos_programados = linhas_producao = 0
+        qtd_total_programada = peso_total_estimado = produtos_palletizados = 0
+        programacao_recente = palletizacao_recente = []
     
     return render_template('producao/dashboard.html',
-                         total_ops=total_ops,
-                         ops_atrasadas=ops_atrasadas,
-                         total_produtos_palletizados=total_produtos_palletizados)
+                         total_programacao=total_programacao,
+                         produtos_programados=produtos_programados,
+                         produtos_palletizados=produtos_palletizados,
+                         linhas_producao=linhas_producao,
+                         qtd_total_programada=qtd_total_programada,
+                         peso_total_estimado=peso_total_estimado,
+                         programacao_recente=programacao_recente,
+                         palletizacao_recente=palletizacao_recente)
 
 @producao_bp.route('/programacao')
 @login_required
