@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Importar Movimentações de Estoque{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-file-upload"></i> Importar Movimentações de Estoque
+                <small class="text-muted">Sempre Adiciona Novos Registros</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Instruções -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <h5><i class="fas fa-info-circle"></i> Instruções para Importação</h5>
+                <ul class="mb-0">
+                    <li><strong>COMPORTAMENTO:</strong> Este processo <strong>sempre adiciona</strong> novos registros (não substitui)</li>
+                    <li><strong>Arquivo:</strong> Selecione um arquivo <code>.xlsx</code> ou <code>.csv</code></li>
+                    <li><strong>TODOS os campos são obrigatórios</strong></li>
+                    <li><strong>Tipos aceitos:</strong> AVARIA, EST INICIAL, DEVOLUÇÃO, PRODUÇÃO, RETRABALHO</li>
+                    <li><strong>Formato da data:</strong> DD/MM/AAAA ou AAAA-MM-DD</li>
+                    <li><strong>Validação:</strong> Produtos não cadastrados na palletização serão marcados com flag</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exemplo de Layout -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-table"></i> Formato Obrigatório do Arquivo</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="text-danger">Tipo Movimentação*</th>
+                                    <th class="text-danger">Código Produto*</th>
+                                    <th class="text-danger">Nome Produto*</th>
+                                    <th class="text-danger">Data Movimentação*</th>
+                                    <th class="text-danger">Quantidade Movimentação*</th>
+                                    <th class="text-danger">Local Movimentação*</th>
+                                    <th class="text-danger">Observação*</th>
+                                    <th class="text-danger">Documento Origem*</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>EST INICIAL</td>
+                                    <td>PROD001</td>
+                                    <td>Produto Exemplo A</td>
+                                    <td>15/01/2025</td>
+                                    <td>100</td>
+                                    <td>Almoxarifado Central</td>
+                                    <td>Estoque inicial</td>
+                                    <td>INV-2025-001</td>
+                                </tr>
+                                <tr>
+                                    <td>PRODUÇÃO</td>
+                                    <td>PROD002</td>
+                                    <td>Produto Exemplo B</td>
+                                    <td>16/01/2025</td>
+                                    <td>50</td>
+                                    <td>Linha Produção 1</td>
+                                    <td>Produção diária</td>
+                                    <td>PROD-2025-001</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <small class="text-muted">
+                        <span class="text-danger">* Todos os campos são obrigatórios</span>
+                    </small>
+                    
+                    <!-- Tipos permitidos -->
+                    <div class="mt-3">
+                        <h6>Tipos de Movimentação Aceitos:</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <span class="badge badge-primary me-2">AVARIA</span>
+                                <span class="badge badge-success me-2">EST INICIAL</span>
+                                <span class="badge badge-warning me-2">DEVOLUÇÃO</span>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="badge badge-info me-2">PRODUÇÃO</span>
+                                <span class="badge badge-secondary me-2">RETRABALHO</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário de Upload -->
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-cloud-upload-alt"></i> Upload do Arquivo</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                        {{ csrf_token() }}
+                        
+                        <div class="form-group mb-4">
+                            <label for="arquivo" class="form-label">
+                                <i class="fas fa-file-excel"></i> Selecione o arquivo
+                            </label>
+                            <input type="file" 
+                                   class="form-control" 
+                                   id="arquivo" 
+                                   name="arquivo" 
+                                   accept=".xlsx,.csv" 
+                                   required>
+                            <small class="form-text text-muted">
+                                Arquivos aceitos: .xlsx, .csv (máximo 15MB)
+                            </small>
+                        </div>
+
+                        <div class="alert alert-success">
+                            <i class="fas fa-plus-circle"></i>
+                            <strong>Processamento:</strong> Todas as movimentações do arquivo serão ADICIONADAS ao estoque existente.
+                            <br><small>Produtos não cadastrados na palletização serão marcados com flag de alerta.</small>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg" id="btnUpload">
+                                <i class="fas fa-upload"></i> Importar Movimentações
+                            </button>
+                            <a href="{{ url_for('estoque.listar_movimentacoes') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar para Listagem
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progresso -->
+    <div class="row mt-4" id="progressSection" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="fas fa-cog fa-spin"></i> Processando movimentações...</h6>
+                    <div class="progress">
+                        <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 100%"></div>
+                    </div>
+                    <small class="text-muted mt-2 d-block">Adicionando movimentações ao estoque...</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    const arquivo = document.getElementById('arquivo').files[0];
+    
+    if (!arquivo) {
+        e.preventDefault();
+        alert('Por favor, selecione um arquivo!');
+        return;
+    }
+    
+    // Verificar tamanho (15MB para estoque)
+    if (arquivo.size > 15 * 1024 * 1024) {
+        e.preventDefault();
+        alert('Arquivo muito grande! Máximo permitido: 15MB');
+        return;
+    }
+    
+    // Verificar extensão
+    const extensao = arquivo.name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'csv'].includes(extensao)) {
+        e.preventDefault();
+        alert('Tipo de arquivo não permitido! Use apenas .xlsx ou .csv');
+        return;
+    }
+    
+    // Mostrar progresso
+    document.getElementById('progressSection').style.display = 'block';
+    document.getElementById('btnUpload').disabled = true;
+    document.getElementById('btnUpload').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+});
+
+// Validação em tempo real do arquivo
+document.getElementById('arquivo').addEventListener('change', function(e) {
+    const arquivo = e.target.files[0];
+    const btnUpload = document.getElementById('btnUpload');
+    
+    if (arquivo) {
+        const tamanhoMB = (arquivo.size / (1024 * 1024)).toFixed(1);
+        const extensao = arquivo.name.split('.').pop().toLowerCase();
+        
+        if (arquivo.size > 15 * 1024 * 1024) {
+            e.target.setCustomValidity('Arquivo muito grande (máx 15MB)');
+            btnUpload.disabled = true;
+        } else if (!['xlsx', 'csv'].includes(extensao)) {
+            e.target.setCustomValidity('Tipo não permitido (use .xlsx ou .csv)');
+            btnUpload.disabled = true;
+        } else {
+            e.target.setCustomValidity('');
+            btnUpload.disabled = false;
+            
+            // Mostrar informações do arquivo
+            const info = document.createElement('small');
+            info.className = 'text-success';
+            info.innerHTML = '<i class="fas fa-check"></i> ' + arquivo.name + ' (' + tamanhoMB + ' MB)';
+            
+            // Remove info anterior se existir
+            const infoAnterior = e.target.parentNode.querySelector('.text-success');
+            if (infoAnterior) infoAnterior.remove();
+            
+            e.target.parentNode.appendChild(info);
+        }
+    }
+});
+</script>
+{% endblock %} 
