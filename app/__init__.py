@@ -423,6 +423,11 @@ def create_app(config_name=None):
     from app.portaria.routes import portaria_bp
     from app.api.routes import api_bp
     from app.claude_ai import claude_ai_bp
+    
+    # 📦 Importando blueprints dos módulos de carteira (seguindo padrão existente)
+    from app.carteira.routes import carteira_bp
+    from app.estoque.routes import estoque_bp
+    from app.producao.routes import producao_bp
 
 
     app.register_blueprint(auth_bp)
@@ -448,6 +453,11 @@ def create_app(config_name=None):
     
     # 🤖 Claude AI Integration
     app.register_blueprint(claude_ai_bp)
+    
+    # 📦 Módulos de Carteira de Pedidos
+    app.register_blueprint(carteira_bp)
+    app.register_blueprint(estoque_bp)
+    app.register_blueprint(producao_bp)
     
     # ✅ INICIALIZAR CLAUDE AI DE FORMA EXPLÍCITA
     try:
@@ -478,6 +488,11 @@ def create_app(config_name=None):
     from app.transportadoras.models import Transportadora
     from app.veiculos.models import Veiculo
     from app.cotacao.models import Cotacao
+    # Novos modelos dos módulos de carteira
+    from app.faturamento.models import FaturamentoProduto
+    from app.estoque.models import MovimentacaoEstoque
+    from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
+    from app.localidades.models import CadastroRota, CadastroSubRota
 
     # ✅ MIDDLEWARE PARA RECONEXÃO AUTOMÁTICA DO BANCO
     @app.before_request

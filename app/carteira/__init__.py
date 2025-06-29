@@ -1,0 +1,1 @@
+# Módulo carteira - blueprint definido em routes.py 

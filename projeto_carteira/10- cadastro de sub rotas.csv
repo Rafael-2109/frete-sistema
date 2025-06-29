@@ -1,0 +1,4 @@
+﻿Explicação do campo;Nome do campo já existente no sistema;Nome do campo no excel;
+Estado do Endereço de entrega do cliente;cod_uf;ESTADO;AC
+Cidade do Endereço de entrega do cliente;nome_cidade;CIDADE;RIO BRANCO
+Sub rota utilizada na condicional da carteira de pedidos - utilizada nos filtros da roteirização (lista_pedidos);sub_rota;SUB ROTA;CAP

@@ -1,0 +1,28 @@
+﻿class Separacao(db.Model):;
+    __tablename__ = 'separacao';
+;
+id;
+separacao_lote_id;Criado pelo sistema, porem possivel vincular com a carga criada na separação
+num_pedido;vem direto da carteira
+data_pedido;vem direto da carteira
+cnpj_cpf;vem direto da carteira
+raz_social_red;vem direto da carteira
+nome_cidade;vem do endereço de entrega e não do cliente
+cod_uf;vem do endereço de entrega e não do cliente
+cod_produto;vem através da conversão dos códigos
+nome_produto;vem direto da carteira
+;
+qtd_saldo;vem da qtd prevista no embarque (é uma parte ou total da carteira, inserido manualmente)
+valor_saldo;qtd_saldo * Preço unitario da carteira
+pallet;Vem da base de dados de palletização / peso
+peso;Vem da base de dados de palletização / peso
+;
+rota;"Vem de uma condicional entre ""tabela de de-para UF - rota"" e incoterm (FOB = FOB / RED = RED / CIF = tabela de de-para)"
+sub_rota;"Vem de uma condicional entre ""tabela de de-para cidade - sub_rota"" e incoterm (FOB = vazio / RED = vazio / CIF = tabela de de-para)"
+observ_ped_1;vem direto da carteira
+roteirizacao;Vem de um preenchimento manual para provisão roteirização (comentario, não é campo com dados)
+expedicao;Data inserida manualmente para dedução de estoque provisionada
+agendamento;Data de agendamento inserida manual
+protocolo;Protocolo de agentamento inserido manual
+;
+criado_em;

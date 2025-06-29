@@ -1,0 +1,46 @@
+﻿Explicação do campo;Nome do campo já existente no sistema;sugestão de nome;Nome do campo no excel;
+Numero do pedido de compra do cliente;;pedido_cliente;Referência do pedido/Pedido de Compra do Cliente;
+Numero de pedido para nossa referencia;num_pedido;;Referência do pedido/Referência do pedido;VCD2520007
+data que foi criado;data_pedido;;Referência do pedido/Data de criação;26/06/2025 16:17
+CNPJ do cliente;cnpj_cpf;;Referência do pedido/Cliente/CNPJ;46.196.098/0001-03
+Razao social do cliente;;raz_social;Referência do pedido/Cliente/Razão Social;FACIL DISTRIBUIDORA LTDA
+Nome do cliente;raz_social_red;;Referência do pedido/Cliente/Nome;PEIXEIRO
+Cidade do cliente;municipio;;Referência do pedido/Cliente/Município/Nome do Município;Fortaleza
+Estado do cliente;estado;;Referência do pedido/Cliente/Estado/Código do estado;CE
+Vendedor;vendedor (RelatorioFaturamentoImportado);;Referência do pedido/Vendedor;Camila dos Santos Perpetuo
+Equipe de vendas;;equipe_vendas;Referência do pedido/Equipe de vendas;VENDA INTERNA DENISE
+Codigo do produto;cod_produto;;Produto/Referência interna;4759099
+Descrição do produto;nome_produto;;Produto/Nome;OLEO DE SOJA MISTO - GL 4X5,02 L - ST ISABEL
+Quantidade do pedido;;qtd_produto_pedido;Quantidade;100
+Saldo a faturar;;qtd_saldo_produto_pedido;Saldo;100
+Qtd Cancelada;;qtd_cancelada_produto_pedido;Cancelado;0
+Preço Unitario do produto;;preco_produto_pedido;Preço unitário;220
+"Status do pedido, pode ser Cancelado, Pedido de venda ou Cotação.
+Para os casos de Cancelado, deverá ser excluido do sistema";;status_pedido;Referência do pedido/Status;Pedido de venda
+Categoria do produto;;embalagem_produto;Produto/Categoria de produtos/Nome;GALAO 5,02 L
+Sub categoria do produto;;materia_prima_produto;Produto/Categoria de produtos/Categoria primária/Nome;OLEO DE SOJA
+Sub Sub categoria do produto;;categoria_produto;Produto/Categoria de produtos/Categoria primária/Categoria primária/Nome;OLEOS
+Condição de pagamento;;cond_pgto_pedido;Referência do pedido/Condições de pagamento;28/35/42 DDL
+Forma de pagamento;;forma_pgto_pedido;Referência do pedido/Forma de Pagamento;Boleto Grafeno CD
+Observação do pedido;observ_ped_1;;Referência do pedido/Notas para Expedição;
+Incoterm do pedido;incoterm;;Referência do pedido/Incoterm;[CIF] CIF
+Método de entrega;;metodo_entrega_pedido;Referência do pedido/Método de entrega;
+Data de entrega;;data_entrega_pedido;Referência do pedido/Data de entrega;
+Cliente precisa de agendamento (É outra fonte de identificar se o cliente precisa de agendamento);;cliente_nec_agendamento;Referência do pedido/Cliente/Agendamento;Não
+Endereço de entrega - CNPJ;;cnpj_endereco_ent;Referência do pedido/Endereço de entrega/CNPJ;46.196.098/0001-03
+Endereço de entrega - Nome do local de entrega;;empresa_endereco_ent;Referência do pedido/Endereço de entrega/O próprio;PEIXEIRO
+Endereço de entrega - Cep do local de entrega;;cep_endereco_ent;Referência do pedido/Endereço de entrega/CEP;60455500
+Endereço de entrega - Cidade e UF do local de entrega - Necessario tratamento no sistema para extrair o UF dentro do parenteses e a cidade antes do parenteses;nome_cidade / cod_uf;;Referência do pedido/Endereço de entrega/Município;Fortaleza (CE)
+Endereço de entrega -  Bairro do endereço de local de entrega;;bairro_endereco_ent;Referência do pedido/Endereço de entrega/Bairro;AMADEU FURTADO
+Endereço de entrega - Rua do local de entrega;;rua_endereco_ent;Referência do pedido/Endereço de entrega/Endereço;R TIPOGRAFO SALES
+Endereço de entrega - numero do local de entrega;;endereco_ent;Referência do pedido/Endereço de entrega/Número;938
+Endereço de entrega - Telefone do local de entrega;;endereco_ent;Referência do pedido/Endereço de entrega/Telefone;8588990058
+;;;;
+Campos adicionados no excel hoje para analise da baixa de estoque proveniente do faturamento;;;;
+;;;;
+"Nesse campo é preenchido as deduções do estoque pelo faturamento.
+No caso são as baixas dos pedidos pelo faturamento, com isso é verificado se as baixas dos pedidos não ultrapassam a ""Quantidade"" do pedido, pois isso não pode ocorrer. 
+Caso o faturamento seja menor ou igual ao saldo do pedido, indica que o faturamento é coerente, portanto eu baixo essa quantidade do pedido gerando um novo saldo.
+Caso o faturamento seja superior ao saldo do pedido, indica que há alguma NF cancelada ou outra inconsistencia a ser verificada.
+Como o sistema de fretes não é integrado ao ERP da empresa, as informações de pedido, faturamento, produção e estoque são atualizadas ";;baixa_produto_pedido;Baixa pelo faturamento;
+"Saldo do pedido, extraido através da ""Quantidade - Cancelado - Baixa pelo faturamento"", deverá ser igual ao ""Saldo""";;qtd_saldo_produto_calculado;Saldo calculado;

@@ -1,0 +1,33 @@
+﻿Explicação do campo;Nome do campo já existente no sistema;Nome do campo no excel;;;*** Essa planilha eu utilizo para unificar o estoque considerando as previsões e os estoques da seguinte maneira:;;
+Código usado para buscar as movimentações;cod_produto;De - Codigo;;;;;
+Código usado para lançamento das movimentações;cod_produto;Para - Codigo;;;Exemplo:;;
+Quantidade usada para calcular estoque;estoque;Quantidade;;;Lançado no sistema;;
+;;;;;estoque inicial;codigo 1;1000
+;;;;;estoque inicial;codigo 2;200
+;;;;;saidas;codigo 1;500
+;;;;;saidas;codigo 2;500
+;;;;;programação de produção;codigo 1;3000
+;;;;;programação de produção;codigo 2;
+;;;;;saldo;codigo 1;3500
+;;;;;saldo;codigo 2;-300
+;;;;;;;
+;;;;;Unificação detalhamento;;
+;;;;;estoque inicial;codigo 1;1200
+;;;;;estoque inicial;codigo 2;1200
+;;;;;saidas;codigo 1;1000
+;;;;;saidas;codigo 2;1000
+;;;;;programação de produção;codigo 1;3000
+;;;;;programação de produção;codigo 2;3000
+;;;;;saldo;codigo 1;3200
+;;;;;saldo;codigo 2;3200
+;;;;;;;
+;;;;;Unificação de códigos;;
+;;;;;De - Codigo;Para - Codigo;Quantidade
+;;;;;codigo 1;codigo 1;3500
+;;;;;codigo 1;codigo 2;3500
+;;;;;codigo 2;codigo 1;-300
+;;;;;codigo 2;codigo 2;-300
+;;;;;;;
+;;;;;Estoque;;
+;;;;;;codigo 1;3200
+;;;;;;codigo 2;3200

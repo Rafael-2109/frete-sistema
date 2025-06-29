@@ -1,0 +1,1 @@
+# Módulo estoque - blueprint definido em routes.py 

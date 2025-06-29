@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app import db
-from app.faturamento.models import RelatorioFaturamentoImportado
+from app.faturamento.models import RelatorioFaturamentoImportado, FaturamentoProduto
 from app.faturamento.forms import UploadRelatorioForm  # certifique-se de que o caminho está correto
 from app.utils.helpers import limpar_valor
 from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
@@ -544,4 +544,65 @@ def inativar_nfs():
             'success': False,
             'message': f'Erro interno: {str(e)}'
         }), 500
+    
+# =====================================
+# 🆕 ROTAS PARA FATURAMENTO POR PRODUTO
+# =====================================
 
+@faturamento_bp.route('/produtos')
+@login_required
+def listar_faturamento_produtos():
+    """Lista faturamento por produto (novo módulo)"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    
+    # Filtros
+    cod_produto = request.args.get('cod_produto', '')
+    numero_nf = request.args.get('numero_nf', '')
+    cnpj_cliente = request.args.get('cnpj_cliente', '')
+    
+    # Query base
+    query = FaturamentoProduto.query
+    
+    # Aplicar filtros
+    if cod_produto:
+        query = query.filter(FaturamentoProduto.cod_produto.ilike(f'%{cod_produto}%'))
+    if numero_nf:
+        query = query.filter(FaturamentoProduto.numero_nf.ilike(f'%{numero_nf}%'))
+    if cnpj_cliente:
+        query = query.filter(FaturamentoProduto.cnpj_cliente.ilike(f'%{cnpj_cliente}%'))
+    
+    # Ordenação e paginação
+    faturamentos = query.order_by(FaturamentoProduto.data_fatura.desc()).all()
+    
+    return render_template('faturamento/listar_produtos.html',
+                         faturamentos=faturamentos,
+                         cod_produto=cod_produto,
+                         numero_nf=numero_nf,
+                         cnpj_cliente=cnpj_cliente)
+
+@faturamento_bp.route('/produtos/api/estatisticas')
+@login_required
+def api_estatisticas_produtos():
+    """API para estatísticas do faturamento por produto"""
+    try:
+        from sqlalchemy import func
+        
+        # Estatísticas básicas
+        stats = {
+            'total_produtos': db.session.query(FaturamentoProduto.cod_produto).distinct().count(),
+            'total_nfs': db.session.query(FaturamentoProduto.numero_nf).distinct().count(),
+            'total_clientes': db.session.query(FaturamentoProduto.cnpj_cliente).distinct().count(),
+            'valor_total': db.session.query(func.sum(FaturamentoProduto.valor_produto_faturado)).scalar() or 0
+        }
+        
+        return jsonify({'success': True, 'data': stats})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@faturamento_bp.route('/produtos/importar')
+@login_required
+def importar_faturamento_produtos():
+    """Tela para importar dados de faturamento por produto"""
+    return render_template('faturamento/importar_produtos.html')

@@ -1,0 +1,3 @@
+﻿Explicação do campo;Nome do campo já existente no sistema;Nome do campo no excel
+Estado do Endereço de entrega do cliente;cod_uf;ESTADO
+Rota utilizada na condicional da carteira de pedidos - utilizada nos filtros da roteirização (lista_pedidos);rota;ROTA

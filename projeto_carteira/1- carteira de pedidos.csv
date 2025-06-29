@@ -1,0 +1,91 @@
+﻿Explicação do campo;Nome do campo já existente no sistema;;Nome do campo no excel;
+Numero do pedido de compra do cliente;;pedido_cliente;Referência do pedido/Pedido de Compra do Cliente;
+Numero de pedido para nossa referencia;num_pedido;;Referência do pedido/Referência do pedido;VCD2520007
+data que foi criado;data_pedido;;Referência do pedido/Data de criação;26/06/2025 16:17
+data da ultima alteração;;data_atual_pedido;Referência do pedido/Data do pedido;27/06/2025 16:36
+CNPJ do cliente;cnpj_cpf;;Referência do pedido/Cliente/CNPJ;46.196.098/0001-03
+Razao social do cliente;;raz_social;Referência do pedido/Cliente/Razão Social;FACIL DISTRIBUIDORA LTDA
+Nome do cliente;raz_social_red;;Referência do pedido/Cliente/Nome;PEIXEIRO
+Cidade do cliente;municipio;;Referência do pedido/Cliente/Município/Nome do Município;Fortaleza
+Estado do cliente;estado;;Referência do pedido/Cliente/Estado/Código do estado;CE
+Vendedor;vendedor (RelatorioFaturamentoImportado);;Referência do pedido/Vendedor;Camila dos Santos Perpetuo
+Equipe de vendas;;equipe_vendas;Referência do pedido/Equipe de vendas;VENDA INTERNA DENISE
+Codigo do produto;cod_produto;;Produto/Referência interna;4759099
+Descrição do produto;nome_produto;;Produto/Nome;OLEO DE SOJA MISTO - GL 4X5,02 L - ST ISABEL
+Unidade de medida;;unid_medida_produto;Produto/Unidade de medida;CAIXAS
+Quantidade do pedido;;qtd_produto_pedido;Quantidade;100
+Saldo a faturar;;qtd_saldo_produto_pedido;Saldo;100
+Qtd Cancelada;;qtd_cancelada_produto_pedido;Cancelado;0
+Preço Unitario do produto;;preco_produto_pedido;Preço unitário;220
+"Status do pedido, pode ser Cancelado, Pedido de venda ou Cotação.
+Para os casos de Cancelado, deverá ser excluido do sistema";;status_pedido;Referência do pedido/Status;Pedido de venda
+Categoria do produto;;embalagem_produto;Produto/Categoria de produtos/Nome;GALAO 5,02 L
+Sub categoria do produto;;materia_prima_produto;Produto/Categoria de produtos/Categoria primária/Nome;OLEO DE SOJA
+Sub Sub categoria do produto;;categoria_produto;Produto/Categoria de produtos/Categoria primária/Categoria primária/Nome;OLEOS
+Condição de pagamento;;cond_pgto_pedido;Referência do pedido/Condições de pagamento;28/35/42 DDL
+Forma de pagamento;;forma_pgto_pedido;Referência do pedido/Forma de Pagamento;Boleto Grafeno CD
+Observação do pedido;observ_ped_1;;Referência do pedido/Notas para Expedição;
+Incoterm do pedido;incoterm;;Referência do pedido/Incoterm;[CIF] CIF
+Método de entrega;;metodo_entrega_pedido;Referência do pedido/Método de entrega;
+Data de entrega;;data_entrega_pedido;Referência do pedido/Data de entrega;
+Cliente precisa de agendamento;;cliente_nec_agendamento;Referência do pedido/Cliente/Agendamento;Não
+Endereço de entrega - CNPJ;;cnpj_endereco_ent;Referência do pedido/Endereço de entrega/CNPJ;46.196.098/0001-03
+Endereço de entrega - Nome do local de entrega;;empresa_endereco_ent;Referência do pedido/Endereço de entrega/O próprio;PEIXEIRO
+Endereço de entrega - Cep do local de entrega;;cep_endereco_ent;Referência do pedido/Endereço de entrega/CEP;60455500
+Endereço de entrega - Cidade e UF do local de entrega - Necessario tratamento no sistema para extrair o UF dentro do parenteses e a cidade antes do parenteses;nome_cidade / cod_uf;;Referência do pedido/Endereço de entrega/Município;Fortaleza (CE)
+Endereço de entrega -  Bairro do endereço de local de entrega;;bairro_endereco_ent;Referência do pedido/Endereço de entrega/Bairro;AMADEU FURTADO
+Endereço de entrega - Rua do local de entrega;;rua_endereco_ent;Referência do pedido/Endereço de entrega/Endereço;R TIPOGRAFO SALES
+Endereço de entrega - numero do local de entrega;;endereco_ent;Referência do pedido/Endereço de entrega/Número;938
+Endereço de entrega - Telefone do local de entrega;;endereco_ent;Referência do pedido/Endereço de entrega/Telefone;8588990058
+;;;;
+Campos adicionados no excel hoje para analise da disponibilidade de estoque;;;;
+Menor estoque do item em 7 dias;;menor_estoque_produto_d7;Previsão de ruptura;
+Estoque do item no dia (expedicao) já deduzindo a linha;;saldo_estoque_pedido;Estoque na data;
+Previsão de estoque com produção just in time (Estoque na data + programação de produção D0);;saldo_estoque_pedido_forcado;Analise just-in-time;
+Data prevista de expedição;expedicao;;Data de Expedição;
+Dara prevista de entrega;;data_entrega;Data de Entrega;
+Data agendada;agendamento;;Data de agendamento;
+Protocolo de agendamento;protocolo;;Protocolo de agendamento;
+Campo utilizado apenas para leitura no momento da roteirização com comentarios sobre a roteirização;roteirizacao;;Transportadora;
+ID da carga;(como se fosse o lote_separacao_id);;;
+Qtd do item na carga;qtd_saldo;;;
+Valor do item na carga;valor_saldo;;;
+Pallet do item na carga;pallet;;;
+Peso do item na carga;peso;;;
+Valor total programado na carga do CNPJ;valor_saldo_total;;Valor na data;
+Pallet total programado na carga do CNPJ;pallet_total;;Pallet na data;
+Peso total programado na carga do CNPJ;peso_total;;Peso na data;
+Valor total em carteira do CNPJ;;valor_cliente_pedido;Valor cliente;
+Pallet total em carteira do CNPJ;;pallet_cliente_pedido;Pallet cliente;
+Peso total em carteira do CNPJ;;peso_cliente_pedido;Peso cliente;
+Quantidade total do item na carteira de pedidos considerando todos CNPJ;;qtd_total_produto_carteira;Carteira;
+Estoque inicial / atual do item D0;;estoque;Estoque;
+Estoque inicial D0 - Qtd prevista para expedição de D0;;estoque_d0;Estoque final D0;
+Estoque final D0 + programação de produção D0 + Qtd prevista para expedição de D1;;estoque_d1;Estoque final D1;
+Estoque final D1 + programação de produção D1 + Qtd prevista para expedição de D2;;estoque_d2;Estoque final D2;
+Estoque final D2 + programação de produção D2 + Qtd prevista para expedição de D3;;estoque_d3;Estoque final D3;
+Estoque final D3 + programação de produção D3 + Qtd prevista para expedição de D4;;estoque_d4;Estoque final D4;
+Estoque final D4 + programação de produção D4 + Qtd prevista para expedição de D5;;estoque_d5;Estoque final D5;
+Estoque final D5 + programação de produção D5 + Qtd prevista para expedição de D6;;estoque_d6;Estoque final D6;
+Estoque final D6 + programação de produção D6 + Qtd prevista para expedição de D7;;estoque_d7;Estoque final D7;
+Estoque final D7 + programação de produção D7 + Qtd prevista para expedição de D8;;estoque_d8;Estoque final D8;
+Estoque final D8 + programação de produção D8 + Qtd prevista para expedição de D9;;estoque_d9;Estoque final D9;
+Estoque final D9 + programação de produção D9 + Qtd prevista para expedição de D10;;estoque_d10;Estoque final D10;
+Estoque final D10 + programação de produção D10 + Qtd prevista para expedição de D11;;estoque_d11;Estoque final D11;
+Estoque final D11 + programação de produção D11 + Qtd prevista para expedição de D12;;estoque_d12;Estoque final D12;
+Estoque final D12 + programação de produção D12 + Qtd prevista para expedição de D13;;estoque_d13;Estoque final D13;
+Estoque final D13 + programação de produção D13 + Qtd prevista para expedição de D14;;estoque_d14;Estoque final D14;
+Estoque final D14 + programação de produção D14 + Qtd prevista para expedição de D15;;estoque_d15;Estoque final D15;
+Estoque final D15 + programação de produção D15 + Qtd prevista para expedição de D16;;estoque_d16;Estoque final D16;
+Estoque final D16 + programação de produção D16 + Qtd prevista para expedição de D17;;estoque_d17;Estoque final D17;
+Estoque final D17 + programação de produção D17 + Qtd prevista para expedição de D18;;estoque_d18;Estoque final D18;
+Estoque final D18 + programação de produção D18 + Qtd prevista para expedição de D19;;estoque_d19;Estoque final D19;
+Estoque final D19 + programação de produção D19 + Qtd prevista para expedição de D20;;estoque_d20;Estoque final D20;
+Estoque final D20 + programação de produção D20 + Qtd prevista para expedição de D21;;estoque_d21;Estoque final D21;
+Estoque final D21 + programação de produção D21 + Qtd prevista para expedição de D22;;estoque_d22;Estoque final D22;
+Estoque final D22 + programação de produção D22 + Qtd prevista para expedição de D23;;estoque_d23;Estoque final D23;
+Estoque final D23 + programação de produção D23 + Qtd prevista para expedição de D24;;estoque_d24;Estoque final D24;
+Estoque final D24 + programação de produção D24 + Qtd prevista para expedição de D25;;estoque_d25;Estoque final D25;
+Estoque final D25 + programação de produção D25 + Qtd prevista para expedição de D26;;estoque_d26;Estoque final D26;
+Estoque final D26 + programação de produção D26 + Qtd prevista para expedição de D27;;estoque_d27;Estoque final D27;
+Estoque final D27 + programação de produção D27 + Qtd prevista para expedição de D28;;estoque_d28;Estoque final D28;

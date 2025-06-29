@@ -1,0 +1,16 @@
+﻿Explicação do campo;Nome do campo já existente no sistema;;Nome do campo no excel;
+Numero da NF;numero_nf;;Numero NF;128944
+CNPJ do cliente;cnpj_cliente;;Cód. ClienteE;75.315.333/0103-33
+Nome do cliente;nome_cliente;;Razão Social;ATACADAO 103
+Cidade do cliente;municipio;;Cidade;
+Estado do cliente;estado;;UF;Espírito Santo
+Numero do pedido;origem;;Pedido;VCD2407531
+Status da NF;;status_nf;Seq.Pedido;Lançado
+Código do produto;cod_produto;;Cód.Produto;4220179
+Nome do produto;nome_produto;;Descrição Produto;AZEITONA PRETA AZAPA - VD 12X360 GR - CAMPO BELO
+Quantidade;;qtd_produto_faturado; Qtd.Item ;55
+Preço Unitario do produto;;preco_produto_faturado;Vlr.Unitário;220
+Valor total do produto;;valor_produto_faturado;Vlr.Total Mercadoria;12084,05
+Data do faturamento;data_fatura;;DATA;11/12/2024
+Vendedor;vendedor;;Vendedor;
+Incoterm;incoterm;;Incoterm;

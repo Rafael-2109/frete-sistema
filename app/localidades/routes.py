@@ -4,7 +4,8 @@ from flask_login import login_required
 
 from app.localidades.forms import CidadeForm
 
-from app.localidades.models import Cidade
+from app.localidades.models import Cidade, CadastroRota, CadastroSubRota
+from app import db
 
 from io import BytesIO
 
@@ -109,3 +110,51 @@ def mesorregioes_por_uf(uf):
     mesorregioes = Cidade.query.filter_by(uf=uf).distinct(Cidade.mesorregiao).all()
     mesos = sorted(set(c.mesorregiao for c in mesorregioes if c.mesorregiao))
     return jsonify(mesos)
+
+
+# =====================================
+# 🚚 ROTAS MOVIDAS DE /producao/ 
+# =====================================
+# Rotas e Sub-rotas são cadastros de regiões/destinos para fretes
+
+@localidades_bp.route('/rotas')
+@login_required
+def listar_rotas():
+    """Lista cadastro de rotas principais por UF"""
+    try:
+        rotas = CadastroRota.query.filter_by(ativa=True).order_by(CadastroRota.cod_uf).all() if db.engine.has_table('cadastro_rota') else []
+    except Exception:
+        rotas = []
+    
+    return render_template('localidades/listar_rotas.html', rotas=rotas)
+
+@localidades_bp.route('/sub-rotas')
+@login_required
+def listar_sub_rotas():
+    """Lista cadastro de sub-rotas (detalhamento por cidade)"""
+    # Filtros
+    cod_uf = request.args.get('cod_uf', '')
+    nome_cidade = request.args.get('nome_cidade', '')
+    
+    try:
+        if db.engine.has_table('cadastro_sub_rota'):
+            # Query base
+            query = CadastroSubRota.query.filter_by(ativa=True)
+            
+            # Aplicar filtros
+            if cod_uf:
+                query = query.filter(CadastroSubRota.cod_uf.ilike(f'%{cod_uf}%'))
+            if nome_cidade:
+                query = query.filter(CadastroSubRota.nome_cidade.ilike(f'%{nome_cidade}%'))
+            
+            # Ordenação
+            sub_rotas = query.order_by(CadastroSubRota.cod_uf, CadastroSubRota.nome_cidade).all()
+        else:
+            sub_rotas = []
+    except Exception:
+        sub_rotas = []
+    
+    return render_template('localidades/listar_sub_rotas.html',
+                         sub_rotas=sub_rotas,
+                         cod_uf=cod_uf,
+                         nome_cidade=nome_cidade)

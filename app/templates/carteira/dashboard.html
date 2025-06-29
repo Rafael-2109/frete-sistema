@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block title %}Carteira de Pedidos - Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-briefcase"></i> Carteira de Pedidos
+                <small class="text-muted">Sistema Integrado de Gestão</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Estatísticas gerais dos módulos -->
+    <div class="row mb-4">
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ total_faturamento_produtos or 0 }}</h4>
+                            <span class="small">Faturamento Produtos</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-file-invoice-dollar fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ total_programacao_producao or 0 }}</h4>
+                            <span class="small">Programação Produção</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-industry fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ total_movimentacoes_estoque or 0 }}</h4>
+                            <span class="small">Movimentações Estoque</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-boxes fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ total_cadastros_palletizacao or 0 }}</h4>
+                            <span class="small">Produtos Palletizados</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-weight-hanging fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ total_rotas or 0 }}</h4>
+                            <span class="small">Rotas Cadastradas</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-route fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-dark text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ total_sub_rotas or 0 }}</h4>
+                            <span class="small">Sub-rotas Cidades</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-map-marked-alt fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Módulos Disponíveis -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4><i class="fas fa-th-large"></i> Módulos Disponíveis</h4>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('faturamento.listar_produtos') }}" class="btn btn-primary btn-lg btn-block">
+                <i class="fas fa-file-invoice-dollar"></i><br>
+                Faturamento<br>por Produto
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('producao.dashboard') }}" class="btn btn-success btn-lg btn-block">
+                <i class="fas fa-industry"></i><br>
+                Programação<br>Produção
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('estoque.dashboard') }}" class="btn btn-info btn-lg btn-block">
+                <i class="fas fa-boxes"></i><br>
+                Movimentações<br>Estoque
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('producao.listar_palletizacao') }}" class="btn btn-warning btn-lg btn-block text-dark">
+                <i class="fas fa-weight-hanging"></i><br>
+                Cadastro<br>Palletização
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('localidades.listar_rotas') }}" class="btn btn-secondary btn-lg btn-block">
+                <i class="fas fa-route"></i><br>
+                Cadastro<br>Rotas
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('localidades.listar_sub_rotas') }}" class="btn btn-dark btn-lg btn-block">
+                <i class="fas fa-map-marked-alt"></i><br>
+                Sub-rotas<br>por Cidade
+            </a>
+        </div>
+    </div>
+
+    <!-- Importação de Dados -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4><i class="fas fa-upload"></i> Importação de Dados</h4>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('faturamento.importar_produtos') }}" class="btn btn-outline-primary btn-lg btn-block">
+                <i class="fas fa-file-excel"></i><br>
+                Importar<br>Faturamento
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('producao.importar_programacao') }}" class="btn btn-outline-success btn-lg btn-block">
+                <i class="fas fa-file-excel"></i><br>
+                Importar<br>Programação
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('estoque.importar_movimentacoes') }}" class="btn btn-outline-info btn-lg btn-block">
+                <i class="fas fa-file-excel"></i><br>
+                Importar<br>Movimentações
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-outline-warning btn-lg btn-block">
+                <i class="fas fa-file-excel"></i><br>
+                Importar<br>Palletização
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('localidades.importar_rotas') }}" class="btn btn-outline-secondary btn-lg btn-block">
+                <i class="fas fa-file-excel"></i><br>
+                Importar<br>Rotas
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('localidades.importar_sub_rotas') }}" class="btn btn-outline-dark btn-lg btn-block">
+                <i class="fas fa-file-excel"></i><br>
+                Importar<br>Sub-rotas
+            </a>
+        </div>
+    </div>
+
+    <!-- Status dos Módulos -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-line"></i> Status dos Módulos
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Módulos Implementados</h6>
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-file-invoice-dollar text-primary"></i> Faturamento por Produto</span>
+                                    <span class="badge badge-success">✅ Ativo</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-industry text-success"></i> Programação de Produção</span>
+                                    <span class="badge badge-success">✅ Ativo</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-boxes text-info"></i> Movimentações de Estoque</span>
+                                    <span class="badge badge-success">✅ Ativo</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-weight-hanging text-warning"></i> Cadastro de Palletização</span>
+                                    <span class="badge badge-success">✅ Ativo</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-route text-secondary"></i> Cadastro de Rotas</span>
+                                    <span class="badge badge-success">✅ Ativo</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-map-marked-alt text-dark"></i> Sub-rotas por Cidade</span>
+                                    <span class="badge badge-success">✅ Ativo</span>
+                                </li>
+                            </ul>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6>Próximos Módulos (Fase 2)</h6>
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-clipboard-list text-muted"></i> Carteira de Pedidos</span>
+                                    <span class="badge badge-warning">🔄 Planejado</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-warehouse text-muted"></i> Saldo de Estoque</span>
+                                    <span class="badge badge-warning">🔄 Planejado</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-barcode text-muted"></i> Unificação de Códigos</span>
+                                    <span class="badge badge-warning">🔄 Planejado</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-cut text-muted"></i> Sistema de Separação</span>
+                                    <span class="badge badge-info">🔗 Integrado</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
