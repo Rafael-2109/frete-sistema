@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Importar Programação de Produção{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-file-upload"></i> Importar Programação de Produção
+                <small class="text-muted">Sempre Substitui Dados Existentes</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Instruções -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-warning">
+                <h5><i class="fas fa-exclamation-triangle"></i> Atenção - Substituição de Dados</h5>
+                <ul class="mb-0">
+                    <li><strong>COMPORTAMENTO:</strong> Este processo <strong>sempre substitui</strong> os dados existentes</li>
+                    <li><strong>Arquivo:</strong> Selecione um arquivo <code>.xlsx</code> ou <code>.xls</code></li>
+                    <li><strong>Colunas obrigatórias:</strong> Data Programação, Código Produto, Nome Produto, Quantidade Programada</li>
+                    <li><strong>Colunas opcionais:</strong> Linha Produção, Cliente/Marca, Observação PCP</li>
+                    <li><strong>Formato da data:</strong> DD/MM/AAAA</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exemplo de Layout -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-table"></i> Formato Obrigatório do Arquivo</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="text-danger">Data Programação*</th>
+                                    <th class="text-danger">Código Produto*</th>
+                                    <th class="text-danger">Nome Produto*</th>
+                                    <th class="text-danger">Quantidade Programada*</th>
+                                    <th class="text-success">Linha Produção</th>
+                                    <th class="text-success">Cliente/Marca</th>
+                                    <th class="text-success">Observação PCP</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>15/01/2025</td>
+                                    <td>PROD001</td>
+                                    <td>Produto Exemplo A</td>
+                                    <td>1000</td>
+                                    <td>Linha 1</td>
+                                    <td>Cliente ABC</td>
+                                    <td>Prioridade alta</td>
+                                </tr>
+                                <tr>
+                                    <td>16/01/2025</td>
+                                    <td>PROD002</td>
+                                    <td>Produto Exemplo B</td>
+                                    <td>500</td>
+                                    <td>Linha 2</td>
+                                    <td>Cliente XYZ</td>
+                                    <td>Produção padrão</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <small class="text-muted">
+                        <span class="text-danger">* Campos obrigatórios</span> | 
+                        <span class="text-success">Campos opcionais</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário de Upload -->
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-cloud-upload-alt"></i> Upload do Arquivo</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                        {{ csrf_token() }}
+                        
+                        <div class="form-group mb-4">
+                            <label for="arquivo" class="form-label">
+                                <i class="fas fa-file-excel"></i> Selecione o arquivo
+                            </label>
+                            <input type="file" 
+                                   class="form-control" 
+                                   id="arquivo" 
+                                   name="arquivo" 
+                                   accept=".xlsx,.xls" 
+                                   required>
+                            <small class="form-text text-muted">
+                                Arquivos aceitos: .xlsx, .xls (máximo 10MB)
+                            </small>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Processamento:</strong> Todos os dados de programação existentes serão substituídos pelos dados do arquivo.
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg" id="btnUpload">
+                                <i class="fas fa-upload"></i> Importar e Substituir Programação
+                            </button>
+                            <a href="{{ url_for('producao.listar_programacao') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar para Listagem
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progresso -->
+    <div class="row mt-4" id="progressSection" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="fas fa-cog fa-spin"></i> Processando arquivo...</h6>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 100%"></div>
+                    </div>
+                    <small class="text-muted mt-2 d-block">Substituindo dados da programação de produção...</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    const arquivo = document.getElementById('arquivo').files[0];
+    
+    if (!arquivo) {
+        e.preventDefault();
+        alert('Por favor, selecione um arquivo!');
+        return;
+    }
+    
+    // Verificar tamanho (10MB)
+    if (arquivo.size > 10 * 1024 * 1024) {
+        e.preventDefault();
+        alert('Arquivo muito grande! Máximo permitido: 10MB');
+        return;
+    }
+    
+    // Verificar extensão
+    const extensao = arquivo.name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'xls'].includes(extensao)) {
+        e.preventDefault();
+        alert('Tipo de arquivo não permitido! Use apenas .xlsx ou .xls');
+        return;
+    }
+    
+    // Confirmar substituição
+    if (!confirm('ATENÇÃO: Todos os dados de programação existentes serão SUBSTITUÍDOS. Deseja continuar?')) {
+        e.preventDefault();
+        return;
+    }
+    
+    // Mostrar progresso
+    document.getElementById('progressSection').style.display = 'block';
+    document.getElementById('btnUpload').disabled = true;
+    document.getElementById('btnUpload').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+});
+
+// Validação em tempo real do arquivo
+document.getElementById('arquivo').addEventListener('change', function(e) {
+    const arquivo = e.target.files[0];
+    const btnUpload = document.getElementById('btnUpload');
+    
+    if (arquivo) {
+        const tamanhoMB = (arquivo.size / (1024 * 1024)).toFixed(1);
+        const extensao = arquivo.name.split('.').pop().toLowerCase();
+        
+        if (arquivo.size > 10 * 1024 * 1024) {
+            e.target.setCustomValidity('Arquivo muito grande (máx 10MB)');
+            btnUpload.disabled = true;
+        } else if (!['xlsx', 'xls'].includes(extensao)) {
+            e.target.setCustomValidity('Tipo não permitido (use .xlsx ou .xls)');
+            btnUpload.disabled = true;
+        } else {
+            e.target.setCustomValidity('');
+            btnUpload.disabled = false;
+            
+            // Mostrar informações do arquivo
+            const info = document.createElement('small');
+            info.className = 'text-success';
+            info.innerHTML = '<i class="fas fa-check"></i> ' + arquivo.name + ' (' + tamanhoMB + ' MB)';
+            
+            // Remove info anterior se existir
+            const infoAnterior = e.target.parentNode.querySelector('.text-success');
+            if (infoAnterior) infoAnterior.remove();
+            
+            e.target.parentNode.appendChild(info);
+        }
+    }
+});
+</script>
+{% endblock %} 
