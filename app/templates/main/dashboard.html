@@ -94,6 +94,149 @@
         </div>
     </div>
 
+    <!-- 🏭 CARTEIRA & PRODUÇÃO - Novos Módulos Implementados -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow border-left-success">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-gradient-success">
+                    <h6 class="m-0 font-weight-bold text-white">🏭 Carteira & Produção</h6>
+                    <div>
+                        <span class="badge badge-light">✅ 6 MÓDULOS</span>
+                        <span class="badge badge-warning ms-1">NOVO</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="text-dark mb-2">Sistema Completo de Gestão</h5>
+                            <p class="text-muted mb-3">
+                                Acesse os <strong>6 novos módulos</strong> para gestão completa da carteira de pedidos, produção, estoque, faturamento e rotas de entrega.
+                            </p>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <ul class="list-unstyled text-sm">
+                                        <li><i class="fas fa-check text-success"></i> Faturamento por Produto</li>
+                                        <li><i class="fas fa-check text-success"></i> Programação de Produção</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-4">
+                                    <ul class="list-unstyled text-sm">
+                                        <li><i class="fas fa-check text-success"></i> Movimentação de Estoque</li>
+                                        <li><i class="fas fa-check text-success"></i> Cadastro de Palletização</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-4">
+                                    <ul class="list-unstyled text-sm">
+                                        <li><i class="fas fa-check text-success"></i> Cadastro de Rotas</li>
+                                        <li><i class="fas fa-check text-success"></i> Cadastro de Sub-rotas</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="mb-3">
+                                <i class="fas fa-industry fa-3x text-success mb-2"></i>
+                                <p class="text-muted small">Sistema Integrado</p>
+                            </div>
+                            <div class="btn-group-vertical w-100" role="group">
+                                <a href="{{ url_for('producao.dashboard') }}" class="btn btn-success btn-sm">
+                                    <i class="fas fa-tachometer-alt"></i> Dashboard Produção
+                                </a>
+                                <a href="{{ url_for('estoque.dashboard') }}" class="btn btn-info btn-sm">
+                                    <i class="fas fa-warehouse"></i> Dashboard Estoque
+                                </a>
+                                <a href="{{ url_for('faturamento.listar_produtos') }}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-receipt"></i> Faturamento por Produto
+                                </a>
+                                <button type="button" class="btn btn-outline-success btn-sm" onclick="mostrarModulosCarteira()">
+                                    <i class="fas fa-list"></i> Ver Todos os Módulos
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Lista completa oculta inicialmente -->
+                    <div id="modulos-carteira" class="mt-4" style="display: none;">
+                        <hr>
+                        <h6 class="text-success mb-3">📋 Acesso Rápido aos 6 Módulos:</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card border-success mb-3">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0">🏭 Produção</h6>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="list-group list-group-flush">
+                                            <a href="{{ url_for('producao.listar_programacao') }}" class="list-group-item list-group-item-action py-2">
+                                                <i class="fas fa-calendar-check text-primary"></i> Programação de Produção
+                                            </a>
+                                            <a href="{{ url_for('producao.listar_palletizacao') }}" class="list-group-item list-group-item-action py-2">
+                                                <i class="fas fa-cubes text-warning"></i> Cadastro de Palletização
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="card border-info mb-3">
+                                    <div class="card-header bg-info text-white">
+                                        <h6 class="mb-0">📦 Estoque</h6>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="list-group list-group-flush">
+                                            <a href="{{ url_for('estoque.listar_movimentacoes') }}" class="list-group-item list-group-item-action py-2">
+                                                <i class="fas fa-exchange-alt text-info"></i> Movimentações de Estoque
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-primary mb-3">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0">💰 Faturamento</h6>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="list-group list-group-flush">
+                                            <a href="{{ url_for('faturamento.listar_produtos') }}" class="list-group-item list-group-item-action py-2">
+                                                <i class="fas fa-receipt text-success"></i> Faturamento por Produto
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="card border-warning mb-3">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h6 class="mb-0">🗺️ Rotas</h6>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="list-group list-group-flush">
+                                            <a href="{{ url_for('localidades.listar_rotas') }}" class="list-group-item list-group-item-action py-2">
+                                                <i class="fas fa-route text-warning"></i> Cadastro de Rotas
+                                            </a>
+                                            <a href="{{ url_for('localidades.listar_sub_rotas') }}" class="list-group-item list-group-item-action py-2">
+                                                <i class="fas fa-map-marker-alt text-danger"></i> Cadastro de Sub-rotas
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-center mt-3">
+                            <div class="btn-group" role="group">
+                                <a href="{{ url_for('producao.dashboard') }}" class="btn btn-success">
+                                    📊 Dashboard Produção
+                                </a>
+                                <a href="{{ url_for('estoque.dashboard') }}" class="btn btn-info">
+                                    📊 Dashboard Estoque
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 🤖 Seção MCP v4.0 - NOVA -->
     <div class="row mb-4">
         <div class="col-12">
@@ -381,6 +524,23 @@ function mostrarExemplos() {
     } else {
         exemploDiv.style.display = 'none';
         botao.innerHTML = '<i class="fas fa-lightbulb"></i> Ver Exemplos';
+    }
+}
+
+// 🏭 Função para mostrar/ocultar módulos da carteira
+function mostrarModulosCarteira() {
+    const modulosDiv = document.getElementById('modulos-carteira');
+    const botao = event.target;
+    
+    if (modulosDiv.style.display === 'none') {
+        modulosDiv.style.display = 'block';
+        botao.innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar Módulos';
+        
+        // Scroll suave para os módulos
+        modulosDiv.scrollIntoView({ behavior: 'smooth' });
+    } else {
+        modulosDiv.style.display = 'none';
+        botao.innerHTML = '<i class="fas fa-list"></i> Ver Todos os Módulos';
     }
 }
 </script>

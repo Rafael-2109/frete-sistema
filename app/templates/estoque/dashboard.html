@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block title %}Estoque - Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-boxes"></i> Módulo de Estoque
+                <small class="text-muted">Movimentações & Controle</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Estatísticas de Estoque -->
+    <div class="row mb-4">
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ total_movimentacoes or 0 }}</h4>
+                            <span class="small">Total Movimentações</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-exchange-alt fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ entradas_mes or 0 }}</h4>
+                            <span class="small">Entradas (Mês)</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-arrow-down fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ saidas_mes or 0 }}</h4>
+                            <span class="small">Saídas (Mês)</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-arrow-up fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ produtos_movimentados or 0 }}</h4>
+                            <span class="small">Produtos Únicos</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-box fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ locais_movimentacao or 0 }}</h4>
+                            <span class="small">Locais de Estoque</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-warehouse fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <div class="card bg-dark text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="mb-0">{{ qtd_total_movimentada | numero_br }}</h4>
+                            <span class="small">Quantidade Total</span>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-calculator fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações Rápidas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4><i class="fas fa-bolt"></i> Ações Rápidas</h4>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('estoque.listar_movimentacoes') }}" class="btn btn-info btn-lg btn-block">
+                <i class="fas fa-list"></i><br>
+                Movimentações<br>de Estoque
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('estoque.importar_movimentacoes') }}" class="btn btn-primary btn-lg btn-block">
+                <i class="fas fa-file-excel"></i><br>
+                Importar<br>Movimentações
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('estoque.relatorio_entradas') }}" class="btn btn-success btn-lg btn-block">
+                <i class="fas fa-arrow-down"></i><br>
+                Relatório<br>Entradas
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('estoque.relatorio_saidas') }}" class="btn btn-warning btn-lg btn-block text-dark">
+                <i class="fas fa-arrow-up"></i><br>
+                Relatório<br>Saídas
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('estoque.saldo_estoque') }}" class="btn btn-secondary btn-lg btn-block">
+                <i class="fas fa-chart-bar"></i><br>
+                Saldo<br>Estoque
+            </a>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+            <a href="{{ url_for('carteira.dashboard') }}" class="btn btn-outline-dark btn-lg btn-block">
+                <i class="fas fa-arrow-left"></i><br>
+                Voltar<br>Carteira
+            </a>
+        </div>
+    </div>
+
+    <!-- Movimentações Recentes -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-history"></i> Movimentações Recentes
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if movimentacoes_recentes %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Tipo</th>
+                                        <th>Código Produto</th>
+                                        <th>Nome Produto</th>
+                                        <th>Quantidade</th>
+                                        <th>Local</th>
+                                        <th>Documento</th>
+                                        <th>Observação</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for mov in movimentacoes_recentes %}
+                                    <tr>
+                                        <td>{{ mov.data_movimentacao | formatar_data_brasil }}</td>
+                                        <td>
+                                            {% if mov.tipo_movimentacao %}
+                                                {% if 'ENTRADA' in mov.tipo_movimentacao.upper() %}
+                                                    <span class="badge badge-success">{{ mov.tipo_movimentacao }}</span>
+                                                {% elif 'SAIDA' in mov.tipo_movimentacao.upper() %}
+                                                    <span class="badge badge-warning">{{ mov.tipo_movimentacao }}</span>
+                                                {% else %}
+                                                    <span class="badge badge-info">{{ mov.tipo_movimentacao }}</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <code>{{ mov.cod_produto }}</code>
+                                        </td>
+                                        <td>{{ mov.nome_produto[:30] }}...</td>
+                                        <td>
+                                            <span class="badge badge-primary">{{ mov.qtd_movimentacao | numero_br }}</span>
+                                        </td>
+                                        <td>
+                                            {% if mov.local_movimentacao %}
+                                                <small>{{ mov.local_movimentacao }}</small>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if mov.documento_origem %}
+                                                <small>{{ mov.documento_origem }}</small>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if mov.observacao %}
+                                                <small>{{ mov.observacao[:20] }}...</small>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-boxes fa-3x text-muted"></i>
+                            <p class="text-muted mt-2">Nenhuma movimentação encontrada.</p>
+                            <a href="{{ url_for('estoque.importar_movimentacoes') }}" class="btn btn-primary">
+                                <i class="fas fa-file-excel"></i> Importar Movimentações
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tipos de Movimentação -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-pie"></i> Tipos de Movimentação (Último Mês)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if tipos_movimentacao %}
+                        <div class="row">
+                            {% for tipo in tipos_movimentacao %}
+                            <div class="col-md-3 mb-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h5>{{ tipo.quantidade }}</h5>
+                                        <small>{{ tipo.tipo_movimentacao }}</small>
+                                        <div class="progress mt-2">
+                                            <div class="progress-bar" role="progressbar" 
+                                                 style="width: {{ (tipo.quantidade / total_movimentacoes * 100) if total_movimentacoes > 0 else 0 }}%">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-chart-pie fa-3x text-muted"></i>
+                            <p class="text-muted mt-2">Nenhum dado para exibir gráfico.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

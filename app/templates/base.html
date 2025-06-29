@@ -163,6 +163,48 @@
           </ul>
         </li>
 
+        <!-- CARTEIRA & PRODUÇÃO - Módulos de carteira de pedidos -->
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="menuCarteira" role="button" data-bs-toggle="dropdown">
+            <i class="fas fa-industry text-success"></i> Carteira & Estoque
+          </a>
+          <ul class="dropdown-menu">
+            <li><h6 class="dropdown-header">📊 Dashboards</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('producao.dashboard') }}">
+              <i class="fas fa-tachometer-alt text-primary"></i> Dashboard Produção
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('estoque.dashboard') }}">
+              <i class="fas fa-warehouse text-info"></i> Dashboard Estoque
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">🏭 Produção</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('producao.listar_programacao') }}">
+              <i class="fas fa-calendar-check"></i> Programação de Produção
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('producao.listar_palletizacao') }}">
+              <i class="fas fa-cubes"></i> Cadastro de Palletização
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">💰 Faturamento</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('faturamento.listar_produtos') }}">
+              <i class="fas fa-receipt"></i> Faturamento por Produto
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">📦 Estoque</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('estoque.listar_movimentacoes') }}">
+              <i class="fas fa-exchange-alt"></i> Movimentações de Estoque
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">🗺️ Rotas</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('localidades.listar_rotas') }}">
+              <i class="fas fa-route"></i> Cadastro de Rotas
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('localidades.listar_sub_rotas') }}">
+              <i class="fas fa-map-marker-alt"></i> Cadastro de Sub-rotas
+            </a></li>
+          </ul>
+        </li>
+
         <!-- USUÁRIOS - Gestão de usuários (apenas para admins e gerentes comerciais) -->
         {% if current_user.is_authenticated and current_user.pode_aprovar_usuarios() %}
         <li class="nav-item dropdown">

@@ -84,3 +84,4 @@ spacy==3.7.4               # Engine principal de NLP
 # ==========================================
 # plotly==5.20.0          # Gráficos interativos
 # matplotlib==3.8.3       # Gráficos básicos
+structlog>=23.1.0
