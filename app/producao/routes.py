@@ -302,17 +302,17 @@ def api_estatisticas():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@producao_bp.route('/importar')
+@producao_bp.route('/programacao/importar')
 @login_required
 @require_admin()
-def importar_producao():
-    """Tela para importar dados de produção"""
+def importar_programacao():
+    """Tela para importar programação de produção"""
     return render_template('producao/importar_programacao.html')
 
-@producao_bp.route('/importar', methods=['POST'])
+@producao_bp.route('/programacao/importar', methods=['POST'])
 @login_required
 @require_admin()
-def processar_importacao_producao():
+def processar_importacao_programacao():
     """Processar importação de programação de produção"""
     try:
         import pandas as pd
@@ -323,16 +323,16 @@ def processar_importacao_producao():
         
         if 'arquivo' not in request.files:
             flash('Nenhum arquivo selecionado!', 'error')
-            return redirect(url_for('producao.importar_producao'))
+            return redirect(url_for('producao.importar_programacao'))
             
         arquivo = request.files['arquivo']
         if arquivo.filename == '':
             flash('Nenhum arquivo selecionado!', 'error')
-            return redirect(url_for('producao.importar_producao'))
+            return redirect(url_for('producao.importar_programacao'))
             
         if not arquivo.filename.lower().endswith(('.xlsx', '.csv')):
             flash('Tipo de arquivo não suportado! Use apenas .xlsx ou .csv', 'error')
-            return redirect(url_for('producao.importar_producao'))
+            return redirect(url_for('producao.importar_programacao'))
         
         # Processar arquivo temporário
         try:
@@ -347,7 +347,7 @@ def processar_importacao_producao():
                 os.unlink(temp_file.name)
         except Exception as e:
             flash(f'Erro ao processar arquivo: {str(e)}', 'error')
-            return redirect(url_for('producao.importar_producao'))
+            return redirect(url_for('producao.importar_programacao'))
         
         # 🎯 MAPEAMENTO EXATO conforme arquivo 5 - programação de produção
         colunas_esperadas = {
@@ -366,7 +366,7 @@ def processar_importacao_producao():
         colunas_faltando = [col for col in colunas_obrigatorias_excel if col not in df.columns]
         if colunas_faltando:
             flash(f'❌ Colunas obrigatórias não encontradas: {", ".join(colunas_faltando)}', 'error')
-            return redirect(url_for('producao.importar_producao'))
+            return redirect(url_for('producao.importar_programacao'))
         
         # COMPORTAMENTO: SEMPRE SUBSTITUI - Deletar todos os dados existentes
         try:
@@ -455,7 +455,7 @@ def processar_importacao_producao():
     except Exception as e:
         db.session.rollback()
         flash(f'Erro durante importação: {str(e)}', 'error')
-        return redirect(url_for('producao.importar_producao'))
+        return redirect(url_for('producao.importar_programacao'))
 
 # TODO: Implementar outras rotas conforme necessário
 # - POST /importar (upload e processamento de arquivos)
