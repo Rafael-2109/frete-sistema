@@ -138,16 +138,16 @@
                                 <i class="fas fa-industry fa-3x text-success mb-2"></i>
                                 <p class="text-muted small">Sistema Integrado</p>
                             </div>
-                            <div class="btn-group-vertical w-100" role="group">
-                                <a href="{{ url_for('producao.dashboard') }}" class="btn btn-success btn-sm">
-                                    <i class="fas fa-tachometer-alt"></i> Dashboard Produção
-                                </a>
-                                <a href="{{ url_for('estoque.dashboard') }}" class="btn btn-info btn-sm">
-                                    <i class="fas fa-warehouse"></i> Dashboard Estoque
-                                </a>
-                                <a href="{{ url_for('faturamento.listar_produtos') }}" class="btn btn-primary btn-sm">
-                                    <i class="fas fa-receipt"></i> Faturamento por Produto
-                                </a>
+                                                         <div class="btn-group-vertical w-100" role="group">
+                                 <a href="{{ url_for('producao.index') }}" class="btn btn-success btn-sm">
+                                     <i class="fas fa-tachometer-alt"></i> Dashboard Produção
+                                 </a>
+                                 <a href="{{ url_for('estoque.index') }}" class="btn btn-info btn-sm">
+                                     <i class="fas fa-warehouse"></i> Dashboard Estoque
+                                 </a>
+                                 <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="btn btn-primary btn-sm">
+                                     <i class="fas fa-receipt"></i> Faturamento por Produto
+                                 </a>
                                 <button type="button" class="btn btn-outline-success btn-sm" onclick="mostrarModulosCarteira()">
                                     <i class="fas fa-list"></i> Ver Todos os Módulos
                                 </button>
@@ -197,7 +197,7 @@
                                     </div>
                                     <div class="card-body p-2">
                                         <div class="list-group list-group-flush">
-                                            <a href="{{ url_for('faturamento.listar_produtos') }}" class="list-group-item list-group-item-action py-2">
+                                            <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="list-group-item list-group-item-action py-2">
                                                 <i class="fas fa-receipt text-success"></i> Faturamento por Produto
                                             </a>
                                         </div>
@@ -223,10 +223,10 @@
                         </div>
                         <div class="text-center mt-3">
                             <div class="btn-group" role="group">
-                                <a href="{{ url_for('producao.dashboard') }}" class="btn btn-success">
+                                <a href="{{ url_for('producao.index') }}" class="btn btn-success">
                                     📊 Dashboard Produção
                                 </a>
-                                <a href="{{ url_for('estoque.dashboard') }}" class="btn btn-info">
+                                <a href="{{ url_for('estoque.index') }}" class="btn btn-info">
                                     📊 Dashboard Estoque
                                 </a>
                             </div>
