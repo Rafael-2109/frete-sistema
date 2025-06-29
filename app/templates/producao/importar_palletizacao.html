@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+
+{% block title %}Importar Cadastro de Palletização{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-file-upload"></i> Importar Cadastro de Palletização
+                <small class="text-muted">Substitui Existentes, Adiciona Novos</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Instruções -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <h5><i class="fas fa-info-circle"></i> Instruções para Importação</h5>
+                <ul class="mb-0">
+                    <li><strong>COMPORTAMENTO:</strong> Substitui produtos existentes e adiciona novos</li>
+                    <li><strong>Arquivo:</strong> Selecione um arquivo <code>.xlsx</code> ou <code>.csv</code></li>
+                    <li><strong>TODOS os campos são obrigatórios</strong></li>
+                    <li><strong>Duplicatas:</strong> Produtos com mesmo código serão atualizados</li>
+                    <li><strong>Formato:</strong> Números decimais aceitos (ex: 1,5 ou 1.5)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exemplo de Layout -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-table"></i> Formato Obrigatório do Arquivo</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="text-danger">Código Produto*</th>
+                                    <th class="text-danger">Nome Produto*</th>
+                                    <th class="text-danger">Palletização*</th>
+                                    <th class="text-danger">Peso Bruto*</th>
+                                    <th class="text-success">Altura CM</th>
+                                    <th class="text-success">Largura CM</th>
+                                    <th class="text-success">Comprimento CM</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>PROD001</td>
+                                    <td>Produto Exemplo A</td>
+                                    <td>24</td>
+                                    <td>1200</td>
+                                    <td>120</td>
+                                    <td>100</td>
+                                    <td>80</td>
+                                </tr>
+                                <tr>
+                                    <td>PROD002</td>
+                                    <td>Produto Exemplo B</td>
+                                    <td>12,5</td>
+                                    <td>800,5</td>
+                                    <td>100</td>
+                                    <td>80</td>
+                                    <td>60</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <small class="text-muted">
+                        <span class="text-danger">* Campos obrigatórios</span> | 
+                        <span class="text-success">Campos opcionais (dimensões)</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário de Upload -->
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-cloud-upload-alt"></i> Upload do Arquivo</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                        {{ csrf_token() }}
+                        
+                        <div class="form-group mb-4">
+                            <label for="arquivo" class="form-label">
+                                <i class="fas fa-file-excel"></i> Selecione o arquivo
+                            </label>
+                            <input type="file" 
+                                   class="form-control" 
+                                   id="arquivo" 
+                                   name="arquivo" 
+                                   accept=".xlsx,.csv" 
+                                   required>
+                            <small class="form-text text-muted">
+                                Arquivos aceitos: .xlsx, .csv (máximo 10MB)
+                            </small>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exchange-alt"></i>
+                            <strong>Processamento:</strong> Produtos existentes serão ATUALIZADOS e novos produtos serão ADICIONADOS.
+                            <br><small>Código do produto é usado como chave única para identificar duplicatas.</small>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-warning btn-lg" id="btnUpload">
+                                <i class="fas fa-upload"></i> Importar Palletização
+                            </button>
+                            <a href="{{ url_for('producao.listar_palletizacao') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar para Listagem
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progresso -->
+    <div class="row mt-4" id="progressSection" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="fas fa-cog fa-spin"></i> Processando cadastro de palletização...</h6>
+                    <div class="progress">
+                        <div class="progress-bar bg-warning progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 100%"></div>
+                    </div>
+                    <small class="text-muted mt-2 d-block">Atualizando produtos existentes e adicionando novos...</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    const arquivo = document.getElementById('arquivo').files[0];
+    
+    if (!arquivo) {
+        e.preventDefault();
+        alert('Por favor, selecione um arquivo!');
+        return;
+    }
+    
+    // Verificar tamanho (10MB)
+    if (arquivo.size > 10 * 1024 * 1024) {
+        e.preventDefault();
+        alert('Arquivo muito grande! Máximo permitido: 10MB');
+        return;
+    }
+    
+    // Verificar extensão
+    const extensao = arquivo.name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'csv'].includes(extensao)) {
+        e.preventDefault();
+        alert('Tipo de arquivo não permitido! Use apenas .xlsx ou .csv');
+        return;
+    }
+    
+    // Mostrar progresso
+    document.getElementById('progressSection').style.display = 'block';
+    document.getElementById('btnUpload').disabled = true;
+    document.getElementById('btnUpload').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+});
+
+// Validação em tempo real do arquivo
+document.getElementById('arquivo').addEventListener('change', function(e) {
+    const arquivo = e.target.files[0];
+    const btnUpload = document.getElementById('btnUpload');
+    
+    if (arquivo) {
+        const tamanhoMB = (arquivo.size / (1024 * 1024)).toFixed(1);
+        const extensao = arquivo.name.split('.').pop().toLowerCase();
+        
+        if (arquivo.size > 10 * 1024 * 1024) {
+            e.target.setCustomValidity('Arquivo muito grande (máx 10MB)');
+            btnUpload.disabled = true;
+        } else if (!['xlsx', 'csv'].includes(extensao)) {
+            e.target.setCustomValidity('Tipo não permitido (use .xlsx ou .csv)');
+            btnUpload.disabled = true;
+        } else {
+            e.target.setCustomValidity('');
+            btnUpload.disabled = false;
+            
+            // Mostrar informações do arquivo
+            const info = document.createElement('small');
+            info.className = 'text-success';
+            info.innerHTML = '<i class="fas fa-check"></i> ' + arquivo.name + ' (' + tamanhoMB + ' MB)';
+            
+            // Remove info anterior se existir
+            const infoAnterior = e.target.parentNode.querySelector('.text-success');
+            if (infoAnterior) infoAnterior.remove();
+            
+            e.target.parentNode.appendChild(info);
+        }
+    }
+});
+</script>
+{% endblock %} 

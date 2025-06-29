@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastro de Palletização{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-weight-hanging"></i> Cadastro de Palletização
+                <small class="text-muted">Fatores de Conversão e Peso</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" id="filtrosForm">
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label for="cod_produto">Código Produto:</label>
+                                <select class="form-control" id="cod_produto" name="cod_produto">
+                                    <option value="">Todos</option>
+                                    {% for codigo in codigos_produtos %}
+                                    <option value="{{ codigo }}" {% if request.args.get('cod_produto') == codigo %}selected{% endif %}>{{ codigo }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="nome_produto">Nome Produto:</label>
+                                <select class="form-control" id="nome_produto" name="nome_produto">
+                                    <option value="">Todos</option>
+                                    {% for nome in nomes_produtos %}
+                                    <option value="{{ nome }}" {% if request.args.get('nome_produto') == nome %}selected{% endif %}>{{ nome[:50] }}{% if nome|length > 50 %}...{% endif %}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="palletizacao">Palletização:</label>
+                                <select class="form-control" id="palletizacao" name="palletizacao">
+                                    <option value="">Todos</option>
+                                    {% for fator in fatores_palletizacao %}
+                                    <option value="{{ fator }}" {% if request.args.get('palletizacao') == fator|string %}selected{% endif %}>{{ fator | numero_br }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="peso_bruto">Peso Bruto:</label>
+                                <select class="form-control" id="peso_bruto" name="peso_bruto">
+                                    <option value="">Todos</option>
+                                    {% for peso in pesos_brutos %}
+                                    <option value="{{ peso }}" {% if request.args.get('peso_bruto') == peso|string %}selected{% endif %}>{{ peso | numero_br }} kg</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary me-2">
+                                    <i class="fas fa-search"></i> Pesquisar
+                                </button>
+                                <a href="{{ url_for('producao.listar_palletizacao') }}" class="btn btn-secondary me-2">
+                                    <i class="fas fa-eraser"></i> Limpar
+                                </a>
+                                <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-success">
+                                    <i class="fas fa-file-upload"></i> Importar
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    {% if palletizacao %}
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h4>{{ palletizacao|length }}</h4>
+                    <small>Produtos Cadastrados</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h4>{{ media_palletizacao | numero_br }}</h4>
+                    <small>Média Palletização</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h4>{{ media_peso_bruto | numero_br }} kg</h4>
+                    <small>Média Peso Bruto</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body text-center">
+                    <h4>{{ total_volume | numero_br }} m³</h4>
+                    <small>Volume Total</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tabela -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-table"></i> Cadastro de Palletização
+                    </h5>
+                    {% if palletizacao %}
+                    <div>
+                        <button class="btn btn-sm btn-success" onclick="exportarExcel()">
+                            <i class="fas fa-file-excel"></i> Exportar Excel
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if palletizacao %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover" id="tabelaPalletizacao">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Código Produto</th>
+                                        <th>Nome Produto</th>
+                                        <th>Palletização</th>
+                                        <th>Peso Bruto</th>
+                                        <th>Dimensões</th>
+                                        <th>Volume m³</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in palletizacao %}
+                                    <tr>
+                                        <td><code>{{ item.cod_produto }}</code></td>
+                                        <td>
+                                            <small>{{ item.nome_produto[:40] }}{% if item.nome_produto|length > 40 %}...{% endif %}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-primary">{{ item.palletizacao | numero_br }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-success">{{ item.peso_bruto | numero_br }} kg</span>
+                                        </td>
+                                        <td>
+                                            {% if item.altura_cm and item.largura_cm and item.comprimento_cm %}
+                                                <small>{{ item.altura_cm|numero_br }} x {{ item.largura_cm|numero_br }} x {{ item.comprimento_cm|numero_br }} cm</small>
+                                            {% else %}
+                                                <span class="text-muted">Não informado</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if item.volume_m3 > 0 %}
+                                                <span class="badge badge-info">{{ item.volume_m3 | numero_br }} m³</span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if item.ativo %}
+                                                <span class="badge badge-success">Ativo</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">Inativo</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="editarItem({{ item.id }})">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Paginação -->
+                        {% if pagination %}
+                        <nav aria-label="Navegação da página">
+                            <ul class="pagination justify-content-center">
+                                {% if pagination.has_prev %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('producao.listar_palletizacao', page=pagination.prev_num, **request.args) }}">Anterior</a>
+                                </li>
+                                {% endif %}
+
+                                {% for page_num in pagination.iter_pages() %}
+                                    {% if page_num %}
+                                        {% if page_num != pagination.page %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="{{ url_for('producao.listar_palletizacao', page=page_num, **request.args) }}">{{ page_num }}</a>
+                                        </li>
+                                        {% else %}
+                                        <li class="page-item active">
+                                            <span class="page-link">{{ page_num }}</span>
+                                        </li>
+                                        {% endif %}
+                                    {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">…</span>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+
+                                {% if pagination.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('producao.listar_palletizacao', page=pagination.next_num, **request.args) }}">Próximo</a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                        {% endif %}
+
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-weight-hanging fa-4x text-muted"></i>
+                            <h4 class="text-muted mt-3">Nenhum registro encontrado</h4>
+                            <p class="text-muted">Não há cadastro de palletização ou os filtros não retornaram resultados.</p>
+                            <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-primary">
+                                <i class="fas fa-file-upload"></i> Importar Palletização
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-submit nos selects
+document.getElementById('cod_produto').addEventListener('change', function() {
+    document.getElementById('filtrosForm').submit();
+});
+
+document.getElementById('nome_produto').addEventListener('change', function() {
+    document.getElementById('filtrosForm').submit();
+});
+
+document.getElementById('palletizacao').addEventListener('change', function() {
+    document.getElementById('filtrosForm').submit();
+});
+
+document.getElementById('peso_bruto').addEventListener('change', function() {
+    document.getElementById('filtrosForm').submit();
+});
+
+// Função para exportar Excel
+function exportarExcel() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('export', 'excel');
+    window.location.href = '{{ url_for("producao.listar_palletizacao") }}?' + params.toString();
+}
+
+// Função para editar item
+function editarItem(id) {
+    // TODO: Implementar modal de edição
+    alert('Funcionalidade de edição será implementada em breve');
+}
+</script>
+{% endblock %} 

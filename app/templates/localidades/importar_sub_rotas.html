@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}Importar Cadastro de Sub Rotas{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-file-upload"></i> Importar Cadastro de Sub Rotas
+                <small class="text-muted">Substitui Existentes, Adiciona Novos</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Instruções -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <h5><i class="fas fa-info-circle"></i> Instruções para Importação</h5>
+                <ul class="mb-0">
+                    <li><strong>COMPORTAMENTO:</strong> Sub rota única por combinação UF+Cidade</li>
+                    <li><strong>Arquivo:</strong> Selecione um arquivo <code>.xlsx</code> ou <code>.csv</code></li>
+                    <li><strong>TODOS os campos são obrigatórios</strong></li>
+                    <li><strong>Duplicata UF+Cidade:</strong> A sub rota será SUBSTITUÍDA</li>
+                    <li><strong>Validação:</strong> Cidade+UF deve existir no cadastro de cidades</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exemplo de Layout -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-table"></i> Formato Obrigatório do Arquivo</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="text-danger">UF*</th>
+                                    <th class="text-danger">Cidade*</th>
+                                    <th class="text-danger">Sub Rota*</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>SP</td>
+                                    <td>São Paulo</td>
+                                    <td>SUB-ROTA A1</td>
+                                </tr>
+                                <tr>
+                                    <td>SP</td>
+                                    <td>Campinas</td>
+                                    <td>SUB-ROTA A2</td>
+                                </tr>
+                                <tr>
+                                    <td>RJ</td>
+                                    <td>Rio de Janeiro</td>
+                                    <td>SUB-ROTA B1</td>
+                                </tr>
+                                <tr>
+                                    <td>RJ</td>
+                                    <td>Niterói</td>
+                                    <td>SUB-ROTA B2</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <small class="text-muted">
+                        <span class="text-danger">* Todos os campos são obrigatórios</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Validações -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Validações Automáticas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-map-marker-alt"></i> Cidade+UF Válida</h6>
+                            <p class="text-muted">A combinação Cidade+UF deve existir no cadastro de cidades.</p>
+                            <small class="text-success">✓ Válidas encontradas serão importadas</small><br>
+                            <small class="text-danger">✗ Inválidas serão rejeitadas com erro</small>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-key"></i> Combinação Única</h6>
+                            <p class="text-muted">Apenas uma sub rota por UF+Cidade é permitida.</p>
+                            <small class="text-info">ℹ️ Nova combinação = sub rota adicionada</small><br>
+                            <small class="text-warning">⚠️ Combinação existente = sub rota substituída</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário de Upload -->
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-cloud-upload-alt"></i> Upload do Arquivo</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                        {{ csrf_token() }}
+                        
+                        <div class="form-group mb-4">
+                            <label for="arquivo" class="form-label">
+                                <i class="fas fa-file-excel"></i> Selecione o arquivo
+                            </label>
+                            <input type="file" 
+                                   class="form-control" 
+                                   id="arquivo" 
+                                   name="arquivo" 
+                                   accept=".xlsx,.csv" 
+                                   required>
+                            <small class="form-text text-muted">
+                                Arquivos aceitos: .xlsx, .csv (máximo 10MB)
+                            </small>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <i class="fas fa-key"></i>
+                            <strong>Processamento:</strong> Combinações UF+Cidade existentes terão suas sub rotas SUBSTITUÍDAS e novas combinações serão ADICIONADAS.
+                            <br><small>Apenas combinações válidas (cadastradas em Cidades) serão processadas.</small>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg" id="btnUpload">
+                                <i class="fas fa-upload"></i> Importar Sub Rotas
+                            </button>
+                            <a href="{{ url_for('localidades.listar_sub_rotas') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar para Listagem
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progresso -->
+    <div class="row mt-4" id="progressSection" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="fas fa-cog fa-spin"></i> Processando cadastro de sub rotas...</h6>
+                    <div class="progress">
+                        <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 100%"></div>
+                    </div>
+                    <small class="text-muted mt-2 d-block">Validando combinações UF+Cidade e processando sub rotas...</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    const arquivo = document.getElementById('arquivo').files[0];
+    
+    if (!arquivo) {
+        e.preventDefault();
+        alert('Por favor, selecione um arquivo!');
+        return;
+    }
+    
+    // Verificar tamanho (10MB)
+    if (arquivo.size > 10 * 1024 * 1024) {
+        e.preventDefault();
+        alert('Arquivo muito grande! Máximo permitido: 10MB');
+        return;
+    }
+    
+    // Verificar extensão
+    const extensao = arquivo.name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'csv'].includes(extensao)) {
+        e.preventDefault();
+        alert('Tipo de arquivo não permitido! Use apenas .xlsx ou .csv');
+        return;
+    }
+    
+    // Mostrar progresso
+    document.getElementById('progressSection').style.display = 'block';
+    document.getElementById('btnUpload').disabled = true;
+    document.getElementById('btnUpload').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+});
+
+// Validação em tempo real do arquivo
+document.getElementById('arquivo').addEventListener('change', function(e) {
+    const arquivo = e.target.files[0];
+    const btnUpload = document.getElementById('btnUpload');
+    
+    if (arquivo) {
+        const tamanhoMB = (arquivo.size / (1024 * 1024)).toFixed(1);
+        const extensao = arquivo.name.split('.').pop().toLowerCase();
+        
+        if (arquivo.size > 10 * 1024 * 1024) {
+            e.target.setCustomValidity('Arquivo muito grande (máx 10MB)');
+            btnUpload.disabled = true;
+        } else if (!['xlsx', 'csv'].includes(extensao)) {
+            e.target.setCustomValidity('Tipo não permitido (use .xlsx ou .csv)');
+            btnUpload.disabled = true;
+        } else {
+            e.target.setCustomValidity('');
+            btnUpload.disabled = false;
+            
+            // Mostrar informações do arquivo
+            const info = document.createElement('small');
+            info.className = 'text-success';
+            info.innerHTML = '<i class="fas fa-check"></i> ' + arquivo.name + ' (' + tamanhoMB + ' MB)';
+            
+            // Remove info anterior se existir
+            const infoAnterior = e.target.parentNode.querySelector('.text-success');
+            if (infoAnterior) infoAnterior.remove();
+            
+            e.target.parentNode.appendChild(info);
+        }
+    }
+});
+</script>
+{% endblock %} 
