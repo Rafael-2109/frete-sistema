@@ -3,3 +3,6 @@ Código do produto;cod_produto;;Cód.Produto;4210155
 Nome do produto;nome_produto;;Descrição Produto;AZEITONA PRETA INTEIRA POUCH 12x400 GR - CAMPO BELO
 Fator utilizado para converter o produto em pallet (qtd / PALLETIZACAO);;palletizacao;PALLETIZACAO;80
 Fator utilizado para converter o produto em peso (qtd * PESO BRUTO);;peso_bruto;PESO BRUTO;9
+Altura em cm;;altura_cm;altura_cm;
+Largura em cm;;largura_cm;largura_cm;
+comprimento em cm;;comprimento_cm;comprimento_cm;

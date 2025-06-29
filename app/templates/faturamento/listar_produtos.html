@@ -43,7 +43,7 @@
                             <div class="col-md-3 mb-3">
                                 <label for="cod_produto">Código Produto:</label>
                                 <input type="text" class="form-control" id="cod_produto" name="cod_produto" 
-                                       placeholder="Ex: ABC123" value="{{ request.args.get('cod_produto', '') }}">
+                                       placeholder="Ex: 4320162" value="{{ request.args.get('cod_produto', '') }}">
                             </div>
                         </div>
                         <div class="row">
@@ -181,7 +181,7 @@
                                         </td>
                                         <td>{{ produto.data_fatura | formatar_data_brasil }}</td>
                                         <td>
-                                            <small>{{ produto.nome_cliente[:25] }}{% if produto.nome_cliente|length > 25 %}...{% endif %}</small>
+                                            <small>{{ produto.nome_cliente[:50] }}{% if produto.nome_cliente|length > 50 %}...{% endif %}</small>
                                         </td>
                                         <td>
                                             {% if produto.estado %}
@@ -194,7 +194,7 @@
                                             <code>{{ produto.cod_produto }}</code>
                                         </td>
                                         <td>
-                                            <small>{{ produto.nome_produto[:30] }}{% if produto.nome_produto|length > 30 %}...{% endif %}</small>
+                                            <small>{{ produto.nome_produto[:70] }}{% if produto.nome_produto|length > 70 %}...{% endif %}</small>
                                         </td>
                                         <td>
                                             <span class="badge badge-primary">{{ produto.qtd_produto_faturado | numero_br }}</span>

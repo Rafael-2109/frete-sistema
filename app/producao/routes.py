@@ -161,7 +161,157 @@ def api_estatisticas():
 @require_admin()
 def importar_producao():
     """Tela para importar dados de produção"""
-    return render_template('producao/importar_producao.html')
+    return render_template('producao/importar_programacao.html')
+
+@producao_bp.route('/importar', methods=['POST'])
+@login_required
+@require_admin()
+def processar_importacao_producao():
+    """Processar importação de programação de produção"""
+    try:
+        import pandas as pd
+        import tempfile
+        import os
+        from datetime import datetime
+        from werkzeug.utils import secure_filename
+        
+        if 'arquivo' not in request.files:
+            flash('Nenhum arquivo selecionado!', 'error')
+            return redirect(url_for('producao.importar_producao'))
+            
+        arquivo = request.files['arquivo']
+        if arquivo.filename == '':
+            flash('Nenhum arquivo selecionado!', 'error')
+            return redirect(url_for('producao.importar_producao'))
+            
+        if not arquivo.filename.lower().endswith(('.xlsx', '.csv')):
+            flash('Tipo de arquivo não suportado! Use apenas .xlsx ou .csv', 'error')
+            return redirect(url_for('producao.importar_producao'))
+        
+        # Processar arquivo temporário
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_file:
+                arquivo.save(temp_file.name)
+                
+                if arquivo.filename.lower().endswith('.xlsx'):
+                    df = pd.read_excel(temp_file.name)
+                else:
+                    df = pd.read_csv(temp_file.name, encoding='utf-8', sep=';')
+                
+                os.unlink(temp_file.name)
+        except Exception as e:
+            flash(f'Erro ao processar arquivo: {str(e)}', 'error')
+            return redirect(url_for('producao.importar_producao'))
+        
+        # Validar colunas obrigatórias
+        colunas_obrigatorias = ['data_programacao', 'cod_produto', 'nome_produto', 'qtd_programada']
+        
+        # Mapear nomes de colunas flexíveis
+        mapeamento_colunas = {
+            'data_programacao': ['data_programacao', 'data', 'data_producao'],
+            'cod_produto': ['cod_produto', 'codigo', 'codigo_produto'],
+            'nome_produto': ['nome_produto', 'produto', 'descricao'],
+            'qtd_programada': ['qtd_programada', 'quantidade', 'qtd']
+        }
+        
+        # Normalizar nomes das colunas
+        df.columns = [col.lower().strip().replace(' ', '_') for col in df.columns]
+        
+        # Mapear colunas
+        colunas_encontradas = {}
+        for campo, possibilidades in mapeamento_colunas.items():
+            for possibilidade in possibilidades:
+                if possibilidade in df.columns:
+                    colunas_encontradas[campo] = possibilidade
+                    break
+        
+        # Verificar se todas as colunas obrigatórias foram encontradas
+        faltando = [col for col in colunas_obrigatorias if col not in colunas_encontradas]
+        if faltando:
+            flash(f'Colunas obrigatórias não encontradas: {", ".join(faltando)}', 'error')
+            return redirect(url_for('producao.importar_producao'))
+        
+        # COMPORTAMENTO: SEMPRE SUBSTITUI - Deletar todos os dados existentes
+        try:
+            ProgramacaoProducao.query.delete()
+            db.session.commit()
+            flash('✅ Dados existentes removidos (substituição completa)', 'info')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao remover dados existentes: {str(e)}', 'warning')
+        
+        # Processar dados
+        produtos_importados = 0
+        erros = []
+        
+        for index, row in df.iterrows():
+            try:
+                # Extrair dados usando mapeamento
+                cod_produto = str(row[colunas_encontradas['cod_produto']]).strip()
+                
+                if not cod_produto or cod_produto == 'nan':
+                    continue
+                
+                # Preparar dados
+                data_programacao = row[colunas_encontradas['data_programacao']]
+                if isinstance(data_programacao, str):
+                    try:
+                        data_programacao = pd.to_datetime(data_programacao).date()
+                    except:
+                        data_programacao = None
+                elif hasattr(data_programacao, 'date'):
+                    data_programacao = data_programacao.date()
+                
+                if not data_programacao:
+                    erros.append(f"Linha {index + 1}: Data inválida")
+                    continue
+                
+                # Criar novo registro
+                novo_produto = ProgramacaoProducao(
+                    data_programacao=data_programacao,
+                    cod_produto=cod_produto,
+                    nome_produto=str(row[colunas_encontradas['nome_produto']]).strip(),
+                    qtd_programada=float(row[colunas_encontradas['qtd_programada']] or 0),
+                    created_by=current_user.nome
+                )
+                
+                # Campos opcionais
+                if 'linha_producao' in df.columns:
+                    novo_produto.linha_producao = str(row.get('linha_producao', '')).strip()
+                if 'cliente_produto' in df.columns:
+                    novo_produto.cliente_produto = str(row.get('cliente_produto', '')).strip()
+                if 'observacao_pcp' in df.columns:
+                    novo_produto.observacao_pcp = str(row.get('observacao_pcp', '')).strip()
+                
+                db.session.add(novo_produto)
+                produtos_importados += 1
+                
+            except Exception as e:
+                erros.append(f"Linha {index + 1}: {str(e)}")
+                continue
+        
+        # Commit das alterações
+        db.session.commit()
+        
+        # Mensagens de resultado
+        if produtos_importados > 0:
+            mensagem = f"✅ Importação concluída: {produtos_importados} produtos programados (substituição completa)"
+            if erros:
+                mensagem += f". {len(erros)} erros encontrados."
+            flash(mensagem, 'success')
+        else:
+            flash("⚠️ Nenhum produto foi importado.", 'warning')
+        
+        if erros[:5]:  # Mostrar apenas os primeiros 5 erros
+            for erro in erros[:5]:
+                flash(f"❌ {erro}", 'error')
+        
+        return redirect(url_for('producao.listar_programacao'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro durante importação: {str(e)}', 'error')
+        return redirect(url_for('producao.importar_producao'))
 
 # TODO: Implementar outras rotas conforme necessário
 # - POST /importar (upload e processamento de arquivos)

@@ -601,8 +601,262 @@ def api_estatisticas_produtos():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@faturamento_bp.route('/produtos/importar')
+@faturamento_bp.route('/produtos/importar', methods=['GET', 'POST'])
 @login_required
 def importar_faturamento_produtos():
-    """Tela para importar dados de faturamento por produto"""
-    return render_template('faturamento/importar_produtos.html')
+    """Importar dados de faturamento por produto"""
+    if request.method == 'GET':
+        return render_template('faturamento/importar_produtos.html')
+    
+    # POST - Processar importação
+    try:
+        if 'arquivo' not in request.files:
+            flash('Nenhum arquivo selecionado!', 'error')
+            return redirect(request.url)
+            
+        arquivo = request.files['arquivo']
+        if arquivo.filename == '':
+            flash('Nenhum arquivo selecionado!', 'error')
+            return redirect(request.url)
+            
+        if not arquivo.filename.lower().endswith(('.xlsx', '.csv')):
+            flash('Tipo de arquivo não suportado! Use apenas .xlsx ou .csv', 'error')
+            return redirect(request.url)
+        
+        # Salvar arquivo temporário
+        file_storage = get_file_storage()
+        temp_filename = f"temp_faturamento_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secure_filename(arquivo.filename)}"
+        
+        try:
+            # Salvar no S3/storage
+            file_path = file_storage.save_file(arquivo, 'temp', temp_filename)
+            
+            # Processar arquivo
+            if arquivo.filename.lower().endswith('.xlsx'):
+                df = pd.read_excel(file_path)
+            else:
+                df = pd.read_csv(file_path, encoding='utf-8', sep=';')
+                
+        except Exception as e:
+            # Fallback para arquivo local se S3 falhar
+            import tempfile
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_file:
+                arquivo.save(temp_file.name)
+                if arquivo.filename.lower().endswith('.xlsx'):
+                    df = pd.read_excel(temp_file.name)
+                else:
+                    df = pd.read_csv(temp_file.name, encoding='utf-8', sep=';')
+                os.unlink(temp_file.name)
+        
+        # Validar colunas obrigatórias
+        colunas_obrigatorias = ['numero_nf', 'data_fatura', 'cnpj_cliente', 'nome_cliente', 
+                               'cod_produto', 'nome_produto', 'qtd_produto_faturado',
+                               'preco_produto_faturado', 'valor_produto_faturado']
+        
+        # 🎯 MAPEAMENTO EXATO conforme especificação do usuário
+        colunas_esperadas = {
+            'numero_nf': 'Linhas da fatura/NF-e',
+            'cnpj_cliente': 'Linhas da fatura/Parceiro/CNPJ',
+            'nome_cliente': 'Linhas da fatura/Parceiro',
+            'municipio_estado': 'Linhas da fatura/Parceiro/Município',
+            'origem': 'Linhas da fatura/Origem',
+            'status_nf': 'Status',
+            'cod_produto': 'Linhas da fatura/Produto/Referência',
+            'nome_produto': 'Linhas da fatura/Produto/Nome',
+            'qtd_produto_faturado': 'Linhas da fatura/Quantidade',
+            'valor_produto_faturado': 'Linhas da fatura/Valor Total do Item da NF',
+            'data_fatura': 'Linhas da fatura/Data',
+            'vendedor': 'Vendedor',
+            'incoterm': 'Incoterm'
+        }
+        
+        # Verificar se as colunas obrigatórias existem
+        colunas_obrigatorias_excel = [
+            'Linhas da fatura/Parceiro/CNPJ',
+            'Linhas da fatura/Parceiro',
+            'Linhas da fatura/Produto/Referência',
+            'Linhas da fatura/Parceiro/Município',
+            'Linhas da fatura/Produto/Nome',
+            'Linhas da fatura/Valor Total do Item da NF',
+            'Linhas da fatura/Quantidade',
+            'Linhas da fatura/Data'
+        ]
+        
+        colunas_faltando = [col for col in colunas_obrigatorias_excel if col not in df.columns]
+        if colunas_faltando:
+            flash(f'❌ Colunas obrigatórias não encontradas: {", ".join(colunas_faltando)}', 'error')
+            return redirect(request.url)
+        
+        # 🔄 FORWARD FILL - Conforme especificação
+        campos_forward_fill = ['Status', 'Vendedor', 'Incoterm']
+        for campo in campos_forward_fill:
+            if campo in df.columns:
+                df[campo] = df[campo].fillna(method='ffill')
+        
+        # 🏙️ PROCESSAR CIDADE/ESTADO do formato "Cidade (UF)"
+        def extrair_cidade_uf(texto):
+            if pd.isna(texto) or str(texto).strip() == '':
+                return '', ''
+            
+            import re
+            texto = str(texto).strip()
+            match = re.search(r'^(.+?)\s*\(([A-Z]{2})\)$', texto)
+            if match:
+                return match.group(1).strip(), match.group(2).strip()
+            else:
+                return texto, ''
+        
+        # Aplicar extração de cidade/estado
+        if 'Linhas da fatura/Parceiro/Município' in df.columns:
+            cidades_ufs = df['Linhas da fatura/Parceiro/Município'].apply(extrair_cidade_uf)
+            df['municipio'] = [item[0] for item in cidades_ufs]
+            df['estado'] = [item[1] for item in cidades_ufs]
+        
+        # 💰 CONVERTER VALORES BRASILEIROS (3.281,10)
+        def converter_valor_br(valor):
+            if pd.isna(valor):
+                return 0.0
+            valor_str = str(valor).strip().replace('R$', '').replace(' ', '')
+            if ',' in valor_str:
+                valor_str = valor_str.replace('.', '').replace(',', '.')
+            try:
+                return float(valor_str)
+            except:
+                return 0.0
+        
+        if 'Linhas da fatura/Valor Total do Item da NF' in df.columns:
+            df['valor_convertido'] = df['Linhas da fatura/Valor Total do Item da NF'].apply(converter_valor_br)
+        
+        if 'Linhas da fatura/Quantidade' in df.columns:
+            df['qtd_convertida'] = df['Linhas da fatura/Quantidade'].apply(converter_valor_br)
+        
+        # ✅ VALIDAR STATUS PERMITIDOS
+        status_permitidos = ['Lançado', 'Cancelado', 'Provisório']
+        if 'Status' in df.columns:
+            status_invalidos = df[df['Status'].notna() & ~df['Status'].isin(status_permitidos)]['Status'].unique()
+            if len(status_invalidos) > 0:
+                flash(f'❌ Status inválidos encontrados: {", ".join(status_invalidos)}. Permitidos: {", ".join(status_permitidos)}', 'error')
+                return redirect(request.url)
+        
+        # Processar dados
+        produtos_importados = 0
+        produtos_atualizados = 0
+        erros = []
+        
+        for index, row in df.iterrows():
+            try:
+                # 📋 EXTRAIR DADOS usando nomes exatos das colunas Excel
+                numero_nf = str(row.get('Linhas da fatura/NF-e', '')).strip() if pd.notna(row.get('Linhas da fatura/NF-e')) else ''
+                cod_produto = str(row.get('Linhas da fatura/Produto/Referência', '')).strip() if pd.notna(row.get('Linhas da fatura/Produto/Referência')) else ''
+                
+                if not numero_nf or numero_nf == 'nan' or not cod_produto or cod_produto == 'nan':
+                    continue
+                
+                # Verificar se já existe (NF + Produto = chave única)
+                produto_existente = FaturamentoProduto.query.filter_by(
+                    numero_nf=numero_nf,
+                    cod_produto=cod_produto
+                ).first()
+                
+                # 📅 PROCESSAR DATA
+                data_fatura = row.get('Linhas da fatura/Data')
+                if pd.notna(data_fatura):
+                    if isinstance(data_fatura, str):
+                        try:
+                            # Formato brasileiro DD/MM/YYYY
+                            data_fatura = pd.to_datetime(data_fatura, format='%d/%m/%Y').date()
+                        except:
+                            try:
+                                data_fatura = pd.to_datetime(data_fatura).date()
+                            except:
+                                data_fatura = None
+                    elif hasattr(data_fatura, 'date'):
+                        data_fatura = data_fatura.date()
+                else:
+                    data_fatura = None
+                
+                # 💰 VALORES
+                qtd = row.get('qtd_convertida', 0) or 0
+                valor_total = row.get('valor_convertido', 0) or 0
+                
+                # 🧮 CALCULAR PREÇO UNITÁRIO (valor_total / quantidade)
+                preco_unitario = 0.0
+                if qtd > 0 and valor_total > 0:
+                    preco_unitario = valor_total / qtd
+                
+                # 📝 DADOS BÁSICOS
+                cnpj_cliente = str(row.get('Linhas da fatura/Parceiro/CNPJ', '')).strip()
+                nome_cliente = str(row.get('Linhas da fatura/Parceiro', '')).strip()
+                nome_produto = str(row.get('Linhas da fatura/Produto/Nome', '')).strip()
+                
+                # Criar ou atualizar produto
+                if produto_existente:
+                    # ✏️ ATUALIZAR EXISTENTE
+                    produto_existente.data_fatura = data_fatura
+                    produto_existente.cnpj_cliente = cnpj_cliente
+                    produto_existente.nome_cliente = nome_cliente
+                    produto_existente.nome_produto = nome_produto
+                    produto_existente.qtd_produto_faturado = qtd
+                    produto_existente.preco_produto_faturado = preco_unitario
+                    produto_existente.valor_produto_faturado = valor_total
+                    
+                    # 🌍 CAMPOS PROCESSADOS
+                    produto_existente.municipio = row.get('municipio', '')
+                    produto_existente.estado = row.get('estado', '')
+                    produto_existente.vendedor = str(row.get('Vendedor', '')).strip()
+                    produto_existente.incoterm = str(row.get('Incoterm', '')).strip()
+                    produto_existente.origem = str(row.get('Linhas da fatura/Origem', '')).strip()
+                    produto_existente.status_nf = str(row.get('Status', '')).strip()
+                    
+                    produto_existente.updated_by = current_user.nome
+                    produtos_atualizados += 1
+                    
+                else:
+                    # ➕ CRIAR NOVO
+                    novo_produto = FaturamentoProduto()
+                    novo_produto.numero_nf = numero_nf
+                    novo_produto.data_fatura = data_fatura
+                    novo_produto.cnpj_cliente = cnpj_cliente
+                    novo_produto.nome_cliente = nome_cliente
+                    novo_produto.cod_produto = cod_produto
+                    novo_produto.nome_produto = nome_produto
+                    novo_produto.qtd_produto_faturado = qtd
+                    novo_produto.preco_produto_faturado = preco_unitario
+                    novo_produto.valor_produto_faturado = valor_total
+                    novo_produto.municipio = row.get('municipio', '')
+                    novo_produto.estado = row.get('estado', '')
+                    novo_produto.vendedor = str(row.get('Vendedor', '')).strip()
+                    novo_produto.incoterm = str(row.get('Incoterm', '')).strip()
+                    novo_produto.origem = str(row.get('Linhas da fatura/Origem', '')).strip()
+                    novo_produto.status_nf = str(row.get('Status', '')).strip()
+                    novo_produto.created_by = current_user.nome
+                    
+                    db.session.add(novo_produto)
+                    produtos_importados += 1
+                    
+            except Exception as e:
+                erros.append(f"Linha {index + 1}: {str(e)}")
+                continue
+        
+        # Commit das alterações
+        db.session.commit()
+        
+        # Mensagens de resultado
+        if produtos_importados > 0 or produtos_atualizados > 0:
+            mensagem = f"✅ Importação concluída: {produtos_importados} novos produtos, {produtos_atualizados} atualizados"
+            if erros:
+                mensagem += f". {len(erros)} erros encontrados."
+            flash(mensagem, 'success')
+        else:
+            flash("⚠️ Nenhum produto foi importado.", 'warning')
+        
+        if erros[:5]:  # Mostrar apenas os primeiros 5 erros
+            for erro in erros[:5]:
+                flash(f"❌ {erro}", 'error')
+        
+        return redirect(url_for('faturamento.listar_faturamento_produtos'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro durante importação: {str(e)}', 'error')
+        return redirect(request.url)
