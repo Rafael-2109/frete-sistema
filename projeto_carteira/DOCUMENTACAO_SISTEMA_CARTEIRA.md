@@ -37,79 +37,117 @@ app/
 
 ## 🔗 **ROTAS IMPLEMENTADAS**
 
-### **🧾 1. FATURAMENTO POR PRODUTO**
+### **🧾 1. FATURAMENTO POR PRODUTO** ✅ **IMPLEMENTADO COMPLETO**
 | Rota | Método | Função | Template |
 |------|--------|--------|----------|
 | `/faturamento/produtos` | GET | Listar faturamento por produto | `faturamento/listar_produtos.html` |
-| `/faturamento/produtos/importar` | GET/POST | Importar dados de faturamento | `faturamento/importar_produtos.html` |
+| `/faturamento/produtos/importar` | GET/POST | Importar dados de faturamento | `faturamento/importar_produtos.html` ✅ |
 
-**Filtros**: Data de/até, CNPJ cliente, nome cliente, código produto, nome produto, vendedor, incoterm  
-**Comportamento**: Substitui existentes (NF+Produto), adiciona novos  
-**Campos obrigatórios**: numero_nf, data_fatura, cnpj_cliente, nome_cliente, cod_produto, nome_produto, qtd_produto_faturado, preco_produto_faturado, valor_produto_faturado
+**Colunas Excel específicas**:
+- `Linhas da fatura/NF-e` → numero_nf
+- `Linhas da fatura/Parceiro/CNPJ` → cnpj_cliente  
+- `Linhas da fatura/Parceiro` → nome_cliente
+- `Linhas da fatura/Parceiro/Município` → municipio (extrai cidade/UF)
+- `Linhas da fatura/Produto/Referência` → cod_produto
+- `Linhas da fatura/Produto/Nome` → nome_produto
+- `Linhas da fatura/Quantidade` → qtd_produto_faturado
+- `Linhas da fatura/Valor Total do Item da NF` → valor_produto_faturado
+- `Linhas da fatura/Data` → data_fatura
+- `Status` → status_nf (Forward Fill)
+- `Vendedor` → vendedor (Forward Fill)
+- `Incoterm` → incoterm (Forward Fill)
+
+**Funcionalidades especiais**: Forward Fill automático, extração Cidade(UF), conversão valores BR, validação status
 
 ---
 
-### **🏭 2. PROGRAMAÇÃO DE PRODUÇÃO**
+### **🏭 2. PROGRAMAÇÃO DE PRODUÇÃO** ✅ **ATUALIZADA CONFORME ARQUIVO 5**
 | Rota | Método | Função | Template |
 |------|--------|--------|----------|
 | `/producao/` | GET | Dashboard produção | `producao/dashboard.html` |
 | `/producao/programacao` | GET | Listar programação | `producao/listar_programacao.html` |
-| `/producao/programacao/importar` | GET/POST | Importar programação | `producao/importar_programacao.html` |
+| `/producao/importar` | GET/POST | Importar programação | `producao/importar_programacao.html` ✅ |
 
-**Filtros**: Data de/até, código produto (dropdown), nome produto (dropdown), linha produção (dropdown)  
-**Comportamento**: Sempre substitui dados existentes  
-**Campos obrigatórios**: Data programação, código produto, nome produto, quantidade programada
+**Colunas Excel específicas**:
+- `DATA` → data_programacao (formato DD/MM/YYYY)
+- `SEÇÃO / MÁQUINA` → linha_producao
+- `CÓDIGO` → cod_produto
+- `OP` → observacao_pcp
+- `DESCRIÇÃO` → nome_produto
+- `CLIENTE` → cliente_produto
+- `QTDE` → qtd_programada
+
+**Comportamento**: Sempre substitui dados existentes (limpa antes de importar)
 
 ---
 
-### **📦 3. MOVIMENTAÇÃO DE ESTOQUE**
+### **📦 3. MOVIMENTAÇÃO DE ESTOQUE** ✅ **ATUALIZADA CONFORME ARQUIVO 6**
 | Rota | Método | Função | Template |
 |------|--------|--------|----------|
 | `/estoque/` | GET | Dashboard estoque | `estoque/dashboard.html` |
 | `/estoque/movimentacoes` | GET | Listar movimentações | `estoque/listar_movimentacoes.html` |
-| `/estoque/movimentacoes/importar` | GET/POST | Importar movimentações | `estoque/importar_movimentacoes.html` |
+| `/estoque/movimentacoes/importar` | GET/POST | Importar movimentações | `estoque/importar_movimentacoes.html` ✅ |
 
-**Filtros**: Data, tipo movimentação (AVARIA, EST INICIAL, DEVOLUÇÃO, PRODUÇÃO, RETRABALHO), código produto, nome produto, local  
-**Comportamento**: Sempre adiciona registros  
-**Validações**: Tipo movimentação validado, flag para produtos não cadastrados
+**Colunas Excel específicas**:
+- `tipo_movimentacao` → tipo_movimentacao (EST INICIAL, AVARIA, DEVOLUÇÃO, PRODUÇÃO, RETRABALHO)
+- `cod_produto` → cod_produto
+- `nome_produto` → nome_produto 
+- `local_movimentacao` → local_movimentacao
+- `data_movimentacao` → data_movimentacao (formato DD/MM/YYYY)
+- `qtd_movimentacao` → qtd_movimentacao
+
+**Comportamento**: Sempre adiciona registros (nunca remove)
+**Validações**: Tipos permitidos validados automaticamente
 
 ---
 
-### **⚖️ 4. CADASTRO DE PALLETIZAÇÃO**
+### **⚖️ 4. CADASTRO DE PALLETIZAÇÃO** ✅ **ATUALIZADA CONFORME ARQUIVO 8**
 | Rota | Método | Função | Template |
 |------|--------|--------|----------|
 | `/producao/palletizacao` | GET | Listar palletização | `producao/listar_palletizacao.html` |
-| `/producao/palletizacao/importar` | GET/POST | Importar palletização | `producao/importar_palletizacao.html` |
+| `/producao/palletizacao/importar` | GET/POST | Importar palletização | `producao/importar_palletizacao.html` ✅ |
 
-**Filtros**: Código produto, nome produto, palletização, peso bruto  
-**Comportamento**: Substitui existentes, adiciona novos  
-**Campos obrigatórios**: cod_produto, nome_produto, palletizacao, peso_bruto  
-**Campos opcionais**: altura_cm, largura_cm, comprimento_cm (com cálculo de volume automático)
+**Colunas Excel específicas**:
+- `Cód.Produto` → cod_produto
+- `Descrição Produto` → nome_produto
+- `PALLETIZACAO` → palletizacao (fator conversão para pallets)
+- `PESO BRUTO` → peso_bruto (fator conversão para peso)
+- `altura_cm` → altura_cm (opcional)
+- `largura_cm` → largura_cm (opcional)
+- `comprimento_cm` → comprimento_cm (opcional)
+
+**Comportamento**: Substitui existentes, adiciona novos (por cod_produto)
+**Funcionalidades**: Cálculo automático de volume (altura × largura × comprimento)
 
 ---
 
-### **🗺️ 5. CADASTRO DE ROTAS**
+### **🗺️ 5. CADASTRO DE ROTAS** ✅ **ATUALIZADA CONFORME ARQUIVO 9**
 | Rota | Método | Função | Template |
 |------|--------|--------|----------|
 | `/localidades/rotas` | GET | Listar rotas | `localidades/listar_rotas.html` |
-| `/localidades/rotas/importar` | GET/POST | Importar rotas | `localidades/importar_rotas.html` |
+| `/localidades/rotas/importar` | GET/POST | Importar rotas | `localidades/importar_rotas.html` ✅ |
 
-**Filtros**: UF, rota  
-**Comportamento**: Substitui rota se UF já existe, adiciona novos  
-**Campos obrigatórios**: cod_uf, rota  
+**Colunas Excel específicas**:
+- `ESTADO` → cod_uf (2 caracteres, ex: ES, SP, RJ)
+- `ROTA` → rota (descrição da rota de entrega)
+
+**Comportamento**: Substitui rota se UF já existe, adiciona novos
 **Validação**: UF deve existir no cadastro de cidades
 
 ---
 
-### **🎯 6. CADASTRO DE SUB-ROTAS**
+### **🎯 6. CADASTRO DE SUB-ROTAS** ✅ **ATUALIZADA CONFORME ARQUIVO 10**
 | Rota | Método | Função | Template |
 |------|--------|--------|----------|
 | `/localidades/sub-rotas` | GET | Listar sub-rotas | `localidades/listar_sub_rotas.html` |
-| `/localidades/sub-rotas/importar` | GET/POST | Importar sub-rotas | `localidades/importar_sub_rotas.html` |
+| `/localidades/sub-rotas/importar` | GET/POST | Importar sub-rotas | `localidades/importar_sub_rotas.html` ✅ |
 
-**Filtros**: UF, cidade, sub rota  
-**Comportamento**: Sub rota única por combinação UF+Cidade  
-**Campos obrigatórios**: UF, cidade, sub rota  
+**Colunas Excel específicas**:
+- `ESTADO` → cod_uf (2 caracteres, ex: AC, RJ, SP)
+- `CIDADE` → nome_cidade (nome da cidade, ex: RIO BRANCO)
+- `SUB ROTA` → sub_rota (descrição da sub-rota, ex: CAP)
+
+**Comportamento**: Sub rota única por combinação UF+Cidade
 **Validação**: Combinação Cidade+UF deve existir no cadastro de cidades
 
 ---
@@ -128,13 +166,48 @@ app/templates/localidades/listar_sub_rotas.html    # Lista cadastro de sub-rotas
 
 ### **📤 TEMPLATES DE IMPORTAÇÃO (6 arquivos):**
 ```
-app/templates/faturamento/importar_produtos.html     # Importar faturamento por produto
-app/templates/producao/importar_programacao.html     # Importar programação de produção
-app/templates/estoque/importar_movimentacoes.html    # Importar movimentações de estoque
-app/templates/producao/importar_palletizacao.html    # Importar cadastro de palletização
-app/templates/localidades/importar_rotas.html        # Importar cadastro de rotas
-app/templates/localidades/importar_sub_rotas.html    # Importar cadastro de sub-rotas
+app/templates/faturamento/importar_produtos.html     # ✅ Importar faturamento por produto
+app/templates/producao/importar_programacao.html     # ✅ Importar programação de produção
+app/templates/estoque/importar_movimentacoes.html    # ✅ Importar movimentações de estoque
+app/templates/producao/importar_palletizacao.html    # ✅ Importar cadastro de palletização
+app/templates/localidades/importar_rotas.html        # ✅ Importar cadastro de rotas
+app/templates/localidades/importar_sub_rotas.html    # ✅ Importar cadastro de sub-rotas
 ```
+
+---
+
+## 🔥 **ATUALIZAÇÕES REALIZADAS - JANEIRO 2025**
+
+### **✅ COMPLETAMENTE ATUALIZADAS CONFORME ARQUIVOS CSV:**
+
+1. **Faturamento por Produto** (arquivo 3) - Forward Fill automático implementado
+2. **Programação de Produção** (arquivo 5) - Colunas exatas mapeadas
+3. **Movimentações de Estoque** (arquivo 6) - Tipos validados automaticamente
+4. **Cadastro Palletização** (arquivo 8) - Medidas opcionais incluídas
+5. **Cadastro de Rotas** (arquivo 9) - Validação com cadastro de cidades
+6. **Cadastro de Sub-rotas** (arquivo 10) - Validação UF+Cidade
+
+### **🎯 FUNCIONALIDADES ESPECIAIS IMPLEMENTADAS:**
+
+- **Forward Fill**: Preenchimento automático de campos vazios (arquivo 3)
+- **Extração Cidade/UF**: Parse automático "Cidade (UF)" → campos separados
+- **Conversão valores brasileiros**: 3.281,10 → 3281.10 automaticamente
+- **Validação status**: Status permitidos validados (Lançado, Cancelado, Provisório)
+- **Validação tipos**: Tipos movimentação validados automaticamente
+- **Cálculo automático**: Preço unitário = valor_total ÷ quantidade
+- **Volume automático**: Cálculo m³ baseado em dimensões
+- **Validação referencial**: UF/Cidade devem existir no cadastro
+
+### **🔄 COMPORTAMENTOS ESPECÍFICOS:**
+
+| Módulo | Comportamento | Justificativa |
+|--------|---------------|---------------|
+| **Faturamento** | Substitui/Adiciona | NF+Produto = chave única |
+| **Programação** | Substitui tudo | Sempre limpa antes (planejamento) |
+| **Estoque** | Sempre adiciona | Histórico de movimentações |
+| **Palletização** | Substitui/Adiciona | Cadastro mestre por produto |
+| **Rotas** | Substitui/Adiciona | Rota única por UF |
+| **Sub-rotas** | Substitui/Adiciona | Sub-rota única por UF+Cidade |
 
 ---
 

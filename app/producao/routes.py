@@ -137,6 +137,152 @@ def listar_palletizacao():
                          palletizacoes=palletizacoes,
                          cod_produto=cod_produto)
 
+@producao_bp.route('/palletizacao/importar')
+@login_required
+@require_admin()
+def importar_palletizacao():
+    """Tela para importar cadastro de palletização"""
+    return render_template('producao/importar_palletizacao.html')
+
+@producao_bp.route('/palletizacao/importar', methods=['POST'])
+@login_required
+@require_admin()
+def processar_importacao_palletizacao():
+    """Processar importação de cadastro de palletização"""
+    try:
+        import pandas as pd
+        import tempfile
+        import os
+        from datetime import datetime
+        from werkzeug.utils import secure_filename
+        
+        if 'arquivo' not in request.files:
+            flash('Nenhum arquivo selecionado!', 'error')
+            return redirect(url_for('producao.importar_palletizacao'))
+            
+        arquivo = request.files['arquivo']
+        if arquivo.filename == '':
+            flash('Nenhum arquivo selecionado!', 'error')
+            return redirect(url_for('producao.importar_palletizacao'))
+            
+        if not arquivo.filename.lower().endswith(('.xlsx', '.csv')):
+            flash('Tipo de arquivo não suportado! Use apenas .xlsx ou .csv', 'error')
+            return redirect(url_for('producao.importar_palletizacao'))
+        
+        # Processar arquivo temporário
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_file:
+                arquivo.save(temp_file.name)
+                
+                if arquivo.filename.lower().endswith('.xlsx'):
+                    df = pd.read_excel(temp_file.name)
+                else:
+                    df = pd.read_csv(temp_file.name, encoding='utf-8', sep=';')
+                
+                os.unlink(temp_file.name)
+        except Exception as e:
+            flash(f'Erro ao processar arquivo: {str(e)}', 'error')
+            return redirect(url_for('producao.importar_palletizacao'))
+        
+        # 🎯 MAPEAMENTO EXATO conforme arquivo 8 - cadastro palletização e peso bruto
+        colunas_esperadas = {
+            'cod_produto': 'Cód.Produto',
+            'nome_produto': 'Descrição Produto',
+            'palletizacao': 'PALLETIZACAO',
+            'peso_bruto': 'PESO BRUTO',
+            'altura_cm': 'altura_cm',
+            'largura_cm': 'largura_cm',
+            'comprimento_cm': 'comprimento_cm'
+        }
+        
+        # Verificar se as colunas obrigatórias existem
+        colunas_obrigatorias_excel = ['Cód.Produto', 'Descrição Produto', 'PALLETIZACAO', 'PESO BRUTO']
+        
+        colunas_faltando = [col for col in colunas_obrigatorias_excel if col not in df.columns]
+        if colunas_faltando:
+            flash(f'❌ Colunas obrigatórias não encontradas: {", ".join(colunas_faltando)}', 'error')
+            return redirect(url_for('producao.importar_palletizacao'))
+        
+        # COMPORTAMENTO: SUBSTITUI/ADICIONA - Atualiza existente ou cria novo
+        produtos_importados = 0
+        produtos_atualizados = 0
+        erros = []
+        
+        for index, row in df.iterrows():
+            try:
+                # 📋 EXTRAIR DADOS usando nomes exatos das colunas Excel
+                cod_produto = str(row.get('Cód.Produto', '')).strip() if pd.notna(row.get('Cód.Produto')) else ''
+                
+                if not cod_produto or cod_produto == 'nan':
+                    continue
+                
+                # Verificar se já existe
+                palletizacao_existente = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+                
+                # 📝 DADOS BÁSICOS
+                nome_produto = str(row.get('Descrição Produto', '')).strip()
+                palletizacao = float(row.get('PALLETIZACAO', 0) or 0)
+                peso_bruto = float(row.get('PESO BRUTO', 0) or 0)
+                
+                # 📏 MEDIDAS OPCIONAIS
+                altura_cm = float(row.get('altura_cm', 0) or 0) if pd.notna(row.get('altura_cm')) else 0
+                largura_cm = float(row.get('largura_cm', 0) or 0) if pd.notna(row.get('largura_cm')) else 0
+                comprimento_cm = float(row.get('comprimento_cm', 0) or 0) if pd.notna(row.get('comprimento_cm')) else 0
+                
+                if palletizacao_existente:
+                    # ✏️ ATUALIZAR EXISTENTE
+                    palletizacao_existente.nome_produto = nome_produto
+                    palletizacao_existente.palletizacao = palletizacao
+                    palletizacao_existente.peso_bruto = peso_bruto
+                    palletizacao_existente.altura_cm = altura_cm
+                    palletizacao_existente.largura_cm = largura_cm
+                    palletizacao_existente.comprimento_cm = comprimento_cm
+                    palletizacao_existente.updated_by = current_user.nome
+                    palletizacao_existente.ativo = True  # Reativar se estava inativo
+                    produtos_atualizados += 1
+                else:
+                    # ➕ CRIAR NOVO
+                    nova_palletizacao = CadastroPalletizacao()
+                    nova_palletizacao.cod_produto = cod_produto
+                    nova_palletizacao.nome_produto = nome_produto
+                    nova_palletizacao.palletizacao = palletizacao
+                    nova_palletizacao.peso_bruto = peso_bruto
+                    nova_palletizacao.altura_cm = altura_cm
+                    nova_palletizacao.largura_cm = largura_cm
+                    nova_palletizacao.comprimento_cm = comprimento_cm
+                    nova_palletizacao.created_by = current_user.nome
+                    nova_palletizacao.ativo = True
+                    
+                    db.session.add(nova_palletizacao)
+                    produtos_importados += 1
+                
+            except Exception as e:
+                erros.append(f"Linha {index + 1}: {str(e)}")
+                continue
+        
+        # Commit das alterações
+        db.session.commit()
+        
+        # Mensagens de resultado
+        if produtos_importados > 0 or produtos_atualizados > 0:
+            mensagem = f"✅ Importação concluída: {produtos_importados} novos produtos, {produtos_atualizados} atualizados"
+            if erros:
+                mensagem += f". {len(erros)} erros encontrados."
+            flash(mensagem, 'success')
+        else:
+            flash("⚠️ Nenhum produto foi importado.", 'warning')
+        
+        if erros[:5]:  # Mostrar apenas os primeiros 5 erros
+            for erro in erros[:5]:
+                flash(f"❌ {erro}", 'error')
+        
+        return redirect(url_for('producao.listar_palletizacao'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro durante importação: {str(e)}', 'error')
+        return redirect(url_for('producao.importar_palletizacao'))
+
 @producao_bp.route('/api/estatisticas')
 @login_required
 def api_estatisticas():
@@ -203,32 +349,23 @@ def processar_importacao_producao():
             flash(f'Erro ao processar arquivo: {str(e)}', 'error')
             return redirect(url_for('producao.importar_producao'))
         
-        # Validar colunas obrigatórias
-        colunas_obrigatorias = ['data_programacao', 'cod_produto', 'nome_produto', 'qtd_programada']
-        
-        # Mapear nomes de colunas flexíveis
-        mapeamento_colunas = {
-            'data_programacao': ['data_programacao', 'data', 'data_producao'],
-            'cod_produto': ['cod_produto', 'codigo', 'codigo_produto'],
-            'nome_produto': ['nome_produto', 'produto', 'descricao'],
-            'qtd_programada': ['qtd_programada', 'quantidade', 'qtd']
+        # 🎯 MAPEAMENTO EXATO conforme arquivo 5 - programação de produção
+        colunas_esperadas = {
+            'data_programacao': 'DATA',
+            'linha_producao': 'SEÇÃO / MÁQUINA', 
+            'cod_produto': 'CÓDIGO',
+            'observacao_pcp': 'OP',
+            'nome_produto': 'DESCRIÇÃO',
+            'cliente_produto': 'CLIENTE',
+            'qtd_programada': 'QTDE'
         }
         
-        # Normalizar nomes das colunas
-        df.columns = [col.lower().strip().replace(' ', '_') for col in df.columns]
+        # Verificar se as colunas obrigatórias existem
+        colunas_obrigatorias_excel = ['DATA', 'CÓDIGO', 'DESCRIÇÃO', 'QTDE']
         
-        # Mapear colunas
-        colunas_encontradas = {}
-        for campo, possibilidades in mapeamento_colunas.items():
-            for possibilidade in possibilidades:
-                if possibilidade in df.columns:
-                    colunas_encontradas[campo] = possibilidade
-                    break
-        
-        # Verificar se todas as colunas obrigatórias foram encontradas
-        faltando = [col for col in colunas_obrigatorias if col not in colunas_encontradas]
-        if faltando:
-            flash(f'Colunas obrigatórias não encontradas: {", ".join(faltando)}', 'error')
+        colunas_faltando = [col for col in colunas_obrigatorias_excel if col not in df.columns]
+        if colunas_faltando:
+            flash(f'❌ Colunas obrigatórias não encontradas: {", ".join(colunas_faltando)}', 'error')
             return redirect(url_for('producao.importar_producao'))
         
         # COMPORTAMENTO: SEMPRE SUBSTITUI - Deletar todos os dados existentes
@@ -246,42 +383,49 @@ def processar_importacao_producao():
         
         for index, row in df.iterrows():
             try:
-                # Extrair dados usando mapeamento
-                cod_produto = str(row[colunas_encontradas['cod_produto']]).strip()
+                # 📋 EXTRAIR DADOS usando nomes exatos das colunas Excel
+                cod_produto = str(row.get('CÓDIGO', '')).strip() if pd.notna(row.get('CÓDIGO')) else ''
                 
                 if not cod_produto or cod_produto == 'nan':
                     continue
                 
-                # Preparar dados
-                data_programacao = row[colunas_encontradas['data_programacao']]
-                if isinstance(data_programacao, str):
-                    try:
-                        data_programacao = pd.to_datetime(data_programacao).date()
-                    except:
-                        data_programacao = None
-                elif hasattr(data_programacao, 'date'):
-                    data_programacao = data_programacao.date()
+                # 📅 PROCESSAR DATA
+                data_programacao = row.get('DATA')
+                if pd.notna(data_programacao):
+                    if isinstance(data_programacao, str):
+                        try:
+                            # Formato brasileiro DD/MM/YYYY
+                            data_programacao = pd.to_datetime(data_programacao, format='%d/%m/%Y').date()
+                        except:
+                            try:
+                                data_programacao = pd.to_datetime(data_programacao).date()
+                            except:
+                                data_programacao = None
+                    elif hasattr(data_programacao, 'date'):
+                        data_programacao = data_programacao.date()
+                else:
+                    data_programacao = None
                 
                 if not data_programacao:
                     erros.append(f"Linha {index + 1}: Data inválida")
                     continue
                 
-                # Criar novo registro
-                novo_produto = ProgramacaoProducao(
-                    data_programacao=data_programacao,
-                    cod_produto=cod_produto,
-                    nome_produto=str(row[colunas_encontradas['nome_produto']]).strip(),
-                    qtd_programada=float(row[colunas_encontradas['qtd_programada']] or 0),
-                    created_by=current_user.nome
-                )
+                # 📝 DADOS BÁSICOS
+                nome_produto = str(row.get('DESCRIÇÃO', '')).strip()
+                qtd_programada = float(row.get('QTDE', 0) or 0)
                 
-                # Campos opcionais
-                if 'linha_producao' in df.columns:
-                    novo_produto.linha_producao = str(row.get('linha_producao', '')).strip()
-                if 'cliente_produto' in df.columns:
-                    novo_produto.cliente_produto = str(row.get('cliente_produto', '')).strip()
-                if 'observacao_pcp' in df.columns:
-                    novo_produto.observacao_pcp = str(row.get('observacao_pcp', '')).strip()
+                # ➕ CRIAR NOVO REGISTRO
+                novo_produto = ProgramacaoProducao()
+                novo_produto.data_programacao = data_programacao
+                novo_produto.cod_produto = cod_produto
+                novo_produto.nome_produto = nome_produto
+                novo_produto.qtd_programada = qtd_programada
+                novo_produto.created_by = current_user.nome
+                
+                # 🔧 CAMPOS ESPECÍFICOS CONFORME EXCEL
+                novo_produto.linha_producao = str(row.get('SEÇÃO / MÁQUINA', '')).strip()
+                novo_produto.cliente_produto = str(row.get('CLIENTE', '')).strip()
+                novo_produto.observacao_pcp = str(row.get('OP', '')).strip()
                 
                 db.session.add(novo_produto)
                 produtos_importados += 1

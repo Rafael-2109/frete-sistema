@@ -1,7 +1,7 @@
 ﻿Explicação do campo;Nome do campo já existente no sistema;Sugestão nome sistema;Nome do campo no excel;
-Origem da Movimentação;;tipo_movimentacao;Column1.COD_EMPRESA;EST INICIAL
-Código do produto;cod_produto;;Column1.COD_PRODUTO;4089056
-Nome do produto;nome_produto;;Column1.DESCR_PRODUTO; PEPINO FATIADO BAG 6X1,01 KG - SUBWAY
-Local da movimentação;;local_movimentacao;Column1.UN;EST INICIAL
-Data da movimentação;;data_movimentacao;Column1.COD_LOCAL;20/01/2025
-Quantidade;;qtd_movimentacao; Column1.SALDO_ITEM ;1.489
+Origem da Movimentação;;tipo_movimentacao;tipo_movimentacao;EST INICIAL
+Código do produto;cod_produto;;cod_produto;4089056
+Nome do produto;nome_produto;;nome_produto; PEPINO FATIADO BAG 6X1,01 KG - SUBWAY
+Local da movimentação;;local_movimentacao;local_movimentacao;EST INICIAL
+Data da movimentação;;data_movimentacao;data_movimentacao;20/01/2025
+Quantidade;;qtd_movimentacao;qtd_movimentacao;1.489
