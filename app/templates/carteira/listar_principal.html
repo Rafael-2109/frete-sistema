@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+
+{% block title %}Carteira Principal{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-list text-primary"></i> 
+            Carteira Principal de Pedidos
+        </h1>
+        <div>
+            <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <a href="{{ url_for('carteira.importar_carteira') }}" class="btn btn-success btn-sm">
+                <i class="fas fa-upload"></i> Importar
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-filter"></i> Filtros de Busca
+            </h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" id="form-filtros">
+                <div class="row">
+                    <div class="col-md-2 mb-3">
+                        <label for="num_pedido" class="form-label">Número Pedido</label>
+                        <input type="text" class="form-control" id="num_pedido" name="num_pedido" 
+                               value="{{ num_pedido }}" placeholder="Ex: PED001">
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label for="cod_produto" class="form-label">Código Produto</label>
+                        <input type="text" class="form-control" id="cod_produto" name="cod_produto" 
+                               value="{{ cod_produto }}" placeholder="Ex: PROD001">
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label for="vendedor" class="form-label">Vendedor</label>
+                        <input type="text" class="form-control" id="vendedor" name="vendedor" 
+                               value="{{ vendedor }}" placeholder="Ex: João">
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <input type="text" class="form-control" id="status" name="status" 
+                               value="{{ status }}" placeholder="Ex: Pedido de venda">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="cliente" class="form-label">Cliente</label>
+                        <input type="text" class="form-control" id="cliente" name="cliente" 
+                               value="{{ cliente }}" placeholder="Ex: Cliente LTDA">
+                    </div>
+                    <div class="col-md-1 mb-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm me-2">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <a href="{{ url_for('carteira.listar_principal') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-times"></i>
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lista de Itens -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-table"></i> Itens da Carteira
+            </h6>
+            {% if itens and itens.items %}
+            <span class="badge badge-info">
+                {{ itens.total }} itens encontrados
+            </span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if itens and itens.items %}
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Produto</th>
+                            <th>Cliente</th>
+                            <th>Vendedor</th>
+                            <th>Status</th>
+                            <th class="text-right">Qtd</th>
+                            <th class="text-right">Saldo</th>
+                            <th class="text-right">Preço</th>
+                            <th class="text-center">Expedição</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in itens.items %}
+                        <tr>
+                            <td>
+                                <strong>{{ item.num_pedido }}</strong>
+                                {% if item.protocolo %}
+                                <br><small class="text-muted">{{ item.protocolo|formatar_protocolo }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="text-truncate" style="max-width: 200px;" title="{{ item.nome_produto }}">
+                                    <strong>{{ item.cod_produto }}</strong><br>
+                                    <small class="text-muted">{{ item.nome_produto }}</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="text-truncate" style="max-width: 150px;" title="{{ item.raz_social }}">
+                                    {{ item.raz_social_red or item.raz_social }}
+                                    {% if item.municipio %}
+                                    <br><small class="text-muted">{{ item.municipio }}/{{ item.estado }}</small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>{{ item.vendedor or '-' }}</td>
+                            <td>
+                                {% if item.status_pedido %}
+                                <span class="badge badge-primary">{{ item.status_pedido }}</span>
+                                {% else %}
+                                <span class="badge badge-secondary">Sem Status</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">{{ item.qtd_produto_pedido|numero_br }}</td>
+                            <td class="text-right">
+                                <strong>{{ item.qtd_saldo_produto_pedido|numero_br }}</strong>
+                            </td>
+                            <td class="text-right">{{ item.preco_produto_pedido|valor_br if item.preco_produto_pedido else '-' }}</td>
+                            <td class="text-center">
+                                {% if item.expedicao %}
+                                <span class="badge badge-warning">{{ item.expedicao|formatar_data_brasil }}</span>
+                                {% else %}
+                                <span class="badge badge-light">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <button class="btn btn-info btn-sm" onclick="verDetalhes({{ item.id }})" 
+                                        title="Ver detalhes">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if itens.pages > 1 %}
+            <nav aria-label="Paginação">
+                <ul class="pagination justify-content-center">
+                    {% if itens.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('carteira.listar_principal', page=itens.prev_num, **request.args) }}">
+                            <i class="fas fa-angle-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for page_num in itens.iter_pages() %}
+                        {% if page_num %}
+                            {% if page_num != itens.page %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('carteira.listar_principal', page=page_num, **request.args) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if itens.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('carteira.listar_principal', page=itens.next_num, **request.args) }}">
+                            <i class="fas fa-angle-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% elif itens is none %}
+            <div class="text-center py-5">
+                <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                <h5>Sistema Não Inicializado</h5>
+                <p class="text-muted">O sistema de carteira ainda não foi inicializado. Execute a migração do banco de dados.</p>
+                <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+                </a>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <h5>Nenhum item encontrado</h5>
+                <p class="text-muted">Nenhum item da carteira corresponde aos filtros aplicados.</p>
+                <a href="{{ url_for('carteira.listar_principal') }}" class="btn btn-primary">
+                    <i class="fas fa-refresh"></i> Limpar Filtros
+                </a>
+                <a href="{{ url_for('carteira.importar_carteira') }}" class="btn btn-success ms-2">
+                    <i class="fas fa-upload"></i> Importar Carteira
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle"></i> Detalhes do Item
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="conteudo-detalhes">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function verDetalhes(itemId) {
+    const modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
+    const conteudo = document.getElementById('conteudo-detalhes');
+    
+    // Mostrar loading
+    conteudo.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+        </div>
+    `;
+    
+    modal.show();
+    
+    // Buscar detalhes via API
+    fetch(`{{ url_for('carteira.api_item_detalhes', id=0) }}`.replace('0', itemId))
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                conteudo.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Erro: ${data.error}
+                    </div>
+                `;
+            } else {
+                conteudo.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-info"></i> Informações Básicas</h6>
+                            <table class="table table-sm">
+                                <tr><td><strong>Pedido:</strong></td><td>${data.num_pedido}</td></tr>
+                                <tr><td><strong>Produto:</strong></td><td>${data.cod_produto}</td></tr>
+                                <tr><td><strong>Descrição:</strong></td><td>${data.nome_produto}</td></tr>
+                                <tr><td><strong>Cliente:</strong></td><td>${data.raz_social_red}</td></tr>
+                                <tr><td><strong>Vendedor:</strong></td><td>${data.vendedor || '-'}</td></tr>
+                                <tr><td><strong>Status:</strong></td><td>${data.status_pedido || '-'}</td></tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-calculator"></i> Quantidades e Valores</h6>
+                            <table class="table table-sm">
+                                <tr><td><strong>Qtd Pedido:</strong></td><td>${data.qtd_produto_pedido}</td></tr>
+                                <tr><td><strong>Qtd Saldo:</strong></td><td>${data.qtd_saldo_produto_pedido}</td></tr>
+                                <tr><td><strong>Preço Unit:</strong></td><td>R$ ${data.preco_produto_pedido}</td></tr>
+                                <tr><td><strong>Expedição:</strong></td><td>${data.expedicao || '-'}</td></tr>
+                                <tr><td><strong>Agendamento:</strong></td><td>${data.agendamento || '-'}</td></tr>
+                                <tr><td><strong>Protocolo:</strong></td><td>${data.protocolo || '-'}</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            conteudo.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> Erro ao carregar detalhes: ${error.message}
+                </div>
+            `;
+        });
+}
+</script>
+
+<style>
+.table th {
+    border-top: none;
+    font-size: 0.85rem;
+}
+.table td {
+    font-size: 0.85rem;
+    vertical-align: middle;
+}
+.badge {
+    font-size: 0.75rem;
+}
+.text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+</style>
+{% endblock %} 

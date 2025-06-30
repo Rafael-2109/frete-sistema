@@ -1,276 +1,264 @@
 {% extends "base.html" %}
 
-{% block title %}Carteira de Pedidos - Dashboard{% endblock %}
+{% block title %}Dashboard da Carteira de Pedidos{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-shopping-cart text-primary"></i> 
+            Dashboard da Carteira de Pedidos
+        </h1>
+    </div>
+
+    <!-- Cards de Estatísticas -->
+    <div class="row">
+        <!-- Total de Pedidos -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total de Pedidos
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ total_pedidos|default(0) }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-file-invoice fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total de Produtos -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Produtos Únicos
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ total_produtos|default(0) }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-boxes fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total de Itens -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Itens na Carteira
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ total_itens|default(0) }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-list fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Valor Total -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Valor Total
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ valor_total_carteira|valor_br }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alertas e Avisos -->
+    {% if inconsistencias_abertas > 0 or controles_pendentes > 0 %}
     <div class="row">
         <div class="col-12">
-            <h1 class="h3 mb-4">
-                <i class="fas fa-briefcase"></i> Carteira de Pedidos
-                <small class="text-muted">Sistema Integrado de Gestão</small>
-            </h1>
-        </div>
-    </div>
-
-    <!-- Estatísticas gerais dos módulos -->
-    <div class="row mb-4">
-        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-primary text-white">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h4 class="mb-0">{{ total_faturamento_produtos or 0 }}</h4>
-                            <span class="small">Faturamento Produtos</span>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-file-invoice-dollar fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-success text-white">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h4 class="mb-0">{{ total_programacao_producao or 0 }}</h4>
-                            <span class="small">Programação Produção</span>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-industry fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-info text-white">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h4 class="mb-0">{{ total_movimentacoes_estoque or 0 }}</h4>
-                            <span class="small">Movimentações Estoque</span>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-boxes fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-warning text-dark">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h4 class="mb-0">{{ total_cadastros_palletizacao or 0 }}</h4>
-                            <span class="small">Produtos Palletizados</span>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-weight-hanging fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-secondary text-white">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h4 class="mb-0">{{ total_rotas or 0 }}</h4>
-                            <span class="small">Rotas Cadastradas</span>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-route fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
-            <div class="card bg-dark text-white">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h4 class="mb-0">{{ total_sub_rotas or 0 }}</h4>
-                            <span class="small">Sub-rotas Cidades</span>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-map-marked-alt fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
+            <div class="alert alert-warning shadow">
+                <h6 class="alert-heading">
+                    <i class="fas fa-exclamation-triangle"></i> Atenção Necessária
+                </h6>
+                {% if inconsistencias_abertas > 0 %}
+                <p class="mb-1">
+                    <strong>{{ inconsistencias_abertas }}</strong> inconsistências de faturamento precisam ser resolvidas.
+                    <a href="{{ url_for('carteira.listar_inconsistencias') }}" class="btn btn-sm btn-warning ms-2">
+                        <i class="fas fa-tools"></i> Resolver
+                    </a>
+                </p>
+                {% endif %}
+                {% if controles_pendentes > 0 %}
+                <p class="mb-0">
+                    <strong>{{ controles_pendentes }}</strong> controles cruzados pendentes de verificação.
+                </p>
+                {% endif %}
             </div>
         </div>
     </div>
+    {% endif %}
 
-    <!-- Módulos Disponíveis -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <h4><i class="fas fa-th-large"></i> Módulos Disponíveis</h4>
+    <div class="row">
+        <!-- Status Breakdown -->
+        <div class="col-xl-8 col-lg-7">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-pie"></i> Breakdown por Status
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if status_breakdown %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Status</th>
+                                    <th class="text-center">Quantidade</th>
+                                    <th class="text-right">Valor Total</th>
+                                    <th class="text-center">%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% set total_count = status_breakdown|sum(attribute='count') %}
+                                {% for status in status_breakdown %}
+                                <tr>
+                                    <td>
+                                        <span class="badge badge-primary">{{ status.status_pedido or 'Sem Status' }}</span>
+                                    </td>
+                                    <td class="text-center">{{ status.count }}</td>
+                                    <td class="text-right">{{ (status.valor or 0)|valor_br }}</td>
+                                    <td class="text-center">
+                                        <div class="progress" style="height: 6px;">
+                                            <div class="progress-bar bg-primary" style="width: {{ (status.count * 100 / total_count) if total_count > 0 else 0 }}%"></div>
+                                        </div>
+                                        {{ "%.1f"|format((status.count * 100 / total_count) if total_count > 0 else 0) }}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Nenhum dado disponível ainda</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
         </div>
-        
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="btn btn-primary btn-lg btn-block">
-                <i class="fas fa-file-invoice-dollar"></i><br>
-                Faturamento<br>por Produto
-            </a>
-        </div>
-        
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('producao.dashboard') }}" class="btn btn-success btn-lg btn-block">
-                <i class="fas fa-industry"></i><br>
-                Programação<br>Produção
-            </a>
-        </div>
-        
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('estoque.dashboard') }}" class="btn btn-info btn-lg btn-block">
-                <i class="fas fa-boxes"></i><br>
-                Movimentações<br>Estoque
-            </a>
-        </div>
-        
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('producao.listar_palletizacao') }}" class="btn btn-warning btn-lg btn-block text-dark">
-                <i class="fas fa-weight-hanging"></i><br>
-                Cadastro<br>Palletização
-            </a>
-        </div>
-        
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('localidades.listar_rotas') }}" class="btn btn-secondary btn-lg btn-block">
-                <i class="fas fa-route"></i><br>
-                Cadastro<br>Rotas
-            </a>
-        </div>
-        
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('localidades.listar_sub_rotas') }}" class="btn btn-dark btn-lg btn-block">
-                <i class="fas fa-map-marked-alt"></i><br>
-                Sub-rotas<br>por Cidade
-            </a>
+
+        <!-- Expedições Próximas -->
+        <div class="col-xl-4 col-lg-5">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-warning">
+                        <i class="fas fa-clock"></i> Expedições Próximas (7 dias)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="text-center">
+                        <div class="display-4 text-warning mb-2">{{ expedicoes_proximas|default(0) }}</div>
+                        <p class="text-muted mb-3">Pedidos com expedição nos próximos 7 dias</p>
+                        {% if expedicoes_proximas > 0 %}
+                        <a href="{{ url_for('carteira.listar_principal') }}?expedicao_proxima=true" class="btn btn-warning btn-sm">
+                            <i class="fas fa-eye"></i> Ver Detalhes
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Vendedores -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-success">
+                        <i class="fas fa-users"></i> Top Vendedores
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if vendedores_breakdown %}
+                    <div class="small">
+                        {% for vendedor in vendedores_breakdown[:5] %}
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-truncate" style="max-width: 150px;">
+                                {{ vendedor.vendedor or 'Sem Vendedor' }}
+                            </span>
+                            <div class="text-right">
+                                <div class="text-xs text-muted">{{ vendedor.count }} itens</div>
+                                <div class="text-xs font-weight-bold">{{ (vendedor.valor or 0)|valor_br }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-user-slash fa-2x text-muted mb-2"></i>
+                        <p class="text-muted mb-0">Nenhum vendedor encontrado</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Importação de Dados -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <h4><i class="fas fa-upload"></i> Importação de Dados</h4>
-        </div>
-        
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('faturamento.importar_faturamento_produtos') }}" class="btn btn-outline-primary btn-lg btn-block">
-                <i class="fas fa-file-excel"></i><br>
-                Importar<br>Faturamento
-            </a>
-        </div>
-        
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('producao.importar_producao') }}" class="btn btn-outline-success btn-lg btn-block">
-                <i class="fas fa-file-excel"></i><br>
-                Importar<br>Programação
-            </a>
-        </div>
-        
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('estoque.importar_estoque') }}" class="btn btn-outline-info btn-lg btn-block">
-                <i class="fas fa-file-excel"></i><br>
-                Importar<br>Movimentações
-            </a>
-        </div>
-        
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('producao.importar_producao') }}" class="btn btn-outline-warning btn-lg btn-block">
-                <i class="fas fa-file-excel"></i><br>
-                Importar<br>Palletização
-            </a>
-        </div>
-        
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('localidades.importar_rotas') }}" class="btn btn-outline-secondary btn-lg btn-block">
-                <i class="fas fa-file-excel"></i><br>
-                Importar<br>Rotas
-            </a>
-        </div>
-        
-        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('localidades.importar_sub_rotas') }}" class="btn btn-outline-dark btn-lg btn-block">
-                <i class="fas fa-file-excel"></i><br>
-                Importar<br>Sub-rotas
-            </a>
-        </div>
-    </div>
-
-    <!-- Status dos Módulos -->
+    <!-- Ações Rápidas -->
     <div class="row">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-chart-line"></i> Status dos Módulos
-                    </h5>
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-bolt"></i> Ações Rápidas
+                    </h6>
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-6">
-                            <h6>Módulos Implementados</h6>
-                            <ul class="list-group list-group-flush">
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-file-invoice-dollar text-primary"></i> Faturamento por Produto</span>
-                                    <span class="badge badge-success">✅ Ativo</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-industry text-success"></i> Programação de Produção</span>
-                                    <span class="badge badge-success">✅ Ativo</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-boxes text-info"></i> Movimentações de Estoque</span>
-                                    <span class="badge badge-success">✅ Ativo</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-weight-hanging text-warning"></i> Cadastro de Palletização</span>
-                                    <span class="badge badge-success">✅ Ativo</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-route text-secondary"></i> Cadastro de Rotas</span>
-                                    <span class="badge badge-success">✅ Ativo</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-map-marked-alt text-dark"></i> Sub-rotas por Cidade</span>
-                                    <span class="badge badge-success">✅ Ativo</span>
-                                </li>
-                            </ul>
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ url_for('carteira.listar_principal') }}" class="btn btn-primary btn-block">
+                                <i class="fas fa-list"></i> Ver Carteira Principal
+                            </a>
                         </div>
-                        
-                        <div class="col-md-6">
-                            <h6>Próximos Módulos (Fase 2)</h6>
-                            <ul class="list-group list-group-flush">
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-clipboard-list text-muted"></i> Carteira de Pedidos</span>
-                                    <span class="badge badge-warning">🔄 Planejado</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-warehouse text-muted"></i> Saldo de Estoque</span>
-                                    <span class="badge badge-warning">🔄 Planejado</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-barcode text-muted"></i> Unificação de Códigos</span>
-                                    <span class="badge badge-warning">🔄 Planejado</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-cut text-muted"></i> Sistema de Separação</span>
-                                    <span class="badge badge-info">🔗 Integrado</span>
-                                </li>
-                            </ul>
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ url_for('carteira.importar_carteira') }}" class="btn btn-success btn-block">
+                                <i class="fas fa-upload"></i> Importar Carteira
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ url_for('carteira.baixar_modelo') }}" class="btn btn-info btn-block">
+                                <i class="fas fa-download"></i> Baixar Modelo
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ url_for('carteira.gerar_separacao') }}" class="btn btn-warning btn-block">
+                                <i class="fas fa-cut"></i> Gerar Separação
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -278,4 +266,20 @@
         </div>
     </div>
 </div>
+
+<style>
+.progress {
+    background-color: #e9ecef;
+}
+.display-4 {
+    font-size: 2.5rem;
+    font-weight: 300;
+}
+.card {
+    transition: transform 0.2s;
+}
+.card:hover {
+    transform: translateY(-2px);
+}
+</style>
 {% endblock %} 

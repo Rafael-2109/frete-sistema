@@ -170,6 +170,10 @@
           </a>
           <ul class="dropdown-menu">
             <li><h6 class="dropdown-header">📊 Dashboards</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('carteira.index') }}">
+              <i class="fas fa-shopping-cart text-success"></i> Carteira de Pedidos
+              <span class="badge bg-success ms-2">NOVO</span>
+            </a></li>
             <li><a class="dropdown-item" href="{{ url_for('producao.index') }}">
               <i class="fas fa-tachometer-alt text-primary"></i> Dashboard Produção
             </a></li>
