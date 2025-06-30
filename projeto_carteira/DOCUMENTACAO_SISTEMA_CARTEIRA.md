@@ -61,12 +61,14 @@ app/
 
 ---
 
-### **🏭 2. PROGRAMAÇÃO DE PRODUÇÃO** ✅ **ATUALIZADA CONFORME ARQUIVO 5**
+### **🏭 2. PROGRAMAÇÃO DE PRODUÇÃO** ✅ **CORRIGIDO 29/06/2025**
 | Rota | Método | Função | Template |
 |------|--------|--------|----------|
 | `/producao/` | GET | Dashboard produção | `producao/dashboard.html` |
 | `/producao/programacao` | GET | Listar programação | `producao/listar_programacao.html` |
-| `/producao/importar` | GET/POST | Importar programação | `producao/importar_programacao.html` ✅ |
+| `/producao/programacao/importar` | GET/POST | Importar programação | `producao/importar_programacao.html` ✅ |
+
+**🔧 CORREÇÃO APLICADA**: Rota de importação renomeada de `/producao/importar` para `/producao/programacao/importar` para coincidir com o template.
 
 **Colunas Excel específicas**:
 - `DATA` → data_programacao (formato DD/MM/YYYY)
@@ -273,6 +275,6 @@ cod_uf, nome_cidade, sub_rota, ativa
 | **MovimentacaoEstoque** | ➕ Sempre adiciona | - | Tipo movimentação |
 | **CadastroPalletizacao** | 🔄 Substitui/Adiciona | cod_produto | Nenhuma |
 | **CadastroRota** | 🔄 Substitui/Adiciona | cod_uf | UF em Cidade |
-| **CadastroSubRota** | 🔄 Substitui/Adiciona | cod_uf + nome_cidade | Cidade+UF em Cidade |
+| **CadastroSubRota** | �� Substitui/Adiciona | cod_uf + nome_cidade | Cidade+UF em Cidade |
 
 
