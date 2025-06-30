@@ -1,6 +1,12 @@
 from app import db
 from datetime import datetime
 from app.utils.timezone import agora_brasil
+from app.utils.template_filters import formatar_valor_brasileiro
+from sqlalchemy import func, and_, or_
+from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MovimentacaoEstoque(db.Model):
     """
@@ -189,3 +195,232 @@ class UnificacaoCodigos(db.Model):
         self.data_desativacao = agora_brasil()
         self.updated_by = usuario
         self.motivo_desativacao = motivo 
+
+class SaldoEstoque:
+    """
+    Classe de serviço para cálculos de saldo de estoque em tempo real
+    Não é uma tabela persistente, mas sim um calculador que integra dados de:
+    - MovimentacaoEstoque (módulo já existente)
+    - ProgramacaoProducao (módulo já existente) 
+    - CarteiraPedidos (futuro - arquivo 1)
+    - UnificacaoCodigos (módulo recém implementado)
+    """
+    
+    @staticmethod
+    def obter_produtos_com_estoque():
+        """Obtém lista de produtos únicos que têm movimentação de estoque"""
+        try:
+            if not db.engine.has_table('movimentacao_estoque'):
+                return []
+            
+            # Buscar produtos únicos com movimentação
+            produtos = db.session.query(
+                MovimentacaoEstoque.cod_produto,
+                MovimentacaoEstoque.nome_produto
+            ).filter(
+                MovimentacaoEstoque.ativo == True
+            ).distinct().all()
+            
+            return produtos
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter produtos com estoque: {str(e)}")
+            return []
+    
+    @staticmethod
+    def calcular_estoque_inicial(cod_produto):
+        """Calcula estoque inicial (D0) baseado em todas as movimentações"""
+        try:
+            if not db.engine.has_table('movimentacao_estoque'):
+                return 0
+            
+            # Buscar todos os códigos relacionados (considerando unificação)
+            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            
+            # Somar movimentações de todos os códigos relacionados
+            total_estoque = 0
+            for codigo in codigos_relacionados:
+                movimentacoes = MovimentacaoEstoque.query.filter(
+                    MovimentacaoEstoque.cod_produto == str(codigo),
+                    MovimentacaoEstoque.ativo == True
+                ).all()
+                
+                total_estoque += sum(float(m.qtd_movimentacao) for m in movimentacoes)
+            
+            return total_estoque
+            
+        except Exception as e:
+            logger.error(f"Erro ao calcular estoque inicial para {cod_produto}: {str(e)}")
+            return 0
+    
+    @staticmethod
+    def calcular_producao_periodo(cod_produto, data_inicio, data_fim):
+        """Calcula produção programada para um produto em um período"""
+        try:
+            if not db.engine.has_table('programacao_producao'):
+                return 0
+            
+            # Buscar todos os códigos relacionados (considerando unificação)
+            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            
+            # Somar produção de todos os códigos relacionados
+            total_producao = 0
+            for codigo in codigos_relacionados:
+                from app.producao.models import ProgramacaoProducao
+                
+                producoes = ProgramacaoProducao.query.filter(
+                    ProgramacaoProducao.cod_produto == str(codigo),
+                    ProgramacaoProducao.data_programacao >= data_inicio,
+                    ProgramacaoProducao.data_programacao <= data_fim,
+                    ProgramacaoProducao.ativo == True
+                ).all()
+                
+                total_producao += sum(float(p.qtd_programada) for p in producoes)
+            
+            return total_producao
+            
+        except Exception as e:
+            logger.error(f"Erro ao calcular produção para {cod_produto}: {str(e)}")
+            return 0
+    
+    @staticmethod
+    def calcular_saida_periodo(cod_produto, data_inicio, data_fim):
+        """
+        Calcula saída prevista para um produto em um período
+        Por enquanto retorna 0 - será implementado quando tiver carteira de pedidos
+        """
+        # TODO: Implementar quando tiver módulo carteira de pedidos (arquivo 1)
+        return 0
+    
+    @staticmethod
+    def calcular_projecao_completa(cod_produto):
+        """Calcula projeção completa de estoque para 29 dias (D0 até D+28)"""
+        try:
+            projecao = []
+            data_hoje = datetime.now().date()
+            
+            # Estoque inicial (D0)
+            estoque_atual = SaldoEstoque.calcular_estoque_inicial(cod_produto)
+            
+            # Calcular para cada dia (D0 até D+28)
+            for dia in range(29):
+                data_calculo = data_hoje + timedelta(days=dia)
+                data_fim_dia = data_calculo
+                
+                # Saída prevista para o dia (futuro - carteira de pedidos)
+                saida_dia = SaldoEstoque.calcular_saida_periodo(cod_produto, data_calculo, data_fim_dia)
+                
+                # Produção programada para o dia
+                producao_dia = SaldoEstoque.calcular_producao_periodo(cod_produto, data_calculo, data_fim_dia)
+                
+                # Cálculo do estoque final do dia
+                if dia == 0:
+                    estoque_inicial_dia = estoque_atual
+                else:
+                    estoque_inicial_dia = projecao[dia-1]['estoque_final']
+                
+                estoque_final_dia = estoque_inicial_dia - saida_dia + producao_dia
+                
+                # Dados do dia
+                dia_dados = {
+                    'dia': dia,
+                    'data': data_calculo,
+                    'data_formatada': data_calculo.strftime('%d/%m'),
+                    'estoque_inicial': estoque_inicial_dia,
+                    'saida_prevista': saida_dia,
+                    'producao_programada': producao_dia,
+                    'estoque_final': estoque_final_dia
+                }
+                
+                projecao.append(dia_dados)
+            
+            return projecao
+            
+        except Exception as e:
+            logger.error(f"Erro ao calcular projeção para {cod_produto}: {str(e)}")
+            return []
+    
+    @staticmethod
+    def calcular_previsao_ruptura(projecao):
+        """Calcula previsão de ruptura (menor estoque em 7 dias)"""
+        try:
+            if not projecao or len(projecao) < 8:
+                return 0
+            
+            # Pegar estoque final dos primeiros 8 dias (D0 até D7)
+            estoques_7_dias = [dia['estoque_final'] for dia in projecao[:8]]
+            
+            return min(estoques_7_dias)
+            
+        except Exception as e:
+            logger.error(f"Erro ao calcular previsão de ruptura: {str(e)}")
+            return 0
+    
+    @staticmethod
+    def obter_resumo_produto(cod_produto, nome_produto):
+        """Obtém resumo completo de um produto"""
+        try:
+            # Calcular projeção completa
+            projecao = SaldoEstoque.calcular_projecao_completa(cod_produto)
+            
+            if not projecao:
+                return None
+            
+            # Dados principais
+            estoque_inicial = projecao[0]['estoque_inicial']
+            previsao_ruptura = SaldoEstoque.calcular_previsao_ruptura(projecao)
+            
+            # Totais carteira (futuro)
+            qtd_total_carteira = 0  # TODO: Implementar com arquivo 1
+            
+            resumo = {
+                'cod_produto': cod_produto,
+                'nome_produto': nome_produto,
+                'estoque_inicial': estoque_inicial,
+                'qtd_total_carteira': qtd_total_carteira,
+                'previsao_ruptura': previsao_ruptura,
+                'projecao_29_dias': projecao,
+                'status_ruptura': 'CRÍTICO' if previsao_ruptura <= 0 else 'ATENÇÃO' if previsao_ruptura < 10 else 'OK'
+            }
+            
+            return resumo
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter resumo do produto {cod_produto}: {str(e)}")
+            return None
+    
+    @staticmethod
+    def processar_ajuste_estoque(cod_produto, qtd_ajuste, motivo, usuario):
+        """Processa ajuste de estoque gerando movimentação automática"""
+        try:
+            # Buscar nome do produto
+            produto_existente = MovimentacaoEstoque.query.filter_by(
+                cod_produto=str(cod_produto),
+                ativo=True
+            ).first()
+            
+            if not produto_existente:
+                raise ValueError(f"Produto {cod_produto} não encontrado nas movimentações")
+            
+            # Criar movimentação de ajuste
+            ajuste = MovimentacaoEstoque(
+                cod_produto=str(cod_produto),
+                nome_produto=produto_existente.nome_produto,
+                tipo_movimentacao='AJUSTE',
+                local_movimentacao='CD',
+                data_movimentacao=datetime.now().date(),
+                qtd_movimentacao=float(qtd_ajuste),
+                observacao=f'Ajuste manual: {motivo}',
+                criado_por=usuario,
+                atualizado_por=usuario
+            )
+            
+            db.session.add(ajuste)
+            db.session.commit()
+            
+            return True
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao processar ajuste de estoque: {str(e)}")
+            raise e 

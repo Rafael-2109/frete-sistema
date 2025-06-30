@@ -8,10 +8,11 @@ O Sistema de Carteira de Pedidos foi **TOTALMENTE IMPLEMENTADO** com 6 módulos 
 1. **✅ FaturamentoProduto** - Faturamento detalhado por produto com Forward Fill
 2. **✅ ProgramacaoProducao** - Planejamento da produção (substitui dados)
 3. **✅ MovimentacaoEstoque** - Controle de estoque (histórico permanente)
-4. **✅ CadastroPalletizacao** - Fatores de conversão + dimensões
-5. **✅ CadastroRota** - Rotas por UF (validação referencial)
-6. **✅ CadastroSubRota** - Sub-rotas por cidade (validação UF+Cidade)
-7. **✅ UnificacaoCodigos** - Módulo 7 - Unificação para estoque consolidado
+4. **✅ SaldoEstoque** - Projeção 29 dias com unificação e ajustes em tempo real
+5. **✅ CadastroPalletizacao** - Fatores de conversão + dimensões
+6. **✅ CadastroRota** - Rotas por UF (validação referencial)
+7. **✅ CadastroSubRota** - Sub-rotas por cidade (validação UF+Cidade)
+8. **✅ UnificacaoCodigos** - Módulo 7 - Unificação para estoque consolidado
 
 ---
 
@@ -28,10 +29,10 @@ app/
 │   ├── models.py         # 2 modelos
 │   ├── routes.py         # 8 rotas (4 por módulo)
 │   └── templates/        # 6 templates (3 por módulo)
-├── estoque/              # MovimentacaoEstoque + UnificacaoCodigos ✅
-│   ├── models.py         # 2 modelos (MovimentacaoEstoque + UnificacaoCodigos)
-│   ├── routes.py         # 12 rotas (4 movimentações + 8 unificação)
-│   └── templates/        # 5 templates (2 movimentações + 3 unificação)
+├── estoque/              # MovimentacaoEstoque + UnificacaoCodigos + SaldoEstoque ✅
+│   ├── models.py         # 3 modelos (MovimentacaoEstoque + UnificacaoCodigos + SaldoEstoque)
+│   ├── routes.py         # 16 rotas (4 movimentações + 8 unificação + 4 saldo)
+│   └── templates/        # 6 templates (2 movimentações + 3 unificação + 1 saldo)
 └── localidades/          # CadastroRota + CadastroSubRota ✅
     ├── models.py         # 2 modelos
     ├── routes.py         # 8 rotas (4 por módulo)
@@ -90,7 +91,26 @@ app/
 
 ---
 
-### **⚖️ 4. CADASTRO DE PALLETIZAÇÃO** ✅ **COMPLETO COM EXPORTS**
+### **📊 4. SALDO DE ESTOQUE** ✅ **DASHBOARD CALCULADO EM TEMPO REAL**
+| Rota | Método | Função | Descrição |
+|------|--------|--------|-----------|
+| `/estoque/saldo-estoque` | GET | Dashboard principal | Projeção 29 dias (D0-D+28) |
+| `/estoque/saldo-estoque/api/produto/<cod>` | GET | API produto específico | Dados detalhados produto |
+| `/estoque/saldo-estoque/processar-ajuste` | POST | Processar ajuste | Modal ajuste estoque |
+| `/estoque/saldo-estoque/filtrar` | GET | Filtrar produtos | Filtros avançados |
+
+**🔥 Funcionalidades Revolucionárias:**
+- **Projeção automática 29 dias** (D0 até D+28) com datas brasileiras
+- **Unificação de códigos integrada** (soma automática de códigos relacionados)
+- **Cálculo tempo real** baseado em: Movimentações + Programação Produção + Carteira (futuro)
+- **Previsão de ruptura** (menor estoque em 7 dias)
+- **Modal de ajuste** que gera movimentação automática
+- **Status inteligente** (OK/Atenção/Crítico) com cores
+- **Preparado para carteira** de pedidos (arquivo 1 futuro)
+
+---
+
+### **⚖️ 5. CADASTRO DE PALLETIZAÇÃO** ✅ **COMPLETO COM EXPORTS**
 | Rota | Método | Função | Descrição |
 |------|--------|--------|-----------|
 | `/producao/palletizacao` | GET | Listar palletização | Dashboard palletização |
@@ -244,6 +264,7 @@ https://frete-sistema.onrender.com/producao/palletizacao
 
 ✅ ESTOQUE:
 https://frete-sistema.onrender.com/estoque/movimentacoes
+https://frete-sistema.onrender.com/estoque/saldo-estoque
 https://frete-sistema.onrender.com/estoque/unificacao-codigos
 
 ✅ LOCALIDADES:
@@ -260,16 +281,17 @@ https://frete-sistema.onrender.com/localidades/sub-rotas
 |--------|-------|-----------|---------|---------|--------|
 | **FaturamentoProduto** | 4/4 | 2/2 | ✅ | ✅ | 🟢 COMPLETO |
 | **ProgramacaoProducao** | 4/4 | 3/3 | ✅ | ✅ | 🟢 COMPLETO |
-| **CadastroPalletizacao** | 4/4 | 3/3 | ✅ | ✅ | 🟢 COMPLETO |
 | **MovimentacaoEstoque** | 4/4 | 2/2 | ✅ | ✅ | 🟢 COMPLETO |
+| **SaldoEstoque** | 4/4 | 1/1 | ✅ | ⚡ | 🟢 COMPLETO |
+| **CadastroPalletizacao** | 4/4 | 3/3 | ✅ | ✅ | 🟢 COMPLETO |
 | **CadastroRota** | 4/4 | 2/2 | ✅ | ✅ | 🟢 COMPLETO |
 | **CadastroSubRota** | 4/4 | 2/2 | ✅ | ✅ | 🟢 COMPLETO |
 | **UnificacaoCodigos** | 4/4 | 3/3 | ✅ | ✅ | 🟢 COMPLETO |
 
 ### **📈 ESTATÍSTICAS FINAIS:**
-- **🔢 Total Rotas:** 32 rotas implementadas (24 + 8 unificação)
-- **🎨 Total Templates:** 17 templates funcionais (14 + 3 unificação)
-- **📊 Total Models:** 7 modelos de dados (6 + 1 unificação)
+- **🔢 Total Rotas:** 36 rotas implementadas (32 + 4 saldo estoque)
+- **🎨 Total Templates:** 18 templates funcionais (17 + 1 saldo estoque)
+- **📊 Total Models:** 8 modelos de dados (7 + 1 saldo estoque)
 - **📤 Sistema Export/Import:** 100% funcional
 - **🔒 Segurança:** CSRF implementado em todos formulários
 - **🎯 Interface:** Padronizada e responsiva
@@ -282,8 +304,8 @@ https://frete-sistema.onrender.com/localidades/sub-rotas
 
 ### **🚀 SISTEMA CARTEIRA DE PEDIDOS - 100% IMPLEMENTADO:**
 
-✅ **7 módulos totalmente funcionais**  
-✅ **32 rotas implementadas e testadas**  
+✅ **8 módulos totalmente funcionais**  
+✅ **36 rotas implementadas e testadas**  
 ✅ **Sistema completo de Export/Import**  
 ✅ **Modelos Excel com instruções detalhadas**  
 ✅ **Interface padronizada e moderna**  

@@ -1,9 +1,16 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+import io
+import pandas as pd
+from datetime import datetime, timedelta
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response
 from flask_login import login_required, current_user
 from app import db
-from app.estoque.models import MovimentacaoEstoque, UnificacaoCodigos
+from app.estoque.models import MovimentacaoEstoque, UnificacaoCodigos, SaldoEstoque
 from app.utils.auth_decorators import require_admin
 from app.utils.timezone import agora_brasil
+from app.utils.template_filters import formatar_data, formatar_valor_brasileiro, formatar_valor_br
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 📦 Blueprint do estoque (seguindo padrão dos outros módulos)
 estoque_bp = Blueprint('estoque', __name__, url_prefix='/estoque')
@@ -837,4 +844,166 @@ def exportar_dados_unificacao():
         
     except Exception as e:
         flash(f'Erro ao exportar dados: {str(e)}', 'error')
-        return redirect(url_for('estoque.listar_unificacao_codigos')) 
+        return redirect(url_for('estoque.listar_unificacao_codigos'))
+
+@estoque_bp.route('/saldo-estoque')
+@login_required  
+def saldo_estoque():
+    """Dashboard principal do saldo de estoque com projeção de 29 dias"""
+    try:
+        # Obter todos os produtos com movimentação de estoque
+        produtos = SaldoEstoque.obter_produtos_com_estoque()
+        
+        # Estatísticas gerais
+        total_produtos = len(produtos)
+        produtos_criticos = 0
+        produtos_atencao = 0
+        
+        # Processar resumo de cada produto (limitado para performance)
+        limite = min(50, len(produtos))  # Máximo 50 produtos na tela inicial
+        produtos_resumo = []
+        
+        for produto in produtos[:limite]:
+            resumo = SaldoEstoque.obter_resumo_produto(produto.cod_produto, produto.nome_produto)
+            if resumo:
+                produtos_resumo.append(resumo)
+                
+                # Contadores de status
+                if resumo['status_ruptura'] == 'CRÍTICO':
+                    produtos_criticos += 1
+                elif resumo['status_ruptura'] == 'ATENÇÃO':
+                    produtos_atencao += 1
+        
+        # Estatísticas
+        estatisticas = {
+            'total_produtos': total_produtos,
+            'produtos_exibidos': len(produtos_resumo),
+            'produtos_criticos': produtos_criticos,
+            'produtos_atencao': produtos_atencao,
+            'produtos_ok': len(produtos_resumo) - produtos_criticos - produtos_atencao
+        }
+        
+        return render_template('estoque/saldo_estoque.html',
+                             produtos=produtos_resumo,
+                             estatisticas=estatisticas,
+                             limite_exibicao=limite < total_produtos)
+        
+    except Exception as e:
+        flash(f'❌ Erro ao carregar saldo de estoque: {str(e)}', 'error')
+        return render_template('estoque/saldo_estoque.html',
+                             produtos=[],
+                             estatisticas={'total_produtos': 0, 'produtos_exibidos': 0, 
+                                         'produtos_criticos': 0, 'produtos_atencao': 0, 'produtos_ok': 0},
+                             limite_exibicao=False)
+
+@estoque_bp.route('/saldo-estoque/api/produto/<cod_produto>')
+@login_required
+def api_saldo_produto(cod_produto):
+    """API para obter dados detalhados de um produto específico"""
+    try:
+        # Buscar nome do produto
+        produto = MovimentacaoEstoque.query.filter_by(
+            cod_produto=str(cod_produto),
+            ativo=True
+        ).first()
+        
+        if not produto:
+            return jsonify({'error': 'Produto não encontrado'}), 404
+        
+        # Obter resumo completo
+        resumo = SaldoEstoque.obter_resumo_produto(cod_produto, produto.nome_produto)
+        
+        if not resumo:
+            return jsonify({'error': 'Erro ao calcular projeção'}), 500
+        
+        return jsonify({
+            'success': True,
+            'produto': resumo
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro na API saldo produto {cod_produto}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@estoque_bp.route('/saldo-estoque/processar-ajuste', methods=['POST'])
+@login_required
+@require_admin()
+def processar_ajuste_estoque():
+    """Processa ajuste de estoque via modal"""
+    try:
+        data = request.get_json()
+        
+        cod_produto = data.get('cod_produto')
+        qtd_ajuste = data.get('qtd_ajuste')
+        motivo = data.get('motivo', '')
+        
+        if not cod_produto or qtd_ajuste is None:
+            return jsonify({'error': 'Código do produto e quantidade são obrigatórios'}), 400
+        
+        try:
+            qtd_ajuste = float(qtd_ajuste)
+        except ValueError:
+            return jsonify({'error': 'Quantidade deve ser um número'}), 400
+        
+        if qtd_ajuste == 0:
+            return jsonify({'error': 'Quantidade não pode ser zero'}), 400
+        
+        # Processar ajuste
+        SaldoEstoque.processar_ajuste_estoque(
+            cod_produto=cod_produto,
+            qtd_ajuste=qtd_ajuste,
+            motivo=motivo,
+            usuario=current_user.nome
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': f'✅ Ajuste de {qtd_ajuste} unidades processado com sucesso!'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao processar ajuste: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@estoque_bp.route('/saldo-estoque/filtrar')
+@login_required
+def filtrar_saldo_estoque():
+    """Filtra produtos do saldo de estoque"""
+    try:
+        # Parâmetros de filtro
+        codigo_produto = request.args.get('codigo_produto', '')
+        status_ruptura = request.args.get('status_ruptura', '')
+        limite = int(request.args.get('limite', 50))
+        
+        # Obter produtos
+        produtos = SaldoEstoque.obter_produtos_com_estoque()
+        produtos_filtrados = []
+        
+        for produto in produtos:
+            # Filtro por código
+            if codigo_produto and codigo_produto not in str(produto.cod_produto):
+                continue
+                
+            resumo = SaldoEstoque.obter_resumo_produto(produto.cod_produto, produto.nome_produto)
+            if not resumo:
+                continue
+                
+            # Filtro por status
+            if status_ruptura and resumo['status_ruptura'] != status_ruptura:
+                continue
+                
+            produtos_filtrados.append(resumo)
+            
+            # Limite
+            if len(produtos_filtrados) >= limite:
+                break
+        
+        return jsonify({
+            'success': True,
+            'produtos': produtos_filtrados,
+            'total_encontrados': len(produtos_filtrados)
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao filtrar saldo estoque: {str(e)}")
+        return jsonify({'error': str(e)}), 500 
