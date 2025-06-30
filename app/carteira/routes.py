@@ -9,7 +9,7 @@ from app.estoque.models import SaldoEstoque
 from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
 from app.faturamento.models import FaturamentoProduto
-from app.utils.auth_decorators import require_admin, require_operacional
+# from app.utils.auth_decorators import require_admin, require_editar_cadastros  # Removido temporariamente
 from app.utils.timezone import agora_brasil
 from sqlalchemy import func, and_, or_
 from datetime import datetime, date, timedelta
@@ -165,7 +165,7 @@ def listar_principal():
         return redirect(url_for('carteira.index'))
 
 @carteira_bp.route('/importar', methods=['GET', 'POST'])
-@require_operacional
+@login_required
 def importar_carteira():
     """Importa nova carteira principal com atualização inteligente"""
     if request.method == 'GET':
@@ -221,7 +221,7 @@ def importar_carteira():
         return redirect(request.url)
 
 @carteira_bp.route('/inconsistencias')
-@require_operacional  
+@login_required
 def listar_inconsistencias():
     """Lista e gerencia inconsistências de faturamento"""
     try:
@@ -266,7 +266,7 @@ def listar_inconsistencias():
         return redirect(url_for('carteira.index'))
 
 @carteira_bp.route('/resolver-inconsistencia/<int:id>', methods=['POST'])
-@require_operacional
+@login_required
 def resolver_inconsistencia(id):
     """Resolve uma inconsistência específica"""
     try:
@@ -298,7 +298,7 @@ def resolver_inconsistencia(id):
         return redirect(url_for('carteira.listar_inconsistencias'))
 
 @carteira_bp.route('/gerar-separacao', methods=['GET', 'POST'])
-@require_operacional
+@login_required
 def gerar_separacao():
     """Interface para gerar separação (recorte) da carteira"""
     if request.method == 'GET':
@@ -341,7 +341,7 @@ def api_item_detalhes(id):
         return jsonify({'error': str(e)}), 500
 
 @carteira_bp.route('/api/processar-faturamento', methods=['POST'])
-@require_operacional
+@login_required
 def api_processar_faturamento():
     """API para processar baixa automática do faturamento"""
     try:
