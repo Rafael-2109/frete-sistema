@@ -126,30 +126,30 @@
         </div>
         
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('estoque.importar_estoque') }}" class="btn btn-primary btn-lg btn-block">
+            <a href="{{ url_for('estoque.importar_movimentacoes') }}" class="btn btn-primary btn-lg btn-block">
                 <i class="fas fa-file-excel"></i><br>
                 Importar<br>Movimentações
             </a>
         </div>
         
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('estoque.importar_estoque') }}" class="btn btn-success btn-lg btn-block">
-                <i class="fas fa-arrow-down"></i><br>
-                Relatório<br>Entradas
+            <a href="{{ url_for('estoque.listar_unificacao_codigos') }}" class="btn btn-success btn-lg btn-block">
+                <i class="fas fa-link"></i><br>
+                Unificação<br>de Códigos
             </a>
         </div>
         
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('estoque.importar_estoque') }}" class="btn btn-warning btn-lg btn-block text-dark">
-                <i class="fas fa-arrow-up"></i><br>
-                Relatório<br>Saídas
+            <a href="#" class="btn btn-warning btn-lg btn-block text-dark disabled" title="Disponível após módulo 4 - Saldo Estoque">
+                <i class="fas fa-calculator"></i><br>
+                Estoque<br>Consolidado
             </a>
         </div>
         
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('estoque.importar_estoque') }}" class="btn btn-secondary btn-lg btn-block">
-                <i class="fas fa-chart-bar"></i><br>
-                Saldo<br>Estoque
+            <a href="{{ url_for('estoque.baixar_modelo_movimentacoes') }}" class="btn btn-secondary btn-lg btn-block">
+                <i class="fas fa-download"></i><br>
+                Baixar<br>Modelo
             </a>
         </div>
         

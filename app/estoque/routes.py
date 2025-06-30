@@ -1,8 +1,9 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app import db
-from app.estoque.models import MovimentacaoEstoque
+from app.estoque.models import MovimentacaoEstoque, UnificacaoCodigos
 from app.utils.auth_decorators import require_admin
+from app.utils.timezone import agora_brasil
 
 # 📦 Blueprint do estoque (seguindo padrão dos outros módulos)
 estoque_bp = Blueprint('estoque', __name__, url_prefix='/estoque')
@@ -420,4 +421,420 @@ def exportar_dados_movimentacoes():
         
     except Exception as e:
         flash(f'Erro ao exportar dados: {str(e)}', 'error')
-        return redirect(url_for('estoque.listar_movimentacoes')) 
+        return redirect(url_for('estoque.listar_movimentacoes'))
+
+
+# ========================================
+# 🔄 MÓDULO DE UNIFICAÇÃO DE CÓDIGOS
+# ========================================
+
+@estoque_bp.route('/unificacao-codigos')
+@login_required
+@require_admin()
+def listar_unificacao_codigos():
+    """Lista unificações de códigos configuradas"""
+    try:
+        if db.engine.has_table('unificacao_codigos'):
+            # Filtros
+            codigo_busca = request.args.get('codigo_busca', '')
+            status_filtro = request.args.get('status', '')
+            
+            # Query base
+            query = UnificacaoCodigos.query
+            
+                        # Aplicar filtros
+            if codigo_busca:
+                try:
+                    codigo_int = int(codigo_busca)
+                    query = query.filter(
+                        db.or_(
+                            UnificacaoCodigos.codigo_origem == codigo_int,
+                            UnificacaoCodigos.codigo_destino == codigo_int
+                        )
+                    )
+                except ValueError:
+                    pass
+            
+            if status_filtro == 'ativo':
+                query = query.filter(UnificacaoCodigos.ativo.is_(True))
+            elif status_filtro == 'inativo':
+                query = query.filter(UnificacaoCodigos.ativo.is_(False))
+            
+            # Ordenação
+            unificacoes = query.order_by(UnificacaoCodigos.created_at.desc()).limit(500).all()
+            
+            # Estatísticas
+            total_unificacoes = UnificacaoCodigos.query.count()
+            ativas = UnificacaoCodigos.query.filter_by(ativo=True).count()
+            inativas = total_unificacoes - ativas
+            
+        else:
+            unificacoes = []
+            total_unificacoes = ativas = inativas = 0
+            
+    except Exception as e:
+        unificacoes = []
+        total_unificacoes = ativas = inativas = 0
+    
+    return render_template('estoque/listar_unificacao_codigos.html',
+                         unificacoes=unificacoes,
+                         total_unificacoes=total_unificacoes,
+                         ativas=ativas,
+                         inativas=inativas,
+                         codigo_busca=codigo_busca,
+                         status_filtro=status_filtro)
+
+@estoque_bp.route('/unificacao-codigos/novo')
+@login_required
+@require_admin()
+def nova_unificacao_codigo():
+    """Formulário para nova unificação de código"""
+    return render_template('estoque/nova_unificacao_codigo.html')
+
+@estoque_bp.route('/unificacao-codigos/novo', methods=['POST'])
+@login_required
+@require_admin()
+def processar_nova_unificacao():
+    """Processa nova unificação de código"""
+    try:
+        codigo_origem = request.form.get('codigo_origem', '').strip()
+        codigo_destino = request.form.get('codigo_destino', '').strip()
+        observacao = request.form.get('observacao', '').strip()
+        
+        # Validações
+        if not codigo_origem or not codigo_destino:
+            flash('❌ Código origem e destino são obrigatórios!', 'error')
+            return redirect(url_for('estoque.nova_unificacao_codigo'))
+        
+        try:
+            codigo_origem = int(codigo_origem)
+            codigo_destino = int(codigo_destino)
+        except ValueError:
+            flash('❌ Códigos devem ser números inteiros!', 'error')
+            return redirect(url_for('estoque.nova_unificacao_codigo'))
+        
+        if codigo_origem == codigo_destino:
+            flash('❌ Código origem deve ser diferente do código destino!', 'error')
+            return redirect(url_for('estoque.nova_unificacao_codigo'))
+        
+        # Verificar se já existe unificação para este par
+        existe = UnificacaoCodigos.query.filter_by(
+            codigo_origem=codigo_origem,
+            codigo_destino=codigo_destino
+        ).first()
+        
+        if existe:
+            flash('❌ Já existe uma unificação para este par de códigos!', 'error')
+            return redirect(url_for('estoque.nova_unificacao_codigo'))
+        
+        # Verificar ciclos (evitar A->B e B->A)
+        ciclo = UnificacaoCodigos.query.filter_by(
+            codigo_origem=codigo_destino,
+            codigo_destino=codigo_origem
+        ).first()
+        
+        if ciclo:
+            flash(f'❌ Ciclo detectado! Já existe unificação {codigo_destino} → {codigo_origem}', 'error')
+            return redirect(url_for('estoque.nova_unificacao_codigo'))
+        
+        # Criar nova unificação
+        nova_unificacao = UnificacaoCodigos()
+        nova_unificacao.codigo_origem = codigo_origem
+        nova_unificacao.codigo_destino = codigo_destino
+        nova_unificacao.observacao = observacao
+        nova_unificacao.created_by = current_user.nome
+        nova_unificacao.data_ativacao = agora_brasil()
+        
+        db.session.add(nova_unificacao)
+        db.session.commit()
+        
+        flash(f'✅ Unificação criada: {codigo_origem} → {codigo_destino}', 'success')
+        return redirect(url_for('estoque.listar_unificacao_codigos'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Erro ao criar unificação: {str(e)}', 'error')
+        return redirect(url_for('estoque.nova_unificacao_codigo'))
+
+@estoque_bp.route('/unificacao-codigos/toggle/<int:id>')
+@login_required
+@require_admin()
+def toggle_unificacao_codigo(id):
+    """Ativa/Desativa unificação de código"""
+    try:
+        unificacao = UnificacaoCodigos.query.get_or_404(id)
+        motivo = request.args.get('motivo', '')
+        
+        if unificacao.ativo:
+            unificacao.desativar(usuario=current_user.nome, motivo=motivo)
+            flash(f'🔴 Unificação {unificacao.codigo_origem} → {unificacao.codigo_destino} DESATIVADA', 'warning')
+        else:
+            unificacao.ativar(usuario=current_user.nome)
+            flash(f'🟢 Unificação {unificacao.codigo_origem} → {unificacao.codigo_destino} ATIVADA', 'success')
+        
+        db.session.commit()
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Erro ao alterar status: {str(e)}', 'error')
+    
+    return redirect(url_for('estoque.listar_unificacao_codigos'))
+
+@estoque_bp.route('/unificacao-codigos/importar')
+@login_required
+@require_admin()
+def importar_unificacao_codigos():
+    """Tela para importar unificações de códigos"""
+    return render_template('estoque/importar_unificacao_codigos.html')
+
+@estoque_bp.route('/unificacao-codigos/importar', methods=['POST'])
+@login_required
+@require_admin()
+def processar_importacao_unificacao():
+    """Processar importação de unificações de códigos"""
+    try:
+        import pandas as pd
+        import tempfile
+        import os
+        from werkzeug.utils import secure_filename
+        
+        if 'arquivo' not in request.files:
+            flash('Nenhum arquivo selecionado!', 'error')
+            return redirect(url_for('estoque.importar_unificacao_codigos'))
+            
+        arquivo = request.files['arquivo']
+        if arquivo.filename == '':
+            flash('Nenhum arquivo selecionado!', 'error')
+            return redirect(url_for('estoque.importar_unificacao_codigos'))
+            
+        if not arquivo.filename.lower().endswith(('.xlsx', '.csv')):
+            flash('Tipo de arquivo não suportado! Use apenas .xlsx ou .csv', 'error')
+            return redirect(url_for('estoque.importar_unificacao_codigos'))
+        
+        # Processar arquivo temporário
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_file:
+                arquivo.save(temp_file.name)
+                
+                if arquivo.filename.lower().endswith('.xlsx'):
+                    df = pd.read_excel(temp_file.name)
+                else:
+                    df = pd.read_csv(temp_file.name, encoding='utf-8', sep=';')
+                
+                os.unlink(temp_file.name)
+        except Exception as e:
+            flash(f'Erro ao processar arquivo: {str(e)}', 'error')
+            return redirect(url_for('estoque.importar_unificacao_codigos'))
+        
+        # Verificar colunas obrigatórias
+        colunas_obrigatorias = ['codigo_origem', 'codigo_destino']
+        colunas_faltando = [col for col in colunas_obrigatorias if col not in df.columns]
+        if colunas_faltando:
+            flash(f'❌ Colunas obrigatórias não encontradas: {", ".join(colunas_faltando)}', 'error')
+            return redirect(url_for('estoque.importar_unificacao_codigos'))
+        
+        unificacoes_importadas = 0
+        erros = []
+        
+        for index, row in df.iterrows():
+            try:
+                codigo_origem = row.get('codigo_origem')
+                codigo_destino = row.get('codigo_destino')
+                observacao = str(row.get('observacao', '')).strip()
+                
+                # Validações
+                if pd.isna(codigo_origem) or pd.isna(codigo_destino):
+                    erros.append(f"Linha {index + 1}: Códigos obrigatórios")
+                    continue
+                
+                try:
+                    codigo_origem = int(codigo_origem)
+                    codigo_destino = int(codigo_destino)
+                except (ValueError, TypeError):
+                    erros.append(f"Linha {index + 1}: Códigos devem ser inteiros")
+                    continue
+                
+                if codigo_origem == codigo_destino:
+                    erros.append(f"Linha {index + 1}: Códigos não podem ser iguais")
+                    continue
+                
+                # Verificar se já existe
+                existe = UnificacaoCodigos.query.filter_by(
+                    codigo_origem=codigo_origem,
+                    codigo_destino=codigo_destino
+                ).first()
+                
+                if existe:
+                    if not existe.ativo:
+                        # Reativar unificação existente
+                        existe.ativar(usuario=current_user.nome)
+                        unificacoes_importadas += 1
+                    continue
+                
+                # Verificar ciclos
+                ciclo = UnificacaoCodigos.query.filter_by(
+                    codigo_origem=codigo_destino,
+                    codigo_destino=codigo_origem
+                ).first()
+                
+                if ciclo:
+                    erros.append(f"Linha {index + 1}: Ciclo detectado {codigo_destino}→{codigo_origem}")
+                    continue
+                
+                # Criar nova unificação
+                nova_unificacao = UnificacaoCodigos()
+                nova_unificacao.codigo_origem = codigo_origem
+                nova_unificacao.codigo_destino = codigo_destino
+                nova_unificacao.observacao = observacao
+                nova_unificacao.created_by = current_user.nome
+                nova_unificacao.data_ativacao = agora_brasil()
+                
+                db.session.add(nova_unificacao)
+                unificacoes_importadas += 1
+                
+            except Exception as e:
+                erros.append(f"Linha {index + 1}: {str(e)}")
+                continue
+        
+        db.session.commit()
+        
+        # Mensagens de resultado
+        if unificacoes_importadas > 0:
+            flash(f"✅ {unificacoes_importadas} unificações importadas com sucesso!", 'success')
+        
+        if erros[:5]:  # Mostrar apenas os primeiros 5 erros
+            for erro in erros[:5]:
+                flash(f"❌ {erro}", 'error')
+        
+        return redirect(url_for('estoque.listar_unificacao_codigos'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro durante importação: {str(e)}', 'error')
+        return redirect(url_for('estoque.importar_unificacao_codigos'))
+
+@estoque_bp.route('/unificacao-codigos/baixar-modelo')
+@login_required
+@require_admin()
+def baixar_modelo_unificacao():
+    """Baixar modelo Excel para importação de unificações"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        
+        # Dados exemplo conforme arquivo CSV 7
+        dados_exemplo = {
+            'codigo_origem': [4080177, 4320162, 4729098, 4210155],
+            'codigo_destino': [4729098, 4080177, 4320162, 4729098],
+            'observacao': [
+                'Mesmo produto - códigos diferentes para clientes',
+                'Unificação por similaridade',
+                'Consolidação de estoque',
+                'Padronização de códigos'
+            ]
+        }
+        
+        df = pd.DataFrame(dados_exemplo)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Dados', index=False)
+            
+            # Instruções
+            instrucoes = pd.DataFrame({
+                'INSTRUÇÕES IMPORTANTES': [
+                    '1. Campos obrigatórios: codigo_origem, codigo_destino',
+                    '2. Códigos devem ser números inteiros',
+                    '3. Código origem ≠ código destino',
+                    '4. Sistema evita ciclos automaticamente',
+                    '5. Se unificação existe inativa, será reativada',
+                    '6. Observação é opcional mas recomendada',
+                    '7. Para efeitos de estoque: códigos são tratados como mesmo produto',
+                    '8. Telas mostram sempre código original'
+                ]
+            })
+            instrucoes.to_excel(writer, sheet_name='Instruções', index=False)
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = 'attachment; filename=modelo_unificacao_codigos.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao gerar modelo: {str(e)}', 'error')
+        return redirect(url_for('estoque.listar_unificacao_codigos'))
+
+@estoque_bp.route('/unificacao-codigos/exportar-dados')
+@login_required
+@require_admin()
+def exportar_dados_unificacao():
+    """Exportar dados existentes de unificações"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        from datetime import datetime
+        
+        if db.engine.has_table('unificacao_codigos'):
+            unificacoes = UnificacaoCodigos.query.order_by(
+                UnificacaoCodigos.created_at.desc()
+            ).all()
+        else:
+            unificacoes = []
+        
+        if not unificacoes:
+            flash('Nenhum dado encontrado para exportar.', 'warning')
+            return redirect(url_for('estoque.listar_unificacao_codigos'))
+        
+        # Converter para Excel
+        dados_export = []
+        for u in unificacoes:
+            dados_export.append({
+                'codigo_origem': u.codigo_origem,
+                'codigo_destino': u.codigo_destino,
+                'observacao': u.observacao or '',
+                'ativo': 'Sim' if u.ativo else 'Não',
+                'created_at': u.created_at.strftime('%d/%m/%Y %H:%M') if u.created_at else '',
+                'created_by': u.created_by or '',
+                'data_ativacao': u.data_ativacao.strftime('%d/%m/%Y %H:%M') if u.data_ativacao else '',
+                'data_desativacao': u.data_desativacao.strftime('%d/%m/%Y %H:%M') if u.data_desativacao else '',
+                'motivo_desativacao': u.motivo_desativacao or ''
+            })
+        
+        df = pd.DataFrame(dados_export)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Unificações', index=False)
+            
+            # Estatísticas
+            ativas = len([u for u in unificacoes if u.ativo])
+            inativas = len(unificacoes) - ativas
+            
+            stats = pd.DataFrame({
+                'Estatística': ['Total Unificações', 'Ativas', 'Inativas', 'Códigos Origem Únicos', 'Códigos Destino Únicos'],
+                'Valor': [
+                    len(unificacoes),
+                    ativas,
+                    inativas,
+                    len(set(u.codigo_origem for u in unificacoes)),
+                    len(set(u.codigo_destino for u in unificacoes))
+                ]
+            })
+            stats.to_excel(writer, sheet_name='Estatísticas', index=False)
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=unificacao_codigos_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao exportar dados: {str(e)}', 'error')
+        return redirect(url_for('estoque.listar_unificacao_codigos')) 

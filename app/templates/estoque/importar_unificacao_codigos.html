@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}📥 Importar Unificações{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-0">📥 Importar Unificações de Códigos</h2>
+            <small class="text-muted">Upload em lote com validação automática</small>
+        </div>
+        <div>
+            <a href="{{ url_for('estoque.baixar_modelo_unificacao') }}" class="btn btn-info me-2">
+                <i class="fas fa-download"></i> Baixar Modelo Excel
+            </a>
+            <a href="{{ url_for('estoque.listar_unificacao_codigos') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Formulário de Upload -->
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">📁 Upload do Arquivo</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        
+                        <div class="mb-4">
+                            <label class="form-label">Arquivo Excel ou CSV</label>
+                            <input type="file" name="arquivo" class="form-control form-control-lg" 
+                                   accept=".xlsx,.csv" required>
+                            <div class="form-text">
+                                <i class="fas fa-file-excel text-success"></i>
+                                Formatos aceitos: .xlsx ou .csv
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <h6><i class="fas fa-exclamation-triangle"></i> Importante antes de importar:</h6>
+                            <ul class="mb-0">
+                                <li>Use <strong>exatamente</strong> as colunas do modelo Excel</li>
+                                <li>Códigos devem ser números inteiros</li>
+                                <li>Sistema evita automaticamente ciclos e duplicações</li>
+                                <li>Unificações inativas serão reativadas se já existirem</li>
+                            </ul>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{{ url_for('estoque.listar_unificacao_codigos') }}" class="btn btn-secondary me-md-2">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-upload"></i> Importar Unificações
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instruções e Validações -->
+        <div class="col-md-4">
+            <!-- Formato Esperado -->
+            <div class="card mb-3">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">📋 Formato Esperado</h6>
+                </div>
+                <div class="card-body">
+                    <div class="small">
+                        <p><strong>Colunas obrigatórias:</strong></p>
+                        <ul class="mb-2">
+                            <li><code>codigo_origem</code> - Número inteiro</li>
+                            <li><code>codigo_destino</code> - Número inteiro</li>
+                        </ul>
+                        
+                        <p><strong>Colunas opcionais:</strong></p>
+                        <ul class="mb-2">
+                            <li><code>observacao</code> - Texto explicativo</li>
+                        </ul>
+                        
+                        <div class="bg-light p-2 rounded">
+                            <strong>Exemplo:</strong>
+                            <br><code>4080177 → 4729098</code>
+                            <br><small class="text-muted">Mesmo produto para clientes diferentes</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Validações Automáticas -->
+            <div class="card mb-3">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0">⚠️ Validações Automáticas</h6>
+                </div>
+                <div class="card-body">
+                    <div class="small">
+                        <p><strong>O sistema automaticamente:</strong></p>
+                        <ul class="mb-2">
+                            <li>Verifica se códigos são números inteiros</li>
+                            <li>Impede origem = destino</li>
+                            <li>Detecta e bloqueia ciclos (A→B e B→A)</li>
+                            <li>Evita duplicação de pares existentes</li>
+                            <li>Reativa unificações inativas</li>
+                        </ul>
+                        
+                        <div class="alert alert-danger p-2 mb-0">
+                            <small>
+                                <i class="fas fa-times-circle"></i>
+                                <strong>Bloqueado:</strong> 4080177 → 4080177
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comportamento -->
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">🎯 Comportamento da Importação</h6>
+                </div>
+                <div class="card-body">
+                    <div class="small">
+                        <p><strong>Durante a importação:</strong></p>
+                        <ul class="mb-2">
+                            <li><strong>Novas unificações:</strong> Criadas ativas</li>
+                            <li><strong>Existentes ativas:</strong> Ignoradas</li>
+                            <li><strong>Existentes inativas:</strong> Reativadas</li>
+                            <li><strong>Erros:</strong> Linha ignorada, relatório gerado</li>
+                        </ul>
+                        
+                        <div class="alert alert-info p-2 mb-0">
+                            <small>
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Seguro:</strong> Não remove unificações existentes
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exemplo Visual -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">💡 Exemplo de Arquivo Excel</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>codigo_origem</th>
+                                    <th>codigo_destino</th>
+                                    <th>observacao</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>4080177</td>
+                                    <td>4729098</td>
+                                    <td>Mesmo produto - códigos diferentes para clientes</td>
+                                </tr>
+                                <tr>
+                                    <td>4320162</td>
+                                    <td>4080177</td>
+                                    <td>Unificação por similaridade</td>
+                                </tr>
+                                <tr>
+                                    <td>4210155</td>
+                                    <td>4729098</td>
+                                    <td>Consolidação de estoque</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Resultado:</strong> 
+                        Após esta importação, consultar qualquer um dos códigos (4080177, 4320162, 4210155, 4729098) 
+                        mostrará o estoque consolidado de todos eles, pois estarão interligados pelas unificações.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

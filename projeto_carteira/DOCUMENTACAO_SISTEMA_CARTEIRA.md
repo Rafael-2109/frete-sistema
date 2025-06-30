@@ -4,13 +4,14 @@
 
 O Sistema de Carteira de Pedidos foi **TOTALMENTE IMPLEMENTADO** com 6 módulos distribuídos em 4 blueprints Flask, totalizando **18 rotas principais** e **18 templates** funcionais.
 
-### **📊 MÓDULOS IMPLEMENTADOS E FUNCIONAIS:**
+### **✅ MÓDULOS IMPLEMENTADOS E FUNCIONAIS:**
 1. **✅ FaturamentoProduto** - Faturamento detalhado por produto com Forward Fill
 2. **✅ ProgramacaoProducao** - Planejamento da produção (substitui dados)
 3. **✅ MovimentacaoEstoque** - Controle de estoque (histórico permanente)
 4. **✅ CadastroPalletizacao** - Fatores de conversão + dimensões
 5. **✅ CadastroRota** - Rotas por UF (validação referencial)
 6. **✅ CadastroSubRota** - Sub-rotas por cidade (validação UF+Cidade)
+7. **✅ UnificacaoCodigos** - Módulo 7 - Unificação para estoque consolidado
 
 ---
 
@@ -27,10 +28,10 @@ app/
 │   ├── models.py         # 2 modelos
 │   ├── routes.py         # 8 rotas (4 por módulo)
 │   └── templates/        # 6 templates (3 por módulo)
-├── estoque/              # MovimentacaoEstoque ✅
-│   ├── models.py         # Modelo MovimentacaoEstoque
-│   ├── routes.py         # 4 rotas (listar + importar + 2 exports)
-│   └── templates/        # 2 templates (listar + importar)
+├── estoque/              # MovimentacaoEstoque + UnificacaoCodigos ✅
+│   ├── models.py         # 2 modelos (MovimentacaoEstoque + UnificacaoCodigos)
+│   ├── routes.py         # 12 rotas (4 movimentações + 8 unificação)
+│   └── templates/        # 5 templates (2 movimentações + 3 unificação)
 └── localidades/          # CadastroRota + CadastroSubRota ✅
     ├── models.py         # 2 modelos
     ├── routes.py         # 8 rotas (4 por módulo)
@@ -101,6 +102,27 @@ app/
 - **Cálculo volume automático** (altura × largura × comprimento ÷ 1.000.000)
 - **Medidas opcionais** (altura_cm, largura_cm, comprimento_cm)
 - **Substituição inteligente** por cod_produto
+
+---
+
+### **📦 7. UNIFICAÇÃO DE CÓDIGOS** ✅ **COMPLETO COM VALIDAÇÕES**
+| Rota | Método | Função | Descrição |
+|------|--------|--------|-----------|
+| `/estoque/unificacao-codigos` | GET | Listar unificações | Dashboard unificações |
+| `/estoque/unificacao-codigos/novo` | GET/POST | Criar unificação | Formulário nova unificação |
+| `/estoque/unificacao-codigos/toggle/<id>` | GET | Ativar/Desativar | Toggle status com motivo |
+| `/estoque/unificacao-codigos/importar` | GET/POST | Importar em lote | Upload unificações |
+| `/estoque/unificacao-codigos/baixar-modelo` | GET | Baixar modelo | Excel com instruções |
+| `/estoque/unificacao-codigos/processar-importacao` | POST | Processar upload | Validação automática |
+| `/estoque/unificacao-codigos/exportar-dados` | GET | Exportar dados | Excel com histórico |
+| `/estoque/unificacao-codigos/exportar-modelo` | GET | Modelo personalizado | Excel dados existentes |
+
+**🔥 Funcionalidades Específicas:**
+- **Validação anti-ciclo** (impede A→B e B→A simultaneamente)
+- **Sistema ativo/inativo** com histórico de motivos
+- **Auditoria completa** (quem criou, quando ativou/desativou)
+- **Estatísticas tempo real** (total, ativas, inativas)
+- **Preparação para estoque consolidado** (módulo 4 futuro)
 
 ---
 
@@ -222,6 +244,7 @@ https://frete-sistema.onrender.com/producao/palletizacao
 
 ✅ ESTOQUE:
 https://frete-sistema.onrender.com/estoque/movimentacoes
+https://frete-sistema.onrender.com/estoque/unificacao-codigos
 
 ✅ LOCALIDADES:
 https://frete-sistema.onrender.com/localidades/rotas
@@ -241,11 +264,12 @@ https://frete-sistema.onrender.com/localidades/sub-rotas
 | **MovimentacaoEstoque** | 4/4 | 2/2 | ✅ | ✅ | 🟢 COMPLETO |
 | **CadastroRota** | 4/4 | 2/2 | ✅ | ✅ | 🟢 COMPLETO |
 | **CadastroSubRota** | 4/4 | 2/2 | ✅ | ✅ | 🟢 COMPLETO |
+| **UnificacaoCodigos** | 4/4 | 3/3 | ✅ | ✅ | 🟢 COMPLETO |
 
 ### **📈 ESTATÍSTICAS FINAIS:**
-- **🔢 Total Rotas:** 24 rotas implementadas
-- **🎨 Total Templates:** 14 templates funcionais
-- **📊 Total Models:** 6 modelos de dados
+- **🔢 Total Rotas:** 32 rotas implementadas (24 + 8 unificação)
+- **🎨 Total Templates:** 17 templates funcionais (14 + 3 unificação)
+- **📊 Total Models:** 7 modelos de dados (6 + 1 unificação)
 - **📤 Sistema Export/Import:** 100% funcional
 - **🔒 Segurança:** CSRF implementado em todos formulários
 - **🎯 Interface:** Padronizada e responsiva
@@ -258,15 +282,15 @@ https://frete-sistema.onrender.com/localidades/sub-rotas
 
 ### **🚀 SISTEMA CARTEIRA DE PEDIDOS - 100% IMPLEMENTADO:**
 
-✅ **6 módulos totalmente funcionais**  
-✅ **24 rotas implementadas e testadas**  
+✅ **7 módulos totalmente funcionais**  
+✅ **32 rotas implementadas e testadas**  
 ✅ **Sistema completo de Export/Import**  
 ✅ **Modelos Excel com instruções detalhadas**  
 ✅ **Interface padronizada e moderna**  
 ✅ **Validações rigorosas implementadas**  
 ✅ **Funcionalidades especiais (Forward Fill, cálculos, etc.)**  
 ✅ **CSRF corrigido em todos formulários**  
-✅ **Pronto para uso em produção**  
+✅ **Pronto para uso em produção**
 
 ### **🎉 IMPLEMENTAÇÃO CONCLUÍDA COM SUCESSO!**
 
