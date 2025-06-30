@@ -90,7 +90,7 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" enctype="multipart/form-data" id="uploadForm">
-                        {{ csrf_token() }}
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         
                         <div class="form-group mb-4">
                             <label for="arquivo" class="form-label">
