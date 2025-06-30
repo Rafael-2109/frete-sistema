@@ -1,7 +1,6 @@
 from app import db
 from datetime import datetime
 from app.utils.timezone import agora_brasil
-from app.utils.template_filters import formatar_valor_brasileiro
 from sqlalchemy import func, and_, or_
 from datetime import datetime, timedelta
 import logging
