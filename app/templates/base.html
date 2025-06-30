@@ -194,6 +194,16 @@
             <li><a class="dropdown-item" href="{{ url_for('estoque.listar_movimentacoes') }}">
               <i class="fas fa-exchange-alt"></i> Movimentações de Estoque
             </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('estoque.saldo_estoque') }}">
+              <i class="fas fa-chart-line text-success"></i> Saldo de Estoque
+              <span class="badge bg-primary ms-2">NOVO</span>
+            </a></li>
+            {% if current_user.is_authenticated and current_user.pode_aprovar_usuarios() %}
+            <li><a class="dropdown-item" href="{{ url_for('estoque.listar_unificacao_codigos') }}">
+              <i class="fas fa-link text-warning"></i> Unificação de Códigos
+              <span class="badge bg-warning ms-2">ADMIN</span>
+            </a></li>
+            {% endif %}
             <li><hr class="dropdown-divider"></li>
             <li><h6 class="dropdown-header">🗺️ Rotas</h6></li>
             <li><a class="dropdown-item" href="{{ url_for('localidades.listar_rotas') }}">
