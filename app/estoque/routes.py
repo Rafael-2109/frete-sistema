@@ -7,7 +7,8 @@ from app import db
 from app.estoque.models import MovimentacaoEstoque, UnificacaoCodigos, SaldoEstoque
 from app.utils.auth_decorators import require_admin
 from app.utils.timezone import agora_brasil
-from app.utils.template_filters import formatar_data, formatar_valor_brasileiro, formatar_valor_br
+from app.utils.valores_brasileiros import formatar_valor_brasileiro
+from app.utils.timezone import formatar_data_brasil
 import logging
 
 logger = logging.getLogger(__name__)
