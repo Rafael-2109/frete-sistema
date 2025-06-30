@@ -415,3 +415,230 @@ def processar_importacao_sub_rotas():
         db.session.rollback()
         flash(f'Erro durante importação: {str(e)}', 'error')
         return redirect(url_for('localidades.importar_sub_rotas'))
+
+# ========== EXPORTS PARA ROTAS ==========
+
+@localidades_bp.route('/rotas/baixar-modelo')
+@login_required
+def baixar_modelo_rotas():
+    """Baixar modelo Excel para importação de rotas"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        
+        # Colunas exatas conforme arquivo CSV
+        dados_exemplo = {
+            'ESTADO': ['ES', 'RJ', 'SP', 'MG', 'BA'],
+            'ROTA': [
+                'VITÓRIA/SERRA',
+                'RIO DE JANEIRO/NITERÓI',
+                'SÃO PAULO CAPITAL',
+                'BELO HORIZONTE/CONTAGEM',
+                'SALVADOR/LAURO DE FREITAS'
+            ]
+        }
+        
+        df = pd.DataFrame(dados_exemplo)
+        
+        # Criar arquivo Excel
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Dados', index=False)
+            
+            # Instruções
+            instrucoes = pd.DataFrame({
+                'INSTRUÇÕES IMPORTANTES': [
+                    '1. Use as colunas EXATAMENTE: ESTADO, ROTA',
+                    '2. ESTADO deve ter exatamente 2 caracteres (ES, RJ, SP, MG, etc.)',
+                    '3. ESTADO deve existir no cadastro de cidades do sistema',
+                    '4. ROTA é a descrição da rota principal por UF',
+                    '5. Comportamento: Substitui rota se UF já existe',
+                    '6. Adiciona nova rota para UFs não cadastradas',
+                    '7. Validação: UF deve existir no cadastro de cidades',
+                    '8. Exemplos: ES → VITÓRIA/SERRA, SP → SÃO PAULO CAPITAL'
+                ]
+            })
+            instrucoes.to_excel(writer, sheet_name='Instruções', index=False)
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = 'attachment; filename=modelo_rotas.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao gerar modelo: {str(e)}', 'error')
+        return redirect(url_for('localidades.listar_rotas'))
+
+@localidades_bp.route('/rotas/exportar-dados')
+@login_required
+def exportar_dados_rotas():
+    """Exportar dados existentes de rotas"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        from datetime import datetime
+        
+        # Buscar dados
+        if db.engine.has_table('cadastro_rota'):
+            rotas = CadastroRota.query.filter_by(ativa=True).order_by(CadastroRota.cod_uf).all()
+        else:
+            rotas = []
+        
+        if not rotas:
+            flash('Nenhum dado encontrado para exportar.', 'warning')
+            return redirect(url_for('localidades.listar_rotas'))
+        
+        # Converter para Excel
+        dados_export = []
+        for r in rotas:
+            dados_export.append({
+                'ESTADO': r.cod_uf,
+                'ROTA': r.rota
+            })
+        
+        df = pd.DataFrame(dados_export)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Rotas', index=False)
+            
+            # Estatísticas
+            stats = pd.DataFrame({
+                'Estatística': ['Total Rotas', 'Estados Únicos', 'Rotas Ativas'],
+                'Valor': [
+                    len(rotas),
+                    len(set(r.cod_uf for r in rotas)),
+                    len([r for r in rotas if r.ativa])
+                ]
+            })
+            stats.to_excel(writer, sheet_name='Estatísticas', index=False)
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=rotas_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao exportar dados: {str(e)}', 'error')
+        return redirect(url_for('localidades.listar_rotas'))
+
+# ========== EXPORTS PARA SUB-ROTAS ==========
+
+@localidades_bp.route('/sub-rotas/baixar-modelo')
+@login_required
+def baixar_modelo_sub_rotas():
+    """Baixar modelo Excel para importação de sub-rotas"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        
+        # Colunas exatas conforme arquivo CSV
+        dados_exemplo = {
+            'ESTADO': ['AC', 'RJ', 'SP', 'ES', 'MG'],
+            'CIDADE': ['RIO BRANCO', 'RIO DE JANEIRO', 'SÃO PAULO', 'VITÓRIA', 'BELO HORIZONTE'],
+            'SUB ROTA': ['CAP', 'ZON', 'CAP', 'GV', 'INT']
+        }
+        
+        df = pd.DataFrame(dados_exemplo)
+        
+        # Criar arquivo Excel
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Dados', index=False)
+            
+            # Instruções
+            instrucoes = pd.DataFrame({
+                'INSTRUÇÕES IMPORTANTES': [
+                    '1. Use as colunas EXATAMENTE: ESTADO, CIDADE, SUB ROTA',
+                    '2. ESTADO deve ter exatamente 2 caracteres (AC, RJ, SP, etc.)',
+                    '3. CIDADE deve ser o nome exato da cidade (RIO DE JANEIRO, SÃO PAULO)',
+                    '4. Combinação CIDADE+ESTADO deve existir no cadastro de cidades',
+                    '5. SUB ROTA é a abreviação da sub-rota (CAP, ZON, GV, INT)',
+                    '6. Comportamento: Sub-rota única por combinação UF+Cidade',
+                    '7. Substitui sub-rota se combinação já existe',
+                    '8. Validação: Cidade+UF deve existir no cadastro de cidades'
+                ]
+            })
+            instrucoes.to_excel(writer, sheet_name='Instruções', index=False)
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = 'attachment; filename=modelo_sub_rotas.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao gerar modelo: {str(e)}', 'error')
+        return redirect(url_for('localidades.listar_sub_rotas'))
+
+@localidades_bp.route('/sub-rotas/exportar-dados')
+@login_required
+def exportar_dados_sub_rotas():
+    """Exportar dados existentes de sub-rotas"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        from datetime import datetime
+        
+        # Buscar dados
+        if db.engine.has_table('cadastro_sub_rota'):
+            sub_rotas = CadastroSubRota.query.filter_by(ativa=True).order_by(
+                CadastroSubRota.cod_uf, CadastroSubRota.nome_cidade
+            ).all()
+        else:
+            sub_rotas = []
+        
+        if not sub_rotas:
+            flash('Nenhum dado encontrado para exportar.', 'warning')
+            return redirect(url_for('localidades.listar_sub_rotas'))
+        
+        # Converter para Excel
+        dados_export = []
+        for sr in sub_rotas:
+            dados_export.append({
+                'ESTADO': sr.cod_uf,
+                'CIDADE': sr.nome_cidade,
+                'SUB ROTA': sr.sub_rota
+            })
+        
+        df = pd.DataFrame(dados_export)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Sub Rotas', index=False)
+            
+            # Estatísticas
+            stats = pd.DataFrame({
+                'Estatística': ['Total Sub Rotas', 'Estados Únicos', 'Cidades Únicas', 'Sub Rotas Ativas'],
+                'Valor': [
+                    len(sub_rotas),
+                    len(set(sr.cod_uf for sr in sub_rotas)),
+                    len(set(f"{sr.nome_cidade}/{sr.cod_uf}" for sr in sub_rotas)),
+                    len([sr for sr in sub_rotas if sr.ativa])
+                ]
+            })
+            stats.to_excel(writer, sheet_name='Estatísticas', index=False)
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=sub_rotas_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao exportar dados: {str(e)}', 'error')
+        return redirect(url_for('localidades.listar_sub_rotas'))

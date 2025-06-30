@@ -295,4 +295,129 @@ def processar_importacao_movimentacoes():
 
 # TODO: Implementar outras rotas conforme necessário
 # - /movimentar (nova movimentação manual)
-# - /relatorios (relatórios específicos) 
+# - /relatorios (relatórios específicos)
+
+@estoque_bp.route('/movimentacoes/baixar-modelo')
+@login_required
+def baixar_modelo_movimentacoes():
+    """Baixar modelo Excel para importação de movimentações de estoque"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        
+        # Colunas exatas conforme arquivo CSV
+        dados_exemplo = {
+            'tipo_movimentacao': ['EST INICIAL', 'AVARIA', 'DEVOLUÇÃO', 'PRODUÇÃO', 'RETRABALHO'],
+            'cod_produto': [4089056, 4320162, 4729098, 4080177, 4210155],
+            'nome_produto': [
+                'PEPINO FATIADO BAG 6X1,01 KG - SUBWAY',
+                'AZEITONA VERDE FATIADA - BD 6X2 KG - CAMPO BELO',
+                'OL. MIS AZEITE DE OLIVA VD 12X500 ML - ST ISABEL',
+                'PEPINOS EM RODELAS AGRIDOCE VD 12X440G - CAMPO BELO',
+                'AZEITONA PRETA INTEIRA POUCH 12x400 GR - CAMPO BELO'
+            ],
+            'local_movimentacao': ['EST INICIAL', 'EXPEDIÇÃO', 'RECEBIMENTO', 'PRODUÇÃO', 'DEVOLUÇÕES'],
+            'data_movimentacao': ['20/01/2025', '21/01/2025', '22/01/2025', '23/01/2025', '24/01/2025'],
+            'qtd_movimentacao': [1489, -50, 200, 300, -25]
+        }
+        
+        df = pd.DataFrame(dados_exemplo)
+        
+        # Criar arquivo Excel
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Dados', index=False)
+            
+            # Instruções
+            instrucoes = pd.DataFrame({
+                'INSTRUÇÕES IMPORTANTES': [
+                    '1. Use as colunas EXATAMENTE como estão nomeadas',
+                    '2. Campos obrigatórios: tipo_movimentacao, cod_produto, nome_produto, data_movimentacao, qtd_movimentacao',
+                    '3. Tipos permitidos: EST INICIAL, AVARIA, DEVOLUÇÃO, PRODUÇÃO, RETRABALHO',
+                    '4. Data no formato DD/MM/YYYY',
+                    '5. Quantidade pode ser negativa (saídas)',
+                    '6. local_movimentacao é opcional',
+                    '7. Comportamento: SEMPRE ADICIONA (histórico)',
+                    '8. Nunca remove dados existentes'
+                ]
+            })
+            instrucoes.to_excel(writer, sheet_name='Instruções', index=False)
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = 'attachment; filename=modelo_movimentacoes_estoque.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao gerar modelo: {str(e)}', 'error')
+        return redirect(url_for('estoque.listar_movimentacoes'))
+
+@estoque_bp.route('/movimentacoes/exportar-dados')
+@login_required
+def exportar_dados_movimentacoes():
+    """Exportar dados existentes de movimentações de estoque"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        from datetime import datetime
+        
+        # Buscar dados
+        if db.engine.has_table('movimentacao_estoque'):
+            movimentacoes = MovimentacaoEstoque.query.filter_by(ativo=True).order_by(
+                MovimentacaoEstoque.data_movimentacao.desc()
+            ).limit(1000).all()  # Limitar a 1000 para performance
+        else:
+            movimentacoes = []
+        
+        if not movimentacoes:
+            flash('Nenhum dado encontrado para exportar.', 'warning')
+            return redirect(url_for('estoque.listar_movimentacoes'))
+        
+        # Converter para Excel
+        dados_export = []
+        for m in movimentacoes:
+            dados_export.append({
+                'tipo_movimentacao': m.tipo_movimentacao,
+                'cod_produto': m.cod_produto,
+                'nome_produto': m.nome_produto,
+                'local_movimentacao': m.local_movimentacao or '',
+                'data_movimentacao': m.data_movimentacao.strftime('%d/%m/%Y') if m.data_movimentacao else '',
+                'qtd_movimentacao': m.qtd_movimentacao,
+                'observacao': m.observacao or '',
+                'documento_origem': m.documento_origem or ''
+            })
+        
+        df = pd.DataFrame(dados_export)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Movimentações Estoque', index=False)
+            
+            # Estatísticas
+            stats = pd.DataFrame({
+                'Estatística': ['Total Registros', 'Produtos Únicos', 'Tipos Únicos', 'Movimentação Total'],
+                'Valor': [
+                    len(movimentacoes),
+                    len(set(m.cod_produto for m in movimentacoes)),
+                    len(set(m.tipo_movimentacao for m in movimentacoes)),
+                    sum(m.qtd_movimentacao for m in movimentacoes)
+                ]
+            })
+            stats.to_excel(writer, sheet_name='Estatísticas', index=False)
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=movimentacoes_estoque_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao exportar dados: {str(e)}', 'error')
+        return redirect(url_for('estoque.listar_movimentacoes')) 

@@ -57,9 +57,19 @@
                                 <a href="{{ url_for('localidades.listar_sub_rotas') }}" class="btn btn-secondary me-2">
                                     <i class="fas fa-eraser"></i> Limpar
                                 </a>
-                                <a href="{{ url_for('localidades.importar_sub_rotas') }}" class="btn btn-success">
-                                    <i class="fas fa-file-upload"></i> Importar
-                                </a>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('localidades.baixar_modelo_sub_rotas') }}" class="btn btn-info">
+                                        <i class="fas fa-download"></i> Modelo
+                                    </a>
+                                    <a href="{{ url_for('localidades.importar_sub_rotas') }}" class="btn btn-success">
+                                        <i class="fas fa-upload"></i> Importar
+                                    </a>
+                                    {% if sub_rotas %}
+                                    <a href="{{ url_for('localidades.exportar_dados_sub_rotas') }}" class="btn btn-warning">
+                                        <i class="fas fa-file-export"></i> Exportar
+                                    </a>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                     </form>
