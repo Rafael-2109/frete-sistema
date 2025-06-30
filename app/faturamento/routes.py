@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, make_response
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app import db
@@ -859,4 +859,156 @@ def importar_faturamento_produtos():
     except Exception as e:
         db.session.rollback()
         flash(f'Erro durante importação: {str(e)}', 'error')
-        return redirect(request.url)
+        return redirect(url_for('faturamento.importar_faturamento_produtos'))
+
+@faturamento_bp.route('/produtos/baixar-modelo')
+@login_required
+def baixar_modelo_faturamento():
+    """Baixar modelo Excel para importação de faturamento por produto"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        
+        # Colunas exatas conforme arquivo CSV
+        colunas_modelo = [
+            'Linhas da fatura/NF-e',
+            'Linhas da fatura/Parceiro/CNPJ', 
+            'Linhas da fatura/Parceiro',
+            'Linhas da fatura/Parceiro/Município',
+            'Linhas da fatura/Produto/Referência',
+            'Linhas da fatura/Produto/Nome',
+            'Linhas da fatura/Quantidade',
+            'Linhas da fatura/Valor Total do Item da NF',
+            'Linhas da fatura/Data',
+            'Status',
+            'Vendedor', 
+            'Incoterm'
+        ]
+        
+        # Criar DataFrame com exemplo
+        dados_exemplo = {
+            'Linhas da fatura/NF-e': [128944, '', ''],
+            'Linhas da fatura/Parceiro/CNPJ': ['75.315.333/0103-33', '', ''],
+            'Linhas da fatura/Parceiro': ['ATACADAO 103', '', ''],
+            'Linhas da fatura/Parceiro/Município': ['Olímpia (SP)', '', ''],
+            'Linhas da fatura/Produto/Referência': [4220179, 4729098, 4320162],
+            'Linhas da fatura/Produto/Nome': [
+                'AZEITONA PRETA AZAPA - VD 12X360 GR - CAMPO BELO',
+                'OL. MIS AZEITE DE OLIVA VD 12X500 ML - ST ISABEL', 
+                'AZEITONA VERDE FATIADA - BD 6X2 KG - CAMPO BELO'
+            ],
+            'Linhas da fatura/Quantidade': [10, 5, 8],
+            'Linhas da fatura/Valor Total do Item da NF': ['3.281,10', '850,75', '1.200,00'],
+            'Linhas da fatura/Data': ['27/06/2025', '', ''],
+            'Status': ['Lançado', '', ''],
+            'Vendedor': ['12 SCHIAVINATTO REP COM SC LTDA', '', ''],
+            'Incoterm': ['[CIF] CIF', '', '']
+        }
+        
+        df = pd.DataFrame(dados_exemplo)
+        
+        # Criar arquivo Excel em memória
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Aba principal
+            df.to_excel(writer, sheet_name='Dados', index=False)
+            
+            # Aba de instruções
+            instrucoes = pd.DataFrame({
+                'INSTRUÇÕES IMPORTANTES': [
+                    '1. Use as colunas EXATAMENTE como estão nomeadas',
+                    '2. O Forward Fill preencherá campos vazios automaticamente',
+                    '3. Campos obrigatórios: NF, CNPJ, Cliente, Município, Código Produto',
+                    '4. Status permitidos: Lançado, Cancelado, Provisório',
+                    '5. Data no formato DD/MM/YYYY',
+                    '6. Valores brasileiros aceitos: 3.281,10',
+                    '7. Cidade e UF: formato "Cidade (UF)"',
+                    '8. Forward Fill funciona para Status, Vendedor e Incoterm'
+                ]
+            })
+            instrucoes.to_excel(writer, sheet_name='Instruções', index=False)
+        
+        output.seek(0)
+        
+        # Criar resposta
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = 'attachment; filename=modelo_faturamento_produto.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao gerar modelo: {str(e)}', 'error')
+        return redirect(url_for('faturamento.listar_faturamento_produtos'))
+
+@faturamento_bp.route('/produtos/exportar-dados')
+@login_required 
+def exportar_dados_faturamento():
+    """Exportar dados existentes de faturamento por produto"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        
+        # Buscar dados
+        if db.engine.has_table('faturamento_produto'):
+            produtos = FaturamentoProduto.query.filter_by(ativo=True).order_by(
+                FaturamentoProduto.numero_nf.desc()
+            ).all()
+        else:
+            produtos = []
+        
+        if not produtos:
+            flash('Nenhum dado encontrado para exportar.', 'warning')
+            return redirect(url_for('faturamento.listar_faturamento_produtos'))
+        
+        # Converter para formato Excel com colunas exatas
+        dados_export = []
+        for p in produtos:
+            dados_export.append({
+                'Linhas da fatura/NF-e': p.numero_nf,
+                'Linhas da fatura/Parceiro/CNPJ': p.cnpj_cliente,
+                'Linhas da fatura/Parceiro': p.nome_cliente,
+                'Linhas da fatura/Parceiro/Município': f"{p.municipio} ({p.estado})" if p.municipio and p.estado else p.municipio,
+                'Linhas da fatura/Produto/Referência': p.cod_produto,
+                'Linhas da fatura/Produto/Nome': p.nome_produto,
+                'Linhas da fatura/Quantidade': p.qtd_produto_faturado,
+                'Linhas da fatura/Valor Total do Item da NF': f"{p.valor_produto_faturado:,.2f}".replace('.', ',').replace(',', '.', 1),
+                'Linhas da fatura/Data': p.data_fatura.strftime('%d/%m/%Y') if p.data_fatura else '',
+                'Status': getattr(p, 'status_nf', ''),
+                'Vendedor': p.vendedor,
+                'Incoterm': p.incoterm
+            })
+        
+        df = pd.DataFrame(dados_export)
+        
+        # Criar arquivo Excel
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Faturamento Produto', index=False)
+            
+            # Aba de estatísticas
+            stats = pd.DataFrame({
+                'Estatística': ['Total de Registros', 'NFs Únicas', 'Produtos Únicos', 'Total Valor'],
+                'Valor': [
+                    len(produtos),
+                    len(set(p.numero_nf for p in produtos)),
+                    len(set(p.cod_produto for p in produtos)), 
+                    f"R$ {sum(p.valor_produto_faturado for p in produtos):,.2f}"
+                ]
+            })
+            stats.to_excel(writer, sheet_name='Estatísticas', index=False)
+        
+        output.seek(0)
+        
+        # Criar resposta
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=faturamento_produto_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao exportar dados: {str(e)}', 'error')
+        return redirect(url_for('faturamento.listar_faturamento_produtos'))

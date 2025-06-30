@@ -12,9 +12,14 @@
                     <h2 class="mb-0">📊 Importar Faturamento por Produto</h2>
                     <small class="text-muted">Sistema com Forward Fill Automático</small>
                 </div>
-                <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="btn btn-outline-secondary">
-                    <i class="fas fa-arrow-left"></i> Voltar
-                </a>
+                <div>
+                    <a href="{{ url_for('faturamento.baixar_modelo_faturamento') }}" class="btn btn-info me-2">
+                        <i class="fas fa-download"></i> Baixar Modelo Excel
+                    </a>
+                    <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -69,7 +74,7 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" enctype="multipart/form-data">
-                        {{ csrf_token() }}
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         
                         <div class="mb-3">
                             <label for="arquivo" class="form-label">
@@ -163,7 +168,7 @@
                     </div>
                     <div class="alert alert-success mt-2 mb-0">
                         <i class="fas fa-magic"></i> 
-                        <strong>O sistema preenchirá automaticamente</strong> os campos vazios das linhas 2+ com os valores da linha 1!
+                        <strong>O sistema preencherá automaticamente</strong> os campos vazios das linhas 2+ com os valores da linha 1!
                     </div>
                 </div>
             </div>

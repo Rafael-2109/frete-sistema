@@ -1,8 +1,9 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response
 from flask_login import login_required, current_user
 from app import db
 from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
 from app.utils.auth_decorators import require_admin
+from datetime import datetime
 
 # 📦 Blueprint da produção (seguindo padrão dos outros módulos)
 producao_bp = Blueprint('producao', __name__, url_prefix='/producao')
@@ -461,4 +462,230 @@ def processar_importacao_programacao():
 # - POST /importar (upload e processamento de arquivos)
 # - /criar_op (nova ordem de produção)
 # - /editar_rota/<id> (edição de rotas)
-# - /relatorios (relatórios específicos) 
+# - /relatorios (relatórios específicos)
+
+@producao_bp.route('/programacao/baixar-modelo')
+@login_required
+def baixar_modelo_programacao():
+    """Baixar modelo Excel para importação de programação de produção"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        
+        # Colunas exatas conforme arquivo CSV
+        dados_exemplo = {
+            'DATA': ['27/06/2025', '28/06/2025', '29/06/2025'],
+            'SEÇÃO / MÁQUINA': ['1104', '1105', '1106'],
+            'CÓDIGO': [4080177, 4729098, 4320162],
+            'OP': ['OP001', 'OP002', ''],
+            'DESCRIÇÃO': [
+                'PEPINOS EM RODELAS AGRIDOCE VD 12X440G - CAMPO BELO',
+                'OL. MIS AZEITE DE OLIVA VD 12X500 ML - ST ISABEL',
+                'AZEITONA VERDE FATIADA - BD 6X2 KG - CAMPO BELO'
+            ],
+            'CLIENTE': ['CAMPO BELO', 'CAMPO BELO', 'CAMPO BELO'],
+            'QTDE': [500, 300, 200]
+        }
+        
+        df = pd.DataFrame(dados_exemplo)
+        
+        # Criar arquivo Excel
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Dados', index=False)
+            
+            # Instruções
+            instrucoes = pd.DataFrame({
+                'INSTRUÇÕES IMPORTANTES': [
+                    '1. Use as colunas EXATAMENTE como estão nomeadas',
+                    '2. DATA no formato DD/MM/YYYY',
+                    '3. Campos obrigatórios: DATA, CÓDIGO, DESCRIÇÃO, QTDE',
+                    '4. SEÇÃO / MÁQUINA: linha de produção',
+                    '5. OP: observação do PCP (opcional)',
+                    '6. CLIENTE: marca/cliente do produto',
+                    '7. Comportamento: SUBSTITUI todos os dados existentes'
+                ]
+            })
+            instrucoes.to_excel(writer, sheet_name='Instruções', index=False)
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = 'attachment; filename=modelo_programacao_producao.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao gerar modelo: {str(e)}', 'error')
+        return redirect(url_for('producao.listar_programacao'))
+
+@producao_bp.route('/programacao/exportar-dados')
+@login_required
+def exportar_dados_programacao():
+    """Exportar dados existentes de programação de produção"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        
+        # Buscar dados
+        if db.engine.has_table('programacao_producao'):
+            programacao = ProgramacaoProducao.query.filter_by(ativo=True).order_by(
+                ProgramacaoProducao.data_programacao.desc()
+            ).all()
+        else:
+            programacao = []
+        
+        if not programacao:
+            flash('Nenhum dado encontrado para exportar.', 'warning')
+            return redirect(url_for('producao.listar_programacao'))
+        
+        # Converter para Excel
+        dados_export = []
+        for p in programacao:
+            dados_export.append({
+                'DATA': p.data_programacao.strftime('%d/%m/%Y') if p.data_programacao else '',
+                'SEÇÃO / MÁQUINA': p.linha_producao or '',
+                'CÓDIGO': p.cod_produto,
+                'OP': p.observacao_pcp or '',
+                'DESCRIÇÃO': p.nome_produto,
+                'CLIENTE': p.cliente_produto or '',
+                'QTDE': p.qtd_programada
+            })
+        
+        df = pd.DataFrame(dados_export)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Programação Produção', index=False)
+            
+            # Estatísticas
+            stats = pd.DataFrame({
+                'Estatística': ['Total Registros', 'Produtos Únicos', 'Linhas Produção', 'Qtd Total'],
+                'Valor': [
+                    len(programacao),
+                    len(set(p.cod_produto for p in programacao)),
+                    len(set(p.linha_producao for p in programacao if p.linha_producao)),
+                    sum(p.qtd_programada for p in programacao)
+                ]
+            })
+            stats.to_excel(writer, sheet_name='Estatísticas', index=False)
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=programacao_producao_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao exportar dados: {str(e)}', 'error')
+        return redirect(url_for('producao.listar_programacao'))
+
+@producao_bp.route('/palletizacao/baixar-modelo')
+@login_required
+def baixar_modelo_palletizacao():
+    """Baixar modelo Excel para importação de palletização"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        
+        dados_exemplo = {
+            'Cód.Produto': [4210155, 4210156, 4210157],
+            'Descrição Produto': [
+                'AZEITONA PRETA INTEIRA POUCH 12x400 GR - CAMPO BELO',
+                'AZEITONA VERDE INTEIRA POUCH 12x400 GR - CAMPO BELO',
+                'PALMITO INTEIRO VD 12x300 GR - CAMPO BELO'
+            ],
+            'PALLETIZACAO': [80, 90, 100],
+            'PESO BRUTO': [9, 8.5, 7.2],
+            'altura_cm': [120, 115, 110],
+            'largura_cm': [80, 80, 80],
+            'comprimento_cm': [100, 100, 100]
+        }
+        
+        df = pd.DataFrame(dados_exemplo)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Dados', index=False)
+            
+            instrucoes = pd.DataFrame({
+                'INSTRUÇÕES IMPORTANTES': [
+                    '1. Use as colunas EXATAMENTE como estão nomeadas',
+                    '2. Campos obrigatórios: Cód.Produto, Descrição Produto, PALLETIZACAO, PESO BRUTO',
+                    '3. PALLETIZACAO: fator para converter qtd em pallets',
+                    '4. PESO BRUTO: fator para converter qtd em peso',
+                    '5. Medidas em cm são opcionais (altura, largura, comprimento)',
+                    '6. Volume m³ será calculado automaticamente',
+                    '7. Comportamento: SUBSTITUI/ADICIONA por produto'
+                ]
+            })
+            instrucoes.to_excel(writer, sheet_name='Instruções', index=False)
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = 'attachment; filename=modelo_palletizacao.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao gerar modelo: {str(e)}', 'error')
+        return redirect(url_for('producao.listar_palletizacao'))
+
+@producao_bp.route('/palletizacao/exportar-dados')
+@login_required
+def exportar_dados_palletizacao():
+    """Exportar dados existentes de palletização"""
+    try:
+        import pandas as pd
+        from flask import make_response
+        from io import BytesIO
+        
+        if db.engine.has_table('cadastro_palletizacao'):
+            palletizacao = CadastroPalletizacao.query.filter_by(ativo=True).order_by(
+                CadastroPalletizacao.cod_produto
+            ).all()
+        else:
+            palletizacao = []
+        
+        if not palletizacao:
+            flash('Nenhum dado encontrado para exportar.', 'warning')
+            return redirect(url_for('producao.listar_palletizacao'))
+        
+        dados_export = []
+        for p in palletizacao:
+            dados_export.append({
+                'Cód.Produto': p.cod_produto,
+                'Descrição Produto': p.nome_produto,
+                'PALLETIZACAO': p.palletizacao,
+                'PESO BRUTO': p.peso_bruto,
+                'altura_cm': p.altura_cm or '',
+                'largura_cm': p.largura_cm or '',
+                'comprimento_cm': p.comprimento_cm or '',
+                'volume_m3': p.volume_m3
+            })
+        
+        df = pd.DataFrame(dados_export)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Palletização', index=False)
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=palletizacao_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Erro ao exportar dados: {str(e)}', 'error')
+        return redirect(url_for('producao.listar_palletizacao')) 

@@ -88,9 +88,19 @@
                                 <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="btn btn-secondary">
                                     <i class="fas fa-eraser"></i> Limpar Filtros
                                 </a>
-                                <a href="{{ url_for('faturamento.importar_faturamento_produtos') }}" class="btn btn-success ml-3">
-                                    <i class="fas fa-file-excel"></i> Importar Dados
-                                </a>
+                                <div class="btn-group ml-3" role="group">
+                                    <a href="{{ url_for('faturamento.baixar_modelo_faturamento') }}" class="btn btn-info">
+                                        <i class="fas fa-download"></i> Baixar Modelo
+                                    </a>
+                                    <a href="{{ url_for('faturamento.importar_faturamento_produtos') }}" class="btn btn-success">
+                                        <i class="fas fa-file-excel"></i> Importar Dados
+                                    </a>
+                                    {% if produtos %}
+                                    <a href="{{ url_for('faturamento.exportar_dados_faturamento') }}" class="btn btn-warning">
+                                        <i class="fas fa-file-export"></i> Exportar Dados
+                                    </a>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                     </form>
