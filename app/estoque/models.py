@@ -1,7 +1,7 @@
 from app import db
 from datetime import datetime
 from app.utils.timezone import agora_brasil
-\1, inspectnc, and_, or_
+from sqlalchemy import inspect, and_, or_
 from datetime import datetime, timedelta
 import logging
 
@@ -209,6 +209,7 @@ class SaldoEstoque:
     def obter_produtos_com_estoque():
         """Obtém lista de produtos únicos que têm movimentação de estoque"""
         try:
+            inspector = inspect(db.engine)
             if not inspector.has_table('movimentacao_estoque'):
                 return []
             
@@ -230,6 +231,7 @@ class SaldoEstoque:
     def calcular_estoque_inicial(cod_produto):
         """Calcula estoque inicial (D0) baseado em todas as movimentações"""
         try:
+            inspector = inspect(db.engine)
             if not inspector.has_table('movimentacao_estoque'):
                 return 0
             
@@ -256,6 +258,7 @@ class SaldoEstoque:
     def calcular_producao_periodo(cod_produto, data_inicio, data_fim):
         """Calcula produção programada para um produto em um período"""
         try:
+            inspector = inspect(db.engine)
             if not inspector.has_table('programacao_producao'):
                 return 0
             

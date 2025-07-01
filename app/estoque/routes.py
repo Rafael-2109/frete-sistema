@@ -21,8 +21,9 @@ estoque_bp = Blueprint('estoque', __name__, url_prefix='/estoque')
 def index():
     """Dashboard do módulo estoque"""
     try:
-        \1, inspectnc, extract
+        from sqlalchemy import inspect, extract, func
         from datetime import datetime
+        inspector = inspect(db.engine)
         
         # ✅ SEGURO: Verifica se tabela existe antes de fazer query
         if inspector.has_table('movimentacao_estoque'):
@@ -129,7 +130,8 @@ def listar_movimentacoes():
 def api_estatisticas():
     """API para estatísticas do módulo estoque"""
     try:
-        \1, inspectnc
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
         
         # Estatísticas básicas
         stats = {

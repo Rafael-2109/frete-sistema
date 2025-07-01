@@ -586,7 +586,8 @@ def listar_faturamento_produtos():
 def api_estatisticas_produtos():
     """API para estatísticas do faturamento por produto"""
     try:
-        \1, inspectnc
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
         
         # Estatísticas básicas
         stats = {

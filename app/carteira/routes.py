@@ -227,15 +227,22 @@ def importar_carteira():
             flash(f'Colunas obrigatórias faltando: {", ".join(colunas_faltantes)}', 'error')
             return redirect(request.url)
         
+        # 🔄 PROCESSAR FORMATOS ANTES DA IMPORTAÇÃO
+        df = _processar_formatos_brasileiros(df)
+        
         # 🔄 PROCESSAR IMPORTAÇÃO
         resultado = _processar_importacao_carteira_inteligente(df, current_user.nome)
         
-        flash(f"""
-        Importação preparada para implementação!
-        ✅ Sistema de vinculação inteligente configurado
-        🔄 Preservação de dados operacionais planejada
-        📊 Restrições por cotação em desenvolvimento
-        """, 'info')
+        if resultado['sucesso']:
+            flash(f"""
+            Importação concluída com sucesso! ✅
+            📊 Novos criados: {resultado['novos_criados']}
+            🔄 Existentes atualizados: {resultado['existentes_atualizados']}
+            🛡️ Dados preservados: {resultado['dados_preservados']}
+            📋 Total processados: {resultado['total_processados']}
+            """, 'success')
+        else:
+            flash(f'Erro na importação: {resultado["erro"]}', 'error')
         
         return redirect(url_for('carteira.listar_principal'))
         
@@ -392,35 +399,124 @@ def processar_faturamento():
 @carteira_bp.route('/baixar-modelo')
 @login_required
 def baixar_modelo():
-    """Download do modelo Excel para importação da carteira"""
+    """
+    📥 DOWNLOAD DO MODELO EXCEL PARA IMPORTAÇÃO DA CARTEIRA
+    
+    ✅ FORMATOS SUPORTADOS:
+    - 📅 Data: YYYY-MM-DD HH:MM:SS (ISO/SQL)
+    - 💰 Decimal: 1.234,56 (vírgula brasileira)
+    """
     try:
-        # 📝 CRIAR MODELO COM EXEMPLOS REAIS
+        # 📝 CRIAR MODELO COM EXEMPLOS REAIS E FORMATOS CORRETOS
         modelo_data = {
+            # 🔑 CAMPOS OBRIGATÓRIOS
             'num_pedido': ['PED001', 'PED001', 'PED002'],
             'cod_produto': ['PROD001', 'PROD002', 'PROD001'],
             'nome_produto': ['Produto Exemplo A', 'Produto Exemplo B', 'Produto Exemplo A'],
-            'qtd_produto_pedido': [100, 50, 200],
-            'qtd_saldo_produto_pedido': [100, 50, 200],
-            'preco_produto_pedido': [15.50, 23.75, 15.50],
+            'qtd_produto_pedido': ['100,00', '50,50', '200,25'],  # 💰 DECIMAL COM VÍRGULA
+            'qtd_saldo_produto_pedido': ['100,00', '50,50', '200,25'],  # 💰 DECIMAL COM VÍRGULA
+            'preco_produto_pedido': ['15,50', '23,75', '15,50'],  # 💰 DECIMAL COM VÍRGULA
             'cnpj_cpf': ['12.345.678/0001-90', '12.345.678/0001-90', '98.765.432/0001-10'],
+            
+            # 👥 DADOS DO CLIENTE
             'raz_social': ['Cliente Exemplo LTDA', 'Cliente Exemplo LTDA', 'Outro Cliente S.A.'],
             'raz_social_red': ['Cliente Exemplo', 'Cliente Exemplo', 'Outro Cliente'],
-            'vendedor': ['João Silva', 'João Silva', 'Maria Santos'],
-            'status_pedido': ['Pedido de venda', 'Pedido de venda', 'Cotação'],
             'municipio': ['São Paulo', 'São Paulo', 'Rio de Janeiro'],
             'estado': ['SP', 'SP', 'RJ'],
-            'expedicao': ['15/03/2025', '20/03/2025', '25/03/2025'],
-            'data_entrega': ['18/03/2025', '23/03/2025', '28/03/2025']
+            
+            # 🏪 DADOS COMERCIAIS
+            'vendedor': ['João Silva', 'João Silva', 'Maria Santos'],
+            'status_pedido': ['Pedido de venda', 'Pedido de venda', 'Cotação'],
+            
+            # 📅 DATAS NO FORMATO ISO/SQL (YYYY-MM-DD HH:MM:SS)
+            'data_pedido': ['2025-01-15 08:30:00', '2025-01-15 09:15:00', '2025-01-16 14:20:00'],
+            'expedicao': ['2025-03-15 07:00:00', '2025-03-20 07:30:00', '2025-03-25 08:00:00'],
+            'data_entrega': ['2025-03-18 16:00:00', '2025-03-23 15:30:00', '2025-03-28 17:00:00'],
+            'agendamento': ['2025-03-17 10:00:00', '2025-03-22 14:00:00', '2025-03-27 11:30:00'],
+            
+            # 📦 DADOS OPCIONAIS (podem ficar vazios)
+            'pedido_cliente': ['CLI-001', 'CLI-002', ''],
+            'observ_ped_1': ['Entrega urgente', 'Cliente VIP', ''],
+            'protocolo': ['PROT-001', 'PROT-002', ''],
+            'roteirizacao': ['Transportadora A', 'Transportadora B', ''],
+            
+            # ⚖️ DADOS FÍSICOS (DECIMAIS COM VÍRGULA)
+            'peso': ['10,50', '25,75', '5,25'],  # 💰 KG com vírgula
+            'pallet': ['0,50', '1,25', '0,75'],  # 💰 Pallets com vírgula
+            'valor_total': ['1.550,00', '1.187,50', '3.100,00']  # 💰 R$ com vírgula
         }
         
         df = pd.DataFrame(modelo_data)
         
-        # 📁 SALVAR TEMPORARIAMENTE
+        # 📁 CRIAR EXCEL COM MÚLTIPLAS ABAS
         temp_path = os.path.join('app', 'static', 'modelos', 'modelo_carteira_pedidos.xlsx')
         os.makedirs(os.path.dirname(temp_path), exist_ok=True)
         
-        df.to_excel(temp_path, index=False, sheet_name='Carteira')
+        with pd.ExcelWriter(temp_path, engine='openpyxl') as writer:
+            # 📋 ABA 1: DADOS PARA IMPORTAÇÃO
+            df.to_excel(writer, sheet_name='Dados', index=False)
+            
+            # 📖 ABA 2: INSTRUÇÕES DETALHADAS
+            instrucoes_data = {
+                'Campo': [
+                    'num_pedido', 'cod_produto', 'nome_produto', 
+                    'qtd_produto_pedido', 'preco_produto_pedido',
+                    'data_pedido', 'expedicao', 'agendamento',
+                    'peso', 'pallet', 'valor_total'
+                ],
+                'Obrigatório': [
+                    'SIM', 'SIM', 'SIM', 'SIM', 'NÃO', 
+                    'NÃO', 'NÃO', 'NÃO', 'NÃO', 'NÃO', 'NÃO'
+                ],
+                'Formato': [
+                    'Texto (PED001)', 'Texto (PROD001)', 'Texto livre',
+                    'Decimal: 100,50', 'Decimal: 15,75',
+                    'YYYY-MM-DD HH:MM:SS', 'YYYY-MM-DD HH:MM:SS', 'YYYY-MM-DD HH:MM:SS',
+                    'Decimal: 10,50', 'Decimal: 1,25', 'Decimal: 1.500,00'
+                ],
+                'Exemplo': [
+                    'PED001', 'PROD001', 'Produto Exemplo',
+                    '100,50', '15,75',
+                    '2025-03-15 08:30:00', '2025-03-15 07:00:00', '2025-03-17 10:00:00',
+                    '10,50', '1,25', '1.550,00'
+                ],
+                'Observação': [
+                    'Código único do pedido', 'Código único do produto', 'Nome completo do produto',
+                    'Usar VÍRGULA como decimal', 'Usar VÍRGULA como decimal',
+                    'Formato ISO: Ano-Mês-Dia Hora:Min:Seg', 'Data prevista expedição', 'Data agendamento cliente',
+                    'Peso em KG com vírgula', 'Pallets com vírgula', 'Valor total com vírgula'
+                ]
+            }
+            
+            df_instrucoes = pd.DataFrame(instrucoes_data)
+            df_instrucoes.to_excel(writer, sheet_name='Instruções', index=False)
+            
+            # ⚙️ ABA 3: COMPORTAMENTO DO SISTEMA
+            comportamento_data = {
+                'Funcionalidade': [
+                    '📥 Importação Inteligente',
+                    '🛡️ Preservação de Dados',
+                    '📅 Formatos de Data',
+                    '💰 Decimais Brasileiros',
+                    '🔄 Atualização vs Criação',
+                    '📊 Dados Operacionais',
+                    '⚠️ Validação Automática'
+                ],
+                'Descrição': [
+                    'Sistema preserva dados operacionais existentes',
+                    'Expedição, agendamento e protocolo são mantidos',
+                    'Aceita YYYY-MM-DD HH:MM:SS (2025-03-15 08:30:00)',
+                    'Aceita vírgula como separador decimal (1.234,56)',
+                    'Atualiza se existe, cria se novo (chave: num_pedido + cod_produto)',
+                    'Roteirização, lote_separacao_id, peso, pallet preservados',
+                    'Campos obrigatórios validados automaticamente'
+                ]
+            }
+            
+            df_comportamento = pd.DataFrame(comportamento_data)
+            df_comportamento.to_excel(writer, sheet_name='Comportamento', index=False)
         
+        logger.info(f"✅ Modelo gerado: {temp_path}")
         return send_file(temp_path, as_attachment=True, 
                         download_name='modelo_carteira_pedidos.xlsx')
         
@@ -659,6 +755,130 @@ def dashboard_saldos_standby():
 # ========================================
 # 🔧 FUNÇÕES AUXILIARES PRIVADAS
 # ========================================
+
+def _processar_formatos_brasileiros(df):
+    """
+    🔄 PROCESSA FORMATOS BRASILEIROS PARA IMPORTAÇÃO
+    
+    ✅ FUNCIONALIDADES:
+    - 📅 Data: YYYY-MM-DD HH:MM:SS → datetime
+    - 💰 Decimal: 1.234,56 → 1234.56 (float)
+    """
+    try:
+        logger.info("🔄 Processando formatos brasileiros para importação")
+        
+        # 💰 CAMPOS DECIMAIS COM VÍRGULA
+        campos_decimais = [
+            'qtd_produto_pedido', 'qtd_saldo_produto_pedido', 'preco_produto_pedido',
+            'peso', 'pallet', 'valor_total'
+        ]
+        
+        # 📅 CAMPOS DE DATA ISO/SQL
+        campos_data = [
+            'data_pedido', 'expedicao', 'data_entrega', 'agendamento'
+        ]
+        
+        # 🔄 PROCESSAR DECIMAIS BRASILEIROS
+        for campo in campos_decimais:
+            if campo in df.columns:
+                df[campo] = df[campo].apply(_converter_decimal_brasileiro)
+        
+        # 🔄 PROCESSAR DATAS ISO/SQL
+        for campo in campos_data:
+            if campo in df.columns:
+                df[campo] = df[campo].apply(_converter_data_iso_sql)
+        
+        logger.info("✅ Formatos brasileiros processados com sucesso")
+        return df
+        
+    except Exception as e:
+        logger.error(f"Erro ao processar formatos brasileiros: {str(e)}")
+        return df  # Retorna DF original se der erro
+
+def _converter_decimal_brasileiro(valor):
+    """
+    💰 CONVERTE DECIMAL BRASILEIRO PARA FLOAT
+    
+    EXEMPLOS:
+    - '1.234,56' → 1234.56
+    - '100,50' → 100.50
+    - '50' → 50.0
+    - '' → None
+    """
+    try:
+        if pd.isna(valor) or valor == '' or valor is None:
+            return None
+        
+        # Converter para string se necessário
+        valor_str = str(valor).strip()
+        
+        if valor_str == '':
+            return None
+        
+        # Remover espaços e caracteres especiais
+        valor_str = valor_str.replace(' ', '')
+        
+        # Se tem vírgula, processar formato brasileiro
+        if ',' in valor_str:
+            # Separar parte inteira e decimal
+            if valor_str.count(',') == 1:
+                partes = valor_str.split(',')
+                parte_inteira = partes[0].replace('.', '')  # Remove pontos de milhares
+                parte_decimal = partes[1]
+                valor_final = f"{parte_inteira}.{parte_decimal}"
+            else:
+                # Múltiplas vírgulas - usar primeira como decimal
+                valor_final = valor_str.replace(',', '.', 1).replace(',', '')
+        else:
+            # Se não tem vírgula, pode ter ponto como decimal
+            valor_final = valor_str
+        
+        return float(valor_final)
+        
+    except (ValueError, AttributeError) as e:
+        logger.warning(f"Erro ao converter decimal '{valor}': {str(e)}")
+        return None
+
+def _converter_data_iso_sql(valor):
+    """
+    📅 CONVERTE DATA ISO/SQL PARA DATETIME
+    
+    EXEMPLOS:
+    - '2025-03-15 08:30:00' → datetime
+    - '2025-03-15' → datetime (00:00:00)
+    - '' → None
+    """
+    try:
+        if pd.isna(valor) or valor == '' or valor is None:
+            return None
+        
+        # Converter para string se necessário
+        valor_str = str(valor).strip()
+        
+        if valor_str == '':
+            return None
+        
+        # Tentar formatos ISO/SQL
+        formatos_aceitos = [
+            '%Y-%m-%d %H:%M:%S',  # 2025-03-15 08:30:00
+            '%Y-%m-%d %H:%M',     # 2025-03-15 08:30
+            '%Y-%m-%d',           # 2025-03-15
+            '%Y/%m/%d %H:%M:%S',  # 2025/03/15 08:30:00
+            '%Y/%m/%d'            # 2025/03/15
+        ]
+        
+        for formato in formatos_aceitos:
+            try:
+                return pd.to_datetime(valor_str, format=formato)
+            except ValueError:
+                continue
+        
+        # Se nenhum formato funcionou, tentar parsing automático
+        return pd.to_datetime(valor_str)
+        
+    except (ValueError, AttributeError) as e:
+        logger.warning(f"Erro ao converter data '{valor}': {str(e)}")
+        return None
 
 # 🔧 DOCUMENTAÇÃO DO SISTEMA DE VINCULAÇÃO INTELIGENTE
 
