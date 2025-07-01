@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Desvincular Pedidos de Embarques Cancelados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-tools"></i> Ferramenta Administrativa
+                <small class="text-muted">Desvincular pedidos de embarques cancelados</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Card de Explicação -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        O que essa ferramenta resolve?
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">
+                        <strong>Problema:</strong> Pedidos que ficam "presos" a embarques cancelados, impedindo operações normais (edição, exclusão, nova cotação).
+                    </p>
+                    <p class="mb-0">
+                        <strong>Solução:</strong> Esta ferramenta identifica e libera automaticamente todos os pedidos vinculados a embarques cancelados, permitindo que voltem ao status "ABERTO".
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    {% if total_pedidos_afetados > 0 %}
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
+                    <h4>{{ total_pedidos_afetados }}</h4>
+                    <p class="mb-0">Pedidos Afetados</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-warning text-dark">
+                <div class="card-body text-center">
+                    <i class="fas fa-ban fa-2x mb-2"></i>
+                    <h4>{{ problemas|length }}</h4>
+                    <p class="mb-0">Embarques Cancelados</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <i class="fas fa-list fa-2x mb-2"></i>
+                    <h4>{{ problemas|sum(attribute='itens_problematicos')|length }}</h4>
+                    <p class="mb-0">Separações Bloqueadas</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Problemas Identificados -->
+    {% if problemas %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-search"></i> 
+                        Problemas Identificados ({{ problemas|length }} embarques)
+                    </h5>
+                    <form method="POST" style="display: inline;">
+                        <button type="submit" class="btn btn-light btn-sm" 
+                                onclick="return confirm('Tem certeza? Esta ação vai desvincular TODOS os pedidos de embarques cancelados.')">
+                            <i class="fas fa-magic"></i> 
+                            Corrigir Todos Automaticamente
+                        </button>
+                    </form>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Embarque</th>
+                                    <th>Data Cancelamento</th>
+                                    <th>Pedidos Afetados</th>
+                                    <th>Detalhes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for problema in problemas %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-truck text-danger me-2"></i>
+                                            <div>
+                                                <strong>Embarque #{{ problema.embarque.numero }}</strong>
+                                                <br>
+                                                <small class="text-muted">
+                                                    {{ problema.embarque.transportadora.razao_social if problema.embarque.transportadora else 'Sem transportadora' }}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if problema.embarque.cancelado_em %}
+                                            {{ problema.embarque.cancelado_em | formatar_data_hora_brasil }}
+                                            <br>
+                                            <small class="text-muted">por {{ problema.embarque.cancelado_por or 'N/A' }}</small>
+                                        {% else %}
+                                            <span class="text-muted">Data não registrada</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-danger">
+                                            {{ problema.itens_problematicos|length }} pedidos
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-info" type="button" 
+                                                data-bs-toggle="collapse" 
+                                                data-bs-target="#detalhes-{{ problema.embarque.id }}" 
+                                                aria-expanded="false">
+                                            <i class="fas fa-eye"></i> Ver Detalhes
+                                        </button>
+                                    </td>
+                                </tr>
+                                <!-- Detalhes dos Pedidos -->
+                                <tr class="collapse" id="detalhes-{{ problema.embarque.id }}">
+                                    <td colspan="4" class="bg-light">
+                                        <div class="p-3">
+                                            <h6><i class="fas fa-list"></i> Pedidos Afetados:</h6>
+                                            <div class="row">
+                                                {% for item_prob in problema.itens_problematicos %}
+                                                <div class="col-md-6 mb-2">
+                                                    <div class="card card-sm">
+                                                        <div class="card-body p-2">
+                                                            <div class="d-flex justify-content-between align-items-start">
+                                                                <div>
+                                                                    <strong>{{ item_prob.pedido.num_pedido }}</strong>
+                                                                    <br>
+                                                                    <small class="text-muted">{{ item_prob.pedido.raz_social_red }}</small>
+                                                                    <br>
+                                                                    <span class="badge bg-{{ 'success' if item_prob.status_pedido == 'ABERTO' else 'warning' if item_prob.status_pedido == 'EMBARCADO' else 'danger' }}">
+                                                                        {{ item_prob.status_pedido }}
+                                                                    </span>
+                                                                </div>
+                                                                <div class="text-end">
+                                                                    <small class="text-muted">
+                                                                        {{ item_prob.separacoes_count }} separações
+                                                                    </small>
+                                                                    <br>
+                                                                    <span class="badge bg-secondary">
+                                                                        {{ item_prob.item.separacao_lote_id }}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- Nenhum Problema Encontrado -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-success">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-check-circle text-success fa-4x mb-3"></i>
+                    <h4 class="text-success">Sistema Limpo!</h4>
+                    <p class="text-muted mb-0">
+                        Nenhum pedido encontrado vinculado a embarques cancelados. 
+                        Seu sistema está funcionando corretamente.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Botão Voltar -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <a href="{{ url_for('embarques.listar_embarques') }}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left"></i> Voltar para Embarques
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts Bootstrap necessários para collapse -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Bootstrap 5 collapse functionality já está disponível
+    console.log('Ferramenta de desvinculação carregada');
+});
+</script>
+{% endblock %} 

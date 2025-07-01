@@ -727,10 +727,31 @@
                       </button>
                     </div>
                   {% else %}
-                    <!-- Pedidos processados não podem ser editados/excluídos -->
-                    <span class="text-muted" title="Pedido já processado - não pode ser editado">
-                      <i class="fas fa-lock"></i>
-                    </span>
+                    <!-- Pedidos processados: verificar se podem ser desvinculados -->
+                    <div class="btn-group-vertical btn-group-sm" role="group">
+                      <!-- Botão Ver -->
+                      <a href="{{ url_for('pedidos.detalhes_pedido', id=p.id) }}" 
+                         class="btn btn-outline-info btn-sm" 
+                         title="Visualizar pedido">
+                        <i class="fas fa-eye"></i>
+                      </a>
+                      
+                      <!-- 🛠️ Botão Desvinculação (apenas para admins) -->
+                      {% if current_user.perfil == 'admin' and p.status_calculado in ['EMBARCADO', 'COTADO'] %}
+                      <button type="button" 
+                              class="btn btn-outline-warning btn-sm" 
+                              title="Desvincular de embarque cancelado"
+                              data-pedido-id="{{ p.id }}"
+                              data-pedido-numero="{{ p.num_pedido }}"
+                              onclick="confirmarDesvinculacao(this.dataset.pedidoId, this.dataset.pedidoNumero)">
+                        <i class="fas fa-unlink"></i>
+                      </button>
+                      {% else %}
+                      <span class="text-muted" title="Pedido já processado - não pode ser editado">
+                        <i class="fas fa-lock"></i>
+                      </span>
+                      {% endif %}
+                    </div>
                   {% endif %}
                 </td>
 
@@ -995,6 +1016,36 @@ function confirmarExclusao(pedidoId, numeroPedido) {
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = `/pedidos/excluir/${pedidoId}`;
+        
+        // Adiciona o token CSRF
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+        
+        // Adiciona o formulário ao body e submete
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// 🛠️ NOVA FUNÇÃO: Confirmar desvinculação de pedido de embarque cancelado
+function confirmarDesvinculacao(pedidoId, numeroPedido) {
+    const mensagem = `🛠️ DESVINCULAÇÃO DE EMBARQUE CANCELADO\n\n` +
+                    `Pedido: ${numeroPedido}\n\n` +
+                    `Esta ação irá:\n` +
+                    `✅ Liberar o pedido de embarques cancelados\n` +
+                    `✅ Permitir que volte ao status "ABERTO"\n` +
+                    `✅ Possibilitar nova cotação/edição\n\n` +
+                    `Deseja continuar?`;
+    
+    if (confirm(mensagem)) {
+        // Cria formulário para desvincular via POST
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/embarques/admin/desvincular-pedido/${pedidoId}`;
         
         // Adiciona o token CSRF
         const csrfToken = document.querySelector('input[name="csrf_token"]').value;

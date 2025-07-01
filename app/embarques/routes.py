@@ -7,7 +7,7 @@ from flask_login import login_required, current_user
 from app import db
 
 # 🔒 Importar decoradores de permissão
-from app.utils.auth_decorators import require_embarques, allow_vendedor_own_data, get_vendedor_filter_query
+from app.utils.auth_decorators import require_embarques, allow_vendedor_own_data, get_vendedor_filter_query, require_admin
 
 from app.embarques.forms import EmbarqueForm, EmbarqueItemForm
 
@@ -1447,4 +1447,160 @@ def cancelar_item_embarque(item_id):
         flash(f'❌ Erro ao remover pedido do embarque: {str(e)}', 'danger')
     
     return redirect(url_for('embarques.visualizar_embarque', id=embarque.id))
+
+@embarques_bp.route('/admin/desvincular-embarques-cancelados', methods=['GET', 'POST'])
+@login_required 
+@require_admin()
+def desvincular_embarques_cancelados():
+    """
+    🛠️ FERRAMENTA ADMINISTRATIVA: Desvincular pedidos de embarques cancelados
+    
+    RESOLVE: Pedidos que ficam "presos" a embarques cancelados, impedindo operações normais
+    """
+    from app.pedidos.models import Pedido
+    from app.separacao.models import Separacao
+    
+    if request.method == 'GET':
+        # 🔍 IDENTIFICAR PROBLEMAS
+        embarques_cancelados = Embarque.query.filter_by(status='cancelado').all()
+        
+        problemas_identificados = []
+        total_pedidos_afetados = 0
+        
+        for embarque in embarques_cancelados:
+            itens_problematicos = []
+            
+            for item in embarque.itens:
+                if item.separacao_lote_id:
+                    # Busca pedido vinculado
+                    pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+                    
+                    if pedido:
+                        # Verifica se pedido ainda está "preso" ao embarque cancelado
+                        outros_embarques_ativos = EmbarqueItem.query.join(Embarque).filter(
+                            EmbarqueItem.separacao_lote_id == item.separacao_lote_id,
+                            EmbarqueItem.status == 'ativo',
+                            Embarque.status == 'ativo',
+                            EmbarqueItem.id != item.id
+                        ).count()
+                        
+                        if outros_embarques_ativos == 0:
+                            # Pedido realmente está "preso" ao embarque cancelado
+                            itens_problematicos.append({
+                                'item': item,
+                                'pedido': pedido,
+                                'status_pedido': pedido.status_calculado,
+                                'separacoes_count': Separacao.query.filter_by(separacao_lote_id=item.separacao_lote_id).count()
+                            })
+                            total_pedidos_afetados += 1
+            
+            if itens_problematicos:
+                problemas_identificados.append({
+                    'embarque': embarque,
+                    'itens_problematicos': itens_problematicos
+                })
+        
+        return render_template('embarques/desvincular_cancelados.html',
+                             problemas=problemas_identificados,
+                             total_pedidos_afetados=total_pedidos_afetados)
+    
+    else:  # POST - Processar desvinculação
+        try:
+            pedidos_liberados = 0
+            separacoes_liberadas = 0
+            erros = []
+            
+            embarques_cancelados = Embarque.query.filter_by(status='cancelado').all()
+            
+            for embarque in embarques_cancelados:
+                for item in embarque.itens:
+                    if item.separacao_lote_id:
+                        # Busca pedido vinculado
+                        pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+                        
+                        if pedido:
+                            # Verifica se pedido realmente está preso
+                            outros_embarques_ativos = EmbarqueItem.query.join(Embarque).filter(
+                                EmbarqueItem.separacao_lote_id == item.separacao_lote_id,
+                                EmbarqueItem.status == 'ativo',
+                                Embarque.status == 'ativo',
+                                EmbarqueItem.id != item.id
+                            ).count()
+                            
+                            if outros_embarques_ativos == 0:
+                                # 🔓 LIBERAR PEDIDO DO EMBARQUE CANCELADO
+                                pedido.nf = None
+                                pedido.data_embarque = None
+                                pedido.cotacao_id = None
+                                pedido.transportadora = None
+                                pedido.nf_cd = False
+                                
+                                pedidos_liberados += 1
+                                
+                                # 📦 CONTAR SEPARAÇÕES RELACIONADAS
+                                count_separacoes = Separacao.query.filter_by(separacao_lote_id=item.separacao_lote_id).count()
+                                separacoes_liberadas += count_separacoes
+            
+            db.session.commit()
+            
+            flash(f'✅ Desvinculação concluída com sucesso! '
+                  f'{pedidos_liberados} pedidos liberados, '
+                  f'{separacoes_liberadas} separações podem ser excluídas agora.', 'success')
+            
+            return redirect(url_for('embarques.desvincular_embarques_cancelados'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'❌ Erro na desvinculação: {str(e)}', 'danger')
+            return redirect(url_for('embarques.desvincular_embarques_cancelados'))
+
+@embarques_bp.route('/admin/desvincular-pedido/<int:pedido_id>', methods=['POST'])
+@login_required
+@require_admin() 
+def desvincular_pedido_especifico(pedido_id):
+    """
+    🎯 DESVINCULAÇÃO ESPECÍFICA: Libera um pedido específico de embarque cancelado
+    """
+    from app.pedidos.models import Pedido
+    
+    try:
+        pedido = Pedido.query.get_or_404(pedido_id)
+        
+        # Verificar se pedido está vinculado a embarque cancelado
+        if pedido.separacao_lote_id:
+            itens_embarque = EmbarqueItem.query.join(Embarque).filter(
+                EmbarqueItem.separacao_lote_id == pedido.separacao_lote_id,
+                Embarque.status == 'cancelado'
+            ).all()
+            
+            itens_ativos = EmbarqueItem.query.join(Embarque).filter(
+                EmbarqueItem.separacao_lote_id == pedido.separacao_lote_id,
+                EmbarqueItem.status == 'ativo',
+                Embarque.status == 'ativo'
+            ).count()
+            
+            if itens_embarque and itens_ativos == 0:
+                # 🔓 LIBERAR PEDIDO
+                pedido_num = pedido.num_pedido
+                
+                pedido.nf = None
+                pedido.data_embarque = None
+                pedido.cotacao_id = None
+                pedido.transportadora = None
+                pedido.nf_cd = False
+                
+                db.session.commit()
+                
+                flash(f'✅ Pedido {pedido_num} desvinculado com sucesso! '
+                      f'Agora pode ser alterado/excluído normalmente.', 'success')
+            else:
+                flash(f'⚠️ Pedido {pedido.num_pedido} não precisa ser desvinculado ou está em embarque ativo.', 'warning')
+        else:
+            flash(f'⚠️ Pedido {pedido.num_pedido} não possui lote de separação vinculado.', 'warning')
+    
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Erro ao desvincular pedido: {str(e)}', 'danger')
+    
+    return redirect(request.referrer or url_for('pedidos.lista_pedidos'))
 
