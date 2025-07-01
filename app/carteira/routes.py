@@ -14,7 +14,7 @@ from app.pedidos.models import Pedido
 from app.faturamento.models import FaturamentoProduto
 # from app.utils.auth_decorators import require_admin, require_editar_cadastros  # Removido temporariamente
 from app.utils.timezone import agora_brasil
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_, or_, inspect
 from datetime import datetime, date, timedelta
 import pandas as pd
 import logging
@@ -32,17 +32,24 @@ def index():
     """Dashboard principal da carteira de pedidos com KPIs e visão geral"""
     try:
         # 📊 VERIFICAR SE TABELAS EXISTEM (FALLBACK PARA DEPLOY)
-        if not db.engine.has_table('carteira_principal'):
+        inspector = inspect(db.engine)
+        if not inspector.has_table('carteira_principal'):
+            # 📊 SISTEMA NÃO INICIALIZADO
+            estatisticas = {
+                'total_pedidos': 0,
+                'total_produtos': 0,
+                'total_itens': 0,
+                'valor_total': 0
+            }
+            
             return render_template('carteira/dashboard.html',
-                                 total_pedidos=0,
-                                 total_produtos=0,
-                                 total_itens=0,
-                                 valor_total_carteira=0,
+                                 estatisticas=estatisticas,
                                  status_breakdown=[],
-                                 controles_pendentes=0,
-                                 inconsistencias_abertas=0,
-                                 expedicoes_proximas=0,
-                                 vendedores_breakdown=[])
+                                 alertas_inconsistencias=0,
+                                 alertas_vinculacao=0,
+                                 expedicoes_proximas=[],
+                                 top_vendedores=[],
+                                 sistema_inicializado=False)
         
         # 📊 ESTATÍSTICAS PRINCIPAIS
         total_pedidos = db.session.query(CarteiraPrincipal.num_pedido).distinct().count()
@@ -64,9 +71,9 @@ def index():
         # 🔄 CONTROLES CRUZADOS PENDENTES (com fallback)
         controles_pendentes = 0
         inconsistencias_abertas = 0
-        if db.engine.has_table('controle_cruzado_separacao'):
+        if inspector.has_table('controle_cruzado_separacao'):
             controles_pendentes = ControleCruzadoSeparacao.query.filter_by(resolvida=False).count()
-        if db.engine.has_table('inconsistencia_faturamento'):
+        if inspector.has_table('inconsistencia_faturamento'):
             inconsistencias_abertas = InconsistenciaFaturamento.query.filter_by(resolvida=False).count()
         
         # 📈 PEDIDOS COM EXPEDIÇÃO PRÓXIMA (7 dias)
@@ -84,37 +91,51 @@ def index():
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).label('valor')
         ).filter_by(ativo=True).group_by(CarteiraPrincipal.vendedor).limit(10).all()
         
+        # 📊 ORGANIZAR DADOS PARA O TEMPLATE
+        estatisticas = {
+            'total_pedidos': total_pedidos,
+            'total_produtos': total_produtos,
+            'total_itens': total_itens,
+            'valor_total': valor_total_carteira
+        }
+        
         return render_template('carteira/dashboard.html',
-                             total_pedidos=total_pedidos,
-                             total_produtos=total_produtos,
-                             total_itens=total_itens,
-                             valor_total_carteira=valor_total_carteira,
+                             estatisticas=estatisticas,
                              status_breakdown=status_breakdown,
-                             controles_pendentes=controles_pendentes,
-                             inconsistencias_abertas=inconsistencias_abertas,
-                             expedicoes_proximas=expedicoes_proximas,
-                             vendedores_breakdown=vendedores_breakdown)
+                             alertas_inconsistencias=inconsistencias_abertas,
+                             alertas_vinculacao=controles_pendentes,
+                             expedicoes_proximas=[],  # Lista vazia por enquanto
+                             top_vendedores=vendedores_breakdown[:5] if vendedores_breakdown else [],
+                             sistema_inicializado=True)
         
     except Exception as e:
         logger.error(f"Erro no dashboard da carteira: {str(e)}")
         flash('Erro ao carregar dashboard da carteira', 'error')
+        
+        # 📊 FALLBACK COM DADOS ZERO
+        estatisticas = {
+            'total_pedidos': 0,
+            'total_produtos': 0,
+            'total_itens': 0,
+            'valor_total': 0
+        }
+        
         return render_template('carteira/dashboard.html',
-                             total_pedidos=0,
-                             total_produtos=0,
-                             total_itens=0,
-                             valor_total_carteira=0,
+                             estatisticas=estatisticas,
                              status_breakdown=[],
-                             controles_pendentes=0,
-                             inconsistencias_abertas=0,
-                             expedicoes_proximas=0,
-                             vendedores_breakdown=[])
+                             alertas_inconsistencias=0,
+                             alertas_vinculacao=0,
+                             expedicoes_proximas=[],
+                             top_vendedores=[],
+                             sistema_inicializado=False)
 
 @carteira_bp.route('/principal')
 @login_required
 def listar_principal():
     """Lista a carteira principal com filtros e paginação"""
     try:
-        if not db.engine.has_table('carteira_principal'):
+        inspector = inspect(db.engine)
+        if not inspector.has_table('carteira_principal'):
             flash('Sistema de carteira ainda não foi inicializado', 'warning')
             return render_template('carteira/listar_principal.html', itens=None)
             
@@ -436,7 +457,8 @@ def relatorio_vinculacoes():
     try:
         from app.separacao.models import Separacao
         
-        if not db.engine.has_table('carteira_principal'):
+        inspector = inspect(db.engine)
+        if not inspector.has_table('carteira_principal'):
             flash('Sistema de carteira ainda não foi inicializado', 'warning')
             return redirect(url_for('carteira.index'))
         
@@ -889,7 +911,8 @@ def _processar_geracao_separacao(itens_selecionados, usuario, observacao):
                 itens_processados += 1
                 
                 # 🔗 CRIAR VINCULAÇÃO MULTI-DIMENSIONAL (SOMENTE SE MODELO EXISTE)
-                if db.engine.has_table('vinculacao_carteira_separacao'):
+                inspector = inspect(db.engine)
+                if inspector.has_table('vinculacao_carteira_separacao'):
                     vinculacao = VinculacaoCarteiraSeparacao(
                         num_pedido=getattr(item, 'num_pedido', f'TEMP_{item_id}'),
                         cod_produto=getattr(item, 'cod_produto', 'TEMP_PRODUTO'),
@@ -906,7 +929,7 @@ def _processar_geracao_separacao(itens_selecionados, usuario, observacao):
                     db.session.add(vinculacao)
                 
                 # 📝 CRIAR EVENTO DE SEPARAÇÃO (SOMENTE SE MODELO EXISTE)
-                if db.engine.has_table('evento_carteira'):
+                if inspector.has_table('evento_carteira'):
                     evento = EventoCarteira(
                         num_pedido=getattr(item, 'num_pedido', f'TEMP_{item_id}'),
                         cod_produto=getattr(item, 'cod_produto', 'TEMP_PRODUTO'),
