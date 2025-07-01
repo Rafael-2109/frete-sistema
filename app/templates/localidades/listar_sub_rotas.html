@@ -151,19 +151,19 @@
                                     {% for item in sub_rotas %}
                                     <tr>
                                         <td>
-                                            <span class="badge badge-primary">{{ item.cod_uf }}</span>
+                                            <span class="fw-bold text-primary">{{ item.cod_uf }}</span>
                                         </td>
                                         <td>
                                             <strong>{{ item.nome_cidade }}</strong>
                                         </td>
                                         <td>
-                                            <span class="badge badge-secondary">{{ item.sub_rota }}</span>
+                                            <span class="fw-bold text-dark">{{ item.sub_rota }}</span>
                                         </td>
                                         <td>
                                             {% if item.ativa %}
-                                                <span class="badge badge-success">Ativa</span>
+                                                <span class="fw-bold text-success">Ativa</span>
                                             {% else %}
-                                                <span class="badge badge-secondary">Inativa</span>
+                                                <span class="fw-bold text-secondary">Inativa</span>
                                             {% endif %}
                                         </td>
                                         <td>

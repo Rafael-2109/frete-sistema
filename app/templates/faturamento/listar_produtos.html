@@ -195,7 +195,7 @@
                                         </td>
                                         <td>
                                             {% if produto.estado %}
-                                                <span class="badge badge-secondary">{{ produto.estado }}</span>
+                                                <span class="fw-bold text-secondary">{{ produto.estado }}</span>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
@@ -207,7 +207,7 @@
                                             <small>{{ produto.nome_produto[:70] }}{% if produto.nome_produto|length > 70 %}...{% endif %}</small>
                                         </td>
                                         <td>
-                                            <span class="badge badge-primary">{{ produto.qtd_produto_faturado | numero_br }}</span>
+                                            <span class="fw-bold text-primary">{{ produto.qtd_produto_faturado | numero_br }}</span>
                                         </td>
                                         <td>{{ produto.preco_produto_faturado | valor_br }}</td>
                                         <td>
@@ -222,7 +222,7 @@
                                         </td>
                                         <td>
                                             {% if produto.incoterm %}
-                                                <span class="badge badge-info">{{ produto.incoterm }}</span>
+                                                <span class="fw-bold text-info">{{ produto.incoterm }}</span>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}

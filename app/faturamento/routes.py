@@ -971,6 +971,10 @@ def exportar_dados_faturamento():
         import pandas as pd
         from flask import make_response
         from io import BytesIO
+        from sqlalchemy import inspect
+        
+        # 🔧 CORREÇÃO: Definir inspector na função
+        inspector = inspect(db.engine)
         
         # Buscar dados
         if inspector.has_table('faturamento_produto'):

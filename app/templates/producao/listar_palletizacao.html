@@ -172,10 +172,10 @@
                                             <small>{{ item.nome_produto[:40] }}{% if item.nome_produto|length > 40 %}...{% endif %}</small>
                                         </td>
                                         <td>
-                                            <span class="badge badge-primary">{{ item.palletizacao | numero_br }}</span>
+                                            <span class="fw-bold text-primary">{{ item.palletizacao | numero_br }}</span>
                                         </td>
                                         <td>
-                                            <span class="badge badge-success">{{ item.peso_bruto | numero_br }} kg</span>
+                                            <span class="fw-bold text-success">{{ item.peso_bruto | numero_br }} kg</span>
                                         </td>
                                         <td>
                                             {% if item.altura_cm and item.largura_cm and item.comprimento_cm %}
@@ -186,16 +186,16 @@
                                         </td>
                                         <td>
                                             {% if item.volume_m3 > 0 %}
-                                                <span class="badge badge-info">{{ item.volume_m3 | numero_br }} m³</span>
+                                                <span class="fw-bold text-info">{{ item.volume_m3 | numero_br }} m³</span>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
                                         <td>
                                             {% if item.ativo %}
-                                                <span class="badge badge-success">Ativo</span>
+                                                <span class="fw-bold text-success">Ativo</span>
                                             {% else %}
-                                                <span class="badge badge-secondary">Inativo</span>
+                                                <span class="fw-bold text-secondary">Inativo</span>
                                             {% endif %}
                                         </td>
                                         <td>

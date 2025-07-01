@@ -140,6 +140,10 @@ def listar_palletizacao():
     cod_produto = request.args.get('cod_produto', '')
     
     try:
+        # 🔧 CORREÇÃO: Definir inspector na função
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        
         if inspector.has_table('cadastro_palletizacao'):
             # Query base
             query = CadastroPalletizacao.query.filter_by(ativo=True)
@@ -152,7 +156,8 @@ def listar_palletizacao():
             palletizacoes = query.order_by(CadastroPalletizacao.cod_produto).all()
         else:
             palletizacoes = []
-    except Exception:
+    except Exception as e:
+        print(f"Erro na rota palletização: {e}")
         palletizacoes = []
     
     return render_template('producao/listar_palletizacao.html',
@@ -310,7 +315,8 @@ def processar_importacao_palletizacao():
 def api_estatisticas():
     """API para estatísticas do módulo produção"""
     try:
-        from sqlalchemy import func
+        from sqlalchemy import func, inspect
+        inspector = inspect(db.engine)
         
         # Estatísticas básicas (apenas de produção)
         stats = {
@@ -322,6 +328,7 @@ def api_estatisticas():
         return jsonify({'success': True, 'data': stats})
         
     except Exception as e:
+        print(f"Erro na API estatísticas: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @producao_bp.route('/programacao/importar')
@@ -550,6 +557,10 @@ def exportar_dados_programacao():
         import pandas as pd
         from flask import make_response
         from io import BytesIO
+        from sqlalchemy import inspect
+        
+        # 🔧 CORREÇÃO: Definir inspector na função
+        inspector = inspect(db.engine)
         
         # Buscar dados
         if inspector.has_table('programacao_producao'):
@@ -904,6 +915,10 @@ def exportar_dados_palletizacao():
         import pandas as pd
         from flask import make_response
         from io import BytesIO
+        from sqlalchemy import inspect
+        
+        # 🔧 CORREÇÃO: Definir inspector na função
+        inspector = inspect(db.engine)
         
         if inspector.has_table('cadastro_palletizacao'):
             palletizacao = CadastroPalletizacao.query.filter_by(ativo=True).order_by(
