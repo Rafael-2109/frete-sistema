@@ -4,6 +4,7 @@ from app import db
 from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
 from app.utils.auth_decorators import require_admin
 from datetime import datetime
+from sqlalchemy import inspect
 
 # 📦 Blueprint da produção (seguindo padrão dos outros módulos)
 producao_bp = Blueprint('producao', __name__, url_prefix='/producao')
@@ -16,7 +17,8 @@ def index():
         from sqlalchemy import func
         
         # ✅ SEGURO: Verifica se tabelas existem antes de fazer query
-        if db.engine.has_table('programacao_producao'):
+        inspector = inspect(db.engine)
+        if inspector.has_table('programacao_producao'):
             total_programacao = ProgramacaoProducao.query.count()
             
             # Produtos únicos programados
@@ -44,7 +46,7 @@ def index():
             programacao_recente = []
         
         # Dados de palletização
-        if db.engine.has_table('cadastro_palletizacao'):
+        if inspector.has_table('cadastro_palletizacao'):
             produtos_palletizados = CadastroPalletizacao.query.filter_by(ativo=True).count()
             
             # Peso total estimado (soma dos pesos)
@@ -85,7 +87,8 @@ def listar_programacao():
     status = request.args.get('status', '')
     
     try:
-        if db.engine.has_table('programacao_producao'):
+        inspector = inspect(db.engine)
+        if inspector.has_table('programacao_producao'):
             # Query base
             query = ProgramacaoProducao.query
             
@@ -119,7 +122,7 @@ def listar_palletizacao():
     cod_produto = request.args.get('cod_produto', '')
     
     try:
-        if db.engine.has_table('cadastro_palletizacao'):
+        if inspector.has_table('cadastro_palletizacao'):
             # Query base
             query = CadastroPalletizacao.query.filter_by(ativo=True)
             
@@ -293,9 +296,9 @@ def api_estatisticas():
         
         # Estatísticas básicas (apenas de produção)
         stats = {
-            'total_ops': ProgramacaoProducao.query.count() if db.engine.has_table('programacao_producao') else 0,
-            'ops_atrasadas': ProgramacaoProducao.query.filter_by(status='PROGRAMADA').count() if db.engine.has_table('programacao_producao') else 0,
-            'produtos_palletizados': CadastroPalletizacao.query.filter_by(ativo=True).count() if db.engine.has_table('cadastro_palletizacao') else 0
+            'total_ops': ProgramacaoProducao.query.count() if inspector.has_table('programacao_producao') else 0,
+            'ops_atrasadas': ProgramacaoProducao.query.filter_by(status='PROGRAMADA').count() if inspector.has_table('programacao_producao') else 0,
+            'produtos_palletizados': CadastroPalletizacao.query.filter_by(ativo=True).count() if inspector.has_table('cadastro_palletizacao') else 0
         }
         
         return jsonify({'success': True, 'data': stats})
@@ -531,7 +534,7 @@ def exportar_dados_programacao():
         from io import BytesIO
         
         # Buscar dados
-        if db.engine.has_table('programacao_producao'):
+        if inspector.has_table('programacao_producao'):
             programacao = ProgramacaoProducao.query.filter_by(ativo=True).order_by(
                 ProgramacaoProducao.data_programacao.desc()
             ).all()
@@ -648,7 +651,7 @@ def exportar_dados_palletizacao():
         from flask import make_response
         from io import BytesIO
         
-        if db.engine.has_table('cadastro_palletizacao'):
+        if inspector.has_table('cadastro_palletizacao'):
             palletizacao = CadastroPalletizacao.query.filter_by(ativo=True).order_by(
                 CadastroPalletizacao.cod_produto
             ).all()
