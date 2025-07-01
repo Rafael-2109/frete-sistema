@@ -6,10 +6,28 @@
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
-            <h1 class="h3 mb-4">
-                <i class="fas fa-weight-hanging"></i> Cadastro de Palletização
-                <small class="text-muted">Fatores de Conversão e Peso</small>
-            </h1>
+            <!-- Header com botões -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-boxes"></i> Cadastro de Palletização
+                        <small class="text-muted">Fatores de Conversão + Dimensões</small>
+                    </h1>
+                </div>
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('producao.baixar_modelo_palletizacao') }}" class="btn btn-info">
+                        <i class="fas fa-download"></i> Modelo
+                    </a>
+                    <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-success">
+                        <i class="fas fa-upload"></i> Importar
+                    </a>
+                    {% if palletizacoes %}
+                    <a href="{{ url_for('producao.exportar_dados_palletizacao') }}" class="btn btn-warning">
+                        <i class="fas fa-file-export"></i> Exportar
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
 
@@ -74,17 +92,6 @@
                                     <a href="{{ url_for('producao.nova_palletizacao') }}" class="btn btn-primary">
                                         <i class="fas fa-plus"></i> Novo
                                     </a>
-                                    <a href="{{ url_for('producao.baixar_modelo_palletizacao') }}" class="btn btn-info">
-                                        <i class="fas fa-download"></i> Modelo
-                                    </a>
-                                    <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-success">
-                                        <i class="fas fa-upload"></i> Importar
-                                    </a>
-                                    {% if palletizacao %}
-                                    <a href="{{ url_for('producao.exportar_dados_palletizacao') }}" class="btn btn-warning">
-                                        <i class="fas fa-file-export"></i> Exportar
-                                    </a>
-                                    {% endif %}
                                 </div>
                             </div>
                         </div>

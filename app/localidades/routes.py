@@ -1,20 +1,57 @@
-from flask import request, render_template, Blueprint, send_file, jsonify
-
-from flask_login import login_required
-
-from app.localidades.forms import CidadeForm
-
-from app.localidades.models import Cidade, CadastroRota, CadastroSubRota
-from app import db
-
-from io import BytesIO
-
+import io
+import pandas as pd
 import openpyxl
-
+import tempfile
+import os
 from datetime import datetime
+from io import BytesIO
+from werkzeug.utils import secure_filename
 from sqlalchemy import inspect
 
-localidades_bp = Blueprint('localidades', __name__,url_prefix='/localidades')
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response, send_file
+from flask_login import login_required, current_user
+
+from app import db
+from app.localidades.forms import CidadeForm
+from app.localidades.models import Cidade, CadastroRota, CadastroSubRota
+from app.utils.auth_decorators import require_admin
+from app.utils.timezone import agora_brasil
+
+localidades_bp = Blueprint('localidades', __name__, url_prefix='/localidades')
+
+@localidades_bp.route('/')
+@login_required
+def index():
+    """Dashboard do módulo localidades"""
+    try:
+        inspector = inspect(db.engine)
+        
+        # Estatísticas de cidades
+        total_cidades = Cidade.query.count() if inspector.has_table('cidades') else 0
+        
+        # Estatísticas de rotas
+        if inspector.has_table('cadastro_rota'):
+            total_rotas = CadastroRota.query.count()
+            rotas_ativas = CadastroRota.query.filter_by(ativa=True).count()
+        else:
+            total_rotas = rotas_ativas = 0
+            
+        # Estatísticas de sub-rotas
+        if inspector.has_table('cadastro_sub_rota'):
+            total_sub_rotas = CadastroSubRota.query.count()
+            sub_rotas_ativas = CadastroSubRota.query.filter_by(ativa=True).count()
+        else:
+            total_sub_rotas = sub_rotas_ativas = 0
+        
+    except Exception:
+        total_cidades = total_rotas = rotas_ativas = total_sub_rotas = sub_rotas_ativas = 0
+    
+    return render_template('localidades/dashboard.html',
+                         total_cidades=total_cidades,
+                         total_rotas=total_rotas,
+                         rotas_ativas=rotas_ativas,
+                         total_sub_rotas=total_sub_rotas,
+                         sub_rotas_ativas=sub_rotas_ativas)
 
 @localidades_bp.route('/cidades', methods=['GET'])
 @login_required
@@ -141,24 +178,23 @@ def listar_rotas():
             # Ordenação
             rotas = query.order_by(CadastroRota.cod_uf).all()
             
-            # 🔧 BUSCAR OPÇÕES PARA OS DROPDOWNS
-            ufs_disponiveis = sorted(set(r.cod_uf for r in CadastroRota.query.filter_by(ativa=True).all()))
-            rotas_disponiveis = sorted(set(r.rota for r in CadastroRota.query.filter_by(ativa=True).all()))
+            # 🔧 CARREGAR UFS DOS DADOS REAIS
+            ufs_disponiveis = sorted(set(
+                r.cod_uf for r in CadastroRota.query.all() 
+                if r.cod_uf
+            ))
         else:
             rotas = []
             ufs_disponiveis = []
-            rotas_disponiveis = []
     except Exception:
         rotas = []
         ufs_disponiveis = []
-        rotas_disponiveis = []
     
-    return render_template('localidades/listar_rotas.html', 
+    return render_template('localidades/listar_rotas.html',
                          rotas=rotas,
                          cod_uf=cod_uf,
                          rota=rota,
-                         ufs_disponiveis=ufs_disponiveis,
-                         rotas_disponiveis=rotas_disponiveis)
+                         ufs_disponiveis=ufs_disponiveis)
 
 @localidades_bp.route('/sub-rotas')
 @login_required
@@ -186,20 +222,23 @@ def listar_sub_rotas():
             # Ordenação
             sub_rotas = query.order_by(CadastroSubRota.cod_uf, CadastroSubRota.nome_cidade).all()
             
-            # 🔧 BUSCAR OPÇÕES PARA OS DROPDOWNS
-            ufs_disponiveis = sorted(set(sr.cod_uf for sr in CadastroSubRota.query.filter_by(ativa=True).all()))
-            cidades_disponiveis = sorted(set(sr.nome_cidade for sr in CadastroSubRota.query.filter_by(ativa=True).all()))
-            sub_rotas_disponiveis = sorted(set(sr.sub_rota for sr in CadastroSubRota.query.filter_by(ativa=True).all()))
+            # 🔧 CARREGAR OPÇÕES DOS DADOS REAIS
+            ufs_disponiveis = sorted(set(
+                sr.cod_uf for sr in CadastroSubRota.query.all() 
+                if sr.cod_uf
+            ))
+            cidades_disponiveis = sorted(set(
+                sr.nome_cidade for sr in CadastroSubRota.query.all() 
+                if sr.nome_cidade
+            ))
         else:
             sub_rotas = []
             ufs_disponiveis = []
             cidades_disponiveis = []
-            sub_rotas_disponiveis = []
     except Exception:
         sub_rotas = []
         ufs_disponiveis = []
         cidades_disponiveis = []
-        sub_rotas_disponiveis = []
     
     return render_template('localidades/listar_sub_rotas.html',
                          sub_rotas=sub_rotas,
@@ -207,8 +246,7 @@ def listar_sub_rotas():
                          nome_cidade=nome_cidade,
                          sub_rota=sub_rota,
                          ufs_disponiveis=ufs_disponiveis,
-                         cidades_disponiveis=cidades_disponiveis,
-                         sub_rotas_disponiveis=sub_rotas_disponiveis)
+                         cidades_disponiveis=cidades_disponiveis)
 
 # =====================================
 # 📤 ROTAS DE IMPORTAÇÃO 
@@ -216,8 +254,9 @@ def listar_sub_rotas():
 
 @localidades_bp.route('/rotas/importar')
 @login_required
+@require_admin()
 def importar_rotas():
-    """Tela para importar cadastro de rotas"""
+    """Tela para importar rotas"""
     return render_template('localidades/importar_rotas.html')
 
 @localidades_bp.route('/rotas/importar', methods=['POST'])
@@ -341,8 +380,9 @@ def processar_importacao_rotas():
 
 @localidades_bp.route('/sub-rotas/importar')
 @login_required
+@require_admin()
 def importar_sub_rotas():
-    """Tela para importar cadastro de sub-rotas"""
+    """Tela para importar sub-rotas"""
     return render_template('localidades/importar_sub_rotas.html')
 
 @localidades_bp.route('/sub-rotas/importar', methods=['POST'])
@@ -480,25 +520,16 @@ def processar_importacao_sub_rotas():
 def baixar_modelo_rotas():
     """Baixar modelo Excel para importação de rotas"""
     try:
-        import pandas as pd
-        from flask import make_response
         from io import BytesIO
         
-        # Colunas exatas conforme arquivo CSV
+        # Dados exemplo conforme arquivo CSV 9
         dados_exemplo = {
-            'ESTADO': ['ES', 'RJ', 'SP', 'MG', 'BA'],
-            'ROTA': [
-                'VITÓRIA/SERRA',
-                'RIO DE JANEIRO/NITERÓI',
-                'SÃO PAULO CAPITAL',
-                'BELO HORIZONTE/CONTAGEM',
-                'SALVADOR/LAURO DE FREITAS'
-            ]
+            'cod_uf': ['ES', 'RJ', 'SP', 'MG'],
+            'rota': ['ESPÍRITO SANTO', 'RIO DE JANEIRO', 'SÃO PAULO', 'MINAS GERAIS']
         }
         
         df = pd.DataFrame(dados_exemplo)
         
-        # Criar arquivo Excel
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, sheet_name='Dados', index=False)
@@ -506,14 +537,12 @@ def baixar_modelo_rotas():
             # Instruções
             instrucoes = pd.DataFrame({
                 'INSTRUÇÕES IMPORTANTES': [
-                    '1. Use as colunas EXATAMENTE: ESTADO, ROTA',
-                    '2. ESTADO deve ter exatamente 2 caracteres (ES, RJ, SP, MG, etc.)',
-                    '3. ESTADO deve existir no cadastro de cidades do sistema',
-                    '4. ROTA é a descrição da rota principal por UF',
-                    '5. Comportamento: Substitui rota se UF já existe',
-                    '6. Adiciona nova rota para UFs não cadastradas',
-                    '7. Validação: UF deve existir no cadastro de cidades',
-                    '8. Exemplos: ES → VITÓRIA/SERRA, SP → SÃO PAULO CAPITAL'
+                    '1. Campos obrigatórios: cod_uf, rota',
+                    '2. cod_uf deve ter 2 caracteres (ES, RJ, SP, MG)',
+                    '3. UF deve existir no cadastro de cidades',
+                    '4. Comportamento: SUBSTITUI se UF já existe',
+                    '5. Rota única por UF',
+                    '6. Validação automática de UF'
                 ]
             })
             instrucoes.to_excel(writer, sheet_name='Instruções', index=False)
@@ -535,13 +564,8 @@ def baixar_modelo_rotas():
 def exportar_dados_rotas():
     """Exportar dados existentes de rotas"""
     try:
-        import pandas as pd
-        from flask import make_response
         from io import BytesIO
-        from datetime import datetime
-        from sqlalchemy import inspect
         
-        # 🔧 CORREÇÃO: Definir inspector na função
         inspector = inspect(db.engine)
         
         # Buscar dados
@@ -562,10 +586,7 @@ def exportar_dados_rotas():
             dados_export.append({
                 'cod_uf': r.cod_uf,
                 'rota': r.rota,
-                'observacao': r.observacao or '',
-                'ativa': 'Sim' if r.ativa else 'Não',
-                'created_at': r.created_at.strftime('%d/%m/%Y %H:%M') if r.created_at else '',
-                'created_by': r.created_by or ''
+                'ativa': 'Sim' if r.ativa else 'Não'
             })
         
         df = pd.DataFrame(dados_export)
@@ -604,20 +625,17 @@ def exportar_dados_rotas():
 def baixar_modelo_sub_rotas():
     """Baixar modelo Excel para importação de sub-rotas"""
     try:
-        import pandas as pd
-        from flask import make_response
         from io import BytesIO
         
-        # Colunas exatas conforme arquivo CSV
+        # Dados exemplo conforme arquivo CSV 10
         dados_exemplo = {
-            'ESTADO': ['AC', 'RJ', 'SP', 'ES', 'MG'],
-            'CIDADE': ['RIO BRANCO', 'RIO DE JANEIRO', 'SÃO PAULO', 'VITÓRIA', 'BELO HORIZONTE'],
-            'SUB ROTA': ['CAP', 'ZON', 'CAP', 'GV', 'INT']
+            'cod_uf': ['ES', 'ES', 'RJ', 'RJ'],
+            'nome_cidade': ['VITÓRIA', 'SERRA', 'RIO DE JANEIRO', 'NITERÓI'],
+            'sub_rota': ['CENTRO ES', 'GRANDE VITÓRIA', 'ZONA SUL RJ', 'REGIÃO OCEÂNICA']
         }
         
         df = pd.DataFrame(dados_exemplo)
         
-        # Criar arquivo Excel
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, sheet_name='Dados', index=False)
@@ -625,14 +643,12 @@ def baixar_modelo_sub_rotas():
             # Instruções
             instrucoes = pd.DataFrame({
                 'INSTRUÇÕES IMPORTANTES': [
-                    '1. Use as colunas EXATAMENTE: ESTADO, CIDADE, SUB ROTA',
-                    '2. ESTADO deve ter exatamente 2 caracteres (AC, RJ, SP, etc.)',
-                    '3. CIDADE deve ser o nome exato da cidade (RIO DE JANEIRO, SÃO PAULO)',
-                    '4. Combinação CIDADE+ESTADO deve existir no cadastro de cidades',
-                    '5. SUB ROTA é a abreviação da sub-rota (CAP, ZON, GV, INT)',
-                    '6. Comportamento: Sub-rota única por combinação UF+Cidade',
-                    '7. Substitui sub-rota se combinação já existe',
-                    '8. Validação: Cidade+UF deve existir no cadastro de cidades'
+                    '1. Campos obrigatórios: cod_uf, nome_cidade, sub_rota',
+                    '2. cod_uf deve ter 2 caracteres (ES, RJ, SP, MG)',
+                    '3. Combinação UF+Cidade deve existir no cadastro de cidades',
+                    '4. Comportamento: SUBSTITUI se UF+Cidade já existe',
+                    '5. Sub-rota única por combinação UF+Cidade',
+                    '6. Validação automática de cidade e UF'
                 ]
             })
             instrucoes.to_excel(writer, sheet_name='Instruções', index=False)
@@ -654,13 +670,8 @@ def baixar_modelo_sub_rotas():
 def exportar_dados_sub_rotas():
     """Exportar dados existentes de sub-rotas"""
     try:
-        import pandas as pd
-        from flask import make_response
         from io import BytesIO
-        from datetime import datetime
-        from sqlalchemy import inspect
         
-        # 🔧 CORREÇÃO: Definir inspector na função
         inspector = inspect(db.engine)
         
         # Buscar dados
@@ -682,10 +693,7 @@ def exportar_dados_sub_rotas():
                 'cod_uf': sr.cod_uf,
                 'nome_cidade': sr.nome_cidade,
                 'sub_rota': sr.sub_rota,
-                'observacao': sr.observacao or '',
-                'ativa': 'Sim' if sr.ativa else 'Não',
-                'created_at': sr.created_at.strftime('%d/%m/%Y %H:%M') if sr.created_at else '',
-                'created_by': sr.created_by or ''
+                'ativa': 'Sim' if sr.ativa else 'Não'
             })
         
         df = pd.DataFrame(dados_export)

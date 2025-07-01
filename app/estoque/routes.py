@@ -614,30 +614,31 @@ def exportar_dados_movimentacoes():
         dados_export = []
         for m in movimentacoes:
             dados_export.append({
-                'tipo_movimentacao': m.tipo_movimentacao,
                 'cod_produto': m.cod_produto,
                 'nome_produto': m.nome_produto,
-                'local_movimentacao': m.local_movimentacao or '',
                 'data_movimentacao': m.data_movimentacao.strftime('%d/%m/%Y') if m.data_movimentacao else '',
-                'qtd_movimentacao': m.qtd_movimentacao,
+                'tipo_movimentacao': m.tipo_movimentacao,
+                'local_movimentacao': m.local_movimentacao,
+                'qtd_movimentacao': float(m.qtd_movimentacao) if m.qtd_movimentacao else 0,
                 'observacao': m.observacao or '',
-                'documento_origem': m.documento_origem or ''
+                'criado_em': m.criado_em.strftime('%d/%m/%Y %H:%M') if m.criado_em else '',
+                'criado_por': m.criado_por or ''
             })
         
         df = pd.DataFrame(dados_export)
         
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='Movimentações Estoque', index=False)
+            df.to_excel(writer, sheet_name='Movimentações', index=False)
             
             # Estatísticas
             stats = pd.DataFrame({
-                'Estatística': ['Total Registros', 'Produtos Únicos', 'Tipos Únicos', 'Movimentação Total'],
+                'Estatística': ['Total Movimentações', 'Tipos Diferentes', 'Produtos Diferentes', 'Movimentações Ativas'],
                 'Valor': [
                     len(movimentacoes),
-                    len(set(m.cod_produto for m in movimentacoes)),
                     len(set(m.tipo_movimentacao for m in movimentacoes)),
-                    sum(m.qtd_movimentacao for m in movimentacoes)
+                    len(set(m.cod_produto for m in movimentacoes)),
+                    len([m for m in movimentacoes if m.ativo])
                 ]
             })
             stats.to_excel(writer, sheet_name='Estatísticas', index=False)
@@ -646,7 +647,7 @@ def exportar_dados_movimentacoes():
         
         response = make_response(output.getvalue())
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        response.headers['Content-Disposition'] = f'attachment; filename=movimentacoes_estoque_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename=movimentacoes_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
         
         return response
         
