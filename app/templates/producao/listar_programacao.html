@@ -171,11 +171,11 @@
                                             <small>{{ item.nome_produto[:70] }}{% if item.nome_produto|length > 70 %}...{% endif %}</small>
                                         </td>
                                         <td>
-                                            <span class="badge badge-primary">{{ item.qtd_programada | numero_br }}</span>
+                                            <span class="fw-bold text-dark">{{ item.qtd_programada | numero_br }}</span>
                                         </td>
                                         <td>
                                             {% if item.linha_producao %}
-                                                <span class="badge badge-info">{{ item.linha_producao }}</span>
+                                                <span class="fw-bold text-info">{{ item.linha_producao }}</span>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
