@@ -1281,7 +1281,7 @@ def _processar_vinculacao_automatica(usuario):
                         data_agendamento=item.agendamento or date.today(),
                         data_expedicao=item.expedicao or date.today(),
                         carteira_item_id=item.id,
-                        separacao_lote_id=lote_id,
+                        separacao_lote_id=separacao.id,
                         qtd_carteira_original=float(item.qtd_produto_pedido),
                         qtd_separacao_original=float(item.qtd_saldo_produto_pedido),
                         qtd_vinculada=float(item.qtd_saldo_produto_pedido),
