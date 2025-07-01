@@ -623,14 +623,16 @@ def exportar_dados_movimentacoes():
 
 @estoque_bp.route('/unificacao-codigos')
 @login_required
-@require_admin()
 def listar_unificacao_codigos():
-    """Lista unificações de códigos configuradas"""
+    """Lista unificações de códigos"""
+    from sqlalchemy import inspect
+    
     # Definir variáveis no escopo da função para evitar UnboundLocalError
     codigo_busca = request.args.get('codigo_busca', '')
     status_filtro = request.args.get('status', '')
     
     try:
+        inspector = inspect(db.engine)
         if inspector.has_table('unificacao_codigos'):
             # Query base
             query = UnificacaoCodigos.query
@@ -679,16 +681,14 @@ def listar_unificacao_codigos():
 
 @estoque_bp.route('/unificacao-codigos/novo')
 @login_required
-@require_admin()
 def nova_unificacao_codigo():
-    """Formulário para nova unificação de código"""
+    """Tela para criar nova unificação de código"""
     return render_template('estoque/nova_unificacao_codigo.html')
 
 @estoque_bp.route('/unificacao-codigos/novo', methods=['POST'])
 @login_required
-@require_admin()
 def processar_nova_unificacao():
-    """Processa nova unificação de código"""
+    """Processar criação de nova unificação"""
     try:
         codigo_origem = request.form.get('codigo_origem', '').strip()
         codigo_destino = request.form.get('codigo_destino', '').strip()
@@ -751,7 +751,6 @@ def processar_nova_unificacao():
 
 @estoque_bp.route('/unificacao-codigos/toggle/<int:id>')
 @login_required
-@require_admin()
 def toggle_unificacao_codigo(id):
     """Ativa/Desativa unificação de código"""
     try:
@@ -775,14 +774,12 @@ def toggle_unificacao_codigo(id):
 
 @estoque_bp.route('/unificacao-codigos/importar')
 @login_required
-@require_admin()
 def importar_unificacao_codigos():
     """Tela para importar unificações de códigos"""
     return render_template('estoque/importar_unificacao_codigos.html')
 
 @estoque_bp.route('/unificacao-codigos/importar', methods=['POST'])
 @login_required
-@require_admin()
 def processar_importacao_unificacao():
     """Processar importação de unificações de códigos"""
     try:
@@ -804,20 +801,31 @@ def processar_importacao_unificacao():
             flash('Tipo de arquivo não suportado! Use apenas .xlsx ou .csv', 'error')
             return redirect(url_for('estoque.importar_unificacao_codigos'))
         
-        # Processar arquivo temporário
+        # 📁 CORREÇÃO: Ler arquivo uma vez e usar bytes para ambas operações
+        original_filename = arquivo.filename
+        
+        # Ler o arquivo uma vez e usar os bytes
+        arquivo.seek(0)  # Garantir que está no início
+        file_content = arquivo.read()  # Ler todo o conteúdo uma vez
+        
+        # 📁 Para processamento, criar arquivo temporário dos bytes
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as temp_file:
+            temp_file.write(file_content)  # Usar os bytes já lidos
+            temp_filepath = temp_file.name
+
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_file:
-                arquivo.save(temp_file.name)
-                
-                if arquivo.filename.lower().endswith('.xlsx'):
-                    df = pd.read_excel(temp_file.name)
-                else:
-                    df = pd.read_csv(temp_file.name, encoding='utf-8', sep=';')
-                
-                os.unlink(temp_file.name)
-        except Exception as e:
-            flash(f'Erro ao processar arquivo: {str(e)}', 'error')
-            return redirect(url_for('estoque.importar_unificacao_codigos'))
+            # Processar arquivo
+            if original_filename.lower().endswith('.xlsx'):
+                df = pd.read_excel(temp_filepath)
+            else:
+                df = pd.read_csv(temp_filepath, encoding='utf-8', sep=';')
+        finally:
+            # 🗑️ Remover arquivo temporário
+            try:
+                os.unlink(temp_filepath)
+            except OSError:
+                pass  # Ignorar se não conseguir remover
         
         # Verificar colunas obrigatórias
         colunas_obrigatorias = ['codigo_origem', 'codigo_destino']
@@ -908,7 +916,6 @@ def processar_importacao_unificacao():
 
 @estoque_bp.route('/unificacao-codigos/baixar-modelo')
 @login_required
-@require_admin()
 def baixar_modelo_unificacao():
     """Baixar modelo Excel para importação de unificações"""
     try:
@@ -963,7 +970,6 @@ def baixar_modelo_unificacao():
 
 @estoque_bp.route('/unificacao-codigos/exportar-dados')
 @login_required
-@require_admin()
 def exportar_dados_unificacao():
     """Exportar dados existentes de unificações"""
     try:

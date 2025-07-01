@@ -82,6 +82,8 @@ def index():
 @login_required
 def listar_programacao():
     """Lista programação de produção"""
+    from sqlalchemy import inspect
+    
     # Filtros
     cod_produto = request.args.get('cod_produto', '')
     status = request.args.get('status', '')
@@ -105,8 +107,24 @@ def listar_programacao():
     except Exception:
         programacoes = []
     
+    # Cálculos para o template
+    total_quantidade = sum(p.qtd_programada for p in programacoes) if programacoes else 0
+    produtos_unicos = len(set(p.cod_produto for p in programacoes)) if programacoes else 0
+    linhas_unicas = len(set(p.linha_producao for p in programacoes if p.linha_producao)) if programacoes else 0
+    
+    # Dados para dropdowns
+    codigos_produtos = sorted(set(p.cod_produto for p in programacoes)) if programacoes else []
+    nomes_produtos = sorted(set(p.nome_produto for p in programacoes)) if programacoes else []
+    linhas_producao = sorted(set(p.linha_producao for p in programacoes if p.linha_producao)) if programacoes else []
+
     return render_template('producao/listar_programacao.html',
-                         programacoes=programacoes,
+                         programacao=programacoes,  # Correção: template espera 'programacao'
+                         total_quantidade=total_quantidade,
+                         produtos_unicos=produtos_unicos,
+                         linhas_unicas=linhas_unicas,
+                         codigos_produtos=codigos_produtos,
+                         nomes_produtos=nomes_produtos,
+                         linhas_producao=linhas_producao,
                          cod_produto=cod_produto,
                          status=status)
 
