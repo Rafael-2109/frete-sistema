@@ -141,16 +141,16 @@
                                     {% for item in rotas %}
                                     <tr>
                                         <td>
-                                            <span class="badge badge-primary">{{ item.cod_uf }}</span>
+                                            <span class="fw-bold text-primary">{{ item.cod_uf }}</span>
                                         </td>
                                         <td>
                                             <strong>{{ item.rota }}</strong>
                                         </td>
                                         <td>
                                             {% if item.ativa %}
-                                                <span class="badge badge-success">Ativa</span>
+                                                <span class="fw-bold text-success">Ativa</span>
                                             {% else %}
-                                                <span class="badge badge-secondary">Inativa</span>
+                                                <span class="fw-bold text-secondary">Inativa</span>
                                             {% endif %}
                                         </td>
                                         <td>
