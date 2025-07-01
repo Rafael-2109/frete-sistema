@@ -551,7 +551,7 @@ def inativar_nfs():
 
 @faturamento_bp.route('/produtos')
 @login_required
-def listar_faturamento_produto():
+def listar_faturamento_produtos():
     """Lista faturamento detalhado por produto"""
     # Filtros
     nome_cliente = request.args.get('nome_cliente', '')
@@ -942,7 +942,7 @@ def importar_faturamento_produtos():
             for erro in erros[:5]:
                 flash(f"❌ {erro}", 'error')
         
-        return redirect(url_for('faturamento.listar_faturamento_produto'))
+        return redirect(url_for('faturamento.listar_faturamento_produtos'))
         
     except Exception as e:
         db.session.rollback()
@@ -1028,7 +1028,7 @@ def baixar_modelo_faturamento():
         
     except Exception as e:
         flash(f'Erro ao gerar modelo: {str(e)}', 'error')
-        return redirect(url_for('faturamento.listar_faturamento_produto'))
+        return redirect(url_for('faturamento.listar_faturamento_produtos'))
 
 @faturamento_bp.route('/produtos/exportar-dados')
 @login_required 
@@ -1053,7 +1053,7 @@ def exportar_dados_faturamento():
         
         if not produtos:
             flash('Nenhum dado encontrado para exportar.', 'warning')
-            return redirect(url_for('faturamento.listar_faturamento_produto'))
+            return redirect(url_for('faturamento.listar_faturamento_produtos'))
         
         # Converter para formato Excel com colunas exatas
         dados_export = []
@@ -1103,4 +1103,4 @@ def exportar_dados_faturamento():
         
     except Exception as e:
         flash(f'Erro ao exportar dados: {str(e)}', 'error')
-        return redirect(url_for('faturamento.listar_faturamento_produto'))
+        return redirect(url_for('faturamento.listar_faturamento_produtos'))
