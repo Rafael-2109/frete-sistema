@@ -624,30 +624,50 @@ def importar_faturamento_produtos():
             flash('Tipo de arquivo não suportado! Use apenas .xlsx ou .csv', 'error')
             return redirect(request.url)
         
-        # Salvar arquivo temporário
+        # 📁 CORREÇÃO: Ler arquivo uma vez e usar bytes para ambas operações
+        original_filename = arquivo.filename
+        
+        # Ler o arquivo uma vez e usar os bytes para ambas operações
+        arquivo.seek(0)  # Garantir que está no início
+        file_content = arquivo.read()  # Ler todo o conteúdo uma vez
+        
+        # 🌐 Usar sistema S3 para salvar arquivo
         file_storage = get_file_storage()
-        temp_filename = f"temp_faturamento_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secure_filename(arquivo.filename)}"
+        
+        # Criar um objeto BytesIO para simular arquivo para o S3
+        from io import BytesIO
+        file_for_s3 = BytesIO(file_content)
+        file_for_s3.name = original_filename
         
         try:
             # Salvar no S3/storage
-            file_path = file_storage.save_file(arquivo, 'temp', temp_filename)
-            
-            # Processar arquivo
-            if arquivo.filename.lower().endswith('.xlsx'):
-                df = pd.read_excel(file_path)
-            else:
-                df = pd.read_csv(file_path, encoding='utf-8', sep=';')
-                
+            file_path = file_storage.save_file(
+                file=file_for_s3,
+                folder='faturamento',
+                allowed_extensions=['xlsx', 'csv']
+            )
         except Exception as e:
-            # Fallback para arquivo local se S3 falhar
-            import tempfile
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_file:
-                arquivo.save(temp_file.name)
-                if arquivo.filename.lower().endswith('.xlsx'):
-                    df = pd.read_excel(temp_file.name)
-                else:
-                    df = pd.read_csv(temp_file.name, encoding='utf-8', sep=';')
-                os.unlink(temp_file.name)
+            print(f"Erro ao salvar no S3: {e}")
+            file_path = None
+        
+        # 📁 Para processamento, criar arquivo temporário dos bytes
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as temp_file:
+            temp_file.write(file_content)  # Usar os bytes já lidos
+            temp_filepath = temp_file.name
+
+        try:
+            # Processar arquivo
+            if original_filename.lower().endswith('.xlsx'):
+                df = pd.read_excel(temp_filepath)
+            else:
+                df = pd.read_csv(temp_filepath, encoding='utf-8', sep=';')
+        finally:
+            # 🗑️ Remover arquivo temporário
+            try:
+                os.unlink(temp_filepath)
+            except OSError:
+                pass  # Ignorar se não conseguir remover
         
         # Validar colunas obrigatórias
         colunas_obrigatorias = ['numero_nf', 'data_fatura', 'cnpj_cliente', 'nome_cliente', 
