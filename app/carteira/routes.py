@@ -448,9 +448,18 @@ def baixar_modelo():
         
         df = pd.DataFrame(modelo_data)
         
-        # 📁 CRIAR EXCEL COM MÚLTIPLAS ABAS
-        temp_path = os.path.join('app', 'static', 'modelos', 'modelo_carteira_pedidos.xlsx')
-        os.makedirs(os.path.dirname(temp_path), exist_ok=True)
+        # 📁 CRIAR EXCEL COM MÚLTIPLAS ABAS - CAMINHO ABSOLUTO
+        from flask import current_app
+        import tempfile
+        
+        # Criar arquivo temporário para evitar problemas de caminho
+        temp_file = tempfile.NamedTemporaryFile(
+            delete=False, 
+            suffix='.xlsx', 
+            prefix='modelo_carteira_'
+        )
+        temp_path = temp_file.name
+        temp_file.close()
         
         with pd.ExcelWriter(temp_path, engine='openpyxl') as writer:
             # 📋 ABA 1: DADOS PARA IMPORTAÇÃO
@@ -517,8 +526,17 @@ def baixar_modelo():
             df_comportamento.to_excel(writer, sheet_name='Comportamento', index=False)
         
         logger.info(f"✅ Modelo gerado: {temp_path}")
-        return send_file(temp_path, as_attachment=True, 
-                        download_name='modelo_carteira_pedidos.xlsx')
+        
+        # Enviar arquivo e limpar temporário
+        try:
+            return send_file(temp_path, as_attachment=True, 
+                            download_name='modelo_carteira_pedidos.xlsx')
+        finally:
+            # Limpar arquivo temporário após envio (ou em caso de erro)
+            try:
+                os.unlink(temp_path)
+            except:
+                pass  # Ignorar erro de limpeza
         
     except Exception as e:
         logger.error(f"Erro ao gerar modelo: {str(e)}")
