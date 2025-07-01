@@ -12,6 +12,7 @@ from io import BytesIO
 import openpyxl
 
 from datetime import datetime
+from sqlalchemy import inspect
 
 localidades_bp = Blueprint('localidades', __name__,url_prefix='/localidades')
 
@@ -122,7 +123,8 @@ def mesorregioes_por_uf(uf):
 def listar_rotas():
     """Lista cadastro de rotas principais por UF"""
     try:
-        rotas = CadastroRota.query.filter_by(ativa=True).order_by(CadastroRota.cod_uf).all() if db.engine.has_table('cadastro_rota') else []
+        inspector = inspect(db.engine)
+        rotas = CadastroRota.query.filter_by(ativa=True).order_by(CadastroRota.cod_uf).all() if inspector.has_table('cadastro_rota') else []
     except Exception:
         rotas = []
     
@@ -137,7 +139,8 @@ def listar_sub_rotas():
     nome_cidade = request.args.get('nome_cidade', '')
     
     try:
-        if db.engine.has_table('cadastro_sub_rota'):
+        inspector = inspect(db.engine)
+        if inspector.has_table('cadastro_sub_rota'):
             # Query base
             query = CadastroSubRota.query.filter_by(ativa=True)
             
@@ -484,7 +487,7 @@ def exportar_dados_rotas():
         from datetime import datetime
         
         # Buscar dados
-        if db.engine.has_table('cadastro_rota'):
+        if inspector.has_table('cadastro_rota'):
             rotas = CadastroRota.query.filter_by(ativa=True).order_by(CadastroRota.cod_uf).all()
         else:
             rotas = []
@@ -593,7 +596,7 @@ def exportar_dados_sub_rotas():
         from datetime import datetime
         
         # Buscar dados
-        if db.engine.has_table('cadastro_sub_rota'):
+        if inspector.has_table('cadastro_sub_rota'):
             sub_rotas = CadastroSubRota.query.filter_by(ativa=True).order_by(
                 CadastroSubRota.cod_uf, CadastroSubRota.nome_cidade
             ).all()

@@ -1,7 +1,7 @@
 from app import db
 from datetime import datetime
 from app.utils.timezone import agora_brasil
-from sqlalchemy import func, and_, or_
+\1, inspectnc, and_, or_
 from datetime import datetime, timedelta
 import logging
 
@@ -209,7 +209,7 @@ class SaldoEstoque:
     def obter_produtos_com_estoque():
         """Obtém lista de produtos únicos que têm movimentação de estoque"""
         try:
-            if not db.engine.has_table('movimentacao_estoque'):
+            if not inspector.has_table('movimentacao_estoque'):
                 return []
             
             # Buscar produtos únicos com movimentação
@@ -230,7 +230,7 @@ class SaldoEstoque:
     def calcular_estoque_inicial(cod_produto):
         """Calcula estoque inicial (D0) baseado em todas as movimentações"""
         try:
-            if not db.engine.has_table('movimentacao_estoque'):
+            if not inspector.has_table('movimentacao_estoque'):
                 return 0
             
             # Buscar todos os códigos relacionados (considerando unificação)
@@ -256,7 +256,7 @@ class SaldoEstoque:
     def calcular_producao_periodo(cod_produto, data_inicio, data_fim):
         """Calcula produção programada para um produto em um período"""
         try:
-            if not db.engine.has_table('programacao_producao'):
+            if not inspector.has_table('programacao_producao'):
                 return 0
             
             # Buscar todos os códigos relacionados (considerando unificação)

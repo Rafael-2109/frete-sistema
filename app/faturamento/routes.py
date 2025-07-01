@@ -586,7 +586,7 @@ def listar_faturamento_produtos():
 def api_estatisticas_produtos():
     """API para estatísticas do faturamento por produto"""
     try:
-        from sqlalchemy import func
+        \1, inspectnc
         
         # Estatísticas básicas
         stats = {
@@ -952,7 +952,7 @@ def exportar_dados_faturamento():
         from io import BytesIO
         
         # Buscar dados
-        if db.engine.has_table('faturamento_produto'):
+        if inspector.has_table('faturamento_produto'):
             produtos = FaturamentoProduto.query.filter_by(ativo=True).order_by(
                 FaturamentoProduto.numero_nf.desc()
             ).all()

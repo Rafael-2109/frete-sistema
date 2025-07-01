@@ -21,11 +21,11 @@ estoque_bp = Blueprint('estoque', __name__, url_prefix='/estoque')
 def index():
     """Dashboard do módulo estoque"""
     try:
-        from sqlalchemy import func, extract
+        \1, inspectnc, extract
         from datetime import datetime
         
         # ✅ SEGURO: Verifica se tabela existe antes de fazer query
-        if db.engine.has_table('movimentacao_estoque'):
+        if inspector.has_table('movimentacao_estoque'):
             total_movimentacoes = MovimentacaoEstoque.query.count()
             
             # Movimentações do mês atual
@@ -102,7 +102,7 @@ def listar_movimentacoes():
     tipo_movimentacao = request.args.get('tipo_movimentacao', '')
     
     try:
-        if db.engine.has_table('movimentacao_estoque'):
+        if inspector.has_table('movimentacao_estoque'):
             # Query base
             query = MovimentacaoEstoque.query
             
@@ -129,7 +129,7 @@ def listar_movimentacoes():
 def api_estatisticas():
     """API para estatísticas do módulo estoque"""
     try:
-        from sqlalchemy import func
+        \1, inspectnc
         
         # Estatísticas básicas
         stats = {
@@ -376,7 +376,7 @@ def exportar_dados_movimentacoes():
         from datetime import datetime
         
         # Buscar dados
-        if db.engine.has_table('movimentacao_estoque'):
+        if inspector.has_table('movimentacao_estoque'):
             movimentacoes = MovimentacaoEstoque.query.filter_by(ativo=True).order_by(
                 MovimentacaoEstoque.data_movimentacao.desc()
             ).limit(1000).all()  # Limitar a 1000 para performance
@@ -446,7 +446,7 @@ def listar_unificacao_codigos():
     status_filtro = request.args.get('status', '')
     
     try:
-        if db.engine.has_table('unificacao_codigos'):
+        if inspector.has_table('unificacao_codigos'):
             # Query base
             query = UnificacaoCodigos.query
             
@@ -787,7 +787,7 @@ def exportar_dados_unificacao():
         from io import BytesIO
         from datetime import datetime
         
-        if db.engine.has_table('unificacao_codigos'):
+        if inspector.has_table('unificacao_codigos'):
             unificacoes = UnificacaoCodigos.query.order_by(
                 UnificacaoCodigos.created_at.desc()
             ).all()
