@@ -273,8 +273,7 @@ class SaldoEstoque:
                 producoes = ProgramacaoProducao.query.filter(
                     ProgramacaoProducao.cod_produto == str(codigo),
                     ProgramacaoProducao.data_programacao >= data_inicio,
-                    ProgramacaoProducao.data_programacao <= data_fim,
-                    ProgramacaoProducao.ativo == True
+                    ProgramacaoProducao.data_programacao <= data_fim
                 ).all()
                 
                 total_producao += sum(float(p.qtd_programada) for p in producoes)
