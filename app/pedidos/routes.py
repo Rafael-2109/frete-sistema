@@ -665,6 +665,17 @@ def excluir_pedido(pedido_id):
                 db.session.delete(separacao)
                 separacoes_excluidas += 1
         
+        # 🔧 NOVA FUNCIONALIDADE: Excluir itens de cotação relacionados
+        from app.cotacao.models import CotacaoItem
+        itens_cotacao_excluidos = 0
+        itens_cotacao = CotacaoItem.query.filter_by(pedido_id=pedido.id).all()
+        for item_cotacao in itens_cotacao:
+            db.session.delete(item_cotacao)
+            itens_cotacao_excluidos += 1
+        
+        if itens_cotacao_excluidos > 0:
+            print(f"[DEBUG] 🗑️ Removendo {itens_cotacao_excluidos} item(ns) de cotação relacionados")
+
         # ✅ EXCLUI O PEDIDO
         db.session.delete(pedido)
         
@@ -673,6 +684,8 @@ def excluir_pedido(pedido_id):
         
         # ✅ MENSAGEM DE SUCESSO
         mensagem_base = f"Pedido {num_pedido} excluído com sucesso! {separacoes_excluidas} item(ns) de separação também foram removidos."
+        if itens_cotacao_excluidos > 0:
+            mensagem_base += f" {itens_cotacao_excluidos} item(ns) de cotação também foram removidos."
         if vinculos_limpos:
             mensagem_base += " Vínculos órfãos com embarque cancelado foram automaticamente removidos."
         
