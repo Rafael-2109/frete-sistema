@@ -1001,7 +1001,8 @@ def _processar_baixa_faturamento(numero_nf, usuario):
         for nf_item in nfs_faturadas:
             try:
                 # 🔍 BUSCAR ITEM NA CARTEIRA (se existe)
-                if db.engine.has_table('carteira_principal'):
+                inspector = inspect(db.engine)
+                if inspector.has_table('carteira_principal'):
                     itens_carteira = CarteiraPrincipal.query.filter(
                         CarteiraPrincipal.num_pedido == getattr(nf_item, 'origem', None),
                         CarteiraPrincipal.cod_produto == getattr(nf_item, 'cod_produto', None)
@@ -1021,7 +1022,7 @@ def _processar_baixa_faturamento(numero_nf, usuario):
                                     item.qtd_saldo_produto_pedido = max(0, novo_saldo)
                                 
                                 # 📝 ATUALIZAR CÓPIA
-                                if db.engine.has_table('carteira_copia'):
+                                if inspector.has_table('carteira_copia'):
                                     item_copia = CarteiraCopia.query.filter_by(
                                         num_pedido=getattr(item, 'num_pedido', None),
                                         cod_produto=getattr(item, 'cod_produto', None)
@@ -1038,7 +1039,7 @@ def _processar_baixa_faturamento(numero_nf, usuario):
                     else:
                         # ⚠️ INCONSISTÊNCIA - NF SEM CARTEIRA
                         logger.warning(f"NF {numero_nf} produto {getattr(nf_item, 'cod_produto', None)} sem item na carteira")
-                        if db.engine.has_table('inconsistencia_faturamento'):
+                        if inspector.has_table('inconsistencia_faturamento'):
                             inconsistencia = InconsistenciaFaturamento(
                                 numero_nf=numero_nf,
                                 cod_produto=getattr(nf_item, 'cod_produto', None),
@@ -1051,7 +1052,7 @@ def _processar_baixa_faturamento(numero_nf, usuario):
                         inconsistencias += 1
                 
                 # 📝 CRIAR HISTÓRICO DE FATURAMENTO
-                if db.engine.has_table('historico_faturamento'):
+                if inspector.has_table('historico_faturamento'):
                     historico = HistoricoFaturamento(
                         numero_nf=numero_nf,
                         data_faturamento=getattr(nf_item, 'data_fatura', date.today()),
@@ -1064,7 +1065,7 @@ def _processar_baixa_faturamento(numero_nf, usuario):
                     db.session.add(historico)
                 
                 # 📝 CRIAR EVENTO CARTEIRA
-                if db.engine.has_table('evento_carteira'):
+                if inspector.has_table('evento_carteira'):
                     evento = EventoCarteira(
                         num_pedido=getattr(nf_item, 'origem', None),
                         cod_produto=getattr(nf_item, 'cod_produto', None),
