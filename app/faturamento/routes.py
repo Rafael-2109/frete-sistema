@@ -551,35 +551,102 @@ def inativar_nfs():
 
 @faturamento_bp.route('/produtos')
 @login_required
-def listar_faturamento_produtos():
-    """Lista faturamento por produto (novo módulo)"""
-    page = request.args.get('page', 1, type=int)
-    per_page = 50
-    
+def listar_faturamento_produto():
+    """Lista faturamento detalhado por produto"""
     # Filtros
+    nome_cliente = request.args.get('nome_cliente', '')
     cod_produto = request.args.get('cod_produto', '')
-    numero_nf = request.args.get('numero_nf', '')
-    cnpj_cliente = request.args.get('cnpj_cliente', '')
+    vendedor = request.args.get('vendedor', '')
+    estado = request.args.get('estado', '')
+    incoterm = request.args.get('incoterm', '')
+    data_de = request.args.get('data_de', '')
+    data_ate = request.args.get('data_ate', '')
     
-    # Query base
-    query = FaturamentoProduto.query
+    # Paginação
+    try:
+        page = int(request.args.get('page', '1'))
+    except (ValueError, TypeError):
+        page = 1
+    per_page = 200  # 200 itens por página conforme solicitado
     
-    # Aplicar filtros
-    if cod_produto:
-        query = query.filter(FaturamentoProduto.cod_produto.ilike(f'%{cod_produto}%'))
-    if numero_nf:
-        query = query.filter(FaturamentoProduto.numero_nf.ilike(f'%{numero_nf}%'))
-    if cnpj_cliente:
-        query = query.filter(FaturamentoProduto.cnpj_cliente.ilike(f'%{cnpj_cliente}%'))
-    
-    # Ordenação e paginação
-    faturamentos = query.order_by(FaturamentoProduto.data_fatura.desc()).all()
+    try:
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        
+        if inspector.has_table('faturamento_produto'):
+            # Query base
+            query = FaturamentoProduto.query.filter_by(ativo=True)
+            
+            # Aplicar filtros
+            if nome_cliente:
+                query = query.filter(FaturamentoProduto.nome_cliente.ilike(f'%{nome_cliente}%'))
+            if cod_produto:
+                query = query.filter(FaturamentoProduto.cod_produto.ilike(f'%{cod_produto}%'))
+            if vendedor:
+                query = query.filter(FaturamentoProduto.vendedor.ilike(f'%{vendedor}%'))
+            if estado:
+                query = query.filter(FaturamentoProduto.estado == estado)
+            if incoterm:
+                query = query.filter(FaturamentoProduto.incoterm.ilike(f'%{incoterm}%'))
+                
+            # Filtros de data
+            if data_de:
+                try:
+                    data_de_obj = datetime.strptime(data_de, '%Y-%m-%d').date()
+                    query = query.filter(FaturamentoProduto.data_fatura >= data_de_obj)
+                except ValueError:
+                    pass
+                    
+            if data_ate:
+                try:
+                    data_ate_obj = datetime.strptime(data_ate, '%Y-%m-%d').date()
+                    query = query.filter(FaturamentoProduto.data_fatura <= data_ate_obj)
+                except ValueError:
+                    pass
+            
+            # Ordenação e paginação
+            faturamentos = query.order_by(FaturamentoProduto.data_fatura.desc()).paginate(
+                page=page, per_page=per_page, error_out=False
+            )
+            
+            # Buscar opções dos filtros
+            opcoes_estados = sorted(set(
+                f.estado for f in FaturamentoProduto.query.with_entities(FaturamentoProduto.estado).distinct() 
+                if f.estado and f.estado.strip()
+            ))
+            
+            opcoes_incoterms = sorted(set(
+                f.incoterm for f in FaturamentoProduto.query.with_entities(FaturamentoProduto.incoterm).distinct() 
+                if f.incoterm and f.incoterm.strip()
+            ))
+            
+            opcoes_vendedores = sorted(set(
+                f.vendedor for f in FaturamentoProduto.query.with_entities(FaturamentoProduto.vendedor).distinct() 
+                if f.vendedor and f.vendedor.strip()
+            ))
+        else:
+            faturamentos = None
+            opcoes_estados = []
+            opcoes_incoterms = []
+            opcoes_vendedores = []
+    except Exception:
+        faturamentos = None
+        opcoes_estados = []
+        opcoes_incoterms = []
+        opcoes_vendedores = []
     
     return render_template('faturamento/listar_produtos.html',
                          faturamentos=faturamentos,
+                         nome_cliente=nome_cliente,
                          cod_produto=cod_produto,
-                         numero_nf=numero_nf,
-                         cnpj_cliente=cnpj_cliente)
+                         vendedor=vendedor,
+                         estado=estado,
+                         incoterm=incoterm,
+                         data_de=data_de,
+                         data_ate=data_ate,
+                         opcoes_estados=opcoes_estados,
+                         opcoes_incoterms=opcoes_incoterms,
+                         opcoes_vendedores=opcoes_vendedores)
 
 @faturamento_bp.route('/produtos/api/estatisticas')
 @login_required
@@ -875,7 +942,7 @@ def importar_faturamento_produtos():
             for erro in erros[:5]:
                 flash(f"❌ {erro}", 'error')
         
-        return redirect(url_for('faturamento.listar_faturamento_produtos'))
+        return redirect(url_for('faturamento.listar_faturamento_produto'))
         
     except Exception as e:
         db.session.rollback()
@@ -961,7 +1028,7 @@ def baixar_modelo_faturamento():
         
     except Exception as e:
         flash(f'Erro ao gerar modelo: {str(e)}', 'error')
-        return redirect(url_for('faturamento.listar_faturamento_produtos'))
+        return redirect(url_for('faturamento.listar_faturamento_produto'))
 
 @faturamento_bp.route('/produtos/exportar-dados')
 @login_required 
@@ -986,7 +1053,7 @@ def exportar_dados_faturamento():
         
         if not produtos:
             flash('Nenhum dado encontrado para exportar.', 'warning')
-            return redirect(url_for('faturamento.listar_faturamento_produtos'))
+            return redirect(url_for('faturamento.listar_faturamento_produto'))
         
         # Converter para formato Excel com colunas exatas
         dados_export = []
@@ -1036,4 +1103,4 @@ def exportar_dados_faturamento():
         
     except Exception as e:
         flash(f'Erro ao exportar dados: {str(e)}', 'error')
-        return redirect(url_for('faturamento.listar_faturamento_produtos'))
+        return redirect(url_for('faturamento.listar_faturamento_produto'))

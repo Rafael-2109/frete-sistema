@@ -205,6 +205,13 @@ def listar_sub_rotas():
     nome_cidade = request.args.get('nome_cidade', '')
     sub_rota = request.args.get('sub_rota', '')
     
+    # Paginação
+    try:
+        page = int(request.args.get('page', '1'))
+    except (ValueError, TypeError):
+        page = 1
+    per_page = 200  # 200 itens por página conforme solicitado
+    
     try:
         inspector = inspect(db.engine)
         if inspector.has_table('cadastro_sub_rota'):
@@ -219,34 +226,37 @@ def listar_sub_rotas():
             if sub_rota:
                 query = query.filter(CadastroSubRota.sub_rota.ilike(f'%{sub_rota}%'))
             
-            # Ordenação
-            sub_rotas = query.order_by(CadastroSubRota.cod_uf, CadastroSubRota.nome_cidade).all()
+            # Ordenação e paginação
+            sub_rotas = query.order_by(CadastroSubRota.cod_uf, CadastroSubRota.nome_cidade).paginate(
+                page=page, per_page=per_page, error_out=False
+            )
             
-            # 🔧 CARREGAR OPÇÕES DOS DADOS REAIS
-            ufs_disponiveis = sorted(set(
-                sr.cod_uf for sr in CadastroSubRota.query.all() 
-                if sr.cod_uf
+            # Buscar opções dos filtros
+            opcoes_ufs = sorted(set(
+                sr.cod_uf for sr in CadastroSubRota.query.with_entities(CadastroSubRota.cod_uf).distinct() 
+                if sr.cod_uf and sr.cod_uf.strip()
             ))
-            cidades_disponiveis = sorted(set(
-                sr.nome_cidade for sr in CadastroSubRota.query.all() 
-                if sr.nome_cidade
+            
+            opcoes_cidades = sorted(set(
+                sr.nome_cidade for sr in CadastroSubRota.query.with_entities(CadastroSubRota.nome_cidade).distinct() 
+                if sr.nome_cidade and sr.nome_cidade.strip()
             ))
         else:
-            sub_rotas = []
-            ufs_disponiveis = []
-            cidades_disponiveis = []
+            sub_rotas = None
+            opcoes_ufs = []
+            opcoes_cidades = []
     except Exception:
-        sub_rotas = []
-        ufs_disponiveis = []
-        cidades_disponiveis = []
+        sub_rotas = None
+        opcoes_ufs = []
+        opcoes_cidades = []
     
     return render_template('localidades/listar_sub_rotas.html',
                          sub_rotas=sub_rotas,
                          cod_uf=cod_uf,
                          nome_cidade=nome_cidade,
                          sub_rota=sub_rota,
-                         ufs_disponiveis=ufs_disponiveis,
-                         cidades_disponiveis=cidades_disponiveis)
+                         opcoes_ufs=opcoes_ufs,
+                         opcoes_cidades=opcoes_cidades)
 
 # =====================================
 # 📤 ROTAS DE IMPORTAÇÃO 

@@ -102,6 +102,13 @@ def listar_movimentacoes():
     cod_produto = request.args.get('cod_produto', '')
     tipo_movimentacao = request.args.get('tipo_movimentacao', '')
     
+    # Paginação
+    try:
+        page = int(request.args.get('page', 1))
+    except (ValueError, TypeError):
+        page = 1
+    per_page = 200  # 200 itens por página conforme solicitado
+    
     try:
         from sqlalchemy import inspect
         inspector = inspect(db.engine)
@@ -116,26 +123,28 @@ def listar_movimentacoes():
             if tipo_movimentacao:
                 query = query.filter(MovimentacaoEstoque.tipo_movimentacao == tipo_movimentacao)
             
-            # Ordenação (limitado a 100 registros mais recentes)
-            movimentacoes = query.order_by(MovimentacaoEstoque.data_movimentacao.desc()).limit(100).all()
+            # Ordenação e paginação
+            movimentacoes = query.order_by(MovimentacaoEstoque.data_movimentacao.desc()).paginate(
+                page=page, per_page=per_page, error_out=False
+            )
             
-            # 🔧 CARREGAR TIPOS DE MOVIMENTAÇÃO DOS DADOS REAIS
-            tipos_movimentacao_disponiveis = sorted(set(
+            # 🔧 CARREGAR TIPOS DOS DADOS REAIS para o dropdown
+            tipos_disponiveis = sorted(set(
                 m.tipo_movimentacao for m in MovimentacaoEstoque.query.all() 
                 if m.tipo_movimentacao
             ))
         else:
-            movimentacoes = []
-            tipos_movimentacao_disponiveis = []
+            movimentacoes = None
+            tipos_disponiveis = []
     except Exception:
-        movimentacoes = []
-        tipos_movimentacao_disponiveis = []
+        movimentacoes = None
+        tipos_disponiveis = []
     
     return render_template('estoque/listar_movimentacoes.html',
                          movimentacoes=movimentacoes,
                          cod_produto=cod_produto,
                          tipo_movimentacao=tipo_movimentacao,
-                         tipos_movimentacao_disponiveis=tipos_movimentacao_disponiveis)
+                         tipos_disponiveis=tipos_disponiveis)
 
 @estoque_bp.route('/api/estatisticas')
 @login_required
