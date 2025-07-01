@@ -106,20 +106,34 @@
                                     <td>{{ produto.nome_produto }}</td>
                                     <td class="text-end">
                                         <span class="badge {% if produto.estoque_inicial <= 0 %}bg-danger{% elif produto.estoque_inicial < 10 %}bg-warning{% else %}bg-success{% endif %}">
-                                            {{ "%.0f"|format(produto.estoque_inicial) }}
+                                            {{ "{:,.0f}".format(produto.estoque_inicial).replace(',', '.') }}
                                         </span>
                                     </td>
                                     <td class="text-end">
                                         {% if produto.qtd_total_carteira > 0 %}
-                                            <span class="text-primary">{{ "%.1f"|format(produto.qtd_total_carteira) }}</span>
+                                            <span class="text-primary">{{ "{:,.0f}".format(produto.qtd_total_carteira).replace(',', '.') }}</span>
                                         {% else %}
                                             <span class="text-muted">Em breve</span>
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
                                         <span class="badge {% if produto.previsao_ruptura <= 0 %}bg-danger{% elif produto.previsao_ruptura < 10 %}bg-warning{% else %}bg-success{% endif %}">
-                                            {{ "%.0f"|format(produto.previsao_ruptura) }}
+                                            {{ "{:,.0f}".format(produto.previsao_ruptura).replace(',', '.') }}
                                         </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('estoque.nova_movimentacao') }}?cod_produto={{ produto.cod_produto }}&tipo=AJUSTE" 
+                                               class="btn btn-outline-warning btn-sm" 
+                                               title="Ajuste de Estoque">
+                                                <i class="fas fa-balance-scale"></i>
+                                            </a>
+                                            <button class="btn btn-outline-info btn-sm" 
+                                                    onclick="verProjecao('{{ produto.cod_produto }}')"
+                                                    title="Ver Projeção">
+                                                <i class="fas fa-chart-line"></i>
+                                            </button>
+                                        </div>
                                     </td>
                                     <td>
                                         {% if produto.status_ruptura == 'CRÍTICO' %}
@@ -383,10 +397,10 @@ function gerarTabelaProjecao(produto) {
             <tr>
                 <td>D${dia.dia === 0 ? '0' : '+' + dia.dia}</td>
                 <td>${dia.data_formatada}</td>
-                <td class="text-end">${dia.estoque_inicial.toFixed(1)}</td>
-                <td class="text-end">${dia.saida_prevista > 0 ? dia.saida_prevista.toFixed(1) : '-'}</td>
-                <td class="text-end">${dia.producao_programada > 0 ? dia.producao_programada.toFixed(1) : '-'}</td>
-                <td class="text-end ${corEstoque}">${dia.estoque_final.toFixed(1)}</td>
+                <td class="text-end">${Number(dia.estoque_inicial).toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>
+                <td class="text-end">${dia.saida_prevista > 0 ? Number(dia.saida_prevista).toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '-'}</td>
+                <td class="text-end">${dia.producao_programada > 0 ? Number(dia.producao_programada).toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '-'}</td>
+                <td class="text-end ${corEstoque}">${Number(dia.estoque_final).toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>
             </tr>
         `;
     });

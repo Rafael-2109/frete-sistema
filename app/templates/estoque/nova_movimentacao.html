@@ -1,0 +1,383 @@
+{% extends "base.html" %}
+
+{% block title %}Nova Movimentação de Estoque{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-plus-circle"></i> Nova Movimentação de Estoque
+                <small class="text-muted">Registrar movimentação manualmente</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Formulário Principal -->
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exchange-alt"></i> Dados da Movimentação
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('estoque.processar_nova_movimentacao') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        
+                        <!-- Produto -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="cod_produto" class="form-label">
+                                    <i class="fas fa-barcode"></i> Código do Produto *
+                                </label>
+                                <div class="input-group">
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="cod_produto" 
+                                           name="cod_produto"
+                                           placeholder="Digite o código do produto"
+                                           required
+                                           autocomplete="off">
+                                    <button type="button" 
+                                            class="btn btn-outline-secondary" 
+                                            onclick="buscarProduto()"
+                                            title="Buscar produto">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text">
+                                    O produto será buscado no cadastro de palletização
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="nome_produto" class="form-label">
+                                    <i class="fas fa-tag"></i> Nome do Produto *
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="nome_produto" 
+                                       name="nome_produto"
+                                       placeholder="Nome será preenchido automaticamente"
+                                       required
+                                       readonly>
+                            </div>
+                        </div>
+
+                        <!-- Dados da Movimentação -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="tipo_movimentacao" class="form-label">
+                                    <i class="fas fa-arrows-alt"></i> Tipo de Movimentação *
+                                </label>
+                                <select class="form-select" id="tipo_movimentacao" name="tipo_movimentacao" required>
+                                    <option value="">Selecione o tipo</option>
+                                    <option value="EST INICIAL">📦 EST INICIAL - Estoque Inicial</option>
+                                    <option value="PRODUÇÃO">🏭 PRODUÇÃO - Produção</option>
+                                    <option value="AVARIA">⚠️ AVARIA - Avaria/Perda</option>
+                                    <option value="DEVOLUÇÃO">🔄 DEVOLUÇÃO - Devolução</option>
+                                    <option value="RETRABALHO">🔧 RETRABALHO - Retrabalho</option>
+                                    <option value="AJUSTE">⚖️ AJUSTE - Ajuste Manual</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="data_movimentacao" class="form-label">
+                                    <i class="fas fa-calendar"></i> Data da Movimentação *
+                                </label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="data_movimentacao" 
+                                       name="data_movimentacao"
+                                       value="{{ data_hoje }}"
+                                       required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="qtd_movimentacao" class="form-label">
+                                    <i class="fas fa-calculator"></i> Quantidade *
+                                </label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="qtd_movimentacao" 
+                                       name="qtd_movimentacao"
+                                       step="0.001"
+                                       placeholder="Ex: 100 ou -50"
+                                       required>
+                                <div class="form-text">
+                                    Use valores negativos para saídas
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Localização e Documentação -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="local_movimentacao" class="form-label">
+                                    <i class="fas fa-map-marker-alt"></i> Local da Movimentação *
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="local_movimentacao" 
+                                       name="local_movimentacao"
+                                       placeholder="Ex: Almoxarifado Central, Linha Produção 1"
+                                       required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="documento_origem" class="form-label">
+                                    <i class="fas fa-file-alt"></i> Documento de Origem
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="documento_origem" 
+                                       name="documento_origem"
+                                       placeholder="Ex: INV-2025-001, PROD-2025-001">
+                            </div>
+                        </div>
+
+                        <!-- Observações -->
+                        <div class="mb-3">
+                            <label for="observacao" class="form-label">
+                                <i class="fas fa-comment"></i> Observações
+                            </label>
+                            <textarea class="form-control" 
+                                      id="observacao" 
+                                      name="observacao"
+                                      rows="3"
+                                      placeholder="Observações adicionais sobre a movimentação..."></textarea>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('estoque.listar_movimentacoes') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> Salvar Movimentação
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para criar produto não encontrado -->
+<div class="modal fade" id="modalCriarProduto" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus"></i> Criar Produto no Cadastro
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formCriarProduto">
+                <div class="modal-body">
+                    <input type="hidden" id="novoCodProduto">
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        Produto <strong id="codigoProdutoNaoEncontrado"></strong> não encontrado no cadastro de palletização.
+                        Preencha os dados abaixo para criá-lo:
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="novoNomeProduto" class="form-label">
+                            <i class="fas fa-tag"></i> Nome do Produto *
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="novoNomeProduto"
+                               placeholder="Digite o nome do produto"
+                               required>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="novaPalletizacao" class="form-label">
+                                <i class="fas fa-layer-group"></i> Palletização
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="novaPalletizacao"
+                                   step="0.001"
+                                   value="0"
+                                   placeholder="Ex: 1200">
+                            <div class="form-text">Unidades por pallet</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="novoPesoBruto" class="form-label">
+                                <i class="fas fa-weight"></i> Peso Bruto (kg)
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="novoPesoBruto"
+                                   step="0.001"
+                                   value="0"
+                                   placeholder="Ex: 15.5">
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Nota:</strong> O produto será criado com dados básicos. 
+                        Você pode completar as informações depois no cadastro de palletização.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-plus"></i> Criar Produto
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function buscarProduto() {
+    const codProduto = $('#cod_produto').val().trim();
+    
+    if (!codProduto) {
+        alert('Digite o código do produto primeiro!');
+        return;
+    }
+    
+    // Mostrar loading
+    const btnBuscar = $('button[onclick="buscarProduto()"]');
+    const textoOriginal = btnBuscar.html();
+    btnBuscar.html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
+    
+    // Buscar no cadastro de palletização
+    fetch(`/producao/palletizacao/api/produto/${codProduto}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.produto) {
+                // Produto encontrado
+                $('#nome_produto').val(data.produto.nome_produto);
+                $('#nome_produto').removeClass('is-invalid').addClass('is-valid');
+                alert('✅ Produto encontrado no cadastro!');
+            } else {
+                // Produto não encontrado - abrir modal para criar
+                $('#codigoProdutoNaoEncontrado').text(codProduto);
+                $('#novoCodProduto').val(codProduto);
+                $('#novoNomeProduto').val('');
+                $('#novaPalletizacao').val('0');
+                $('#novoPesoBruto').val('0');
+                $('#modalCriarProduto').modal('show');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao buscar produto. Você pode digitar o nome manualmente.');
+            $('#nome_produto').prop('readonly', false).focus();
+        })
+        .finally(() => {
+            // Restaurar botão
+            btnBuscar.html(textoOriginal).prop('disabled', false);
+        });
+}
+
+// Auto-buscar quando sair do campo código
+$('#cod_produto').on('blur', function() {
+    if ($(this).val().trim()) {
+        buscarProduto();
+    }
+});
+
+// Processar criação de produto
+$('#formCriarProduto').on('submit', function(e) {
+    e.preventDefault();
+    
+    const dadosProduto = {
+        cod_produto: $('#novoCodProduto').val(),
+        nome_produto: $('#novoNomeProduto').val(),
+        palletizacao: parseFloat($('#novaPalletizacao').val()) || 0,
+        peso_bruto: parseFloat($('#novoPesoBruto').val()) || 0
+    };
+    
+    if (!dadosProduto.nome_produto.trim()) {
+        alert('Nome do produto é obrigatório!');
+        return;
+    }
+    
+    // Criar produto
+    fetch('/producao/palletizacao/api/criar', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(dadosProduto)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Produto criado com sucesso
+            $('#nome_produto').val(dadosProduto.nome_produto);
+            $('#nome_produto').removeClass('is-invalid').addClass('is-valid');
+            $('#modalCriarProduto').modal('hide');
+            alert('✅ Produto criado com sucesso no cadastro de palletização!');
+        } else {
+            alert('❌ Erro ao criar produto: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('❌ Erro ao criar produto. Você pode continuar digitando o nome manualmente.');
+        $('#nome_produto').val(dadosProduto.nome_produto);
+        $('#nome_produto').prop('readonly', false);
+        $('#modalCriarProduto').modal('hide');
+    });
+});
+
+// Validação de quantidade baseada no tipo
+$('#tipo_movimentacao').on('change', function() {
+    const tipo = $(this).val();
+    const qtdField = $('#qtd_movimentacao');
+    
+    if (tipo === 'AVARIA' || tipo === 'SAIDA') {
+        qtdField.attr('placeholder', 'Digite valor negativo (Ex: -50)');
+    } else if (tipo === 'PRODUÇÃO' || tipo === 'EST INICIAL') {
+        qtdField.attr('placeholder', 'Digite valor positivo (Ex: 100)');
+    } else {
+        qtdField.attr('placeholder', 'Ex: 100 ou -50');
+    }
+});
+
+// Validação do formulário
+$('form').on('submit', function(e) {
+    const codProduto = $('#cod_produto').val().trim();
+    const nomeProduto = $('#nome_produto').val().trim();
+    const quantidade = parseFloat($('#qtd_movimentacao').val());
+    
+    if (!codProduto || !nomeProduto) {
+        e.preventDefault();
+        alert('Código e nome do produto são obrigatórios!');
+        return;
+    }
+    
+    if (isNaN(quantidade) || quantidade === 0) {
+        e.preventDefault();
+        alert('Quantidade deve ser um número diferente de zero!');
+        return;
+    }
+    
+    // Confirmação final
+    const tipoMov = $('#tipo_movimentacao option:selected').text();
+    const confirmacao = confirm(
+        `Confirma a criação da movimentação?\n\n` +
+        `Produto: ${codProduto} - ${nomeProduto}\n` +
+        `Tipo: ${tipoMov}\n` +
+        `Quantidade: ${quantidade}\n` +
+        `Data: ${$('#data_movimentacao').val()}`
+    );
+    
+    if (!confirmacao) {
+        e.preventDefault();
+    }
+});
+</script>
+{% endblock %} 

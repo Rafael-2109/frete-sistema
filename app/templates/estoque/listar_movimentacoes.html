@@ -52,6 +52,9 @@
                                     <a href="{{ url_for('estoque.importar_movimentacoes') }}" class="btn btn-success">
                                         <i class="fas fa-upload"></i> Importar
                                     </a>
+                                    <a href="{{ url_for('estoque.nova_movimentacao') }}" class="btn btn-primary">
+                                        <i class="fas fa-plus"></i> Nova Movimentação
+                                    </a>
                                     {% if movimentacoes %}
                                     <a href="{{ url_for('estoque.exportar_dados_movimentacoes') }}" class="btn btn-warning">
                                         <i class="fas fa-file-export"></i> Exportar
@@ -103,6 +106,7 @@
                                         <th>Documento</th>
                                         <th>Observação</th>
                                         <th>Criado em</th>
+                                        <th>Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -166,6 +170,20 @@
                                             <small class="text-muted">
                                                 {{ mov.created_at | formatar_data_hora_brasil }}
                                             </small>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="{{ url_for('estoque.editar_movimentacao', id=mov.id) }}" 
+                                                   class="btn btn-outline-primary" 
+                                                   title="Editar movimentação">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <a href="{{ url_for('estoque.visualizar_movimentacao', id=mov.id) }}" 
+                                                   class="btn btn-outline-info" 
+                                                   title="Visualizar detalhes">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                            </div>
                                         </td>
                                     </tr>
                                     {% endfor %}

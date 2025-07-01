@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Movimentação{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-edit"></i> Editar Movimentação
+                <small class="text-muted">{{ movimentacao.cod_produto }} - {{ movimentacao.tipo_movimentacao }}</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Formulário de Edição -->
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exchange-alt"></i> Dados da Movimentação
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('estoque.processar_edicao_movimentacao', id=movimentacao.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        
+                        <!-- Produto (Código não pode ser alterado) -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    <i class="fas fa-barcode"></i> Código do Produto
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       value="{{ movimentacao.cod_produto }}"
+                                       readonly>
+                                <div class="form-text">
+                                    O código do produto não pode ser alterado
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="nome_produto" class="form-label">
+                                    <i class="fas fa-tag"></i> Nome do Produto *
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="nome_produto" 
+                                       name="nome_produto"
+                                       value="{{ movimentacao.nome_produto }}"
+                                       required>
+                            </div>
+                        </div>
+
+                        <!-- Dados da Movimentação -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="tipo_movimentacao" class="form-label">
+                                    <i class="fas fa-arrows-alt"></i> Tipo de Movimentação *
+                                </label>
+                                <select class="form-select" id="tipo_movimentacao" name="tipo_movimentacao" required>
+                                    <option value="">Selecione o tipo</option>
+                                    <option value="EST INICIAL" {{ 'selected' if movimentacao.tipo_movimentacao == 'EST INICIAL' }}>📦 EST INICIAL - Estoque Inicial</option>
+                                    <option value="PRODUÇÃO" {{ 'selected' if movimentacao.tipo_movimentacao == 'PRODUÇÃO' }}>🏭 PRODUÇÃO - Produção</option>
+                                    <option value="AVARIA" {{ 'selected' if movimentacao.tipo_movimentacao == 'AVARIA' }}>⚠️ AVARIA - Avaria/Perda</option>
+                                    <option value="DEVOLUÇÃO" {{ 'selected' if movimentacao.tipo_movimentacao == 'DEVOLUÇÃO' }}>🔄 DEVOLUÇÃO - Devolução</option>
+                                    <option value="RETRABALHO" {{ 'selected' if movimentacao.tipo_movimentacao == 'RETRABALHO' }}>🔧 RETRABALHO - Retrabalho</option>
+                                    <option value="AJUSTE" {{ 'selected' if movimentacao.tipo_movimentacao == 'AJUSTE' }}>⚖️ AJUSTE - Ajuste Manual</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="data_movimentacao" class="form-label">
+                                    <i class="fas fa-calendar"></i> Data da Movimentação *
+                                </label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="data_movimentacao" 
+                                       name="data_movimentacao"
+                                       value="{{ movimentacao.data_movimentacao.strftime('%Y-%m-%d') if movimentacao.data_movimentacao else '' }}"
+                                       required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="qtd_movimentacao" class="form-label">
+                                    <i class="fas fa-calculator"></i> Quantidade *
+                                </label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="qtd_movimentacao" 
+                                       name="qtd_movimentacao"
+                                       step="0.001"
+                                       value="{{ movimentacao.qtd_movimentacao }}"
+                                       required>
+                                <div class="form-text">
+                                    Use valores negativos para saídas
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Localização e Documentação -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="local_movimentacao" class="form-label">
+                                    <i class="fas fa-map-marker-alt"></i> Local da Movimentação *
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="local_movimentacao" 
+                                       name="local_movimentacao"
+                                       value="{{ movimentacao.local_movimentacao or '' }}"
+                                       required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="documento_origem" class="form-label">
+                                    <i class="fas fa-file-alt"></i> Documento de Origem
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="documento_origem" 
+                                       name="documento_origem"
+                                       value="{{ movimentacao.documento_origem or '' }}">
+                            </div>
+                        </div>
+
+                        <!-- Observações -->
+                        <div class="mb-3">
+                            <label for="observacao" class="form-label">
+                                <i class="fas fa-comment"></i> Observações
+                            </label>
+                            <textarea class="form-control" 
+                                      id="observacao" 
+                                      name="observacao"
+                                      rows="3">{{ movimentacao.observacao or '' }}</textarea>
+                        </div>
+
+                        <!-- Informações de Auditoria -->
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-info-circle"></i> Informações da Movimentação:</h6>
+                            <ul class="mb-0">
+                                <li><strong>ID:</strong> {{ movimentacao.id }}</li>
+                                <li><strong>Criado por:</strong> {{ movimentacao.created_by or 'N/A' }}</li>
+                                <li><strong>Criado em:</strong> {{ movimentacao.created_at | formatar_data_hora_brasil if movimentacao.created_at else 'N/A' }}</li>
+                                {% if movimentacao.updated_by %}
+                                <li><strong>Última atualização:</strong> {{ movimentacao.updated_by }} em {{ movimentacao.updated_at | formatar_data_hora_brasil }}</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('estoque.listar_movimentacoes') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            <div>
+                                <a href="{{ url_for('estoque.visualizar_movimentacao', id=movimentacao.id) }}" class="btn btn-info me-2">
+                                    <i class="fas fa-eye"></i> Visualizar
+                                </a>
+                                <button type="submit" class="btn btn-warning">
+                                    <i class="fas fa-save"></i> Salvar Alterações
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Validação de quantidade baseada no tipo
+$('#tipo_movimentacao').on('change', function() {
+    const tipo = $(this).val();
+    const qtdField = $('#qtd_movimentacao');
+    
+    if (tipo === 'AVARIA' || tipo === 'SAIDA') {
+        qtdField.attr('placeholder', 'Digite valor negativo (Ex: -50)');
+    } else if (tipo === 'PRODUÇÃO' || tipo === 'EST INICIAL') {
+        qtdField.attr('placeholder', 'Digite valor positivo (Ex: 100)');
+    } else {
+        qtdField.attr('placeholder', 'Ex: 100 ou -50');
+    }
+});
+
+// Validação do formulário
+$('form').on('submit', function(e) {
+    const quantidade = parseFloat($('#qtd_movimentacao').val());
+    
+    if (isNaN(quantidade) || quantidade === 0) {
+        e.preventDefault();
+        alert('Quantidade deve ser um número diferente de zero!');
+        return;
+    }
+    
+    // Confirmação final
+    const tipoMov = $('#tipo_movimentacao option:selected').text();
+    const confirmacao = confirm(
+        `Confirma as alterações na movimentação?\n\n` +
+        `Tipo: ${tipoMov}\n` +
+        `Quantidade: ${quantidade}\n` +
+        `Data: ${$('#data_movimentacao').val()}`
+    );
+    
+    if (!confirmacao) {
+        e.preventDefault();
+    }
+});
+</script>
+{% endblock %} 

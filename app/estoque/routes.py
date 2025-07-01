@@ -103,6 +103,9 @@ def listar_movimentacoes():
     tipo_movimentacao = request.args.get('tipo_movimentacao', '')
     
     try:
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        
         if inspector.has_table('movimentacao_estoque'):
             # Query base
             query = MovimentacaoEstoque.query
@@ -130,7 +133,7 @@ def listar_movimentacoes():
 def api_estatisticas():
     """API para estatísticas do módulo estoque"""
     try:
-        from sqlalchemy import inspect
+        from sqlalchemy import inspect, func
         inspector = inspect(db.engine)
         
         # Estatísticas básicas
@@ -258,6 +261,21 @@ def processar_importacao_movimentacoes():
                 qtd_movimentacao = float(row.get('qtd_movimentacao', 0) or 0)
                 local_movimentacao = str(row.get('local_movimentacao', '')).strip()
                 
+                # 🔗 VERIFICAR/CRIAR PRODUTO NO CADASTRO DE PALLETIZAÇÃO
+                from app.producao.models import CadastroPalletizacao
+                produto_palletizacao = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+                
+                if not produto_palletizacao:
+                    # Auto-criar produto no cadastro se não existir (conforme solicitação)
+                    produto_palletizacao = CadastroPalletizacao()
+                    produto_palletizacao.cod_produto = cod_produto
+                    produto_palletizacao.nome_produto = nome_produto
+                    produto_palletizacao.palletizacao = 0  # Zerado conforme solicitação
+                    produto_palletizacao.peso_bruto = 0
+                    produto_palletizacao.created_by = current_user.nome
+                    
+                    db.session.add(produto_palletizacao)
+                
                 # ➕ CRIAR NOVO REGISTRO (sempre adiciona)
                 nova_movimentacao = MovimentacaoEstoque()
                 nova_movimentacao.tipo_movimentacao = tipo_movimentacao
@@ -304,9 +322,174 @@ def processar_importacao_movimentacoes():
         flash(f'Erro durante importação: {str(e)}', 'error')
         return redirect(url_for('estoque.importar_movimentacoes'))
 
-# TODO: Implementar outras rotas conforme necessário
-# - /movimentar (nova movimentação manual)
-# - /relatorios (relatórios específicos)
+# ========================================
+# 🆕 CRUD MANUAL DE MOVIMENTAÇÕES
+# ========================================
+
+@estoque_bp.route('/movimentacoes/nova')
+@login_required
+@require_admin()
+def nova_movimentacao():
+    """Formulário para nova movimentação manual"""
+    from datetime import date
+    return render_template('estoque/nova_movimentacao.html', 
+                         data_hoje=date.today().strftime('%Y-%m-%d'))
+
+@estoque_bp.route('/movimentacoes/nova', methods=['POST'])
+@login_required
+@require_admin()
+def processar_nova_movimentacao():
+    """Processar nova movimentação manual"""
+    try:
+        # Extrair dados do formulário
+        cod_produto = request.form.get('cod_produto', '').strip()
+        nome_produto = request.form.get('nome_produto', '').strip()
+        tipo_movimentacao = request.form.get('tipo_movimentacao', '').strip()
+        data_movimentacao = request.form.get('data_movimentacao')
+        qtd_movimentacao = request.form.get('qtd_movimentacao')
+        local_movimentacao = request.form.get('local_movimentacao', '').strip()
+        documento_origem = request.form.get('documento_origem', '').strip()
+        observacao = request.form.get('observacao', '').strip()
+        
+        # Validações básicas
+        if not all([cod_produto, nome_produto, tipo_movimentacao, data_movimentacao, qtd_movimentacao, local_movimentacao]):
+            flash('❌ Todos os campos obrigatórios devem ser preenchidos!', 'error')
+            return redirect(url_for('estoque.nova_movimentacao'))
+        
+        # Converter dados
+        try:
+            if qtd_movimentacao is None:
+                raise ValueError("Quantidade é obrigatória")
+            qtd_movimentacao = float(qtd_movimentacao)
+            
+            if data_movimentacao is None:
+                raise ValueError("Data é obrigatória")
+            data_movimentacao = datetime.strptime(data_movimentacao, '%Y-%m-%d').date()
+        except ValueError as e:
+            flash(f'❌ Erro nos dados: {str(e)}', 'error')
+            return redirect(url_for('estoque.nova_movimentacao'))
+        
+        if qtd_movimentacao == 0:
+            flash('❌ Quantidade não pode ser zero!', 'error')
+            return redirect(url_for('estoque.nova_movimentacao'))
+        
+        # Verificar se o produto existe no cadastro de palletização
+        from app.producao.models import CadastroPalletizacao
+        produto_palletizacao = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+        
+        if not produto_palletizacao:
+            # Auto-criar produto no cadastro se não existir (conforme solicitação)
+            produto_palletizacao = CadastroPalletizacao()
+            produto_palletizacao.cod_produto = cod_produto
+            produto_palletizacao.nome_produto = nome_produto
+            produto_palletizacao.palletizacao = 0  # Zerado conforme solicitação
+            produto_palletizacao.peso_bruto = 0
+            produto_palletizacao.created_by = current_user.nome
+            
+            db.session.add(produto_palletizacao)
+            flash(f'ℹ️ Produto {cod_produto} criado automaticamente no cadastro de palletização', 'info')
+        
+        # Criar nova movimentação
+        nova_movimentacao = MovimentacaoEstoque()
+        nova_movimentacao.tipo_movimentacao = tipo_movimentacao
+        nova_movimentacao.cod_produto = cod_produto
+        nova_movimentacao.nome_produto = nome_produto
+        nova_movimentacao.local_movimentacao = local_movimentacao
+        nova_movimentacao.data_movimentacao = data_movimentacao
+        nova_movimentacao.qtd_movimentacao = qtd_movimentacao
+        nova_movimentacao.documento_origem = documento_origem if documento_origem else None
+        nova_movimentacao.observacao = observacao if observacao else None
+        nova_movimentacao.created_by = current_user.nome
+        
+        db.session.add(nova_movimentacao)
+        db.session.commit()
+        
+        # Mensagem de sucesso
+        tipo_operacao = "ENTRADA" if qtd_movimentacao > 0 else "SAÍDA"
+        flash(f'✅ Movimentação criada com sucesso: {tipo_operacao} de {abs(qtd_movimentacao)} unidades do produto {cod_produto}', 'success')
+        
+        return redirect(url_for('estoque.listar_movimentacoes'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Erro ao criar movimentação: {str(e)}', 'error')
+        return redirect(url_for('estoque.nova_movimentacao'))
+
+@estoque_bp.route('/movimentacoes/<int:id>')
+@login_required
+def visualizar_movimentacao(id):
+    """Visualizar detalhes de uma movimentação"""
+    movimentacao = MovimentacaoEstoque.query.get_or_404(id)
+    return render_template('estoque/visualizar_movimentacao.html', movimentacao=movimentacao)
+
+@estoque_bp.route('/movimentacoes/editar/<int:id>')
+@login_required
+@require_admin()
+def editar_movimentacao(id):
+    """Formulário para editar movimentação existente"""
+    movimentacao = MovimentacaoEstoque.query.get_or_404(id)
+    return render_template('estoque/editar_movimentacao.html', movimentacao=movimentacao)
+
+@estoque_bp.route('/movimentacoes/editar/<int:id>', methods=['POST'])
+@login_required
+@require_admin()
+def processar_edicao_movimentacao(id):
+    """Processar edição de movimentação existente"""
+    try:
+        movimentacao = MovimentacaoEstoque.query.get_or_404(id)
+        
+        # Extrair dados do formulário
+        nome_produto = request.form.get('nome_produto', '').strip()
+        tipo_movimentacao = request.form.get('tipo_movimentacao', '').strip()
+        data_movimentacao = request.form.get('data_movimentacao')
+        qtd_movimentacao = request.form.get('qtd_movimentacao')
+        local_movimentacao = request.form.get('local_movimentacao', '').strip()
+        documento_origem = request.form.get('documento_origem', '').strip()
+        observacao = request.form.get('observacao', '').strip()
+        
+        # Validações básicas
+        if not all([nome_produto, tipo_movimentacao, data_movimentacao, qtd_movimentacao, local_movimentacao]):
+            flash('❌ Todos os campos obrigatórios devem ser preenchidos!', 'error')
+            return redirect(url_for('estoque.editar_movimentacao', id=id))
+        
+        # Converter dados
+        try:
+            if qtd_movimentacao is None:
+                raise ValueError("Quantidade é obrigatória")
+            qtd_movimentacao = float(qtd_movimentacao)
+            
+            if data_movimentacao is None:
+                raise ValueError("Data é obrigatória")
+            data_movimentacao = datetime.strptime(data_movimentacao, '%Y-%m-%d').date()
+        except ValueError as e:
+            flash(f'❌ Erro nos dados: {str(e)}', 'error')
+            return redirect(url_for('estoque.editar_movimentacao', id=id))
+        
+        if qtd_movimentacao == 0:
+            flash('❌ Quantidade não pode ser zero!', 'error')
+            return redirect(url_for('estoque.editar_movimentacao', id=id))
+        
+        # Atualizar movimentação
+        movimentacao.nome_produto = nome_produto
+        movimentacao.tipo_movimentacao = tipo_movimentacao
+        movimentacao.data_movimentacao = data_movimentacao
+        movimentacao.qtd_movimentacao = qtd_movimentacao
+        movimentacao.local_movimentacao = local_movimentacao
+        movimentacao.documento_origem = documento_origem if documento_origem else None
+        movimentacao.observacao = observacao if observacao else None
+        movimentacao.updated_by = current_user.nome
+        
+        db.session.commit()
+        
+        # Mensagem de sucesso
+        flash(f'✅ Movimentação {id} atualizada com sucesso!', 'success')
+        
+        return redirect(url_for('estoque.listar_movimentacoes'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Erro ao atualizar movimentação: {str(e)}', 'error')
+        return redirect(url_for('estoque.editar_movimentacao', id=id))
 
 @estoque_bp.route('/movimentacoes/baixar-modelo')
 @login_required

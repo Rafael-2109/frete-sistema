@@ -794,6 +794,90 @@ def excluir_palletizacao(id):
         flash(f'❌ Erro ao excluir palletização: {str(e)}', 'error')
         return redirect(url_for('producao.listar_palletizacao'))
 
+@producao_bp.route('/palletizacao/api/produto/<cod_produto>')
+@login_required
+def api_produto_palletizacao(cod_produto):
+    """API para buscar produto no cadastro de palletização"""
+    try:
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        
+        if not inspector.has_table('cadastro_palletizacao'):
+            return jsonify({'success': False, 'error': 'Tabela não encontrada'})
+        
+        produto = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+        
+        if produto:
+            return jsonify({
+                'success': True,
+                'produto': {
+                    'cod_produto': produto.cod_produto,
+                    'nome_produto': produto.nome_produto,
+                    'palletizacao': produto.palletizacao,
+                    'peso_bruto': produto.peso_bruto,
+                    'altura_cm': produto.altura_cm,
+                    'largura_cm': produto.largura_cm,
+                    'comprimento_cm': produto.comprimento_cm,
+                    'volume_m3': produto.volume_m3 if hasattr(produto, 'volume_m3') else 0
+                }
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Produto não encontrado'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@producao_bp.route('/palletizacao/api/criar', methods=['POST'])
+@login_required
+@require_admin()
+def api_criar_produto_palletizacao():
+    """API para criar produto no cadastro de palletização"""
+    try:
+        from flask import request
+        import json
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Dados não fornecidos'})
+        
+        cod_produto = data.get('cod_produto')
+        nome_produto = data.get('nome_produto')
+        
+        if not cod_produto or not nome_produto:
+            return jsonify({'success': False, 'error': 'Código e nome do produto são obrigatórios'})
+        
+        # Verificar se já existe
+        existe = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+        if existe:
+            return jsonify({'success': False, 'error': 'Produto já existe no cadastro'})
+        
+        # Criar novo produto
+        novo_produto = CadastroPalletizacao()
+        novo_produto.cod_produto = cod_produto
+        novo_produto.nome_produto = nome_produto
+        novo_produto.palletizacao = float(data.get('palletizacao', 0))
+        novo_produto.peso_bruto = float(data.get('peso_bruto', 0))
+        novo_produto.altura_cm = float(data.get('altura_cm', 0)) if data.get('altura_cm') else None
+        novo_produto.largura_cm = float(data.get('largura_cm', 0)) if data.get('largura_cm') else None
+        novo_produto.comprimento_cm = float(data.get('comprimento_cm', 0)) if data.get('comprimento_cm') else None
+        novo_produto.created_by = current_user.nome
+        
+        db.session.add(novo_produto)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Produto {cod_produto} criado com sucesso',
+            'produto': {
+                'cod_produto': novo_produto.cod_produto,
+                'nome_produto': novo_produto.nome_produto
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
 @producao_bp.route('/palletizacao/exportar-dados')
 @login_required
 def exportar_dados_palletizacao():
