@@ -44,22 +44,6 @@
                 </button>
             {% endif %}
             
-            <div class="btn-group">
-                <a href="{{ url_for('fretes.nova_despesa_extra', frete_id=frete.id) }}" class="btn btn-warning">
-                    <i class="fas fa-plus"></i> Adicionar Despesa Extra
-                </a>
-                <button type="button" class="btn btn-warning dropdown-toggle dropdown-toggle-split" data-toggle="dropdown">
-                    <span class="sr-only">Toggle Dropdown</span>
-                </button>
-                <div class="dropdown-menu">
-                    <a class="dropdown-item" href="{{ url_for('fretes.nova_despesa_extra', frete_id=frete.id) }}">
-                        <i class="fas fa-plus"></i> Adicionar (Fluxo Direto)
-                    </a>
-                    <a class="dropdown-item" href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}">
-                        <i class="fas fa-search"></i> Buscar por NF (Fluxo Completo)
-                    </a>
-                </div>
-            </div>
             
             <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}" class="btn btn-info">
                 <i class="fas fa-truck"></i> Ver Embarque
