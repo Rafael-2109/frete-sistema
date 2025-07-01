@@ -441,16 +441,16 @@ def exportar_dados_movimentacoes():
 @require_admin()
 def listar_unificacao_codigos():
     """Lista unificações de códigos configuradas"""
+    # Definir variáveis no escopo da função para evitar UnboundLocalError
+    codigo_busca = request.args.get('codigo_busca', '')
+    status_filtro = request.args.get('status', '')
+    
     try:
         if db.engine.has_table('unificacao_codigos'):
-            # Filtros
-            codigo_busca = request.args.get('codigo_busca', '')
-            status_filtro = request.args.get('status', '')
-            
             # Query base
             query = UnificacaoCodigos.query
             
-                        # Aplicar filtros
+            # Aplicar filtros
             if codigo_busca:
                 try:
                     codigo_int = int(codigo_busca)

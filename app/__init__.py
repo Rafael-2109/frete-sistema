@@ -493,6 +493,16 @@ def create_app(config_name=None):
     from app.estoque.models import MovimentacaoEstoque
     from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
     from app.localidades.models import CadastroRota, CadastroSubRota
+    
+    # 🆕 MODELOS DO SISTEMA CARTEIRA DE PEDIDOS (17 MODELOS)
+    from app.carteira.models import (
+        CarteiraPrincipal, CarteiraCopia, ControleCruzadoSeparacao,
+        InconsistenciaFaturamento, HistoricoFaturamento, LogAtualizacaoCarteira,
+        VinculacaoCarteiraSeparacao, EventoCarteira, AprovacaoMudancaCarteira,
+        TipoCarga, FaturamentoParcialJustificativa, ControleAlteracaoCarga,
+        SaldoStandby, ControleDescasamentoNF, SnapshotCarteira, ValidacaoNFSimples,
+        TipoEnvio
+    )
 
     # ✅ MIDDLEWARE PARA RECONEXÃO AUTOMÁTICA DO BANCO
     @app.before_request

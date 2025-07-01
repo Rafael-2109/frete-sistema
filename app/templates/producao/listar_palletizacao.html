@@ -68,9 +68,21 @@
                                 <a href="{{ url_for('producao.listar_palletizacao') }}" class="btn btn-secondary me-2">
                                     <i class="fas fa-eraser"></i> Limpar
                                 </a>
-                                <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-success">
-                                    <i class="fas fa-file-upload"></i> Importar
-                                </a>
+                                
+                                <!-- 🎯 BOTÕES PADRONIZADOS SISTEMA CARTEIRA -->
+                                <div class="btn-group me-2" role="group">
+                                    <a href="{{ url_for('producao.baixar_modelo_palletizacao') }}" class="btn btn-info">
+                                        <i class="fas fa-download"></i> Modelo
+                                    </a>
+                                    <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-success">
+                                        <i class="fas fa-upload"></i> Importar
+                                    </a>
+                                    {% if palletizacao %}
+                                    <a href="{{ url_for('producao.exportar_dados_palletizacao') }}" class="btn btn-warning">
+                                        <i class="fas fa-file-export"></i> Exportar
+                                    </a>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                     </form>
