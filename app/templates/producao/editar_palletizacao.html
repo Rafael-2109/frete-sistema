@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Palletização{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-edit"></i> Editar Palletização
+                <small class="text-muted">{{ palletizacao.cod_produto }} - {{ palletizacao.nome_produto[:50] }}{% if palletizacao.nome_produto|length > 50 %}...{% endif %}</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Formulário -->
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-weight-hanging"></i> Editar Dados da Palletização</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <!-- Código readonly -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="cod_produto" class="form-label">
+                                    <i class="fas fa-barcode"></i> Código do Produto
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="cod_produto" 
+                                       value="{{ palletizacao.cod_produto }}"
+                                       readonly>
+                                <small class="form-text text-muted">Código não pode ser alterado</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="nome_produto" class="form-label">
+                                    <i class="fas fa-box"></i> Nome do Produto *
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="nome_produto" 
+                                       name="nome_produto" 
+                                       value="{{ palletizacao.nome_produto }}"
+                                       required>
+                                <small class="form-text text-muted">Descrição completa do produto</small>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="palletizacao" class="form-label">
+                                    <i class="fas fa-pallet"></i> Fator Palletização *
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="palletizacao" 
+                                       name="palletizacao" 
+                                       value="{{ (palletizacao.palletizacao|string).replace('.', ',') }}"
+                                       pattern="[0-9]+([.,][0-9]+)?"
+                                       required>
+                                <small class="form-text text-muted">Quantidade / Fator = Número de pallets</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="peso_bruto" class="form-label">
+                                    <i class="fas fa-weight"></i> Peso Bruto (kg) *
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="peso_bruto" 
+                                       name="peso_bruto" 
+                                       value="{{ (palletizacao.peso_bruto|string).replace('.', ',') }}"
+                                       pattern="[0-9]+([.,][0-9]+)?"
+                                       required>
+                                <small class="form-text text-muted">Quantidade × Peso = Peso total</small>
+                            </div>
+                        </div>
+
+                        <!-- Medidas Opcionais -->
+                        <h6 class="text-muted mb-3">
+                            <i class="fas fa-ruler-combined"></i> Dimensões (Opcional)
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="altura_cm" class="form-label">Altura (cm)</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="altura_cm" 
+                                       name="altura_cm" 
+                                       value="{% if palletizacao.altura_cm and palletizacao.altura_cm > 0 %}{{ (palletizacao.altura_cm|string).replace('.', ',') }}{% endif %}"
+                                       pattern="[0-9]+([.,][0-9]+)?">
+                                <small class="form-text text-muted">Altura em centímetros</small>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="largura_cm" class="form-label">Largura (cm)</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="largura_cm" 
+                                       name="largura_cm" 
+                                       value="{% if palletizacao.largura_cm and palletizacao.largura_cm > 0 %}{{ (palletizacao.largura_cm|string).replace('.', ',') }}{% endif %}"
+                                       pattern="[0-9]+([.,][0-9]+)?">
+                                <small class="form-text text-muted">Largura em centímetros</small>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="comprimento_cm" class="form-label">Comprimento (cm)</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="comprimento_cm" 
+                                       name="comprimento_cm" 
+                                       value="{% if palletizacao.comprimento_cm and palletizacao.comprimento_cm > 0 %}{{ (palletizacao.comprimento_cm|string).replace('.', ',') }}{% endif %}"
+                                       pattern="[0-9]+([.,][0-9]+)?">
+                                <small class="form-text text-muted">Comprimento em centímetros</small>
+                            </div>
+                        </div>
+
+                        <!-- Informações -->
+                        <div class="alert alert-warning">
+                            <h6><i class="fas fa-exclamation-triangle"></i> Atenção:</h6>
+                            <ul class="mb-0 small">
+                                <li><strong>Código do produto</strong> não pode ser alterado</li>
+                                <li><strong>Alterações</strong> afetarão cálculos futuros de pallets e peso</li>
+                                <li><strong>Decimais:</strong> Use vírgula ou ponto (ex: 80,5 ou 80.5)</li>
+                                <li><strong>Volume:</strong> Será recalculado automaticamente</li>
+                            </ul>
+                        </div>
+
+                        <!-- Valores atuais -->
+                        <div class="card bg-light mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-info-circle"></i> Valores Atuais
+                                </h6>
+                                <div class="row text-center">
+                                    <div class="col-md-3">
+                                        <strong>Volume Atual:</strong><br>
+                                        <span class="text-primary">{{ palletizacao.volume_m3 }} m³</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Status:</strong><br>
+                                        {% if palletizacao.ativo %}
+                                            <span class="badge badge-success">Ativo</span>
+                                        {% else %}
+                                            <span class="badge badge-secondary">Inativo</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Criado em:</strong><br>
+                                        <small class="text-muted">{{ palletizacao.created_at.strftime('%d/%m/%Y') }}</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Atualizado em:</strong><br>
+                                        <small class="text-muted">{{ palletizacao.updated_at.strftime('%d/%m/%Y') }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                            <button type="button" class="btn btn-danger" onclick="confirmarExclusao()">
+                                <i class="fas fa-trash"></i> Excluir
+                            </button>
+                            <div>
+                                <a href="{{ url_for('producao.listar_palletizacao') }}" class="btn btn-secondary me-2">
+                                    <i class="fas fa-arrow-left"></i> Cancelar
+                                </a>
+                                <button type="submit" class="btn btn-warning">
+                                    <i class="fas fa-save"></i> Salvar Alterações
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview de cálculo -->
+    <div class="row mt-4">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="fas fa-calculator"></i> Preview de Cálculos (Com Novos Valores)</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <h6>Para 1000 unidades:</h6>
+                            <p class="text-muted" id="calc_pallets">- pallets</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>Peso total:</h6>
+                            <p class="text-muted" id="calc_peso">- kg</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>Volume unitário:</h6>
+                            <p class="text-muted" id="calc_volume">- m³</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>Volume 1000 un:</h6>
+                            <p class="text-muted" id="calc_volume_total">- m³</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Função para calcular valores em tempo real
+function calcularPreview() {
+    const palletizacao = parseFloat(document.getElementById('palletizacao').value.replace(',', '.')) || 0;
+    const peso_bruto = parseFloat(document.getElementById('peso_bruto').value.replace(',', '.')) || 0;
+    const altura = parseFloat(document.getElementById('altura_cm').value.replace(',', '.')) || 0;
+    const largura = parseFloat(document.getElementById('largura_cm').value.replace(',', '.')) || 0;
+    const comprimento = parseFloat(document.getElementById('comprimento_cm').value.replace(',', '.')) || 0;
+    
+    // Calcular para 1000 unidades
+    const qtd_exemplo = 1000;
+    
+    // Pallets
+    const pallets = palletizacao > 0 ? (qtd_exemplo / palletizacao).toFixed(2) : 0;
+    document.getElementById('calc_pallets').textContent = pallets + ' pallets';
+    
+    // Peso
+    const peso_total = (qtd_exemplo * peso_bruto).toFixed(2);
+    document.getElementById('calc_peso').textContent = peso_total + ' kg';
+    
+    // Volume unitário
+    const volume_unitario = (altura > 0 && largura > 0 && comprimento > 0) ? 
+        ((altura * largura * comprimento) / 1000000).toFixed(6) : 0;
+    document.getElementById('calc_volume').textContent = volume_unitario + ' m³';
+    
+    // Volume total para 1000
+    const volume_total = (volume_unitario * qtd_exemplo).toFixed(3);
+    document.getElementById('calc_volume_total').textContent = volume_total + ' m³';
+}
+
+// Função para confirmar exclusão
+function confirmarExclusao() {
+    if (confirm('Tem certeza que deseja excluir esta palletização?\n\nEsta ação não poderá ser desfeita.')) {
+        window.location.href = '{{ url_for("producao.excluir_palletizacao", id=palletizacao.id) }}';
+    }
+}
+
+// Eventos para atualizar cálculos
+document.getElementById('palletizacao').addEventListener('input', calcularPreview);
+document.getElementById('peso_bruto').addEventListener('input', calcularPreview);
+document.getElementById('altura_cm').addEventListener('input', calcularPreview);
+document.getElementById('largura_cm').addEventListener('input', calcularPreview);
+document.getElementById('comprimento_cm').addEventListener('input', calcularPreview);
+
+// Formatação automática de decimais
+function formatarDecimal(input) {
+    input.addEventListener('blur', function() {
+        let valor = this.value.replace(',', '.');
+        if (valor && !isNaN(valor)) {
+            this.value = parseFloat(valor).toString().replace('.', ',');
+        }
+    });
+}
+
+formatarDecimal(document.getElementById('palletizacao'));
+formatarDecimal(document.getElementById('peso_bruto'));
+formatarDecimal(document.getElementById('altura_cm'));
+formatarDecimal(document.getElementById('largura_cm'));
+formatarDecimal(document.getElementById('comprimento_cm'));
+
+// Calcular inicial
+document.addEventListener('DOMContentLoaded', calcularPreview);
+</script>
+{% endblock %} 

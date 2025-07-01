@@ -642,6 +642,158 @@ def baixar_modelo_palletizacao():
         flash(f'Erro ao gerar modelo: {str(e)}', 'error')
         return redirect(url_for('producao.listar_palletizacao'))
 
+@producao_bp.route('/palletizacao/nova')
+@login_required
+@require_admin()
+def nova_palletizacao():
+    """Formulário para nova palletização"""
+    return render_template('producao/nova_palletizacao.html')
+
+@producao_bp.route('/palletizacao/nova', methods=['POST'])
+@login_required
+@require_admin()
+def processar_nova_palletizacao():
+    """Processar nova palletização"""
+    try:
+        cod_produto = request.form.get('cod_produto', '').strip()
+        nome_produto = request.form.get('nome_produto', '').strip()
+        palletizacao = request.form.get('palletizacao', '').replace(',', '.')
+        peso_bruto = request.form.get('peso_bruto', '').replace(',', '.')
+        altura_cm = request.form.get('altura_cm', '').replace(',', '.') or None
+        largura_cm = request.form.get('largura_cm', '').replace(',', '.') or None
+        comprimento_cm = request.form.get('comprimento_cm', '').replace(',', '.') or None
+        
+        # Validações básicas
+        if not cod_produto or not nome_produto:
+            flash('❌ Código e nome do produto são obrigatórios!', 'error')
+            return redirect(url_for('producao.nova_palletizacao'))
+        
+        if not palletizacao or not peso_bruto:
+            flash('❌ Palletização e peso bruto são obrigatórios!', 'error')
+            return redirect(url_for('producao.nova_palletizacao'))
+        
+        # Verificar se já existe
+        existente = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+        if existente:
+            flash(f'❌ Produto {cod_produto} já possui cadastro de palletização!', 'error')
+            return redirect(url_for('producao.nova_palletizacao'))
+        
+        try:
+            palletizacao = float(palletizacao)
+            peso_bruto = float(peso_bruto)
+            altura_cm = float(altura_cm) if altura_cm else 0
+            largura_cm = float(largura_cm) if largura_cm else 0
+            comprimento_cm = float(comprimento_cm) if comprimento_cm else 0
+        except ValueError:
+            flash('❌ Valores numéricos inválidos!', 'error')
+            return redirect(url_for('producao.nova_palletizacao'))
+        
+        # Criar novo registro
+        nova_palletizacao = CadastroPalletizacao()
+        nova_palletizacao.cod_produto = cod_produto
+        nova_palletizacao.nome_produto = nome_produto
+        nova_palletizacao.palletizacao = palletizacao
+        nova_palletizacao.peso_bruto = peso_bruto
+        nova_palletizacao.altura_cm = altura_cm
+        nova_palletizacao.largura_cm = largura_cm
+        nova_palletizacao.comprimento_cm = comprimento_cm
+        nova_palletizacao.created_by = current_user.nome
+        nova_palletizacao.ativo = True
+        
+        db.session.add(nova_palletizacao)
+        db.session.commit()
+        
+        flash(f'✅ Palletização do produto {cod_produto} criada com sucesso!', 'success')
+        return redirect(url_for('producao.listar_palletizacao'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Erro ao criar palletização: {str(e)}', 'error')
+        return redirect(url_for('producao.nova_palletizacao'))
+
+@producao_bp.route('/palletizacao/editar/<int:id>')
+@login_required
+@require_admin()
+def editar_palletizacao(id):
+    """Formulário para editar palletização"""
+    palletizacao = CadastroPalletizacao.query.get_or_404(id)
+    return render_template('producao/editar_palletizacao.html', palletizacao=palletizacao)
+
+@producao_bp.route('/palletizacao/editar/<int:id>', methods=['POST'])
+@login_required
+@require_admin()
+def processar_edicao_palletizacao(id):
+    """Processar edição de palletização"""
+    try:
+        palletizacao = CadastroPalletizacao.query.get_or_404(id)
+        
+        nome_produto = request.form.get('nome_produto', '').strip()
+        palletizacao_valor = request.form.get('palletizacao', '').replace(',', '.')
+        peso_bruto = request.form.get('peso_bruto', '').replace(',', '.')
+        altura_cm = request.form.get('altura_cm', '').replace(',', '.') or None
+        largura_cm = request.form.get('largura_cm', '').replace(',', '.') or None
+        comprimento_cm = request.form.get('comprimento_cm', '').replace(',', '.') or None
+        
+        # Validações básicas
+        if not nome_produto:
+            flash('❌ Nome do produto é obrigatório!', 'error')
+            return redirect(url_for('producao.editar_palletizacao', id=id))
+        
+        if not palletizacao_valor or not peso_bruto:
+            flash('❌ Palletização e peso bruto são obrigatórios!', 'error')
+            return redirect(url_for('producao.editar_palletizacao', id=id))
+        
+        try:
+            palletizacao_valor = float(palletizacao_valor)
+            peso_bruto = float(peso_bruto)
+            altura_cm = float(altura_cm) if altura_cm else 0
+            largura_cm = float(largura_cm) if largura_cm else 0
+            comprimento_cm = float(comprimento_cm) if comprimento_cm else 0
+        except ValueError:
+            flash('❌ Valores numéricos inválidos!', 'error')
+            return redirect(url_for('producao.editar_palletizacao', id=id))
+        
+        # Atualizar registro
+        palletizacao.nome_produto = nome_produto
+        palletizacao.palletizacao = palletizacao_valor
+        palletizacao.peso_bruto = peso_bruto
+        palletizacao.altura_cm = altura_cm
+        palletizacao.largura_cm = largura_cm
+        palletizacao.comprimento_cm = comprimento_cm
+        palletizacao.updated_by = current_user.nome
+        
+        db.session.commit()
+        
+        flash(f'✅ Palletização do produto {palletizacao.cod_produto} atualizada com sucesso!', 'success')
+        return redirect(url_for('producao.listar_palletizacao'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Erro ao atualizar palletização: {str(e)}', 'error')
+        return redirect(url_for('producao.editar_palletizacao', id=id))
+
+@producao_bp.route('/palletizacao/excluir/<int:id>')
+@login_required
+@require_admin()
+def excluir_palletizacao(id):
+    """Excluir palletização (soft delete)"""
+    try:
+        palletizacao = CadastroPalletizacao.query.get_or_404(id)
+        
+        # Soft delete - marcar como inativo
+        palletizacao.ativo = False
+        palletizacao.updated_by = current_user.nome
+        
+        db.session.commit()
+        
+        flash(f'✅ Palletização do produto {palletizacao.cod_produto} excluída com sucesso!', 'success')
+        return redirect(url_for('producao.listar_palletizacao'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Erro ao excluir palletização: {str(e)}', 'error')
+        return redirect(url_for('producao.listar_palletizacao'))
+
 @producao_bp.route('/palletizacao/exportar-dados')
 @login_required
 def exportar_dados_palletizacao():

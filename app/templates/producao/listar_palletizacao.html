@@ -71,6 +71,9 @@
                                 
                                 <!-- 🎯 BOTÕES PADRONIZADOS SISTEMA CARTEIRA -->
                                 <div class="btn-group me-2" role="group">
+                                    <a href="{{ url_for('producao.nova_palletizacao') }}" class="btn btn-primary">
+                                        <i class="fas fa-plus"></i> Novo
+                                    </a>
                                     <a href="{{ url_for('producao.baixar_modelo_palletizacao') }}" class="btn btn-info">
                                         <i class="fas fa-download"></i> Modelo
                                     </a>
@@ -196,9 +199,18 @@
                                             {% endif %}
                                         </td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline-primary" onclick="editarItem({{ item.id }})">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
+                                            <div class="btn-group" role="group">
+                                                <a href="{{ url_for('producao.editar_palletizacao', id=item.id) }}" 
+                                                   class="btn btn-sm btn-outline-primary" 
+                                                   title="Editar">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <button class="btn btn-sm btn-outline-danger" 
+                                                        onclick="confirmarExclusao({{ item.id }}, '{{ item.nome_produto[:30] }}')"
+                                                        title="Excluir">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -284,10 +296,11 @@ function exportarExcel() {
     window.location.href = '{{ url_for("producao.listar_palletizacao") }}?' + params.toString();
 }
 
-// Função para editar item
-function editarItem(id) {
-    // TODO: Implementar modal de edição
-    alert('Funcionalidade de edição será implementada em breve');
+// Função para confirmar exclusão
+function confirmarExclusao(id, nome) {
+    if (confirm(`Tem certeza que deseja excluir a palletização do produto: ${nome}?`)) {
+        window.location.href = `{{ url_for('producao.excluir_palletizacao', id=0) }}`.replace('0', id);
+    }
 }
 </script>
 {% endblock %} 
