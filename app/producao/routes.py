@@ -102,8 +102,8 @@ def listar_programacao():
     try:
         inspector = inspect(db.engine)
         if inspector.has_table('programacao_producao'):
-            # Query base
-            query = ProgramacaoProducao.query.filter_by(ativo=True)
+            # Query base - CORRIGIDO: sem filtro ativo (campo não existe)
+            query = ProgramacaoProducao.query
             
             # Aplicar filtros
             if data_de:
@@ -136,10 +136,10 @@ def listar_programacao():
             programacao = pagination.items  # Template espera 'programacao'
             
             # 🔧 BUSCAR OPÇÕES PARA OS DROPDOWNS (de todos os registros, não só filtrados)
-            todos_registros = ProgramacaoProducao.query.filter_by(ativo=True).all()
+            todos_registros = ProgramacaoProducao.query.all()
             codigos_produtos = sorted(set(p.cod_produto for p in todos_registros if p.cod_produto))
             nomes_produtos = sorted(set(p.nome_produto for p in todos_registros if p.nome_produto))
-            linhas_producao = sorted(set(p.linha_producao for p in todos_registros if p.linha_producao))  # 🔧 NOME LIMPO
+            linhas_producao = sorted(set(p.linha_producao for p in todos_registros if p.linha_producao))
             
             # Cálculos para o template
             total_quantidade = sum(p.qtd_programada for p in programacao) if programacao else 0
@@ -672,7 +672,7 @@ def exportar_dados_programacao():
         
         # Buscar dados
         if inspector.has_table('programacao_producao'):
-            programacoes = ProgramacaoProducao.query.filter_by(ativo=True).order_by(
+            programacoes = ProgramacaoProducao.query.order_by(
                 ProgramacaoProducao.data_programacao.desc()
             ).limit(1000).all()  # Limitar a 1000 para performance
         else:

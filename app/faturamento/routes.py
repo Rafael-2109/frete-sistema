@@ -574,8 +574,8 @@ def listar_faturamento_produtos():
         inspector = inspect(db.engine)
         
         if inspector.has_table('faturamento_produto'):
-            # Query base
-            query = FaturamentoProduto.query.filter_by(ativo=True)
+            # Query base - CORRIGIDO: sem filtro ativo (campo não existe)
+            query = FaturamentoProduto.query
             
             # Aplicar filtros
             if nome_cliente:
