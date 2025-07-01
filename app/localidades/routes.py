@@ -122,13 +122,43 @@ def mesorregioes_por_uf(uf):
 @login_required
 def listar_rotas():
     """Lista cadastro de rotas principais por UF"""
+    # Filtros
+    cod_uf = request.args.get('cod_uf', '')
+    rota = request.args.get('rota', '')
+    
     try:
         inspector = inspect(db.engine)
-        rotas = CadastroRota.query.filter_by(ativa=True).order_by(CadastroRota.cod_uf).all() if inspector.has_table('cadastro_rota') else []
+        if inspector.has_table('cadastro_rota'):
+            # Query base
+            query = CadastroRota.query.filter_by(ativa=True)
+            
+            # Aplicar filtros
+            if cod_uf:
+                query = query.filter(CadastroRota.cod_uf == cod_uf)
+            if rota:
+                query = query.filter(CadastroRota.rota.ilike(f'%{rota}%'))
+            
+            # Ordenação
+            rotas = query.order_by(CadastroRota.cod_uf).all()
+            
+            # 🔧 BUSCAR OPÇÕES PARA OS DROPDOWNS
+            ufs_disponiveis = sorted(set(r.cod_uf for r in CadastroRota.query.filter_by(ativa=True).all()))
+            rotas_disponiveis = sorted(set(r.rota for r in CadastroRota.query.filter_by(ativa=True).all()))
+        else:
+            rotas = []
+            ufs_disponiveis = []
+            rotas_disponiveis = []
     except Exception:
         rotas = []
+        ufs_disponiveis = []
+        rotas_disponiveis = []
     
-    return render_template('localidades/listar_rotas.html', rotas=rotas)
+    return render_template('localidades/listar_rotas.html', 
+                         rotas=rotas,
+                         cod_uf=cod_uf,
+                         rota=rota,
+                         ufs_disponiveis=ufs_disponiveis,
+                         rotas_disponiveis=rotas_disponiveis)
 
 @localidades_bp.route('/sub-rotas')
 @login_required
@@ -137,6 +167,7 @@ def listar_sub_rotas():
     # Filtros
     cod_uf = request.args.get('cod_uf', '')
     nome_cidade = request.args.get('nome_cidade', '')
+    sub_rota = request.args.get('sub_rota', '')
     
     try:
         inspector = inspect(db.engine)
@@ -146,21 +177,38 @@ def listar_sub_rotas():
             
             # Aplicar filtros
             if cod_uf:
-                query = query.filter(CadastroSubRota.cod_uf.ilike(f'%{cod_uf}%'))
+                query = query.filter(CadastroSubRota.cod_uf == cod_uf)
             if nome_cidade:
                 query = query.filter(CadastroSubRota.nome_cidade.ilike(f'%{nome_cidade}%'))
+            if sub_rota:
+                query = query.filter(CadastroSubRota.sub_rota.ilike(f'%{sub_rota}%'))
             
             # Ordenação
             sub_rotas = query.order_by(CadastroSubRota.cod_uf, CadastroSubRota.nome_cidade).all()
+            
+            # 🔧 BUSCAR OPÇÕES PARA OS DROPDOWNS
+            ufs_disponiveis = sorted(set(sr.cod_uf for sr in CadastroSubRota.query.filter_by(ativa=True).all()))
+            cidades_disponiveis = sorted(set(sr.nome_cidade for sr in CadastroSubRota.query.filter_by(ativa=True).all()))
+            sub_rotas_disponiveis = sorted(set(sr.sub_rota for sr in CadastroSubRota.query.filter_by(ativa=True).all()))
         else:
             sub_rotas = []
+            ufs_disponiveis = []
+            cidades_disponiveis = []
+            sub_rotas_disponiveis = []
     except Exception:
         sub_rotas = []
+        ufs_disponiveis = []
+        cidades_disponiveis = []
+        sub_rotas_disponiveis = []
     
     return render_template('localidades/listar_sub_rotas.html',
                          sub_rotas=sub_rotas,
                          cod_uf=cod_uf,
-                         nome_cidade=nome_cidade)
+                         nome_cidade=nome_cidade,
+                         sub_rota=sub_rota,
+                         ufs_disponiveis=ufs_disponiveis,
+                         cidades_disponiveis=cidades_disponiveis,
+                         sub_rotas_disponiveis=sub_rotas_disponiveis)
 
 # =====================================
 # 📤 ROTAS DE IMPORTAÇÃO 
@@ -491,10 +539,16 @@ def exportar_dados_rotas():
         from flask import make_response
         from io import BytesIO
         from datetime import datetime
+        from sqlalchemy import inspect
+        
+        # 🔧 CORREÇÃO: Definir inspector na função
+        inspector = inspect(db.engine)
         
         # Buscar dados
         if inspector.has_table('cadastro_rota'):
-            rotas = CadastroRota.query.filter_by(ativa=True).order_by(CadastroRota.cod_uf).all()
+            rotas = CadastroRota.query.filter_by(ativa=True).order_by(
+                CadastroRota.cod_uf
+            ).all()
         else:
             rotas = []
         
@@ -506,8 +560,12 @@ def exportar_dados_rotas():
         dados_export = []
         for r in rotas:
             dados_export.append({
-                'ESTADO': r.cod_uf,
-                'ROTA': r.rota
+                'cod_uf': r.cod_uf,
+                'rota': r.rota,
+                'observacao': r.observacao or '',
+                'ativa': 'Sim' if r.ativa else 'Não',
+                'created_at': r.created_at.strftime('%d/%m/%Y %H:%M') if r.created_at else '',
+                'created_by': r.created_by or ''
             })
         
         df = pd.DataFrame(dados_export)
@@ -518,7 +576,7 @@ def exportar_dados_rotas():
             
             # Estatísticas
             stats = pd.DataFrame({
-                'Estatística': ['Total Rotas', 'Estados Únicos', 'Rotas Ativas'],
+                'Estatística': ['Total Rotas', 'UFs Atendidas', 'Rotas Ativas'],
                 'Valor': [
                     len(rotas),
                     len(set(r.cod_uf for r in rotas)),
@@ -600,6 +658,10 @@ def exportar_dados_sub_rotas():
         from flask import make_response
         from io import BytesIO
         from datetime import datetime
+        from sqlalchemy import inspect
+        
+        # 🔧 CORREÇÃO: Definir inspector na função
+        inspector = inspect(db.engine)
         
         # Buscar dados
         if inspector.has_table('cadastro_sub_rota'):
@@ -617,9 +679,13 @@ def exportar_dados_sub_rotas():
         dados_export = []
         for sr in sub_rotas:
             dados_export.append({
-                'ESTADO': sr.cod_uf,
-                'CIDADE': sr.nome_cidade,
-                'SUB ROTA': sr.sub_rota
+                'cod_uf': sr.cod_uf,
+                'nome_cidade': sr.nome_cidade,
+                'sub_rota': sr.sub_rota,
+                'observacao': sr.observacao or '',
+                'ativa': 'Sim' if sr.ativa else 'Não',
+                'created_at': sr.created_at.strftime('%d/%m/%Y %H:%M') if sr.created_at else '',
+                'created_by': sr.created_by or ''
             })
         
         df = pd.DataFrame(dados_export)
@@ -630,11 +696,11 @@ def exportar_dados_sub_rotas():
             
             # Estatísticas
             stats = pd.DataFrame({
-                'Estatística': ['Total Sub Rotas', 'Estados Únicos', 'Cidades Únicas', 'Sub Rotas Ativas'],
+                'Estatística': ['Total Sub-Rotas', 'UFs Atendidas', 'Cidades Atendidas', 'Sub-Rotas Ativas'],
                 'Valor': [
                     len(sub_rotas),
                     len(set(sr.cod_uf for sr in sub_rotas)),
-                    len(set(f"{sr.nome_cidade}/{sr.cod_uf}" for sr in sub_rotas)),
+                    len(set(sr.nome_cidade for sr in sub_rotas)),
                     len([sr for sr in sub_rotas if sr.ativa])
                 ]
             })

@@ -32,10 +32,9 @@
                                 <label for="tipo_movimentacao">Tipo de Movimentação:</label>
                                 <select class="form-control" id="tipo_movimentacao" name="tipo_movimentacao">
                                     <option value="">Todos os Tipos</option>
-                                    <option value="ENTRADA" {{ 'selected' if tipo_movimentacao == 'ENTRADA' }}>Entrada</option>
-                                    <option value="SAIDA" {{ 'selected' if tipo_movimentacao == 'SAIDA' }}>Saída</option>
-                                    <option value="TRANSFERENCIA" {{ 'selected' if tipo_movimentacao == 'TRANSFERENCIA' }}>Transferência</option>
-                                    <option value="AJUSTE" {{ 'selected' if tipo_movimentacao == 'AJUSTE' }}>Ajuste</option>
+                                    {% for tipo in tipos_movimentacao_disponiveis %}
+                                    <option value="{{ tipo }}" {% if tipo_movimentacao == tipo %}selected{% endif %}>{{ tipo }}</option>
+                                    {% endfor %}
                                 </select>
                             </div>
                             <div class="col-md-4 mb-3 d-flex align-items-end">
@@ -178,10 +177,11 @@
                                                    title="Editar movimentação">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
-                                                <a href="{{ url_for('estoque.visualizar_movimentacao', id=mov.id) }}" 
-                                                   class="btn btn-outline-info" 
-                                                   title="Visualizar detalhes">
-                                                    <i class="fas fa-eye"></i>
+                                                <a href="{{ url_for('estoque.excluir_movimentacao', id=mov.id) }}" 
+                                                   class="btn btn-outline-danger" 
+                                                   title="Excluir movimentação"
+                                                   onclick="return confirm('Tem certeza que deseja excluir esta movimentação?')">
+                                                    <i class="fas fa-trash"></i>
                                                 </a>
                                             </div>
                                         </td>

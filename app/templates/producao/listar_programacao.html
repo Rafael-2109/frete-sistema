@@ -134,17 +134,10 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="card-header">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-table"></i> Programação de Produção
                     </h5>
-                    {% if programacao %}
-                    <div>
-                        <button class="btn btn-sm btn-success" onclick="exportarExcel()">
-                            <i class="fas fa-file-excel"></i> Exportar Excel
-                        </button>
-                    </div>
-                    {% endif %}
                 </div>
                 <div class="card-body">
                     {% if programacao %}
@@ -280,13 +273,6 @@ document.getElementById('nome_produto').addEventListener('change', function() {
 document.getElementById('linha_producao').addEventListener('change', function() {
     document.getElementById('filtrosForm').submit();
 });
-
-// Função para exportar Excel
-function exportarExcel() {
-    const params = new URLSearchParams(window.location.search);
-    params.set('export', 'excel');
-    window.location.href = '{{ url_for("producao.listar_programacao") }}?' + params.toString();
-}
 
 // Função para editar item
 function editarItem(id) {

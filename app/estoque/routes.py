@@ -118,15 +118,24 @@ def listar_movimentacoes():
             
             # Ordenação (limitado a 100 registros mais recentes)
             movimentacoes = query.order_by(MovimentacaoEstoque.data_movimentacao.desc()).limit(100).all()
+            
+            # 🔧 CARREGAR TIPOS DE MOVIMENTAÇÃO DOS DADOS REAIS
+            tipos_movimentacao_disponiveis = sorted(set(
+                m.tipo_movimentacao for m in MovimentacaoEstoque.query.all() 
+                if m.tipo_movimentacao
+            ))
         else:
             movimentacoes = []
+            tipos_movimentacao_disponiveis = []
     except Exception:
         movimentacoes = []
+        tipos_movimentacao_disponiveis = []
     
     return render_template('estoque/listar_movimentacoes.html',
                          movimentacoes=movimentacoes,
                          cod_produto=cod_produto,
-                         tipo_movimentacao=tipo_movimentacao)
+                         tipo_movimentacao=tipo_movimentacao,
+                         tipos_movimentacao_disponiveis=tipos_movimentacao_disponiveis)
 
 @estoque_bp.route('/api/estatisticas')
 @login_required
@@ -491,6 +500,31 @@ def processar_edicao_movimentacao(id):
         flash(f'❌ Erro ao atualizar movimentação: {str(e)}', 'error')
         return redirect(url_for('estoque.editar_movimentacao', id=id))
 
+@estoque_bp.route('/movimentacoes/excluir/<int:id>')
+@login_required
+@require_admin()
+def excluir_movimentacao(id):
+    """Excluir movimentação de estoque"""
+    try:
+        movimentacao = MovimentacaoEstoque.query.get_or_404(id)
+        
+        # Guardar informações para a mensagem
+        tipo_mov = movimentacao.tipo_movimentacao
+        cod_produto = movimentacao.cod_produto
+        qtd = movimentacao.qtd_movimentacao
+        
+        # Excluir do banco
+        db.session.delete(movimentacao)
+        db.session.commit()
+        
+        flash(f'✅ Movimentação excluída com sucesso: {tipo_mov} de {qtd} unidades do produto {cod_produto}', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ Erro ao excluir movimentação: {str(e)}', 'error')
+    
+    return redirect(url_for('estoque.listar_movimentacoes'))
+
 @estoque_bp.route('/movimentacoes/baixar-modelo')
 @login_required
 def baixar_modelo_movimentacoes():
@@ -559,6 +593,10 @@ def exportar_dados_movimentacoes():
         from flask import make_response
         from io import BytesIO
         from datetime import datetime
+        from sqlalchemy import inspect
+        
+        # 🔧 CORREÇÃO: Definir inspector na função
+        inspector = inspect(db.engine)
         
         # Buscar dados
         if inspector.has_table('movimentacao_estoque'):
@@ -977,6 +1015,10 @@ def exportar_dados_unificacao():
         from flask import make_response
         from io import BytesIO
         from datetime import datetime
+        from sqlalchemy import inspect
+        
+        # 🔧 CORREÇÃO: Definir inspector na função
+        inspector = inspect(db.engine)
         
         if inspector.has_table('unificacao_codigos'):
             unificacoes = UnificacaoCodigos.query.order_by(

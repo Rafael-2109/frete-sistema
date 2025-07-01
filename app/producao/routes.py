@@ -83,39 +83,69 @@ def index():
 def listar_programacao():
     """Lista programação de produção"""
     from sqlalchemy import inspect
+    from datetime import datetime
     
     # Filtros
+    data_de = request.args.get('data_de', '')
+    data_ate = request.args.get('data_ate', '')
     cod_produto = request.args.get('cod_produto', '')
-    status = request.args.get('status', '')
+    nome_produto = request.args.get('nome_produto', '')
+    linha_producao = request.args.get('linha_producao', '')
     
     try:
         inspector = inspect(db.engine)
         if inspector.has_table('programacao_producao'):
             # Query base
-            query = ProgramacaoProducao.query
+            query = ProgramacaoProducao.query.filter_by(ativo=True)
             
             # Aplicar filtros
+            if data_de:
+                try:
+                    data_de_obj = datetime.strptime(data_de, '%Y-%m-%d').date()
+                    query = query.filter(ProgramacaoProducao.data_programacao >= data_de_obj)
+                except:
+                    pass
+            
+            if data_ate:
+                try:
+                    data_ate_obj = datetime.strptime(data_ate, '%Y-%m-%d').date()
+                    query = query.filter(ProgramacaoProducao.data_programacao <= data_ate_obj)
+                except:
+                    pass
+            
             if cod_produto:
                 query = query.filter(ProgramacaoProducao.cod_produto.ilike(f'%{cod_produto}%'))
-            if status:
-                query = query.filter(ProgramacaoProducao.status == status)
+            
+            if nome_produto:
+                query = query.filter(ProgramacaoProducao.nome_produto.ilike(f'%{nome_produto}%'))
+            
+            if linha_producao:
+                query = query.filter(ProgramacaoProducao.linha_producao.ilike(f'%{linha_producao}%'))
             
             # Ordenação
-            programacoes = query.order_by(ProgramacaoProducao.data_programacao).all()
+            programacoes = query.order_by(ProgramacaoProducao.data_programacao.desc()).all()
+            
+            # 🔧 BUSCAR OPÇÕES PARA OS DROPDOWNS (de todos os registros, não só filtrados)
+            todos_registros = ProgramacaoProducao.query.filter_by(ativo=True).all()
+            codigos_produtos = sorted(set(p.cod_produto for p in todos_registros if p.cod_produto))
+            nomes_produtos = sorted(set(p.nome_produto for p in todos_registros if p.nome_produto))
+            linhas_producao = sorted(set(p.linha_producao for p in todos_registros if p.linha_producao))
         else:
             programacoes = []
-    except Exception:
+            codigos_produtos = []
+            nomes_produtos = []
+            linhas_producao = []
+    except Exception as e:
+        print(f"Erro na programação: {e}")
         programacoes = []
+        codigos_produtos = []
+        nomes_produtos = []
+        linhas_producao = []
     
     # Cálculos para o template
     total_quantidade = sum(p.qtd_programada for p in programacoes) if programacoes else 0
     produtos_unicos = len(set(p.cod_produto for p in programacoes)) if programacoes else 0
     linhas_unicas = len(set(p.linha_producao for p in programacoes if p.linha_producao)) if programacoes else 0
-    
-    # Dados para dropdowns
-    codigos_produtos = sorted(set(p.cod_produto for p in programacoes)) if programacoes else []
-    nomes_produtos = sorted(set(p.nome_produto for p in programacoes)) if programacoes else []
-    linhas_producao = sorted(set(p.linha_producao for p in programacoes if p.linha_producao)) if programacoes else []
 
     return render_template('producao/listar_programacao.html',
                          programacao=programacoes,  # Correção: template espera 'programacao'
@@ -125,8 +155,11 @@ def listar_programacao():
                          codigos_produtos=codigos_produtos,
                          nomes_produtos=nomes_produtos,
                          linhas_producao=linhas_producao,
+                         data_de=data_de,
+                         data_ate=data_ate,
                          cod_produto=cod_produto,
-                         status=status)
+                         nome_produto=nome_produto,
+                         linha_producao=linha_producao)
 
 # 🚚 ROTAS MOVIDAS PARA /localidades/ pois são cadastros de regiões/destinos
 # - /localidades/rotas (lista rotas por UF)
@@ -557,6 +590,7 @@ def exportar_dados_programacao():
         import pandas as pd
         from flask import make_response
         from io import BytesIO
+        from datetime import datetime
         from sqlalchemy import inspect
         
         # 🔧 CORREÇÃO: Definir inspector na função
@@ -564,27 +598,29 @@ def exportar_dados_programacao():
         
         # Buscar dados
         if inspector.has_table('programacao_producao'):
-            programacao = ProgramacaoProducao.query.filter_by(ativo=True).order_by(
+            programacoes = ProgramacaoProducao.query.filter_by(ativo=True).order_by(
                 ProgramacaoProducao.data_programacao.desc()
-            ).all()
+            ).limit(1000).all()  # Limitar a 1000 para performance
         else:
-            programacao = []
+            programacoes = []
         
-        if not programacao:
+        if not programacoes:
             flash('Nenhum dado encontrado para exportar.', 'warning')
             return redirect(url_for('producao.listar_programacao'))
         
         # Converter para Excel
         dados_export = []
-        for p in programacao:
+        for p in programacoes:
             dados_export.append({
-                'DATA': p.data_programacao.strftime('%d/%m/%Y') if p.data_programacao else '',
-                'SEÇÃO / MÁQUINA': p.linha_producao or '',
-                'CÓDIGO': p.cod_produto,
-                'OP': p.observacao_pcp or '',
-                'DESCRIÇÃO': p.nome_produto,
-                'CLIENTE': p.cliente_produto or '',
-                'QTDE': p.qtd_programada
+                'cod_produto': p.cod_produto,
+                'nome_produto': p.nome_produto,
+                'linha_producao': p.linha_producao,
+                'data_programacao': p.data_programacao.strftime('%d/%m/%Y') if p.data_programacao else '',
+                'qtd_programada': p.qtd_programada,
+                'status': p.status,
+                'observacao': p.observacao or '',
+                'created_at': p.created_at.strftime('%d/%m/%Y %H:%M') if p.created_at else '',
+                'created_by': p.created_by or ''
             })
         
         df = pd.DataFrame(dados_export)
@@ -595,12 +631,12 @@ def exportar_dados_programacao():
             
             # Estatísticas
             stats = pd.DataFrame({
-                'Estatística': ['Total Registros', 'Produtos Únicos', 'Linhas Produção', 'Qtd Total'],
+                'Estatística': ['Total Programações', 'Produtos Únicos', 'Linhas de Produção', 'Quantidade Total'],
                 'Valor': [
-                    len(programacao),
-                    len(set(p.cod_produto for p in programacao)),
-                    len(set(p.linha_producao for p in programacao if p.linha_producao)),
-                    sum(p.qtd_programada for p in programacao)
+                    len(programacoes),
+                    len(set(p.cod_produto for p in programacoes)),
+                    len(set(p.linha_producao for p in programacoes if p.linha_producao)),
+                    sum(p.qtd_programada for p in programacoes if p.qtd_programada)
                 ]
             })
             stats.to_excel(writer, sheet_name='Estatísticas', index=False)
