@@ -1,19 +1,30 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard da Carteira de Pedidos{% endblock %}
+{% block title %}📋 Carteira de Pedidos - Dashboard{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <div class="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 class="h3 mb-0 text-gray-800">
-            <i class="fas fa-shopping-cart text-primary"></i> 
-            Dashboard da Carteira de Pedidos
-        </h1>
+    <!-- Header Principal -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-clipboard-list text-primary"></i>
+                Carteira de Pedidos
+            </h1>
+            <p class="text-muted mb-0">Sistema central de gestão da carteira - Núcleo do ecossistema</p>
+        </div>
+        <div>
+            <a href="{{ url_for('carteira.importar_carteira') }}" class="btn btn-primary">
+                <i class="fas fa-upload"></i> Importar Carteira
+            </a>
+            <a href="{{ url_for('carteira.listar_principal') }}" class="btn btn-outline-primary">
+                <i class="fas fa-list"></i> Ver Carteira
+            </a>
+        </div>
     </div>
 
     <!-- Cards de Estatísticas -->
-    <div class="row">
-        <!-- Total de Pedidos -->
+    <div class="row mb-4">
         <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-primary shadow h-100 py-2">
                 <div class="card-body">
@@ -23,18 +34,17 @@
                                 Total de Pedidos
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ total_pedidos|default(0) }}
+                                {{ estatisticas.total_pedidos or 0 }}
                             </div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-file-invoice fa-2x text-gray-300"></i>
+                            <i class="fas fa-shopping-cart fa-2x text-gray-300"></i>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Total de Produtos -->
         <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-success shadow h-100 py-2">
                 <div class="card-body">
@@ -44,7 +54,7 @@
                                 Produtos Únicos
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ total_produtos|default(0) }}
+                                {{ estatisticas.total_produtos or 0 }}
                             </div>
                         </div>
                         <div class="col-auto">
@@ -55,17 +65,16 @@
             </div>
         </div>
 
-        <!-- Total de Itens -->
         <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-info shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                Itens na Carteira
+                                Total de Itens
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ total_itens|default(0) }}
+                                {{ estatisticas.total_itens or 0 }}
                             </div>
                         </div>
                         <div class="col-auto">
@@ -76,7 +85,6 @@
             </div>
         </div>
 
-        <!-- Valor Total -->
         <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-warning shadow h-100 py-2">
                 <div class="card-body">
@@ -86,7 +94,7 @@
                                 Valor Total
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ valor_total_carteira|valor_br }}
+                                R$ {{ "{:,.2f}".format(estatisticas.valor_total or 0) }}
                             </div>
                         </div>
                         <div class="col-auto">
@@ -98,188 +106,242 @@
         </div>
     </div>
 
-    <!-- Alertas e Avisos -->
-    {% if inconsistencias_abertas > 0 or controles_pendentes > 0 %}
-    <div class="row">
-        <div class="col-12">
-            <div class="alert alert-warning shadow">
-                <h6 class="alert-heading">
-                    <i class="fas fa-exclamation-triangle"></i> Atenção Necessária
-                </h6>
-                {% if inconsistencias_abertas > 0 %}
-                <p class="mb-1">
-                    <strong>{{ inconsistencias_abertas }}</strong> inconsistências de faturamento precisam ser resolvidas.
-                    <a href="{{ url_for('carteira.listar_inconsistencias') }}" class="btn btn-sm btn-warning ms-2">
-                        <i class="fas fa-tools"></i> Resolver
-                    </a>
-                </p>
-                {% endif %}
-                {% if controles_pendentes > 0 %}
-                <p class="mb-0">
-                    <strong>{{ controles_pendentes }}</strong> controles cruzados pendentes de verificação.
-                </p>
-                {% endif %}
+    <!-- Status Breakdown -->
+    {% if status_breakdown %}
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-pie"></i> Status dos Pedidos
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% for status in status_breakdown %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-sm">
+                            <span class="badge badge-pill 
+                                {% if status.status == 'ATIVO' %}badge-success
+                                {% elif status.status == 'PENDENTE' %}badge-warning  
+                                {% elif status.status == 'CANCELADO' %}badge-danger
+                                {% else %}badge-secondary{% endif %}">
+                                {{ status.status or 'N/A' }}
+                            </span>
+                        </span>
+                        <span class="font-weight-bold">{{ status.quantidade }} itens</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-exclamation-triangle"></i> Alertas e Controles
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if alertas_inconsistencias > 0 %}
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>{{ alertas_inconsistencias }}</strong> inconsistência(s) de faturamento pendente(s)
+                        <a href="{{ url_for('carteira.listar_inconsistencias') }}" class="alert-link">Ver detalhes</a>
+                    </div>
+                    {% endif %}
+
+                    {% if alertas_vinculacao > 0 %}
+                    <div class="alert alert-info" role="alert">
+                        <i class="fas fa-link"></i>
+                        <strong>{{ alertas_vinculacao }}</strong> item(s) sem vinculação com separação
+                        <a href="{{ url_for('carteira.relatorio_vinculacoes') }}" class="alert-link">Ver relatório</a>
+                    </div>
+                    {% endif %}
+
+                    {% if alertas_inconsistencias == 0 and alertas_vinculacao == 0 %}
+                    <div class="alert alert-success" role="alert">
+                        <i class="fas fa-check-circle"></i>
+                        Sistema operando normalmente - Nenhum alerta crítico
+                    </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
     {% endif %}
 
-    <div class="row">
-        <!-- Status Breakdown -->
-        <div class="col-xl-8 col-lg-7">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+    <!-- Expedições Próximas -->
+    {% if expedicoes_proximas %}
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-chart-pie"></i> Breakdown por Status
+                        <i class="fas fa-truck"></i> Expedições Próximas (7 dias)
                     </h6>
                 </div>
                 <div class="card-body">
-                    {% if status_breakdown %}
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="table table-sm">
                             <thead>
                                 <tr>
+                                    <th>Data Expedição</th>
+                                    <th>Pedido</th>
+                                    <th>Cliente</th>
+                                    <th>Produto</th>
+                                    <th>Quantidade</th>
                                     <th>Status</th>
-                                    <th class="text-center">Quantidade</th>
-                                    <th class="text-right">Valor Total</th>
-                                    <th class="text-center">%</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% set total_count = status_breakdown|sum(attribute='count') %}
-                                {% for status in status_breakdown %}
+                                {% for item in expedicoes_proximas[:10] %}
                                 <tr>
                                     <td>
-                                        <span class="badge badge-primary">{{ status.status_pedido or 'Sem Status' }}</span>
+                                        <span class="badge badge-pill badge-primary">
+                                            {{ item.expedicao.strftime('%d/%m') if item.expedicao else 'N/A' }}
+                                        </span>
                                     </td>
-                                    <td class="text-center">{{ status.count }}</td>
-                                    <td class="text-right">{{ (status.valor or 0)|valor_br }}</td>
-                                    <td class="text-center">
-                                        <div class="progress" style="height: 6px;">
-                                            <div class="progress-bar bg-primary" style="width: {{ (status.count * 100 / total_count) if total_count > 0 else 0 }}%"></div>
-                                        </div>
-                                        {{ "%.1f"|format((status.count * 100 / total_count) if total_count > 0 else 0) }}%
+                                    <td><strong>{{ item.num_pedido }}</strong></td>
+                                    <td>{{ item.raz_social_red or item.raz_social }}</td>
+                                    <td>{{ item.nome_produto[:30] }}...</td>
+                                    <td>{{ "{:,.0f}".format(item.qtd_saldo_produto_pedido or 0) }}</td>
+                                    <td>
+                                        <span class="badge badge-pill 
+                                            {% if item.status_pedido == 'ATIVO' %}badge-success
+                                            {% elif item.status_pedido == 'PENDENTE' %}badge-warning
+                                            {% else %}badge-secondary{% endif %}">
+                                            {{ item.status_pedido or 'N/A' }}
+                                        </span>
                                     </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
-                    {% else %}
-                    <div class="text-center py-4">
-                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">Nenhum dado disponível ainda</p>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Expedições Próximas -->
-        <div class="col-xl-4 col-lg-5">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-warning">
-                        <i class="fas fa-clock"></i> Expedições Próximas (7 dias)
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="text-center">
-                        <div class="display-4 text-warning mb-2">{{ expedicoes_proximas|default(0) }}</div>
-                        <p class="text-muted mb-3">Pedidos com expedição nos próximos 7 dias</p>
-                        {% if expedicoes_proximas > 0 %}
-                        <a href="{{ url_for('carteira.listar_principal') }}?expedicao_proxima=true" class="btn btn-warning btn-sm">
-                            <i class="fas fa-eye"></i> Ver Detalhes
+                    {% if expedicoes_proximas|length > 10 %}
+                    <div class="text-center mt-3">
+                        <a href="{{ url_for('carteira.listar_principal') }}?filtro_expedicao=7_dias" class="btn btn-sm btn-outline-primary">
+                            Ver todas as {{ expedicoes_proximas|length }} expedições
                         </a>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Top Vendedores -->
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-success">
-                        <i class="fas fa-users"></i> Top Vendedores
-                    </h6>
-                </div>
-                <div class="card-body">
-                    {% if vendedores_breakdown %}
-                    <div class="small">
-                        {% for vendedor in vendedores_breakdown[:5] %}
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="text-truncate" style="max-width: 150px;">
-                                {{ vendedor.vendedor or 'Sem Vendedor' }}
-                            </span>
-                            <div class="text-right">
-                                <div class="text-xs text-muted">{{ vendedor.count }} itens</div>
-                                <div class="text-xs font-weight-bold">{{ (vendedor.valor or 0)|valor_br }}</div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <div class="text-center py-3">
-                        <i class="fas fa-user-slash fa-2x text-muted mb-2"></i>
-                        <p class="text-muted mb-0">Nenhum vendedor encontrado</p>
                     </div>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
+    {% endif %}
 
-    <!-- Ações Rápidas -->
-    <div class="row">
-        <div class="col-12">
+    <!-- Top Vendedores -->
+    {% if top_vendedores %}
+    <div class="row mb-4">
+        <div class="col-lg-6">
             <div class="card shadow">
                 <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-bolt"></i> Ações Rápidas
+                        <i class="fas fa-user-tie"></i> Top Vendedores
                     </h6>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-3 mb-3">
-                            <a href="{{ url_for('carteira.listar_principal') }}" class="btn btn-primary btn-block">
-                                <i class="fas fa-list"></i> Ver Carteira Principal
+                    {% for vendedor in top_vendedores[:5] %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>{{ vendedor.vendedor or 'N/A' }}</span>
+                        <div class="text-right">
+                            <small class="text-muted">{{ vendedor.quantidade }} itens</small><br>
+                            <strong>R$ {{ "{:,.0f}".format(vendedor.valor or 0) }}</strong>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-cogs"></i> Ações Rápidas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <a href="{{ url_for('carteira.importar_carteira') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-upload text-primary"></i>
+                            <strong>Importar Carteira</strong>
+                            <small class="text-muted d-block">Atualizar dados da carteira de pedidos</small>
+                        </a>
+                        
+                        <a href="{{ url_for('carteira.gerar_separacao') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-cut text-success"></i>
+                            <strong>Gerar Separação</strong>
+                            <small class="text-muted d-block">Criar "recorte" da carteira para separação</small>
+                        </a>
+                        
+                        <a href="{{ url_for('carteira.relatorio_vinculacoes') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-link text-info"></i>
+                            <strong>Relatório de Vinculações</strong>
+                            <small class="text-muted d-block">Controle carteira ↔ separações</small>
+                        </a>
+                        
+                        <a href="{{ url_for('carteira.listar_inconsistencias') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-exclamation-triangle text-warning"></i>
+                            <strong>Inconsistências</strong>
+                            <small class="text-muted d-block">Resolver problemas de faturamento</small>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Sistema não inicializado -->
+    {% if not sistema_inicializado %}
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card border-left-warning shadow">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Sistema de Carteira de Pedidos
+                            </div>
+                            <div class="h5 mb-2 font-weight-bold text-gray-800">
+                                Aguardando primeira importação
+                            </div>
+                            <p class="text-muted mb-3">
+                                O sistema está pronto para receber dados. Importe sua primeira carteira de pedidos para começar.
+                            </p>
+                            <a href="{{ url_for('carteira.importar_carteira') }}" class="btn btn-warning">
+                                <i class="fas fa-upload"></i> Importar Primeira Carteira
+                            </a>
+                            <a href="{{ url_for('carteira.baixar_modelo') }}" class="btn btn-outline-secondary ml-2">
+                                <i class="fas fa-download"></i> Baixar Modelo Excel
                             </a>
                         </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="{{ url_for('carteira.importar_carteira') }}" class="btn btn-success btn-block">
-                                <i class="fas fa-upload"></i> Importar Carteira
-                            </a>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="{{ url_for('carteira.baixar_modelo') }}" class="btn btn-info btn-block">
-                                <i class="fas fa-download"></i> Baixar Modelo
-                            </a>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="{{ url_for('carteira.gerar_separacao') }}" class="btn btn-warning btn-block">
-                                <i class="fas fa-cut"></i> Gerar Separação
-                            </a>
+                        <div class="col-auto">
+                            <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
 
 <style>
-.progress {
-    background-color: #e9ecef;
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
 }
-.display-4 {
-    font-size: 2.5rem;
-    font-weight: 300;
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
 }
-.card {
-    transition: transform 0.2s;
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
 }
-.card:hover {
-    transform: translateY(-2px);
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e !important;
 }
 </style>
 {% endblock %} 
