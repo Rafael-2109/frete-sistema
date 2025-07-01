@@ -90,7 +90,14 @@ def listar_programacao():
     data_ate = request.args.get('data_ate', '')
     cod_produto = request.args.get('cod_produto', '')
     nome_produto = request.args.get('nome_produto', '')
-    linha_producao = request.args.get('linha_producao', '')
+    linha_producao_filtro = request.args.get('linha_producao', '')  # 🔧 RENOMEADO para evitar conflito
+    
+    # Paginação
+    try:
+        page = int(request.args.get('page', '1'))
+    except (ValueError, TypeError):
+        page = 1
+    per_page = 200  # 200 itens por página conforme solicitado
     
     try:
         inspector = inspect(db.engine)
@@ -119,36 +126,48 @@ def listar_programacao():
             if nome_produto:
                 query = query.filter(ProgramacaoProducao.nome_produto.ilike(f'%{nome_produto}%'))
             
-            if linha_producao:
-                query = query.filter(ProgramacaoProducao.linha_producao.ilike(f'%{linha_producao}%'))
+            if linha_producao_filtro:
+                query = query.filter(ProgramacaoProducao.linha_producao.ilike(f'%{linha_producao_filtro}%'))
             
-            # Ordenação
-            programacoes = query.order_by(ProgramacaoProducao.data_programacao.desc()).all()
+            # Ordenação e paginação
+            pagination = query.order_by(ProgramacaoProducao.data_programacao.desc()).paginate(
+                page=page, per_page=per_page, error_out=False
+            )
+            programacao = pagination.items  # Template espera 'programacao'
             
             # 🔧 BUSCAR OPÇÕES PARA OS DROPDOWNS (de todos os registros, não só filtrados)
             todos_registros = ProgramacaoProducao.query.filter_by(ativo=True).all()
             codigos_produtos = sorted(set(p.cod_produto for p in todos_registros if p.cod_produto))
             nomes_produtos = sorted(set(p.nome_produto for p in todos_registros if p.nome_produto))
-            linhas_producao = sorted(set(p.linha_producao for p in todos_registros if p.linha_producao))
+            linhas_producao = sorted(set(p.linha_producao for p in todos_registros if p.linha_producao))  # 🔧 NOME LIMPO
+            
+            # Cálculos para o template
+            total_quantidade = sum(p.qtd_programada for p in programacao) if programacao else 0
+            produtos_unicos = len(set(p.cod_produto for p in programacao)) if programacao else 0
+            linhas_unicas = len(set(p.linha_producao for p in programacao if p.linha_producao)) if programacao else 0
         else:
-            programacoes = []
+            pagination = None
+            programacao = []
             codigos_produtos = []
             nomes_produtos = []
             linhas_producao = []
+            total_quantidade = 0
+            produtos_unicos = 0
+            linhas_unicas = 0
     except Exception as e:
         print(f"Erro na programação: {e}")
-        programacoes = []
+        pagination = None
+        programacao = []
         codigos_produtos = []
         nomes_produtos = []
         linhas_producao = []
-    
-    # Cálculos para o template
-    total_quantidade = sum(p.qtd_programada for p in programacoes) if programacoes else 0
-    produtos_unicos = len(set(p.cod_produto for p in programacoes)) if programacoes else 0
-    linhas_unicas = len(set(p.linha_producao for p in programacoes if p.linha_producao)) if programacoes else 0
+        total_quantidade = 0
+        produtos_unicos = 0
+        linhas_unicas = 0
 
     return render_template('producao/listar_programacao.html',
-                         programacao=programacoes,  # Correção: template espera 'programacao'
+                         programacao=programacao,  # ✅ Template espera 'programacao'
+                         pagination=pagination,
                          total_quantidade=total_quantidade,
                          produtos_unicos=produtos_unicos,
                          linhas_unicas=linhas_unicas,
@@ -159,7 +178,7 @@ def listar_programacao():
                          data_ate=data_ate,
                          cod_produto=cod_produto,
                          nome_produto=nome_produto,
-                         linha_producao=linha_producao)
+                         linha_producao=linha_producao_filtro)  # 🔧 PASSA O FILTRO COM NOME ORIGINAL
 
 # 🚚 ROTAS MOVIDAS PARA /localidades/ pois são cadastros de regiões/destinos
 # - /localidades/rotas (lista rotas por UF)
@@ -171,6 +190,16 @@ def listar_palletizacao():
     """Lista cadastro de palletização (com medidas!)"""
     # Filtros
     cod_produto = request.args.get('cod_produto', '')
+    nome_produto = request.args.get('nome_produto', '')
+    palletizacao_filtro = request.args.get('palletizacao', '')
+    peso_bruto_filtro = request.args.get('peso_bruto', '')
+    
+    # Paginação
+    try:
+        page = int(request.args.get('page', '1'))
+    except (ValueError, TypeError):
+        page = 1
+    per_page = 200  # 200 itens por página conforme solicitado
     
     try:
         # 🔧 CORREÇÃO: Definir inspector na função
@@ -185,17 +214,62 @@ def listar_palletizacao():
             if cod_produto:
                 query = query.filter(CadastroPalletizacao.cod_produto.ilike(f'%{cod_produto}%'))
             
-            # Ordenação
-            palletizacoes = query.order_by(CadastroPalletizacao.cod_produto).all()
+            if nome_produto:
+                query = query.filter(CadastroPalletizacao.nome_produto.ilike(f'%{nome_produto}%'))
+                
+            if palletizacao_filtro:
+                try:
+                    palletizacao_val = float(palletizacao_filtro)
+                    query = query.filter(CadastroPalletizacao.palletizacao == palletizacao_val)
+                except:
+                    pass
+                    
+            if peso_bruto_filtro:
+                try:
+                    peso_val = float(peso_bruto_filtro)
+                    query = query.filter(CadastroPalletizacao.peso_bruto == peso_val)
+                except:
+                    pass
+            
+            # Ordenação e paginação
+            pagination = query.order_by(CadastroPalletizacao.cod_produto).paginate(
+                page=page, per_page=per_page, error_out=False
+            )
+            palletizacao = pagination.items  # Template espera 'palletizacao'
+            
+            # 🔧 BUSCAR OPÇÕES PARA OS DROPDOWNS (todos os registros ativos)
+            todos_registros = CadastroPalletizacao.query.filter_by(ativo=True).all()
+            codigos_produtos = sorted(set(p.cod_produto for p in todos_registros if p.cod_produto))
+            nomes_produtos = sorted(set(p.nome_produto for p in todos_registros if p.nome_produto))
+            fatores_palletizacao = sorted(set(p.palletizacao for p in todos_registros if p.palletizacao))
+            pesos_brutos = sorted(set(p.peso_bruto for p in todos_registros if p.peso_bruto))
         else:
-            palletizacoes = []
+            pagination = None
+            palletizacao = []
+            codigos_produtos = []
+            nomes_produtos = []
+            fatores_palletizacao = []
+            pesos_brutos = []
     except Exception as e:
         print(f"Erro na rota palletização: {e}")
-        palletizacoes = []
+        pagination = None
+        palletizacao = []
+        codigos_produtos = []
+        nomes_produtos = []
+        fatores_palletizacao = []
+        pesos_brutos = []
     
     return render_template('producao/listar_palletizacao.html',
-                         palletizacoes=palletizacoes,
-                         cod_produto=cod_produto)
+                         palletizacao=palletizacao,
+                         pagination=pagination,
+                         cod_produto=cod_produto,
+                         nome_produto=nome_produto,
+                         palletizacao_filtro=palletizacao_filtro,
+                         peso_bruto_filtro=peso_bruto_filtro,
+                         codigos_produtos=codigos_produtos,
+                         nomes_produtos=nomes_produtos,
+                         fatores_palletizacao=fatores_palletizacao,
+                         pesos_brutos=pesos_brutos)
 
 @producao_bp.route('/palletizacao/importar')
 @login_required
@@ -951,6 +1025,7 @@ def exportar_dados_palletizacao():
         import pandas as pd
         from flask import make_response
         from io import BytesIO
+        from datetime import datetime
         from sqlalchemy import inspect
         
         # 🔧 CORREÇÃO: Definir inspector na função
@@ -977,7 +1052,7 @@ def exportar_dados_palletizacao():
                 'altura_cm': p.altura_cm or '',
                 'largura_cm': p.largura_cm or '',
                 'comprimento_cm': p.comprimento_cm or '',
-                'volume_m3': p.volume_m3
+                'volume_m3': p.volume_m3 if hasattr(p, 'volume_m3') else 0
             })
         
         df = pd.DataFrame(dados_export)
@@ -985,6 +1060,18 @@ def exportar_dados_palletizacao():
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, sheet_name='Palletização', index=False)
+            
+            # 🔧 ADICIONADO: Aba de estatísticas como nas outras funções
+            stats = pd.DataFrame({
+                'Estatística': ['Total Produtos', 'Média Palletização', 'Média Peso Bruto', 'Volume Total m³'],
+                'Valor': [
+                    len(palletizacao),
+                    sum(p.palletizacao for p in palletizacao) / len(palletizacao) if palletizacao else 0,
+                    sum(p.peso_bruto for p in palletizacao) / len(palletizacao) if palletizacao else 0,
+                    sum(p.volume_m3 for p in palletizacao if hasattr(p, 'volume_m3') and p.volume_m3)
+                ]
+            })
+            stats.to_excel(writer, sheet_name='Estatísticas', index=False)
         
         output.seek(0)
         

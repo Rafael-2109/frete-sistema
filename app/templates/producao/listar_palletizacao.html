@@ -15,13 +15,16 @@
                     </h1>
                 </div>
                 <div class="btn-group" role="group">
+                    <a href="{{ url_for('producao.nova_palletizacao') }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Novo
+                    </a>
                     <a href="{{ url_for('producao.baixar_modelo_palletizacao') }}" class="btn btn-info">
                         <i class="fas fa-download"></i> Modelo
                     </a>
                     <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-success">
                         <i class="fas fa-upload"></i> Importar
                     </a>
-                    {% if palletizacoes %}
+                    {% if palletizacao %}
                     <a href="{{ url_for('producao.exportar_dados_palletizacao') }}" class="btn btn-warning">
                         <i class="fas fa-file-export"></i> Exportar
                     </a>
@@ -31,68 +34,54 @@
         </div>
     </div>
 
-    <!-- Filtros -->
+    <!-- Filtros Completos -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
-                </div>
                 <div class="card-body">
                     <form method="GET" id="filtrosForm">
                         <div class="row">
                             <div class="col-md-3 mb-3">
-                                <label for="cod_produto">Código Produto:</label>
-                                <select class="form-control" id="cod_produto" name="cod_produto">
-                                    <option value="">Todos</option>
-                                    {% for codigo in codigos_produtos %}
-                                    <option value="{{ codigo }}" {% if request.args.get('cod_produto') == codigo %}selected{% endif %}>{{ codigo }}</option>
-                                    {% endfor %}
-                                </select>
+                                <label for="cod_produto">Filtrar por Código:</label>
+                                <input type="text" class="form-control" id="cod_produto" name="cod_produto" 
+                                       value="{{ cod_produto }}" placeholder="Digite o código do produto">
                             </div>
                             <div class="col-md-3 mb-3">
-                                <label for="nome_produto">Nome Produto:</label>
-                                <select class="form-control" id="nome_produto" name="nome_produto">
-                                    <option value="">Todos</option>
-                                    {% for nome in nomes_produtos %}
-                                    <option value="{{ nome }}" {% if request.args.get('nome_produto') == nome %}selected{% endif %}>{{ nome[:50] }}{% if nome|length > 50 %}...{% endif %}</option>
-                                    {% endfor %}
-                                </select>
+                                <label for="nome_produto">Filtrar por Nome:</label>
+                                <input type="text" class="form-control" id="nome_produto" name="nome_produto" 
+                                       value="{{ nome_produto }}" placeholder="Digite o nome do produto">
                             </div>
                             <div class="col-md-3 mb-3">
-                                <label for="palletizacao">Palletização:</label>
+                                <label for="palletizacao">Filtrar por Palletização:</label>
                                 <select class="form-control" id="palletizacao" name="palletizacao">
-                                    <option value="">Todos</option>
+                                    <option value="">Todas as palletizações</option>
                                     {% for fator in fatores_palletizacao %}
-                                    <option value="{{ fator }}" {% if request.args.get('palletizacao') == fator|string %}selected{% endif %}>{{ fator | numero_br }}</option>
+                                    <option value="{{ fator }}" {% if palletizacao_filtro == fator|string %}selected{% endif %}>
+                                        {{ fator | numero_br }}
+                                    </option>
                                     {% endfor %}
                                 </select>
                             </div>
                             <div class="col-md-3 mb-3">
-                                <label for="peso_bruto">Peso Bruto:</label>
+                                <label for="peso_bruto">Filtrar por Peso Bruto:</label>
                                 <select class="form-control" id="peso_bruto" name="peso_bruto">
-                                    <option value="">Todos</option>
+                                    <option value="">Todos os pesos</option>
                                     {% for peso in pesos_brutos %}
-                                    <option value="{{ peso }}" {% if request.args.get('peso_bruto') == peso|string %}selected{% endif %}>{{ peso | numero_br }} kg</option>
+                                    <option value="{{ peso }}" {% if peso_bruto_filtro == peso|string %}selected{% endif %}>
+                                        {{ peso | numero_br }} kg
+                                    </option>
                                     {% endfor %}
                                 </select>
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-12 d-flex align-items-end">
+                            <div class="col-12 d-flex justify-content-end">
                                 <button type="submit" class="btn btn-primary me-2">
-                                    <i class="fas fa-search"></i> Pesquisar
+                                    <i class="fas fa-search"></i> Filtrar
                                 </button>
-                                <a href="{{ url_for('producao.listar_palletizacao') }}" class="btn btn-secondary me-2">
+                                <a href="{{ url_for('producao.listar_palletizacao') }}" class="btn btn-secondary">
                                     <i class="fas fa-eraser"></i> Limpar
                                 </a>
-                                
-                                <!-- 🎯 BOTÕES PADRONIZADOS SISTEMA CARTEIRA -->
-                                <div class="btn-group me-2" role="group">
-                                    <a href="{{ url_for('producao.nova_palletizacao') }}" class="btn btn-primary">
-                                        <i class="fas fa-plus"></i> Novo
-                                    </a>
-                                </div>
                             </div>
                         </div>
                     </form>
@@ -101,59 +90,17 @@
         </div>
     </div>
 
-    <!-- Resumo -->
-    {% if palletizacao %}
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card bg-primary text-white">
-                <div class="card-body text-center">
-                    <h4>{{ palletizacao|length }}</h4>
-                    <small>Produtos Cadastrados</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-success text-white">
-                <div class="card-body text-center">
-                    <h4>{{ media_palletizacao | numero_br }}</h4>
-                    <small>Média Palletização</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-info text-white">
-                <div class="card-body text-center">
-                    <h4>{{ media_peso_bruto | numero_br }} kg</h4>
-                    <small>Média Peso Bruto</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-warning text-dark">
-                <div class="card-body text-center">
-                    <h4>{{ total_volume | numero_br }} m³</h4>
-                    <small>Volume Total</small>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Tabela -->
+    <!-- Tabela Simplificada -->
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="card-header">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-table"></i> Cadastro de Palletização
+                        {% if palletizacao %}
+                        <span class="badge bg-primary ms-2">{{ palletizacao|length }} produtos</span>
+                        {% endif %}
                     </h5>
-                    {% if palletizacao %}
-                    <div>
-                        <button class="btn btn-sm btn-success" onclick="exportarExcel()">
-                            <i class="fas fa-file-excel"></i> Exportar Excel
-                        </button>
-                    </div>
-                    {% endif %}
                 </div>
                 <div class="card-body">
                     {% if palletizacao %}
@@ -161,63 +108,56 @@
                             <table class="table table-sm table-hover" id="tabelaPalletizacao">
                                 <thead class="thead-light">
                                     <tr>
-                                        <th>Código Produto</th>
+                                        <th>Código</th>
                                         <th>Nome Produto</th>
                                         <th>Palletização</th>
-                                        <th>Peso Bruto</th>
-                                        <th>Dimensões</th>
-                                        <th>Volume m³</th>
-                                        <th>Status</th>
-                                        <th>Ações</th>
+                                        <th>Peso Bruto (kg)</th>
+                                        <th>Altura (cm)</th>
+                                        <th>Largura (cm)</th>
+                                        <th>Comprimento (cm)</th>
+                                        <th>Volume (m³)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for item in palletizacao %}
                                     <tr>
-                                        <td><code>{{ item.cod_produto }}</code></td>
+                                        <td><code class="fw-bold">{{ item.cod_produto }}</code></td>
                                         <td>
-                                            <small>{{ item.nome_produto[:40] }}{% if item.nome_produto|length > 40 %}...{% endif %}</small>
+                                            <small>{{ item.nome_produto[:60] }}{% if item.nome_produto|length > 60 %}...{% endif %}</small>
                                         </td>
                                         <td>
                                             <span class="fw-bold text-primary">{{ item.palletizacao | numero_br }}</span>
                                         </td>
                                         <td>
-                                            <span class="fw-bold text-success">{{ item.peso_bruto | numero_br }} kg</span>
+                                            <span class="fw-bold text-success">{{ item.peso_bruto | numero_br }}</span>
                                         </td>
                                         <td>
-                                            {% if item.altura_cm and item.largura_cm and item.comprimento_cm %}
-                                                <small>{{ item.altura_cm|numero_br }} x {{ item.largura_cm|numero_br }} x {{ item.comprimento_cm|numero_br }} cm</small>
-                                            {% else %}
-                                                <span class="text-muted">Não informado</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if item.volume_m3 > 0 %}
-                                                <span class="fw-bold text-info">{{ item.volume_m3 | numero_br }} m³</span>
+                                            {% if item.altura_cm and item.altura_cm > 0 %}
+                                                <span class="fw-bold text-info">{{ item.altura_cm | numero_br }}</span>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
                                         <td>
-                                            {% if item.ativo %}
-                                                <span class="fw-bold text-success">Ativo</span>
+                                            {% if item.largura_cm and item.largura_cm > 0 %}
+                                                <span class="fw-bold text-info">{{ item.largura_cm | numero_br }}</span>
                                             {% else %}
-                                                <span class="fw-bold text-secondary">Inativo</span>
+                                                <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
                                         <td>
-                                            <div class="btn-group" role="group">
-                                                <a href="{{ url_for('producao.editar_palletizacao', id=item.id) }}" 
-                                                   class="btn btn-sm btn-outline-primary" 
-                                                   title="Editar">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                                <button class="btn btn-sm btn-outline-danger" 
-                                                        onclick="confirmarExclusao({{ item.id }}, '{{ item.nome_produto[:30] }}')"
-                                                        title="Excluir">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </div>
+                                            {% if item.comprimento_cm and item.comprimento_cm > 0 %}
+                                                <span class="fw-bold text-info">{{ item.comprimento_cm | numero_br }}</span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if item.volume_m3 and item.volume_m3 > 0 %}
+                                                <span class="fw-bold text-warning">{{ item.volume_m3 | numero_br }}</span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -226,7 +166,7 @@
                         </div>
 
                         <!-- Paginação -->
-                        {% if pagination %}
+                        {% if pagination and pagination.pages > 1 %}
                         <nav aria-label="Navegação da página">
                             <ul class="pagination justify-content-center">
                                 {% if pagination.has_prev %}
@@ -259,14 +199,18 @@
                                 </li>
                                 {% endif %}
                             </ul>
+                            
+                            <div class="text-center text-muted">
+                                <small>Página {{ pagination.page }} de {{ pagination.pages }} ({{ pagination.total }} produtos)</small>
+                            </div>
                         </nav>
                         {% endif %}
 
                     {% else %}
                         <div class="text-center py-5">
-                            <i class="fas fa-weight-hanging fa-4x text-muted"></i>
-                            <h4 class="text-muted mt-3">Nenhum registro encontrado</h4>
-                            <p class="text-muted">Não há cadastro de palletização ou os filtros não retornaram resultados.</p>
+                            <i class="fas fa-boxes fa-4x text-muted"></i>
+                            <h4 class="text-muted mt-3">Nenhum produto encontrado</h4>
+                            <p class="text-muted">Não há produtos cadastrados ou os filtros não retornaram resultados.</p>
                             <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-primary">
                                 <i class="fas fa-file-upload"></i> Importar Palletização
                             </a>
@@ -279,15 +223,20 @@
 </div>
 
 <script>
+// Auto-submit nos filtros
+document.getElementById('cod_produto').addEventListener('keyup', function(e) {
+    if (e.key === 'Enter') {
+        document.getElementById('filtrosForm').submit();
+    }
+});
+
+document.getElementById('nome_produto').addEventListener('keyup', function(e) {
+    if (e.key === 'Enter') {
+        document.getElementById('filtrosForm').submit();
+    }
+});
+
 // Auto-submit nos selects
-document.getElementById('cod_produto').addEventListener('change', function() {
-    document.getElementById('filtrosForm').submit();
-});
-
-document.getElementById('nome_produto').addEventListener('change', function() {
-    document.getElementById('filtrosForm').submit();
-});
-
 document.getElementById('palletizacao').addEventListener('change', function() {
     document.getElementById('filtrosForm').submit();
 });
@@ -295,19 +244,5 @@ document.getElementById('palletizacao').addEventListener('change', function() {
 document.getElementById('peso_bruto').addEventListener('change', function() {
     document.getElementById('filtrosForm').submit();
 });
-
-// Função para exportar Excel
-function exportarExcel() {
-    const params = new URLSearchParams(window.location.search);
-    params.set('export', 'excel');
-    window.location.href = '{{ url_for("producao.listar_palletizacao") }}?' + params.toString();
-}
-
-// Função para confirmar exclusão
-function confirmarExclusao(id, nome) {
-    if (confirm(`Tem certeza que deseja excluir a palletização do produto: ${nome}?`)) {
-        window.location.href = `{{ url_for('producao.excluir_palletizacao', id=0) }}`.replace('0', id);
-    }
-}
 </script>
 {% endblock %} 
