@@ -603,6 +603,7 @@ def excluir_pedido(pedido_id):
     """
     Exclui um pedido e todas as separações relacionadas.
     Permite exclusão apenas de pedidos com status "ABERTO".
+    Limpa automaticamente vínculos órfãos com embarques cancelados.
     """
     pedido = Pedido.query.get_or_404(pedido_id)
     
@@ -615,6 +616,28 @@ def excluir_pedido(pedido_id):
         # ✅ BACKUP de informações para log
         num_pedido = pedido.num_pedido
         lote_id = pedido.separacao_lote_id
+        
+        # 🔧 NOVA FUNCIONALIDADE: Limpa vínculos órfãos com embarques cancelados
+        vinculos_limpos = False
+        if pedido.cotacao_id or pedido.transportadora or pedido.nf or pedido.data_embarque:
+            from app.embarques.models import Embarque, EmbarqueItem
+            
+            # Busca se há embarque relacionado
+            embarque_relacionado = None
+            if lote_id:
+                item_embarque = EmbarqueItem.query.filter_by(separacao_lote_id=lote_id).first()
+                if item_embarque:
+                    embarque_relacionado = Embarque.query.get(item_embarque.embarque_id)
+            
+            # Se o embarque estiver cancelado, limpa os vínculos órfãos
+            if embarque_relacionado and embarque_relacionado.status == 'cancelado':
+                print(f"[DEBUG] 🧹 Limpando vínculos órfãos com embarque cancelado #{embarque_relacionado.numero}")
+                pedido.nf = None
+                pedido.data_embarque = None
+                pedido.cotacao_id = None
+                pedido.transportadora = None
+                pedido.nf_cd = False
+                vinculos_limpos = True
         
         # ✅ BUSCA E EXCLUI SEPARAÇÕES RELACIONADAS
         separacoes_excluidas = 0
@@ -649,7 +672,11 @@ def excluir_pedido(pedido_id):
         db.session.commit()
         
         # ✅ MENSAGEM DE SUCESSO
-        flash(f"Pedido {num_pedido} excluído com sucesso! {separacoes_excluidas} item(ns) de separação também foram removidos.", "success")
+        mensagem_base = f"Pedido {num_pedido} excluído com sucesso! {separacoes_excluidas} item(ns) de separação também foram removidos."
+        if vinculos_limpos:
+            mensagem_base += " Vínculos órfãos com embarque cancelado foram automaticamente removidos."
+        
+        flash(mensagem_base, "success")
         
         # ✅ LOG da exclusão
         print(f"[DELETE] Pedido {num_pedido} excluído:")
