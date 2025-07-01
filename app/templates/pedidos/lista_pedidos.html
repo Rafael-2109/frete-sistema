@@ -737,10 +737,10 @@
                       </a>
                       
                       <!-- 🛠️ Botão Desvinculação (apenas para admins) -->
-                      {% if current_user.perfil == 'admin' and p.status_calculado in ['EMBARCADO', 'COTADO'] %}
+                      {% if current_user.perfil == 'admin' and p.status_calculado in ['EMBARCADO', 'COTADO', 'ABERTO'] %}
                       <button type="button" 
                               class="btn btn-outline-warning btn-sm" 
-                              title="Desvincular de embarque cancelado"
+                              title="Desvincular de embarque cancelado (remove vínculos órfãos)"
                               data-pedido-id="{{ p.id }}"
                               data-pedido-numero="{{ p.num_pedido }}"
                               onclick="confirmarDesvinculacao(this.dataset.pedidoId, this.dataset.pedidoNumero)">
@@ -1036,9 +1036,12 @@ function confirmarDesvinculacao(pedidoId, numeroPedido) {
     const mensagem = `🛠️ DESVINCULAÇÃO DE EMBARQUE CANCELADO\n\n` +
                     `Pedido: ${numeroPedido}\n\n` +
                     `Esta ação irá:\n` +
-                    `✅ Liberar o pedido de embarques cancelados\n` +
-                    `✅ Permitir que volte ao status "ABERTO"\n` +
-                    `✅ Possibilitar nova cotação/edição\n\n` +
+                    `✅ Remover vínculos órfãos com embarques cancelados\n` +
+                    `✅ Limpar dados de cotação/transporte/NF obsoletos\n` +
+                    `✅ Garantir que o pedido fique 100% "ABERTO"\n` +
+                    `✅ Permitir edição/exclusão/nova cotação sem problemas\n\n` +
+                    `⚠️ IMPORTANTE: Funciona para pedidos ABERTO/EMBARCADO/COTADO\n` +
+                    `que estão com vínculos órfãos de embarques cancelados.\n\n` +
                     `Deseja continuar?`;
     
     if (confirm(mensagem)) {

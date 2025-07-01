@@ -1485,7 +1485,9 @@ def desvincular_embarques_cancelados():
                         ).count()
                         
                         if outros_embarques_ativos == 0:
-                            # Pedido realmente está "preso" ao embarque cancelado
+                            # Pedido está vinculado a embarque cancelado - INCLUI TODOS OS STATUS
+                            # ABERTO: pode ter vínculos órfãos que impedem operações
+                            # EMBARCADO/COTADO: obviamente problemático
                             itens_problematicos.append({
                                 'item': item,
                                 'pedido': pedido,
