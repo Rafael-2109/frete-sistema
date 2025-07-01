@@ -361,20 +361,26 @@ def processar_importacao_sub_rotas():
             try:
                 # 📋 EXTRAIR DADOS usando nomes exatos das colunas Excel
                 cod_uf = str(row.get('ESTADO', '')).strip().upper() if pd.notna(row.get('ESTADO')) else ''
-                nome_cidade = str(row.get('CIDADE', '')).strip().upper() if pd.notna(row.get('CIDADE')) else ''
+                nome_cidade = str(row.get('CIDADE', '')).strip() if pd.notna(row.get('CIDADE')) else ''  # ✅ REMOVIDO .upper()
                 sub_rota = str(row.get('SUB ROTA', '')).strip() if pd.notna(row.get('SUB ROTA')) else ''
                 
                 if not cod_uf or cod_uf == 'NAN' or not nome_cidade or nome_cidade == 'NAN' or not sub_rota or sub_rota == 'NAN':
                     continue
                 
-                # ✅ VALIDAR COMBINAÇÃO CIDADE+UF (deve existir no cadastro de cidades)
-                cidade_existe = Cidade.query.filter_by(uf=cod_uf, nome=nome_cidade).first()
+                # ✅ VALIDAR COMBINAÇÃO CIDADE+UF com busca case-insensitive
+                cidade_existe = Cidade.query.filter(
+                    Cidade.uf == cod_uf,
+                    Cidade.nome.ilike(nome_cidade)
+                ).first()
                 if not cidade_existe:
                     erros.append(f"Linha {index + 1}: Combinação '{nome_cidade}/{cod_uf}' não existe no cadastro de cidades")
                     continue
                 
+                # ✅ USAR O NOME REAL DA CIDADE DO BANCO para garantir consistência
+                nome_cidade_real = cidade_existe.nome
+                
                 # Verificar se já existe (chave única: UF + Cidade)
-                sub_rota_existente = CadastroSubRota.query.filter_by(cod_uf=cod_uf, nome_cidade=nome_cidade).first()
+                sub_rota_existente = CadastroSubRota.query.filter_by(cod_uf=cod_uf, nome_cidade=nome_cidade_real).first()
                 
                 if sub_rota_existente:
                     # ✏️ ATUALIZAR EXISTENTE (substitui sub rota)
@@ -385,7 +391,7 @@ def processar_importacao_sub_rotas():
                     # ➕ CRIAR NOVO
                     nova_sub_rota = CadastroSubRota()
                     nova_sub_rota.cod_uf = cod_uf
-                    nova_sub_rota.nome_cidade = nome_cidade
+                    nova_sub_rota.nome_cidade = nome_cidade_real  # ✅ USAR NOME REAL DO BANCO
                     nova_sub_rota.sub_rota = sub_rota
                     nova_sub_rota.ativa = True
                     
