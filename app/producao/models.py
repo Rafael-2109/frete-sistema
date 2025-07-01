@@ -37,7 +37,7 @@ class ProgramacaoProducao(db.Model):
     __table_args__ = (
         db.Index('idx_programacao_data_linha', 'data_programacao', 'linha_producao'),
         db.Index('idx_programacao_produto_data', 'cod_produto', 'data_programacao'),
-        db.UniqueConstraint('data_programacao', 'linha_producao', 'cod_produto', name='uk_programacao_unica'),
+        db.UniqueConstraint('data_programacao', 'linha_producao', 'cod_produto', 'cliente_produto', name='uk_programacao_cliente_unica'),
     )
 
     def __repr__(self):

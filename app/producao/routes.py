@@ -378,7 +378,7 @@ def processar_importacao_programacao():
             db.session.rollback()
             flash(f'Erro ao remover dados existentes: {str(e)}', 'warning')
         
-        # Processar dados
+        # Processar dados (agora com constraint que inclui cliente)
         produtos_importados = 0
         erros = []
         
@@ -415,7 +415,7 @@ def processar_importacao_programacao():
                 nome_produto = str(row.get('DESCRIÇÃO', '')).strip()
                 qtd_programada = float(row.get('QTDE', 0) or 0)
                 
-                # ➕ CRIAR NOVO REGISTRO
+                # ➕ CRIAR NOVO REGISTRO (constraint agora inclui cliente)
                 novo_produto = ProgramacaoProducao()
                 novo_produto.data_programacao = data_programacao
                 novo_produto.cod_produto = cod_produto
@@ -426,7 +426,7 @@ def processar_importacao_programacao():
                 # 🔧 CAMPOS ESPECÍFICOS CONFORME EXCEL
                 novo_produto.linha_producao = str(row.get('SEÇÃO / MÁQUINA', '')).strip()
                 novo_produto.cliente_produto = str(row.get('CLIENTE', '')).strip()
-                novo_produto.observacao_pcp = str(row.get('OP', '')).strip()
+                novo_produto.observacao_pcp = str(row.get('OP', '')).strip() if row.get('OP') != 'nan' else ''
                 
                 db.session.add(novo_produto)
                 produtos_importados += 1
