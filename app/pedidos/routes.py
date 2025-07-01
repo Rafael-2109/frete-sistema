@@ -1283,4 +1283,41 @@ def embarque_fob():
         flash(f"Erro ao criar embarque FOB: {str(e)}", "error")
         return redirect(url_for("pedidos.lista_pedidos"))
 
-
+@pedidos_bp.route('/detalhes/<int:id>')
+@login_required
+def detalhes_pedido(id):
+    """
+    Visualiza detalhes completos de um pedido
+    """
+    pedido = Pedido.query.get_or_404(id)
+    
+    # Buscar embarque relacionado se existir
+    embarque = None
+    if pedido.separacao_lote_id:
+        from app.embarques.models import EmbarqueItem, Embarque
+        item_embarque = (
+            db.session.query(EmbarqueItem, Embarque)
+            .join(Embarque, EmbarqueItem.embarque_id == Embarque.id)
+            .filter(
+                EmbarqueItem.separacao_lote_id == pedido.separacao_lote_id,
+                EmbarqueItem.status == 'ativo',
+                Embarque.status == 'ativo'
+            )
+            .order_by(Embarque.numero.desc())
+            .first()
+        )
+        
+        if item_embarque:
+            embarque = item_embarque[1]
+    
+    # Buscar contato de agendamento
+    contato_agendamento = None
+    if pedido.cnpj_cpf:
+        contato_agendamento = ContatoAgendamento.query.filter_by(cnpj=pedido.cnpj_cpf).first()
+    
+    return render_template(
+        'pedidos/detalhes_pedido.html',
+        pedido=pedido,
+        embarque=embarque,
+        contato_agendamento=contato_agendamento
+    )

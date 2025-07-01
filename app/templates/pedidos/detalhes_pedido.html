@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes do Pedido {{ pedido.num_pedido }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3">
+                    <i class="fas fa-file-alt"></i> Detalhes do Pedido {{ pedido.num_pedido }}
+                </h1>
+                <div class="btn-group">
+                    <a href="{{ url_for('pedidos.lista_pedidos') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar à Lista
+                    </a>
+                    {% if pedido.status_calculado == 'ABERTO' %}
+                    <a href="{{ url_for('pedidos.editar_pedido', pedido_id=pedido.id) }}" class="btn btn-primary">
+                        <i class="fas fa-edit"></i> Editar
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status e Informações Básicas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Informações Gerais
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Número do Pedido:</th>
+                                    <td><strong>{{ pedido.num_pedido }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <th>Status:</th>
+                                    <td>
+                                        {% if pedido.status_calculado %}
+                                            {% if pedido.status_calculado == 'ABERTO' %}
+                                                <span class="badge bg-warning text-dark">{{ pedido.status_calculado }}</span>
+                                            {% elif pedido.status_calculado == 'COTADO' %}
+                                                <span class="badge bg-info">{{ pedido.status_calculado }}</span>
+                                            {% elif pedido.status_calculado == 'EMBARCADO' %}
+                                                <span class="badge bg-primary">{{ pedido.status_calculado }}</span>
+                                            {% elif pedido.status_calculado == 'FATURADO' %}
+                                                <span class="badge bg-success">{{ pedido.status_calculado }}</span>
+                                            {% elif pedido.status_calculado == 'NF no CD' %}
+                                                <span class="badge bg-secondary">{{ pedido.status_calculado }}</span>
+                                            {% else %}
+                                                <span class="badge bg-light text-dark">{{ pedido.status_calculado }}</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Data do Pedido:</th>
+                                    <td>{{ pedido.data_pedido | formatar_data_brasil if pedido.data_pedido else '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Data de Expedição:</th>
+                                    <td>{{ pedido.expedicao | formatar_data_brasil if pedido.expedicao else '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Data de Agendamento:</th>
+                                    <td>{{ pedido.agendamento | formatar_data_brasil if pedido.agendamento else '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Protocolo:</th>
+                                    <td>{{ pedido.protocolo if pedido.protocolo else '-' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Valor Total:</th>
+                                    <td><strong>{{ "R$ {:,.2f}".format(pedido.valor_saldo_total).replace(',', 'X').replace('.', ',').replace('X', '.') if pedido.valor_saldo_total else 'R$ 0,00' }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <th>Peso Total:</th>
+                                    <td>{{ "{:,.2f} kg".format(pedido.peso_total).replace(',', 'X').replace('.', ',').replace('X', '.') if pedido.peso_total else '0,00 kg' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Pallets:</th>
+                                    <td>{{ "{:,.0f}".format(pedido.pallet_total).replace(',', '.') if pedido.pallet_total else '0' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Rota:</th>
+                                    <td>{{ pedido.rota if pedido.rota else '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Sub-rota:</th>
+                                    <td>{{ pedido.sub_rota if pedido.sub_rota else '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Lote de Separação:</th>
+                                    <td>
+                                        {% if pedido.separacao_lote_id %}
+                                            <code>{{ pedido.separacao_lote_id }}</code>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cliente -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-building"></i> Informações do Cliente
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="30%">CNPJ/CPF:</th>
+                                    <td>{{ pedido.cnpj_cpf if pedido.cnpj_cpf else '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Razão Social:</th>
+                                    <td><strong>{{ pedido.raz_social_red if pedido.raz_social_red else '-' }}</strong></td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="30%">Cidade:</th>
+                                    <td>{{ pedido.nome_cidade if pedido.nome_cidade else '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>UF:</th>
+                                    <td>{{ pedido.cod_uf if pedido.cod_uf else '-' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transportadora e Cotação -->
+    {% if pedido.cotacao_id or pedido.transportadora %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-truck"></i> Informações de Transporte
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Transportadora:</th>
+                                    <td>{{ pedido.transportadora if pedido.transportadora else '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>ID da Cotação:</th>
+                                    <td>{{ pedido.cotacao_id if pedido.cotacao_id else '-' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Data do Embarque:</th>
+                                    <td>{{ pedido.data_embarque | formatar_data_brasil if pedido.data_embarque else '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Roteirização:</th>
+                                    <td>{{ pedido.roteirizacao if pedido.roteirizacao else '-' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Embarque Relacionado -->
+    {% if embarque %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-ship"></i> Embarque Relacionado
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Número do Embarque:</th>
+                                    <td>
+                                        <a href="{{ url_for('embarques.visualizar_embarque', id=embarque.id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-external-link-alt"></i> {{ embarque.numero }}
+                                        </a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Status:</th>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if embarque.status == 'ativo' else 'secondary' }}">
+                                            {{ embarque.status.upper() }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Tipo de Carga:</th>
+                                    <td>{{ embarque.tipo_carga if embarque.tipo_carga else '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Modalidade:</th>
+                                    <td>{{ embarque.modalidade if embarque.modalidade else '-' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Contato de Agendamento -->
+    {% if contato_agendamento %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-phone"></i> Informações de Agendamento
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Forma de Agendamento:</th>
+                                    <td>
+                                        {% if contato_agendamento.forma %}
+                                            <span class="badge bg-primary">{{ contato_agendamento.forma }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Contato:</th>
+                                    <td>{{ contato_agendamento.contato if contato_agendamento.contato else '-' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Observação:</th>
+                                    <td>{{ contato_agendamento.observacao if contato_agendamento.observacao else '-' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Faturamento -->
+    {% if pedido.nf or pedido.nf_cd %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-file-invoice"></i> Informações de Faturamento
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Nota Fiscal:</th>
+                                    <td>{{ pedido.nf if pedido.nf else '-' }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">NF no CD:</th>
+                                    <td>
+                                        {% if pedido.nf_cd %}
+                                            <span class="badge bg-success">Sim</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Não</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Observações -->
+    {% if pedido.observ_ped_1 %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-comment"></i> Observações
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-0">{{ pedido.observ_ped_1 }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Botões de Ação -->
+    <div class="row">
+        <div class="col-12">
+            <div class="text-center">
+                <a href="{{ url_for('pedidos.lista_pedidos') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Voltar à Lista
+                </a>
+                {% if pedido.status_calculado == 'ABERTO' %}
+                <a href="{{ url_for('pedidos.editar_pedido', pedido_id=pedido.id) }}" class="btn btn-primary">
+                    <i class="fas fa-edit"></i> Editar Pedido
+                </a>
+                {% endif %}
+                {% if embarque %}
+                <a href="{{ url_for('embarques.visualizar_embarque', id=embarque.id) }}" class="btn btn-info">
+                    <i class="fas fa-ship"></i> Ver Embarque
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

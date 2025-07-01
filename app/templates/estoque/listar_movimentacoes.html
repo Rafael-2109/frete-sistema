@@ -118,13 +118,13 @@
                                         <td>
                                             {% if mov.tipo_movimentacao %}
                                                 {% if 'ENTRADA' in mov.tipo_movimentacao.upper() %}
-                                                    <span class="badge badge-success">{{ mov.tipo_movimentacao }}</span>
+                                                    <span class="fw-bold text-success">{{ mov.tipo_movimentacao }}</span>
                                                 {% elif 'SAIDA' in mov.tipo_movimentacao.upper() %}
-                                                    <span class="badge badge-warning">{{ mov.tipo_movimentacao }}</span>
+                                                    <span class="fw-bold text-warning">{{ mov.tipo_movimentacao }}</span>
                                                 {% elif 'TRANSFERENCIA' in mov.tipo_movimentacao.upper() %}
-                                                    <span class="badge badge-info">{{ mov.tipo_movimentacao }}</span>
+                                                    <span class="fw-bold text-info">{{ mov.tipo_movimentacao }}</span>
                                                 {% else %}
-                                                    <span class="badge badge-secondary">{{ mov.tipo_movimentacao }}</span>
+                                                    <span class="fw-bold text-dark">{{ mov.tipo_movimentacao }}</span>
                                                 {% endif %}
                                             {% else %}
                                                 <span class="text-muted">-</span>
@@ -134,12 +134,12 @@
                                             <code class="text-primary">{{ mov.cod_produto }}</code>
                                         </td>
                                         <td>
-                                            <span class="text-truncate" style="max-width: 200px; display: inline-block;">
+                                            <span class="text-truncate" style="max-width: 400px; display: inline-block;">
                                                 {{ mov.nome_produto }}
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="badge badge-primary badge-lg">
+                                            <span class="fw-bold text-dark">
                                                 {{ mov.qtd_movimentacao | numero_br }}
                                             </span>
                                         </td>
