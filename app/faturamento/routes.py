@@ -635,8 +635,19 @@ def listar_faturamento_produtos():
         opcoes_incoterms = []
         opcoes_vendedores = []
     
+    # Calcular estatísticas se há dados
+    total_valor_faturado = 0
+    total_quantidade = 0
+    produtos_unicos = 0
+    
+    if faturamentos and faturamentos.items:
+        total_valor_faturado = sum(p.valor_produto_faturado for p in faturamentos.items)
+        total_quantidade = sum(p.qtd_produto_faturado for p in faturamentos.items)
+        produtos_unicos = len(set(p.cod_produto for p in faturamentos.items))
+    
     return render_template('faturamento/listar_produtos.html',
-                         faturamentos=faturamentos,
+                         produtos=faturamentos.items if faturamentos else [],
+                         pagination=faturamentos if faturamentos else None,
                          nome_cliente=nome_cliente,
                          cod_produto=cod_produto,
                          vendedor=vendedor,
@@ -644,9 +655,12 @@ def listar_faturamento_produtos():
                          incoterm=incoterm,
                          data_de=data_de,
                          data_ate=data_ate,
-                         opcoes_estados=opcoes_estados,
-                         opcoes_incoterms=opcoes_incoterms,
-                         opcoes_vendedores=opcoes_vendedores)
+                         ufs_disponiveis=opcoes_estados,
+                         vendedores_disponiveis=opcoes_vendedores,
+                         incoterms_disponiveis=opcoes_incoterms,
+                         total_valor_faturado=total_valor_faturado,
+                         total_quantidade=total_quantidade,
+                         produtos_unicos=produtos_unicos)
 
 @faturamento_bp.route('/produtos/api/estatisticas')
 @login_required
@@ -1045,7 +1059,7 @@ def exportar_dados_faturamento():
         
         # Buscar dados
         if inspector.has_table('faturamento_produto'):
-            produtos = FaturamentoProduto.query.filter_by(ativo=True).order_by(
+            produtos = FaturamentoProduto.query.order_by(
                 FaturamentoProduto.numero_nf.desc()
             ).all()
         else:
