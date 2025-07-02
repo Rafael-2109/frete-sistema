@@ -407,43 +407,56 @@ def baixar_modelo():
     - 💰 Decimal: 1.234,56 (vírgula brasileira)
     """
     try:
-        # 📝 CRIAR MODELO COM EXEMPLOS REAIS E FORMATOS CORRETOS
+        # 📝 MODELO EXCEL CORRETO - APENAS CAMPOS DE IMPORTAÇÃO (LINHAS 2-38 ARQUIVO 1)
         modelo_data = {
-            # 🔑 CAMPOS OBRIGATÓRIOS
+            # 🔑 CAMPOS OBRIGATÓRIOS - CHAVES PRIMÁRIAS
             'num_pedido': ['PED001', 'PED001', 'PED002'],
             'cod_produto': ['PROD001', 'PROD002', 'PROD001'],
             'nome_produto': ['Produto Exemplo A', 'Produto Exemplo B', 'Produto Exemplo A'],
             'qtd_produto_pedido': ['100,00', '50,50', '200,25'],  # 💰 DECIMAL COM VÍRGULA
             'qtd_saldo_produto_pedido': ['100,00', '50,50', '200,25'],  # 💰 DECIMAL COM VÍRGULA
-            'preco_produto_pedido': ['15,50', '23,75', '15,50'],  # 💰 DECIMAL COM VÍRGULA
             'cnpj_cpf': ['12.345.678/0001-90', '12.345.678/0001-90', '98.765.432/0001-10'],
             
-            # 👥 DADOS DO CLIENTE
+            # 📋 DADOS DO PEDIDO (LINHAS 2, 4, 5, 20)
+            'pedido_cliente': ['CLI-001', 'CLI-002', 'CLI-003'],
+            'data_pedido': ['2025-01-15 08:30:00', '2025-01-15 09:15:00', '2025-01-16 14:20:00'],
+            'data_atual_pedido': ['2025-01-17 10:00:00', '2025-01-17 11:00:00', '2025-01-18 15:00:00'],
+            'status_pedido': ['Pedido de venda', 'Pedido de venda', 'Cotação'],
+            
+            # 👥 DADOS DO CLIENTE (LINHAS 7, 8, 9, 10, 11, 12)
             'raz_social': ['Cliente Exemplo LTDA', 'Cliente Exemplo LTDA', 'Outro Cliente S.A.'],
             'raz_social_red': ['Cliente Exemplo', 'Cliente Exemplo', 'Outro Cliente'],
             'municipio': ['São Paulo', 'São Paulo', 'Rio de Janeiro'],
             'estado': ['SP', 'SP', 'RJ'],
-            
-            # 🏪 DADOS COMERCIAIS
             'vendedor': ['João Silva', 'João Silva', 'Maria Santos'],
-            'status_pedido': ['Pedido de venda', 'Pedido de venda', 'Cotação'],
+            'equipe_vendas': ['VENDA INTERNA DENISE', 'VENDA EXTERNA MILER', 'VENDA EXTERNA JUNIOR'],
             
-            # 📅 DATAS NO FORMATO ISO/SQL (YYYY-MM-DD HH:MM:SS)
-            'data_pedido': ['2025-01-15 08:30:00', '2025-01-15 09:15:00', '2025-01-16 14:20:00'],
-            'expedicao': ['2025-03-15 07:00:00', '2025-03-20 07:30:00', '2025-03-25 08:00:00'],
-            'data_entrega': ['2025-03-18 16:00:00', '2025-03-23 15:30:00', '2025-03-28 17:00:00'],
-            'agendamento': ['2025-03-17 10:00:00', '2025-03-22 14:00:00', '2025-03-27 11:30:00'],
+            # 📦 DADOS DO PRODUTO (LINHAS 15, 18, 19, 21, 22, 23)
+            'unid_medida_produto': ['CAIXAS', 'UNIDADES', 'KG'],
+            'qtd_cancelada_produto_pedido': ['0,00', '5,00', '0,00'],
+            'preco_produto_pedido': ['15,50', '23,75', '15,50'],  # 💰 DECIMAL COM VÍRGULA
+            'embalagem_produto': ['GALAO 5,02 L', 'CAIXA 12 UNID', 'SACO 25 KG'],
+            'materia_prima_produto': ['OLEO DE SOJA', 'BISCOITO', 'FARINHA'],
+            'categoria_produto': ['OLEOS', 'DOCES', 'FARINHAS'],
             
-            # 📦 DADOS OPCIONAIS (podem ficar vazios)
-            'pedido_cliente': ['CLI-001', 'CLI-002', ''],
-            'observ_ped_1': ['Entrega urgente', 'Cliente VIP', ''],
-            'protocolo': ['PROT-001', 'PROT-002', ''],
-            'roteirizacao': ['Transportadora A', 'Transportadora B', ''],
+            # 💳 CONDIÇÕES COMERCIAIS (LINHAS 24, 25, 26, 27, 28, 29, 30)
+            'cond_pgto_pedido': ['28/35/42 DDL', '30 DDL', '60 DDL'],
+            'forma_pgto_pedido': ['Boleto Grafeno CD', 'PIX', 'Transferência'],
+            'observ_ped_1': ['Entrega urgente', 'Cliente VIP', 'Produto frágil'],
+            'incoterm': ['[CIF] CIF', '[FOB] FOB', '[RED] REDESPACHO'],
+            'metodo_entrega_pedido': ['Entrega Expressa', 'Entrega Normal', 'Retirada'],
+            'data_entrega_pedido': ['2025-03-18 16:00:00', '2025-03-23 15:30:00', '2025-03-28 17:00:00'],
+            'cliente_nec_agendamento': ['Sim', 'Não', 'Sim'],
             
-            # ⚖️ DADOS FÍSICOS (DECIMAIS COM VÍRGULA)
-            'peso': ['10,50', '25,75', '5,25'],  # 💰 KG com vírgula
-            'pallet': ['0,50', '1,25', '0,75'],  # 💰 Pallets com vírgula
-            'valor_total': ['1.550,00', '1.187,50', '3.100,00']  # 💰 R$ com vírgula
+            # 🏠 ENDEREÇO DE ENTREGA COMPLETO (LINHAS 31-38)
+            'cnpj_endereco_ent': ['12.345.678/0001-90', '12.345.678/0001-90', '98.765.432/0001-10'],
+            'empresa_endereco_ent': ['CLIENTE EXEMPLO', 'CLIENTE EXEMPLO', 'OUTRO CLIENTE'],
+            'cep_endereco_ent': ['01310-100', '01310-100', '20040-020'],
+            'nome_cidade': ['São Paulo (SP)', 'São Paulo (SP)', 'Rio de Janeiro (RJ)'],  # 🌍 FORMATO ESPECIAL
+            'bairro_endereco_ent': ['Centro', 'Vila Olímpia', 'Copacabana'],
+            'rua_endereco_ent': ['Rua das Flores', 'Av. das Nações', 'Rua do Ouvidor'],
+            'endereco_ent': ['123', '456', '789'],
+            'telefone_endereco_ent': ['(11) 1234-5678', '(11) 8765-4321', '(21) 9999-8888']
         }
         
         df = pd.DataFrame(modelo_data)
@@ -1041,40 +1054,117 @@ def _atualizar_item_inteligente(item, row, usuario):
     }
 
 def _atualizar_dados_mestres(item, row):
-    """Atualiza apenas dados mestres, preservando operacionais"""
+    """Atualiza apenas dados mestres, preservando operacionais - TODOS OS CAMPOS DOS CSVs"""
+    
+    # 📋 DADOS DO PEDIDO (ARQUIVO 1)
     item.pedido_cliente = row.get('pedido_cliente')
     item.data_pedido = pd.to_datetime(row.get('data_pedido')).date() if pd.notna(row.get('data_pedido')) else None
+    item.data_atual_pedido = pd.to_datetime(row.get('data_atual_pedido')).date() if pd.notna(row.get('data_atual_pedido')) else None
+    
+    # 👥 DADOS DO CLIENTE (ARQUIVO 1)
     item.cnpj_cpf = str(row['cnpj_cpf'])
     item.raz_social = row.get('raz_social')
     item.raz_social_red = row.get('raz_social_red')
     item.municipio = row.get('municipio')
     item.estado = row.get('estado')
+    
+    # 👥 DADOS COMERCIAIS (ARQUIVO 1)
     item.vendedor = row.get('vendedor')
+    item.equipe_vendas = row.get('equipe_vendas')
+    
+    # 📦 DADOS DO PRODUTO (ARQUIVO 1)
     item.nome_produto = str(row['nome_produto'])
+    item.unid_medida_produto = row.get('unid_medida_produto')
+    item.embalagem_produto = row.get('embalagem_produto')
+    item.materia_prima_produto = row.get('materia_prima_produto')
+    item.categoria_produto = row.get('categoria_produto')
+    
+    # 📊 QUANTIDADES E VALORES (ARQUIVO 1)
     item.qtd_produto_pedido = float(row['qtd_produto_pedido'])
     item.qtd_saldo_produto_pedido = float(row['qtd_saldo_produto_pedido'])
+    item.qtd_cancelada_produto_pedido = float(row.get('qtd_cancelada_produto_pedido', 0) or 0)
     item.preco_produto_pedido = float(row['preco_produto_pedido']) if pd.notna(row.get('preco_produto_pedido')) else None
+    
+    # 💳 CONDIÇÕES COMERCIAIS (ARQUIVO 1)
+    item.cond_pgto_pedido = row.get('cond_pgto_pedido')
+    item.forma_pgto_pedido = row.get('forma_pgto_pedido')
+    item.incoterm = row.get('incoterm')
+    item.metodo_entrega_pedido = row.get('metodo_entrega_pedido')
+    item.data_entrega_pedido = pd.to_datetime(row.get('data_entrega_pedido')).date() if pd.notna(row.get('data_entrega_pedido')) else None
+    item.cliente_nec_agendamento = row.get('cliente_nec_agendamento')
+    item.observ_ped_1 = row.get('observ_ped_1')
     item.status_pedido = row.get('status_pedido')
+    
+    # 🏠 ENDEREÇO DE ENTREGA COMPLETO (ARQUIVO 1)
+    item.cnpj_endereco_ent = row.get('cnpj_endereco_ent')
+    item.empresa_endereco_ent = row.get('empresa_endereco_ent')
+    item.cep_endereco_ent = row.get('cep_endereco_ent')
+    
+    # 🌍 EXTRAÇÃO CIDADE/UF - TRATAMENTO ESPECIAL "Fortaleza (CE)"
+    municipio_completo = row.get('nome_cidade') or row.get('municipio_completo', '')
+    if municipio_completo and '(' in municipio_completo and ')' in municipio_completo:
+        # Extrair "Fortaleza (CE)" → cidade: "Fortaleza", uf: "CE"
+        item.nome_cidade = municipio_completo.split('(')[0].strip()
+        item.cod_uf = municipio_completo.split('(')[1].replace(')', '').strip()
+    else:
+        item.nome_cidade = row.get('nome_cidade')
+        item.cod_uf = row.get('cod_uf')
+    
+    item.bairro_endereco_ent = row.get('bairro_endereco_ent')
+    item.rua_endereco_ent = row.get('rua_endereco_ent')
+    item.endereco_ent = row.get('endereco_ent')
+    item.telefone_endereco_ent = row.get('telefone_endereco_ent')
+    
+    # 📊 ANÁLISE DE ESTOQUE (ARQUIVO 1) - CALCULADOS
+    item.menor_estoque_produto_d7 = float(row.get('menor_estoque_produto_d7', 0) or 0) if pd.notna(row.get('menor_estoque_produto_d7')) else None
+    item.saldo_estoque_pedido = float(row.get('saldo_estoque_pedido', 0) or 0) if pd.notna(row.get('saldo_estoque_pedido')) else None
+    item.saldo_estoque_pedido_forcado = float(row.get('saldo_estoque_pedido_forcado', 0) or 0) if pd.notna(row.get('saldo_estoque_pedido_forcado')) else None
+    
+    # 📈 TOTALIZADORES POR CLIENTE (ARQUIVO 1) - CALCULADOS
+    item.valor_saldo_total = float(row.get('valor_saldo_total', 0) or 0) if pd.notna(row.get('valor_saldo_total')) else None
+    item.pallet_total = float(row.get('pallet_total', 0) or 0) if pd.notna(row.get('pallet_total')) else None
+    item.peso_total = float(row.get('peso_total', 0) or 0) if pd.notna(row.get('peso_total')) else None
+    item.valor_cliente_pedido = float(row.get('valor_cliente_pedido', 0) or 0) if pd.notna(row.get('valor_cliente_pedido')) else None
+    item.pallet_cliente_pedido = float(row.get('pallet_cliente_pedido', 0) or 0) if pd.notna(row.get('pallet_cliente_pedido')) else None
+    item.peso_cliente_pedido = float(row.get('peso_cliente_pedido', 0) or 0) if pd.notna(row.get('peso_cliente_pedido')) else None
+    
+    # 📊 TOTALIZADORES POR PRODUTO (ARQUIVO 1) - CALCULADOS
+    item.qtd_total_produto_carteira = float(row.get('qtd_total_produto_carteira', 0) or 0) if pd.notna(row.get('qtd_total_produto_carteira')) else None
+    item.estoque = float(row.get('estoque', 0) or 0) if pd.notna(row.get('estoque')) else None
+    
+    # 📈 PROJEÇÃO D0-D28 (ARQUIVO 1) - 29 CAMPOS DE ESTOQUE FUTURO
+    for i in range(29):  # D0 até D28
+        campo_estoque = f'estoque_d{i}'
+        if hasattr(item, campo_estoque):
+            valor = row.get(campo_estoque)
+            setattr(item, campo_estoque, float(valor or 0) if pd.notna(valor) else None)
 
 def _criar_novo_item_carteira(row, usuario):
-    """Cria novo item na carteira"""
-    return CarteiraPrincipal(
-        num_pedido=str(row['num_pedido']),
-        cod_produto=str(row['cod_produto']),
-        nome_produto=str(row['nome_produto']),
-        qtd_produto_pedido=float(row['qtd_produto_pedido']),
-        qtd_saldo_produto_pedido=float(row['qtd_saldo_produto_pedido']),
-        preco_produto_pedido=float(row['preco_produto_pedido']) if pd.notna(row.get('preco_produto_pedido')) else None,
-        cnpj_cpf=str(row['cnpj_cpf']),
-        raz_social=row.get('raz_social'),
-        raz_social_red=row.get('raz_social_red'),
-        municipio=row.get('municipio'),
-        estado=row.get('estado'),
-        vendedor=row.get('vendedor'),
-        status_pedido=row.get('status_pedido'),
+    """Cria novo item na carteira - campos básicos + auditoria"""
+    
+    # 🌍 EXTRAÇÃO CIDADE/UF - TRATAMENTO ESPECIAL "Fortaleza (CE)"
+    municipio_completo = row.get('nome_cidade') or row.get('municipio_completo', '')
+    nome_cidade = None
+    cod_uf = None
+    if municipio_completo and '(' in municipio_completo and ')' in municipio_completo:
+        # Extrair "Fortaleza (CE)" → cidade: "Fortaleza", uf: "CE"
+        nome_cidade = municipio_completo.split('(')[0].strip()
+        cod_uf = municipio_completo.split('(')[1].replace(')', '').strip()
+    else:
+        nome_cidade = row.get('nome_cidade')
+        cod_uf = row.get('cod_uf')
+    
+    # 📦 CRIAR NOVO ITEM COM CAMPOS BÁSICOS
+    novo_item = CarteiraPrincipal(
         created_by=usuario,
         updated_by=usuario
     )
+    
+    # 🔄 APLICAR TODOS OS CAMPOS USANDO A FUNÇÃO DE ATUALIZAÇÃO
+    _atualizar_dados_mestres(novo_item, row)
+    
+    db.session.add(novo_item)
+    return novo_item
 
 def _processar_geracao_separacao(itens_selecionados, usuario, observacao):
     """
