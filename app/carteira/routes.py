@@ -8,7 +8,7 @@ from app.carteira.models import (
     TipoCarga, FaturamentoParcialJustificativa, ControleAlteracaoCarga, SaldoStandby,
     SnapshotCarteira, ValidacaoNFSimples, ControleDescasamentoNF
 )
-from app.estoque.models import SaldoEstoque
+from app.estoque.models import SaldoEstoque, MovimentacaoEstoque
 from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
 from app.faturamento.models import FaturamentoProduto
@@ -1462,290 +1462,172 @@ def _processar_geracao_separacao(itens_selecionados, usuario, observacao):
 
 def _processar_baixa_faturamento(numero_nf, usuario):
     """
-    💳 BAIXA AUTOMÁTICA DE FATURAMENTO - FUNÇÃO 1 CORRIGIDA
+    💳 BAIXA AUTOMÁTICA DE FATURAMENTO - ARQUITETURA CORRETA + VALIDAÇÕES
     
-    FUNCIONALIDADE CRÍTICA:
-    - Busca NF no FaturamentoProduto (dados por produto)
-    - Identifica itens correspondentes na carteira
-    - Baixa automática respeitando saldos disponíveis
-    - Sincronização CarteiraPrincipal ↔ CarteiraCopia
-    - Detecção de inconsistências em tempo real
+    FLUXO CORRIGIDO:
+    1. Busca NF no FaturamentoProduto (dados por produto)
+    2. Para cada item faturado:
+       - SE não encontra pedido → GERA INCONSISTÊNCIA + PARA (não baixa)
+       - SE faturamento > saldo → GERA INCONSISTÊNCIA + PARA (não baixa)  
+       - SE tudo OK → BAIXA AUTOMÁTICA (CarteiraCopia + MovimentacaoEstoque)
+    
+    PRINCÍPIO: Só baixa automaticamente quando tem CERTEZA que está correto
     """
     try:
         from app.faturamento.models import FaturamentoProduto
+        from app.estoque.models import MovimentacaoEstoque
         from sqlalchemy import inspect
         
-        logger.info(f"💳 Processando baixa automática NF: {numero_nf}")
+        logger.info(f"💳 Processando baixa automática NF: {numero_nf} (Só baixa se perfeito)")
         
-        # 🔍 1. VERIFICAR SE TABELA DE FATURAMENTO EXISTE
+        # 🔍 1. VERIFICAR SE TABELAS EXISTEM
         inspector = inspect(db.engine)
         if not inspector.has_table('faturamento_produto'):
-            return {
-                'success': False,
-                'error': 'Tabela de faturamento por produto não encontrada. Importe dados de faturamento primeiro.',
-                'processadas': 0,
-                'erros': ['Sistema não inicializado']
-            }
+            return {'sucesso': False, 'erro': 'Sistema de faturamento não inicializado'}
         
-        # 🔍 2. BUSCAR NF NO FATURAMENTO POR PRODUTO (CORRIGIDO)
-        itens_nf = FaturamentoProduto.query.filter_by(
+        if not inspector.has_table('carteira_copia'):
+            return {'sucesso': False, 'erro': 'Sistema de carteira cópia não inicializado'}
+        
+        # 📋 2. BUSCAR ITENS FATURADOS NA NF
+        itens_faturados = FaturamentoProduto.query.filter_by(
             numero_nf=numero_nf,
-            status_nf='ATIVO'  # Apenas NFs ativas
+            status_nf='ATIVO'
         ).all()
         
-        if not itens_nf:
-            return {
-                'success': False,
-                'error': f'NF {numero_nf} não encontrada no faturamento por produto ou está cancelada',
-                'processadas': 0,
-                'erros': [f'NF {numero_nf} não localizada ou inativa']
-            }
+        if not itens_faturados:
+            return {'sucesso': False, 'erro': f'NF {numero_nf} não encontrada ou inativa'}
         
-        processadas = 0
-        erros = []
+        # 📊 3. CONTADORES DE RESULTADO
+        itens_baixados = 0
         inconsistencias_detectadas = []
+        movimentacoes_criadas = []
         
-        # 🔄 3. PROCESSAR CADA PRODUTO DA NF
-        for item_faturamento in itens_nf:
+        # 🔄 4. PROCESSAR CADA ITEM FATURADO
+        for item_faturado in itens_faturados:
             try:
-                # 🔍 3.1 BUSCAR ITEM NA CARTEIRA PRINCIPAL (USANDO CAMPOS CORRETOS)
-                item_carteira = CarteiraPrincipal.query.filter_by(
-                    num_pedido=item_faturamento.origem,  # origem = num_pedido
-                    cod_produto=item_faturamento.cod_produto
+                # 📋 EXTRAIR DADOS
+                num_pedido = item_faturado.origem  # origem = num_pedido
+                cod_produto = item_faturado.cod_produto  
+                qtd_faturada = float(item_faturado.qtd_produto_faturado or 0)
+                
+                # 🔍 4.1 BUSCAR PEDIDO NA CARTEIRA CÓPIA
+                item_copia = CarteiraCopia.query.filter_by(
+                    num_pedido=num_pedido,
+                    cod_produto=cod_produto
                 ).first()
                 
-                if not item_carteira:
-                    # ⚠️ INCONSISTÊNCIA: NF sem pedido correspondente
+                # ❌ 4.2 VALIDAÇÃO 1: FATURAMENTO SEM PEDIDO
+                if not item_copia:
                     inconsistencia = InconsistenciaFaturamento(
                         tipo='FATURAMENTO_SEM_PEDIDO',
                         numero_nf=numero_nf,
-                        num_pedido=item_faturamento.origem or 'N/A',
-                        cod_produto=item_faturamento.cod_produto,
-                        qtd_faturada=float(item_faturamento.qtd_produto_faturado or 0),
-                        saldo_disponivel=0,
-                        qtd_excesso=float(item_faturamento.qtd_produto_faturado or 0)
-                    )
-                    db.session.add(inconsistencia)
-                    erros.append(f"Produto {item_faturamento.cod_produto} (Pedido: {item_faturamento.origem}) sem item correspondente na carteira")
-                    continue
-                
-                # 📊 3.2 VERIFICAR SALDO DISPONÍVEL (USANDO CAMPOS CORRETOS)
-                qtd_faturada = float(item_faturamento.qtd_produto_faturado or 0)
-                saldo_disponivel = float(item_carteira.qtd_saldo_produto_pedido or 0)
-                
-                if qtd_faturada > saldo_disponivel:
-                    # ⚠️ INCONSISTÊNCIA: Faturamento excede saldo
-                    inconsistencia = InconsistenciaFaturamento(
-                        tipo='FATURAMENTO_EXCEDE_SALDO',
-                        numero_nf=numero_nf,
-                        num_pedido=item_carteira.num_pedido,
-                        cod_produto=item_carteira.cod_produto,
+                        num_pedido=num_pedido or 'N/A',
+                        cod_produto=cod_produto,
                         qtd_faturada=qtd_faturada,
-                        saldo_disponivel=saldo_disponivel,
-                        qtd_excesso=qtd_faturada - saldo_disponivel
+                        saldo_disponivel=0,
+                        qtd_excesso=qtd_faturada,
+                        status='PENDENTE',
+                        detectada_por=usuario
                     )
                     db.session.add(inconsistencia)
                     inconsistencias_detectadas.append({
-                        'produto': item_carteira.cod_produto,
-                        'pedido': item_carteira.num_pedido,
-                        'faturado': qtd_faturada,
-                        'disponivel': saldo_disponivel,
+                        'tipo': 'FATURAMENTO_SEM_PEDIDO',
+                        'pedido': num_pedido,
+                        'produto': cod_produto,
+                        'qtd_faturada': qtd_faturada
+                    })
+                    logger.warning(f"⚠️ INCONSISTÊNCIA: Faturamento sem pedido {num_pedido}-{cod_produto}")
+                    continue  # PARA AQUI - NÃO BAIXA
+                
+                # 📊 4.3 CALCULAR SALDO DISPONÍVEL
+                saldo_disponivel = float(item_copia.qtd_produto_pedido or 0) - float(item_copia.baixa_produto_pedido or 0)
+                
+                # ❌ 4.4 VALIDAÇÃO 2: FATURAMENTO EXCEDE SALDO
+                if qtd_faturada > saldo_disponivel:
+                    inconsistencia = InconsistenciaFaturamento(
+                        tipo='FATURAMENTO_EXCEDE_SALDO',
+                        numero_nf=numero_nf,
+                        num_pedido=num_pedido,
+                        cod_produto=cod_produto,
+                        qtd_faturada=qtd_faturada,
+                        saldo_disponivel=saldo_disponivel,
+                        qtd_excesso=qtd_faturada - saldo_disponivel,
+                        status='PENDENTE',
+                        detectada_por=usuario
+                    )
+                    db.session.add(inconsistencia)
+                    inconsistencias_detectadas.append({
+                        'tipo': 'FATURAMENTO_EXCEDE_SALDO',
+                        'pedido': num_pedido,
+                        'produto': cod_produto,
+                        'qtd_faturada': qtd_faturada,
+                        'saldo_disponivel': saldo_disponivel,
                         'excesso': qtd_faturada - saldo_disponivel
                     })
-                    
-                    # 🔄 BAIXAR APENAS O SALDO DISPONÍVEL
-                    qtd_a_baixar = saldo_disponivel
-                    logger.warning(f"⚠️ Faturamento excede saldo: {item_carteira.num_pedido}-{item_carteira.cod_produto} Faturado:{qtd_faturada} Disponível:{saldo_disponivel}")
-                else:
-                    qtd_a_baixar = qtd_faturada
+                    logger.warning(f"⚠️ INCONSISTÊNCIA: Faturamento excede saldo {num_pedido}-{cod_produto} ({qtd_faturada} > {saldo_disponivel})")
+                    continue  # PARA AQUI - NÃO BAIXA
                 
-                # 💳 3.3 BAIXAR NA CARTEIRA PRINCIPAL
-                item_carteira.qtd_saldo_produto_pedido = float(item_carteira.qtd_saldo_produto_pedido) - qtd_a_baixar
-                item_carteira.updated_by = usuario
-                item_carteira.updated_at = agora_brasil()
+                # ✅ 4.5 TUDO OK - BAIXA AUTOMÁTICA
+                logger.info(f"✅ Baixa automática {num_pedido}-{cod_produto}: {qtd_faturada} unidades")
                 
-                # 🔄 3.4 SINCRONIZAR COM CARTEIRA CÓPIA
-                item_copia = CarteiraCopia.query.filter_by(
-                    num_pedido=item_carteira.num_pedido,
-                    cod_produto=item_carteira.cod_produto
-                ).first()
+                # 💳 BAIXAR NA CARTEIRA CÓPIA
+                item_copia.baixa_produto_pedido = float(item_copia.baixa_produto_pedido or 0) + qtd_faturada
+                item_copia.updated_by = usuario
+                item_copia.updated_at = agora_brasil()
                 
-                if item_copia:
-                    # Atualizar baixa na cópia
-                    item_copia.baixa_produto_pedido = float(item_copia.baixa_produto_pedido or 0) + qtd_a_baixar
-                    item_copia.recalcular_saldo()
-                    item_copia.updated_by = usuario
-                    item_copia.updated_at = agora_brasil()
-                else:
-                    logger.warning(f"⚠️ Item não encontrado na CarteiraCopia: {item_carteira.num_pedido}-{item_carteira.cod_produto}")
+                # 📦 GERAR MOVIMENTAÇÃO DE ESTOQUE (FATURAMENTO)
+                movimentacao = MovimentacaoEstoque(
+                    cod_produto=cod_produto,
+                    nome_produto=item_faturado.nome_produto,
+                    tipo_movimentacao='FATURAMENTO',
+                    qtd_movimentacao=-qtd_faturada,  # Saída (negativa)
+                    observacao=f"Baixa automática NF {numero_nf} - Pedido {num_pedido}",
+                    numero_nf=numero_nf,
+                    num_pedido=num_pedido,
+                    created_by=usuario
+                )
+                db.session.add(movimentacao)
+                movimentacoes_criadas.append({
+                    'cod_produto': cod_produto,
+                    'qtd_movimentacao': -qtd_faturada,
+                    'numero_nf': numero_nf,
+                    'num_pedido': num_pedido
+                })
                 
-                # 📋 3.5 REGISTRAR HISTÓRICO
-                if inspector.has_table('historico_faturamento'):
-                    historico = HistoricoFaturamento(
-                        num_pedido=item_carteira.num_pedido,
-                        cod_produto=item_carteira.cod_produto,
-                        numero_nf=numero_nf,
-                        qtd_baixada=qtd_a_baixar,
-                        data_faturamento=item_faturamento.data_fatura
-                    )
-                    db.session.add(historico)
-                
-                processadas += 1
-                logger.info(f"✅ Baixa processada: {item_carteira.num_pedido}-{item_carteira.cod_produto} Qtd: {qtd_a_baixar}")
+                itens_baixados += 1
                 
             except Exception as e:
-                logger.error(f"❌ Erro ao processar produto {item_faturamento.cod_produto}: {str(e)}")
-                erros.append(f"Produto {item_faturamento.cod_produto}: {str(e)}")
+                logger.error(f"❌ Erro ao processar item {cod_produto}: {str(e)}")
                 continue
         
-        # 💾 4. SALVAR TODAS AS ALTERAÇÕES
+        # 💾 5. SALVAR TODAS AS ALTERAÇÕES
         db.session.commit()
         
-        # 📊 5. RESULTADO FINAL
+        # 📊 6. GERAR RESULTADO
         resultado = {
-            'success': True,
-            'processadas': processadas,
-            'erros': erros,
+            'sucesso': True,
+            'numero_nf': numero_nf,
+            'itens_baixados': itens_baixados,
+            'inconsistencias_detectadas': len(inconsistencias_detectadas),
             'inconsistencias': inconsistencias_detectadas,
-            'total_itens_nf': len(itens_nf),
-            'tabela_origem': 'FaturamentoProduto'  # Confirmar correção
+            'movimentacoes_criadas': len(movimentacoes_criadas),
+            'movimentacoes': movimentacoes_criadas,
+            'total_itens_processados': len(itens_faturados)
         }
         
+        # 📋 7. LOG FINAL
         if inconsistencias_detectadas:
-            logger.warning(f"⚠️ {len(inconsistencias_detectadas)} inconsistências detectadas na NF {numero_nf}")
+            logger.warning(f"⚠️ Baixa automática concluída COM {len(inconsistencias_detectadas)} inconsistências para verificação manual")
+        else:
+            logger.info(f"✅ Baixa automática concluída SEM inconsistências: {itens_baixados} itens baixados")
         
-        logger.info(f"✅ Baixa automática concluída NF {numero_nf}: {processadas}/{len(itens_nf)} itens processados, {len(erros)} erros")
         return resultado
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"❌ Erro crítico na baixa automática NF {numero_nf}: {str(e)}")
-        return {
-            'success': False,
-            'error': f'Erro crítico: {str(e)}',
-            'processadas': 0,
-            'erros': [str(e)]
-        }
-
-def _processar_alteracao_inteligente(carteira_item_id, separacao_lote_id, qtd_nova, usuario, decisao_manual=None):
-    """
-    🎯 LÓGICA INTELIGENTE PARA RESOLVER CONFLITO DE REGRAS
-    
-    ALGORITMO:
-    1. Busca dados atuais da carga e alteração
-    2. Verifica tipo de carga e capacidades
-    3. Decide se adiciona à carga ou cria nova
-    4. Registra controle de alteração
-    """
-    try:
-        # 🔍 1. BUSCAR DADOS ATUAIS
-        carteira_item = CarteiraPrincipal.query.get(carteira_item_id)
-        if not carteira_item:
-            raise ValueError(f"Item da carteira {carteira_item_id} não encontrado")
-        
-        # 🎯 2. BUSCAR OU CRIAR TIPO DE CARGA
-        tipo_carga = TipoCarga.query.filter_by(separacao_lote_id=separacao_lote_id).first()
-        if not tipo_carga:
-            # Se não tem tipo definido, assume TOTAL (aceita alterações)
-            tipo_carga = TipoCarga(
-                separacao_lote_id=separacao_lote_id,
-                tipo_envio='TOTAL',
-                aceita_incremento=True,
-                motivo_tipo='Criado automaticamente - carga completa',
-                criado_por=usuario
-            )
-            db.session.add(tipo_carga)
-            db.session.flush()  # Para obter o ID
-        
-        # 📊 3. CALCULAR ALTERAÇÃO
-        qtd_anterior = float(carteira_item.qtd_produto_pedido)
-        qtd_diferenca = qtd_nova - qtd_anterior
-        
-        # 🎯 4. DECISÃO BASEADA NO TIPO DE CARGA
-        if tipo_carga.tipo_envio == 'PARCIAL':
-            # PARCIAL: Não altera carga, apenas saldo
-            decisao = 'MANTER_CARGA_ALTERAR_SALDO'
-            nova_carga_id = None
-            
-            # Atualizar apenas saldo restante
-            carteira_item.qtd_produto_pedido = qtd_nova
-            # O saldo da carga permanece o mesmo
-            
-        elif tipo_carga.tipo_envio == 'TOTAL':
-            # TOTAL: Altera carga e notifica
-            if tipo_carga.aceita_incremento and qtd_diferenca > 0:
-                # Pode adicionar à carga existente
-                decisao = 'ADICIONAR_CARGA_ATUAL'
-                nova_carga_id = None
-                
-                # Atualizar carga
-                carteira_item.qtd_produto_pedido = qtd_nova
-                carteira_item.qtd_saldo = getattr(carteira_item, 'qtd_saldo', 0) + qtd_diferenca
-                tipo_carga.peso_atual += qtd_diferenca * 0.5  # Estimativa peso
-                
-            else:
-                # Criar nova carga para a diferença
-                decisao = 'CRIAR_NOVA_CARGA'
-                nova_carga_id = _gerar_novo_lote_id()
-                
-                # Atualizar item original
-                carteira_item.qtd_produto_pedido = qtd_nova
-                
-        else:
-            decisao = 'AGUARDA_APROVACAO'
-            nova_carga_id = None
-        
-        # 📝 5. REGISTRAR CONTROLE DE ALTERAÇÃO
-        controle = ControleAlteracaoCarga(
-            carteira_item_id=carteira_item_id,
-            separacao_lote_id=separacao_lote_id,
-            num_pedido=carteira_item.num_pedido,
-            cod_produto=carteira_item.cod_produto,
-            qtd_anterior=qtd_anterior,
-            qtd_nova=qtd_nova,
-            qtd_diferenca=qtd_diferenca,
-            decisao_sistema=decisao,
-            motivo_decisao=f"Tipo carga: {tipo_carga.tipo_envio}, Aceita incremento: {tipo_carga.aceita_incremento}",
-            capacidade_peso_ok=True,  # TODO: Implementar verificação real
-            nova_carga_criada_id=nova_carga_id,
-            detectado_em=agora_brasil(),
-            processado_em=agora_brasil(),
-            processado_por=usuario
-        )
-        db.session.add(controle)
-        
-        # 🔔 6. GERAR EVENTO SE AFETA SEPARAÇÃO
-        if decisao in ['ADICIONAR_CARGA_ATUAL', 'CRIAR_NOVA_CARGA']:
-            evento = EventoCarteira(
-                num_pedido=carteira_item.num_pedido,
-                cod_produto=carteira_item.cod_produto,
-                carteira_item_id=carteira_item_id,
-                tipo_evento='ALTERACAO_QTD',
-                qtd_anterior=qtd_anterior,
-                qtd_nova=qtd_nova,
-                qtd_impactada=abs(qtd_diferenca),
-                afeta_separacao=True,
-                separacao_notificada=False,
-                responsavel_cotacao=usuario,
-                status_processamento='PENDENTE',
-                criado_por=usuario
-            )
-            db.session.add(evento)
-        
-        db.session.commit()
-        
-        return {
-            'decisao': decisao,
-            'motivo': controle.motivo_decisao,
-            'nova_carga_id': nova_carga_id,
-            'capacidade_utilizada': float(tipo_carga.peso_atual) if hasattr(tipo_carga, 'peso_atual') else 0,
-            'afeta_separacao': decisao != 'MANTER_CARGA_ALTERAR_SALDO'
-        }
-        
-    except Exception as e:
-        logger.error(f"Erro na alteração inteligente: {str(e)}")
-        db.session.rollback()
-        raise
+        erro_msg = f"Erro na baixa automática NF {numero_nf}: {str(e)}"
+        logger.error(erro_msg)
+        return {'sucesso': False, 'erro': erro_msg}
 
 def _processar_justificativa_faturamento_parcial(data, usuario):
     """
@@ -2624,6 +2506,212 @@ def _detectar_alteracoes_importantes(item_antes, item_depois):
     }
 
 def _gerar_novo_lote_id():
-    """Gera ID único para novo lote de separação"""
-    import uuid
-    return f"LOTE_{uuid.uuid4().hex[:8].upper()}"
+    """Gera novo ID sequencial para lotes de separação"""
+    try:
+        from app.separacao.models import Separacao
+        
+        # Buscar último lote usado
+        ultimo_lote = db.session.query(
+            func.max(Separacao.separacao_lote_id)
+        ).scalar()
+        
+        if ultimo_lote:
+            return str(int(ultimo_lote) + 1)
+        else:
+            return "1001"  # Primeiro lote
+            
+    except Exception as e:
+        logger.error(f"Erro ao gerar novo lote ID: {str(e)}")
+        # Fallback baseado em timestamp
+        return f"LOTE_{int(agora_brasil().timestamp())}"
+
+def _cancelar_nf_faturamento(numero_nf, usuario, motivo_cancelamento):
+    """
+    🚫 CANCELAMENTO DE NF - REVERSÃO COMPLETA
+    
+    FUNCIONALIDADE:
+    - Apaga MovimentacaoEstoque relacionadas à NF
+    - Mantém CarteiraCopia como histórico (NÃO apaga)
+    - Busca por numero_nf, num_pedido e cod_produto
+    """
+    try:
+        from app.faturamento.models import FaturamentoProduto
+        from app.estoque.models import MovimentacaoEstoque
+        from sqlalchemy import inspect
+        
+        logger.info(f"🚫 Cancelando NF {numero_nf} - Motivo: {motivo_cancelamento}")
+        
+        # 🔍 1. BUSCAR ITENS DA NF
+        itens_nf = FaturamentoProduto.query.filter(
+            FaturamentoProduto.numero_nf == numero_nf,
+            FaturamentoProduto.status_nf == 'ATIVO'
+        ).all()
+        
+        if not itens_nf:
+            return {'sucesso': False, 'erro': f'NF {numero_nf} não encontrada'}
+        
+        movimentacoes_removidas = 0
+        historico_mantido = 0
+        
+        # 🔄 2. PROCESSAR CADA ITEM DA NF
+        for item_nf in itens_nf:
+            try:
+                cod_produto = str(item_nf.cod_produto)
+                num_pedido = item_nf.origem
+                
+                # 🚫 2.1 APAGAR MOVIMENTAÇÕES DE ESTOQUE
+                movimentacoes = MovimentacaoEstoque.query.filter(
+                    MovimentacaoEstoque.cod_produto == cod_produto,
+                    MovimentacaoEstoque.tipo_movimentacao == 'FATURAMENTO',
+                    MovimentacaoEstoque.observacao.like(f'%NF {numero_nf}%'),
+                    MovimentacaoEstoque.ativo == True
+                ).all()
+                
+                for mov in movimentacoes:
+                    # Verificar se realmente é da NF correta (dupla verificação)
+                    if f'NF {numero_nf}' in mov.observacao and f'Pedido {num_pedido}' in mov.observacao:
+                        logger.info(f"🚫 Removendo MovimentacaoEstoque: {mov.cod_produto} Qtd: {mov.qtd_movimentacao}")
+                        db.session.delete(mov)
+                        movimentacoes_removidas += 1
+                
+                # 📝 2.2 MANTER CARTEIRA CÓPIA COMO HISTÓRICO (NÃO APAGA)
+                # CarteiraCopia permanece para auditoria
+                item_copia = CarteiraCopia.query.filter_by(
+                    num_pedido=num_pedido,
+                    cod_produto=cod_produto
+                ).first()
+                
+                if item_copia:
+                    historico_mantido += 1
+                    logger.info(f"📝 CarteiraCopia mantida como histórico: {cod_produto} Baixa: {item_copia.baixa_produto_pedido}")
+                
+            except Exception as e:
+                logger.error(f"Erro ao cancelar item {cod_produto}: {str(e)}")
+                continue
+        
+        # 💾 3. COMMIT DAS ALTERAÇÕES
+        db.session.commit()
+        
+        # 📊 4. RESULTADO
+        resultado = {
+            'sucesso': True,
+            'movimentacoes_removidas': movimentacoes_removidas,
+            'historico_carteira_mantido': historico_mantido,
+            'observacao': f'NF {numero_nf} cancelada: {movimentacoes_removidas} movimentações removidas, {historico_mantido} registros mantidos em CarteiraCopia para auditoria.'
+        }
+        
+        logger.info(f"✅ Cancelamento de NF concluído: {resultado}")
+        return resultado
+        
+    except Exception as e:
+        db.session.rollback()
+        erro_msg = f"Erro no cancelamento da NF {numero_nf}: {str(e)}"
+        logger.error(erro_msg)
+        return {'sucesso': False, 'erro': erro_msg}
+
+def _validar_sincronizacao_baixas_faturamento(cod_produto=None, num_pedido=None):
+    """
+    🔍 VALIDAÇÃO DE SINCRONIZAÇÃO - CARTEIRA CÓPIA vs MOVIMENTAÇÃO ESTOQUE
+    
+    FUNCIONALIDADE:
+    - Valida se baixas na CarteiraCopia estão sincronizadas com MovimentacaoEstoque
+    - Detecta divergências entre os dois sistemas
+    - Gera relatório de inconsistências para correção
+    """
+    try:
+        from app.estoque.models import MovimentacaoEstoque
+        from sqlalchemy import func
+        
+        logger.info("🔍 Validando sincronização baixas faturamento")
+        
+        inconsistencias = []
+        produtos_validados = 0
+        
+        # 🔍 1. DEFINIR ESCOPO DA VALIDAÇÃO
+        query_carteira = CarteiraCopia.query
+        if cod_produto:
+            query_carteira = query_carteira.filter_by(cod_produto=str(cod_produto))
+        if num_pedido:
+            query_carteira = query_carteira.filter_by(num_pedido=str(num_pedido))
+        
+        itens_carteira = query_carteira.all()
+        
+        # 🔄 2. VALIDAR CADA ITEM DA CARTEIRA
+        for item_carteira in itens_carteira:
+            try:
+                cod_produto_item = item_carteira.cod_produto
+                num_pedido_item = item_carteira.num_pedido
+                baixa_carteira = float(item_carteira.baixa_produto_pedido or 0)
+                
+                # 📊 2.1 CALCULAR TOTAL MOVIMENTAÇÕES DE FATURAMENTO
+                total_movimentacoes = db.session.query(
+                    func.sum(MovimentacaoEstoque.qtd_movimentacao)
+                ).filter(
+                    MovimentacaoEstoque.cod_produto == cod_produto_item,
+                    MovimentacaoEstoque.tipo_movimentacao == 'FATURAMENTO',
+                    MovimentacaoEstoque.observacao.like(f'%Pedido {num_pedido_item}%'),
+                    MovimentacaoEstoque.ativo == True
+                ).scalar() or 0
+                
+                # Converter para positivo (movimentações são negativas)
+                total_movimentacoes = abs(float(total_movimentacoes))
+                
+                # 🔍 2.2 VERIFICAR SINCRONIZAÇÃO
+                diferenca = abs(baixa_carteira - total_movimentacoes)
+                
+                if diferenca > 0.001:  # Tolerância para arredondamentos
+                    inconsistencias.append({
+                        'num_pedido': num_pedido_item,
+                        'cod_produto': cod_produto_item,
+                        'baixa_carteira_copia': baixa_carteira,
+                        'total_movimentacoes_estoque': total_movimentacoes,
+                        'diferenca': diferenca,
+                        'tipo_problema': 'DESSINCRONIZADO',
+                        'acao_sugerida': 'Verificar movimentações de faturamento do produto'
+                    })
+                    
+                    logger.warning(f"⚠️ Dessincronização detectada: {num_pedido_item}-{cod_produto_item} Carteira:{baixa_carteira} vs Movimentações:{total_movimentacoes}")
+                
+                produtos_validados += 1
+                
+            except Exception as e:
+                inconsistencias.append({
+                    'num_pedido': item_carteira.num_pedido,
+                    'cod_produto': item_carteira.cod_produto,
+                    'baixa_carteira_copia': 'ERRO',
+                    'total_movimentacoes_estoque': 'ERRO',
+                    'diferenca': 0,
+                    'tipo_problema': 'ERRO_CALCULO',
+                    'acao_sugerida': f'Erro no cálculo: {str(e)}'
+                })
+                logger.error(f"Erro ao validar {item_carteira.num_pedido}-{item_carteira.cod_produto}: {str(e)}")
+                continue
+        
+        # 📊 3. RESULTADO DA VALIDAÇÃO
+        resultado = {
+            'sucesso': True,
+            'produtos_validados': produtos_validados,
+            'inconsistencias_encontradas': len(inconsistencias),
+            'sincronizacao_ok': len(inconsistencias) == 0,
+            'inconsistencias': inconsistencias,
+            'resumo': f'{produtos_validados} produtos validados, {len(inconsistencias)} inconsistências encontradas'
+        }
+        
+        if inconsistencias:
+            logger.warning(f"⚠️ Validação concluída com {len(inconsistencias)} inconsistências")
+        else:
+            logger.info(f"✅ Validação concluída: {produtos_validados} produtos sincronizados corretamente")
+        
+        return resultado
+        
+    except Exception as e:
+        erro_msg = f"Erro na validação de sincronização: {str(e)}"
+        logger.error(erro_msg)
+        return {
+            'sucesso': False,
+            'erro': erro_msg,
+            'produtos_validados': 0,
+            'inconsistencias_encontradas': 0,
+            'sincronizacao_ok': False,
+            'inconsistencias': []
+        }
