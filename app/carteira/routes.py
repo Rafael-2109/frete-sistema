@@ -382,14 +382,22 @@ def processar_faturamento():
         if not nfs_processadas:
             return jsonify({'success': False, 'error': 'Nenhuma NF informada'}), 400
         
-        # resultado = _processar_baixa_faturamento(nfs_processadas, current_user.nome)
-        # TODO: Implementar função _processar_baixa_faturamento
-        resultado = {'processadas': len(nfs_processadas), 'erros': []}
+        # ⚡ USAR FUNÇÃO IMPLEMENTADA
+        total_processadas = 0
+        total_erros = []
+        
+        for numero_nf in nfs_processadas:
+            resultado = _processar_baixa_faturamento(numero_nf, current_user.nome)
+            if resultado.get('success'):
+                total_processadas += resultado.get('processadas', 0)
+            else:
+                total_erros.extend(resultado.get('erros', []))
         
         return jsonify({
             'success': True,
-            'processadas': resultado['processadas'],
-            'erros': resultado['erros']
+            'processadas': total_processadas,
+            'erros': total_erros,
+            'total_nfs': len(nfs_processadas)
         })
         
     except Exception as e:
@@ -708,41 +716,98 @@ def justificar_faturamento_parcial():
 @login_required
 def configurar_tipo_carga(separacao_lote_id):
     """
-    ⚙️ CONFIGURAR TIPO DE CARGA E CAPACIDADES
+    ⚙️ CONFIGURAR TIPO DE CARGA - FUNÇÃO 3 IMPLEMENTADA
     
     FUNCIONALIDADE:
     - Define se carga é TOTAL, PARCIAL, COMPLEMENTAR, STANDBY
     - Configura limites de peso, pallets, valor
     - Define comportamento para alterações futuras
     """
-    if request.method == 'GET':
-        tipo_carga_existente = TipoCarga.query.filter_by(
-            separacao_lote_id=separacao_lote_id
-        ).first()
-        
-        return render_template(
-            'carteira/configurar_tipo_carga.html',
-            separacao_lote_id=separacao_lote_id,
-            tipo_carga=tipo_carga_existente
-        )
-    
     try:
-        data = request.form
-        resultado = _configurar_tipo_carga(separacao_lote_id, data, current_user.nome)
+        from sqlalchemy import inspect
         
-        flash(f"""
-        Tipo de carga configurado com sucesso!
-        🎯 Tipo: {resultado['tipo_carga']}
-        📊 Capacidade: {resultado['capacidade_resumo']}
-        🔄 Aceita alterações: {'Sim' if resultado['aceita_incremento'] else 'Não'}
-        """, 'success')
+        logger.info(f"⚙️ Configurando tipo de carga {separacao_lote_id} por {current_user.nome}")
         
-        return redirect(url_for('carteira.listar_principal'))
+        # 🔍 1. VERIFICAR SE TABELA EXISTE
+        inspector = inspect(db.engine)
+        if not inspector.has_table('tipo_carga'):
+            return {
+                'success': False,
+                'error': 'Sistema de tipos de carga não inicializado',
+                'tipo_carga': 'AGUARDA_MIGRACAO',
+                'capacidade_resumo': 'Sistema não migrado',
+                'aceita_incremento': False
+            }
+        
+        # 📋 2. EXTRAIR DADOS DO FORMULÁRIO
+        tipo_envio = request.form.get('tipo_envio', 'TOTAL')
+        capacidade_maxima_peso = float(request.form.get('capacidade_maxima_peso', 0) or 0)
+        capacidade_maxima_pallets = float(request.form.get('capacidade_maxima_pallets', 0) or 0)
+        capacidade_maxima_valor = float(request.form.get('capacidade_maxima_valor', 0) or 0)
+        aceita_incremento = request.form.get('aceita_incremento', 'true').lower() == 'true'
+        motivo_tipo = request.form.get('motivo_tipo', '')
+        
+        # 🔍 3. BUSCAR OU CRIAR TIPO DE CARGA
+        tipo_carga = TipoCarga.query.filter_by(separacao_lote_id=separacao_lote_id).first()
+        
+        if not tipo_carga:
+            # 🆕 CRIAR NOVO
+            tipo_carga = TipoCarga(
+                separacao_lote_id=separacao_lote_id,
+                criado_por=current_user.nome
+            )
+            db.session.add(tipo_carga)
+        
+        # 📊 4. ATUALIZAR CONFIGURAÇÕES
+        tipo_carga.tipo_envio = tipo_envio
+        tipo_carga.capacidade_maxima_peso = capacidade_maxima_peso
+        tipo_carga.capacidade_maxima_pallets = capacidade_maxima_pallets
+        tipo_carga.capacidade_maxima_valor = capacidade_maxima_valor
+        tipo_carga.aceita_incremento = aceita_incremento
+        tipo_carga.motivo_tipo = motivo_tipo
+        
+        # 📊 5. CALCULAR UTILIZAÇÃO ATUAL (da separação)
+        from app.separacao.models import Separacao
+        if inspector.has_table('separacao'):
+            separacoes = Separacao.query.filter_by(separacao_lote_id=separacao_lote_id).all()
+            peso_atual = sum(float(s.peso or 0) for s in separacoes)
+            pallets_atual = sum(float(s.pallet or 0) for s in separacoes)
+            valor_atual = sum(float(s.valor_saldo or 0) for s in separacoes)
+            
+            tipo_carga.peso_atual = peso_atual
+            tipo_carga.pallets_atual = pallets_atual
+            tipo_carga.valor_atual = valor_atual
+        
+        # 💾 6. SALVAR
+        db.session.commit()
+        
+        # 📊 7. GERAR RESUMO
+        capacidade_resumo = f"Peso: {tipo_carga.peso_atual}/{capacidade_maxima_peso}kg"
+        if capacidade_maxima_pallets > 0:
+            capacidade_resumo += f", Pallets: {tipo_carga.pallets_atual}/{capacidade_maxima_pallets}"
+        if capacidade_maxima_valor > 0:
+            capacidade_resumo += f", Valor: R$ {tipo_carga.valor_atual:,.2f}/{capacidade_maxima_valor:,.2f}"
+        
+        logger.info(f"✅ Tipo de carga configurado: {separacao_lote_id} Tipo: {tipo_envio}")
+        
+        return {
+            'success': True,
+            'tipo_carga': tipo_envio,
+            'capacidade_resumo': capacidade_resumo,
+            'aceita_incremento': aceita_incremento,
+            'tipo_carga_id': tipo_carga.id
+        }
         
     except Exception as e:
-        logger.error(f"Erro ao configurar tipo de carga: {str(e)}")
-        flash(f'Erro ao configurar tipo de carga: {str(e)}', 'error')
-        return redirect(request.url)
+        db.session.rollback()
+        logger.error(f"❌ Erro ao configurar tipo de carga: {str(e)}")
+        return {
+            'success': False,
+            'error': f'Erro ao configurar: {str(e)}',
+            'tipo_carga': 'ERRO',
+            'capacidade_resumo': 'Erro no processamento',
+            'aceita_incremento': False
+        }
 
 @carteira_bp.route('/dashboard-saldos-standby')
 @login_required
@@ -1397,135 +1462,169 @@ def _processar_geracao_separacao(itens_selecionados, usuario, observacao):
 
 def _processar_baixa_faturamento(numero_nf, usuario):
     """
-    💳 PROCESSA BAIXA DE FATURAMENTO NA CARTEIRA
+    💳 BAIXA AUTOMÁTICA DE FATURAMENTO - FUNÇÃO 1 CORRIGIDA
     
-    FUNCIONALIDADE:
-    - Busca NF no faturamento importado
-    - Identifica itens na carteira
-    - Executa baixa automática
-    - Cria eventos de rastreamento
+    FUNCIONALIDADE CRÍTICA:
+    - Busca NF no FaturamentoProduto (dados por produto)
+    - Identifica itens correspondentes na carteira
+    - Baixa automática respeitando saldos disponíveis
+    - Sincronização CarteiraPrincipal ↔ CarteiraCopia
+    - Detecção de inconsistências em tempo real
     """
     try:
-        logger.info(f"💳 Processando baixa NF {numero_nf}")
+        from app.faturamento.models import FaturamentoProduto
+        from sqlalchemy import inspect
         
-        # 🔍 BUSCAR NF NO FATURAMENTO IMPORTADO
-        from app.faturamento.models import RelatorioFaturamentoImportado
-        nfs_faturadas = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).all()
+        logger.info(f"💳 Processando baixa automática NF: {numero_nf}")
         
-        if not nfs_faturadas:
-            logger.warning(f"NF {numero_nf} não encontrada no faturamento")
-            return {'nf': numero_nf, 'itens_baixados': 0, 'erro': 'NF não encontrada'}
+        # 🔍 1. VERIFICAR SE TABELA DE FATURAMENTO EXISTE
+        inspector = inspect(db.engine)
+        if not inspector.has_table('faturamento_produto'):
+            return {
+                'success': False,
+                'error': 'Tabela de faturamento por produto não encontrada. Importe dados de faturamento primeiro.',
+                'processadas': 0,
+                'erros': ['Sistema não inicializado']
+            }
         
-        # 📊 CONTADORES
-        itens_baixados = 0
-        valor_baixado = 0
-        inconsistencias = 0
+        # 🔍 2. BUSCAR NF NO FATURAMENTO POR PRODUTO (CORRIGIDO)
+        itens_nf = FaturamentoProduto.query.filter_by(
+            numero_nf=numero_nf,
+            status_nf='ATIVO'  # Apenas NFs ativas
+        ).all()
         
-        # 🔄 PROCESSAR CADA PRODUTO FATURADO
-        for nf_item in nfs_faturadas:
+        if not itens_nf:
+            return {
+                'success': False,
+                'error': f'NF {numero_nf} não encontrada no faturamento por produto ou está cancelada',
+                'processadas': 0,
+                'erros': [f'NF {numero_nf} não localizada ou inativa']
+            }
+        
+        processadas = 0
+        erros = []
+        inconsistencias_detectadas = []
+        
+        # 🔄 3. PROCESSAR CADA PRODUTO DA NF
+        for item_faturamento in itens_nf:
             try:
-                # 🔍 BUSCAR ITEM NA CARTEIRA (se existe)
-                inspector = inspect(db.engine)
-                if inspector.has_table('carteira_principal'):
-                    itens_carteira = CarteiraPrincipal.query.filter(
-                        CarteiraPrincipal.num_pedido == getattr(nf_item, 'origem', None),
-                        CarteiraPrincipal.cod_produto == getattr(nf_item, 'cod_produto', None)
-                    ).all()
-                    
-                    if itens_carteira:
-                        # ✅ BAIXA NORMAL - ITEM EXISTE NA CARTEIRA
-                        for item in itens_carteira:
-                            qtd_faturada = float(getattr(nf_item, 'qtd_produto_faturado', 0) or 0)
-                            qtd_saldo_atual = float(getattr(item, 'qtd_saldo_produto_pedido', 0) or 0)
-                            qtd_baixar = min(qtd_faturada, qtd_saldo_atual)
-                            
-                            if qtd_baixar > 0:
-                                # 📝 ATUALIZAR CARTEIRA
-                                if hasattr(item, 'qtd_saldo_produto_pedido'):
-                                    novo_saldo = qtd_saldo_atual - qtd_baixar
-                                    item.qtd_saldo_produto_pedido = max(0, novo_saldo)
-                                
-                                # 📝 ATUALIZAR CÓPIA
-                                if inspector.has_table('carteira_copia'):
-                                    item_copia = CarteiraCopia.query.filter_by(
-                                        num_pedido=getattr(item, 'num_pedido', None),
-                                        cod_produto=getattr(item, 'cod_produto', None)
-                                    ).first()
-                                    if item_copia and hasattr(item_copia, 'baixa_produto_pedido'):
-                                        baixa_atual = float(getattr(item_copia, 'baixa_produto_pedido', 0) or 0)
-                                        item_copia.baixa_produto_pedido = baixa_atual + qtd_baixar
-                                
-                                valor_baixado += qtd_baixar * float(getattr(nf_item, 'preco_produto_faturado', 0) or 0)
-                                itens_baixados += 1
-                                
-                                if hasattr(item, 'updated_by'):
-                                    item.updated_by = usuario
-                    else:
-                        # ⚠️ INCONSISTÊNCIA - NF SEM CARTEIRA
-                        logger.warning(f"NF {numero_nf} produto {getattr(nf_item, 'cod_produto', None)} sem item na carteira")
-                        if inspector.has_table('inconsistencia_faturamento'):
-                            inconsistencia = InconsistenciaFaturamento(
-                                numero_nf=numero_nf,
-                                cod_produto=getattr(nf_item, 'cod_produto', None),
-                                tipo_inconsistencia='FATURAMENTO_SEM_PEDIDO',
-                                qtd_faturada=float(getattr(nf_item, 'qtd_produto_faturado', 0) or 0),
-                                valor_faturado=float(getattr(nf_item, 'valor_produto_faturado', 0) or 0),
-                                detectada_por=usuario
-                            )
-                            db.session.add(inconsistencia)
-                        inconsistencias += 1
+                # 🔍 3.1 BUSCAR ITEM NA CARTEIRA PRINCIPAL (USANDO CAMPOS CORRETOS)
+                item_carteira = CarteiraPrincipal.query.filter_by(
+                    num_pedido=item_faturamento.origem,  # origem = num_pedido
+                    cod_produto=item_faturamento.cod_produto
+                ).first()
                 
-                # 📝 CRIAR HISTÓRICO DE FATURAMENTO
+                if not item_carteira:
+                    # ⚠️ INCONSISTÊNCIA: NF sem pedido correspondente
+                    inconsistencia = InconsistenciaFaturamento(
+                        tipo='FATURAMENTO_SEM_PEDIDO',
+                        numero_nf=numero_nf,
+                        num_pedido=item_faturamento.origem or 'N/A',
+                        cod_produto=item_faturamento.cod_produto,
+                        qtd_faturada=float(item_faturamento.qtd_produto_faturado or 0),
+                        saldo_disponivel=0,
+                        qtd_excesso=float(item_faturamento.qtd_produto_faturado or 0)
+                    )
+                    db.session.add(inconsistencia)
+                    erros.append(f"Produto {item_faturamento.cod_produto} (Pedido: {item_faturamento.origem}) sem item correspondente na carteira")
+                    continue
+                
+                # 📊 3.2 VERIFICAR SALDO DISPONÍVEL (USANDO CAMPOS CORRETOS)
+                qtd_faturada = float(item_faturamento.qtd_produto_faturado or 0)
+                saldo_disponivel = float(item_carteira.qtd_saldo_produto_pedido or 0)
+                
+                if qtd_faturada > saldo_disponivel:
+                    # ⚠️ INCONSISTÊNCIA: Faturamento excede saldo
+                    inconsistencia = InconsistenciaFaturamento(
+                        tipo='FATURAMENTO_EXCEDE_SALDO',
+                        numero_nf=numero_nf,
+                        num_pedido=item_carteira.num_pedido,
+                        cod_produto=item_carteira.cod_produto,
+                        qtd_faturada=qtd_faturada,
+                        saldo_disponivel=saldo_disponivel,
+                        qtd_excesso=qtd_faturada - saldo_disponivel
+                    )
+                    db.session.add(inconsistencia)
+                    inconsistencias_detectadas.append({
+                        'produto': item_carteira.cod_produto,
+                        'pedido': item_carteira.num_pedido,
+                        'faturado': qtd_faturada,
+                        'disponivel': saldo_disponivel,
+                        'excesso': qtd_faturada - saldo_disponivel
+                    })
+                    
+                    # 🔄 BAIXAR APENAS O SALDO DISPONÍVEL
+                    qtd_a_baixar = saldo_disponivel
+                    logger.warning(f"⚠️ Faturamento excede saldo: {item_carteira.num_pedido}-{item_carteira.cod_produto} Faturado:{qtd_faturada} Disponível:{saldo_disponivel}")
+                else:
+                    qtd_a_baixar = qtd_faturada
+                
+                # 💳 3.3 BAIXAR NA CARTEIRA PRINCIPAL
+                item_carteira.qtd_saldo_produto_pedido = float(item_carteira.qtd_saldo_produto_pedido) - qtd_a_baixar
+                item_carteira.updated_by = usuario
+                item_carteira.updated_at = agora_brasil()
+                
+                # 🔄 3.4 SINCRONIZAR COM CARTEIRA CÓPIA
+                item_copia = CarteiraCopia.query.filter_by(
+                    num_pedido=item_carteira.num_pedido,
+                    cod_produto=item_carteira.cod_produto
+                ).first()
+                
+                if item_copia:
+                    # Atualizar baixa na cópia
+                    item_copia.baixa_produto_pedido = float(item_copia.baixa_produto_pedido or 0) + qtd_a_baixar
+                    item_copia.recalcular_saldo()
+                    item_copia.updated_by = usuario
+                    item_copia.updated_at = agora_brasil()
+                else:
+                    logger.warning(f"⚠️ Item não encontrado na CarteiraCopia: {item_carteira.num_pedido}-{item_carteira.cod_produto}")
+                
+                # 📋 3.5 REGISTRAR HISTÓRICO
                 if inspector.has_table('historico_faturamento'):
                     historico = HistoricoFaturamento(
+                        num_pedido=item_carteira.num_pedido,
+                        cod_produto=item_carteira.cod_produto,
                         numero_nf=numero_nf,
-                        data_faturamento=getattr(nf_item, 'data_fatura', date.today()),
-                        num_pedido=getattr(nf_item, 'origem', None),
-                        cod_produto=getattr(nf_item, 'cod_produto', None),
-                        qtd_faturada=float(getattr(nf_item, 'qtd_produto_faturado', 0) or 0),
-                        valor_faturado=float(getattr(nf_item, 'valor_produto_faturado', 0) or 0),
-                        processada_por=usuario
+                        qtd_baixada=qtd_a_baixar,
+                        data_faturamento=item_faturamento.data_fatura
                     )
                     db.session.add(historico)
                 
-                # 📝 CRIAR EVENTO CARTEIRA
-                if inspector.has_table('evento_carteira'):
-                    evento = EventoCarteira(
-                        num_pedido=getattr(nf_item, 'origem', None),
-                        cod_produto=getattr(nf_item, 'cod_produto', None),
-                        tipo_evento='FATURAMENTO',
-                        numero_nf=numero_nf,
-                        qtd_impactada=float(getattr(nf_item, 'qtd_produto_faturado', 0) or 0),
-                        valor_impactado=float(getattr(nf_item, 'valor_produto_faturado', 0) or 0),
-                        criado_por=usuario
-                    )
-                    db.session.add(evento)
+                processadas += 1
+                logger.info(f"✅ Baixa processada: {item_carteira.num_pedido}-{item_carteira.cod_produto} Qtd: {qtd_a_baixar}")
                 
             except Exception as e:
-                logger.error(f"Erro ao processar item NF {numero_nf}: {str(e)}")
+                logger.error(f"❌ Erro ao processar produto {item_faturamento.cod_produto}: {str(e)}")
+                erros.append(f"Produto {item_faturamento.cod_produto}: {str(e)}")
                 continue
         
-        # 💾 COMMIT FINAL
+        # 💾 4. SALVAR TODAS AS ALTERAÇÕES
         db.session.commit()
         
-        logger.info(f"✅ NF {numero_nf} processada - {itens_baixados} itens baixados")
-        
-        return {
-            'nf': numero_nf,
-            'itens_baixados': itens_baixados,
-            'valor_baixado': valor_baixado,
-            'inconsistencias': inconsistencias,
-            'sucesso': True
+        # 📊 5. RESULTADO FINAL
+        resultado = {
+            'success': True,
+            'processadas': processadas,
+            'erros': erros,
+            'inconsistencias': inconsistencias_detectadas,
+            'total_itens_nf': len(itens_nf),
+            'tabela_origem': 'FaturamentoProduto'  # Confirmar correção
         }
         
+        if inconsistencias_detectadas:
+            logger.warning(f"⚠️ {len(inconsistencias_detectadas)} inconsistências detectadas na NF {numero_nf}")
+        
+        logger.info(f"✅ Baixa automática concluída NF {numero_nf}: {processadas}/{len(itens_nf)} itens processados, {len(erros)} erros")
+        return resultado
+        
     except Exception as e:
-        logger.error(f"Erro no processamento NF {numero_nf}: {str(e)}")
         db.session.rollback()
+        logger.error(f"❌ Erro crítico na baixa automática NF {numero_nf}: {str(e)}")
         return {
-            'nf': numero_nf,
-            'itens_baixados': 0,
-            'sucesso': False,
-            'erro': str(e)
+            'success': False,
+            'error': f'Erro crítico: {str(e)}',
+            'processadas': 0,
+            'erros': [str(e)]
         }
 
 def _processar_alteracao_inteligente(carteira_item_id, separacao_lote_id, qtd_nova, usuario, decisao_manual=None):
@@ -1650,100 +1749,451 @@ def _processar_alteracao_inteligente(carteira_item_id, separacao_lote_id, qtd_no
 
 def _processar_justificativa_faturamento_parcial(data, usuario):
     """
-    📋 PROCESSA JUSTIFICATIVA DE FATURAMENTO PARCIAL
+    📋 JUSTIFICATIVA FATURAMENTO PARCIAL - FUNÇÃO 2 IMPLEMENTADA
+    
+    PROBLEMA RESOLVIDO:
+    - Separou 100, faturou 60 → Por que 40 não foram?
+    - Tratamento inteligente do saldo restante
+    - Decisão comercial sobre destino do saldo
     """
-    
-    # TODO: IMPLEMENTAR APÓS MIGRAÇÃO DAS TABELAS
-    # justificativa = FaturamentoParcialJustificativa(
-    #     separacao_lote_id=data.get('separacao_lote_id'),
-    #     num_pedido=data.get('num_pedido'),
-    #     cod_produto=data.get('cod_produto'),
-    #     numero_nf=data.get('numero_nf'),
-    #     qtd_separada=float(data.get('qtd_separada', 0)),
-    #     qtd_faturada=float(data.get('qtd_faturada', 0)),
-    #     qtd_saldo=float(data.get('qtd_saldo', 0)),
-    #     motivo_nao_faturamento=data.get('motivo_nao_faturamento'),
-    #     descricao_detalhada=data.get('descricao_detalhada'),
-    #     classificacao_saldo=data.get('classificacao_saldo'),
-    #     criado_por=usuario
-    # )
-    
-    # Implementação temporária até migração
-    return {
-        'motivo': 'AGUARDA_MIGRACAO',
-        'classificacao_saldo': 'AGUARDA_MIGRACAO',
-        'acao_tomada': 'AGUARDA_MIGRACAO'
-    }
-
-def _configurar_tipo_carga(separacao_lote_id, data, usuario):
-    """
-    ⚙️ CONFIGURA TIPO DE CARGA E CAPACIDADES
-    """
-    
-    # TODO: IMPLEMENTAR APÓS MIGRAÇÃO DAS TABELAS
-    # tipo_carga = TipoCarga.query.filter_by(separacao_lote_id=separacao_lote_id).first()
-    # if not tipo_carga:
-    #     tipo_carga = TipoCarga(
-    #         separacao_lote_id=separacao_lote_id,
-    #         criado_por=usuario
-    #     )
-    #     db.session.add(tipo_carga)
-    
-    # Implementação temporária até migração
-    return {
-        'tipo_carga': 'AGUARDA_MIGRACAO',
-        'capacidade_resumo': 'Aguardando migração das tabelas',
-        'aceita_incremento': True
-    }
+    try:
+        from sqlalchemy import inspect
+        
+        logger.info(f"📋 Processando justificativa faturamento parcial por {usuario}")
+        
+        # 🔍 1. VERIFICAR SE TABELAS EXISTEM
+        inspector = inspect(db.engine)
+        if not inspector.has_table('faturamento_parcial_justificativa'):
+            return {
+                'success': False,
+                'error': 'Sistema de justificativas não inicializado',
+                'motivo': 'SISTEMA_NAO_INICIALIZADO',
+                'classificacao_saldo': 'AGUARDA_MIGRACAO',
+                'acao_tomada': 'NENHUMA'
+            }
+        
+        # 📋 2. EXTRAIR DADOS DO FORMULÁRIO
+        separacao_lote_id = data.get('separacao_lote_id')
+        num_pedido = data.get('num_pedido')
+        cod_produto = data.get('cod_produto')
+        numero_nf = data.get('numero_nf')
+        motivo_nao_faturamento = data.get('motivo_nao_faturamento')
+        classificacao_saldo = data.get('classificacao_saldo')
+        descricao_detalhada = data.get('descricao_detalhada', '')
+        
+        # 📊 3. CALCULAR QUANTIDADES
+        qtd_separada = float(data.get('qtd_separada', 0) or 0)
+        qtd_faturada = float(data.get('qtd_faturada', 0) or 0)
+        qtd_saldo = qtd_separada - qtd_faturada
+        
+        if qtd_saldo <= 0:
+            return {
+                'success': False,
+                'error': 'Quantidade separada deve ser maior que faturada para justificativa parcial',
+                'motivo': 'DADOS_INVALIDOS',
+                'classificacao_saldo': 'ERRO',
+                'acao_tomada': 'VALIDACAO_NEGADA'
+            }
+        
+        # 📝 4. CRIAR JUSTIFICATIVA
+        justificativa = FaturamentoParcialJustificativa(
+            separacao_lote_id=separacao_lote_id,
+            num_pedido=num_pedido,
+            cod_produto=cod_produto,
+            numero_nf=numero_nf,
+            qtd_separada=qtd_separada,
+            qtd_faturada=qtd_faturada,
+            qtd_saldo=qtd_saldo,
+            motivo_nao_faturamento=motivo_nao_faturamento,
+            classificacao_saldo=classificacao_saldo,
+            descricao_detalhada=descricao_detalhada,
+            criado_por=usuario
+        )
+        db.session.add(justificativa)
+        
+        # 🎯 5. PROCESSAR AÇÃO BASEADA NA CLASSIFICAÇÃO
+        acao_tomada = None
+        
+        if classificacao_saldo == 'RETORNA_CARTEIRA':
+            # 🔄 RETORNAR À CARTEIRA SEM DADOS OPERACIONAIS
+            item_carteira = CarteiraPrincipal.query.filter_by(
+                num_pedido=num_pedido,
+                cod_produto=cod_produto
+            ).first()
+            
+            if item_carteira:
+                # Limpar dados operacionais
+                item_carteira.lote_separacao_id = None
+                item_carteira.expedicao = None
+                item_carteira.agendamento = None
+                item_carteira.protocolo = None
+                item_carteira.roteirizacao = None
+                item_carteira.qtd_saldo_produto_pedido = float(item_carteira.qtd_saldo_produto_pedido or 0) + qtd_saldo
+                item_carteira.updated_by = usuario
+                item_carteira.updated_at = agora_brasil()
+                
+            acao_tomada = 'ITEM_RETORNADO_CARTEIRA'
+            
+        elif classificacao_saldo == 'NECESSITA_COMPLEMENTO':
+            # ⏸️ CRIAR SALDO EM STANDBY
+            saldo_standby = SaldoStandby(
+                origem_separacao_lote_id=separacao_lote_id,
+                num_pedido=num_pedido,
+                cod_produto=cod_produto,
+                cnpj_cliente=data.get('cnpj_cliente', ''),
+                nome_cliente=data.get('nome_cliente', ''),
+                qtd_saldo=qtd_saldo,
+                valor_saldo=qtd_saldo * float(data.get('preco_unitario', 0) or 0),
+                tipo_standby='AGUARDA_COMPLEMENTO',
+                criado_por=usuario
+            )
+            db.session.add(saldo_standby)
+            acao_tomada = 'SALDO_EM_STANDBY'
+            
+        elif classificacao_saldo == 'EXCLUIR_DEFINITIVO':
+            # 🗑️ MARCAR ITEM COMO INATIVO
+            item_carteira = CarteiraPrincipal.query.filter_by(
+                num_pedido=num_pedido,
+                cod_produto=cod_produto
+            ).first()
+            
+            if item_carteira:
+                item_carteira.ativo = False
+                item_carteira.updated_by = usuario
+                item_carteira.updated_at = agora_brasil()
+                
+            acao_tomada = 'ITEM_EXCLUIDO_DEFINITIVO'
+            
+        else:
+            # 📋 AGUARDA DECISÃO POSTERIOR
+            acao_tomada = 'AGUARDA_DECISAO_COMERCIAL'
+        
+        # 📝 6. ATUALIZAR JUSTIFICATIVA COM AÇÃO
+        justificativa.acao_comercial = acao_tomada
+        justificativa.data_acao = agora_brasil()
+        justificativa.executado_por = usuario
+        
+        # 📋 7. CRIAR EVENTO DE RASTREAMENTO
+        if inspector.has_table('evento_carteira'):
+            evento = EventoCarteira(
+                num_pedido=num_pedido,
+                cod_produto=cod_produto,
+                carteira_item_id=0,  # Será atualizado se necessário
+                tipo_evento='JUSTIFICATIVA_FATURAMENTO_PARCIAL',
+                qtd_anterior=qtd_separada,
+                qtd_nova=qtd_faturada,
+                qtd_impactada=qtd_saldo,
+                numero_nf=numero_nf,
+                motivo_cancelamento=motivo_nao_faturamento,
+                criado_por=usuario
+            )
+            db.session.add(evento)
+        
+        # 💾 8. SALVAR TUDO
+        db.session.commit()
+        
+        logger.info(f"✅ Justificativa processada: {num_pedido}-{cod_produto} Motivo: {motivo_nao_faturamento} Ação: {acao_tomada}")
+        
+        return {
+            'success': True,
+            'motivo': motivo_nao_faturamento,
+            'classificacao_saldo': classificacao_saldo,
+            'acao_tomada': acao_tomada,
+            'qtd_saldo': qtd_saldo,
+            'justificativa_id': justificativa.id
+        }
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao processar justificativa: {str(e)}")
+        return {
+            'success': False,
+            'error': f'Erro ao processar: {str(e)}',
+            'motivo': 'ERRO_SISTEMA',
+            'classificacao_saldo': 'ERRO',
+            'acao_tomada': 'FALHA_PROCESSAMENTO'
+        }
 
 def _criar_saldo_standby(justificativa, tipo_standby, usuario):
-    """Cria registro de saldo em standby"""
-    # TODO: IMPLEMENTAR APÓS MIGRAÇÃO DAS TABELAS
-    # saldo_standby = SaldoStandby(
-    #     origem_separacao_lote_id=justificativa.separacao_lote_id,
-    #     num_pedido=justificativa.num_pedido,
-    #     cod_produto=justificativa.cod_produto,
-    #     cnpj_cliente='',  # TODO: Buscar do pedido
-    #     nome_cliente='',  # TODO: Buscar do pedido
-    #     qtd_saldo=justificativa.qtd_saldo,
-    #     valor_saldo=0,  # TODO: Calcular
-    #     tipo_standby=tipo_standby,
-    #     criado_por=usuario
-    # )
-    pass
+    """
+    ⏸️ CRIAR SALDO EM STANDBY - FUNÇÃO 4 IMPLEMENTADA
+    
+    FUNCIONALIDADE:
+    - Cria saldo aguardando decisão comercial
+    - Define prazos e alertas automáticos
+    - Controle temporal de saldos parados
+    """
+    try:
+        from sqlalchemy import inspect
+        from datetime import date, timedelta
+        
+        logger.info(f"⏸️ Criando saldo standby tipo {tipo_standby} por {usuario}")
+        
+        # 🔍 1. VERIFICAR SE TABELA EXISTE
+        inspector = inspect(db.engine)
+        if not inspector.has_table('saldo_standby'):
+            return {
+                'success': False,
+                'error': 'Sistema de saldos standby não inicializado',
+                'standby_id': None,
+                'data_limite': None
+            }
+        
+        # 📊 2. CALCULAR PRAZOS BASEADOS NO TIPO
+        data_limite_standby = None
+        if tipo_standby == 'AGUARDA_COMPLEMENTO':
+            data_limite_standby = date.today() + timedelta(days=30)  # 30 dias para complemento
+        elif tipo_standby == 'AGUARDA_DECISAO':
+            data_limite_standby = date.today() + timedelta(days=7)   # 7 dias para decisão
+        elif tipo_standby == 'AGUARDA_REPOSICAO':
+            data_limite_standby = date.today() + timedelta(days=15)  # 15 dias para reposição
+        
+        proximo_alerta = date.today() + timedelta(days=3)  # Primeiro alerta em 3 dias
+        
+        # 📝 3. CRIAR SALDO STANDBY
+        saldo = SaldoStandby(
+            origem_separacao_lote_id=justificativa.get('separacao_lote_id'),
+            num_pedido=justificativa.get('num_pedido'),
+            cod_produto=justificativa.get('cod_produto'),
+            cnpj_cliente=justificativa.get('cnpj_cliente', ''),
+            nome_cliente=justificativa.get('nome_cliente', ''),
+            qtd_saldo=justificativa.get('qtd_saldo', 0),
+            valor_saldo=justificativa.get('valor_saldo', 0),
+            peso_saldo=justificativa.get('peso_saldo', 0),
+            pallet_saldo=justificativa.get('pallet_saldo', 0),
+            tipo_standby=tipo_standby,
+            data_limite_standby=data_limite_standby,
+            proximo_alerta=proximo_alerta,
+            criado_por=usuario
+        )
+        db.session.add(saldo)
+        db.session.commit()
+        
+        logger.info(f"✅ Saldo standby criado: {justificativa.get('num_pedido')}-{justificativa.get('cod_produto')} Tipo: {tipo_standby}")
+        
+        return {
+            'success': True,
+            'standby_id': saldo.id,
+            'tipo_standby': tipo_standby,
+            'data_limite': data_limite_standby.strftime('%d/%m/%Y') if data_limite_standby else None,
+            'proximo_alerta': proximo_alerta.strftime('%d/%m/%Y')
+        }
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao criar saldo standby: {str(e)}")
+        return {
+            'success': False,
+            'error': f'Erro ao criar standby: {str(e)}',
+            'standby_id': None,
+            'data_limite': None
+        }
 
 def _buscar_faturamentos_parciais_pendentes():
     """
-    🔍 BUSCA FATURAMENTOS PARCIAIS QUE PRECISAM DE JUSTIFICATIVA
+    🔍 BUSCAR FATURAMENTOS PARCIAIS PENDENTES - FUNÇÃO 5 IMPLEMENTADA
     
-    LÓGICA:
-    - Compara qtd_separada vs qtd_faturada nos embarques
-    - Identifica diferenças que precisam justificativa
+    FUNCIONALIDADE:
+    - Lista faturamentos que precisam de justificativa
+    - Identifica separações com faturamento incompleto
+    - Prioriza por antiguidade e valor
     """
-    
-    # TODO: Implementar lógica de detecção automática
-    # Por enquanto retorna lista vazia
-    return []
-
-def _gerar_novo_lote_id():
-    """Gera ID único para novo lote de separação"""
-    import uuid
-    return f"LOTE_{uuid.uuid4().hex[:8].upper()}"
+    try:
+        from sqlalchemy import inspect, and_, or_
+        
+        logger.info("🔍 Buscando faturamentos parciais pendentes")
+        
+        # 🔍 1. VERIFICAR SE TABELAS EXISTEM
+        inspector = inspect(db.engine)
+        if not inspector.has_table('inconsistencia_faturamento'):
+            return []
+        
+        # 📊 2. BUSCAR INCONSISTÊNCIAS NÃO RESOLVIDAS
+        inconsistencias = InconsistenciaFaturamento.query.filter(
+            InconsistenciaFaturamento.resolvida == False,
+            or_(
+                InconsistenciaFaturamento.tipo == 'FATURAMENTO_EXCEDE_SALDO',
+                InconsistenciaFaturamento.tipo == 'FATURAMENTO_PARCIAL'
+            )
+        ).order_by(InconsistenciaFaturamento.detectada_em.desc()).limit(50).all()
+        
+        pendentes = []
+        
+        for inconsistencia in inconsistencias:
+            try:
+                # 🔍 3. BUSCAR DADOS COMPLEMENTARES
+                item_carteira = CarteiraPrincipal.query.filter_by(
+                    num_pedido=inconsistencia.num_pedido,
+                    cod_produto=inconsistencia.cod_produto
+                ).first()
+                
+                if item_carteira:
+                    pendente = {
+                        'inconsistencia_id': inconsistencia.id,
+                        'numero_nf': inconsistencia.numero_nf,
+                        'num_pedido': inconsistencia.num_pedido,
+                        'cod_produto': inconsistencia.cod_produto,
+                        'nome_produto': item_carteira.nome_produto,
+                        'qtd_faturada': float(inconsistencia.qtd_faturada or 0),
+                        'saldo_disponivel': float(inconsistencia.saldo_disponivel or 0),
+                        'qtd_excesso': float(inconsistencia.qtd_excesso or 0),
+                        'valor_impacto': float(inconsistencia.qtd_excesso or 0) * float(item_carteira.preco_produto_pedido or 0),
+                        'cliente': item_carteira.raz_social_red or item_carteira.raz_social,
+                        'vendedor': item_carteira.vendedor,
+                        'data_deteccao': inconsistencia.detectada_em.strftime('%d/%m/%Y %H:%M'),
+                        'antiguidade_dias': (agora_brasil() - inconsistencia.detectada_em).days,
+                        'tipo_inconsistencia': inconsistencia.tipo,
+                        'lote_separacao_id': item_carteira.lote_separacao_id
+                    }
+                    pendentes.append(pendente)
+                    
+            except Exception as e:
+                logger.error(f"❌ Erro ao processar inconsistência {inconsistencia.id}: {str(e)}")
+                continue
+        
+        # 📊 4. ORDENAR POR PRIORIDADE (ANTIGUIDADE + VALOR)
+        pendentes.sort(key=lambda x: (x['antiguidade_dias'], -x['valor_impacto']), reverse=True)
+        
+        logger.info(f"✅ Encontrados {len(pendentes)} faturamentos parciais pendentes")
+        return pendentes
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar faturamentos pendentes: {str(e)}")
+        return []
 
 def _sincronizar_carteira_copia(usuario):
     """
-    🔄 SINCRONIZA CARTEIRA PRINCIPAL → CÓPIA
+    🔄 SINCRONIZAÇÃO CARTEIRA CÓPIA - FUNÇÃO 6 IMPLEMENTADA
     
-    TODO: IMPLEMENTAR APÓS MIGRAÇÃO COMPLETA DOS MODELOS
+    FUNCIONALIDADE:
+    - Sincroniza CarteiraPrincipal com CarteiraCopia
+    - Recalcula saldos e baixas automáticas
+    - Detecta divergências entre sistemas
     """
     try:
-        logger.info("🔄 Sincronização CarteiraCopia (aguardando migração)")
-        # TODO: Implementar após migração estar funcional
-        return True
+        from sqlalchemy import inspect
+        
+        logger.info(f"🔄 Sincronizando carteira cópia por {usuario}")
+        
+        # 🔍 1. VERIFICAR SE TABELAS EXISTEM
+        inspector = inspect(db.engine)
+        if not inspector.has_table('carteira_copia'):
+            return {
+                'success': False,
+                'error': 'Tabela carteira_copia não existe',
+                'sincronizados': 0,
+                'criados': 0,
+                'divergencias': 0
+            }
+        
+        # 📊 2. CONTADORES
+        sincronizados = 0
+        criados = 0
+        divergencias_detectadas = 0
+        
+        # 🔄 3. PROCESSAR TODOS OS ITENS DA CARTEIRA PRINCIPAL
+        itens_principais = CarteiraPrincipal.query.filter_by(ativo=True).all()
+        
+        for item_principal in itens_principais:
+            try:
+                # 🔍 3.1 BUSCAR ITEM NA CÓPIA
+                item_copia = CarteiraCopia.query.filter_by(
+                    num_pedido=item_principal.num_pedido,
+                    cod_produto=item_principal.cod_produto
+                ).first()
+                
+                if not item_copia:
+                    # 🆕 3.2 CRIAR NOVO ITEM NA CÓPIA
+                    item_copia = CarteiraCopia(
+                        num_pedido=item_principal.num_pedido,
+                        cod_produto=item_principal.cod_produto,
+                        cnpj_cpf=item_principal.cnpj_cpf,
+                        raz_social=item_principal.raz_social,
+                        raz_social_red=item_principal.raz_social_red,
+                        nome_produto=item_principal.nome_produto,
+                        qtd_produto_pedido=item_principal.qtd_produto_pedido,
+                        qtd_saldo_produto_pedido=item_principal.qtd_saldo_produto_pedido,
+                        preco_produto_pedido=item_principal.preco_produto_pedido,
+                        vendedor=item_principal.vendedor,
+                        baixa_produto_pedido=0,  # Inicia sem baixa
+                        created_by=usuario
+                    )
+                    db.session.add(item_copia)
+                    criados += 1
+                    
+                else:
+                    # 🔄 3.3 SINCRONIZAR DADOS MESTRES
+                    campos_alterados = []
+                    
+                    if item_copia.qtd_produto_pedido != item_principal.qtd_produto_pedido:
+                        item_copia.qtd_produto_pedido = item_principal.qtd_produto_pedido
+                        campos_alterados.append('qtd_produto_pedido')
+                    
+                    if item_copia.preco_produto_pedido != item_principal.preco_produto_pedido:
+                        item_copia.preco_produto_pedido = item_principal.preco_produto_pedido
+                        campos_alterados.append('preco_produto_pedido')
+                    
+                    if item_copia.raz_social != item_principal.raz_social:
+                        item_copia.raz_social = item_principal.raz_social
+                        campos_alterados.append('raz_social')
+                    
+                    if campos_alterados:
+                        item_copia.updated_by = usuario
+                        item_copia.updated_at = agora_brasil()
+                        sincronizados += 1
+                
+                # 📊 3.4 RECALCULAR SALDO NA CÓPIA
+                item_copia.recalcular_saldo()
+                
+                # ⚠️ 3.5 DETECTAR DIVERGÊNCIAS
+                saldo_principal = float(item_principal.qtd_saldo_produto_pedido or 0)
+                saldo_calculado_copia = float(item_copia.qtd_saldo_produto_calculado or 0)
+                
+                if abs(saldo_principal - saldo_calculado_copia) > 0.001:  # Tolerância para decimais
+                    logger.warning(f"⚠️ Divergência detectada {item_principal.num_pedido}-{item_principal.cod_produto}: Principal={saldo_principal}, Cópia={saldo_calculado_copia}")
+                    divergencias_detectadas += 1
+                    
+                    # 🔄 CRIAR CONTROLE DE DIVERGÊNCIA
+                    if inspector.has_table('controle_cruzado_separacao'):
+                        controle = ControleCruzadoSeparacao(
+                            lote_separacao_id=item_principal.lote_separacao_id or 0,
+                            num_pedido=item_principal.num_pedido,
+                            cod_produto=item_principal.cod_produto,
+                            qtd_separada_original=item_principal.qtd_produto_pedido,
+                            qtd_baixada_carteira=item_copia.baixa_produto_pedido,
+                            diferenca_detectada=saldo_principal - saldo_calculado_copia,
+                            status_controle='DIFERENCA',
+                            motivo_diferenca='SINCRONIZACAO_AUTOMATICA'
+                        )
+                        db.session.add(controle)
+                
+            except Exception as e:
+                logger.error(f"❌ Erro ao sincronizar item {item_principal.num_pedido}-{item_principal.cod_produto}: {str(e)}")
+                continue
+        
+        # 💾 4. SALVAR TODAS AS ALTERAÇÕES
+        db.session.commit()
+        
+        logger.info(f"✅ Sincronização concluída: {sincronizados} atualizados, {criados} criados, {divergencias_detectadas} divergências")
+        
+        return {
+            'success': True,
+            'sincronizados': sincronizados,
+            'criados': criados,
+            'divergencias': divergencias_detectadas,
+            'total_processados': len(itens_principais)
+        }
         
     except Exception as e:
-        logger.error(f"Erro na sincronização da carteira cópia: {str(e)}")
-        return False
+        db.session.rollback()
+        logger.error(f"❌ Erro na sincronização da carteira cópia: {str(e)}")
+        return {
+            'success': False,
+            'error': f'Erro na sincronização: {str(e)}',
+            'sincronizados': 0,
+            'criados': 0,
+            'divergencias': 0
+        }
 
 def _processar_vinculacao_automatica(usuario):
     """
@@ -2172,3 +2622,8 @@ def _detectar_alteracoes_importantes(item_antes, item_depois):
         'requer_aprovacao': requer_aprovacao,
         'total_alteracoes': len(alteracoes_importantes)
     }
+
+def _gerar_novo_lote_id():
+    """Gera ID único para novo lote de separação"""
+    import uuid
+    return f"LOTE_{uuid.uuid4().hex[:8].upper()}"
