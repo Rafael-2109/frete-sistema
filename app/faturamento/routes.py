@@ -561,6 +561,7 @@ def listar_faturamento_produtos():
     incoterm = request.args.get('incoterm', '')
     data_de = request.args.get('data_de', '')
     data_ate = request.args.get('data_ate', '')
+    municipio = request.args.get('municipio', '')
     
     # Paginação
     try:
@@ -588,7 +589,9 @@ def listar_faturamento_produtos():
                 query = query.filter(FaturamentoProduto.estado == estado)
             if incoterm:
                 query = query.filter(FaturamentoProduto.incoterm.ilike(f'%{incoterm}%'))
-                
+            if municipio:
+                query = query.filter(FaturamentoProduto.municipio.ilike(f'%{municipio}%'))
+
             # Filtros de data
             if data_de:
                 try:
@@ -652,6 +655,7 @@ def listar_faturamento_produtos():
                          cod_produto=cod_produto,
                          vendedor=vendedor,
                          estado=estado,
+                         municipio=municipio,
                          incoterm=incoterm,
                          data_de=data_de,
                          data_ate=data_ate,

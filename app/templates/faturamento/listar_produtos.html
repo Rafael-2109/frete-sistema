@@ -178,13 +178,14 @@
                                         <th style="width: 100px;">Data Fatura</th>
                                         <th>Cliente</th>
                                         <th style="width: 50px;">UF</th>
+                                        <th style="width: 120px;">Municipio</th>
                                         <th style="width: 80px;">Código</th>
-                                        <th style="width: 280px;">Nome Produto</th>
+                                        <th style="width: 380px;">Nome Produto</th>
                                         <th style="width: 70px;">Qtd</th>
                                         <th style="width: 90px;">Preço Unit.</th>
                                         <th style="width: 100px;">Valor Total</th>
                                         <th style="width: 200px;">Vendedor</th>
-                                        <th style="width: 70px;">Incoterm</th>
+                                        <th style="width: 100px;">Incoterm</th>
                                         <th style="width: 100px;">Origem</th>
                                     </tr>
                                 </thead>
@@ -204,6 +205,14 @@
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if produto.municipio %}
+                                            <span class="fw-bold text-secondary">{{ produto.municipio }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+
                                         </td>
                                         <td>
                                             <code>{{ produto.cod_produto }}</code>
