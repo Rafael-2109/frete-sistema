@@ -174,25 +174,25 @@
                             <table class="table table-sm table-hover" id="tabelaProdutos">
                                 <thead class="thead-light">
                                     <tr>
-                                        <th>NF</th>
-                                        <th>Data Fatura</th>
+                                        <th style="width: 80px;">NF</th>
+                                        <th style="width: 100px;">Data Fatura</th>
                                         <th>Cliente</th>
-                                        <th>UF</th>
-                                        <th>Código Produto</th>
-                                        <th>Nome Produto</th>
-                                        <th>Qtd</th>
-                                        <th>Preço Unit.</th>
-                                        <th>Valor Total</th>
-                                        <th>Vendedor</th>
-                                        <th>Incoterm</th>
-                                        <th>Origem</th>
+                                        <th style="width: 50px;">UF</th>
+                                        <th style="width: 80px;">Código</th>
+                                        <th style="width: 280px;">Nome Produto</th>
+                                        <th style="width: 70px;">Qtd</th>
+                                        <th style="width: 90px;">Preço Unit.</th>
+                                        <th style="width: 100px;">Valor Total</th>
+                                        <th style="width: 200px;">Vendedor</th>
+                                        <th style="width: 70px;">Incoterm</th>
+                                        <th style="width: 100px;">Origem</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for produto in produtos %}
                                     <tr>
                                         <td>
-                                            <strong>{{ produto.numero_nf }}</strong>
+                                            <strong>{{ produto.numero_nf | string | replace('.0', '') }}</strong>
                                         </td>
                                         <td>{{ produto.data_fatura | formatar_data_brasil }}</td>
                                         <td>
@@ -227,7 +227,7 @@
                                         </td>
                                         <td>
                                             {% if produto.incoterm %}
-                                                <span class="fw-bold text-info">{{ produto.incoterm }}</span>
+                                                <small class="fw-bold text-info">{{ produto.incoterm[:8] }}{% if produto.incoterm|length > 8 %}...{% endif %}</small>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
