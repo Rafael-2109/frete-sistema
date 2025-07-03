@@ -337,7 +337,11 @@ def importar_carteira():
         for i in range(min(3, len(df))):
             logger.info(f"  Linha {i}: {dict(df.iloc[i])}")
         
-        df = df.rename(columns=mapeamento_colunas)
+        # 🔄 INVERTER DICIONÁRIO PARA O RENAME (Excel → Sistema)
+        mapeamento_rename = {v: k for k, v in mapeamento_colunas.items()}
+        logger.info(f"🔄 DEBUG: Dicionário de rename: {mapeamento_rename}")
+        
+        df = df.rename(columns=mapeamento_rename)
         logger.info(f"✅ Todas as colunas obrigatórias + {len(mapeamento_colunas) - 5} opcionais mapeadas com sucesso")
         
         logger.info(f"🔍 DEBUG: Colunas APÓS rename: {list(df.columns)}")
