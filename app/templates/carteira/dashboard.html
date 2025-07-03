@@ -232,9 +232,10 @@
     </div>
     {% endif %}
 
-    <!-- Top Vendedores -->
-    {% if top_vendedores %}
+    <!-- Ações Rápidas - SEMPRE VISÍVEL -->
     <div class="row mb-4">
+        <!-- Top Vendedores (apenas se houver dados) -->
+        {% if top_vendedores %}
         <div class="col-lg-6">
             <div class="card shadow">
                 <div class="card-header py-3">
@@ -255,8 +256,10 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
-        <div class="col-lg-6">
+        <!-- Ações Rápidas sempre visíveis -->
+        <div class="{% if top_vendedores %}col-lg-6{% else %}col-lg-8 mx-auto{% endif %}">
             <div class="card shadow">
                 <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-primary">
@@ -293,7 +296,6 @@
             </div>
         </div>
     </div>
-    {% endif %}
 
     <!-- Sistema não inicializado -->
     {% if not sistema_inicializado %}

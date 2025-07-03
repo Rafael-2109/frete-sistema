@@ -60,7 +60,7 @@
                     </h6>
                 </div>
                 <div class="card-body">
-                    <form method="POST" enctype="multipart/form-data" id="form-importacao">
+                    <form method="POST" enctype="multipart/form-data" id="form-importacao" action="{{ url_for('carteira.importar_carteira') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         
                         <div class="mb-4">
@@ -199,15 +199,27 @@
 
 <script>
 document.getElementById('form-importacao').addEventListener('submit', function(e) {
-    const arquivo = document.getElementById('arquivo').files[0];
+    console.log('🔍 DEBUG: Formulário sendo submetido');
+    
+    const arquivoInput = document.getElementById('arquivo');
+    const arquivo = arquivoInput.files[0];
     const btnImportar = document.getElementById('btn-importar');
     const btnProcessando = document.getElementById('btn-processando');
     
-    if (!arquivo) {
+    console.log('🔍 DEBUG: Input arquivo:', arquivoInput);
+    console.log('🔍 DEBUG: Arquivo selecionado:', arquivo);
+    console.log('🔍 DEBUG: Files length:', arquivoInput.files.length);
+    
+    if (!arquivo || arquivoInput.files.length === 0) {
         e.preventDefault();
-        alert('Por favor, selecione um arquivo');
+        console.error('❌ Nenhum arquivo selecionado');
+        alert('Por favor, selecione um arquivo antes de enviar');
         return false;
     }
+    
+    console.log('🔍 DEBUG: Nome do arquivo:', arquivo.name);
+    console.log('🔍 DEBUG: Tamanho do arquivo:', arquivo.size);
+    console.log('🔍 DEBUG: Tipo do arquivo:', arquivo.type);
     
     // Validar tamanho (16MB)
     if (arquivo.size > 16 * 1024 * 1024) {
@@ -227,12 +239,17 @@ document.getElementById('form-importacao').addEventListener('submit', function(e
         return false;
     }
     
+    console.log('✅ Validação passou, enviando formulário...');
+    
     // Mostrar loading
     btnImportar.classList.add('d-none');
     btnProcessando.classList.remove('d-none');
     
     // Desabilitar form
-    document.getElementById('arquivo').disabled = true;
+    arquivoInput.disabled = true;
+    
+    // Permitir envio
+    return true;
 });
 
 // Preview do arquivo selecionado
