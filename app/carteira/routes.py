@@ -359,6 +359,16 @@ def importar_carteira():
         # 🔄 PROCESSAR IMPORTAÇÃO
         resultado = _processar_importacao_carteira_inteligente(df, current_user.nome)
         
+        # 🤖 APLICAR AUTOMAÇÃO INTELIGENTE DA CARTEIRA (SE IMPORTAÇÃO FOI SUCESSO)
+        '''resultado_automacao = {'resumo': 'Automação desabilitada'}
+        if resultado['sucesso'] and resultado['total_processados'] > 0:
+            try:
+                resultado_automacao = _aplicar_automacao_carteira_completa(current_user.nome)
+                logger.info(f"🤖 Automação aplicada: {resultado_automacao.get('resumo', 'Sem detalhes')}")
+            except Exception as e:
+                logger.warning(f"⚠️ Erro na automação (importação foi bem-sucedida): {str(e)}")
+                resultado_automacao = {'resumo': f'Erro na automação: {str(e)[:50]}...'}'''
+        
         if resultado['sucesso']:
             flash(f"""
             Importação concluída com sucesso! ✅
@@ -366,6 +376,7 @@ def importar_carteira():
             🔄 Existentes atualizados: {resultado['existentes_atualizados']}
             🛡️ Dados preservados: {resultado['dados_preservados']}
             📋 Total processados: {resultado['total_processados']}
+            #🤖 Automação: {resultado_automacao['resumo']}
             """, 'success')
         else:
             flash(f'Erro na importação: {resultado["erro"]}', 'error')
@@ -3428,3 +3439,156 @@ def escolher_separacao(inconsistencia_id):
         logger.error(f"❌ Erro ao escolher separação: {str(e)}")
         flash(f'Erro ao carregar opções de separação: {str(e)}', 'error')
         return redirect(url_for('carteira.listar_inconsistencias'))
+
+def _aplicar_automacao_carteira_completa(usuario):
+    """
+    🤖 ORQUESTRAÇÃO COMPLETA DA AUTOMAÇÃO DA CARTEIRA
+    
+    FLUXO COMPLETO:
+    1. Classificação automática por urgência e tipo de cliente
+    2. Análise de estoque D0-D28 com detecção de rupturas  
+    3. Otimização de agendamentos com geração de protocolos
+    4. Formação inteligente de cargas considerando lote_separacao_id
+    5. Detecção de inconsistências e justificativas para cargas parciais
+    """
+    try:
+        from .automation import ClassificationEngine, StockAnalyzer, SchedulingOptimizer, CargoOptimizer
+        
+        logger.info("🤖 Iniciando automação completa da carteira")
+        
+        # 📊 BUSCAR ITENS ATIVOS DA CARTEIRA
+        itens_carteira = CarteiraPrincipal.query.filter_by(ativo=True).all()
+        
+        if not itens_carteira:
+            return {
+                'sucesso': True,
+                'resumo': 'Nenhum item para processar',
+                'detalhes': {'total_itens': 0}
+            }
+        
+        resultado_geral = {
+            'total_itens_processados': len(itens_carteira),
+            'classificacoes': {'tempo': 0, 'estatisticas': {}},
+            'analises_estoque': {'tempo': 0, 'estatisticas': {}},
+            'agendamentos': {'tempo': 0, 'estatisticas': {}},
+            'cargas': {'tempo': 0, 'estatisticas': {}},
+            'tempo_total': 0
+        }
+        
+        inicio_geral = datetime.now()
+        
+        # 🎯 ETAPA 1: CLASSIFICAÇÃO AUTOMÁTICA
+        logger.info("🎯 Etapa 1: Classificação automática")
+        classification_engine = ClassificationEngine()
+        resultado_classificacao = classification_engine.classificar_lote(itens_carteira)
+        
+        if not resultado_classificacao['sucesso']:
+            return {
+                'sucesso': False,
+                'erro': 'Falha na classificação automática',
+                'resumo': 'Erro na classificação'
+            }
+        
+        classificacoes = resultado_classificacao['resultados']
+        resultado_geral['classificacoes'] = resultado_classificacao['estatisticas']
+        
+        # 📊 ETAPA 2: ANÁLISE DE ESTOQUE
+        logger.info("📊 Etapa 2: Análise de estoque D0-D28")
+        stock_analyzer = StockAnalyzer()
+        resultado_estoque = stock_analyzer.analisar_lote_estoque(itens_carteira)
+        
+        if not resultado_estoque['sucesso']:
+            return {
+                'sucesso': False,
+                'erro': 'Falha na análise de estoque',
+                'resumo': 'Erro na análise de estoque'
+            }
+        
+        analises_estoque = resultado_estoque['resultados']
+        resultado_geral['analises_estoque'] = resultado_estoque['estatisticas']
+        
+        # 📅 ETAPA 3: OTIMIZAÇÃO DE AGENDAMENTOS
+        logger.info("📅 Etapa 3: Otimização de agendamentos")
+        scheduling_optimizer = SchedulingOptimizer()
+        resultado_agendamentos = scheduling_optimizer.otimizar_lote_agendamentos(
+            itens_carteira, classificacoes, analises_estoque
+        )
+        
+        if not resultado_agendamentos['sucesso']:
+            return {
+                'sucesso': False,
+                'erro': 'Falha na otimização de agendamentos',
+                'resumo': 'Erro nos agendamentos'
+            }
+        
+        agendamentos = resultado_agendamentos['resultados']
+        resultado_geral['agendamentos'] = resultado_agendamentos['estatisticas']
+        
+        # 🚛 ETAPA 4: OTIMIZAÇÃO DE CARGAS
+        logger.info("🚛 Etapa 4: Formação inteligente de cargas")
+        cargo_optimizer = CargoOptimizer()
+        resultado_cargas = cargo_optimizer.otimizar_formacao_carga(
+            itens_carteira, classificacoes, analises_estoque, agendamentos
+        )
+        
+        if not resultado_cargas['sucesso']:
+            return {
+                'sucesso': False,
+                'erro': 'Falha na otimização de cargas',
+                'resumo': 'Erro na formação de cargas'
+            }
+        
+        resultado_geral['cargas'] = resultado_cargas['estatisticas']
+        
+        # ⏱️ TEMPO TOTAL
+        fim_geral = datetime.now()
+        resultado_geral['tempo_total'] = (fim_geral - inicio_geral).total_seconds()
+        
+        # 📊 RESUMO EXECUTIVO
+        resumo_partes = []
+        
+        # Classificações
+        if resultado_geral['classificacoes'].get('por_urgencia', {}).get('CRITICO', 0) > 0:
+            resumo_partes.append(f"{resultado_geral['classificacoes']['por_urgencia']['CRITICO']} críticos")
+        
+        # Estoque
+        disp_hoje = resultado_geral['analises_estoque'].get('disponibilidade_geral', {}).get('disponiveis_hoje', 0)
+        if disp_hoje > 0:
+            resumo_partes.append(f"{disp_hoje} disponíveis hoje")
+        
+        # Agendamentos
+        protocolos = resultado_geral['agendamentos'].get('protocolos_gerados', 0)
+        if protocolos > 0:
+            resumo_partes.append(f"{protocolos} protocolos gerados")
+        
+        # Cargas
+        total_cargas = resultado_geral['cargas'].get('total_cargas', 0)
+        if total_cargas > 0:
+            ocupacao = resultado_geral['cargas'].get('ocupacao_media', 0)
+            resumo_partes.append(f"{total_cargas} cargas ({ocupacao:.1f}% ocupação)")
+        
+        resumo_final = f"{len(itens_carteira)} itens: " + ", ".join(resumo_partes) if resumo_partes else f"{len(itens_carteira)} itens processados"
+        
+        logger.info(f"✅ Automação concluída em {resultado_geral['tempo_total']:.2f}s: {resumo_final}")
+        
+        return {
+            'sucesso': True,
+            'resumo': resumo_final,
+            'detalhes': resultado_geral,
+            'tempo_processamento': resultado_geral['tempo_total']
+        }
+        
+    except ImportError as e:
+        logger.error(f"❌ Erro de importação na automação: {str(e)}")
+        return {
+            'sucesso': False,
+            'erro': f'Módulos de automação não disponíveis: {str(e)}',
+            'resumo': 'Automação indisponível'
+        }
+    except Exception as e:
+        logger.error(f"❌ Erro na automação da carteira: {str(e)}")
+        return {
+            'sucesso': False,
+            'erro': str(e),
+            'resumo': f'Erro na automação: {str(e)[:30]}...'
+        }
