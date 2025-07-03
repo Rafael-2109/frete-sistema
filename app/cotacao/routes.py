@@ -912,7 +912,7 @@ def fechar_frete():
         
         if redespacho_ativo:
             # Para redespacho, sempre busca ICMS de Guarulhos/SP
-            cidade_destino = Cidade.query.filter_by(nome='GUARULHOS', uf='SP').first()
+            cidade_destino = Cidade.query.filter_by(nome='Guarulhos', uf='SP').first()
             if not cidade_destino:
                 cidade_destino = Cidade.query.filter_by(nome='Guarulhos', uf='SP').first()
             if cidade_destino:
@@ -1543,14 +1543,14 @@ def otimizar():
                 
                 # ✅ ALTERAÇÃO PRINCIPAL: Força UF=SP e cidade=Guarulhos
                 pedido_copia.cod_uf = 'SP'
-                pedido_copia.nome_cidade = 'GUARULHOS'
+                pedido_copia.nome_cidade = 'Guarulhos'
                 pedido_copia.rota = 'CIF'  # Força para não ser RED
                 
                 # Normaliza dados do pedido convertido
                 LocalizacaoService.normalizar_dados_pedido(pedido_copia)
                 
                 pedidos_para_calculo.append(pedido_copia)
-                print(f"[DEBUG] 📍 Convertido: {pedido_original.num_pedido} → GUARULHOS/SP")
+                print(f"[DEBUG] 📍 Convertido: {pedido_original.num_pedido} → Guarulhos/SP")
         
         # ✅ CÁLCULO CORRETO DAS OTIMIZAÇÕES
         otimizacoes = {
@@ -2071,7 +2071,7 @@ def calcular_frete_otimizacao_conservadora(pedidos):
         for pedido in pedidos:
             # Considera conversão RED -> Guarulhos/SP
             if hasattr(pedido, 'rota') and pedido.rota and pedido.rota.upper().strip() == 'RED':
-                cidade = buscar_cidade_unificada(cidade='GUARULHOS', uf='SP', rota='RED')
+                cidade = buscar_cidade_unificada(cidade='Guarulhos', uf='SP', rota='RED')
             else:
                 cidade = buscar_cidade_unificada(pedido=pedido)
             
@@ -2306,10 +2306,10 @@ def redespachar():
             
             # ✅ ALTERAÇÃO PRINCIPAL: Força UF=SP e cidade=Guarulhos
             pedido_copia.cod_uf = 'SP'
-            pedido_copia.nome_cidade = 'GUARULHOS'
+            pedido_copia.nome_cidade = 'Guarulhos'
             pedido_copia.rota = 'CIF'  # Força para não ser RED (que vai para Guarulhos)
             
-            print(f"[DEBUG] 📍 Pedido {pedido_original.num_pedido}: {pedido_original.nome_cidade}/{pedido_original.cod_uf} → GUARULHOS/SP")
+            print(f"[DEBUG] 📍 Pedido {pedido_original.num_pedido}: {pedido_original.nome_cidade}/{pedido_original.cod_uf} → Guarulhos/SP")
             
             pedidos_redespacho.append(pedido_copia)
 
@@ -2343,7 +2343,7 @@ def redespachar():
                 'data_pedido': pedido.data_pedido.strftime('%Y-%m-%d') if pedido.data_pedido else None,
                 'cnpj_cpf': pedido.cnpj_cpf,
                 'raz_social_red': pedido.raz_social_red,
-                'nome_cidade': 'GUARULHOS',  # Mostra cidade alterada
+                'nome_cidade': 'Guarulhos',  # Mostra cidade alterada
                 'cod_uf': 'SP',  # Mostra UF alterada
                 'valor_saldo_total': float(pedido.valor_saldo_total) if pedido.valor_saldo_total else 0,
                 'pallet_total': float(pedido.pallet_total) if pedido.pallet_total else 0,
@@ -2426,7 +2426,7 @@ def redespachar():
                 opcao_completa = {
                     'cnpj': cnpj,
                     'razao_social': pedidos_cnpj[0].raz_social_red if pedidos_cnpj else '',
-                    'cidade': 'GUARULHOS',  # Cidade alterada
+                    'cidade': 'Guarulhos',  # Cidade alterada
                     'uf': 'SP',  # UF alterada
                     'peso_grupo': peso_grupo,
                     'valor_grupo': valor_grupo,
@@ -2457,7 +2457,7 @@ def redespachar():
                         'valor_liquido': opcao.get('valor_liquido', 0),
                         'frete_kg': opcao.get('valor_liquido', 0) / peso_grupo if peso_grupo > 0 else 0,
                         'peso_grupo': peso_grupo,
-                        'cidade': 'GUARULHOS',  # Cidade alterada
+                        'cidade': 'Guarulhos',  # Cidade alterada
                         'uf': 'SP',  # UF alterada
                         'razao_social': pedidos_cnpj[0].raz_social_red if pedidos_cnpj else ''
                     }
@@ -2558,7 +2558,7 @@ def redespachar_sao_paulo():
             
             # ✅ ALTERAÇÃO PRINCIPAL: Força UF=SP e cidade=São Paulo
             pedido_copia.cod_uf = 'SP'
-            pedido_copia.nome_cidade = 'SAO PAULO'
+            pedido_copia.nome_cidade = 'São Paulo'
             pedido_copia.rota = 'CIF'  # Força para não ser RED
             
             print(f"[DEBUG] 📍 Pedido {pedido_original.num_pedido}: {pedido_original.nome_cidade}/{pedido_original.cod_uf} → SÃO PAULO/SP")
@@ -2595,7 +2595,7 @@ def redespachar_sao_paulo():
                 'data_pedido': pedido.data_pedido.strftime('%Y-%m-%d') if pedido.data_pedido else None,
                 'cnpj_cpf': pedido.cnpj_cpf,
                 'raz_social_red': pedido.raz_social_red,
-                'nome_cidade': 'SAO PAULO',  # Mostra cidade alterada
+                'nome_cidade': 'São Paulo',  # Mostra cidade alterada
                 'cod_uf': 'SP',  # Mostra UF alterada
                 'valor_saldo_total': float(pedido.valor_saldo_total) if pedido.valor_saldo_total else 0,
                 'pallet_total': float(pedido.pallet_total) if pedido.pallet_total else 0,
@@ -2764,7 +2764,7 @@ def redespachar_sao_paulo():
             peso_total=peso_total,
             todos_mesmo_uf=todos_mesmo_uf,
             redespacho=True,  # Flag para o template saber que é redespacho
-            cidade_redespacho='SAO PAULO'  # Flag específica da cidade
+            cidade_redespacho='São Paulo'  # Flag específica da cidade
         )
 
     except Exception as e:

@@ -28,6 +28,9 @@ def calcular_fretes_possiveis(
     """
     Calcula fretes possíveis (por transportadora / tabela) para UM conjunto de peso + valor.
     
+    ✅ NOVA LÓGICA: Para carga DIRETA, aplica "tabela mais cara" por transportadora/modalidade
+    Para outras cargas, mantém comportamento original
+    
     LÓGICA CORRETA:
     1. frete_minimo_peso = peso mínimo para cálculo (não é valor)
     2. Calcular frete líquido SEM ICMS
@@ -114,6 +117,13 @@ def calcular_fretes_possiveis(
     if not atendimentos:
         return []
     
+    # ✅ NOVA LÓGICA: Para carga DIRETA, agrupa por transportadora/modalidade para aplicar "tabela mais cara"
+    if tipo_carga == "DIRETA":
+        grupos_direta = {}  # (transportadora_id, modalidade) -> [opcoes_calculadas]
+        
+        print(f"[DEBUG] 🎯 CARGA DIRETA: Aplicando lógica de tabela mais cara")
+        
+    # Processa todas as transportadoras
     for at in atendimentos:        
         # 🏢 GRUPO EMPRESARIAL: Busca tabelas em todas as transportadoras do grupo
         grupo_ids = grupo_service.obter_transportadoras_grupo(at.transportadora_id)
@@ -143,12 +153,12 @@ def calcular_fretes_possiveis(
                 if capacidade and peso_final > capacidade:
                     continue
 
-            # ✅ CORREÇÃO COMPLETA: Aplicar lógica correta do cálculo
+            # ✅ LÓGICA ÚNICA DE CÁLCULO DE FRETE
             
-            # 1. CORREÇÃO: Determinar peso para cálculo (peso real vs peso mínimo)
+            # 1. Determinar peso para cálculo (peso real vs peso mínimo)
             peso_para_calculo = max(peso_final, tf.frete_minimo_peso or 0)
             
-            # 2. CORREÇÃO: Calcular frete base SOMANDO peso + valor
+            # 2. Calcular frete base SOMANDO peso + valor
             frete_peso = (tf.valor_kg or 0) * peso_para_calculo
             frete_valor = (tf.percentual_valor or 0) * valor_final / 100
             frete_base = frete_peso + frete_valor  # SOMA peso + valor
@@ -171,10 +181,10 @@ def calcular_fretes_possiveis(
             # 6. Total líquido SEM ICMS
             frete_liquido = frete_base + gris + adv + rca + pedagio + fixos
             
-            # 7. CORREÇÃO: Aplicar frete mínimo VALOR no frete líquido
+            # 7. Aplicar frete mínimo VALOR no frete líquido
             frete_final_liquido = max(frete_liquido, tf.frete_minimo_valor or 0)
             
-            # 8. CORREÇÃO: Aplicar ICMS apenas no final (se não estiver incluso)
+            # 8. Aplicar ICMS apenas no final (se não estiver incluso)
             frete_com_icms = frete_final_liquido
             if not tf.icms_incluso:
                 if cidade_icms < 1 and cidade_icms > 0:
@@ -188,33 +198,60 @@ def calcular_fretes_possiveis(
                     if cidade_icms < 1 and cidade_icms > 0:
                         valor_liquido = frete_com_icms * (1 - cidade_icms)
                 
-                resultados.append(
-                    {
-                        "transportadora": at.transportadora.razao_social,
-                        "transportadora_id": at.transportadora.id,
-                        "modalidade": tf.modalidade,
-                        "tipo_carga": tf.tipo_carga,
-                        "valor_total": round(frete_com_icms, 2),
-                        "valor_liquido": round(valor_liquido, 2),
-                        "nome_tabela": at.nome_tabela,
-                        # ✅ CORREÇÃO: Adiciona TODOS os dados da tabela
-                        "valor_kg": tf.valor_kg or 0,
-                        "percentual_valor": tf.percentual_valor or 0,
-                        "frete_minimo_valor": tf.frete_minimo_valor or 0,
-                        "frete_minimo_peso": tf.frete_minimo_peso or 0,
-                        "percentual_gris": tf.percentual_gris or 0,
-                        "pedagio_por_100kg": tf.pedagio_por_100kg or 0,
-                        "valor_tas": tf.valor_tas or 0,
-                        "percentual_adv": tf.percentual_adv or 0,
-                        "percentual_rca": tf.percentual_rca or 0,
-                        "valor_despacho": tf.valor_despacho or 0,
-                        "valor_cte": tf.valor_cte or 0,
-                        "icms_incluso": tf.icms_incluso or False,
-                        "icms_destino": cidade_icms,
-                        "cidade": cidade_nome,
-                        "uf": cidade_uf
-                    }
-                )
+                # Cria opção calculada
+                opcao_calculada = {
+                    "transportadora": at.transportadora.razao_social,
+                    "transportadora_id": at.transportadora.id,
+                    "modalidade": tf.modalidade,
+                    "tipo_carga": tf.tipo_carga,
+                    "valor_total": round(frete_com_icms, 2),
+                    "valor_liquido": round(valor_liquido, 2),
+                    "nome_tabela": at.nome_tabela,
+                    # ✅ CORREÇÃO: Adiciona TODOS os dados da tabela
+                    "valor_kg": tf.valor_kg or 0,
+                    "percentual_valor": tf.percentual_valor or 0,
+                    "frete_minimo_valor": tf.frete_minimo_valor or 0,
+                    "frete_minimo_peso": tf.frete_minimo_peso or 0,
+                    "percentual_gris": tf.percentual_gris or 0,
+                    "pedagio_por_100kg": tf.pedagio_por_100kg or 0,
+                    "valor_tas": tf.valor_tas or 0,
+                    "percentual_adv": tf.percentual_adv or 0,
+                    "percentual_rca": tf.percentual_rca or 0,
+                    "valor_despacho": tf.valor_despacho or 0,
+                    "valor_cte": tf.valor_cte or 0,
+                    "icms_incluso": tf.icms_incluso or False,
+                    "icms_destino": cidade_icms,
+                    "cidade": cidade_nome,
+                    "uf": cidade_uf
+                }
+                
+                # ✅ APLICA LÓGICA ESPECÍFICA POR TIPO DE CARGA
+                if tipo_carga == "DIRETA":
+                    # 🎯 CARGA DIRETA: Agrupa por (transportadora_id, modalidade)
+                    chave_grupo = (at.transportadora_id, tf.modalidade)
+                    
+                    if chave_grupo not in grupos_direta:
+                        grupos_direta[chave_grupo] = []
+                    grupos_direta[chave_grupo].append(opcao_calculada)
+                else:
+                    # ✅ OUTRAS CARGAS: Adiciona diretamente
+                    resultados.append(opcao_calculada)
+
+    # ✅ APLICA LÓGICA "TABELA MAIS CARA" apenas para carga DIRETA
+    if tipo_carga == "DIRETA":
+        print(f"[DEBUG] 🎯 CARGA DIRETA: Processando {len(grupos_direta)} grupos")
+        
+        for (transportadora_id, modalidade), opcoes in grupos_direta.items():
+            if len(opcoes) > 1:
+                # Tem mais de uma tabela para esta combinação -> escolhe a MAIS CARA
+                opcao_mais_cara = max(opcoes, key=lambda x: x['valor_liquido'])
+                print(f"[DEBUG] 📊 Transp {transportadora_id} {modalidade}: {len(opcoes)} tabelas → escolhida mais cara: {opcao_mais_cara['nome_tabela']} (R${opcao_mais_cara['valor_liquido']:.2f})")
+                opcao_mais_cara['nome_tabela'] = f"{opcao_mais_cara['nome_tabela']} (MAIS CARA)"
+                resultados.append(opcao_mais_cara)
+            else:
+                # Apenas uma tabela para esta combinação
+                print(f"[DEBUG] 📋 Transp {transportadora_id} {modalidade}: 1 tabela única: {opcoes[0]['nome_tabela']} (R${opcoes[0]['valor_liquido']:.2f})")
+                resultados.append(opcoes[0])
 
     return resultados
 
