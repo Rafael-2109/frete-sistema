@@ -233,42 +233,78 @@ def importar_carteira():
         # ✅ VALIDAR E CORRIGIR COLUNAS OBRIGATÓRIAS
         colunas_obrigatorias = ['num_pedido', 'cod_produto', 'nome_produto', 'qtd_produto_pedido', 'cnpj_cpf']
         
-        # 🔍 MAPEAR COLUNAS SIMILARES (busca inteligente)
+        # 🧠 MAPEAMENTO INTELIGENTE AVANÇADO - SUPORTE A ESTRUTURAS HIERÁRQUICAS
         mapeamento_colunas = {}
         colunas_encontradas = list(df.columns)
         
+        # 📋 MAPEAMENTO OFICIAL BASEADO NOS ARQUIVOS PROJETO_CARTEIRA
+        # Baseado em: projeto_carteira/OK - 1- carteira de pedidos.csv e OK - 2- copia da carteira de pedidos.csv
+        mapeamentos_oficiais = {
+            # 🔑 CAMPOS OBRIGATÓRIOS - CONFORME ARQUIVO 1
+            'num_pedido': 'Referência do pedido/Referência do pedido',
+            'cod_produto': 'Produto/Referência interna', 
+            'nome_produto': 'Produto/Nome',
+            'qtd_produto_pedido': 'Quantidade',
+            'cnpj_cpf': 'Referência do pedido/Cliente/CNPJ',
+            
+            # 👥 DADOS DO CLIENTE
+            'raz_social': 'Referência do pedido/Cliente/Razão Social',
+            'raz_social_red': 'Referência do pedido/Cliente/Nome',
+            'municipio': 'Referência do pedido/Cliente/Município/Nome do Município',
+            'estado': 'Referência do pedido/Cliente/Estado/Código do estado',
+            'vendedor': 'Referência do pedido/Vendedor',
+            'equipe_vendas': 'Referência do pedido/Equipe de vendas',
+            
+            # 📦 DADOS DO PRODUTO
+            'unid_medida_produto': 'Produto/Unidade de medida',
+            'embalagem_produto': 'Produto/Categoria de produtos/Nome',
+            'materia_prima_produto': 'Produto/Categoria de produtos/Categoria primária/Nome', 
+            'categoria_produto': 'Produto/Categoria de produtos/Categoria primária/Categoria primária/Nome',
+            
+            # 📊 QUANTIDADES E VALORES
+            'qtd_saldo_produto_pedido': 'Saldo',
+            'qtd_cancelada_produto_pedido': 'Cancelado',
+            'preco_produto_pedido': 'Preço unitário',
+            
+            # 📋 DADOS DO PEDIDO
+            'pedido_cliente': 'Referência do pedido/Pedido de Compra do Cliente',
+            'data_pedido': 'Referência do pedido/Data de criação',
+            'data_atual_pedido': 'Referência do pedido/Data do pedido',
+            'status_pedido': 'Referência do pedido/Status',
+            
+            # 💳 CONDIÇÕES COMERCIAIS
+            'cond_pgto_pedido': 'Referência do pedido/Condições de pagamento',
+            'forma_pgto_pedido': 'Referência do pedido/Forma de Pagamento',
+            'observ_ped_1': 'Referência do pedido/Notas para Expedição',
+            'incoterm': 'Referência do pedido/Incoterm',
+            'metodo_entrega_pedido': 'Referência do pedido/Método de entrega',
+            'data_entrega_pedido': 'Referência do pedido/Data de entrega',
+            'cliente_nec_agendamento': 'Referência do pedido/Cliente/Agendamento',
+            
+            # 🏠 ENDEREÇO DE ENTREGA
+            'cnpj_endereco_ent': 'Referência do pedido/Endereço de entrega/CNPJ',
+            'empresa_endereco_ent': 'Referência do pedido/Endereço de entrega/O próprio',
+            'cep_endereco_ent': 'Referência do pedido/Endereço de entrega/CEP',
+            'nome_cidade': 'Referência do pedido/Endereço de entrega/Município',  # Tratamento especial para extrair cidade e UF
+            'bairro_endereco_ent': 'Referência do pedido/Endereço de entrega/Bairro',
+            'rua_endereco_ent': 'Referência do pedido/Endereço de entrega/Endereço',
+            'endereco_ent': 'Referência do pedido/Endereço de entrega/Número',
+            'telefone_endereco_ent': 'Referência do pedido/Endereço de entrega/Telefone',
+            
+            # 📊 CAMPOS ESPECIAIS DA CÓPIA (ARQUIVO 2)
+            'baixa_produto_pedido': 'Baixa pelo faturamento',
+            'qtd_saldo_produto_calculado': 'Saldo calculado'
+        }
+        
+        # 🎯 MAPEAMENTO EXATO - SOMENTE NOMES OFICIAIS DOS ARQUIVOS DE ESPECIFICAÇÃO
         for col_obrigatoria in colunas_obrigatorias:
-            # Buscar coluna exata primeiro
-            if col_obrigatoria in colunas_encontradas:
-                mapeamento_colunas[col_obrigatoria] = col_obrigatoria
-                continue
-            
-            # Buscar variações comuns
-            variações = [
-                col_obrigatoria.upper(),
-                col_obrigatoria.lower(),
-                col_obrigatoria.replace('_', ' '),
-                col_obrigatoria.replace('_', ''),
-                col_obrigatoria.title()
-            ]
-            
-            encontrada = False
-            for variacao in variações:
-                if variacao in colunas_encontradas:
-                    mapeamento_colunas[col_obrigatoria] = variacao
-                    logger.info(f"🔧 Mapeamento: '{col_obrigatoria}' → '{variacao}'")
-                    encontrada = True
-                    break
-            
-            # Buscar por similaridade (contém)
-            if not encontrada:
-                for col_arquivo in colunas_encontradas:
-                    if (col_obrigatoria.replace('_', '').lower() in col_arquivo.replace('_', '').replace(' ', '').lower() or
-                        col_arquivo.replace('_', '').replace(' ', '').lower() in col_obrigatoria.replace('_', '').lower()):
-                        mapeamento_colunas[col_obrigatoria] = col_arquivo
-                        logger.info(f"🔧 Mapeamento similar: '{col_obrigatoria}' → '{col_arquivo}'")
-                        encontrada = True
-                        break
+            if col_obrigatoria in mapeamentos_oficiais:
+                coluna_excel_esperada = mapeamentos_oficiais[col_obrigatoria]
+                if coluna_excel_esperada in colunas_encontradas:
+                    mapeamento_colunas[col_obrigatoria] = coluna_excel_esperada
+                    logger.info(f"✅ Mapeamento EXATO: '{col_obrigatoria}' → '{coluna_excel_esperada}'")
+                else:
+                    logger.warning(f"❌ Coluna obrigatória '{col_obrigatoria}' não encontrada. Esperado: '{coluna_excel_esperada}'")
         
         # 📋 VERIFICAR QUAIS AINDA ESTÃO FALTANDO
         colunas_faltantes = [col for col in colunas_obrigatorias if col not in mapeamento_colunas]
@@ -287,9 +323,20 @@ def importar_carteira():
             """, 'error')
             return redirect(request.url)
         
+        # 🔄 MAPEAR TODOS OS CAMPOS OPCIONAIS DO DICIONÁRIO OFICIAL
+        campos_opcionais = [field for field in mapeamentos_oficiais.keys() if field not in colunas_obrigatorias]
+        
+        # Mapear campos opcionais
+        for campo_opcional in campos_opcionais:
+            if campo_opcional not in mapeamento_colunas:  # Só se ainda não foi mapeado
+                coluna_excel = mapeamentos_oficiais[campo_opcional]
+                if coluna_excel in colunas_encontradas:
+                    mapeamento_colunas[campo_opcional] = coluna_excel
+                    logger.info(f"➕ Campo OPCIONAL mapeado: '{campo_opcional}' → '{coluna_excel}'")
+        
         # 🔄 RENOMEAR COLUNAS PARA PADRÃO DO SISTEMA
         df = df.rename(columns=mapeamento_colunas)
-        logger.info(f"✅ Todas as colunas obrigatórias mapeadas com sucesso")
+        logger.info(f"✅ Todas as colunas obrigatórias + {len(mapeamento_colunas) - 5} opcionais mapeadas com sucesso")
         
         # 🔄 PROCESSAR FORMATOS ANTES DA IMPORTAÇÃO
         df = _processar_formatos_brasileiros(df)
