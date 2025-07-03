@@ -222,13 +222,74 @@ def importar_carteira():
             flash(f'Erro ao ler arquivo: {str(e)}', 'error')
             return redirect(request.url)
         
-        # ✅ VALIDAR COLUNAS OBRIGATÓRIAS
+        # 🔍 DEBUG: Mostrar colunas encontradas no arquivo
+        logger.info(f"🔍 DEBUG: Total de colunas encontradas: {len(df.columns)}")
+        logger.info(f"🔍 DEBUG: Colunas no arquivo: {list(df.columns)}")
+        
+        # 🧹 LIMPAR NOMES DAS COLUNAS (espaços, quebras de linha)
+        df.columns = df.columns.str.strip().str.replace('\n', '').str.replace('\r', '')
+        logger.info(f"🔍 DEBUG: Colunas após limpeza: {list(df.columns)}")
+        
+        # ✅ VALIDAR E CORRIGIR COLUNAS OBRIGATÓRIAS
         colunas_obrigatorias = ['num_pedido', 'cod_produto', 'nome_produto', 'qtd_produto_pedido', 'cnpj_cpf']
-        colunas_faltantes = [col for col in colunas_obrigatorias if col not in df.columns]
+        
+        # 🔍 MAPEAR COLUNAS SIMILARES (busca inteligente)
+        mapeamento_colunas = {}
+        colunas_encontradas = list(df.columns)
+        
+        for col_obrigatoria in colunas_obrigatorias:
+            # Buscar coluna exata primeiro
+            if col_obrigatoria in colunas_encontradas:
+                mapeamento_colunas[col_obrigatoria] = col_obrigatoria
+                continue
+            
+            # Buscar variações comuns
+            variações = [
+                col_obrigatoria.upper(),
+                col_obrigatoria.lower(),
+                col_obrigatoria.replace('_', ' '),
+                col_obrigatoria.replace('_', ''),
+                col_obrigatoria.title()
+            ]
+            
+            encontrada = False
+            for variacao in variações:
+                if variacao in colunas_encontradas:
+                    mapeamento_colunas[col_obrigatoria] = variacao
+                    logger.info(f"🔧 Mapeamento: '{col_obrigatoria}' → '{variacao}'")
+                    encontrada = True
+                    break
+            
+            # Buscar por similaridade (contém)
+            if not encontrada:
+                for col_arquivo in colunas_encontradas:
+                    if (col_obrigatoria.replace('_', '').lower() in col_arquivo.replace('_', '').replace(' ', '').lower() or
+                        col_arquivo.replace('_', '').replace(' ', '').lower() in col_obrigatoria.replace('_', '').lower()):
+                        mapeamento_colunas[col_obrigatoria] = col_arquivo
+                        logger.info(f"🔧 Mapeamento similar: '{col_obrigatoria}' → '{col_arquivo}'")
+                        encontrada = True
+                        break
+        
+        # 📋 VERIFICAR QUAIS AINDA ESTÃO FALTANDO
+        colunas_faltantes = [col for col in colunas_obrigatorias if col not in mapeamento_colunas]
         
         if colunas_faltantes:
-            flash(f'Colunas obrigatórias faltando: {", ".join(colunas_faltantes)}', 'error')
+            flash(f"""
+            ❌ Colunas obrigatórias não encontradas: {", ".join(colunas_faltantes)}
+            
+            📋 Colunas disponíveis no arquivo ({len(df.columns)}):
+            {", ".join(df.columns)}
+            
+            ✅ Colunas mapeadas com sucesso:
+            {", ".join([f"{k} → {v}" for k, v in mapeamento_colunas.items()])}
+            
+            💡 Certifique-se que o arquivo contém as colunas: {", ".join(colunas_faltantes)}
+            """, 'error')
             return redirect(request.url)
+        
+        # 🔄 RENOMEAR COLUNAS PARA PADRÃO DO SISTEMA
+        df = df.rename(columns=mapeamento_colunas)
+        logger.info(f"✅ Todas as colunas obrigatórias mapeadas com sucesso")
         
         # 🔄 PROCESSAR FORMATOS ANTES DA IMPORTAÇÃO
         df = _processar_formatos_brasileiros(df)
