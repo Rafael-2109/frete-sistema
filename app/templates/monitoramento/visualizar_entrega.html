@@ -173,6 +173,7 @@
               <strong>{{ ev.tipo_evento|capitalize }}</strong> | Motorista: {{ ev.motorista }}<br>
               Chegada: {{ ev.data_hora_chegada }} | Saída: {{ ev.data_hora_saida }}<br>
               {{ ev.observacao|safe }}
+              <em>Criado por {{ ev.criado_por }} em {{ ev.criado_em | formatar_data_hora_brasil }}</em>
             </div>
             <form method="POST" action="{{ url_for('monitoramento.excluir_evento', evento_id=ev.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -192,7 +193,9 @@
           </div>
           {{ form_evento.motorista.label }} {{ form_evento.motorista(class="form-control mt-2") }}
           {{ form_evento.tipo_evento.label }} {{ form_evento.tipo_evento(class="form-select mt-2") }}
-          {{ form_evento.observacao.label }} {{ form_evento.observacao(class="form-control mt-2") }}
+          {{ form_evento.observacao.label }} {{ form_evento.observacao(class="form-control mt-2") }}  
+          {{ form_evento.criado_por.label }} {{ form_evento.criado_por(class="form-control mt-2") }}
+          {{ form_evento.criado_em.label }} {{ form_evento.criado_em(class="form-control mt-2") }}
           {{ form_evento.submit_evento(class="btn btn-primary mt-3") }}
         </form>
       </div>
@@ -234,8 +237,8 @@
             <div class="d-flex justify-content-between align-items-start">
               <div class="flex-grow-1">
                 <div class="d-flex align-items-center gap-2 mb-2">
-                  <strong>{{ ag.data_agendada | formatar_data_hora_brasil if ag.data_agendada else '-' }} 
-                  {{ ag.hora_agendada | formatar_hora_brasil if ag.hora_agendada else '' }}</strong>
+                  <strong>Data:</strong> {{ ag.data_agendada | formatar_data_hora_brasil if ag.data_agendada else '-' }} 
+                  <strong>Hora:</strong> {{ ag.hora_agendada | formatar_hora_brasil if ag.hora_agendada else '' }}<br>
                   {% if ag.status == 'confirmado' %}
                     <span class="badge bg-primary">✅ Confirmado</span>
                   {% else %}
@@ -244,6 +247,8 @@
                 </div>
                 
                 <div>
+                  <strong>Data:</strong> {{ ag.data_agendada | formatar_data_hora_brasil if ag.data_agendada else '-' }} 
+                  <strong>Hora:</strong> {{ ag.hora_agendada | formatar_hora_brasil if ag.hora_agendada else '' }}<br>
                   <strong>Forma:</strong> {{ ag.forma_agendamento }} | <strong>Contato:</strong> {{ ag.contato_agendamento }}<br>
                   <strong>Protocolo:</strong> {{ ag.protocolo_agendamento | formatar_protocolo }}<br>
                   <strong>Motivo:</strong> {{ ag.motivo or '-' }}<br>

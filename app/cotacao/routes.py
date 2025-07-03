@@ -2779,8 +2779,6 @@ def incluir_em_embarque():
     """
     Inclui os pedidos da cotação atual em um embarque existente
     """
-    from app.embarques.models import Embarque, EmbarqueItem
-    from app.pedidos.models import Pedido
     
     embarque_id = request.form.get('embarque_id')
     tipo_carga = request.form.get('tipo_carga')
@@ -2825,6 +2823,7 @@ def incluir_em_embarque():
         
         # Adicionar pedidos ao embarque
         pedidos_adicionados = 0
+        pedidos_nao_incluidos = []
         
         for pedido in pedidos:
             # Verificar se o pedido já não está em outro embarque ativo
@@ -2874,25 +2873,67 @@ def incluir_em_embarque():
                 cidade_destino=cidade_formatada  # ✅ CORREÇÃO: Usa cidade normalizada
             )
             
-            # Para carga fracionada, copiar dados da tabela do embarque
-            if tipo_carga == 'FRACIONADA' and embarque.itens_ativos:
-                item_referencia = embarque.itens_ativos[0]
-                novo_item.modalidade = item_referencia.modalidade
-                novo_item.tabela_nome_tabela = item_referencia.tabela_nome_tabela
-                novo_item.tabela_valor_kg = item_referencia.tabela_valor_kg
-                novo_item.tabela_percentual_valor = item_referencia.tabela_percentual_valor
-                novo_item.tabela_frete_minimo_valor = item_referencia.tabela_frete_minimo_valor
-                novo_item.tabela_frete_minimo_peso = item_referencia.tabela_frete_minimo_peso
-                novo_item.tabela_icms = item_referencia.tabela_icms
-                novo_item.tabela_percentual_gris = item_referencia.tabela_percentual_gris
-                novo_item.tabela_pedagio_por_100kg = item_referencia.tabela_pedagio_por_100kg
-                novo_item.tabela_valor_tas = item_referencia.tabela_valor_tas
-                novo_item.tabela_percentual_adv = item_referencia.tabela_percentual_adv
-                novo_item.tabela_percentual_rca = item_referencia.tabela_percentual_rca
-                novo_item.tabela_valor_despacho = item_referencia.tabela_valor_despacho
-                novo_item.tabela_valor_cte = item_referencia.tabela_valor_cte
-                novo_item.tabela_icms_incluso = item_referencia.tabela_icms_incluso
-                novo_item.icms_destino = item_referencia.icms_destino
+            # ✅ CORREÇÃO: Para carga fracionada, OBRIGATÓRIO usar dados da tabela DA COTAÇÃO da mesma transportadora
+            dados_tabela_encontrados = False
+            
+            if tipo_carga == 'FRACIONADA':
+                # Busca os dados da tabela calculados na cotação para o CNPJ ESPECÍFICO deste pedido
+                resultados = session.get('resultados', {})
+                
+                if 'fracionadas' in resultados and pedido.cnpj_cpf in resultados['fracionadas']:
+                    opcoes_cnpj = resultados['fracionadas'][pedido.cnpj_cpf]
+                    
+                    # ✅ CORREÇÃO: Busca a MELHOR OPÇÃO DA COTAÇÃO para este CNPJ específico da mesma transportadora
+                    melhor_opcao_cnpj = None
+                    melhor_valor_kg = float('inf')
+                    
+                    # Encontra a melhor opção (mais barata) deste CNPJ para a transportadora do embarque
+                    for opcao in opcoes_cnpj:
+                        if opcao.get('transportadora_id') == embarque.transportadora_id:
+                            # Calcula valor por kg para comparação
+                            peso_total_cnpj = sum(p.peso_total or 0 for p in pedidos if p.cnpj_cpf == pedido.cnpj_cpf)
+                            valor_kg = opcao.get('valor_liquido', 0) / peso_total_cnpj if peso_total_cnpj > 0 else float('inf')
+                            
+                            if valor_kg < melhor_valor_kg:
+                                melhor_valor_kg = valor_kg
+                                melhor_opcao_cnpj = opcao
+                    
+                    # Se encontrou a melhor opção deste CNPJ para a transportadora
+                    if melhor_opcao_cnpj:
+                        # Usa os dados da tabela específica da cotação deste CNPJ
+                        novo_item.modalidade = melhor_opcao_cnpj.get('modalidade', 'FRETE PESO')
+                        novo_item.tabela_nome_tabela = melhor_opcao_cnpj.get('nome_tabela', '')
+                        novo_item.tabela_valor_kg = melhor_opcao_cnpj.get('valor_kg', 0)
+                        novo_item.tabela_percentual_valor = melhor_opcao_cnpj.get('percentual_valor', 0)
+                        novo_item.tabela_frete_minimo_valor = melhor_opcao_cnpj.get('frete_minimo_valor', 0)
+                        novo_item.tabela_frete_minimo_peso = melhor_opcao_cnpj.get('frete_minimo_peso', 0)
+                        novo_item.tabela_percentual_gris = melhor_opcao_cnpj.get('percentual_gris', 0)
+                        novo_item.tabela_pedagio_por_100kg = melhor_opcao_cnpj.get('pedagio_por_100kg', 0)
+                        novo_item.tabela_valor_tas = melhor_opcao_cnpj.get('valor_tas', 0)
+                        novo_item.tabela_percentual_adv = melhor_opcao_cnpj.get('percentual_adv', 0)
+                        novo_item.tabela_percentual_rca = melhor_opcao_cnpj.get('percentual_rca', 0)
+                        novo_item.tabela_valor_despacho = melhor_opcao_cnpj.get('valor_despacho', 0)
+                        novo_item.tabela_valor_cte = melhor_opcao_cnpj.get('valor_cte', 0)
+                        novo_item.tabela_icms_incluso = melhor_opcao_cnpj.get('icms_incluso', False)
+                        novo_item.icms_destino = melhor_opcao_cnpj.get('icms_destino', 0)
+                        
+                        dados_tabela_encontrados = True
+                        print(f"[DEBUG] ✅ Usando tabela ESPECÍFICA da cotação para CNPJ {pedido.cnpj_cpf} (Pedido {pedido.num_pedido}): {melhor_opcao_cnpj.get('nome_tabela')} - R${melhor_valor_kg:.2f}/kg")
+                
+                # ❌ SE NÃO ENCONTROU DADOS DA COTAÇÃO PARA A MESMA TRANSPORTADORA, NÃO INCLUI O PEDIDO
+                if not dados_tabela_encontrados:
+                    motivo = f"Sem dados de cotação para transportadora {embarque.transportadora.razao_social}"
+                    pedidos_nao_incluidos.append({
+                        'num_pedido': pedido.num_pedido,
+                        'cnpj': pedido.cnpj_cpf,
+                        'cliente': pedido.raz_social_red,
+                        'motivo': motivo
+                    })
+                    print(f"[DEBUG] ❌ PEDIDO NÃO INCLUÍDO: {pedido.num_pedido} - {motivo}")
+                    continue  # Pula para o próximo pedido
+            else:
+                # Para carga direta, sempre considera como encontrado (usa dados do embarque)
+                dados_tabela_encontrados = True
             
             db.session.add(novo_item)
             
@@ -2914,16 +2955,30 @@ def incluir_em_embarque():
         
         db.session.commit()
         
+        # ✅ FEEDBACK DETALHADO SOBRE PEDIDOS INCLUÍDOS E NÃO INCLUÍDOS
         if pedidos_adicionados > 0:
             flash(f'✅ {pedidos_adicionados} pedido(s) adicionado(s) ao embarque #{embarque.numero} com sucesso!', 'success')
             
-            # Limpar sessão da cotação
-            if 'cotacao_pedidos' in session:
+            # Mostrar pedidos que NÃO foram incluídos (se houver)
+            if pedidos_nao_incluidos:
+                flash(f'⚠️ {len(pedidos_nao_incluidos)} pedido(s) NÃO foram incluídos:', 'warning')
+                for pedido_nao_incluido in pedidos_nao_incluidos:
+                    flash(f'❌ Pedido {pedido_nao_incluido["num_pedido"]} ({pedido_nao_incluido["cliente"][:30]}): {pedido_nao_incluido["motivo"]}', 'danger')
+            
+            # Limpar sessão da cotação apenas se todos foram incluídos
+            if not pedidos_nao_incluidos and 'cotacao_pedidos' in session:
                 del session['cotacao_pedidos']
             
             return redirect(url_for('embarques.visualizar_embarque', id=embarque.id))
         else:
             flash('❌ Nenhum pedido foi adicionado ao embarque.', 'warning')
+            
+            # Explicar por que nenhum pedido foi incluído
+            if pedidos_nao_incluidos:
+                flash('💡 Motivos pelos quais os pedidos não foram incluídos:', 'info')
+                for pedido_nao_incluido in pedidos_nao_incluidos:
+                    flash(f'❌ Pedido {pedido_nao_incluido["num_pedido"]}: {pedido_nao_incluido["motivo"]}', 'danger')
+            
             return redirect(url_for('cotacao.tela_cotacao'))
             
     except Exception as e:
