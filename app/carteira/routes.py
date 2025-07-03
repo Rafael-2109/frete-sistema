@@ -291,9 +291,6 @@ def importar_carteira():
             'endereco_ent': 'Referência do pedido/Endereço de entrega/Número',
             'telefone_endereco_ent': 'Referência do pedido/Endereço de entrega/Telefone',
             
-            # 📊 CAMPOS ESPECIAIS DA CÓPIA (ARQUIVO 2)
-            'baixa_produto_pedido': 'Baixa pelo faturamento',
-            'qtd_saldo_produto_calculado': 'Saldo calculado'
         }
         
         # 🎯 MAPEAMENTO EXATO - SOMENTE NOMES OFICIAIS DOS ARQUIVOS DE ESPECIFICAÇÃO
@@ -335,11 +332,25 @@ def importar_carteira():
                     logger.info(f"➕ Campo OPCIONAL mapeado: '{campo_opcional}' → '{coluna_excel}'")
         
         # 🔄 RENOMEAR COLUNAS PARA PADRÃO DO SISTEMA
+        logger.info(f"🔍 DEBUG: Colunas ANTES do rename: {list(df.columns)}")
+        logger.info(f"🔍 DEBUG: Primeiras 3 linhas ANTES do rename:")
+        for i in range(min(3, len(df))):
+            logger.info(f"  Linha {i}: {dict(df.iloc[i])}")
+        
         df = df.rename(columns=mapeamento_colunas)
         logger.info(f"✅ Todas as colunas obrigatórias + {len(mapeamento_colunas) - 5} opcionais mapeadas com sucesso")
         
+        logger.info(f"🔍 DEBUG: Colunas APÓS rename: {list(df.columns)}")
+        logger.info(f"🔍 DEBUG: Primeiras 3 linhas APÓS rename:")
+        for i in range(min(3, len(df))):
+            logger.info(f"  Linha {i}: {dict(df.iloc[i])}")
+        
         # 🔄 PROCESSAR FORMATOS ANTES DA IMPORTAÇÃO
         df = _processar_formatos_brasileiros(df)
+        
+        logger.info(f"🔍 DEBUG: Primeiras 3 linhas APÓS _processar_formatos_brasileiros:")
+        for i in range(min(3, len(df))):
+            logger.info(f"  Linha {i}: {dict(df.iloc[i])}")
         
         # 🔄 PROCESSAR IMPORTAÇÃO
         resultado = _processar_importacao_carteira_inteligente(df, current_user.nome)
@@ -1181,11 +1192,23 @@ def _processar_importacao_carteira_inteligente(df, usuario):
         # 🔄 PROCESSAR CADA LINHA
         for index, row in df.iterrows():
             try:
-                num_pedido = str(row.get('num_pedido', '')).strip()
-                cod_produto = str(row.get('cod_produto', '')).strip()
+                # 🔍 DEBUG DETALHADO DOS VALORES
+                num_pedido_raw = row.get('num_pedido')
+                cod_produto_raw = row.get('cod_produto')
                 
-                if not num_pedido or not cod_produto:
-                    logger.warning(f"Linha {index}: num_pedido ou cod_produto vazio")
+                logger.info(f"🔍 DEBUG Linha {index}: num_pedido_raw='{num_pedido_raw}' (tipo: {type(num_pedido_raw)})")
+                logger.info(f"🔍 DEBUG Linha {index}: cod_produto_raw='{cod_produto_raw}' (tipo: {type(cod_produto_raw)})")
+                
+                # Verificar se os valores são NaN, None ou vazios
+                num_pedido = str(num_pedido_raw).strip() if pd.notna(num_pedido_raw) and num_pedido_raw is not None else ''
+                cod_produto = str(cod_produto_raw).strip() if pd.notna(cod_produto_raw) and cod_produto_raw is not None else ''
+                
+                logger.info(f"🔍 DEBUG Linha {index}: num_pedido_processado='{num_pedido}', cod_produto_processado='{cod_produto}'")
+                
+                if not num_pedido or not cod_produto or num_pedido == 'nan' or cod_produto == 'nan':
+                    logger.warning(f"❌ Linha {index}: campos obrigatórios vazios/inválidos - num_pedido='{num_pedido}', cod_produto='{cod_produto}'")
+                    # Mostrar todos os valores da linha para debug
+                    logger.info(f"🔍 DEBUG Linha {index} - Todos os valores: {dict(row)}")
                     continue
                 
                 # 🔍 BUSCAR ITEM EXISTENTE
