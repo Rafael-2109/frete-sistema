@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+
+{% block title %}Inconsistências de Faturamento{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-exclamation-triangle text-warning"></i> 
+            Inconsistências de Faturamento
+        </h1>
+        <div>
+            <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Resumo das Inconsistências -->
+    {% if inconsistencias and inconsistencias.items %}
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Total Inconsistências
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ inconsistencias.total }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Pendentes
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ inconsistencias.items|selectattr('status', 'equalto', 'PENDENTE')|list|length }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clock fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Resolvidas
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ inconsistencias.items|selectattr('status', 'equalto', 'RESOLVIDA')|list|length }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Ignoradas
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ inconsistencias.items|selectattr('status', 'equalto', 'IGNORADA')|list|length }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-eye-slash fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Lista de Inconsistências -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-list"></i> Inconsistências Detectadas
+            </h6>
+        </div>
+        <div class="card-body">
+            {% if inconsistencias and inconsistencias.items %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>NF</th>
+                            <th>Pedido</th>
+                            <th>Produto</th>
+                            <th>Tipo</th>
+                            <th class="text-right">Qtd Faturada</th>
+                            <th class="text-right">Saldo Disponível</th>
+                            <th class="text-right">Excesso</th>
+                            <th>Status</th>
+                            <th>Detectada em</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for inconsistencia in inconsistencias.items %}
+                        <tr>
+                            <td><strong>{{ inconsistencia.numero_nf }}</strong></td>
+                            <td>{{ inconsistencia.num_pedido or '-' }}</td>
+                            <td>
+                                <strong>{{ inconsistencia.cod_produto }}</strong>
+                                {% if inconsistencia.nome_produto %}
+                                <br><small class="text-muted">{{ inconsistencia.nome_produto[:30] }}...</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if inconsistencia.tipo == 'FATURAMENTO_SEM_PEDIDO' %}
+                                <span class="badge badge-danger">Sem Pedido</span>
+                                {% elif inconsistencia.tipo == 'FATURAMENTO_EXCEDE_SALDO' %}
+                                <span class="badge badge-warning">Excede Saldo</span>
+                                {% else %}
+                                <span class="badge badge-secondary">{{ inconsistencia.tipo }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">{{ inconsistencia.qtd_faturada|numero_br }}</td>
+                            <td class="text-right">{{ inconsistencia.saldo_disponivel|numero_br }}</td>
+                            <td class="text-right">
+                                {% if inconsistencia.qtd_excesso > 0 %}
+                                <span class="text-danger">{{ inconsistencia.qtd_excesso|numero_br }}</span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if inconsistencia.status == 'PENDENTE' %}
+                                <span class="badge badge-warning">
+                                    <i class="fas fa-clock"></i> Pendente
+                                </span>
+                                {% elif inconsistencia.status == 'RESOLVIDA' %}
+                                <span class="badge badge-success">
+                                    <i class="fas fa-check"></i> Resolvida
+                                </span>
+                                {% elif inconsistencia.status == 'IGNORADA' %}
+                                <span class="badge badge-info">
+                                    <i class="fas fa-eye-slash"></i> Ignorada
+                                </span>
+                                {% else %}
+                                <span class="badge badge-secondary">{{ inconsistencia.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ inconsistencia.created_at|formatar_data_brasil }}</small>
+                                {% if inconsistencia.detectada_por %}
+                                <br><small class="text-muted">por {{ inconsistencia.detectada_por }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if inconsistencia.status == 'PENDENTE' %}
+                                <div class="dropdown">
+                                    <button class="btn btn-primary btn-sm dropdown-toggle" type="button" 
+                                            data-bs-toggle="dropdown">
+                                        <i class="fas fa-cog"></i> Resolver
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li>
+                                            <a class="dropdown-item" href="#" 
+                                               onclick="abrirModalResolucao({{ inconsistencia.id }}, 'aceitar_automatico', '{{ inconsistencia.numero_nf }}')">
+                                                <i class="fas fa-check text-success"></i> Baixa Automática
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="#" 
+                                               onclick="abrirModalCancelamento({{ inconsistencia.id }}, '{{ inconsistencia.numero_nf }}')">
+                                                <i class="fas fa-ban text-danger"></i> Cancelar NF
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item" href="#" 
+                                               onclick="abrirModalResolucao({{ inconsistencia.id }}, 'ignorar', '{{ inconsistencia.numero_nf }}')">
+                                                <i class="fas fa-eye-slash text-muted"></i> Ignorar
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                                {% else %}
+                                <small class="text-muted">
+                                    {% if inconsistencia.resolvida_em %}
+                                    {{ inconsistencia.resolvida_em|formatar_data_brasil }}
+                                    {% if inconsistencia.resolvida_por %}
+                                    <br>por {{ inconsistencia.resolvida_por }}
+                                    {% endif %}
+                                    {% endif %}
+                                </small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if inconsistencias.pages > 1 %}
+            <nav aria-label="Paginação">
+                <ul class="pagination justify-content-center">
+                    {% if inconsistencias.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('carteira.listar_inconsistencias', page=inconsistencias.prev_num) }}">
+                            <i class="fas fa-angle-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for page_num in inconsistencias.iter_pages() %}
+                        {% if page_num %}
+                            {% if page_num != inconsistencias.page %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('carteira.listar_inconsistencias', page=page_num) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if inconsistencias.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('carteira.listar_inconsistencias', page=inconsistencias.next_num) }}">
+                            <i class="fas fa-angle-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                <h5>Nenhuma Inconsistência Encontrada</h5>
+                <p class="text-muted">Não há inconsistências de faturamento no momento.</p>
+                <a href="{{ url_for('carteira.index') }}" class="btn btn-primary">
+                    <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Resolução Simples -->
+<div class="modal fade" id="modalResolucao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="formResolucao">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="acao" id="acaoResolucao">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="tituloResolucao">
+                        <i class="fas fa-cog"></i> Resolver Inconsistência
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="descricaoAcao"></p>
+                    <div class="form-group">
+                        <label for="observacao">Observação:</label>
+                        <textarea class="form-control" name="observacao" id="observacao" rows="3" 
+                                  placeholder="Justifique a ação tomada..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnConfirmarResolucao">Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Cancelamento de NF -->
+<div class="modal fade" id="modalCancelamento" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="formCancelamento">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="acao" value="cancelar_nf">
+                <input type="hidden" name="numero_nf" id="nfCancelamento">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-ban"></i> Cancelar Nota Fiscal
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>ATENÇÃO!</strong> Esta ação irá:
+                        <ul class="mb-0 mt-2">
+                            <li><strong>EXCLUIR</strong> todas as movimentações de estoque relacionadas à NF</li>
+                            <li><strong>REVERTER</strong> as baixas na carteira de pedidos</li>
+                            <li>Marcar a inconsistência como resolvida</li>
+                        </ul>
+                    </div>
+                    
+                    <p>Confirme o número da NF que será cancelada:</p>
+                    <div class="form-group mb-3">
+                        <label for="nfConfirmacao">Número da NF:</label>
+                        <input type="text" class="form-control" id="nfConfirmacao" readonly>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="motivoCancelamento">Motivo do cancelamento: <span class="text-danger">*</span></label>
+                        <select class="form-control" name="motivo_cancelamento" id="motivoCancelamento" required>
+                            <option value="">Selecione o motivo...</option>
+                            <option value="ERRO_DIGITACAO">Erro de digitação</option>
+                            <option value="CANCELAMENTO_CLIENTE">Cancelamento pelo cliente</option>
+                            <option value="PRODUTO_INDISPONIVEL">Produto indisponível</option>
+                            <option value="ERRO_SISTEMA">Erro do sistema</option>
+                            <option value="DUPLICACAO">NF duplicada</option>
+                            <option value="OUTROS">Outros motivos</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="observacoesCancelamento">Observações adicionais:</label>
+                        <textarea class="form-control" name="observacoes" id="observacoesCancelamento" rows="3" 
+                                  placeholder="Detalhe o motivo do cancelamento..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger" id="btnConfirmarCancelamento" disabled>
+                        <i class="fas fa-ban"></i> Confirmar Cancelamento
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function abrirModalResolucao(id, acao, numeroNf) {
+    const modal = new bootstrap.Modal(document.getElementById('modalResolucao'));
+    const form = document.getElementById('formResolucao');
+    const titulo = document.getElementById('tituloResolucao');
+    const descricao = document.getElementById('descricaoAcao');
+    const btnConfirmar = document.getElementById('btnConfirmarResolucao');
+    
+    // Configurar form action
+    form.action = `/carteira/resolver-inconsistencia/${id}`;
+    document.getElementById('acaoResolucao').value = acao;
+    
+    // Configurar textos baseado na ação
+    if (acao === 'aceitar_automatico') {
+        titulo.innerHTML = '<i class="fas fa-check text-success"></i> Forçar Baixa Automática';
+        descricao.textContent = `Forçar a baixa automática da NF ${numeroNf}, mesmo com as inconsistências detectadas.`;
+        btnConfirmar.className = 'btn btn-success';
+        btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Forçar Baixa';
+    } else if (acao === 'ignorar') {
+        titulo.innerHTML = '<i class="fas fa-eye-slash text-info"></i> Ignorar Inconsistência';
+        descricao.textContent = `Marcar a inconsistência da NF ${numeroNf} como ignorada (não será processada).`;
+        btnConfirmar.className = 'btn btn-info';
+        btnConfirmar.innerHTML = '<i class="fas fa-eye-slash"></i> Ignorar';
+    }
+    
+    modal.show();
+}
+
+function abrirModalCancelamento(id, numeroNf) {
+    const modal = new bootstrap.Modal(document.getElementById('modalCancelamento'));
+    const form = document.getElementById('formCancelamento');
+    
+    // Configurar form action
+    form.action = `/carteira/resolver-inconsistencia/${id}`;
+    document.getElementById('nfCancelamento').value = numeroNf;
+    document.getElementById('nfConfirmacao').value = numeroNf;
+    
+    modal.show();
+}
+
+// Habilitar botão de cancelamento apenas quando motivo for selecionado
+document.getElementById('motivoCancelamento').addEventListener('change', function() {
+    const btn = document.getElementById('btnConfirmarCancelamento');
+    btn.disabled = !this.value;
+});
+
+// Confirmação extra para cancelamento
+document.getElementById('formCancelamento').addEventListener('submit', function(e) {
+    const numeroNf = document.getElementById('nfConfirmacao').value;
+    
+    if (!confirm(`TEM CERTEZA que deseja cancelar a NF ${numeroNf}?\n\nEsta ação NÃO PODE ser desfeita!`)) {
+        e.preventDefault();
+        return false;
+    }
+});
+</script>
+
+<style>
+.badge {
+    font-size: 0.75rem;
+}
+.table th, .table td {
+    font-size: 0.85rem;
+    vertical-align: middle;
+}
+.dropdown-menu {
+    font-size: 0.85rem;
+}
+.alert ul {
+    padding-left: 1.2rem;
+}
+</style>
+{% endblock %} 

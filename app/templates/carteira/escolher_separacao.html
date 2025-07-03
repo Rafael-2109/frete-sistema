@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}Escolher Separação{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-tasks text-warning"></i> 
+            Escolher Separação
+        </h1>
+        <div>
+            <a href="{{ url_for('carteira.listar_inconsistencias') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Informações da NF -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-warning">
+            <h6 class="m-0 font-weight-bold text-dark">
+                <i class="fas fa-exclamation-triangle"></i> 
+                Múltiplas Separações Detectadas
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>📄 Número da NF:</strong><br>
+                    <span class="badge badge-primary">{{ numero_nf }}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>📦 Código do Produto:</strong><br>
+                    <span class="badge badge-info">{{ cod_produto }}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>📊 Quantidade Faturada:</strong><br>
+                    <span class="badge badge-success">{{ "{:,.0f}".format(qtd_faturada) }} un</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>🎯 Ação Necessária:</strong><br>
+                    <span class="badge badge-warning">Escolher Separação</span>
+                </div>
+            </div>
+            <hr>
+            <div class="alert alert-warning">
+                <i class="fas fa-info-circle"></i>
+                <strong>Situação:</strong> Existem múltiplas separações para este produto. Escolha qual separação está sendo faturada nesta NF.
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário de Escolha -->
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        
+        <!-- Opções de Separação -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-list"></i> 
+                    Separações Disponíveis ({{ separacoes|length }} opções)
+                </h6>
+            </div>
+            <div class="card-body">
+                {% for separacao in separacoes %}
+                <div class="form-check mb-3 p-3 border rounded {% if separacao.compativel_faturamento %}border-success bg-light{% else %}border-danger bg-light{% endif %}">
+                    <input class="form-check-input" type="radio" name="lote_separacao_escolhido" 
+                           id="lote_{{ separacao.lote_separacao_id }}" 
+                           value="{{ separacao.lote_separacao_id }}"
+                           {% if not separacao.compativel_faturamento %}disabled{% endif %}
+                           required>
+                    <label class="form-check-label w-100" for="lote_{{ separacao.lote_separacao_id }}">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>🎯 Lote de Separação:</strong><br>
+                                <span class="badge badge-primary">{{ separacao.lote_separacao_id }}</span>
+                            </div>
+                            <div class="col-md-2">
+                                <strong>📊 Total Separado:</strong><br>
+                                <span class="badge {% if separacao.compativel_faturamento %}badge-success{% else %}badge-danger{% endif %}">
+                                    {{ "{:,.0f}".format(separacao.total_separado) }} un
+                                </span>
+                            </div>
+                            <div class="col-md-2">
+                                <strong>📝 Qtd Pedidos:</strong><br>
+                                <span class="badge badge-info">{{ separacao.qtd_pedidos }} pedido(s)</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>✅ Compatibilidade:</strong><br>
+                                {% if separacao.compativel_faturamento %}
+                                    <span class="badge badge-success">✓ Suficiente para faturamento</span>
+                                {% else %}
+                                    <span class="badge badge-danger">✗ Insuficiente ({{ "{:,.0f}".format(separacao.total_separado) }} < {{ "{:,.0f}".format(qtd_faturada) }})</span>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-2">
+                                <strong>🔍 Ação:</strong><br>
+                                {% if separacao.compativel_faturamento %}
+                                    <span class="badge badge-primary">Selecionar</span>
+                                {% else %}
+                                    <span class="badge badge-secondary">Bloqueado</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Detalhes dos Itens -->
+                        <div class="mt-2">
+                            <small class="text-muted"><strong>📋 Itens desta separação:</strong></small>
+                            <div class="row">
+                                {% for item in separacao.itens %}
+                                <div class="col-md-6">
+                                    <small class="text-muted">
+                                        • Pedido: <strong>{{ item.num_pedido }}</strong> | 
+                                        Qtd: <strong>{{ "{:,.0f}".format(item.qtd_separada) }}</strong> | 
+                                        Cliente: <strong>{{ item.cliente[:30] }}{% if item.cliente|length > 30 %}...{% endif %}</strong>
+                                    </small>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </label>
+                </div>
+                {% endfor %}
+                
+                {% if not separacoes %}
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Erro:</strong> Nenhuma separação encontrada. Verifique se as separações ainda estão ativas.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Observações -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-secondary">
+                    <i class="fas fa-comment"></i> 
+                    Observações (Opcional)
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="observacao_escolha">💬 Motivo da escolha ou observações adicionais:</label>
+                    <textarea class="form-control" name="observacao_escolha" id="observacao_escolha" 
+                              rows="3" placeholder="Ex: Escolhida por proximidade da data de expedição, solicitação do cliente, etc."></textarea>
+                    <small class="form-text text-muted">
+                        Estas observações serão registradas no histórico para auditoria.
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botões de Ação -->
+        <div class="card shadow mb-4">
+            <div class="card-body text-center">
+                <button type="submit" class="btn btn-success btn-lg mr-3">
+                    <i class="fas fa-check"></i> Confirmar Escolha
+                </button>
+                <a href="{{ url_for('carteira.listar_inconsistencias') }}" class="btn btn-secondary btn-lg">
+                    <i class="fas fa-times"></i> Cancelar
+                </a>
+            </div>
+        </div>
+    </form>
+
+    <!-- Informações Adicionais -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-info">
+            <h6 class="m-0 font-weight-bold text-white">
+                <i class="fas fa-info-circle"></i> 
+                Como Funciona
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6><i class="fas fa-1"></i> Escolha da Separação</h6>
+                    <p class="text-muted">
+                        Selecione a separação que corresponde aos itens faturados nesta NF. 
+                        Apenas separações com quantidade suficiente estão disponíveis.
+                    </p>
+                </div>
+                <div class="col-md-6">
+                    <h6><i class="fas fa-2"></i> Próximos Passos</h6>
+                    <p class="text-muted">
+                        Após confirmar, o sistema verificará se há faturamento parcial. 
+                        Se houver, você será direcionado para a tela de justificativa.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<style>
+.form-check-input:disabled + .form-check-label {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.border-success {
+    border-color: #28a745 !important;
+}
+
+.border-danger {
+    border-color: #dc3545 !important;
+}
+
+.bg-light {
+    background-color: #f8f9fa !important;
+}
+
+.form-check {
+    transition: all 0.2s ease;
+}
+
+.form-check:hover:not(:has(input:disabled)) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Destacar separação selecionada
+    const radios = document.querySelectorAll('input[name="lote_separacao_escolhido"]');
+    radios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            // Remover destaque de todos
+            document.querySelectorAll('.form-check').forEach(div => {
+                div.classList.remove('border-primary', 'bg-primary');
+                div.classList.add('border-success', 'bg-light');
+            });
+            
+            // Destacar selecionado
+            if (this.checked) {
+                const parentDiv = this.closest('.form-check');
+                parentDiv.classList.remove('border-success', 'bg-light');
+                parentDiv.classList.add('border-primary', 'bg-primary');
+                parentDiv.style.color = 'white';
+            }
+        });
+    });
+    
+    // Validação de formulário
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const radioSelecionado = document.querySelector('input[name="lote_separacao_escolhido"]:checked');
+        if (!radioSelecionado) {
+            e.preventDefault();
+            alert('Por favor, selecione uma separação antes de continuar.');
+        }
+    });
+});
+</script>
+
+{% endblock %} 

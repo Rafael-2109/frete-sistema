@@ -36,7 +36,7 @@ Endereço de entrega - Cidade e UF do local de entrega - Necessario tratamento n
 Endereço de entrega -  Bairro do endereço de local de entrega;;bairro_endereco_ent;Referência do pedido/Endereço de entrega/Bairro;AMADEU FURTADO
 Endereço de entrega - Rua do local de entrega;;rua_endereco_ent;Referência do pedido/Endereço de entrega/Endereço;R TIPOGRAFO SALES
 Endereço de entrega - numero do local de entrega;;endereco_ent;Referência do pedido/Endereço de entrega/Número;938
-Endereço de entrega - Telefone do local de entrega;;endereco_ent;Referência do pedido/Endereço de entrega/Telefone;8588990058
+Endereço de entrega - Telefone do local de entrega;;telefone_endereco_ent;Referência do pedido/Endereço de entrega/Telefone;8588990058
 ;;;;
 Campos adicionados no excel hoje para analise da disponibilidade de estoque;;;;
 Menor estoque do item em 7 dias;;menor_estoque_produto_d7;Previsão de ruptura;

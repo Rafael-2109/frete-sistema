@@ -947,7 +947,70 @@ def importar_faturamento_produtos():
         # Commit das alterações
         db.session.commit()
         
-        # Mensagens de resultado
+        # 🚀 GATILHO AUTOMÁTICO: PROCESSAR CARTEIRA APÓS IMPORTAR FATURAMENTO
+        try:
+            # Importar função da carteira
+            from app.carteira.routes import _processar_baixa_faturamento
+            
+            # Buscar NFs únicas que foram importadas/atualizadas
+            nfs_processadas = set()
+            
+            for index, row in df.iterrows():
+                numero_nf = str(row.get('Linhas da fatura/NF-e', '')).strip() if pd.notna(row.get('Linhas da fatura/NF-e')) else ''
+                if numero_nf and numero_nf != 'nan':
+                    nfs_processadas.add(numero_nf)
+            
+            # Processar baixa automática para cada NF
+            nfs_baixadas_sucesso = 0
+            nfs_com_inconsistencias = 0
+            nfs_canceladas_revertidas = 0
+            
+            for numero_nf in nfs_processadas:
+                try:
+                    resultado = _processar_baixa_faturamento(numero_nf, current_user.nome)
+                    
+                    if resultado.get('sucesso'):
+                        if resultado.get('status_nf') == 'CANCELADA':
+                            # NF foi cancelada e revertida
+                            nfs_canceladas_revertidas += 1
+                            flash(f'🚫 NF {numero_nf} cancelada: {resultado["movimentacoes_excluidas"]} movimentações revertidas', 'warning')
+                        else:
+                            # NF processada normalmente
+                            itens_baixados = resultado.get('itens_baixados', 0)
+                            inconsistencias = resultado.get('inconsistencias_detectadas', 0)
+                            
+                            if itens_baixados > 0:
+                                nfs_baixadas_sucesso += 1
+                                
+                            if inconsistencias > 0:
+                                nfs_com_inconsistencias += 1
+                    else:
+                        # Erro no processamento
+                        flash(f'⚠️ Erro ao processar NF {numero_nf}: {resultado.get("erro", "Erro desconhecido")}', 'warning')
+                        
+                except Exception as e:
+                    # Log do erro mas não interrompe o processo
+                    print(f"Erro ao processar carteira para NF {numero_nf}: {str(e)}")
+                    continue
+            
+            # Relatório do processamento automático
+            if nfs_baixadas_sucesso > 0:
+                flash(f'🤖 Processamento automático: {nfs_baixadas_sucesso} NFs baixadas na carteira', 'success')
+                
+            if nfs_canceladas_revertidas > 0:
+                flash(f'🚫 {nfs_canceladas_revertidas} NFs canceladas foram revertidas automaticamente', 'info')
+                
+            if nfs_com_inconsistencias > 0:
+                flash(f'⚠️ {nfs_com_inconsistencias} NFs geraram inconsistências (verifique em Carteira → Inconsistências)', 'warning')
+                
+        except ImportError:
+            # Sistema de carteira não disponível - continua normalmente
+            flash('ℹ️ Sistema de carteira não disponível - processamento manual necessário', 'info')
+        except Exception as e:
+            # Erro no processamento automático - não interrompe a importação
+            flash(f'⚠️ Erro no processamento automático da carteira: {str(e)}', 'warning')
+        
+        # Mensagens de resultado da importação
         if produtos_importados > 0 or produtos_atualizados > 0:
             mensagem = f"✅ Importação concluída: {produtos_importados} novos produtos, {produtos_atualizados} atualizados"
             if erros:

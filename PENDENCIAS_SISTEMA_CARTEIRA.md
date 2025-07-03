@@ -13,42 +13,55 @@ Após análise técnica detalhada das 6 funções implementadas, foram identific
 
 ---
 
-## 🚨 **PENDÊNCIAS CRÍTICAS - ALTA PRIORIDADE**
+## 🔴 **PENDÊNCIAS CRÍTICAS (ALTA PRIORIDADE)**
 
-### **✅ 1. ⚠️ FUNÇÃO BAIXA AUTOMÁTICA DE FATURAMENTO - RESOLVIDO**
+### **✅ 1. FUNÇÃO BAIXA AUTOMÁTICA DE FATURAMENTO - COMPLETO COM LIMPEZA NECESSÁRIA**
 
-**Status:** **✅ CORRIGIDO EM 01/07/2025**
+**Status:** **✅ CORRIGIDO EM 01/07/2025 + 🚨 DUPLICAÇÕES IDENTIFICADAS**
 
-**🔍 PROBLEMA IDENTIFICADO (RESOLVIDO):**
+**🔍 PROBLEMA ORIGINAL (RESOLVIDO):**
+- ❌ Usava `RelatorioFaturamentoImportado` (dados gerais) 
+- ✅ Corrigido para `FaturamentoProduto` (dados por produto)
+- ❌ Faltavam validações de inconsistência
+- ✅ Implementadas validações: FATURAMENTO_SEM_PEDIDO + FATURAMENTO_EXCEDE_SALDO
+
+**⚠️ NOVO PROBLEMA IDENTIFICADO:**
+📋 **ARQUIVO COM DUPLICAÇÕES CRÍTICAS:** `app/carteira/routes.py` (3.664 linhas)
+- **4 rotas duplicadas** (linhas 639 vs 1681, 677 vs 1719, 714 vs 1756, 811 vs 1853)
+- **8 funções duplicadas** (linhas 854-2371)
+- **40% do arquivo são duplicações** que devem ser removidas
+
+**📋 AÇÃO NECESSÁRIA:**
+- Ver arquivo: `MAPEAMENTO_COMPLETO_CARTEIRA_ROUTES.md`
+- Remover duplicações para reduzir de 3.664 → ~2.200 linhas
+- Manter apenas versões originais das funções (primeira ocorrência)
+
+**✅ FUNCIONALIDADE CRÍTICA IMPLEMENTADA:**
 ```python
-# ❌ IMPLEMENTAÇÃO INCORRETA (CORRIGIDA)
-from app.faturamento.models import RelatorioFaturamentoImportado
-itens_nf = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).all()
-
-# ✅ IMPLEMENTAÇÃO CORRETA (APLICADA)
-from app.faturamento.models import FaturamentoProduto
-itens_nf = FaturamentoProduto.query.filter_by(numero_nf=numero_nf, status_nf='ATIVO').all()
+def _processar_baixa_faturamento(numero_nf, usuario):
+    # ✅ VALIDAÇÃO 1: FATURAMENTO SEM PEDIDO
+    if not item_copia:
+        inconsistencia = InconsistenciaFaturamento(
+            tipo='FATURAMENTO_SEM_PEDIDO',
+            numero_nf=numero_nf,
+            qtd_faturada=qtd_faturada,
+            status='PENDENTE'
+        )
+    
+    # ✅ VALIDAÇÃO 2: FATURAMENTO EXCEDE SALDO  
+    if qtd_faturada > saldo_disponivel:
+        inconsistencia = InconsistenciaFaturamento(
+            tipo='FATURAMENTO_EXCEDE_SALDO',
+            qtd_excesso=qtd_faturada - saldo_disponivel,
+            status='PENDENTE'
+        )
+    
+    # ✅ COMPORTAMENTO INTELIGENTE:
+    # - FATURAMENTO SEM PEDIDO: Gera MovimentacaoEstoque, não baixa CarteiraCopia
+    # - FATURAMENTO EXCEDE SALDO: Baixa saldo disponível, MovimentacaoEstoque quantidade real
 ```
 
-**📋 DETALHES TÉCNICOS (CORRIGIDOS):**
-- **RelatorioFaturamentoImportado:** Contém apenas dados gerais da NF (sem produtos)
-- **FaturamentoProduto:** Contém dados detalhados por produto (necessário para baixa)
-- **Campos corrigidos:** `qtd_produto_faturado` ao invés de `qtd_faturada`
-
-**🔧 CORREÇÕES APLICADAS:**
-1. **Tabela correta:** `FaturamentoProduto` ao invés de `RelatorioFaturamentoImportado`
-2. **Campos corretos:** Usando `qtd_produto_faturado`, `origem`, `status_nf`
-3. **Validação melhorada:** Apenas NFs ativas (`status_nf='ATIVO'`)
-4. **Error handling:** Mensagens mais específicas e informativas
-5. **Logs detalhados:** Identificação clara do problema e fonte de dados
-
-**📊 TESTE/VALIDAÇÃO:**
-- Função agora usa a tabela correta com dados por produto
-- Integração com CarteiraPrincipal via campo `origem` = `num_pedido`
-- Detecção de inconsistências funcional
-- Sistema à prova de erros com rollback
-
-**Commit:** `92dc63f` - Aplicado com sucesso no GitHub/Render
+**💾 COMMIT:** `62db335` + `Função baixa faturamento corrigida com validações de inconsistência`
 
 ---
 

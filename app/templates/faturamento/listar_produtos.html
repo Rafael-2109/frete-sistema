@@ -176,9 +176,8 @@
                                     <tr>
                                         <th style="width: 80px;">NF</th>
                                         <th style="width: 100px;">Data Fatura</th>
-                                        <th>Cliente</th>
-                                        <th style="width: 50px;">UF</th>
-                                        <th style="width: 120px;">Municipio</th>
+                                        <th style="width: 100px;"></th>Cliente</th>
+                                        <th style="width: 100px;">UF/Municipio</th>
                                         <th style="width: 80px;">Código</th>
                                         <th style="width: 380px;">Nome Produto</th>
                                         <th style="width: 70px;">Qtd</th>
@@ -200,15 +199,8 @@
                                             <small>{{ produto.nome_cliente[:50] }}{% if produto.nome_cliente|length > 50 %}...{% endif %}</small>
                                         </td>
                                         <td>
-                                            {% if produto.estado %}
-                                                <span class="fw-bold text-secondary">{{ produto.estado }}</span>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
                                             {% if produto.municipio %}
-                                            <span class="fw-bold text-secondary">{{ produto.municipio }}</span>
+                                            <span class="fw-bold text-secondary">{{ produto.estado }}/{{ produto.municipio }}</span>
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
