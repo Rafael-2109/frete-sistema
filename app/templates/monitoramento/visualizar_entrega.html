@@ -235,8 +235,18 @@
             <div class="d-flex justify-content-between align-items-start">
               <div class="flex-grow-1">
                 <div class="d-flex align-items-center gap-2 mb-2">
-                  <strong>Data:</strong> {{ ag.data_agendada | formatar_data_hora_brasil if ag.data_agendada else '-' }} 
-                  <strong>Hora:</strong> {{ ag.hora_agendada | formatar_hora_brasil if ag.hora_agendada else '' }}
+                  <strong>Data:</strong> 
+                  {% if ag.data_agendada %}
+                    {{ ag.data_agendada.strftime('%d/%m/%Y') }}
+                  {% else %}
+                    -
+                  {% endif %}
+                  <strong>Hora:</strong> 
+                  {% if ag.hora_agendada %}
+                    {{ ag.hora_agendada.strftime('%H:%M') }}
+                  {% else %}
+                    -
+                  {% endif %}
                   {% if ag.status == 'confirmado' %}
                     <span class="badge bg-primary">✅ Confirmado</span>
                   {% else %}
