@@ -14,7 +14,7 @@
             <p class="text-muted mb-0">Controle de vinculação entre Carteira de Pedidos ↔ Separações</p>
         </div>
         <div>
-            <a href="{{ url_for('carteira.dashboard') }}" class="btn btn-outline-secondary">
+            <a href="{{ url_for('carteira.index') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
             </a>
             <button class="btn btn-primary" onclick="processarVinculacaoAutomatica()">
@@ -340,7 +340,7 @@
                             Aguardando dados na carteira de pedidos.
                         {% endif %}
                     </p>
-                    <a href="{{ url_for('carteira.dashboard') }}" class="btn btn-primary">
+                    <a href="{{ url_for('carteira.index') }}" class="btn btn-primary">
                         <i class="fas fa-tachometer-alt"></i> Voltar ao Dashboard
                     </a>
                 </div>

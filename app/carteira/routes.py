@@ -198,21 +198,14 @@ def importar_carteira():
         return render_template('carteira/importar.html')
     
     try:
-        # 🔍 DEBUG: Log dos dados recebidos
-        logger.info(f"🔍 DEBUG Importação - request.files: {list(request.files.keys())}")
-        logger.info(f"🔍 DEBUG Importação - request.form: {list(request.form.keys())}")
-        
         if 'arquivo' not in request.files:
-            logger.warning("❌ Campo 'arquivo' não encontrado no request.files")
-            flash('Nenhum arquivo selecionado - campo arquivo não encontrado', 'error')
+            flash('Nenhum arquivo selecionado', 'error')
             return redirect(request.url)
         
         arquivo = request.files['arquivo']
-        logger.info(f"🔍 DEBUG Arquivo recebido - filename: '{arquivo.filename}', content_type: {arquivo.content_type}")
         
         if arquivo.filename == '' or arquivo.filename is None:
-            logger.warning(f"❌ Filename vazio ou None: '{arquivo.filename}'")
-            flash('Nenhum arquivo selecionado - nome do arquivo vazio', 'error')
+            flash('Nenhum arquivo selecionado', 'error')
             return redirect(request.url)
         
         if not arquivo.filename.lower().endswith(('.xlsx', '.xls', '.csv')):

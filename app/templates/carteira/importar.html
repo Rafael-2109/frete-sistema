@@ -199,27 +199,17 @@
 
 <script>
 document.getElementById('form-importacao').addEventListener('submit', function(e) {
-    console.log('🔍 DEBUG: Formulário sendo submetido');
-    
     const arquivoInput = document.getElementById('arquivo');
     const arquivo = arquivoInput.files[0];
     const btnImportar = document.getElementById('btn-importar');
     const btnProcessando = document.getElementById('btn-processando');
     
-    console.log('🔍 DEBUG: Input arquivo:', arquivoInput);
-    console.log('🔍 DEBUG: Arquivo selecionado:', arquivo);
-    console.log('🔍 DEBUG: Files length:', arquivoInput.files.length);
-    
+    // Validar se arquivo foi selecionado
     if (!arquivo || arquivoInput.files.length === 0) {
         e.preventDefault();
-        console.error('❌ Nenhum arquivo selecionado');
         alert('Por favor, selecione um arquivo antes de enviar');
         return false;
     }
-    
-    console.log('🔍 DEBUG: Nome do arquivo:', arquivo.name);
-    console.log('🔍 DEBUG: Tamanho do arquivo:', arquivo.size);
-    console.log('🔍 DEBUG: Tipo do arquivo:', arquivo.type);
     
     // Validar tamanho (16MB)
     if (arquivo.size > 16 * 1024 * 1024) {
@@ -239,13 +229,11 @@ document.getElementById('form-importacao').addEventListener('submit', function(e
         return false;
     }
     
-    console.log('✅ Validação passou, enviando formulário...');
-    
     // Mostrar loading
     btnImportar.classList.add('d-none');
     btnProcessando.classList.remove('d-none');
     
-    // Desabilitar form
+    // Desabilitar form para evitar duplo envio
     arquivoInput.disabled = true;
     
     // Permitir envio
