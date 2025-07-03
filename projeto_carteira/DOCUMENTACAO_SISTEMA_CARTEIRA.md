@@ -581,27 +581,27 @@ O **sistema de Carteira de Pedidos** foi implementado como o **núcleo central**
 ### **🌐 PRODUÇÃO (Render.com):**
 ```
 ✅ FATURAMENTO:
-https://frete-sistema.onrender.com/faturamento/produtos
-https://frete-sistema.onrender.com/faturamento/produtos/importar
+https://sistema-fretes.onrender.com/faturamento/produtos
+https://sistema-fretes.onrender.com/faturamento/produtos/importar
 
 ✅ PRODUÇÃO:  
-https://frete-sistema.onrender.com/producao/programacao
-https://frete-sistema.onrender.com/producao/palletizacao
+https://sistema-fretes.onrender.com/producao/programacao
+https://sistema-fretes.onrender.com/producao/palletizacao
 
 ✅ ESTOQUE:
-https://frete-sistema.onrender.com/estoque/movimentacoes
-https://frete-sistema.onrender.com/estoque/saldo-estoque
-https://frete-sistema.onrender.com/estoque/unificacao-codigos
+https://sistema-fretes.onrender.com/estoque/movimentacoes
+https://sistema-fretes.onrender.com/estoque/saldo-estoque
+https://sistema-fretes.onrender.com/estoque/unificacao-codigos
 
 ✅ LOCALIDADES:
-https://frete-sistema.onrender.com/localidades/rotas
-https://frete-sistema.onrender.com/localidades/sub-rotas
+https://sistema-fretes.onrender.com/localidades/rotas
+https://sistema-fretes.onrender.com/localidades/sub-rotas
 
 🆕 CARTEIRA DE PEDIDOS:
-https://frete-sistema.onrender.com/carteira/
-https://frete-sistema.onrender.com/carteira/principal
-https://frete-sistema.onrender.com/carteira/importar
-https://frete-sistema.onrender.com/carteira/inconsistencias
+https://sistema-fretes.onrender.com/carteira/
+https://sistema-fretes.onrender.com/carteira/principal
+https://sistema-fretes.onrender.com/carteira/importar
+https://sistema-fretes.onrender.com/carteira/inconsistencias
 ```
 
 ---
