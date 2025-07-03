@@ -1411,12 +1411,19 @@ def _atualizar_item_inteligente(item, row, usuario):
             'erro': str(e)
         }
 
-def _atualizar_dados_mestres(item, row):
-    """Atualiza apenas dados mestres, preservando operacionais - TODOS OS CAMPOS DOS CSVs"""
+def _atualizar_dados_mestres(item, row, definir_chaves=False):
+    """Atualiza apenas dados mestres, preservando operacionais - TODOS OS CAMPOS DOS CSVs
     
-    # 🔑 CAMPOS OBRIGATÓRIOS CRÍTICOS (PRIMEIRO!)
-    item.num_pedido = str(row['num_pedido'])
-    item.cod_produto = str(row['cod_produto'])
+    Args:
+        item: Item da carteira (novo ou existente)
+        row: Linha do DataFrame com os dados
+        definir_chaves: Se True, define num_pedido e cod_produto (apenas para itens NOVOS)
+    """
+    
+    # 🔑 CAMPOS OBRIGATÓRIOS CRÍTICOS (APENAS PARA ITENS NOVOS!)
+    if definir_chaves:
+        item.num_pedido = str(row['num_pedido'])
+        item.cod_produto = str(row['cod_produto'])
     
     # 📋 DADOS DO PEDIDO (ARQUIVO 1)
     item.pedido_cliente = row.get('pedido_cliente')
@@ -1522,8 +1529,8 @@ def _criar_novo_item_carteira(row, usuario):
         updated_by=usuario
     )
     
-    # 🔄 APLICAR TODOS OS CAMPOS USANDO A FUNÇÃO DE ATUALIZAÇÃO
-    _atualizar_dados_mestres(novo_item, row)
+    # 🔄 APLICAR TODOS OS CAMPOS USANDO A FUNÇÃO DE ATUALIZAÇÃO (ITEM NOVO = DEFINE CHAVES)
+    _atualizar_dados_mestres(novo_item, row, definir_chaves=True)
     
     db.session.add(novo_item)
     return novo_item
