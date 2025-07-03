@@ -233,8 +233,8 @@ document.getElementById('form-importacao').addEventListener('submit', function(e
     btnImportar.classList.add('d-none');
     btnProcessando.classList.remove('d-none');
     
-    // Desabilitar form para evitar duplo envio
-    arquivoInput.disabled = true;
+    // Não desabilitar o input file - isso remove o arquivo do POST!
+    // Apenas desabilitar o botão já previne duplo envio
     
     // Permitir envio
     return true;
