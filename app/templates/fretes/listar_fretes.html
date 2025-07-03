@@ -116,6 +116,8 @@
                                 <th>CTe</th>
                                 <th>Valor Cotado</th>
                                 <th>Valor CTe</th>
+                                <th>Valor Considerado</th>
+                                <th>Valor Pago</th>
                                 <th>Status</th>
                                 <th>Criado em</th>
                                 <th>Ações</th>
@@ -163,6 +165,20 @@
                                                 </small>
                                             {% endif %}
                                         {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if frete.valor_considerado %}
+                                        R$ {{ "%.2f"|format(frete.valor_considerado) }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if frete.valor_pago %}
+                                        R$ {{ "%.2f"|format(frete.valor_pago) }}
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}

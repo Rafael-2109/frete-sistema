@@ -157,7 +157,10 @@
                             <th>Cliente</th>
                             <th>Embarque</th>
                             <th>NFs Incluídas</th>
+                            <th>Valor Cotado</th>
                             <th>Valor CTe</th>
+                            <th>Valor Considerado</th>
+                            <th>Valor Pago</th>
                             <th>Status</th>
                             <th>Ações</th>
                         </tr>
@@ -190,7 +193,10 @@
                                     <span class="text-muted">N/A</span>
                                 {% endif %}
                             </td>
+                            <td><strong>R$ {{ "%.2f"|format(frete.valor_cotado or 0) }}</strong></td>
                             <td><strong>R$ {{ "%.2f"|format(frete.valor_cte or 0) }}</strong></td>
+                            <td><strong>R$ {{ "%.2f"|format(frete.valor_considerado or 0) }}</strong></td>
+                            <td><strong>R$ {{ "%.2f"|format(frete.valor_pago or 0) }}</strong></td>
                             <td>
                                 {% if frete.status == 'APROVADO' %}
                                     <span class="badge badge-success" style="color: white; background-color: #28a745;">{{ frete.status }}</span>
