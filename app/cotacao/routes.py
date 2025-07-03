@@ -818,6 +818,7 @@ def safe_float(value, default=0.0):
 def fechar_frete():
     """
     Fechar frete - versão corrigida com dados da tabela nos locais corretos
+    ✅ NOVO: Suporte para alterar cotação de embarques existentes
     """
     try:
         # ✅ CORREÇÃO: Aceita tanto JSON quanto form data
@@ -841,11 +842,34 @@ def fechar_frete():
         pedidos_data = data.get('pedidos', [])
         indice_original = data.get('indice_original', 0)
         
-        print(f"[DEBUG] === CORREÇÃO FECHAR FRETE ===")
+        # ✅ NOVO: Verifica se estamos alterando cotação de embarque existente
+        alterando_embarque = session.get('alterando_embarque')
+        embarque_existente = None
+        
+        if alterando_embarque:
+            embarque_id = alterando_embarque.get('embarque_id')
+            embarque_existente = Embarque.query.get(embarque_id)
+            
+            if not embarque_existente:
+                # Remove informação inválida da sessão
+                session.pop('alterando_embarque', None)
+                return jsonify({'success': False, 'message': 'Embarque não encontrado para alteração'}), 404
+            
+            # Verifica se ainda é possível alterar (data embarque não preenchida)
+            if embarque_existente.data_embarque:
+                session.pop('alterando_embarque', None)
+                return jsonify({'success': False, 'message': 'Não é possível alterar cotação de embarque já embarcado'}), 400
+            
+            print(f"[DEBUG] 🔄 ALTERANDO COTAÇÃO do embarque #{embarque_existente.numero}")
+        else:
+            print(f"[DEBUG] ✅ CRIANDO NOVO EMBARQUE")
+
+        print(f"[DEBUG] === FECHAR FRETE ===")
         print(f"[DEBUG] Tipo: {tipo}")
         print(f"[DEBUG] Transportadora: {transportadora_id}")
         print(f"[DEBUG] Índice original: {indice_original}")
         print(f"[DEBUG] Redespacho: {data.get('redespacho', False)}")
+        print(f"[DEBUG] Alterando embarque: {embarque_existente.numero if embarque_existente else 'Não'}")
         
         if not tipo or not transportadora_id or not pedidos_data:
             return jsonify({'success': False, 'message': 'Dados incompletos'}), 400
@@ -1007,145 +1031,252 @@ def fechar_frete():
         print(f"[DEBUG]   - Frete líquido: R${valor_frete_liquido:.2f}")
         print(f"[DEBUG]   - Frete/kg: R${frete_por_kg:.2f}")
 
-        # ✅ CRIA COTAÇÃO
-        cotacao = Cotacao(
-            usuario_id=current_user.id,
-            transportadora_id=transportadora_id,
-            data_fechamento=datetime.now(),
-            status='Fechada',
-            tipo_carga=tipo,
-            valor_total=valor_mercadorias,
-            peso_total=peso_total
-        )
-        db.session.add(cotacao)
-        db.session.flush()  # ✅ CORREÇÃO CRÍTICA: Força geração do ID da cotação
+        # ✅ NOVO: Lógica diferente para alteração vs criação
+        if embarque_existente:
+            # ✅ ALTERAÇÃO DE COTAÇÃO: Atualiza embarque existente
+            print(f"[DEBUG] 🔄 ALTERANDO cotação do embarque #{embarque_existente.numero}")
+            
+            # Limpa dados antigos de cotação (conforme solicitado)
+            cotacao_antiga = None
+            if embarque_existente.cotacao_id:
+                cotacao_antiga = Cotacao.query.get(embarque_existente.cotacao_id)
+            
+            # Atualiza dados básicos do embarque
+            embarque_existente.transportadora_id = transportadora_id
+            embarque_existente.tipo_carga = tipo
+            embarque_existente.valor_total = valor_mercadorias
+            embarque_existente.peso_total = peso_total
+            embarque_existente.transportadora_optante = transportadora.optante
+            
+            # Cria nova cotação
+            cotacao = Cotacao(
+                usuario_id=current_user.id,
+                transportadora_id=transportadora_id,
+                data_fechamento=datetime.now(),
+                status='Fechada',
+                tipo_carga=tipo,
+                valor_total=valor_mercadorias,
+                peso_total=peso_total
+            )
+            db.session.add(cotacao)
+            db.session.flush()  # Força geração do ID da cotação
+            
+            # Atualiza embarque com nova cotação
+            embarque_existente.cotacao_id = cotacao.id
+            
+            # ✅ LIMPA E ATUALIZA DADOS DA TABELA NO LOCAL CORRETO
+            if tipo == 'DIRETA':
+                # ✅ CARGA DIRETA: Limpa dados antigos e atualiza no EMBARQUE
+                embarque_existente.modalidade = dados_tabela.get('modalidade')
+                embarque_existente.tabela_nome_tabela = dados_tabela.get('nome_tabela')
+                embarque_existente.tabela_valor_kg = dados_tabela.get('valor_kg')
+                embarque_existente.tabela_percentual_valor = dados_tabela.get('percentual_valor')
+                embarque_existente.tabela_frete_minimo_valor = dados_tabela.get('frete_minimo_valor')
+                embarque_existente.tabela_frete_minimo_peso = dados_tabela.get('frete_minimo_peso')
+                embarque_existente.tabela_icms = dados_tabela.get('icms')
+                embarque_existente.tabela_percentual_gris = dados_tabela.get('percentual_gris')
+                embarque_existente.tabela_pedagio_por_100kg = dados_tabela.get('pedagio_por_100kg')
+                embarque_existente.tabela_valor_tas = dados_tabela.get('valor_tas')
+                embarque_existente.tabela_percentual_adv = dados_tabela.get('percentual_adv')
+                embarque_existente.tabela_percentual_rca = dados_tabela.get('percentual_rca')
+                embarque_existente.tabela_valor_despacho = dados_tabela.get('valor_despacho')
+                embarque_existente.tabela_valor_cte = dados_tabela.get('valor_cte')
+                embarque_existente.tabela_icms_incluso = dados_tabela.get('icms_incluso', False)
+                embarque_existente.icms_destino = dados_tabela.get('icms_destino')
+                
+                print(f"[DEBUG] 🔄 CARGA DIRETA: Dados da tabela atualizados no EMBARQUE")
+            
+            # ✅ ATUALIZA DADOS DA TABELA NOS ITENS (para carga fracionada)
+            if tipo == 'FRACIONADA':
+                for item in embarque_existente.itens:
+                    if item.status == 'ativo':  # Só atualiza itens ativos
+                        item.modalidade = dados_tabela.get('modalidade')
+                        item.tabela_nome_tabela = dados_tabela.get('nome_tabela')
+                        item.tabela_valor_kg = dados_tabela.get('valor_kg')
+                        item.tabela_percentual_valor = dados_tabela.get('percentual_valor')
+                        item.tabela_frete_minimo_valor = dados_tabela.get('frete_minimo_valor')
+                        item.tabela_frete_minimo_peso = dados_tabela.get('frete_minimo_peso')
+                        item.tabela_icms = dados_tabela.get('icms')
+                        item.tabela_percentual_gris = dados_tabela.get('percentual_gris')
+                        item.tabela_pedagio_por_100kg = dados_tabela.get('pedagio_por_100kg')
+                        item.tabela_valor_tas = dados_tabela.get('valor_tas')
+                        item.tabela_percentual_adv = dados_tabela.get('percentual_adv')
+                        item.tabela_percentual_rca = dados_tabela.get('percentual_rca')
+                        item.tabela_valor_despacho = dados_tabela.get('valor_despacho')
+                        item.tabela_valor_cte = dados_tabela.get('valor_cte')
+                        item.tabela_icms_incluso = dados_tabela.get('icms_incluso', False)
+                        item.icms_destino = dados_tabela.get('icms_destino')
+                        
+                        print(f"[DEBUG] 🔄 CARGA FRACIONADA: Dados da tabela atualizados no ITEM {item.pedido}")
+            
+            # Atualiza pedidos COM ID DA COTAÇÃO VÁLIDO
+            for pedido_data in pedidos_data:
+                pedido = Pedido.query.get(pedido_data.get('id'))
+                if pedido:
+                    pedido.cotacao_id = cotacao.id
+                    pedido.transportadora = transportadora.razao_social
+                    pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
+                    # O status será calculado automaticamente como COTADO pelo trigger
+            
+            # Remove cotação antiga se existir
+            if cotacao_antiga:
+                db.session.delete(cotacao_antiga)
+                print(f"[DEBUG] 🗑️ Cotação antiga removida: ID {cotacao_antiga.id}")
+            
+            embarque = embarque_existente  # Para usar nas próximas etapas
+            
+        else:
+            # ✅ CRIAÇÃO NORMAL: Cria novo embarque
+            print(f"[DEBUG] ✅ CRIANDO novo embarque")
+            
+            # ✅ CRIA COTAÇÃO
+            cotacao = Cotacao(
+                usuario_id=current_user.id,
+                transportadora_id=transportadora_id,
+                data_fechamento=datetime.now(),
+                status='Fechada',
+                tipo_carga=tipo,
+                valor_total=valor_mercadorias,
+                peso_total=peso_total
+            )
+            db.session.add(cotacao)
+            db.session.flush()  # ✅ CORREÇÃO CRÍTICA: Força geração do ID da cotação
 
-        # Atualiza pedidos COM ID DA COTAÇÃO VÁLIDO
-        for pedido_data in pedidos_data:
-            pedido = Pedido.query.get(pedido_data.get('id'))
-            if pedido:
-                pedido.cotacao_id = cotacao.id
-                pedido.transportadora = transportadora.razao_social
-                pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
-                # O status será calculado automaticamente como COTADO pelo trigger
+            # Atualiza pedidos COM ID DA COTAÇÃO VÁLIDO
+            for pedido_data in pedidos_data:
+                pedido = Pedido.query.get(pedido_data.get('id'))
+                if pedido:
+                    pedido.cotacao_id = cotacao.id
+                    pedido.transportadora = transportadora.razao_social
+                    pedido.nf_cd = False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
+                    # O status será calculado automaticamente como COTADO pelo trigger
 
-        # ✅ CRIA EMBARQUE
-        embarque = Embarque(
-            transportadora_id=transportadora_id,
-            status='ativo',
-            numero=obter_proximo_numero_embarque(),
-            tipo_cotacao='Automatica',
-            tipo_carga=tipo,
-            valor_total=valor_mercadorias,
-            peso_total=peso_total,
-            criado_em=datetime.now(),
-            criado_por=current_user.nome,
-            cotacao_id=cotacao.id,
-            transportadora_optante=transportadora.optante
-        )
-        
-        # ✅ CORREÇÃO PRINCIPAL: SALVA DADOS DA TABELA NO LOCAL CORRETO
-        if tipo == 'DIRETA':
-            # ✅ CARGA DIRETA: Dados da tabela vão para o EMBARQUE
-            embarque.modalidade = dados_tabela.get('modalidade')
-            embarque.tabela_nome_tabela = dados_tabela.get('nome_tabela')
-            embarque.tabela_valor_kg = dados_tabela.get('valor_kg')
-            embarque.tabela_percentual_valor = dados_tabela.get('percentual_valor')
-            embarque.tabela_frete_minimo_valor = dados_tabela.get('frete_minimo_valor')
-            embarque.tabela_frete_minimo_peso = dados_tabela.get('frete_minimo_peso')
-            embarque.tabela_icms = dados_tabela.get('icms')
-            embarque.tabela_percentual_gris = dados_tabela.get('percentual_gris')
-            embarque.tabela_pedagio_por_100kg = dados_tabela.get('pedagio_por_100kg')
-            embarque.tabela_valor_tas = dados_tabela.get('valor_tas')
-            embarque.tabela_percentual_adv = dados_tabela.get('percentual_adv')
-            embarque.tabela_percentual_rca = dados_tabela.get('percentual_rca')
-            embarque.tabela_valor_despacho = dados_tabela.get('valor_despacho')
-            embarque.tabela_valor_cte = dados_tabela.get('valor_cte')
-            embarque.tabela_icms_incluso = dados_tabela.get('icms_incluso', False)
-            embarque.icms_destino = dados_tabela.get('icms_destino')
-            
-            print(f"[DEBUG] ✅ CARGA DIRETA: Dados da tabela salvos no EMBARQUE")
-        
-        db.session.add(embarque)
-        db.session.flush()  # Para obter o ID do embarque
-
-        # Cria EmbarqueItems
-        for pedido_data in pedidos_data:
-            pedido = Pedido.query.get(pedido_data.get('id'))
-            if not pedido:
-                continue
-
-            uf_correto = 'SP' if pedido.rota and pedido.rota.upper().strip() == 'RED' else pedido.cod_uf
-            
-            # ✅ ESTRATÉGIA CODIGO IBGE: Usa código IBGE se disponível, senão usa normalização
-            cidade_formatada = None
-            if pedido.codigo_ibge:
-                # Busca cidade por código IBGE (mais confiável)
-                cidade_obj = LocalizacaoService.buscar_cidade_por_ibge(pedido.codigo_ibge)
-                if cidade_obj:
-                    cidade_formatada = cidade_obj.nome
-                    print(f"[DEBUG] ✅ Cidade encontrada por IBGE {pedido.codigo_ibge}: {cidade_formatada}")
-            
-            if not cidade_formatada:
-                # Fallback: normalização de nome
-                cidade_formatada = LocalizacaoService.normalizar_nome_cidade_com_regras(
-                    pedido.nome_cidade, 
-                    getattr(pedido, 'rota', None)
-                ) or pedido.nome_cidade
-                print(f"[DEBUG] 🔄 Cidade por normalização: {cidade_formatada}")
-            
-            protocolo_formatado = formatar_protocolo(pedido.protocolo)
-            data_formatada = formatar_data_brasileira(pedido.agendamento)
-            
-            item = EmbarqueItem(
-                embarque_id=embarque.id,
-                separacao_lote_id=pedido.separacao_lote_id,  # ✅ CORRIGE: copia separacao_lote_id do pedido
-                cnpj_cliente=pedido.cnpj_cpf,  # ✅ CORREÇÃO: Usa CNPJ do banco, não do frontend
-                cliente=pedido.raz_social_red,
-                pedido=pedido.num_pedido,
-                peso=pedido.peso_total,
-                valor=pedido.valor_saldo_total,
-                pallets=pedido.pallet_total,  # ✅ NOVO: Adiciona pallets reais do pedido
-                uf_destino=uf_correto,
-                cidade_destino=cidade_formatada,
-                volumes=None,  # ✅ ALTERADO: Deixa volumes em branco também na cotação normal
-                protocolo_agendamento=protocolo_formatado,
-                data_agenda=data_formatada
+            # ✅ CRIA EMBARQUE
+            embarque = Embarque(
+                transportadora_id=transportadora_id,
+                status='ativo',
+                numero=obter_proximo_numero_embarque(),
+                tipo_cotacao='Automatica',
+                tipo_carga=tipo,
+                valor_total=valor_mercadorias,
+                peso_total=peso_total,
+                criado_em=datetime.now(),
+                criado_por=current_user.nome,
+                cotacao_id=cotacao.id,
+                transportadora_optante=transportadora.optante
             )
             
-            
-            # ✅ CORREÇÃO: CARGA FRACIONADA - Dados da tabela vão para os EMBARQUE_ITENS
-            if tipo == 'FRACIONADA':
-                item.modalidade = dados_tabela.get('modalidade')
-                item.tabela_nome_tabela = dados_tabela.get('nome_tabela')
-                item.tabela_valor_kg = dados_tabela.get('valor_kg')
-                item.tabela_percentual_valor = dados_tabela.get('percentual_valor')
-                item.tabela_frete_minimo_valor = dados_tabela.get('frete_minimo_valor')
-                item.tabela_frete_minimo_peso = dados_tabela.get('frete_minimo_peso')
-                item.tabela_icms = dados_tabela.get('icms')
-                item.tabela_percentual_gris = dados_tabela.get('percentual_gris')
-                item.tabela_pedagio_por_100kg = dados_tabela.get('pedagio_por_100kg')
-                item.tabela_valor_tas = dados_tabela.get('valor_tas')
-                item.tabela_percentual_adv = dados_tabela.get('percentual_adv')
-                item.tabela_percentual_rca = dados_tabela.get('percentual_rca')
-                item.tabela_valor_despacho = dados_tabela.get('valor_despacho')
-                item.tabela_valor_cte = dados_tabela.get('valor_cte')
-                item.tabela_icms_incluso = dados_tabela.get('icms_incluso', False)
-                item.icms_destino = dados_tabela.get('icms_destino')
+            # ✅ CORREÇÃO PRINCIPAL: SALVA DADOS DA TABELA NO LOCAL CORRETO
+            if tipo == 'DIRETA':
+                # ✅ CARGA DIRETA: Dados da tabela vão para o EMBARQUE
+                embarque.modalidade = dados_tabela.get('modalidade')
+                embarque.tabela_nome_tabela = dados_tabela.get('nome_tabela')
+                embarque.tabela_valor_kg = dados_tabela.get('valor_kg')
+                embarque.tabela_percentual_valor = dados_tabela.get('percentual_valor')
+                embarque.tabela_frete_minimo_valor = dados_tabela.get('frete_minimo_valor')
+                embarque.tabela_frete_minimo_peso = dados_tabela.get('frete_minimo_peso')
+                embarque.tabela_icms = dados_tabela.get('icms')
+                embarque.tabela_percentual_gris = dados_tabela.get('percentual_gris')
+                embarque.tabela_pedagio_por_100kg = dados_tabela.get('pedagio_por_100kg')
+                embarque.tabela_valor_tas = dados_tabela.get('valor_tas')
+                embarque.tabela_percentual_adv = dados_tabela.get('percentual_adv')
+                embarque.tabela_percentual_rca = dados_tabela.get('percentual_rca')
+                embarque.tabela_valor_despacho = dados_tabela.get('valor_despacho')
+                embarque.tabela_valor_cte = dados_tabela.get('valor_cte')
+                embarque.tabela_icms_incluso = dados_tabela.get('icms_incluso', False)
+                embarque.icms_destino = dados_tabela.get('icms_destino')
                 
-                print(f"[DEBUG] ✅ CARGA FRACIONADA: Dados da tabela salvos no EMBARQUE_ITEM {pedido.num_pedido}")
-                print(f"[DEBUG]   📋 Nome tabela: {item.tabela_nome_tabela}")
-                print(f"[DEBUG]   📋 Modalidade: {item.modalidade}")
-                print(f"[DEBUG]   📋 Valor/kg: R${item.tabela_valor_kg}")
-                print(f"[DEBUG]   📋 ICMS destino: {item.icms_destino}%")
+                print(f"[DEBUG] ✅ CARGA DIRETA: Dados da tabela salvos no EMBARQUE")
             
-            db.session.add(item)
+            db.session.add(embarque)
+            db.session.flush()  # Para obter o ID do embarque
+
+            # Cria EmbarqueItems apenas para criação nova
+            for pedido_data in pedidos_data:
+                pedido = Pedido.query.get(pedido_data.get('id'))
+                if not pedido:
+                    continue
+
+                uf_correto = 'SP' if pedido.rota and pedido.rota.upper().strip() == 'RED' else pedido.cod_uf
+                
+                # ✅ ESTRATÉGIA CODIGO IBGE: Usa código IBGE se disponível, senão usa normalização
+                cidade_formatada = None
+                if pedido.codigo_ibge:
+                    # Busca cidade por código IBGE (mais confiável)
+                    cidade_obj = LocalizacaoService.buscar_cidade_por_ibge(pedido.codigo_ibge)
+                    if cidade_obj:
+                        cidade_formatada = cidade_obj.nome
+                        print(f"[DEBUG] ✅ Cidade encontrada por IBGE {pedido.codigo_ibge}: {cidade_formatada}")
+                
+                if not cidade_formatada:
+                    # Fallback: normalização de nome
+                    cidade_formatada = LocalizacaoService.normalizar_nome_cidade_com_regras(
+                        pedido.nome_cidade, 
+                        getattr(pedido, 'rota', None)
+                    ) or pedido.nome_cidade
+                    print(f"[DEBUG] 🔄 Cidade por normalização: {cidade_formatada}")
+                
+                protocolo_formatado = formatar_protocolo(pedido.protocolo)
+                data_formatada = formatar_data_brasileira(pedido.agendamento)
+                
+                item = EmbarqueItem(
+                    embarque_id=embarque.id,
+                    separacao_lote_id=pedido.separacao_lote_id,  # ✅ CORRIGE: copia separacao_lote_id do pedido
+                    cnpj_cliente=pedido.cnpj_cpf,  # ✅ CORREÇÃO: Usa CNPJ do banco, não do frontend
+                    cliente=pedido.raz_social_red,
+                    pedido=pedido.num_pedido,
+                    peso=pedido.peso_total,
+                    valor=pedido.valor_saldo_total,
+                    pallets=pedido.pallet_total,  # ✅ NOVO: Adiciona pallets reais do pedido
+                    uf_destino=uf_correto,
+                    cidade_destino=cidade_formatada,
+                    volumes=None,  # ✅ ALTERADO: Deixa volumes em branco também na cotação normal
+                    protocolo_agendamento=protocolo_formatado,
+                    data_agenda=data_formatada
+                )
+                
+                
+                # ✅ CORREÇÃO: CARGA FRACIONADA - Dados da tabela vão para os EMBARQUE_ITENS
+                if tipo == 'FRACIONADA':
+                    item.modalidade = dados_tabela.get('modalidade')
+                    item.tabela_nome_tabela = dados_tabela.get('nome_tabela')
+                    item.tabela_valor_kg = dados_tabela.get('valor_kg')
+                    item.tabela_percentual_valor = dados_tabela.get('percentual_valor')
+                    item.tabela_frete_minimo_valor = dados_tabela.get('frete_minimo_valor')
+                    item.tabela_frete_minimo_peso = dados_tabela.get('frete_minimo_peso')
+                    item.tabela_icms = dados_tabela.get('icms')
+                    item.tabela_percentual_gris = dados_tabela.get('percentual_gris')
+                    item.tabela_pedagio_por_100kg = dados_tabela.get('pedagio_por_100kg')
+                    item.tabela_valor_tas = dados_tabela.get('valor_tas')
+                    item.tabela_percentual_adv = dados_tabela.get('percentual_adv')
+                    item.tabela_percentual_rca = dados_tabela.get('percentual_rca')
+                    item.tabela_valor_despacho = dados_tabela.get('valor_despacho')
+                    item.tabela_valor_cte = dados_tabela.get('valor_cte')
+                    item.tabela_icms_incluso = dados_tabela.get('icms_incluso', False)
+                    item.icms_destino = dados_tabela.get('icms_destino')
+                    
+                    print(f"[DEBUG] ✅ CARGA FRACIONADA: Dados da tabela salvos no EMBARQUE_ITEM {pedido.num_pedido}")
+                    print(f"[DEBUG]   📋 Nome tabela: {item.tabela_nome_tabela}")
+                    print(f"[DEBUG]   📋 Modalidade: {item.modalidade}")
+                    print(f"[DEBUG]   📋 Valor/kg: R${item.tabela_valor_kg}")
+                    print(f"[DEBUG]   📋 ICMS destino: {item.icms_destino}%")
+                
+                db.session.add(item)
 
         db.session.commit()
 
+        # ✅ LIMPA DADOS DA SESSÃO APÓS SUCESSO
+        if alterando_embarque:
+            session.pop('alterando_embarque', None)
+            mensagem = f'Cotação do embarque #{embarque.numero} alterada com sucesso'
+            print(f"[DEBUG] ✅ {mensagem}")
+        else:
+            mensagem = 'Cotação e embarque criados com sucesso'
+            print(f"[DEBUG] ✅ {mensagem}")
+
         return jsonify({
             'success': True,
-            'message': 'Cotação e embarque criados com sucesso',
+            'message': mensagem,
             'redirect_url': url_for('cotacao.resumo_frete', cotacao_id=cotacao.id)
         })
 
@@ -1153,7 +1284,7 @@ def fechar_frete():
         db.session.rollback()
         return jsonify({
             'success': False,
-            'message': f'Erro ao criar embarque: {str(e)}'
+            'message': f'Erro ao criar/alterar embarque: {str(e)}'
         }), 500
 
 @cotacao_bp.route("/fechar_frete_grupo", methods=["POST"])

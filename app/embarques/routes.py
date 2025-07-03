@@ -1448,3 +1448,81 @@ def cancelar_item_embarque(item_id):
     
     return redirect(url_for('embarques.visualizar_embarque', id=embarque.id))
 
+@embarques_bp.route('/<int:embarque_id>/alterar_cotacao')
+@login_required
+@require_embarques()
+def alterar_cotacao(embarque_id):
+    """
+    Permite alterar a cotação de um embarque existente.
+    
+    Só permite se a data do embarque não estiver preenchida.
+    Extrai os pedidos do embarque e redireciona para a tela de cotação.
+    """
+    try:
+        embarque = Embarque.query.get_or_404(embarque_id)
+        
+        # 🔒 VERIFICAÇÃO ESPECÍFICA PARA VENDEDORES
+        if current_user.perfil == 'vendedor':
+            # Verifica se o vendedor tem permissão para ver este embarque
+            tem_permissao = False
+            from app.utils.auth_decorators import check_vendedor_permission
+            for item in embarque.itens:
+                if check_vendedor_permission(numero_nf=item.nota_fiscal):
+                    tem_permissao = True
+                    break
+            
+            if not tem_permissao:
+                flash('Acesso negado. Você só pode alterar cotação de embarques dos seus clientes.', 'danger')
+                return redirect(url_for('embarques.listar_embarques'))
+        
+        # Verificar se a data do embarque não está preenchida
+        if embarque.data_embarque:
+            flash('❌ Não é possível alterar a cotação de um embarque que já foi embarcado (data de embarque preenchida).', 'danger')
+            return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
+        
+        # Verificar se há itens ativos no embarque
+        itens_ativos = [item for item in embarque.itens if item.status == 'ativo']
+        if not itens_ativos:
+            flash('❌ Este embarque não possui itens ativos para cotar.', 'warning')
+            return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
+        
+        # Extrair os pedidos dos itens do embarque
+        pedidos_ids = []
+        
+        for item in itens_ativos:
+            # Buscar o pedido correspondente
+            if item.separacao_lote_id:
+                # Busca por lote de separação (mais preciso)
+                pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+            else:
+                # Fallback: busca por número do pedido
+                pedido = Pedido.query.filter_by(num_pedido=item.pedido).first()
+            
+            if pedido:
+                if pedido.id not in pedidos_ids:
+                    pedidos_ids.append(pedido.id)
+            else:
+                flash(f'⚠️ Pedido {item.pedido} não encontrado na base de dados.', 'warning')
+        
+        if not pedidos_ids:
+            flash('❌ Nenhum pedido válido encontrado para alterar a cotação.', 'danger')
+            return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
+        
+        # Armazenar informações da alteração na sessão
+        session['cotacao_pedidos'] = pedidos_ids
+        session['alterando_embarque'] = {
+            'embarque_id': embarque_id,
+            'numero_embarque': embarque.numero,
+            'transportadora_anterior': embarque.transportadora.razao_social if embarque.transportadora else None,
+            'tipo_carga_anterior': embarque.tipo_carga
+        }
+        
+        flash(f'🔄 Iniciando alteração da cotação do embarque #{embarque.numero}. {len(pedidos_ids)} pedido(s) selecionado(s).', 'info')
+        
+        # Redirecionar para a tela de cotação
+        return redirect(url_for('cotacao.tela_cotacao'))
+        
+    except Exception as e:
+        flash(f'❌ Erro ao iniciar alteração de cotação: {str(e)}', 'danger')
+        return redirect(url_for('embarques.listar_embarques'))
+

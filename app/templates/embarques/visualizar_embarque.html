@@ -505,6 +505,23 @@
       <a href="{{ url_for('embarques.dados_tabela_embarque', id=embarque.id) }}" class="btn btn-info">
         Ver Dados da Tabela
       </a>
+      
+      <!-- Botão Alterar Cotação (apenas se data embarque não preenchida) -->
+      {% if not embarque.data_embarque and embarque.status != 'cancelado' %}
+        <a href="{{ url_for('embarques.alterar_cotacao', embarque_id=embarque.id) }}" 
+           class="btn btn-warning"
+           onclick="return confirm('⚠️ Tem certeza que deseja alterar a cotação deste embarque?\n\nIsso irá sobrescrever os dados de transportadora e cotação existentes.')">
+          <i class="fas fa-edit"></i> Alterar Cotação
+        </a>
+      {% else %}
+        {% if embarque.data_embarque %}
+          <button type="button" class="btn btn-secondary" disabled 
+                  title="Não é possível alterar cotação de embarque já embarcado">
+            <i class="fas fa-edit"></i> Alterar Cotação
+          </button>
+        {% endif %}
+      {% endif %}
+      
       <!-- Botão Imprimir Completo -->
       {% if embarque.data_prevista_embarque %}
         <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id) }}" 
