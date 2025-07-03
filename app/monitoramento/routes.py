@@ -171,7 +171,9 @@ def adicionar_log(id):
             autor=current_user.nome,
             descricao=form_log.descricao.data,
             tipo=form_log.tipo.data,
-            lembrete_para=form_log.lembrete_para.data
+            lembrete_para=form_log.lembrete_para.data,
+            criado_em=datetime.utcnow(),
+            criado_por=current_user.nome
         )
         db.session.add(log)
         db.session.commit()
@@ -210,7 +212,8 @@ def adicionar_evento(id):
             tipo_evento=form_evento.tipo_evento.data,
             observacao=form_evento.observacao.data,
             autor=current_user.nome,
-            criado_em=datetime.utcnow() 
+            criado_em=datetime.utcnow(),
+            criado_por=current_user.nome
         )
         db.session.add(evento)
 
@@ -256,7 +259,8 @@ def adicionar_custo(id):
             tipo=form_custo.tipo.data,
             valor=form_custo.valor.data,
             motivo=form_custo.motivo.data,
-            autor=current_user.nome
+            autor=current_user.nome,
+            criado_em=datetime.utcnow(),
         )
         db.session.add(custo)
         db.session.commit()
@@ -1417,13 +1421,15 @@ def alterar_data_prevista(id):
         
         # Registra histórico
         from app.monitoramento.models import HistoricoDataPrevista
+        from app.utils.timezone import formatar_data_hora_brasil
         
         historico = HistoricoDataPrevista(
             entrega_id=entrega.id,
             data_anterior=entrega.data_entrega_prevista,
             data_nova=nova_data,
             motivo_alteracao=motivo_alteracao,
-            alterado_por=current_user.nome
+            alterado_por=current_user.nome,
+            alterado_em=formatar_data_hora_brasil(datetime.utcnow())
         )
         
         # Atualiza a data na entrega
@@ -1459,7 +1465,7 @@ def historico_data_prevista(id):
             'data_anterior': h.data_anterior.strftime('%d/%m/%Y') if h.data_anterior else None,
             'data_nova': h.data_nova.strftime('%d/%m/%Y'),
             'motivo': h.motivo_alteracao,
-            'alterado_por': h.alterado_por
+            'alterado_por': h.alterado_por,
         })
     
     return jsonify({'historico': historico_data})
@@ -1664,7 +1670,10 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'motivo': ag.motivo,
                 'observacao': ag.observacao,
                 'autor': ag.autor,
-                'criado_em': limpar_timezone(ag.criado_em)
+                'criado_em': limpar_timezone(ag.criado_em),
+                'criado_por': ag.criado_por,
+                'alterado_em': limpar_timezone(ag.alterado_em),
+                'alterado_por': ag.alterado_por
             })
         
         # Eventos
@@ -1678,7 +1687,10 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'tipo_evento': ev.tipo_evento,
                 'observacao': ev.observacao,
                 'autor': ev.autor,
-                'criado_em': limpar_timezone(ev.criado_em)
+                'criado_em': limpar_timezone(ev.criado_em),
+                'criado_por': ev.criado_por,
+                'alterado_em': limpar_timezone(ev.alterado_em),
+                'alterado_por': ev.alterado_por
             })
         
         # Custos extras
@@ -1690,7 +1702,10 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'valor': custo.valor,
                 'motivo': custo.motivo,
                 'autor': custo.autor,
-                'criado_em': limpar_timezone(custo.criado_em)
+                'criado_em': limpar_timezone(custo.criado_em),
+                'criado_por': custo.criado_por,
+                'alterado_em': limpar_timezone(custo.alterado_em),
+                'alterado_por': custo.alterado_por
             })
         
         # Logs
@@ -1702,7 +1717,11 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'data_hora': limpar_timezone(log.data_hora),
                 'tipo': log.tipo,
                 'descricao': log.descricao,
-                'lembrete_para': log.lembrete_para
+                'lembrete_para': log.lembrete_para,
+                'criado_em': limpar_timezone(log.criado_em),
+                'criado_por': log.criado_por,
+                'alterado_em': limpar_timezone(log.alterado_em),
+                'alterado_por': log.alterado_por
             })
         
         # Comentários

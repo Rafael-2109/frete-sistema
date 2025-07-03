@@ -582,7 +582,19 @@ def editar_frete(frete_id):
         
         db.session.commit()
         flash('Frete atualizado com sucesso!', 'success')
-        return redirect(url_for('fretes.visualizar_frete', frete_id=frete.id))
+        
+        # ✅ DETECTA QUAL BOTÃO FOI CLICADO
+        acao = request.form.get('acao')
+        
+        if acao == 'salvar_e_lancar_cte':
+            # Redireciona para lançar CTe da mesma fatura
+            return redirect(url_for('fretes.lancar_cte', fatura_id=frete.fatura_frete_id))
+        elif acao == 'salvar_e_visualizar_fatura':
+            # Redireciona para visualizar a fatura
+            return redirect(url_for('fretes.visualizar_fatura', fatura_id=frete.fatura_frete_id))
+        else:
+            # Fallback: comportamento original
+            return redirect(url_for('fretes.visualizar_frete', frete_id=frete.id))
     
     return render_template('fretes/editar_frete.html', form=form, frete=frete)
 
@@ -935,6 +947,7 @@ def conferir_fatura(fatura_id):
     
     # Analisa status dos documentos
     documentos_status = []
+    valor_total_cotado = 0
     valor_total_cte = 0
     valor_total_considerado = 0
     valor_total_pago = 0
@@ -956,6 +969,7 @@ def conferir_fatura(fatura_id):
         documentos_status.append({
             'tipo': 'CTe',
             'numero': frete.numero_cte or f'Frete #{frete.id}',
+            'valor_cotado': frete.valor_cotado or 0,
             'valor_cte': frete.valor_cte or 0,
             'valor_considerado': frete.valor_considerado or 0,
             'valor_pago': frete.valor_pago or 0,
@@ -964,6 +978,7 @@ def conferir_fatura(fatura_id):
             'frete_id': frete.id
         })
         
+        valor_total_cotado += frete.valor_cotado or 0
         valor_total_cte += frete.valor_cte or 0
         valor_total_considerado += frete.valor_considerado or 0
         valor_total_pago += frete.valor_pago or 0
@@ -997,6 +1012,7 @@ def conferir_fatura(fatura_id):
         documentos_status.append({
             'tipo': 'Despesa',
             'numero': despesa.numero_documento or f'Despesa #{despesa.id}',
+            'valor_cotado': despesa.valor_cotado or 0,
             'valor_cte': despesa.valor_despesa,
             'valor_considerado': despesa.valor_despesa,
             'valor_pago': despesa.valor_despesa,
@@ -1005,6 +1021,7 @@ def conferir_fatura(fatura_id):
             'despesa_id': despesa.id
         })
         
+        valor_total_cotado += despesa.valor_cotado or 0
         valor_total_cte += despesa.valor_despesa
         valor_total_considerado += despesa.valor_despesa
         valor_total_pago += despesa.valor_despesa
@@ -1062,6 +1079,7 @@ def conferir_fatura(fatura_id):
     # Análise de valores
     analise_valores = {
         'valor_fatura': fatura.valor_total_fatura,
+        'valor_cotado': valor_total_cotado,
         'valor_total_cte': valor_total_cte,
         'valor_total_considerado': valor_total_considerado,
         'valor_total_pago': valor_total_pago,

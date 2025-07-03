@@ -204,9 +204,14 @@
                             <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}" class="btn btn-secondary">
                                 <i class="fas fa-times"></i> Cancelar
                             </a>
-                            <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="fas fa-save"></i> Salvar Alterações
-                            </button>
+                            <div class="btn-group">
+                                <button type="submit" name="acao" value="salvar_e_lancar_cte" class="btn btn-success btn-lg">
+                                    <i class="fas fa-plus"></i> Salvar e Adicionar + CTe
+                                </button>
+                                <button type="submit" name="acao" value="salvar_e_visualizar_fatura" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-eye"></i> Salvar e Visualizar a Fatura
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </div>
