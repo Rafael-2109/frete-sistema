@@ -1197,11 +1197,24 @@ def _processar_importacao_carteira_inteligente(df, usuario):
         for index, row in df.iterrows():
             try:
                 # 🔍 DEBUG DETALHADO DOS VALORES
+                logger.info(f"🔍 DEBUG Linha {index}: Colunas disponíveis: {list(row.index)}")
+                
                 num_pedido_raw = row.get('num_pedido')
                 cod_produto_raw = row.get('cod_produto')
                 
                 logger.info(f"🔍 DEBUG Linha {index}: num_pedido_raw='{num_pedido_raw}' (tipo: {type(num_pedido_raw)})")
                 logger.info(f"🔍 DEBUG Linha {index}: cod_produto_raw='{cod_produto_raw}' (tipo: {type(cod_produto_raw)})")
+                
+                # 🔍 VERIFICAR SE AINDA ESTÃO COM NOMES ANTIGOS
+                if num_pedido_raw is None:
+                    logger.warning(f"❌ Linha {index}: num_pedido é None - verificando nome antigo...")
+                    num_pedido_antigo = row.get('Referência do pedido/Referência do pedido')
+                    logger.info(f"🔍 DEBUG Linha {index}: Nome antigo = '{num_pedido_antigo}'")
+                
+                if cod_produto_raw is None:
+                    logger.warning(f"❌ Linha {index}: cod_produto é None - verificando nome antigo...")
+                    cod_produto_antigo = row.get('Produto/Referência interna')
+                    logger.info(f"🔍 DEBUG Linha {index}: Produto antigo = '{cod_produto_antigo}'")
                 
                 # Verificar se os valores são NaN, None ou vazios
                 num_pedido = str(num_pedido_raw).strip() if pd.notna(num_pedido_raw) and num_pedido_raw is not None else ''
@@ -1400,6 +1413,10 @@ def _atualizar_item_inteligente(item, row, usuario):
 
 def _atualizar_dados_mestres(item, row):
     """Atualiza apenas dados mestres, preservando operacionais - TODOS OS CAMPOS DOS CSVs"""
+    
+    # 🔑 CAMPOS OBRIGATÓRIOS CRÍTICOS (PRIMEIRO!)
+    item.num_pedido = str(row['num_pedido'])
+    item.cod_produto = str(row['cod_produto'])
     
     # 📋 DADOS DO PEDIDO (ARQUIVO 1)
     item.pedido_cliente = row.get('pedido_cliente')
