@@ -236,7 +236,7 @@
               <div class="flex-grow-1">
                 <div class="d-flex align-items-center gap-2 mb-2">
                   <strong>Data:</strong> {{ ag.data_agendada | formatar_data_hora_brasil if ag.data_agendada else '-' }} 
-                  <strong>Hora:</strong> {{ ag.hora_agendada | formatar_hora_brasil if ag.hora_agendada else '' }}<br>
+                  <strong>Hora:</strong> {{ ag.hora_agendada | formatar_hora_brasil if ag.hora_agendada else '' }}
                   {% if ag.status == 'confirmado' %}
                     <span class="badge bg-primary">✅ Confirmado</span>
                   {% else %}
@@ -245,8 +245,6 @@
                 </div>
                 
                 <div>
-                  <strong>Data:</strong> {{ ag.data_agendada | formatar_data_hora_brasil if ag.data_agendada else '-' }} 
-                  <strong>Hora:</strong> {{ ag.hora_agendada | formatar_hora_brasil if ag.hora_agendada else '' }}<br>
                   <strong>Forma:</strong> {{ ag.forma_agendamento }} | <strong>Contato:</strong> {{ ag.contato_agendamento }}<br>
                   <strong>Protocolo:</strong> {{ ag.protocolo_agendamento | formatar_protocolo }}<br>
                   <strong>Motivo:</strong> {{ ag.motivo or '-' }}<br>
