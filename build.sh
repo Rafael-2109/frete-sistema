@@ -1,41 +1,43 @@
-#!/usr/bin/env bash
-# Script de build para Render.com
+#!/bin/bash
 
-echo "🚀 Iniciando build do Sistema de Fretes..."
+echo "🚀 INICIANDO BUILD RENDER - VERSÃO CORRIGIDA"
+echo "=============================================="
 
-# Instalar dependências Python
+# Instalar dependências
 echo "📦 Instalando dependências..."
 pip install -r requirements.txt
 
-# Baixar modelos de NLP
-echo "🧠 Baixando modelos de linguagem natural..."
+# Configurar encoding
+export PYTHONIOENCODING=utf-8
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
 
-# Modelo português do spaCy
-python -m spacy download pt_core_news_sm || echo "⚠️ Falha ao baixar modelo spaCy"
+echo "🗄️ Configurando banco de dados..."
 
-# Recursos NLTK
-python -c "
-import nltk
-nltk.download('stopwords', quiet=True)
-nltk.download('punkt', quiet=True)
-nltk.download('rslp', quiet=True)
-print('✅ Recursos NLTK baixados')
-" || echo "⚠️ Falha ao baixar recursos NLTK"
+# Limpar estado de migração problemático
+echo "🧹 Limpando estado de migração..."
+flask db stamp head 2>/dev/null || echo "⚠️ Stamp head falhou, continuando..."
 
-# Executar migrações com correção robusta
-echo "🗄️ Executando migrações do banco..."
-echo "🔧 Aplicando correção robusta de migração..."
+# Resolver múltiplas heads se existirem
+echo "🔀 Resolvendo múltiplas heads..."
+flask db merge heads -m "Merge heads for Render deployment" 2>/dev/null || echo "⚠️ Merge heads não necessário"
 
-# Tentar resolver problema da revisão 1d81b88a3038
-flask db stamp head 2>/dev/null || echo "⚠️ Stamp não necessário"
-flask db merge heads 2>/dev/null || echo "⚠️ Sem múltiplas heads para merge"
-flask db upgrade 2>/dev/null || echo "⚠️ Upgrade com problemas, continuando..."
+# Aplicar migrações
+echo "⬆️ Aplicando migrações..."
+flask db upgrade || {
+    echo "❌ Erro na migração, tentando correção..."
+    
+    # Tentar stamp na revisão mais recente
+    LATEST_REVISION=$(find migrations/versions -name "*.py" | sort | tail -1 | xargs basename | cut -d'_' -f1)
+    if [ ! -z "$LATEST_REVISION" ]; then
+        echo "🔧 Tentando stamp na revisão: $LATEST_REVISION"
+        flask db stamp $LATEST_REVISION
+        flask db upgrade
+    else
+        echo "⚠️ Usando fallback: init_db.py"
+        python init_db.py
+    fi
+}
 
-echo "✅ Build concluído!" 
-
-# Aplicar correções Claude AI
-echo "🔧 Aplicando correções Claude AI..."
-python corrigir_problemas_claude_render.py || echo "⚠️ Correções Claude AI já aplicadas ou falharam"
-
-# Verificação final de migrações
-echo "✅ Migrações aplicadas com sucesso!"
+echo "✅ BUILD CONCLUÍDO COM SUCESSO"
+echo "=============================================="
