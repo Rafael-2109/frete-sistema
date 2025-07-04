@@ -1012,7 +1012,7 @@ def conferir_fatura(fatura_id):
         documentos_status.append({
             'tipo': 'Despesa',
             'numero': despesa.numero_documento or f'Despesa #{despesa.id}',
-            'valor_cotado': despesa.valor_cotado or 0,
+            'valor_cotado': despesa.valor_despesa or 0,  # ✅ CORRIGIDO: DespesaExtra não tem valor_cotado
             'valor_cte': despesa.valor_despesa,
             'valor_considerado': despesa.valor_despesa,
             'valor_pago': despesa.valor_despesa,
@@ -1021,7 +1021,7 @@ def conferir_fatura(fatura_id):
             'despesa_id': despesa.id
         })
         
-        valor_total_cotado += despesa.valor_cotado or 0
+        valor_total_cotado += despesa.valor_despesa or 0  # ✅ CORRIGIDO: usar valor_despesa
         valor_total_cte += despesa.valor_despesa
         valor_total_considerado += despesa.valor_despesa
         valor_total_pago += despesa.valor_despesa

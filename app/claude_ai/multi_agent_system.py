@@ -1,3 +1,4 @@
+from app import db
 #!/usr/bin/env python3
 """
 🤖 SISTEMA MULTI-AGENT AI - POTENCIAL MÁXIMO

@@ -29,3 +29,7 @@ if [ -f "flask" ]; then
 fi
 
 echo "✅ Build concluído!" 
+
+# Aplicar correções Claude AI (executar uma vez)
+echo "🔧 Aplicando correções Claude AI..."
+python migracao_ai_render.py || echo "⚠️ Migração AI já aplicada ou falhou"
