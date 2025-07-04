@@ -5,9 +5,10 @@ load_dotenv()
 
 # Detecta o tipo de banco uma vez
 DATABASE_URL = os.environ.get('DATABASE_URL')
-    # Correção UTF-8 para PostgreSQL
-    if DATABASE_URL and 'client_encoding=' not in DATABASE_URL:
-        DATABASE_URL += '&client_encoding=utf-8' if '?' in DATABASE_URL else '?client_encoding=utf-8' or 'sqlite:///sistema_fretes.db'
+# Correção UTF-8 para PostgreSQL
+if DATABASE_URL and 'client_encoding=' not in DATABASE_URL:
+    DATABASE_URL += '&client_encoding=utf-8' if '?' in DATABASE_URL else '?client_encoding=utf-8'
+DATABASE_URL = DATABASE_URL or 'sqlite:///sistema_fretes.db'
 IS_POSTGRESQL = DATABASE_URL.startswith('postgresql://') or DATABASE_URL.startswith('postgres://')
 
 # Detecta se é ambiente de produção
@@ -68,7 +69,9 @@ class Config:
                 'keepalives_idle': 30,  # Envia keepalive a cada 30s
                 'keepalives_interval': 10,  # Intervalo entre keepalives
                 'keepalives_count': 5,  # Tentativas antes de desistir
-                'options': '-c statement_timeout=60000 -c idle_in_transaction_session_timeout=300000'
+                'options': '-c statement_timeout=60000 -c idle_in_transaction_session_timeout=300000',
+                'client_encoding': 'utf8',  # Encoding UTF-8 explícito
+                'options': '-c client_encoding=UTF8'  # Força UTF-8 no PostgreSQL
             }
         }
     else:

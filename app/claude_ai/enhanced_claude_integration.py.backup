@@ -34,6 +34,7 @@ class EnhancedClaudeIntegration:
         """Inicializa a integração Claude melhorada"""
         # Import lazy para evitar circular import
         try:
+            from .claude_real_integration import ClaudeRealIntegration
             self.claude_integration = ClaudeRealIntegration()
         except ImportError as e:
             print(f"⚠️ Warning: ClaudeRealIntegration não disponível: {e}")

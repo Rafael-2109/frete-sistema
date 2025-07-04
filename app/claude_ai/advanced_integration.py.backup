@@ -625,8 +625,7 @@ class AdvancedAIIntegration:
     async def _store_advanced_metadata(self, session_id: str, metadata: Dict[str, Any]):
         """Armazena metadata avançada em PostgreSQL + JSONB"""
         
-        with current_app.app_context():
-            try:
+        try:
             # Converter para JSON serializável
             json_metadata = json.dumps(metadata, default=str, ensure_ascii=False)
             

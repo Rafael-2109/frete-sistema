@@ -7,9 +7,8 @@ import json
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple
-from flask import current_app
-from app import db
 from sqlalchemy import text, func
+from app import db
 from app.utils.redis_cache import redis_cache, REDIS_DISPONIVEL
 
 logger = logging.getLogger(__name__)
@@ -135,8 +134,7 @@ class LifelongLearningSystem:
     
     def _salvar_padrao(self, padrao: Dict) -> Optional[Dict]:
         """Salva ou atualiza um padrão no banco"""
-        with current_app.app_context():
-            try:
+        try:
             # Verificar se já existe
             existe = db.session.execute(
                 text("""
@@ -192,8 +190,7 @@ class LifelongLearningSystem:
     
     def _aprender_mapeamento_cliente(self, consulta: str, cliente: str) -> Optional[Dict]:
         """Aprende como usuários se referem a clientes"""
-        with current_app.app_context():
-            try:
+        try:
             # Extrair termos usados para o cliente
             termos = self._extrair_termos_cliente(consulta, cliente)
             
@@ -378,8 +375,7 @@ class LifelongLearningSystem:
                          resposta: str, feedback: Optional[Dict], 
                          aprendizados: Dict, usuario_id: Optional[int]):
         """Salva histórico completo da interação"""
-        with current_app.app_context():
-            try:
+        try:
             db.session.execute(
                 text("""
                     INSERT INTO ai_learning_history
@@ -667,8 +663,7 @@ class LifelongLearningSystem:
     
     def _atualizar_metricas(self, interpretacao: Dict, feedback: Optional[Dict]):
         """Atualiza métricas de performance"""
-        with current_app.app_context():
-            try:
+        try:
             # Calcular satisfação baseada no feedback
             satisfacao = 1.0  # Default: satisfeito
             if feedback:
