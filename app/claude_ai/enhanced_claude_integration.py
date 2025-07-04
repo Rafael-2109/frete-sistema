@@ -13,7 +13,7 @@ import json
 
 import logging
 from .intelligent_query_analyzer import get_intelligent_analyzer, TipoInformacao, UrgenciaConsulta
-from .claude_real_integration import ClaudeRealIntegration
+# from .claude_real_integration import ClaudeRealIntegration  # Removido para evitar import circular
 from .sistema_real_data import get_sistema_real_data
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,13 @@ class EnhancedClaudeIntegration:
     
     def __init__(self):
         """Inicializa a integração Claude melhorada"""
-        self.claude_integration = ClaudeRealIntegration()
+        # Import lazy para evitar circular import
+        try:
+            from .claude_real_integration import ClaudeRealIntegration
+            self.claude_integration = ClaudeRealIntegration()
+        except ImportError as e:
+            print(f"⚠️ Warning: ClaudeRealIntegration não disponível: {e}")
+            self.claude_integration = None
         self.intelligent_analyzer = get_intelligent_analyzer()
         self.sistema_data = get_sistema_real_data()
         
