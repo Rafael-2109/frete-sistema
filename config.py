@@ -70,7 +70,8 @@ class Config:
                 'keepalives_interval': 10,  # Intervalo entre keepalives
                 'keepalives_count': 5,  # Tentativas antes de desistir
                 'options': '-c statement_timeout=60000 -c idle_in_transaction_session_timeout=300000',
-                'client_encoding': 'utf8'  # Encoding UTF-8 explícito
+                'client_encoding': 'utf8',  # Encoding UTF-8 explícito
+                'options': '-c client_encoding=UTF8'  # Força UTF-8 no PostgreSQL
             }
         }
     else:

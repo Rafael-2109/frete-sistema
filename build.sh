@@ -30,6 +30,10 @@ fi
 
 echo "✅ Build concluído!" 
 
-# Aplicar correções Claude AI (executar uma vez)
+# Aplicar correções Claude AI
 echo "🔧 Aplicando correções Claude AI..."
-python migracao_ai_render.py || echo "⚠️ Migração AI já aplicada ou falhou"
+python corrigir_problemas_claude_render.py || echo "⚠️ Correções Claude AI já aplicadas ou falharam"
+
+# Executar migrações das tabelas de IA
+echo "🗄️ Executando migrações das tabelas de IA..."
+flask db upgrade || echo "⚠️ Migrações já aplicadas ou falharam"
