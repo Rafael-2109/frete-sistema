@@ -90,10 +90,11 @@
                             <th>Cliente</th>
                             <th>Vendedor</th>
                             <th>Status</th>
-                            <th class="text-right">Qtd</th>
                             <th class="text-right">Saldo</th>
-                            <th class="text-right">Preço</th>
+                            <th class="text-right">Valor</th>
+                            <th class="text-center">Peso/Pallet</th>
                             <th class="text-center">Expedição</th>
+                            <th class="text-center">Separação</th>
                             <th class="text-center">Ações</th>
                         </tr>
                     </thead>
@@ -127,22 +128,56 @@
                                 {% else %}
                                 <span class="badge badge-secondary">Sem Status</span>
                                 {% endif %}
+                                {% if item.cliente_nec_agendamento == 'Sim' %}
+                                <br><small class="badge badge-info">Agendamento</small>
+                                {% endif %}
                             </td>
-                            <td class="text-right">{{ item.qtd_produto_pedido|numero_br }}</td>
                             <td class="text-right">
                                 <strong>{{ item.qtd_saldo_produto_pedido|numero_br }}</strong>
+                                {% if item.qtd_cancelada_produto_pedido and item.qtd_cancelada_produto_pedido > 0 %}
+                                <br><small class="text-muted">Cancel: {{ item.qtd_cancelada_produto_pedido|numero_br }}</small>
+                                {% endif %}
                             </td>
-                            <td class="text-right">{{ item.preco_produto_pedido|valor_br if item.preco_produto_pedido else '-' }}</td>
+                            <td class="text-right">
+                                {% set valor_total = (item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0) %}
+                                <strong>{{ valor_total|valor_br }}</strong>
+                                <br><small class="text-muted">{{ item.preco_produto_pedido|valor_br if item.preco_produto_pedido else '-' }}/un</small>
+                            </td>
+                            <td class="text-center">
+                                {% if item.peso or item.pallet %}
+                                <span class="badge badge-secondary">
+                                    {% if item.peso %}{{ item.peso|numero_br }}kg{% endif %}
+                                    {% if item.peso and item.pallet %} | {% endif %}
+                                    {% if item.pallet %}{{ item.pallet|numero_br }}pl{% endif %}
+                                </span>
+                                {% else %}
+                                <span class="badge badge-light">-</span>
+                                {% endif %}
+                            </td>
                             <td class="text-center">
                                 {% if item.expedicao %}
                                 <span class="badge badge-warning">{{ item.expedicao|formatar_data_brasil }}</span>
                                 {% else %}
                                 <span class="badge badge-light">-</span>
                                 {% endif %}
+                                {% if item.agendamento %}
+                                <br><small class="badge badge-info">{{ item.agendamento|formatar_data_brasil }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.lote_separacao_id %}
+                                <span class="badge badge-success" title="Vinculado ao lote {{ item.lote_separacao_id }}">
+                                    <i class="fas fa-link"></i> #{{ item.lote_separacao_id }}
+                                </span>
+                                {% else %}
+                                <span class="badge badge-secondary">
+                                    <i class="fas fa-unlink"></i> Sem separação
+                                </span>
+                                {% endif %}
                             </td>
                             <td class="text-center">
                                 <button class="btn btn-info btn-sm" onclick="verDetalhes({{ item.id }})" 
-                                        title="Ver detalhes">
+                                        title="Ver detalhes completos">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </td>
@@ -223,11 +258,11 @@
 
 <!-- Modal de Detalhes -->
 <div class="modal fade" id="modalDetalhes" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    <i class="fas fa-info-circle"></i> Detalhes do Item
+                    <i class="fas fa-clipboard-list"></i> Análise Completa do Item da Carteira
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -272,29 +307,130 @@ function verDetalhes(itemId) {
                     </div>
                 `;
             } else {
+                // Status geral com cores
+                const statusColors = {
+                    'OK': 'success',
+                    'PENDENTE': 'warning',
+                    'PARCIAL': 'info',
+                    'ATENCAO': 'warning',
+                    'CRITICO': 'danger'
+                };
+                const statusColor = statusColors[data.indicadores.status_geral.status] || 'secondary';
+                
                 conteudo.innerHTML = `
+                    <!-- Status Geral -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="alert alert-${statusColor}" role="alert">
+                                <h5 class="alert-heading">
+                                    <i class="fas fa-clipboard-check"></i> Status: ${data.indicadores.status_geral.status}
+                                </h5>
+                                <p class="mb-0">${data.indicadores.status_geral.motivo}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Informações Principais -->
                     <div class="row">
                         <div class="col-md-6">
-                            <h6><i class="fas fa-info"></i> Informações Básicas</h6>
-                            <table class="table table-sm">
-                                <tr><td><strong>Pedido:</strong></td><td>${data.num_pedido}</td></tr>
+                            <h6><i class="fas fa-info-circle text-primary"></i> Informações Básicas</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr><td><strong>Pedido:</strong></td><td><span class="badge badge-primary">${data.num_pedido}</span></td></tr>
                                 <tr><td><strong>Produto:</strong></td><td>${data.cod_produto}</td></tr>
                                 <tr><td><strong>Descrição:</strong></td><td>${data.nome_produto}</td></tr>
-                                <tr><td><strong>Cliente:</strong></td><td>${data.raz_social_red}</td></tr>
+                                <tr><td><strong>Cliente:</strong></td><td>${data.raz_social_red || data.raz_social}</td></tr>
+                                <tr><td><strong>Cidade/UF:</strong></td><td>${data.municipio || '-'}/${data.estado || '-'}</td></tr>
                                 <tr><td><strong>Vendedor:</strong></td><td>${data.vendedor || '-'}</td></tr>
-                                <tr><td><strong>Status:</strong></td><td>${data.status_pedido || '-'}</td></tr>
+                                <tr><td><strong>Status:</strong></td><td><span class="badge badge-secondary">${data.status_pedido || '-'}</span></td></tr>
                             </table>
                         </div>
                         <div class="col-md-6">
-                            <h6><i class="fas fa-calculator"></i> Quantidades e Valores</h6>
-                            <table class="table table-sm">
-                                <tr><td><strong>Qtd Pedido:</strong></td><td>${data.qtd_produto_pedido}</td></tr>
-                                <tr><td><strong>Qtd Saldo:</strong></td><td>${data.qtd_saldo_produto_pedido}</td></tr>
-                                <tr><td><strong>Preço Unit:</strong></td><td>R$ ${data.preco_produto_pedido}</td></tr>
-                                <tr><td><strong>Expedição:</strong></td><td>${data.expedicao || '-'}</td></tr>
-                                <tr><td><strong>Agendamento:</strong></td><td>${data.agendamento || '-'}</td></tr>
+                            <h6><i class="fas fa-calculator text-success"></i> Quantidades e Valores</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr><td><strong>Qtd Pedido:</strong></td><td>${data.qtd_produto_pedido.toFixed(2)}</td></tr>
+                                <tr><td><strong>Qtd Saldo:</strong></td><td><strong>${data.qtd_saldo_produto_pedido.toFixed(2)}</strong></td></tr>
+                                <tr><td><strong>Qtd Cancelada:</strong></td><td>${data.qtd_cancelada_produto_pedido.toFixed(2)}</td></tr>
+                                <tr><td><strong>Preço Unit:</strong></td><td>R$ ${data.preco_produto_pedido.toFixed(2)}</td></tr>
+                                <tr><td><strong>Valor Total:</strong></td><td><strong>R$ ${data.valor_total.toFixed(2)}</strong></td></tr>
+                                <tr><td><strong>Peso Total:</strong></td><td>${data.peso.toFixed(2)} kg</td></tr>
+                                <tr><td><strong>Pallets:</strong></td><td>${data.pallet.toFixed(2)}</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Datas e Prazos -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-calendar text-warning"></i> Datas e Prazos</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr><td><strong>Expedição:</strong></td><td>${data.expedicao ? '<span class="badge badge-warning">' + data.expedicao + '</span>' : '-'}</td></tr>
+                                <tr><td><strong>Agendamento:</strong></td><td>${data.agendamento ? '<span class="badge badge-info">' + data.agendamento + '</span>' : '-'}</td></tr>
+                                <tr><td><strong>Data Entrega:</strong></td><td>${data.data_entrega_pedido ? '<span class="badge badge-success">' + data.data_entrega_pedido + '</span>' : '-'}</td></tr>
                                 <tr><td><strong>Protocolo:</strong></td><td>${data.protocolo || '-'}</td></tr>
                             </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-phone text-info"></i> Agendamento do Cliente</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr><td><strong>Precisa Agendamento:</strong></td><td>${data.agendamento_info.precisa_agendamento ? '<span class="badge badge-warning">Sim</span>' : '<span class="badge badge-success">Não</span>'}</td></tr>
+                                <tr><td><strong>Forma:</strong></td><td>${data.agendamento_info.forma_agendamento || '-'}</td></tr>
+                                <tr><td><strong>Contato:</strong></td><td>${data.agendamento_info.contato || '-'}</td></tr>
+                                <tr><td><strong>Observação:</strong></td><td><small>${data.agendamento_info.observacao || '-'}</small></td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Estoque e Separação -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-boxes text-primary"></i> Situação do Estoque</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr><td><strong>Saldo Atual:</strong></td><td><span class="badge badge-${data.estoque.disponivel ? 'success' : 'danger'}">${data.estoque.saldo_atual.toFixed(2)}</span></td></tr>
+                                <tr><td><strong>Necessário:</strong></td><td>${data.qtd_saldo_produto_pedido.toFixed(2)}</td></tr>
+                                <tr><td><strong>Disponível:</strong></td><td>${data.estoque.disponivel ? '<span class="badge badge-success">Sim</span>' : '<span class="badge badge-danger">Não</span>'}</td></tr>
+                                <tr><td><strong>Previsão Ruptura:</strong></td><td><span class="badge badge-${data.estoque.status_ruptura === 'OK' ? 'success' : data.estoque.status_ruptura === 'CRÍTICO' ? 'danger' : 'warning'}">${data.estoque.previsao_ruptura.toFixed(2)}</span></td></tr>
+                                <tr><td><strong>Status Estoque:</strong></td><td><span class="badge badge-${data.estoque.status_ruptura === 'OK' ? 'success' : data.estoque.status_ruptura === 'CRÍTICO' ? 'danger' : 'warning'}">${data.estoque.status_ruptura}</span></td></tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-cut text-success"></i> Situação da Separação</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr><td><strong>Tem Separação:</strong></td><td>${data.separacao_info.tem_separacao ? '<span class="badge badge-success">Sim</span>' : '<span class="badge badge-secondary">Não</span>'}</td></tr>
+                                <tr><td><strong>Lote ID:</strong></td><td>${data.separacao_info.lote_id ? '<span class="badge badge-info">#' + data.separacao_info.lote_id + '</span>' : '-'}</td></tr>
+                                <tr><td><strong>Qtd Separada:</strong></td><td>${data.separacao_info.qtd_separada.toFixed(2)}</td></tr>
+                                <tr><td><strong>Peso Separado:</strong></td><td>${data.separacao_info.peso_separado.toFixed(2)} kg</td></tr>
+                                <tr><td><strong>Pallets Separados:</strong></td><td>${data.separacao_info.pallet_separado.toFixed(2)}</td></tr>
+                                <tr><td><strong>% Separado:</strong></td><td><span class="badge badge-${data.separacao_info.separacao_completa ? 'success' : 'warning'}">${data.separacao_info.percentual_separado.toFixed(1)}%</span></td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Indicadores Finais -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="card border-left-${statusColor}">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-chart-line"></i> Resumo dos Indicadores</h6>
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <small><strong>Valor do Item:</strong></small><br>
+                                            <span class="h6">R$ ${data.indicadores.valor_total_item.toFixed(2)}</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <small><strong>Estoque:</strong></small><br>
+                                            <span class="badge badge-${data.indicadores.estoque_suficiente ? 'success' : 'danger'}">${data.indicadores.estoque_suficiente ? 'Suficiente' : 'Insuficiente'}</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <small><strong>Agendamento:</strong></small><br>
+                                            <span class="badge badge-${data.indicadores.necessita_agendamento ? 'warning' : 'success'}">${data.indicadores.necessita_agendamento ? 'Necessário' : 'Não precisa'}</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <small><strong>Separação:</strong></small><br>
+                                            <span class="badge badge-${data.indicadores.separacao_completa ? 'success' : data.indicadores.tem_separacao_vinculada ? 'warning' : 'secondary'}">${data.indicadores.separacao_completa ? 'Completa' : data.indicadores.tem_separacao_vinculada ? 'Parcial' : 'Pendente'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -326,6 +462,34 @@ function verDetalhes(itemId) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Bordas coloridas para status */
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e !important;
+}
+.border-left-danger {
+    border-left: 0.25rem solid #e74a3b !important;
+}
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
+}
+.border-left-secondary {
+    border-left: 0.25rem solid #858796 !important;
+}
+
+/* Melhorar tabelas no modal */
+.table-borderless td {
+    border: none;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Cards no modal */
+.modal-body .card {
+    margin-bottom: 0;
 }
 </style>
 {% endblock %} 

@@ -1,0 +1,511 @@
+{% extends "base.html" %}
+{% block title %}Gerar Separação Avançada{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 🚀 Header da Página -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-rocket text-primary"></i> Gerar Separação Avançada
+        </h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('carteira.index') }}">Carteira</a></li>
+                <li class="breadcrumb-item active">Gerar Separação Avançada</li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- 📋 Formulário Principal -->
+    <form method="POST" id="formSeparacaoAvancada">
+        {{ csrf_token() }}
+        
+        <!-- 📅 Seção de Datas e Protocolo -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-calendar-alt"></i> Configurações Operacionais
+                </h6>
+                <p class="text-muted mb-0 mt-2">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Protocolo:</strong>
+                </p>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="data_expedicao">
+                                <i class="fas fa-shipping-fast text-primary"></i> Data de Expedição
+                            </label>
+                            <input type="date" 
+                                   class="form-control" 
+                                   id="data_expedicao" 
+                                   name="data_expedicao"
+                                   min="{{ moment().format('YYYY-MM-DD') }}"
+                                   onchange="validarDatas()">
+                            <small class="form-text text-muted">Data planejada para expedição</small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="data_entrega">
+                                <i class="fas fa-truck text-success"></i> Data de Entrega
+                            </label>
+                            <input type="date" 
+                                   class="form-control" 
+                                   id="data_entrega" 
+                                   name="data_entrega"
+                                   min="{{ moment().format('YYYY-MM-DD') }}"
+                                   onchange="validarDatas()">
+                            <small class="form-text text-muted">Data prevista para entrega ao cliente</small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="data_agendamento">
+                                <i class="fas fa-clock text-warning"></i> Data de Agendamento
+                            </label>
+                            <input type="date" 
+                                   class="form-control" 
+                                   id="data_agendamento" 
+                                   name="data_agendamento"
+                                   onchange="validarDatas()">
+                            <small class="form-text text-muted">Data do agendamento com cliente</small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="protocolo_agendamento">
+                                <i class="fas fa-hashtag text-info"></i> Protocolo do Cliente
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="protocolo_agendamento" 
+                                   name="protocolo_agendamento">
+                            <small class="form-text text-muted">Protocolo de agendamento</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-12">
+                        <div class="form-group">
+                            <label for="observacao">
+                                <i class="fas fa-sticky-note text-secondary"></i> Observações da Separação
+                            </label>
+                            <textarea class="form-control" 
+                                      id="observacao" 
+                                      name="observacao" 
+                                      rows="2" 
+                                      placeholder="Observações gerais sobre esta separação..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 📦 Seleção de Itens -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-boxes"></i> Itens Disponíveis para Separação 
+                    <span class="badge badge-info" id="countItensDisponiveis">{{ itens_disponiveis|length }}</span>
+                </h6>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="selecionarTodos()">
+                        <i class="fas fa-check-square"></i> Selecionar Todos
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="limparSelecao()">
+                        <i class="fas fa-square"></i> Limpar Seleção
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if itens_disponiveis %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover mb-0" id="tabelaItens">
+                        <thead class="thead-light">
+                            <tr>
+                                <th width="50">
+                                    <input type="checkbox" id="checkAll" onchange="toggleTodos()">
+                                </th>
+                                <th>Pedido</th>
+                                <th>Produto</th>
+                                <th>Cliente</th>
+                                <th>Vendedor</th>
+                                <th class="text-right">Qtd</th>
+                                <th class="text-right">Valor Unit.</th>
+                                <th class="text-right">Valor Total</th>
+                                <th class="text-center">Estoque</th>
+                                <th class="text-center">Agendamento</th>
+                                <th class="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item_info in itens_disponiveis %}
+                                {% set item = item_info.item %}
+                                <tr class="{% if not item_info.estoque_suficiente %}table-warning{% endif %}">
+                                    <td class="text-center">
+                                        <input type="checkbox" 
+                                               name="itens_selecionados" 
+                                               value="{{ item.id }}"
+                                               class="item-checkbox"
+                                               onchange="atualizarTotais()">
+                                    </td>
+                                    <td>
+                                        <strong>{{ item.num_pedido }}</strong>
+                                        {% if item.expedicao %}
+                                            <br><small class="text-primary">
+                                                <i class="fas fa-shipping-fast"></i> {{ item.expedicao.strftime('%d/%m/%Y') }}
+                                            </small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <strong>{{ item.cod_produto }}</strong>
+                                        <br><small class="text-muted">{{ item.nome_produto|truncate(30) }}</small>
+                                    </td>
+                                    <td>
+                                        <strong>{{ item.raz_social_red or item.raz_social }}</strong>
+                                        <br><small class="text-muted">{{ item.municipio }}/{{ item.estado }}</small>
+                                    </td>
+                                    <td>{{ item.vendedor or '-' }}</td>
+                                    <td class="text-right">
+                                        <strong>{{ item.qtd_saldo_produto_pedido|numero_br }}</strong>
+                                        {% if item.peso %}
+                                            <br><small class="text-muted">{{ (item.peso * item.qtd_saldo_produto_pedido)|numero_br }} kg</small>
+                                        {% endif %}
+                                        {% if item.pallet %}
+                                            <br><small class="text-info">{{ (item.pallet * item.qtd_saldo_produto_pedido)|numero_br }} pl</small>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-right">{{ item.preco_produto_pedido|valor_br if item.preco_produto_pedido else '-' }}</td>
+                                    <td class="text-right">
+                                        <strong>{{ item_info.valor_total|valor_br }}</strong>
+                                    </td>
+                                    <td class="text-center">
+                                        {% if item_info.estoque_suficiente %}
+                                            <span class="badge badge-success">
+                                                <i class="fas fa-check"></i> {{ item_info.estoque_disponivel|numero_br }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge badge-warning">
+                                                <i class="fas fa-exclamation-triangle"></i> {{ item_info.estoque_disponivel|numero_br }}
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if item_info.precisa_agendamento %}
+                                            {% if item_info.tem_contato_agendamento %}
+                                                <span class="badge badge-info" title="Forma: {{ item_info.forma_agendamento }}">
+                                                    <i class="fas fa-calendar-check"></i> {{ item_info.forma_agendamento or 'Cadastrado' }}
+                                                </span>
+                                            {% else %}
+                                                <span class="badge badge-danger">
+                                                    <i class="fas fa-exclamation-circle"></i> Não cadastrado
+                                                </span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge badge-secondary">
+                                                <i class="fas fa-times"></i> Não precisa
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if item.lote_separacao_id %}
+                                            <span class="badge badge-primary">
+                                                <i class="fas fa-link"></i> {{ item.lote_separacao_id }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge badge-light">
+                                                <i class="fas fa-plus"></i> Novo
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Nenhum item disponível para separação</h5>
+                    <p class="text-muted">Todos os itens da carteira já foram separados ou estão inativos.</p>
+                    <a href="{{ url_for('carteira.index') }}" class="btn btn-primary">
+                        <i class="fas fa-arrow-left"></i> Voltar à Carteira
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 📊 Resumo da Separação -->
+        <div class="card shadow mb-4" id="resumoSeparacao" style="display: none;">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-success">
+                    <i class="fas fa-calculator"></i> Resumo da Separação
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card border-left-primary h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                            Itens Selecionados
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalItens">0</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-boxes fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <div class="card border-left-success h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                            Valor Total
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="valorTotal">R$ 0,00</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <div class="card border-left-info h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                            Peso Total
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="pesoTotal">0 kg</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-weight fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <div class="card border-left-warning h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                            Pallets Total
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="palletTotal">0 pl</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-pallet fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 🎯 Problemas Detectados -->
+                <div id="alertasProblemas" class="mt-3" style="display: none;">
+                    <div class="alert alert-warning" role="alert">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Atenção aos problemas detectados:</h6>
+                        <ul id="listaProblemas" class="mb-0"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🚀 Botões de Ação -->
+        {% if itens_disponiveis %}
+        <div class="card shadow mb-4">
+            <div class="card-body text-center">
+                <button type="submit" class="btn btn-primary btn-lg" id="btnGerar" disabled>
+                    <i class="fas fa-rocket"></i> Gerar Separação Avançada
+                </button>
+                <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary btn-lg ml-3">
+                    <i class="fas fa-arrow-left"></i> Cancelar
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+<style>
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
+}
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e !important;
+}
+.table-warning {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+}
+</style>
+
+<script>
+let dadosItens = {};
+
+// Preparar dados dos itens para JavaScript
+{% for item_info in itens_disponiveis %}
+dadosItens[{{ item_info.item.id }}] = {
+    qtd: {{ item_info.item.qtd_saldo_produto_pedido or 0 }},
+    peso: {{ item_info.item.peso or 0 }},
+    pallet: {{ item_info.item.pallet or 0 }},
+    valor_unitario: {{ item_info.item.preco_produto_pedido or 0 }},
+    valor_total: {{ item_info.valor_total }},
+    estoque_suficiente: {{ item_info.estoque_suficiente|lower }},
+    precisa_agendamento: {{ item_info.precisa_agendamento|lower }},
+    tem_contato_agendamento: {{ item_info.tem_contato_agendamento|lower }}
+};
+{% endfor %}
+
+function toggleTodos() {
+    const checkAll = document.getElementById('checkAll');
+    const checkboxes = document.querySelectorAll('.item-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = checkAll.checked;
+    });
+    
+    atualizarTotais();
+}
+
+function selecionarTodos() {
+    document.getElementById('checkAll').checked = true;
+    toggleTodos();
+}
+
+function limparSelecao() {
+    document.getElementById('checkAll').checked = false;
+    toggleTodos();
+}
+
+function atualizarTotais() {
+    const checkboxes = document.querySelectorAll('.item-checkbox:checked');
+    let totalItens = 0;
+    let valorTotal = 0;
+    let pesoTotal = 0;
+    let palletTotal = 0;
+    let problemas = [];
+    
+    checkboxes.forEach(checkbox => {
+        const itemId = parseInt(checkbox.value);
+        const dados = dadosItens[itemId];
+        
+        if (dados) {
+            totalItens++;
+            valorTotal += dados.valor_total;
+            pesoTotal += dados.peso * dados.qtd;
+            palletTotal += dados.pallet * dados.qtd;
+            
+            // Detectar problemas
+            if (!dados.estoque_suficiente) {
+                problemas.push(`Item ${itemId}: Estoque insuficiente`);
+            }
+            if (dados.precisa_agendamento && !dados.tem_contato_agendamento) {
+                problemas.push(`Item ${itemId}: Precisa agendamento mas não tem contato cadastrado`);
+            }
+        }
+    });
+    
+    // Atualizar interface
+    document.getElementById('totalItens').textContent = totalItens;
+    document.getElementById('valorTotal').textContent = 'R$ ' + valorTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+    document.getElementById('pesoTotal').textContent = pesoTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + ' kg';
+    document.getElementById('palletTotal').textContent = palletTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + ' pl';
+    
+    // Mostrar/ocultar resumo
+    const resumo = document.getElementById('resumoSeparacao');
+    const btnGerar = document.getElementById('btnGerar');
+    
+    if (totalItens > 0) {
+        resumo.style.display = 'block';
+        btnGerar.disabled = false;
+    } else {
+        resumo.style.display = 'none';
+        btnGerar.disabled = true;
+    }
+    
+    // Mostrar problemas
+    const alertasProblemas = document.getElementById('alertasProblemas');
+    const listaProblemas = document.getElementById('listaProblemas');
+    
+    if (problemas.length > 0) {
+        listaProblemas.innerHTML = problemas.map(p => `<li>${p}</li>`).join('');
+        alertasProblemas.style.display = 'block';
+    } else {
+        alertasProblemas.style.display = 'none';
+    }
+}
+
+function validarDatas() {
+    const dataExpedicao = document.getElementById('data_expedicao').value;
+    const dataEntrega = document.getElementById('data_entrega').value;
+    const dataAgendamento = document.getElementById('data_agendamento').value;
+    
+    // Validar sequência lógica
+    if (dataExpedicao && dataEntrega && dataEntrega < dataExpedicao) {
+        alert('❌ Data de entrega deve ser igual ou posterior à data de expedição');
+        document.getElementById('data_entrega').value = '';
+        return;
+    }
+    
+    if (dataAgendamento && dataExpedicao && dataAgendamento > dataExpedicao) {
+        alert('❌ Data de agendamento deve ser anterior ou igual à data de expedição');
+        document.getElementById('data_agendamento').value = '';
+        return;
+    }
+}
+
+// Validação antes do envio
+document.getElementById('formSeparacaoAvancada').addEventListener('submit', function(e) {
+    const checkboxes = document.querySelectorAll('.item-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        e.preventDefault();
+        alert('❌ Selecione pelo menos um item para gerar a separação');
+        return;
+    }
+    
+    // Confirmar ação
+    const totalItens = checkboxes.length;
+    const confirmacao = confirm(`🚀 Confirma a geração da separação com ${totalItens} itens selecionados?`);
+    
+    if (!confirmacao) {
+        e.preventDefault();
+    }
+});
+
+// Inicializar
+document.addEventListener('DOMContentLoaded', function() {
+    atualizarTotais();
+});
+</script>
+{% endblock %} 

@@ -280,6 +280,12 @@
                             <small class="text-muted d-block">Criar "recorte" da carteira para separação</small>
                         </a>
                         
+                        <a href="{{ url_for('carteira.gerar_separacao_avancada') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-rocket text-primary"></i>
+                            <strong>Gerar Separação Avançada</strong>
+                            <small class="text-muted d-block">Separação com datas de expedição, entrega, agendamento e protocolo</small>
+                        </a>
+                        
                         <a href="{{ url_for('carteira.relatorio_vinculacoes') }}" class="list-group-item list-group-item-action">
                             <i class="fas fa-link text-info"></i>
                             <strong>Relatório de Vinculações</strong>

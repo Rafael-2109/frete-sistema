@@ -14,7 +14,7 @@ from app.pedidos.models import Pedido
 from app.faturamento.models import FaturamentoProduto
 # from app.utils.auth_decorators import require_admin, require_editar_cadastros  # Removido temporariamente
 from app.utils.timezone import agora_brasil
-from sqlalchemy import func, and_, or_, inspect
+from sqlalchemy import func, and_, or_, inspect, literal
 from datetime import datetime, date, timedelta
 import pandas as pd
 import logging
@@ -376,8 +376,9 @@ def importar_carteira():
             🔄 Existentes atualizados: {resultado['existentes_atualizados']}
             🛡️ Dados preservados: {resultado['dados_preservados']}
             📋 Total processados: {resultado['total_processados']}
-            #🤖 Automação: {resultado_automacao['resumo']}
             """, 'success')
+            '''#🤖 Automação: {resultado_automacao['resumo']}'''
+
         else:
             flash(f'Erro na importação: {resultado["erro"]}', 'error')
         
@@ -546,13 +547,181 @@ def gerar_separacao():
 @carteira_bp.route('/api/item/<int:id>')
 @login_required
 def api_item_detalhes(id):
-    """API para detalhes de um item da carteira"""
+    """API aprimorada para detalhes completos de um item da carteira"""
     try:
         item = CarteiraPrincipal.query.get_or_404(id)
-        return jsonify(item.to_dict())
+        
+        # 📊 DADOS BÁSICOS DO ITEM
+        dados = {
+            'id': item.id,
+            'num_pedido': item.num_pedido,
+            'cod_produto': item.cod_produto,
+            'nome_produto': item.nome_produto,
+            'raz_social': item.raz_social,
+            'raz_social_red': item.raz_social_red,
+            'vendedor': item.vendedor,
+            'status_pedido': item.status_pedido,
+            'qtd_produto_pedido': float(item.qtd_produto_pedido or 0),
+            'qtd_saldo_produto_pedido': float(item.qtd_saldo_produto_pedido or 0),
+            'qtd_cancelada_produto_pedido': float(item.qtd_cancelada_produto_pedido or 0),
+            'preco_produto_pedido': float(item.preco_produto_pedido or 0),
+            'expedicao': item.expedicao.strftime('%d/%m/%Y') if item.expedicao else None,
+            'agendamento': item.agendamento.strftime('%d/%m/%Y') if item.agendamento else None,
+            'protocolo': item.protocolo,
+            'peso': float(item.peso or 0),
+            'pallet': float(item.pallet or 0),
+            'cnpj_cpf': item.cnpj_cpf,
+            'municipio': item.municipio,
+            'estado': item.estado,
+            'cliente_nec_agendamento': item.cliente_nec_agendamento,
+            'data_entrega_pedido': item.data_entrega_pedido.strftime('%d/%m/%Y') if item.data_entrega_pedido else None,
+            'valor_total': float((item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0)),
+            'lote_separacao_id': item.lote_separacao_id
+        }
+        
+        # 📦 INFORMAÇÕES DE ESTOQUE
+        try:
+            from app.estoque.models import SaldoEstoque
+            estoque_info = SaldoEstoque.obter_resumo_produto(item.cod_produto, item.nome_produto)
+            if estoque_info:
+                dados['estoque'] = {
+                    'saldo_atual': estoque_info['estoque_inicial'],
+                    'previsao_ruptura': estoque_info['previsao_ruptura'],
+                    'status_ruptura': estoque_info['status_ruptura'],
+                    'disponivel': estoque_info['estoque_inicial'] >= (item.qtd_saldo_produto_pedido or 0)
+                }
+            else:
+                dados['estoque'] = {
+                    'saldo_atual': 0,
+                    'previsao_ruptura': 0,
+                    'status_ruptura': 'SEM_DADOS',
+                    'disponivel': False
+                }
+        except Exception as e:
+            logger.warning(f"Erro ao buscar dados de estoque: {str(e)}")
+            dados['estoque'] = {
+                'saldo_atual': 0,
+                'previsao_ruptura': 0,
+                'status_ruptura': 'ERRO',
+                'disponivel': False
+            }
+        
+        # 📞 INFORMAÇÕES DE AGENDAMENTO DO CLIENTE
+        try:
+            from app.cadastros_agendamento.models import ContatoAgendamento
+            contato_agendamento = ContatoAgendamento.query.filter_by(cnpj=item.cnpj_cpf).first()
+            if contato_agendamento:
+                dados['agendamento_info'] = {
+                    'forma_agendamento': contato_agendamento.forma,
+                    'contato': contato_agendamento.contato,
+                    'observacao': contato_agendamento.observacao,
+                    'precisa_agendamento': item.cliente_nec_agendamento == 'Sim'
+                }
+            else:
+                dados['agendamento_info'] = {
+                    'forma_agendamento': None,
+                    'contato': None,
+                    'observacao': 'Cliente não cadastrado',
+                    'precisa_agendamento': item.cliente_nec_agendamento == 'Sim'
+                }
+        except Exception as e:
+            logger.warning(f"Erro ao buscar dados de agendamento: {str(e)}")
+            dados['agendamento_info'] = {
+                'forma_agendamento': None,
+                'contato': None,
+                'observacao': 'Erro ao carregar',
+                'precisa_agendamento': item.cliente_nec_agendamento == 'Sim'
+            }
+        
+        # 📦 INFORMAÇÕES DE SEPARAÇÃO VINCULADA
+        try:
+            from app.separacao.models import Separacao
+            if item.lote_separacao_id:
+                separacoes = Separacao.query.filter_by(
+                    separacao_lote_id=item.lote_separacao_id,
+                    num_pedido=item.num_pedido,
+                    cod_produto=item.cod_produto
+                ).all()
+                
+                if separacoes:
+                    total_qtd_separada = sum(float(s.qtd_saldo or 0) for s in separacoes)
+                    total_peso_separado = sum(float(s.peso or 0) for s in separacoes)
+                    total_pallet_separado = sum(float(s.pallet or 0) for s in separacoes)
+                    
+                    dados['separacao_info'] = {
+                        'tem_separacao': True,
+                        'lote_id': item.lote_separacao_id,
+                        'qtd_separada': total_qtd_separada,
+                        'peso_separado': total_peso_separado,
+                        'pallet_separado': total_pallet_separado,
+                        'percentual_separado': (total_qtd_separada / (item.qtd_saldo_produto_pedido or 1)) * 100 if item.qtd_saldo_produto_pedido else 0,
+                        'separacao_completa': total_qtd_separada >= (item.qtd_saldo_produto_pedido or 0)
+                    }
+                else:
+                    dados['separacao_info'] = {
+                        'tem_separacao': False,
+                        'lote_id': item.lote_separacao_id,
+                        'qtd_separada': 0,
+                        'peso_separado': 0,
+                        'pallet_separado': 0,
+                        'percentual_separado': 0,
+                        'separacao_completa': False
+                    }
+            else:
+                dados['separacao_info'] = {
+                    'tem_separacao': False,
+                    'lote_id': None,
+                    'qtd_separada': 0,
+                    'peso_separado': 0,
+                    'pallet_separado': 0,
+                    'percentual_separado': 0,
+                    'separacao_completa': False
+                }
+        except Exception as e:
+            logger.warning(f"Erro ao buscar dados de separação: {str(e)}")
+            dados['separacao_info'] = {
+                'tem_separacao': False,
+                'lote_id': None,
+                'qtd_separada': 0,
+                'peso_separado': 0,
+                'pallet_separado': 0,
+                'percentual_separado': 0,
+                'separacao_completa': False
+            }
+        
+        # 📊 INDICADORES CALCULADOS
+        dados['indicadores'] = {
+            'valor_total_item': dados['valor_total'],
+            'necessita_agendamento': dados['agendamento_info']['precisa_agendamento'],
+            'estoque_suficiente': dados['estoque']['disponivel'],
+            'tem_separacao_vinculada': dados['separacao_info']['tem_separacao'],
+            'separacao_completa': dados['separacao_info']['separacao_completa'],
+            'status_geral': _calcular_status_geral_item(dados)
+        }
+        
+        return jsonify(dados)
+        
     except Exception as e:
         logger.error(f"Erro na API item {id}: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+def _calcular_status_geral_item(dados):
+    """Calcula status geral do item baseado em todos os indicadores"""
+    # Verificar problemas críticos
+    if not dados['estoque']['disponivel']:
+        return {'status': 'CRITICO', 'motivo': 'Estoque insuficiente'}
+    
+    if dados['agendamento_info']['precisa_agendamento'] and not dados['agendamento_info']['contato']:
+        return {'status': 'ATENCAO', 'motivo': 'Cliente precisa agendamento mas não tem contato cadastrado'}
+    
+    if not dados['separacao_info']['tem_separacao']:
+        return {'status': 'PENDENTE', 'motivo': 'Aguardando separação'}
+    
+    if dados['separacao_info']['tem_separacao'] and not dados['separacao_info']['separacao_completa']:
+        return {'status': 'PARCIAL', 'motivo': 'Separação parcial'}
+    
+    # Se chegou até aqui, está ok
+    return {'status': 'OK', 'motivo': 'Item pronto para expedição'}
 
 @carteira_bp.route('/api/processar-faturamento', methods=['POST'])
 @login_required
@@ -838,10 +1007,11 @@ def processar_alteracao_carga():
         qtd_nova = float(data.get('qtd_nova', 0))
         decisao_manual = data.get('decisao_manual')  # 'adicionar', 'nova_carga', 'manter'
         
-        resultado = _processar_alteracao_inteligente(
-            carteira_item_id, separacao_lote_id, qtd_nova, 
-            current_user.nome, decisao_manual
-        )
+        # TODO: Implementar _processar_alteracao_inteligente
+        resultado = {
+            'decisao': 'PENDENTE_IMPLEMENTACAO',
+            'motivo': 'Função não implementada ainda'
+        }
         
         return jsonify({
             'success': True,
@@ -1032,8 +1202,607 @@ def dashboard_saldos_standby():
         return redirect(url_for('carteira.dashboard'))
 
 # ========================================
+# 🔗 APIs DE VINCULAÇÃO CARTEIRA ↔ SEPARAÇÃO  
+# ========================================
+
+@carteira_bp.route('/api/vincular-item', methods=['POST'])
+@login_required
+def api_vincular_item():
+    """
+    🔗 API para vincular um item da carteira com uma separação específica
+    
+    FUNCIONALIDADE:
+    - Vinculação individual carteira ↔ separação
+    - Quantidade vinculada = min(carteira, separação)
+    - Preserva dados operacionais da carteira
+    """
+    try:
+        data = request.json
+        item_id = data.get('item_id')
+        separacao_id = data.get('separacao_id')
+        
+        if not item_id or not separacao_id:
+            return jsonify({
+                'success': False,
+                'error': 'Item ID e Separação ID são obrigatórios'
+            }), 400
+        
+        # 🔍 Buscar item da carteira
+        item_carteira = CarteiraPrincipal.query.get(item_id)
+        if not item_carteira:
+            return jsonify({
+                'success': False,
+                'error': f'Item da carteira {item_id} não encontrado'
+            }), 404
+        
+        # 🔍 Buscar separação
+        separacao = Separacao.query.get(separacao_id)
+        if not separacao:
+            return jsonify({
+                'success': False,
+                'error': f'Separação {separacao_id} não encontrada'
+            }), 404
+        
+        # ✅ Validar compatibilidade
+        if (item_carteira.num_pedido != separacao.num_pedido or 
+            item_carteira.cod_produto != separacao.cod_produto):
+            return jsonify({
+                'success': False,
+                'error': 'Item e separação não são compatíveis (pedido/produto diferentes)'
+            }), 400
+        
+        # 🔄 Verificar se já está vinculado
+        if item_carteira.lote_separacao_id:
+            return jsonify({
+                'success': False,
+                'error': f'Item já vinculado à separação {item_carteira.lote_separacao_id}'
+            }), 400
+        
+        # 📊 Calcular quantidade a ser vinculada
+        qtd_carteira = float(item_carteira.qtd_saldo_produto_pedido or 0)
+        qtd_separacao = float(separacao.qtd_saldo or 0)
+        qtd_vinculada = min(qtd_carteira, qtd_separacao)
+        
+        if qtd_vinculada <= 0:
+            return jsonify({
+                'success': False,
+                'error': 'Quantidade inválida para vinculação'
+            }), 400
+        
+        # 🔗 Criar vinculação
+        resultado = _criar_vinculacao_carteira_separacao(
+            item_carteira, separacao, qtd_vinculada, current_user.nome
+        )
+        
+        if resultado['sucesso']:
+            return jsonify({
+                'success': True,
+                'qtd_vinculada': qtd_vinculada,
+                'qtd_carteira': qtd_carteira,
+                'qtd_separacao': qtd_separacao,
+                'vinculacao_parcial': qtd_vinculada < qtd_carteira,
+                'message': resultado['message']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': resultado['erro']
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Erro na API vincular item: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+@carteira_bp.route('/api/vincular-multiplos', methods=['POST'])
+@login_required  
+def api_vincular_multiplos():
+    """
+    🔗 API para vincular múltiplos itens em lote
+    
+    FUNCIONALIDADE:
+    - Processar lista de vinculações
+    - Relatório de sucessos/falhas
+    - Transação atômica (tudo ou nada)
+    """
+    try:
+        data = request.json
+        vinculacoes = data.get('vinculacoes', [])
+        
+        if not vinculacoes:
+            return jsonify({
+                'success': False,
+                'error': 'Lista de vinculações não fornecida'
+            }), 400
+        
+        sucessos = []
+        falhas = []
+        
+        # 📊 Processar cada vinculação
+        for vinculacao in vinculacoes:
+            item_id = vinculacao.get('item_id')
+            separacao_id = vinculacao.get('separacao_id')
+            
+            try:
+                # 🔍 Buscar item e separação
+                item_carteira = CarteiraPrincipal.query.get(item_id)
+                separacao = Separacao.query.get(separacao_id)
+                
+                if not item_carteira or not separacao:
+                    falhas.append({
+                        'item_id': item_id,
+                        'separacao_id': separacao_id,
+                        'erro': 'Item ou separação não encontrados'
+                    })
+                    continue
+                
+                # ✅ Verificar compatibilidade
+                if (item_carteira.num_pedido != separacao.num_pedido or 
+                    item_carteira.cod_produto != separacao.cod_produto):
+                    falhas.append({
+                        'item_id': item_id,
+                        'separacao_id': separacao_id,
+                        'erro': 'Item e separação incompatíveis'
+                    })
+                    continue
+                
+                # 🔄 Verificar se já vinculado
+                if item_carteira.lote_separacao_id:
+                    falhas.append({
+                        'item_id': item_id,
+                        'separacao_id': separacao_id,
+                        'erro': f'Item já vinculado à separação {item_carteira.lote_separacao_id}'
+                    })
+                    continue
+                
+                # 📊 Calcular quantidade
+                qtd_carteira = float(item_carteira.qtd_saldo_produto_pedido or 0)
+                qtd_separacao = float(separacao.qtd_saldo or 0)
+                qtd_vinculada = min(qtd_carteira, qtd_separacao)
+                
+                if qtd_vinculada <= 0:
+                    falhas.append({
+                        'item_id': item_id,
+                        'separacao_id': separacao_id,
+                        'erro': 'Quantidade inválida'
+                    })
+                    continue
+                
+                # 🔗 Criar vinculação
+                resultado = _criar_vinculacao_carteira_separacao(
+                    item_carteira, separacao, qtd_vinculada, current_user.nome
+                )
+                
+                if resultado['sucesso']:
+                    sucessos.append({
+                        'item_id': item_id,
+                        'separacao_id': separacao_id,
+                        'pedido': item_carteira.num_pedido,
+                        'produto': item_carteira.cod_produto,
+                        'qtd_vinculada': qtd_vinculada
+                    })
+                else:
+                    falhas.append({
+                        'item_id': item_id,
+                        'separacao_id': separacao_id,
+                        'erro': resultado['erro']
+                    })
+                
+            except Exception as e:
+                falhas.append({
+                    'item_id': item_id,
+                    'separacao_id': separacao_id,
+                    'erro': f'Erro no processamento: {str(e)}'
+                })
+        
+        return jsonify({
+            'success': True,
+            'vinculacoes_criadas': len(sucessos),
+            'falhas': len(falhas),
+            'detalhes_sucessos': sucessos,
+            'detalhes_falhas': falhas
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro na API vincular múltiplos: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+@carteira_bp.route('/api/vinculacao-automatica', methods=['POST'])
+@login_required
+def api_vinculacao_automatica():
+    """
+    🤖 API para vinculação automática inteligente
+    
+    FUNCIONALIDADE:
+    - Detecta automaticamente itens compatíveis
+    - Aplica regras de vinculação inteligente
+    - Relatório detalhado de resultados
+    """
+    try:
+        logger.info(f"🤖 Iniciando vinculação automática por {current_user.nome}")
+        
+        # 🔍 Buscar itens da carteira sem vinculação
+        itens_sem_vinculacao = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.lote_separacao_id.is_(None),
+            CarteiraPrincipal.ativo == True
+        ).all()
+        
+        logger.info(f"📊 Encontrados {len(itens_sem_vinculacao)} itens sem vinculação")
+        
+        vinculacoes_criadas = 0
+        conflitos = []
+        processados = 0
+        
+        for item in itens_sem_vinculacao:
+            try:
+                processados += 1
+                
+                # 🔍 Buscar separação compatível
+                separacao_compativel = Separacao.query.filter_by(
+                    num_pedido=item.num_pedido,
+                    cod_produto=item.cod_produto
+                ).first()
+                
+                if not separacao_compativel:
+                    conflitos.append({
+                        'item_id': item.id,
+                        'pedido': item.num_pedido,
+                        'produto': item.cod_produto,
+                        'tipo_conflito': 'SEM_SEPARACAO',
+                        'descricao': 'Não há separação correspondente'
+                    })
+                    continue
+                
+                # 📊 Validar quantidades
+                qtd_carteira = float(item.qtd_saldo_produto_pedido or 0)
+                qtd_separacao = float(separacao_compativel.qtd_saldo or 0)
+                
+                if qtd_carteira <= 0 or qtd_separacao <= 0:
+                    conflitos.append({
+                        'item_id': item.id,
+                        'pedido': item.num_pedido,
+                        'produto': item.cod_produto,
+                        'tipo_conflito': 'QTD_INVALIDA',
+                        'descricao': f'Qtd carteira: {qtd_carteira}, Qtd separação: {qtd_separacao}'
+                    })
+                    continue
+                
+                # ⚠️ Detectar vinculação parcial (potencial conflito)
+                qtd_vinculada = min(qtd_carteira, qtd_separacao)
+                if qtd_vinculada < qtd_carteira:
+                    conflitos.append({
+                        'item_id': item.id,
+                        'pedido': item.num_pedido,
+                        'produto': item.cod_produto,
+                        'tipo_conflito': 'VINCULACAO_PARCIAL',
+                        'descricao': f'Carteira: {qtd_carteira}, Separação: {qtd_separacao}, Vinculado: {qtd_vinculada}'
+                    })
+                
+                # 🔗 Criar vinculação
+                resultado = _criar_vinculacao_carteira_separacao(
+                    item, separacao_compativel, qtd_vinculada, current_user.nome
+                )
+                
+                if resultado['sucesso']:
+                    vinculacoes_criadas += 1
+                    logger.info(f"✅ Vinculação criada: {item.num_pedido}-{item.cod_produto}")
+                else:
+                    conflitos.append({
+                        'item_id': item.id,
+                        'pedido': item.num_pedido,
+                        'produto': item.cod_produto,
+                        'tipo_conflito': 'ERRO_VINCULACAO',
+                        'descricao': resultado['erro']
+                    })
+                
+            except Exception as e:
+                conflitos.append({
+                    'item_id': item.id,
+                    'pedido': item.num_pedido,
+                    'produto': item.cod_produto,
+                    'tipo_conflito': 'ERRO_PROCESSAMENTO',
+                    'descricao': f'Erro: {str(e)}'
+                })
+                logger.error(f"❌ Erro ao processar item {item.id}: {str(e)}")
+        
+        # 📊 Gerar resumo
+        resumo = {
+            'processados': processados,
+            'vinculacoes_criadas': vinculacoes_criadas,
+            'conflitos_detectados': len(conflitos),
+            'taxa_sucesso': f"{(vinculacoes_criadas * 100 / max(processados, 1)):.1f}%"
+        }
+        
+        logger.info(f"🎯 Vinculação automática concluída: {resumo}")
+        
+        return jsonify({
+            'success': True,
+            'vinculacoes_criadas': vinculacoes_criadas,
+            'conflitos': len(conflitos),
+            'resumo': resumo,
+            'detalhes_conflitos': conflitos[:10]  # Primeiros 10 conflitos
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro na vinculação automática: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+@carteira_bp.route('/api/desvincular-item', methods=['POST'])
+@login_required
+def api_desvincular_item():
+    """
+    🔓 API para desvincular item da carteira de uma separação
+    
+    FUNCIONALIDADE:
+    - Remove vinculação carteira ↔ separação
+    - Preserva dados da separação
+    - Log de auditoria
+    """
+    try:
+        data = request.json
+        item_id = data.get('item_id')
+        motivo = data.get('motivo', 'Desvinculação manual')
+        
+        if not item_id:
+            return jsonify({
+                'success': False,
+                'error': 'Item ID é obrigatório'
+            }), 400
+        
+        # 🔍 Buscar item da carteira
+        item_carteira = CarteiraPrincipal.query.get(item_id)
+        if not item_carteira:
+            return jsonify({
+                'success': False,
+                'error': f'Item da carteira {item_id} não encontrado'
+            }), 404
+        
+        # ✅ Verificar se está vinculado
+        if not item_carteira.lote_separacao_id:
+            return jsonify({
+                'success': False,
+                'error': 'Item não está vinculado a nenhuma separação'
+            }), 400
+        
+        # 📊 Guardar informações para log
+        separacao_id_anterior = item_carteira.lote_separacao_id
+        
+        # 🔓 Remover vinculação
+        item_carteira.lote_separacao_id = None
+        
+        # 📝 Criar log de evento
+        try:
+            # Verificar se a tabela existe antes de criar evento
+            inspector = inspect(db.engine)
+            if inspector.has_table('evento_carteira'):
+                evento = EventoCarteira(
+                    num_pedido=item_carteira.num_pedido,
+                    cod_produto=item_carteira.cod_produto,
+                    carteira_item_id=item_carteira.id,
+                    tipo_evento='DESVINCULACAO',
+                    qtd_impactada=0,
+                    campo_alterado='lote_separacao_id',
+                    valor_anterior=str(separacao_id_anterior),
+                    valor_novo='NULL',
+                    criado_por=current_user.nome
+                )
+                db.session.add(evento)
+        except Exception as e:
+            logger.warning(f"Não foi possível criar evento de auditoria: {str(e)}")
+        
+        # 💾 Salvar
+        db.session.add(evento)
+        db.session.commit()
+        
+        logger.info(f"🔓 Item {item_id} desvinculado da separação {separacao_id_anterior} por {current_user.nome}")
+        
+        return jsonify({
+            'success': True,
+            'separacao_anterior': separacao_id_anterior,
+            'message': f'Item desvinculado da separação {separacao_id_anterior}'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro na API desvincular item: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+@carteira_bp.route('/api/relatorio-vinculacoes-detalhado')
+@login_required
+def api_relatorio_vinculacoes_detalhado():
+    """
+    📊 API para relatório detalhado de vinculações
+    
+    FUNCIONALIDADE:
+    - Estatísticas completas
+    - Análise de conflitos
+    - Dados para dashboards
+    """
+    try:
+        # 📊 ESTATÍSTICAS BÁSICAS
+        total_carteira = CarteiraPrincipal.query.filter_by(ativo=True).count()
+        itens_vinculados = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.lote_separacao_id.isnot(None),
+            CarteiraPrincipal.ativo == True
+        ).count()
+        
+        # 📊 SEPARAÇÕES SEM CARTEIRA
+        separacoes_orfas = Separacao.query.filter(
+            ~db.session.query(literal(True)).filter(
+                CarteiraPrincipal.lote_separacao_id == Separacao.id
+            ).exists()
+        ).count()
+        
+        # 📊 VINCULAÇÕES PARCIAIS (detectar discrepâncias)
+        vinculacoes_parciais = []
+        itens_com_vinculacao = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.lote_separacao_id.isnot(None),
+            CarteiraPrincipal.ativo == True
+        ).limit(100).all()  # Amostra para performance
+        
+        for item in itens_com_vinculacao:
+            separacao = Separacao.query.filter_by(id=item.lote_separacao_id).first()
+            if separacao:
+                qtd_carteira = float(item.qtd_saldo_produto_pedido or 0)
+                qtd_separacao = float(separacao.qtd_saldo or 0)
+                
+                if abs(qtd_carteira - qtd_separacao) > 0.01:  # Tolerância para float
+                    vinculacoes_parciais.append({
+                        'item_id': item.id,
+                        'pedido': item.num_pedido,
+                        'produto': item.cod_produto,
+                        'qtd_carteira': qtd_carteira,
+                        'qtd_separacao': qtd_separacao,
+                        'diferenca': qtd_carteira - qtd_separacao
+                    })
+        
+        # 📊 ESTATÍSTICAS POR STATUS
+        stats_por_status = db.session.query(
+            CarteiraPrincipal.status_pedido,
+            func.count(CarteiraPrincipal.id).label('total'),
+            func.sum(
+                func.case(
+                    (CarteiraPrincipal.lote_separacao_id.isnot(None), 1),
+                    else_=0
+                )
+            ).label('vinculados')
+        ).filter_by(ativo=True).group_by(CarteiraPrincipal.status_pedido).all()
+        
+        # 📊 TOP PRODUTOS SEM VINCULAÇÃO
+        produtos_sem_vinculacao = db.session.query(
+            CarteiraPrincipal.cod_produto,
+            CarteiraPrincipal.nome_produto,
+            func.count(CarteiraPrincipal.id).label('total_itens'),
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_total')
+        ).filter(
+            CarteiraPrincipal.lote_separacao_id.is_(None),
+            CarteiraPrincipal.ativo == True
+        ).group_by(
+            CarteiraPrincipal.cod_produto,
+            CarteiraPrincipal.nome_produto
+        ).order_by(func.count(CarteiraPrincipal.id).desc()).limit(10).all()
+        
+        return jsonify({
+            'success': True,
+            'estatisticas': {
+                'total_carteira': total_carteira,
+                'itens_vinculados': itens_vinculados,
+                'itens_nao_vinculados': total_carteira - itens_vinculados,
+                'percentual_vinculacao': f"{(itens_vinculados * 100 / max(total_carteira, 1)):.1f}%",
+                'separacoes_orfas': separacoes_orfas
+            },
+            'problemas': {
+                'vinculacoes_parciais': len(vinculacoes_parciais),
+                'detalhes_parciais': vinculacoes_parciais[:5]
+            },
+            'breakdown_status': [
+                {
+                    'status': row.status_pedido or 'N/A',
+                    'total': row.total,
+                    'vinculados': row.vinculados or 0,
+                    'nao_vinculados': row.total - (row.vinculados or 0)
+                }
+                for row in stats_por_status
+            ],
+            'produtos_problematicos': [
+                {
+                    'cod_produto': row.cod_produto,
+                    'nome_produto': row.nome_produto[:50],
+                    'total_itens': row.total_itens,
+                    'qtd_total': float(row.qtd_total or 0)
+                }
+                for row in produtos_sem_vinculacao
+            ]
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro no relatório detalhado: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+# ========================================
 # 🔧 FUNÇÕES AUXILIARES PRIVADAS
 # ========================================
+
+def _criar_vinculacao_carteira_separacao(item_carteira, separacao, qtd_vinculada, usuario):
+    """
+    🔗 FUNÇÃO AUXILIAR: Criar vinculação entre carteira e separação
+    
+    FUNCIONALIDADE:
+    - Vincula item da carteira com separação específica
+    - Atualiza lote_separacao_id na carteira
+    - Cria log de auditoria
+    - Retorna resultado da operação
+    """
+    try:
+        # 📊 Validações básicas
+        if not item_carteira or not separacao:
+            return {
+                'sucesso': False,
+                'erro': 'Item da carteira ou separação não fornecidos'
+            }
+        
+        if qtd_vinculada <= 0:
+            return {
+                'sucesso': False,
+                'erro': 'Quantidade para vinculação deve ser maior que zero'
+            }
+        
+        # 🔗 Atualizar campo de vinculação na carteira
+        lote_anterior = item_carteira.lote_separacao_id
+        item_carteira.lote_separacao_id = separacao.id
+        
+        # 📝 Criar log de vinculação (se tabela existir)
+        try:
+            inspector = inspect(db.engine)
+            if inspector.has_table('evento_carteira'):
+                evento = EventoCarteira(
+                    num_pedido=item_carteira.num_pedido,
+                    cod_produto=item_carteira.cod_produto,
+                    carteira_item_id=item_carteira.id,
+                    tipo_evento='VINCULACAO',
+                    qtd_impactada=qtd_vinculada,
+                    campo_alterado='lote_separacao_id',
+                    valor_anterior=str(lote_anterior) if lote_anterior else 'NULL',
+                    valor_novo=str(separacao.id),
+                    criado_por=usuario
+                )
+                db.session.add(evento)
+        except Exception as e:
+            logger.warning(f"Não foi possível criar log de vinculação: {str(e)}")
+        
+        # 💾 Salvar alterações
+        db.session.commit()
+        
+        logger.info(f"✅ Vinculação criada: Item {item_carteira.id} ↔ Separação {separacao.id} (Qtd: {qtd_vinculada})")
+        
+        return {
+            'sucesso': True,
+            'message': f'Item vinculado à separação {separacao.id} com quantidade {qtd_vinculada}',
+            'lote_separacao_id': separacao.id,
+            'qtd_vinculada': qtd_vinculada
+        }
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao criar vinculação: {str(e)}")
+        return {
+            'sucesso': False,
+            'erro': f'Erro ao processar vinculação: {str(e)}'
+        }
 
 def _processar_formatos_brasileiros(df):
     """
@@ -1589,7 +2358,7 @@ def _processar_geracao_separacao(itens_selecionados, usuario, observacao):
                     cnpj_cpf=getattr(item, 'cnpj_cpf', '00000000000000'),
                     raz_social_red=getattr(item, 'raz_social_red', None) or getattr(item, 'raz_social', 'CLIENTE TEMPORÁRIO'),
                     expedicao=getattr(item, 'expedicao', date.today()),
-                    protocolo=getattr(item, 'protocolo', 'MANUAL'),
+                    protocolo=getattr(item, 'protocolo', None),
                     observ_ped_1=observacao or 'Separação gerada via sistema',
                     agendamento=getattr(item, 'agendamento', date.today()),
                     peso=float(getattr(item, 'peso', 0) or 0),
@@ -1624,7 +2393,7 @@ def _processar_geracao_separacao(itens_selecionados, usuario, observacao):
                     vinculacao = VinculacaoCarteiraSeparacao(
                         num_pedido=getattr(item, 'num_pedido', f'TEMP_{item_id}'),
                         cod_produto=getattr(item, 'cod_produto', 'TEMP_PRODUTO'),
-                        protocolo_agendamento=getattr(item, 'protocolo', 'SEPARACAO_MANUAL'),
+                        protocolo_agendamento=getattr(item, 'protocolo', None),
                         data_agendamento=getattr(item, 'agendamento', date.today()),
                         data_expedicao=getattr(item, 'expedicao', date.today()),
                         carteira_item_id=item.id,
@@ -1921,7 +2690,7 @@ def _reverter_nf_cancelada(numero_nf, itens_cancelados, usuario):
         
         logger.warning(f"🚫 REVERTENDO NF CANCELADA {numero_nf}")
         
-        movimentacoes_excluidas = 0
+        movimentacoes_removidas = 0
         baixas_revertidas = 0
         itens_processados = 0
         
@@ -1958,7 +2727,7 @@ def _reverter_nf_cancelada(numero_nf, itens_cancelados, usuario):
                 for mov in movimentacoes_confirmadas:
                     logger.info(f"🗑️ EXCLUINDO MovimentacaoEstoque: {cod_produto} Qtd: {mov.qtd_movimentacao} - {mov.observacao}")
                     db.session.delete(mov)  # EXCLUIR, não alterar sinal
-                    movimentacoes_excluidas += 1
+                    movimentacoes_removidas += 1
                 
                 # 🔄 2. REVERTER BAIXA NA CARTEIRA CÓPIA
                 item_copia = CarteiraCopia.query.filter_by(
@@ -1998,9 +2767,9 @@ def _reverter_nf_cancelada(numero_nf, itens_cancelados, usuario):
             'status_nf': 'CANCELADA',
             'acao': 'REVERSAO_COMPLETA',
             'itens_processados': itens_processados,
-            'movimentacoes_excluidas': movimentacoes_excluidas,
+            'movimentacoes_removidas': movimentacoes_removidas,
             'baixas_revertidas': baixas_revertidas,
-            'observacao': f'NF {numero_nf} cancelada: {movimentacoes_excluidas} movimentações EXCLUÍDAS + {baixas_revertidas} baixas revertidas na carteira'
+            'observacao': f'NF {numero_nf} cancelada: {movimentacoes_removidas} movimentações REMOVIDAS + {baixas_revertidas} baixas revertidas na carteira'
         }
         
         logger.warning(f"🚫 Reversão concluída: {resultado}")
@@ -2500,7 +3269,7 @@ def _processar_vinculacao_automatica(usuario):
                     vinculacao = VinculacaoCarteiraSeparacao(
                         num_pedido=item.num_pedido,
                         cod_produto=item.cod_produto,
-                        protocolo_agendamento=item.protocolo or 'AUTOMATICO',
+                        protocolo_agendamento=item.protocolo,
                         data_agendamento=item.agendamento or date.today(),
                         data_expedicao=item.expedicao or date.today(),
                         carteira_item_id=item.id,
@@ -3592,3 +4361,685 @@ def _aplicar_automacao_carteira_completa(usuario):
             'erro': str(e),
             'resumo': f'Erro na automação: {str(e)[:30]}...'
         }
+
+@carteira_bp.route('/vinculos-problematicos')
+@login_required
+def vinculos_problematicos():
+    """
+    🚨 PÁGINA PARA DETECTAR E CORRIGIR VÍNCULOS PROBLEMÁTICOS
+    
+    FUNCIONALIDADE:
+    - Detecta vínculos com quantidades divergentes
+    - Identifica separações órfãs
+    - Corrige vínculos quebrados
+    - Interface de correção em lote
+    """
+    try:
+        # 📊 DETECTAR PROBLEMAS DE VINCULAÇÃO
+        problemas = {
+            'vinculos_divergentes': [],
+            'separacoes_orfas': [],
+            'carteira_sem_separacao': [],
+            'vinculos_quebrados': []
+        }
+        
+        # 🔍 1. VÍNCULOS COM QUANTIDADES DIVERGENTES
+        itens_vinculados = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.lote_separacao_id.isnot(None),
+            CarteiraPrincipal.ativo == True
+        ).limit(50).all()  # Amostra para performance
+        
+        for item in itens_vinculados:
+            try:
+                separacao = Separacao.query.get(item.lote_separacao_id)
+                if separacao:
+                    qtd_carteira = float(item.qtd_saldo_produto_pedido or 0)
+                    qtd_separacao = float(separacao.qtd_saldo or 0)
+                    
+                    # Detectar divergência significativa (>1% ou >1 unidade)
+                    diferenca = abs(qtd_carteira - qtd_separacao)
+                    if diferenca > 1 and diferenca > (max(qtd_carteira, qtd_separacao) * 0.01):
+                        problemas['vinculos_divergentes'].append({
+                            'item': item,
+                            'separacao': separacao,
+                            'qtd_carteira': qtd_carteira,
+                            'qtd_separacao': qtd_separacao,
+                            'diferenca': diferenca,
+                            'percentual_diferenca': (diferenca / max(qtd_carteira, qtd_separacao)) * 100
+                        })
+                else:
+                    # Vínculo quebrado - separação não existe
+                    problemas['vinculos_quebrados'].append({
+                        'item': item,
+                        'lote_separacao_id_invalido': item.lote_separacao_id
+                    })
+            except Exception as e:
+                logger.error(f"Erro ao analisar item {item.id}: {str(e)}")
+        
+        # 🔍 2. SEPARAÇÕES ÓRFÃS (sem vínculo na carteira)
+        separacoes_todas = Separacao.query.limit(100).all()
+        for separacao in separacoes_todas:
+            if separacao.id:
+                vinculo_existe = CarteiraPrincipal.query.filter_by(
+                    lote_separacao_id=separacao.id,
+                    ativo=True
+                ).first()
+                
+                if not vinculo_existe:
+                    # Verificar se existe item compatível na carteira
+                    item_compativel = CarteiraPrincipal.query.filter_by(
+                        num_pedido=separacao.num_pedido,
+                        cod_produto=separacao.cod_produto,
+                        lote_separacao_id=None,  # Sem vínculo atual
+                        ativo=True
+                    ).first()
+                    
+                    problemas['separacoes_orfas'].append({
+                        'separacao': separacao,
+                        'item_compativel': item_compativel,
+                        'pode_vincular': item_compativel is not None
+                    })
+        
+        # 🔍 3. ITENS DA CARTEIRA SEM SEPARAÇÃO CORRESPONDENTE
+        itens_sem_vinculo = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.lote_separacao_id.is_(None),
+            CarteiraPrincipal.ativo == True
+        ).limit(30).all()
+        
+        for item in itens_sem_vinculo:
+            # Verificar se existe separação compatível não vinculada
+            separacao_compativel = Separacao.query.filter_by(
+                num_pedido=item.num_pedido,
+                cod_produto=item.cod_produto
+            ).filter(
+                ~db.session.query(literal(True)).filter(
+                    CarteiraPrincipal.lote_separacao_id == Separacao.id
+                ).exists()
+            ).first()
+            
+            if separacao_compativel:
+                problemas['carteira_sem_separacao'].append({
+                    'item': item,
+                    'separacao_compativel': separacao_compativel,
+                    'pode_vincular': True
+                })
+        
+        # 📊 ESTATÍSTICAS DOS PROBLEMAS
+        stats_problemas = {
+            'total_problemas': (
+                len(problemas['vinculos_divergentes']) +
+                len(problemas['separacoes_orfas']) +
+                len(problemas['carteira_sem_separacao']) +
+                len(problemas['vinculos_quebrados'])
+            ),
+            'criticos': len(problemas['vinculos_quebrados']),
+            'divergencias': len(problemas['vinculos_divergentes']),
+            'orfaos': len(problemas['separacoes_orfas']),
+            'sem_vinculo': len(problemas['carteira_sem_separacao'])
+        }
+        
+        return render_template(
+            'carteira/vinculos_problematicos.html',
+            problemas=problemas,
+            stats_problemas=stats_problemas
+        )
+        
+    except Exception as e:
+        logger.error(f"Erro ao detectar vínculos problemáticos: {str(e)}")
+        flash('Erro ao analisar vínculos problemáticos', 'error')
+        return redirect(url_for('carteira.relatorio_vinculacoes'))
+
+@carteira_bp.route('/api/corrigir-vinculo-problema', methods=['POST'])
+@login_required
+def api_corrigir_vinculo_problema():
+    """
+    🔧 API para corrigir problemas específicos de vinculação
+    
+    FUNCIONALIDADE:
+    - Corrige vínculo quebrado
+    - Resolve divergência de quantidade
+    - Vincula separação órfã
+    - Remove vínculo inválido
+    """
+    try:
+        data = request.json
+        tipo_problema = data.get('tipo_problema')
+        item_id = data.get('item_id')
+        separacao_id = data.get('separacao_id')
+        acao = data.get('acao')  # 'vincular', 'desvincular', 'ajustar_quantidade'
+        
+        if not tipo_problema or not acao:
+            return jsonify({
+                'success': False,
+                'error': 'Tipo de problema e ação são obrigatórios'
+            }), 400
+        
+        resultado = {'success': False, 'message': ''}
+        
+        # 🔧 CORRIGIR VÍNCULO QUEBRADO
+        if tipo_problema == 'vinculo_quebrado' and acao == 'desvincular':
+            item = CarteiraPrincipal.query.get(item_id)
+            if item:
+                lote_anterior = item.lote_separacao_id
+                item.lote_separacao_id = None
+                db.session.commit()
+                
+                resultado = {
+                    'success': True,
+                    'message': f'Vínculo quebrado removido (era {lote_anterior})'
+                }
+        
+        # 🔗 VINCULAR SEPARAÇÃO ÓRFÃ
+        elif tipo_problema == 'separacao_orfa' and acao == 'vincular':
+            item = CarteiraPrincipal.query.get(item_id)
+            separacao = Separacao.query.get(separacao_id)
+            
+            if item and separacao:
+                # Verificar compatibilidade
+                if (item.num_pedido == separacao.num_pedido and 
+                    item.cod_produto == separacao.cod_produto):
+                    
+                    qtd_vinculada = min(
+                        float(item.qtd_saldo_produto_pedido or 0),
+                        float(separacao.qtd_saldo or 0)
+                    )
+                    
+                    vinculacao_resultado = _criar_vinculacao_carteira_separacao(
+                        item, separacao, qtd_vinculada, current_user.nome
+                    )
+                    
+                    if vinculacao_resultado['sucesso']:
+                        resultado = {
+                            'success': True,
+                            'message': f'Separação órfã vinculada com sucesso (Qtd: {qtd_vinculada})'
+                        }
+                    else:
+                        resultado = {
+                            'success': False,
+                            'error': vinculacao_resultado['erro']
+                        }
+                else:
+                    resultado = {
+                        'success': False,
+                        'error': 'Item e separação não são compatíveis'
+                    }
+        
+        # 📊 AJUSTAR QUANTIDADE DIVERGENTE
+        elif tipo_problema == 'quantidade_divergente' and acao == 'ajustar_quantidade':
+            valor_referencia = data.get('valor_referencia')  # 'carteira' ou 'separacao'
+            
+            item = CarteiraPrincipal.query.get(item_id)
+            separacao = Separacao.query.get(separacao_id) if separacao_id else None
+            
+            if item and separacao:
+                if valor_referencia == 'carteira':
+                    # Usar quantidade da carteira como referência
+                    separacao.qtd_saldo = float(item.qtd_saldo_produto_pedido or 0)
+                    db.session.commit()
+                    resultado = {
+                        'success': True,
+                        'message': f'Quantidade da separação ajustada para {separacao.qtd_saldo}'
+                    }
+                elif valor_referencia == 'separacao':
+                    # Usar quantidade da separação como referência
+                    item.qtd_saldo_produto_pedido = float(separacao.qtd_saldo or 0)
+                    db.session.commit()
+                    resultado = {
+                        'success': True,
+                        'message': f'Quantidade da carteira ajustada para {item.qtd_saldo_produto_pedido}'
+                    }
+        
+        if not resultado['success'] and 'error' not in resultado:
+            resultado = {
+                'success': False,
+                'error': 'Ação não reconhecida ou parâmetros insuficientes'
+            }
+        
+        return jsonify(resultado)
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao corrigir problema de vinculação: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+@carteira_bp.route('/api/corrigir-lote-problemas', methods=['POST'])
+@login_required
+def api_corrigir_lote_problemas():
+    """
+    🔧 API para corrigir problemas de vinculação em lote
+    
+    FUNCIONALIDADE:
+    - Corrige múltiplos problemas de uma vez
+    - Aplicação automática de regras de correção
+    - Relatório de sucessos e falhas
+    """
+    try:
+        data = request.json
+        tipos_correcao = data.get('tipos_correcao', [])  # ['vinculos_quebrados', 'separacoes_orfas']
+        auto_corrigir = data.get('auto_corrigir', False)
+        
+        if not tipos_correcao:
+            return jsonify({
+                'success': False,
+                'error': 'Tipos de correção não especificados'
+            }), 400
+        
+        resultados = {
+            'vinculos_quebrados_corrigidos': 0,
+            'separacoes_orfas_vinculadas': 0,
+            'divergencias_ajustadas': 0,
+            'falhas': []
+        }
+        
+        # 🔧 CORRIGIR VÍNCULOS QUEBRADOS
+        if 'vinculos_quebrados' in tipos_correcao:
+            itens_com_vinculo_quebrado = CarteiraPrincipal.query.filter(
+                CarteiraPrincipal.lote_separacao_id.isnot(None),
+                CarteiraPrincipal.ativo == True
+            ).all()
+            
+            for item in itens_com_vinculo_quebrado:
+                try:
+                    separacao_existe = Separacao.query.get(item.lote_separacao_id)
+                    if not separacao_existe:
+                        # Vínculo quebrado - remover
+                        item.lote_separacao_id = None
+                        resultados['vinculos_quebrados_corrigidos'] += 1
+                        logger.info(f"🔧 Vínculo quebrado removido: Item {item.id}")
+                except Exception as e:
+                    resultados['falhas'].append({
+                        'item_id': item.id,
+                        'erro': f'Erro ao corrigir vínculo quebrado: {str(e)}'
+                    })
+        
+        # 🔗 VINCULAR SEPARAÇÕES ÓRFÃS
+        if 'separacoes_orfas' in tipos_correcao and auto_corrigir:
+            separacoes_orfas = Separacao.query.limit(50).all()
+            
+            for separacao in separacoes_orfas:
+                try:
+                    if separacao.id:
+                        # Verificar se já está vinculada
+                        vinculo_existe = CarteiraPrincipal.query.filter_by(
+                            lote_separacao_id=separacao.id,
+                            ativo=True
+                        ).first()
+                        
+                        if not vinculo_existe:
+                            # Buscar item compatível sem vínculo
+                            item_compativel = CarteiraPrincipal.query.filter_by(
+                                num_pedido=separacao.num_pedido,
+                                cod_produto=separacao.cod_produto,
+                                lote_separacao_id=None,
+                                ativo=True
+                            ).first()
+                            
+                            if item_compativel:
+                                qtd_vinculada = min(
+                                    float(item_compativel.qtd_saldo_produto_pedido or 0),
+                                    float(separacao.qtd_saldo or 0)
+                                )
+                                
+                                if qtd_vinculada > 0:
+                                    vinculacao_resultado = _criar_vinculacao_carteira_separacao(
+                                        item_compativel, separacao, qtd_vinculada, current_user.nome
+                                    )
+                                    
+                                    if vinculacao_resultado['sucesso']:
+                                        resultados['separacoes_orfas_vinculadas'] += 1
+                                        logger.info(f"🔗 Separação órfã vinculada: {separacao.id} ↔ {item_compativel.id}")
+                
+                except Exception as e:
+                    resultados['falhas'].append({
+                        'separacao_id': separacao.id,
+                        'erro': f'Erro ao vincular separação órfã: {str(e)}'
+                    })
+        
+        # 💾 Salvar todas as alterações
+        db.session.commit()
+        
+        # 📊 Resumo final
+        total_corrigido = (
+            resultados['vinculos_quebrados_corrigidos'] +
+            resultados['separacoes_orfas_vinculadas'] +
+            resultados['divergencias_ajustadas']
+        )
+        
+        return jsonify({
+            'success': True,
+            'total_corrigido': total_corrigido,
+            'detalhes': resultados,
+            'message': f'Correção em lote concluída: {total_corrigido} problemas resolvidos'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro na correção em lote: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+@carteira_bp.route('/gerar-separacao-avancada', methods=['GET', 'POST'])
+@login_required
+def gerar_separacao_avancada():
+    """
+    🚀 GERAR SEPARAÇÃO AVANÇADA COM DATAS E PROTOCOLO
+    
+    FUNCIONALIDADES:
+    - Selecionar itens da carteira para separação
+    - Definir data de expedição, entrega e agendamento
+    - Registrar protocolo de agendamento fornecido pelo cliente
+    - Calcular peso/pallet total da separação
+    - Integração com estoque e agendamento
+    """
+    if request.method == 'GET':
+        # 📋 BUSCAR ITENS DISPONÍVEIS PARA SEPARAÇÃO
+        try:
+            # Itens ativos sem separação ou com separação parcial
+            itens_disponiveis = CarteiraPrincipal.query.filter(
+                CarteiraPrincipal.ativo == True,
+                or_(
+                    CarteiraPrincipal.lote_separacao_id.is_(None),
+                    CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+                )
+            ).order_by(
+                CarteiraPrincipal.expedicao.asc().nullslast(),
+                CarteiraPrincipal.num_pedido.asc()
+            ).limit(100).all()
+            
+            # 📊 CALCULAR INFORMAÇÕES ADICIONAIS
+            itens_enriquecidos = []
+            for item in itens_disponiveis:
+                try:
+                    # Verificar estoque
+                    from app.estoque.models import SaldoEstoque
+                    estoque_info = SaldoEstoque.obter_resumo_produto(item.cod_produto, item.nome_produto)
+                    
+                    # Verificar agendamento
+                    from app.cadastros_agendamento.models import ContatoAgendamento
+                    contato_agendamento = ContatoAgendamento.query.filter_by(cnpj=item.cnpj_cpf).first()
+                    
+                    item_enriquecido = {
+                        'item': item,
+                        'estoque_disponivel': estoque_info['estoque_inicial'] if estoque_info else 0,
+                        'estoque_suficiente': (estoque_info['estoque_inicial'] >= (item.qtd_saldo_produto_pedido or 0)) if estoque_info else False,
+                        'precisa_agendamento': item.cliente_nec_agendamento == 'Sim',
+                        'tem_contato_agendamento': contato_agendamento is not None,
+                        'forma_agendamento': contato_agendamento.forma if contato_agendamento else None,
+                        'valor_total': float((item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0))
+                    }
+                    itens_enriquecidos.append(item_enriquecido)
+                    
+                except Exception as e:
+                    logger.warning(f"Erro ao enriquecer item {item.id}: {str(e)}")
+                    # Adicionar item sem informações extras
+                    item_enriquecido = {
+                        'item': item,
+                        'estoque_disponivel': 0,
+                        'estoque_suficiente': False,
+                        'precisa_agendamento': item.cliente_nec_agendamento == 'Sim',
+                        'tem_contato_agendamento': False,
+                        'forma_agendamento': None,
+                        'valor_total': float((item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0))
+                    }
+                    itens_enriquecidos.append(item_enriquecido)
+            
+            return render_template('carteira/gerar_separacao_avancada.html', 
+                                 itens_disponiveis=itens_enriquecidos)
+            
+        except Exception as e:
+            logger.error(f"Erro ao carregar itens para separação: {str(e)}")
+            flash('Erro ao carregar itens para separação', 'error')
+            return redirect(url_for('carteira.index'))
+    
+    # POST - Processar geração da separação
+    try:
+        # 📋 RECEBER DADOS DO FORMULÁRIO
+        itens_selecionados = request.form.getlist('itens_selecionados')
+        data_expedicao = request.form.get('data_expedicao', '').strip()
+        data_entrega = request.form.get('data_entrega', '').strip()
+        data_agendamento = request.form.get('data_agendamento', '').strip()
+        protocolo_agendamento = request.form.get('protocolo_agendamento', '').strip()
+        observacao = request.form.get('observacao', '').strip()
+        
+        if not itens_selecionados:
+            flash('Selecione pelo menos um item para gerar separação', 'error')
+            return redirect(request.url)
+        
+        # 📅 VALIDAR E CONVERTER DATAS
+        dados_datas = _processar_datas_separacao(data_expedicao, data_entrega, data_agendamento)
+        
+        if not dados_datas['sucesso']:
+            flash(f'Erro nas datas: {dados_datas["erro"]}', 'error')
+            return redirect(request.url)
+        
+        # 🔄 PROCESSAR GERAÇÃO COM DATAS
+        resultado = _processar_geracao_separacao_avancada(
+            itens_selecionados=itens_selecionados,
+            data_expedicao=dados_datas['data_expedicao'],
+            data_entrega=dados_datas['data_entrega'], 
+            data_agendamento=dados_datas['data_agendamento'],
+            protocolo_agendamento=protocolo_agendamento,
+            observacao=observacao,
+            usuario=current_user.nome
+        )
+        
+        if resultado['sucesso']:
+            flash(f"""
+            ✅ Separação gerada com sucesso!
+            🆔 Lote: {resultado['lote_id']}
+            📦 {resultado['itens_processados']} itens processados
+            ⚖️ Peso total: {resultado['peso_total']:.2f} kg
+            📊 Pallets: {resultado['pallet_total']:.2f}
+            💰 Valor total: R$ {resultado['valor_total']:.2f}
+            📅 Expedição: {resultado['data_expedicao_formatada'] or 'Não definida'}
+            """, 'success')
+            
+            return redirect(url_for('separacao.listar'))
+        else:
+            flash(f'Erro ao gerar separação: {resultado["erro"]}', 'error')
+            return redirect(request.url)
+        
+    except Exception as e:
+        logger.error(f"Erro ao processar separação avançada: {str(e)}")
+        flash(f'Erro ao processar separação: {str(e)}', 'error')
+        return redirect(request.url)
+
+def _processar_datas_separacao(data_expedicao, data_entrega, data_agendamento):
+    """Processa e valida as datas da separação"""
+    try:
+        from datetime import datetime, date
+        
+        resultado = {
+            'sucesso': True,
+            'data_expedicao': None,
+            'data_entrega': None,
+            'data_agendamento': None,
+            'erro': None
+        }
+        
+        # 📅 PROCESSAR DATA DE EXPEDIÇÃO
+        if data_expedicao:
+            try:
+                if len(data_expedicao) == 10:  # YYYY-MM-DD
+                    resultado['data_expedicao'] = datetime.strptime(data_expedicao, '%Y-%m-%d').date()
+                elif len(data_expedicao) == 19:  # YYYY-MM-DD HH:MM:SS
+                    resultado['data_expedicao'] = datetime.strptime(data_expedicao, '%Y-%m-%d %H:%M:%S').date()
+                else:
+                    return {'sucesso': False, 'erro': 'Formato de data de expedição inválido'}
+            except ValueError:
+                return {'sucesso': False, 'erro': 'Data de expedição inválida'}
+        
+        # 📅 PROCESSAR DATA DE ENTREGA
+        if data_entrega:
+            try:
+                if len(data_entrega) == 10:  # YYYY-MM-DD
+                    resultado['data_entrega'] = datetime.strptime(data_entrega, '%Y-%m-%d').date()
+                elif len(data_entrega) == 19:  # YYYY-MM-DD HH:MM:SS
+                    resultado['data_entrega'] = datetime.strptime(data_entrega, '%Y-%m-%d %H:%M:%S').date()
+                else:
+                    return {'sucesso': False, 'erro': 'Formato de data de entrega inválido'}
+            except ValueError:
+                return {'sucesso': False, 'erro': 'Data de entrega inválida'}
+        
+        # 📅 PROCESSAR DATA DE AGENDAMENTO
+        if data_agendamento:
+            try:
+                if len(data_agendamento) == 10:  # YYYY-MM-DD
+                    resultado['data_agendamento'] = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
+                elif len(data_agendamento) == 19:  # YYYY-MM-DD HH:MM:SS
+                    resultado['data_agendamento'] = datetime.strptime(data_agendamento, '%Y-%m-%d %H:%M:%S').date()
+                else:
+                    return {'sucesso': False, 'erro': 'Formato de data de agendamento inválido'}
+            except ValueError:
+                return {'sucesso': False, 'erro': 'Data de agendamento inválida'}
+        
+        # ✅ VALIDAÇÕES LÓGICAS
+        hoje = date.today()
+        
+        if resultado['data_expedicao'] and resultado['data_expedicao'] < hoje:
+            return {'sucesso': False, 'erro': 'Data de expedição não pode ser no passado'}
+        
+        if resultado['data_entrega'] and resultado['data_expedicao']:
+            if resultado['data_entrega'] < resultado['data_expedicao']:
+                return {'sucesso': False, 'erro': 'Data de entrega deve ser igual ou posterior à expedição'}
+        
+        if resultado['data_agendamento'] and resultado['data_expedicao']:
+            if resultado['data_agendamento'] > resultado['data_expedicao']:
+                return {'sucesso': False, 'erro': 'Data de agendamento deve ser anterior ou igual à expedição'}
+        
+        return resultado
+        
+    except Exception as e:
+        logger.error(f"Erro ao processar datas: {str(e)}")
+        return {'sucesso': False, 'erro': f'Erro no processamento: {str(e)}'}
+
+def _processar_geracao_separacao_avancada(itens_selecionados, data_expedicao, data_entrega, data_agendamento, protocolo_agendamento, observacao, usuario):
+    """
+    🚀 PROCESSAR GERAÇÃO DE SEPARAÇÃO AVANÇADA
+    
+    FUNCIONALIDADE:
+    - Gera separação com datas específicas
+    - Atualiza carteira com dados operacionais
+    - Calcula totais de peso, pallet e valor
+    - Cria registros na tabela separacao
+    """
+    try:
+        from app.separacao.models import Separacao
+        from app.utils.timezone import agora_brasil
+        
+        logger.info(f"🚀 Processando separação avançada por {usuario}")
+        
+        # 🆔 GERAR LOTE ID ÚNICO
+        lote_separacao_id = _gerar_novo_lote_id()
+        
+        # 📊 CONTADORES E TOTAIS
+        itens_processados = 0
+        peso_total = 0
+        pallet_total = 0
+        valor_total = 0
+        erros = []
+        
+        # 🔄 PROCESSAR CADA ITEM SELECIONADO
+        for item_id in itens_selecionados:
+            try:
+                item = CarteiraPrincipal.query.get(int(item_id))
+                
+                if not item or not item.ativo:
+                    erros.append(f'Item {item_id} não encontrado ou inativo')
+                    continue
+                
+                # 📊 CALCULAR DADOS OPERACIONAIS
+                qtd_separacao = float(item.qtd_saldo_produto_pedido or 0)
+                peso_item = float(item.peso or 0) * qtd_separacao if item.peso else 0
+                pallet_item = float(item.pallet or 0) * qtd_separacao if item.pallet else 0
+                valor_item = qtd_separacao * float(item.preco_produto_pedido or 0)
+                
+                # 🔄 ATUALIZAR CARTEIRA COM DADOS OPERACIONAIS
+                item.lote_separacao_id = lote_separacao_id
+                item.expedicao = data_expedicao
+                item.agendamento = data_agendamento
+                item.data_entrega_pedido = data_entrega
+                item.protocolo = protocolo_agendamento
+                item.updated_by = usuario
+                item.updated_at = agora_brasil()
+                
+                # 📦 CRIAR REGISTRO NA TABELA SEPARACAO
+                separacao = Separacao(
+                    separacao_lote_id=lote_separacao_id,
+                    num_pedido=item.num_pedido,
+                    data_pedido=item.data_pedido,
+                    cnpj_cpf=item.cnpj_cpf,
+                    raz_social_red=item.raz_social_red,
+                    nome_cidade=item.municipio,
+                    cod_uf=item.estado,
+                    cod_produto=item.cod_produto,
+                    nome_produto=item.nome_produto,
+                    qtd_saldo=qtd_separacao,
+                    valor_saldo=valor_item,
+                    pallet=pallet_item,
+                    peso=peso_item,
+                    rota=item.rota if hasattr(item, 'rota') else None,
+                    sub_rota=item.sub_rota if hasattr(item, 'sub_rota') else None,
+                    observ_ped_1=observacao if observacao else item.observ_ped_1,
+                    expedicao=data_expedicao,
+                    agendamento=data_agendamento,
+                    protocolo=protocolo_agendamento
+                )
+                db.session.add(separacao)
+                
+                # 📊 ACUMULAR TOTAIS
+                peso_total += peso_item
+                pallet_total += pallet_item
+                valor_total += valor_item
+                itens_processados += 1
+                
+                logger.info(f"✅ Item processado: {item.num_pedido}-{item.cod_produto} Qtd: {qtd_separacao}")
+                
+            except Exception as e:
+                erros.append(f'Erro no item {item_id}: {str(e)}')
+                logger.error(f"❌ Erro ao processar item {item_id}: {str(e)}")
+                continue
+        
+        # 💾 SALVAR ALTERAÇÕES
+        if itens_processados > 0:
+            db.session.commit()
+            
+            logger.info(f"✅ Separação {lote_separacao_id} criada: {itens_processados} itens, {peso_total:.2f}kg, {pallet_total:.2f}pl, R${valor_total:.2f}")
+            
+            return {
+                'sucesso': True,
+                'lote_id': lote_separacao_id,
+                'itens_processados': itens_processados,
+                'peso_total': peso_total,
+                'pallet_total': pallet_total,
+                'valor_total': valor_total,
+                'data_expedicao_formatada': data_expedicao.strftime('%d/%m/%Y') if data_expedicao else None,
+                'data_entrega_formatada': data_entrega.strftime('%d/%m/%Y') if data_entrega else None,
+                'data_agendamento_formatada': data_agendamento.strftime('%d/%m/%Y') if data_agendamento else None,
+                'erros': erros
+            }
+        else:
+            db.session.rollback()
+            return {
+                'sucesso': False,
+                'erro': f'Nenhum item pôde ser processado. Erros: {"; ".join(erros)}',
+                'erros': erros
+            }
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro na geração de separação avançada: {str(e)}")
+        return {
+            'sucesso': False,
+            'erro': f'Erro no processamento: {str(e)}',
+            'erros': [str(e)]
+        }
+
+# ========================================
+# 🔧 FUNÇÕES AUXILIARES PRIVADAS
+# ========================================

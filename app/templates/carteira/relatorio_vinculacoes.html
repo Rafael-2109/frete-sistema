@@ -17,6 +17,9 @@
             <a href="{{ url_for('carteira.index') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
             </a>
+            <a href="{{ url_for('carteira.vinculos_problematicos') }}" class="btn btn-warning">
+                <i class="fas fa-exclamation-triangle"></i> Detectar Problemas
+            </a>
             <button class="btn btn-primary" onclick="processarVinculacaoAutomatica()">
                 <i class="fas fa-magic"></i> Vincular Automaticamente
             </button>

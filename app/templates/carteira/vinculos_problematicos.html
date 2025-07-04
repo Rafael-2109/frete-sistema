@@ -1,0 +1,591 @@
+{% extends "base.html" %}
+
+{% block title %}🚨 Vínculos Problemáticos - Carteira ↔ Separações{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-exclamation-triangle text-warning"></i>
+                Vínculos Problemáticos
+            </h1>
+            <p class="text-muted mb-0">Detectar e corrigir problemas de vinculação entre carteira e separações</p>
+        </div>
+        <div>
+            <a href="{{ url_for('carteira.relatorio_vinculacoes') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar ao Relatório
+            </a>
+            <button class="btn btn-success" onclick="corrigirLoteProblemas()">
+                <i class="fas fa-tools"></i> Correção Automática
+            </button>
+        </div>
+    </div>
+
+    <!-- Cards de Resumo de Problemas -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Vínculos Quebrados
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ stats_problemas.criticos or 0 }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-unlink fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Quantidades Divergentes
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ stats_problemas.divergencias or 0 }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-balance-scale fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Separações Órfãs
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ stats_problemas.orfaos or 0 }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-question-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total de Problemas
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ stats_problemas.total_problemas or 0 }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-bug fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vínculos Quebrados (Críticos) -->
+    {% if problemas.vinculos_quebrados %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow border-left-danger">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-danger">
+                        <i class="fas fa-unlink"></i> 
+                        Vínculos Quebrados - CRÍTICO ({{ problemas.vinculos_quebrados|length }})
+                    </h6>
+                    <button class="btn btn-sm btn-danger" onclick="corrigirVinculosQuebrados()">
+                        <i class="fas fa-tools"></i> Corrigir Todos
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Item Carteira</th>
+                                    <th>Pedido</th>
+                                    <th>Produto</th>
+                                    <th>Cliente</th>
+                                    <th>Lote Inválido</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for problema in problemas.vinculos_quebrados %}
+                                <tr>
+                                    <td>
+                                        <strong>#{{ problema.item.id }}</strong>
+                                    </td>
+                                    <td>
+                                        {{ problema.item.num_pedido }}
+                                    </td>
+                                    <td>
+                                        <span class="text-muted">{{ problema.item.cod_produto }}</span><br>
+                                        <small>{{ problema.item.nome_produto[:40] }}...</small>
+                                    </td>
+                                    <td>
+                                        {{ problema.item.raz_social_red or problema.item.raz_social }}
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-danger">
+                                            Lote #{{ problema.lote_separacao_id_invalido }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-warning" 
+                                                onclick="corrigirProblema('vinculo_quebrado', {{ problema.item.id }}, null, 'desvincular')">
+                                            <i class="fas fa-unlink"></i> Remover Vínculo
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quantidades Divergentes -->
+    {% if problemas.vinculos_divergentes %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow border-left-warning">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-warning">
+                        <i class="fas fa-balance-scale"></i> 
+                        Quantidades Divergentes ({{ problemas.vinculos_divergentes|length }})
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Pedido/Produto</th>
+                                    <th>Cliente</th>
+                                    <th>Carteira</th>
+                                    <th>Separação</th>
+                                    <th>Diferença</th>
+                                    <th>% Divergência</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for problema in problemas.vinculos_divergentes %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ problema.item.num_pedido }}</strong><br>
+                                        <span class="text-muted">{{ problema.item.cod_produto }}</span>
+                                    </td>
+                                    <td>
+                                        {{ problema.item.raz_social_red }}
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-primary">
+                                            {{ "{:,.0f}".format(problema.qtd_carteira) }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-success">
+                                            {{ "{:,.0f}".format(problema.qtd_separacao) }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-warning">
+                                            {{ "{:,.0f}".format(problema.diferenca) }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-{% if problema.percentual_diferenca > 10 %}danger{% else %}warning{% endif %}">
+                                            {{ "{:.1f}".format(problema.percentual_diferenca) }}%
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-outline-primary" 
+                                                    onclick="ajustarQuantidade({{ problema.item.id }}, {{ problema.separacao.id }}, 'carteira')"
+                                                    title="Usar quantidade da carteira">
+                                                <i class="fas fa-arrow-right"></i> Carteira
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-success" 
+                                                    onclick="ajustarQuantidade({{ problema.item.id }}, {{ problema.separacao.id }}, 'separacao')"
+                                                    title="Usar quantidade da separação">
+                                                <i class="fas fa-arrow-left"></i> Separação
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Separações Órfãs -->
+    {% if problemas.separacoes_orfas %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow border-left-info">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-info">
+                        <i class="fas fa-question-circle"></i> 
+                        Separações Órfãs ({{ problemas.separacoes_orfas|length }})
+                    </h6>
+                    <button class="btn btn-sm btn-info" onclick="vincularSeparacoesOrfas()">
+                        <i class="fas fa-link"></i> Vincular Compatíveis
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Separação</th>
+                                    <th>Pedido/Produto</th>
+                                    <th>Cliente</th>
+                                    <th>Quantidade</th>
+                                    <th>Compatível</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for problema in problemas.separacoes_orfas %}
+                                <tr>
+                                    <td>
+                                        <strong>Lote #{{ problema.separacao.id }}</strong>
+                                    </td>
+                                    <td>
+                                        <strong>{{ problema.separacao.num_pedido }}</strong><br>
+                                        <span class="text-muted">{{ problema.separacao.cod_produto }}</span>
+                                    </td>
+                                    <td>
+                                        {{ problema.separacao.raz_social_red }}
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-success">
+                                            {{ "{:,.0f}".format(problema.separacao.qtd_saldo or 0) }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if problema.pode_vincular %}
+                                            <span class="badge badge-success">
+                                                <i class="fas fa-check"></i> Sim
+                                            </span>
+                                        {% else %}
+                                            <span class="badge badge-secondary">
+                                                <i class="fas fa-times"></i> Não
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if problema.pode_vincular %}
+                                            <button class="btn btn-sm btn-success" 
+                                                    onclick="corrigirProblema('separacao_orfa', {{ problema.item_compativel.id }}, {{ problema.separacao.id }}, 'vincular')">
+                                                <i class="fas fa-link"></i> Vincular
+                                            </button>
+                                        {% else %}
+                                            <button class="btn btn-sm btn-outline-secondary" disabled>
+                                                <i class="fas fa-ban"></i> N/A
+                                            </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Carteira sem Separação -->
+    {% if problemas.carteira_sem_separacao %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow border-left-primary">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-link"></i> 
+                        Carteira com Separação Disponível ({{ problemas.carteira_sem_separacao|length }})
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Pedido/Produto</th>
+                                    <th>Cliente</th>
+                                    <th>Qtd Carteira</th>
+                                    <th>Qtd Separação</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for problema in problemas.carteira_sem_separacao %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ problema.item.num_pedido }}</strong><br>
+                                        <span class="text-muted">{{ problema.item.cod_produto }}</span>
+                                    </td>
+                                    <td>
+                                        {{ problema.item.raz_social_red }}
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-primary">
+                                            {{ "{:,.0f}".format(problema.item.qtd_saldo_produto_pedido or 0) }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-success">
+                                            {{ "{:,.0f}".format(problema.separacao_compativel.qtd_saldo or 0) }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" 
+                                                onclick="corrigirProblema('separacao_orfa', {{ problema.item.id }}, {{ problema.separacao_compativel.id }}, 'vincular')">
+                                            <i class="fas fa-link"></i> Vincular
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Sistema sem problemas -->
+    {% if stats_problemas.total_problemas == 0 %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-left-success shadow">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                    <h4 class="text-success">Sistema Sem Problemas Detectados!</h4>
+                    <p class="text-muted">
+                        Todas as vinculações entre carteira e separações estão corretas.
+                    </p>
+                    <a href="{{ url_for('carteira.relatorio_vinculacoes') }}" class="btn btn-primary">
+                        <i class="fas fa-chart-line"></i> Ver Relatório Completo
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- JavaScript -->
+<script>
+function corrigirProblema(tipoProblema, itemId, separacaoId, acao) {
+    if (confirm(`Confirma a ${acao} para resolver este problema?`)) {
+        fetch('/carteira/api/corrigir-vinculo-problema', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                tipo_problema: tipoProblema,
+                item_id: itemId,
+                separacao_id: separacaoId,
+                acao: acao
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('✅ ' + data.message);
+                location.reload();
+            } else {
+                alert('❌ Erro: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('❌ Erro na requisição: ' + error);
+        });
+    }
+}
+
+function ajustarQuantidade(itemId, separacaoId, valorReferencia) {
+    if (confirm(`Confirma o ajuste usando a quantidade da ${valorReferencia} como referência?`)) {
+        fetch('/carteira/api/corrigir-vinculo-problema', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                tipo_problema: 'quantidade_divergente',
+                item_id: itemId,
+                separacao_id: separacaoId,
+                acao: 'ajustar_quantidade',
+                valor_referencia: valorReferencia
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('✅ ' + data.message);
+                location.reload();
+            } else {
+                alert('❌ Erro: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('❌ Erro na requisição: ' + error);
+        });
+    }
+}
+
+function corrigirVinculosQuebrados() {
+    if (confirm('Confirma a correção automática de TODOS os vínculos quebrados? Esta ação removerá vínculos para separações inexistentes.')) {
+        fetch('/carteira/api/corrigir-lote-problemas', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                tipos_correcao: ['vinculos_quebrados'],
+                auto_corrigir: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`✅ Correção concluída!\n${data.detalhes.vinculos_quebrados_corrigidos} vínculos quebrados removidos.`);
+                location.reload();
+            } else {
+                alert('❌ Erro: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('❌ Erro na requisição: ' + error);
+        });
+    }
+}
+
+function vincularSeparacoesOrfas() {
+    if (confirm('Confirma a vinculação automática de separações órfãs com itens compatíveis da carteira?')) {
+        fetch('/carteira/api/corrigir-lote-problemas', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                tipos_correcao: ['separacoes_orfas'],
+                auto_corrigir: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`✅ Vinculação concluída!\n${data.detalhes.separacoes_orfas_vinculadas} separações órfãs vinculadas.`);
+                location.reload();
+            } else {
+                alert('❌ Erro: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('❌ Erro na requisição: ' + error);
+        });
+    }
+}
+
+function corrigirLoteProblemas() {
+    if (confirm('Confirma a correção automática de TODOS os tipos de problemas detectados? Esta é uma operação abrangente.')) {
+        fetch('/carteira/api/corrigir-lote-problemas', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                tipos_correcao: ['vinculos_quebrados', 'separacoes_orfas'],
+                auto_corrigir: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`✅ Correção geral concluída!\n` +
+                      `Vínculos quebrados corrigidos: ${data.detalhes.vinculos_quebrados_corrigidos}\n` +
+                      `Separações órfãs vinculadas: ${data.detalhes.separacoes_orfas_vinculadas}\n` +
+                      `Total de problemas resolvidos: ${data.total_corrigido}`);
+                location.reload();
+            } else {
+                alert('❌ Erro: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('❌ Erro na requisição: ' + error);
+        });
+    }
+}
+</script>
+
+<style>
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
+}
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e !important;
+}
+.border-left-danger {
+    border-left: 0.25rem solid #e74a3b !important;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(0,0,0,.04);
+}
+
+.btn-group .btn {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+</style>
+{% endblock %} 

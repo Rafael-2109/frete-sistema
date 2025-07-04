@@ -9,6 +9,7 @@ from app.vinculos.forms import ConsultaVinculoForm
 from app.vinculos.models import CidadeAtendida
 from app.transportadoras.models import Transportadora
 from app.localidades.models import Cidade
+from app.tabelas.models import TabelaFrete
 from app.utils.importacao.utils_importacao import salvar_temp, limpar_temp
 from app.utils.importacao.importar_vinculos_web import validar_vinculos
 import io
@@ -139,7 +140,6 @@ def consulta_vinculos():
         
         if status == 'orfao':
             # Vínculos órfãos - que não têm tabela correspondente
-            from app.tabelas.models import TabelaFrete
             query = query.filter(
                 ~db.session.query(
                     literal(True)
@@ -153,7 +153,6 @@ def consulta_vinculos():
         
         elif status == 'ok':
             # Vínculos OK - que têm tabela correspondente na mesma transportadora
-            from app.tabelas.models import TabelaFrete
             query = query.filter(
                 db.session.query(
                     literal(True)
@@ -194,7 +193,6 @@ def consulta_vinculos():
     # Filtro apenas órfãos
     if apenas_orfaos:
         filtros['apenas_orfaos'] = True
-        from app.tabelas.models import TabelaFrete
         query = query.filter(
             ~db.session.query(
                 literal(True)

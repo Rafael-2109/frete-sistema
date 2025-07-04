@@ -1,4 +1,4 @@
-from flask import request, flash, url_for, redirect, render_template, Blueprint, jsonify
+from flask import request, flash, url_for, redirect, render_template, Blueprint, jsonify, session
 
 from sqlalchemy import or_, cast, String
 
