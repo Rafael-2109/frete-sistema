@@ -283,6 +283,11 @@ def registrar_movimento():
                                     if item.nota_fiscal:
                                         try:
                                             sincronizar_entrega_por_nf(item.nota_fiscal)
+                                            # 🔒 NOVO: Reseta flag de NF no CD
+                                            from app.pedidos.models import Pedido
+                                            pedido = Pedido.query.filter_by(nf=item.nota_fiscal).first()
+                                            if pedido:
+                                                pedido.nf_cd = False
                                             print(f"[DEBUG] NF {item.nota_fiscal} sincronizada com entregas")
                                         except Exception as e:
                                             print(f"[DEBUG] Erro ao sincronizar NF {item.nota_fiscal}: {str(e)}")
