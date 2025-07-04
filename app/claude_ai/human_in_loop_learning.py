@@ -11,6 +11,9 @@ from enum import Enum
 import json
 from dataclasses import dataclass
 from flask_login import current_user
+from flask import current_app
+from app import db
+
 
 logger = logging.getLogger(__name__)
 

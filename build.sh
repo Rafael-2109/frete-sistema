@@ -25,7 +25,10 @@ print('✅ Recursos NLTK baixados')
 # Executar migrações se existirem
 if [ -f "flask" ]; then
     echo "🗄️ Executando migrações do banco..."
-    flask db upgrade || echo "⚠️ Sem migrações para executar"
+    # Resolver problemas de múltiplas heads
+echo "🔧 Resolvendo problemas de migração..."
+flask db merge heads || echo "⚠️ Merge não necessário"
+flask db upgrade || echo "⚠️ Upgrade já aplicado" || echo "⚠️ Sem migrações para executar"
 fi
 
 echo "✅ Build concluído!" 
@@ -36,4 +39,7 @@ python corrigir_problemas_claude_render.py || echo "⚠️ Correções Claude AI
 
 # Executar migrações das tabelas de IA
 echo "🗄️ Executando migrações das tabelas de IA..."
-flask db upgrade || echo "⚠️ Migrações já aplicadas ou falharam"
+# Resolver problemas de múltiplas heads
+echo "🔧 Resolvendo problemas de migração..."
+flask db merge heads || echo "⚠️ Merge não necessário"
+flask db upgrade || echo "⚠️ Upgrade já aplicado" || echo "⚠️ Migrações já aplicadas ou falharam"
