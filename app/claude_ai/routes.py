@@ -21,7 +21,7 @@ from app import db
 # Módulos internos
 from . import claude_ai_bp
 from app.utils.auth_decorators import require_admin
-from .claude_real_integration import processar_com_claude_real, processar_consulta_real
+from .claude_real_integration import processar_com_claude_real
 
 # Imports com fallback para MCP e Redis
 try:
@@ -84,7 +84,6 @@ except ImportError:
 @login_required
 def chat_page():
     """Redireciona para Claude 4 Sonnet (nova interface principal)"""
-    from flask import redirect, url_for
     return redirect(url_for('claude_ai.claude_real'))
 
 @claude_ai_bp.route('/autonomia')

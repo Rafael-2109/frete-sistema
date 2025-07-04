@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import logging
-from flask import current_user
+from flask_login import current_user
 from functools import wraps
 
 logger = logging.getLogger(__name__)

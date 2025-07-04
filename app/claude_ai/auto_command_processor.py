@@ -33,10 +33,14 @@ class AutoCommandProcessor:
                 r'exibi(?:r)? (?:o )?arquivo (.+)'
             ],
             'descobrir_projeto': [
-                r'descobr[ie] (?:o )?projeto',
+                r'descobr[ie]r? (?:o )?projeto',
+                r'descobr[ie]r? projeto',
+                r'descubra (?:o )?projeto',
                 r'analisa(?:r)? (?:a )?estrutura',
-                r'mape[ae] (?:o )?sistema',
-                r'quais módulos (?:existem|tem)'
+                r'mape[ae]r? (?:o )?sistema',
+                r'quais módulos (?:existem|tem)',
+                r'projeto completo',
+                r'estrutura do projeto'
             ],
             'inspecionar_banco': [
                 r'inspeciona(?:r)? (?:o )?banco',

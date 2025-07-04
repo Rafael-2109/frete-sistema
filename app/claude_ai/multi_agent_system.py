@@ -551,36 +551,49 @@ class MultiAgentSystem:
         relevant_responses.sort(key=lambda x: (x.get('relevance', 0) + x.get('confidence', 0)) / 2, reverse=True)
         
         # Construir resposta convergente
+        main_response = "Resposta não disponível"
+        convergence_note = ""
+        
         if len(relevant_responses) == 1:
             # Uma resposta dominante
-            main_response = relevant_responses[0]['response']
-            convergence_note = f"\n\n---\n🤖 **Análise:** Resposta do agente especialista em {relevant_responses[0]['agent']}"
+            main_response = relevant_responses[0].get('response') or "Resposta não disponível"
+            agent_name = relevant_responses[0].get('agent', 'desconhecido')
+            convergence_note = f"\n\n---\n🤖 **Análise:** Resposta do agente especialista em {agent_name}"
         else:
             # Múltiplas respostas - convergir
             main_agent = relevant_responses[0]
             secondary_agents = relevant_responses[1:]
             
-            main_response = main_agent['response']
+            main_response = main_agent.get('response') or "Resposta não disponível"
             
             # Adicionar insights de outros agentes se relevantes
             additional_insights = []
             for agent in secondary_agents:
-                if agent.get('confidence', 0) > 0.6:
-                    additional_insights.append(f"**{agent['agent'].title()}:** {agent['response'][:200]}...")
+                if agent.get('confidence', 0) > 0.6 and agent.get('response'):
+                    response_text = agent.get('response', "Sem resposta")
+                    agent_name = agent.get('agent', 'desconhecido')
+                    additional_insights.append(f"**{agent_name.title()}:** {response_text[:200]}...")
+            
+            main_agent_name = main_agent.get('agent', 'desconhecido')
+            main_agent_relevance = main_agent.get('relevance', 0)
             
             convergence_note = f"\n\n---\n🤖 **Análise Multi-Agente:**\n"
-            convergence_note += f"**Principal:** {main_agent['agent'].title()} (relevância: {main_agent.get('relevance', 0):.1f})\n"
+            convergence_note += f"**Principal:** {main_agent_name.title()} (relevância: {main_agent_relevance:.1f})\n"
             
             if additional_insights:
-                convergence_note += f"**Insights complementares:**\n" + "\n".join(additional_insights)
+                # Filtrar insights válidos e garantir que não sejam None
+                valid_insights = [insight for insight in additional_insights if insight and isinstance(insight, str)]
+                if valid_insights:
+                    convergence_note += f"**Insights complementares:**\n" + "\n".join(valid_insights)
         
         # Adicionar validação
         validation_note = ""
-        if validation_result.get('validation_score', 1) < 0.8:
-            validation_note = f"\n⚠️ **Nota:** Validação cruzada detectou possíveis inconsistências (score: {validation_result.get('validation_score', 0):.2f})"
+        validation_score = validation_result.get('validation_score', 1)
+        if validation_score < 0.8:
+            validation_note = f"\n⚠️ **Nota:** Validação cruzada detectou possíveis inconsistências (score: {validation_score:.2f})"
         
-        # Construir resposta final
-        final_response = main_response + convergence_note + validation_note
+        # Construir resposta final - PROTEÇÃO ABSOLUTA CONTRA None
+        final_response = str(main_response) + str(convergence_note) + str(validation_note)
         
         return final_response
     

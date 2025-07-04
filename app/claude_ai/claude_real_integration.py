@@ -227,6 +227,60 @@ Analise os dados acima e forneça insights úteis. Explore padrões, tendências
                 logger.warning(f"🛡️ CONSULTA INVÁLIDA: {error_msg}")
                 return f"❌ **Erro de Validação**: {error_msg}\n\nPor favor, reformule sua consulta seguindo as diretrizes de segurança."
         
+        # 🤖 AUTO COMMAND PROCESSOR - DETECÇÃO E EXECUÇÃO DE COMANDOS AUTOMÁTICOS
+        try:
+            from .auto_command_processor import get_auto_processor
+            auto_processor = get_auto_processor()
+            
+            if auto_processor:
+                # Detectar se é um comando automático
+                comando_detectado, parametros = auto_processor.detect_command(consulta)
+                
+                if comando_detectado:
+                    logger.info(f"🤖 COMANDO AUTOMÁTICO DETECTADO: {comando_detectado} - {parametros}")
+                    
+                    # Executar comando automaticamente
+                    sucesso, resultado_comando, dados_comando = auto_processor.execute_command(comando_detectado, parametros)
+                    
+                    if sucesso:
+                        logger.info(f"✅ Comando automático executado com sucesso: {comando_detectado}")
+                        
+                        # Formatar resposta do comando para o chat
+                        resposta_formatada = f"""🤖 **CLAUDE AI - AUTONOMIA TOTAL**
+
+{resultado_comando}
+
+---
+🤖 **Comando Executado:** {comando_detectado}
+🎯 **Parâmetros:** {parametros}
+🕒 **Processado:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+⚡ **Fonte:** Auto Command Processor + Claude AI"""
+
+                        # Adicionar ao contexto conversacional
+                        user_id = str(user_context.get('user_id', 'anonymous')) if user_context else 'anonymous'
+                        context_manager = get_conversation_context()
+                        if context_manager:
+                            metadata = {
+                                'tipo': 'comando_automatico',
+                                'comando': comando_detectado,
+                                'parametros': parametros,
+                                'dados_comando': dados_comando
+                            }
+                            context_manager.add_message(user_id, 'user', consulta, metadata)
+                            context_manager.add_message(user_id, 'assistant', resposta_formatada, metadata)
+                            logger.info(f"🧠 Comando automático adicionado ao contexto para usuário {user_id}")
+                        
+                        return resposta_formatada
+                    else:
+                        logger.warning(f"❌ Comando automático falhou: {resultado_comando}")
+                        # Em caso de falha, continuar com processamento normal
+                        
+        except ImportError:
+            logger.debug("⚠️ Auto Command Processor não disponível")
+        except Exception as e:
+            logger.error(f"❌ Erro no Auto Command Processor: {e}")
+            # Em caso de erro, continuar com processamento normal
+        
         # 🧠 SISTEMA DE CONTEXTO CONVERSACIONAL - DEFINIR NO INÍCIO
         user_id = str(user_context.get('user_id', 'anonymous')) if user_context else 'anonymous'
         context_manager = get_conversation_context()
