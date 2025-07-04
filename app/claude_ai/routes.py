@@ -1,55 +1,84 @@
-from flask import render_template, request, jsonify, current_app, flash, redirect, url_for, send_file, abort
-from flask_login import login_required, current_user
-import subprocess
+# Imports principais
+import logging
+import re
 import json
 import os
-import sys
-import logging
-from datetime import datetime
-from sqlalchemy import text
-from .mcp_connector import MCPSistemaOnline
+import uuid
+import mimetypes
+from pathlib import Path
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, List, Union, Tuple
+
+# Flask imports
+from flask import render_template, request, jsonify, current_app, redirect, url_for, flash, abort, send_file, g
+from flask_login import login_required, current_user
+
+# Database imports  
+from sqlalchemy import text, desc, func, and_, or_
+from sqlalchemy import inspect
+from app import db
+
+# Módulos internos
 from . import claude_ai_bp
 from app.utils.auth_decorators import require_admin
-from .claude_real_integration import processar_com_claude_real
+from .claude_real_integration import processar_com_claude_real, processar_consulta_real
+
+# Imports com fallback para MCP e Redis
+try:
+    from .mcp_web_server import MCPSistemaOnline
+except ImportError:
+    class MCPSistemaOnline:
+        def __init__(self, *args, **kwargs):
+            pass
+        def status_rapido(self):
+            return {'online': False, 'components': {}, 'timestamp': datetime.now().isoformat()}
+
+try:
+    from app.utils.redis_cache import redis_cache
+    REDIS_DISPONIVEL = True
+except ImportError:
+    redis_cache = None
+    REDIS_DISPONIVEL = False
 
 # Import do InputValidator com fallback
-# NOTA: O Pylance pode reportar um falso positivo aqui sobre o import não resolvido.
-# Isso ocorre porque o Pylance tem dificuldade com imports relativos em Flask blueprints.
-# O import funciona corretamente quando executado pelo Flask - testado em testar_import_validator.py
 try:
-    from .input_validator import InputValidator  # type: ignore[import]
+    from .input_validator import InputValidator
 except ImportError:
-    # Fallback se o arquivo não for encontrado
-    import sys
-    import os
-    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    from input_validator import InputValidator  # Import absoluto no fallback
+    class InputValidator:
+        @staticmethod
+        def validate_json_request(data, required_fields=None):
+            if not data:
+                return False, "Dados JSON inválidos", None
+            if required_fields:
+                for field in required_fields:
+                    if field not in data:
+                        return False, f"Campo obrigatório: {field}", None
+            return True, "", data
 
-# Configurar logger
+# Sistema de logging
 logger = logging.getLogger(__name__)
 
-# Importar sistema de sugestões inteligentes
+# Imports do sistema de autonomia
 try:
-    from .suggestion_engine import get_suggestion_engine, init_suggestion_engine
-    SUGGESTIONS_AVAILABLE = True
+    from .claude_code_generator import get_code_generator, init_code_generator
 except ImportError:
-    SUGGESTIONS_AVAILABLE = False
-    logger.warning("Sistema de sugestões inteligentes não disponível")
+    logger.warning("⚠️ Claude Code Generator não disponível")
+    get_code_generator = lambda: None
+    init_code_generator = lambda: None
 
-# Importar contexto conversacional
 try:
-    from .conversation_context import get_conversation_context
-    CONTEXT_AVAILABLE = True
+    from .auto_command_processor import get_auto_processor, init_auto_processor
 except ImportError:
-    CONTEXT_AVAILABLE = False
-    logger.warning("Contexto conversacional não disponível")
+    logger.warning("⚠️ Auto Command Processor não disponível")
+    get_auto_processor = lambda: None
+    init_auto_processor = lambda: None
 
-
-# Importar Redis cache se disponível
 try:
-    from app.utils.redis_cache import redis_cache, REDIS_DISPONIVEL
+    from .security_guard import get_security_guard, init_security_guard
 except ImportError:
-    REDIS_DISPONIVEL = False
+    logger.warning("⚠️ Security Guard não disponível")
+    get_security_guard = lambda: None
+    init_security_guard = lambda: None
 
 @claude_ai_bp.route('/chat')
 @login_required
@@ -57,6 +86,12 @@ def chat_page():
     """Redireciona para Claude 4 Sonnet (nova interface principal)"""
     from flask import redirect, url_for
     return redirect(url_for('claude_ai.claude_real'))
+
+@claude_ai_bp.route('/autonomia')
+@login_required
+def autonomia():
+    """Interface de autonomia total do Claude AI"""
+    return render_template('claude_ai/autonomia.html')
 
 # ❌ REMOVIDO: Dashboard MCP antigo - substituído pelo Dashboard Executivo
 
@@ -1927,3 +1962,393 @@ def api_metricas_reais():
             'success': False,
             'error': f'Erro interno: {str(e)}'
         }), 500 
+
+@claude_ai_bp.route('/autonomia/descobrir-projeto')
+@login_required
+def descobrir_projeto():
+    """🔍 DESCOBERTA COMPLETA DO PROJETO"""
+    try:
+        from app import db
+        
+        # Descobrir estrutura de módulos
+        app_path = Path(__file__).parent.parent
+        estrutura_projeto = {}
+        
+        # Listar todos os módulos
+        for item in app_path.iterdir():
+            if item.is_dir() and not item.name.startswith('.') and not item.name.startswith('__'):
+                modulo = {
+                    'nome': item.name,
+                    'tem_models': (item / 'models.py').exists(),
+                    'tem_forms': (item / 'forms.py').exists(),
+                    'tem_routes': (item / 'routes.py').exists(),
+                    'tem_templates': (app_path / 'templates' / item.name).exists(),
+                    'arquivos': [f.name for f in item.iterdir() if f.is_file() and f.suffix == '.py']
+                }
+                estrutura_projeto[item.name] = modulo
+        
+        # Descobrir tabelas do banco
+        inspector = inspect(db.engine)
+        tabelas_banco = inspector.get_table_names()
+        
+        # Descobrir templates
+        templates_dir = app_path / 'templates'
+        templates = {}
+        if templates_dir.exists():
+            for item in templates_dir.iterdir():
+                if item.is_dir():
+                    templates[item.name] = [f.name for f in item.iterdir() if f.suffix == '.html']
+        
+        projeto_completo = {
+            'estrutura_modulos': estrutura_projeto,
+            'tabelas_banco': tabelas_banco,
+            'templates_por_modulo': templates,
+            'total_modulos': len(estrutura_projeto),
+            'total_tabelas': len(tabelas_banco),
+            'total_templates': sum(len(temps) for temps in templates.values())
+        }
+        
+        return jsonify({
+            'status': 'success',
+            'projeto': projeto_completo,
+            'message': f'Projeto descoberto: {len(estrutura_projeto)} módulos, {len(tabelas_banco)} tabelas'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao descobrir projeto: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@claude_ai_bp.route('/autonomia/ler-arquivo', methods=['POST'])
+@login_required
+def ler_arquivo():
+    """📖 LER QUALQUER ARQUIVO DO PROJETO"""
+    try:
+        data = request.get_json()
+        caminho_arquivo = data.get('arquivo')
+        
+        if not caminho_arquivo:
+            return jsonify({'status': 'error', 'message': 'Caminho do arquivo é obrigatório'}), 400
+        
+        code_gen = get_code_generator()
+        if not code_gen:
+            return jsonify({'status': 'error', 'message': 'Gerador de código não inicializado'}), 500
+        
+        conteudo = code_gen.read_file(caminho_arquivo)
+        
+        if conteudo.startswith('❌'):
+            return jsonify({'status': 'error', 'message': conteudo}), 404
+        
+        # Informações adicionais do arquivo
+        app_path = Path(__file__).parent.parent
+        arquivo_path = app_path / caminho_arquivo
+        
+        info_arquivo = {
+            'tamanho_kb': round(len(conteudo) / 1024, 2),
+            'linhas': len(conteudo.split('\n')),
+            'extensao': arquivo_path.suffix,
+            'existe': arquivo_path.exists()
+        }
+        
+        return jsonify({
+            'status': 'success',
+            'arquivo': caminho_arquivo,
+            'conteudo': conteudo,
+            'info': info_arquivo
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao ler arquivo: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@claude_ai_bp.route('/autonomia/listar-diretorio', methods=['POST'])
+@login_required
+def listar_diretorio():
+    """📁 LISTAR CONTEÚDO DE QUALQUER DIRETÓRIO"""
+    try:
+        data = request.get_json()
+        caminho_dir = data.get('diretorio', '')
+        
+        app_path = Path(__file__).parent.parent
+        target_dir = app_path / caminho_dir if caminho_dir else app_path
+        
+        if not target_dir.exists() or not target_dir.is_dir():
+            return jsonify({'status': 'error', 'message': f'Diretório não encontrado: {caminho_dir}'}), 404
+        
+        conteudo = {
+            'diretorios': [],
+            'arquivos': [],
+            'caminho': str(target_dir.relative_to(app_path)) if caminho_dir else 'app'
+        }
+        
+        for item in target_dir.iterdir():
+            if item.is_dir() and not item.name.startswith('.'):
+                conteudo['diretorios'].append(item.name)
+            elif item.is_file():
+                conteudo['arquivos'].append({
+                    'nome': item.name,
+                    'tamanho_kb': round(item.stat().st_size / 1024, 2),
+                    'extensao': item.suffix
+                })
+        
+        return jsonify({
+            'status': 'success',
+            'conteudo': conteudo
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao listar diretório: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@claude_ai_bp.route('/autonomia/criar-modulo', methods=['POST'])
+@login_required
+def criar_modulo():
+    """🚀 CRIAR MÓDULO FLASK COMPLETO"""
+    try:
+        data = request.get_json()
+        nome_modulo = data.get('nome_modulo')
+        campos = data.get('campos', [])
+        templates = data.get('templates', ['form.html', 'list.html'])
+        
+        if not nome_modulo:
+            return jsonify({'status': 'error', 'message': 'Nome do módulo é obrigatório'}), 400
+        
+        if not campos:
+            return jsonify({'status': 'error', 'message': 'Campos são obrigatórios'}), 400
+        
+        code_gen = get_code_generator()
+        if not code_gen:
+            return jsonify({'status': 'error', 'message': 'Gerador de código não inicializado'}), 500
+        
+        # Gerar arquivos do módulo
+        arquivos_gerados = code_gen.generate_flask_module(nome_modulo, campos, templates)
+        
+        # Salvar todos os arquivos
+        arquivos_salvos = []
+        for caminho_arquivo, conteudo in arquivos_gerados.items():
+            if code_gen.write_file(caminho_arquivo, conteudo):
+                arquivos_salvos.append(caminho_arquivo)
+        
+        return jsonify({
+            'status': 'success',
+            'modulo': nome_modulo,
+            'arquivos_criados': arquivos_salvos,
+            'total_arquivos': len(arquivos_salvos),
+            'message': f'Módulo {nome_modulo} criado com {len(arquivos_salvos)} arquivos'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao criar módulo: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@claude_ai_bp.route('/autonomia/criar-arquivo', methods=['POST'])
+@login_required
+def criar_arquivo():
+    """📝 CRIAR/MODIFICAR QUALQUER ARQUIVO"""
+    try:
+        data = request.get_json()
+        caminho_arquivo = data.get('arquivo')
+        conteudo = data.get('conteudo')
+        criar_backup = data.get('backup', True)
+        
+        if not caminho_arquivo:
+            return jsonify({'status': 'error', 'message': 'Caminho do arquivo é obrigatório'}), 400
+        
+        if not conteudo:
+            return jsonify({'status': 'error', 'message': 'Conteúdo é obrigatório'}), 400
+        
+        code_gen = get_code_generator()
+        if not code_gen:
+            return jsonify({'status': 'error', 'message': 'Gerador de código não inicializado'}), 500
+        
+        # Verificar se arquivo já existe
+        app_path = Path(__file__).parent.parent
+        arquivo_path = app_path / caminho_arquivo
+        arquivo_existia = arquivo_path.exists()
+        
+        # Salvar arquivo
+        sucesso = code_gen.write_file(caminho_arquivo, conteudo, criar_backup)
+        
+        if sucesso:
+            return jsonify({
+                'status': 'success',
+                'arquivo': caminho_arquivo,
+                'acao': 'modificado' if arquivo_existia else 'criado',
+                'tamanho_kb': round(len(conteudo) / 1024, 2),
+                'message': f'Arquivo {"modificado" if arquivo_existia else "criado"} com sucesso'
+            })
+        else:
+            return jsonify({'status': 'error', 'message': 'Erro ao salvar arquivo'}), 500
+        
+    except Exception as e:
+        logger.error(f"Erro ao criar arquivo: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@claude_ai_bp.route('/autonomia/inspecionar-banco')
+@login_required
+def inspecionar_banco():
+    """🗄️ INSPECIONAR ESQUEMA COMPLETO DO BANCO"""
+    try:
+        from app import db
+        
+        inspector = inspect(db.engine)
+        
+        esquema_completo = {
+            'info_banco': {
+                'dialeto': str(db.engine.dialect.name),
+                'driver': str(db.engine.driver)
+            },
+            'tabelas': {}
+        }
+        
+        # Listar todas as tabelas
+        tabelas = inspector.get_table_names()
+        
+        for tabela in tabelas:
+            try:
+                colunas = inspector.get_columns(tabela)
+                foreign_keys = inspector.get_foreign_keys(tabela)
+                indexes = inspector.get_indexes(tabela)
+                
+                esquema_completo['tabelas'][tabela] = {
+                    'colunas': [
+                        {
+                            'nome': col['name'],
+                            'tipo': str(col['type']),
+                            'nullable': col['nullable'],
+                            'default': col.get('default'),
+                            'primary_key': col.get('primary_key', False)
+                        } for col in colunas
+                    ],
+                    'foreign_keys': [
+                        {
+                            'coluna': fk['constrained_columns'][0] if fk['constrained_columns'] else None,
+                            'tabela_referenciada': fk['referred_table'],
+                            'coluna_referenciada': fk['referred_columns'][0] if fk['referred_columns'] else None
+                        } for fk in foreign_keys
+                    ],
+                    'indexes': [idx['name'] for idx in indexes],
+                    'total_colunas': len(colunas)
+                }
+            except Exception as e:
+                esquema_completo['tabelas'][tabela] = {'erro': str(e)}
+        
+        return jsonify({
+            'status': 'success',
+            'esquema': esquema_completo,
+            'total_tabelas': len(tabelas),
+            'message': f'Esquema inspecionado: {len(tabelas)} tabelas'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao inspecionar banco: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# ROTA REMOVIDA: /api/query duplicada - usando a versão com autenticação
+
+# Nova rota para aprovação de segurança
+@claude_ai_bp.route('/seguranca/aprovar/<action_id>', methods=['POST'])
+@login_required
+def aprovar_acao_seguranca(action_id):
+    """Aprova ou rejeita ação de segurança"""
+    try:
+        if not current_user.is_admin():
+            return jsonify({'error': 'Acesso negado'}), 403
+        
+        data = request.get_json()
+        aprovado = data.get('approved', False)
+        motivo = data.get('reason', '')
+        
+        security_guard = get_security_guard()
+        if not security_guard:
+            return jsonify({'error': 'Sistema de segurança não disponível'}), 500
+        
+        success, message = security_guard.approve_action(
+            action_id, 
+            aprovado, 
+            current_user.nome,
+            motivo
+        )
+        
+        if success:
+            return jsonify({
+                'status': 'success',
+                'message': message
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': message
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"❌ Erro na aprovação: {e}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+# Nova rota para listar ações pendentes
+@claude_ai_bp.route('/seguranca/pendentes', methods=['GET'])
+@login_required
+def listar_acoes_pendentes():
+    """Lista ações pendentes de aprovação"""
+    try:
+        security_guard = get_security_guard()
+        if not security_guard:
+            return jsonify({'error': 'Sistema de segurança não disponível'}), 500
+        
+        # Administradores veem todas as ações, usuários veem apenas as suas
+        user_id = None if current_user.is_admin() else current_user.id
+        
+        actions = security_guard.get_pending_actions(user_id)
+        
+        return jsonify({
+            'status': 'success',
+            'actions': actions,
+            'count': len(actions)
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao listar ações pendentes: {e}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+# Nova rota para emergência
+@claude_ai_bp.route('/seguranca/emergencia', methods=['POST'])
+@login_required
+def lockdown_emergencia():
+    """Ativa lockdown de emergência"""
+    try:
+        if not current_user.is_admin():
+            return jsonify({'error': 'Acesso negado'}), 403
+        
+        data = request.get_json()
+        motivo = data.get('reason', 'Lockdown de emergência')
+        
+        security_guard = get_security_guard()
+        if not security_guard:
+            return jsonify({'error': 'Sistema de segurança não disponível'}), 500
+        
+        security_guard.emergency_lockdown(motivo, current_user.nome)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'🚨 Lockdown de emergência ativado por {current_user.nome}'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no lockdown: {e}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+# Rota para interface de segurança
+@claude_ai_bp.route('/seguranca-admin')
+@login_required
+def seguranca_admin():
+    """Interface administrativa de segurança"""
+    try:
+        if not current_user.is_admin():
+            flash('Acesso negado. Apenas administradores podem acessar esta área.', 'danger')
+            return redirect(url_for('main.dashboard'))
+        
+        return render_template('claude_ai/seguranca_admin.html')
+        
+    except Exception as e:
+        logger.error(f"❌ Erro na interface de segurança: {e}")
+        flash('Erro ao carregar interface de segurança', 'danger')
+        return redirect(url_for('main.dashboard'))

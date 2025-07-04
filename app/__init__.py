@@ -543,5 +543,28 @@ def create_app(config_name=None):
             db.session.remove()
     
     # ✅ MIDDLEWARE DE LOGGING E PERFORMANCE
+    
+    # Inicializar sistemas de autonomia do Claude AI
+    try:
+        from app.claude_ai.security_guard import init_security_guard
+        from app.claude_ai.auto_command_processor import init_auto_processor
+        from app.claude_ai.claude_code_generator import init_code_generator
+        
+        with app.app_context():
+            # Inicializar sistema de segurança
+            security_guard = init_security_guard()
+            app.logger.info("🔒 Sistema de segurança Claude AI inicializado")
+            
+            # Inicializar processador automático de comandos
+            auto_processor = init_auto_processor()
+            app.logger.info("🤖 Processador automático de comandos inicializado")
+            
+            # Inicializar gerador de código
+            code_generator = init_code_generator()
+            app.logger.info("🚀 Gerador de código Claude AI inicializado")
+            
+    except Exception as e:
+        app.logger.warning(f"⚠️ Erro ao inicializar sistemas de autonomia: {e}")
+        # Sistema continua funcionando sem autonomia
 
     return app

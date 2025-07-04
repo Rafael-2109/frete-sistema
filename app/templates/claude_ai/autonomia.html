@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+{% block title %}Claude AI - Autonomia Total{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-robot text-primary"></i> Claude AI - Autonomia Total
+        </h1>
+        <a href="{{ url_for('claude_ai.chat') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-comments"></i> Chat Normal
+        </a>
+    </div>
+
+    <!-- Cards de Funcionalidades -->
+    <div class="row">
+        <!-- Descobrir Projeto -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Descobrir Projeto
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">Estrutura Completa</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-search fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm mt-2" onclick="descobrirProjeto()">
+                        <i class="fas fa-play"></i> Executar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inspecionar Banco -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Inspecionar Banco
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">Esquema Completo</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-database fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                    <button class="btn btn-success btn-sm mt-2" onclick="inspecionarBanco()">
+                        <i class="fas fa-play"></i> Executar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ler Arquivo -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Ler Arquivo
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">Qualquer Arquivo</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-file-code fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                    <button class="btn btn-info btn-sm mt-2" onclick="mostrarLerArquivo()">
+                        <i class="fas fa-play"></i> Testar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Criar Módulo -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Criar Módulo
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">Flask Completo</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-plus-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                    <button class="btn btn-warning btn-sm mt-2" onclick="mostrarCriarModulo()">
+                        <i class="fas fa-play"></i> Testar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resultado das Operações -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Resultado das Operações</h6>
+                </div>
+                <div class="card-body">
+                    <div id="resultado" class="border p-3 bg-light" style="height: 400px; overflow-y: auto;">
+                        <p class="text-muted">Resultados aparecerão aqui...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Ler Arquivo -->
+<div class="modal fade" id="modalLerArquivo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Ler Arquivo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Caminho do Arquivo:</label>
+                    <input type="text" class="form-control" id="caminhoArquivo" 
+                           placeholder="Ex: carteira/models.py">
+                    <small class="form-text text-muted">Caminho relativo a partir de app/</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="lerArquivo()">Ler Arquivo</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Criar Módulo -->
+<div class="modal fade" id="modalCriarModulo" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Criar Módulo Flask</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Nome do Módulo:</label>
+                    <input type="text" class="form-control" id="nomeModulo" 
+                           placeholder="Ex: teste_autonomia">
+                </div>
+                <div class="form-group">
+                    <label>Campos (JSON):</label>
+                    <textarea class="form-control" id="camposModulo" rows="8" placeholder='[
+  {"name": "nome", "type": "string", "nullable": false},
+  {"name": "descricao", "type": "text", "nullable": true},
+  {"name": "ativo", "type": "boolean", "nullable": false}
+]'></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="criarModulo()">Criar Módulo</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function descobrirProjeto() {
+    mostrarCarregando();
+    
+    fetch('/claude-ai/autonomia/descobrir-projeto', {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': getCSRFToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            mostrarResultado('Projeto Descoberto', data.projeto, 'success');
+        } else {
+            mostrarResultado('Erro', data.message, 'error');
+        }
+    })
+    .catch(error => {
+        mostrarResultado('Erro', error.message, 'error');
+    });
+}
+
+function inspecionarBanco() {
+    mostrarCarregando();
+    
+    fetch('/claude-ai/autonomia/inspecionar-banco', {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': getCSRFToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            mostrarResultado('Banco Inspecionado', data.esquema, 'success');
+        } else {
+            mostrarResultado('Erro', data.message, 'error');
+        }
+    })
+    .catch(error => {
+        mostrarResultado('Erro', error.message, 'error');
+    });
+}
+
+function mostrarLerArquivo() {
+    const modal = new bootstrap.Modal(document.getElementById('modalLerArquivo'));
+    modal.show();
+}
+
+function lerArquivo() {
+    const caminho = document.getElementById('caminhoArquivo').value;
+    if (!caminho) {
+        alert('Por favor, informe o caminho do arquivo');
+        return;
+    }
+    
+    mostrarCarregando();
+    
+    fetch('/claude-ai/autonomia/ler-arquivo', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify({
+            arquivo: caminho
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            mostrarResultado(`Arquivo: ${data.arquivo}`, {
+                info: data.info,
+                conteudo: data.conteudo.substring(0, 1000) + '...'
+            }, 'success');
+        } else {
+            mostrarResultado('Erro', data.message, 'error');
+        }
+        
+        // Fechar modal
+        bootstrap.Modal.getInstance(document.getElementById('modalLerArquivo')).hide();
+    })
+    .catch(error => {
+        mostrarResultado('Erro', error.message, 'error');
+    });
+}
+
+function mostrarCriarModulo() {
+    const modal = new bootstrap.Modal(document.getElementById('modalCriarModulo'));
+    modal.show();
+}
+
+function criarModulo() {
+    const nome = document.getElementById('nomeModulo').value;
+    const camposText = document.getElementById('camposModulo').value;
+    
+    if (!nome || !camposText) {
+        alert('Por favor, preencha todos os campos');
+        return;
+    }
+    
+    let campos;
+    try {
+        campos = JSON.parse(camposText);
+    } catch (e) {
+        alert('JSON de campos inválido');
+        return;
+    }
+    
+    mostrarCarregando();
+    
+    fetch('/claude-ai/autonomia/criar-modulo', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify({
+            nome_modulo: nome,
+            campos: campos
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            mostrarResultado('Módulo Criado', data, 'success');
+        } else {
+            mostrarResultado('Erro', data.message, 'error');
+        }
+        
+        // Fechar modal
+        bootstrap.Modal.getInstance(document.getElementById('modalCriarModulo')).hide();
+    })
+    .catch(error => {
+        mostrarResultado('Erro', error.message, 'error');
+    });
+}
+
+function mostrarCarregando() {
+    document.getElementById('resultado').innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+            <p class="mt-2">Executando operação...</p>
+        </div>
+    `;
+}
+
+function mostrarResultado(titulo, dados, tipo) {
+    const cor = tipo === 'success' ? 'text-success' : 'text-danger';
+    const icone = tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle';
+    
+    document.getElementById('resultado').innerHTML = `
+        <div class="${cor}">
+            <h5><i class="fas ${icone}"></i> ${titulo}</h5>
+        </div>
+        <pre class="bg-light p-3 mt-3" style="max-height: 300px; overflow-y: auto;">${JSON.stringify(dados, null, 2)}</pre>
+    `;
+}
+
+function getCSRFToken() {
+    return document.querySelector('meta[name=csrf-token]').getAttribute('content');
+}
+</script>
+{% endblock %} 
