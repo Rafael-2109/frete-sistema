@@ -9,7 +9,7 @@ from app.embarques.models import EmbarqueItem, Embarque
 from app.vinculos.models import CidadeAtendida
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.transportadoras.models import Transportadora
-
+from app.pedidos.models import Pedido
 
 def adicionar_dias_uteis(data_inicio, dias_uteis):
     """
@@ -230,6 +230,7 @@ def sincronizar_entrega_por_nf(numero_nf):
 def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
 
     entrega = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
+    pedido = Pedido.query.filter_by(nf=numero_nf).first()
     if not entrega:
         return
 
@@ -238,6 +239,7 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
     entrega.status_finalizacao         = None
     entrega.entregue                   = False
     entrega.data_hora_entrega_realizada= None
+    pedido.nf_cd                       = False
 
     entrega.data_embarque = embarque.data_embarque or None
 

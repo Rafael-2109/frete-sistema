@@ -213,7 +213,7 @@ def adicionar_evento(id):
             observacao=form_evento.observacao.data,
             autor=current_user.nome,
             criado_em=datetime.utcnow(),
-            criado_por=current_user.nome
+            autor=current_user.nome
         )
         db.session.add(evento)
 
