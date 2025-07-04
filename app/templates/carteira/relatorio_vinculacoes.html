@@ -98,7 +98,7 @@
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
                                 {% if total_carteira and total_carteira > 0 %}
-                                    {{ "%.1f"|format((itens_vinculados * 100 / total_carteira)) }}%
+                                    {{ "%.1f"|format((itens_vinculados * 100 / total_carteira)|float) }}%
                                 {% else %}
                                     0%
                                 {% endif %}
@@ -122,8 +122,8 @@
                     <h6 class="card-title mb-3">
                         <i class="fas fa-chart-line"></i> Progresso de Vinculação
                     </h6>
-                    <div class="progress mb-2" style="height: 20px;">
-                        {% set percentual_vinculado = (itens_vinculados * 100 / total_carteira) %}
+                                            <div class="progress mb-2" style="height: 20px;">
+                        {% set percentual_vinculado = ((itens_vinculados * 100 / total_carteira)|float) %}
                         <div class="progress-bar bg-success" role="progressbar" 
                              style="width: {{ percentual_vinculado }}%" 
                              aria-valuenow="{{ percentual_vinculado }}" 
@@ -208,7 +208,7 @@
                                         {% if separacao_disponivel %}
                                             <span class="badge badge-success">
                                                 <i class="fas fa-check"></i> 
-                                                {{ "{:,.0f}".format(separacao_disponivel.separacao.quantidade) }} disponível
+                                                {{ "{:,.0f}".format(separacao_disponivel.separacao.qtd_saldo or 0) }} disponível
                                             </span>
                                         {% else %}
                                             <span class="badge badge-secondary">
@@ -294,15 +294,15 @@
                                     </td>
                                     <td>
                                         <span class="badge badge-success">
-                                            {{ "{:,.0f}".format(item_disp.separacao.quantidade) }}
+                                            {{ "{:,.0f}".format(item_disp.separacao.qtd_saldo or 0) }}
                                         </span>
                                     </td>
                                     <td>
-                                        {% set qtd_vinculacao = [item_disp.item.qtd_saldo_produto_pedido, item_disp.separacao.quantidade]|min %}
+                                        {% set qtd_vinculacao = [(item_disp.item.qtd_saldo_produto_pedido or 0), (item_disp.separacao.qtd_saldo or 0)]|min %}
                                         <span class="badge badge-info">
-                                            {{ "{:,.0f}".format(qtd_vinculacao) }}
+                                            {{ "{:,.0f}".format(qtd_vinculacao|float) }}
                                         </span>
-                                        {% if qtd_vinculacao < item_disp.item.qtd_saldo_produto_pedido %}
+                                        {% if qtd_vinculacao < (item_disp.item.qtd_saldo_produto_pedido or 0) %}
                                             <small class="text-warning d-block">
                                                 <i class="fas fa-exclamation-triangle"></i> Parcial
                                             </small>

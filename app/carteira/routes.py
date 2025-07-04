@@ -4739,6 +4739,12 @@ def gerar_separacao_avancada():
     if request.method == 'GET':
         # 📋 BUSCAR ITENS DISPONÍVEIS PARA SEPARAÇÃO
         try:
+            # 🔍 VERIFICAR SE TABELA EXISTE
+            inspector = inspect(db.engine)
+            if not inspector.has_table('carteira_principal'):
+                flash('Sistema de carteira ainda não foi inicializado', 'warning')
+                return redirect(url_for('carteira.index'))
+            
             # Itens ativos sem separação ou com separação parcial
             itens_disponiveis = CarteiraPrincipal.query.filter(
                 CarteiraPrincipal.ativo == True,
@@ -4755,13 +4761,23 @@ def gerar_separacao_avancada():
             itens_enriquecidos = []
             for item in itens_disponiveis:
                 try:
-                    # Verificar estoque
-                    from app.estoque.models import SaldoEstoque
-                    estoque_info = SaldoEstoque.obter_resumo_produto(item.cod_produto, item.nome_produto)
+                    # Verificar estoque (com fallback)
+                    estoque_info = None
+                    if inspector.has_table('saldo_estoque'):
+                        try:
+                            from app.estoque.models import SaldoEstoque
+                            estoque_info = SaldoEstoque.obter_resumo_produto(item.cod_produto, item.nome_produto)
+                        except:
+                            estoque_info = None
                     
-                    # Verificar agendamento
-                    from app.cadastros_agendamento.models import ContatoAgendamento
-                    contato_agendamento = ContatoAgendamento.query.filter_by(cnpj=item.cnpj_cpf).first()
+                    # Verificar agendamento (com fallback)
+                    contato_agendamento = None
+                    if inspector.has_table('contato_agendamento'):
+                        try:
+                            from app.cadastros_agendamento.models import ContatoAgendamento
+                            contato_agendamento = ContatoAgendamento.query.filter_by(cnpj=item.cnpj_cpf).first()
+                        except:
+                            contato_agendamento = None
                     
                     item_enriquecido = {
                         'item': item,

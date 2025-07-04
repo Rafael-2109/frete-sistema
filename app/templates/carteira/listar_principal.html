@@ -46,8 +46,8 @@
                     </div>
                     <div class="col-md-2 mb-3">
                         <label for="status" class="form-label">Status</label>
-                        <input type="text" class="form-control text-black" id="status" name="status" 
-                               value="{{ status }}" placeholder="Ex: Pedido de venda">
+                        <input type="text" class="form-control" id="status" name="status" 
+                               value="{{ status }}" placeholder="Ex: Pedido de venda" style="color: #000 !important;">
                     </div>
                     <div class="col-md-3 mb-3">
                         <label for="cliente" class="form-label">Cliente</label>
@@ -450,10 +450,12 @@ function verDetalhes(itemId) {
 .table th {
     border-top: none;
     font-size: 0.85rem;
+    color: #333 !important;
 }
 .table td {
     font-size: 0.85rem;
     vertical-align: middle;
+    color: #333 !important;
 }
 .badge {
     font-size: 0.75rem;
@@ -462,6 +464,20 @@ function verDetalhes(itemId) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Forçar cor de texto visível */
+.form-control {
+    color: #333 !important;
+}
+.form-label {
+    color: #333 !important;
+}
+.text-muted {
+    color: #6c757d !important;
+}
+small.text-muted {
+    color: #6c757d !important;
 }
 
 /* Bordas coloridas para status */
