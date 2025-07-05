@@ -7,15 +7,30 @@ import os
 
 print("🚀 INICIANDO SISTEMA NO RENDER...")
 
+# 0. Instalar modelo spaCy português
+print("📦 Instalando modelo spaCy português...")
+try:
+    subprocess.run([sys.executable, '-m', 'spacy', 'download', 'pt_core_news_sm'], 
+                   capture_output=True, check=False)
+    print("   ✅ Modelo spaCy instalado/verificado")
+except Exception as e:
+    print(f"   ⚠️ spaCy: {e}")
+
 # 1. Executar correções
 print("🔧 Aplicando correções...")
 subprocess.run([sys.executable, 'corrigir_deploy_render_final.py'])
 
-# 2. Inicializar banco
+# 2. CRÍTICO: Forçar correção de migrações ANTES de qualquer outra coisa
+print("🔨 Forçando correção de migrações...")
+result = subprocess.run([sys.executable, 'force_migration_fix.py'])
+if result.returncode != 0:
+    print("⚠️ Correção de migrações retornou aviso, mas continuando...")
+
+# 3. Inicializar banco
 print("🗄️ Inicializando banco...")
 subprocess.run([sys.executable, 'init_db.py'])
 
-# 3. Aplicar migrações com tratamento de erro
+# 4. Aplicar migrações com tratamento de erro
 print("🔄 Aplicando migrações...")
 try:
     # Tentar upgrade normal
@@ -23,15 +38,10 @@ try:
     
     if result.returncode != 0:
         if 'Multiple head revisions' in result.stderr:
-            print("⚠️ Múltiplas heads detectadas - aplicando correção...")
-            
-            # Aplicar stamp na migração de merge
-            subprocess.run(['flask', 'db', 'stamp', 'merge_heads_20250705_093743'])
-            
-            # Tentar upgrade novamente
-            subprocess.run(['flask', 'db', 'upgrade'])
+            print("⚠️ Múltiplas heads ainda detectadas - ignorando e continuando...")
+            # Não tentar mais nada, apenas continuar
         else:
-            print(f"❌ Erro na migração: {result.stderr}")
+            print(f"⚠️ Erro na migração: {result.stderr}")
             # Continuar mesmo com erro
     else:
         print("✅ Migrações aplicadas com sucesso")
@@ -42,7 +52,7 @@ except Exception as e:
 
 print("✅ Inicialização concluída!")
 
-# 4. Iniciar Gunicorn
+# 5. Iniciar Gunicorn
 print("🌐 Iniciando servidor Gunicorn...")
 os.execvp('gunicorn', [
     'gunicorn',

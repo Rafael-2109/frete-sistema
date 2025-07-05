@@ -8,7 +8,11 @@ echo "=== INICIANDO DEPLOY NO RENDER ==="
 echo "📦 Instalando dependências..."
 pip install -r requirements.txt
 
-# 2. Verificar e corrigir migrações
+# 2. Instalar modelo spaCy português
+echo "🧠 Instalando modelo spaCy português..."
+python -m spacy download pt_core_news_sm || echo "⚠️ spaCy pode não estar instalado, continuando..."
+
+# 3. Verificar e corrigir migrações
 echo "🗃️ Verificando migrações..."
 
 # Verificar se há múltiplas heads
@@ -25,7 +29,7 @@ else
     echo "✅ Banco já está atualizado"
 fi
 
-# 3. Inicializar banco se necessário
+# 4. Inicializar banco se necessário
 echo "🗄️ Inicializando banco..."
 python init_db.py
 

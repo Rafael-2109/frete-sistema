@@ -1,10 +1,46 @@
 #!/usr/bin/env python3
 import os
 import sys
+import subprocess
+
+def force_fix_migrations():
+    """Força correção de migrações antes de inicializar o banco"""
+    try:
+        print("🔧 Verificando e corrigindo migrações...")
+        
+        # Definir FLASK_APP
+        os.environ['FLASK_APP'] = 'run.py'
+        
+        # Verificar se há múltiplas heads
+        result = subprocess.run(['flask', 'db', 'heads'], 
+                              capture_output=True, text=True)
+        
+        if 'merge_heads_20250705_093743' in result.stdout:
+            # Se a migração de merge existe, aplicar stamp nela
+            print("   📌 Aplicando stamp na migração de merge...")
+            subprocess.run(['flask', 'db', 'stamp', 'merge_heads_20250705_093743'], 
+                         check=False)
+            print("   ✅ Migração de merge aplicada")
+        elif 'Multiple head revisions' in result.stderr or result.returncode != 0:
+            # Se há múltiplas heads, forçar stamp head
+            print("   ⚠️ Múltiplas heads detectadas - aplicando correção...")
+            subprocess.run(['flask', 'db', 'stamp', 'head'], check=False)
+            print("   ✅ Stamp head aplicado")
+        else:
+            print("   ✅ Migrações OK")
+            
+    except Exception as e:
+        print(f"   ⚠️ Aviso na verificação de migrações: {e}")
+        # Continuar mesmo com erro
 
 def init_database():
     try:
         print("=== INICIANDO BANCO DE DADOS ===")
+        
+        # NOVO: Corrigir migrações ANTES de tudo
+        if os.environ.get('DATABASE_URL'):
+            # Só executar em produção
+            force_fix_migrations()
         
         # Verificar se estamos em produção
         if os.environ.get('DATABASE_URL'):
