@@ -1,32 +1,24 @@
 #!/bin/bash
-# Script de correÃ§Ã£o de migraÃ§Ã£o para Render
+# Script de correção de migração para Render
 
-echo "ðŸ”„ Corrigindo problema de migraÃ§Ã£o..."
+echo "Iniciando correção de migração..."
 
-# Resetar migraÃ§Ãµes
-flask db stamp head
-flask db merge heads
+# Verificar se há múltiplas heads
+HEADS_COUNT=$(flask db heads 2>/dev/null | wc -l)
 
-# Se ainda houver problema, forÃ§ar reset
-if [ $? -ne 0 ]; then
-    echo "âš ï¸ ForÃ§ando reset de migraÃ§Ã£o..."
-    python -c "
-from flask import Flask
-from flask_migrate import Migrate
-from app import create_app, db
-import os
+if [ "$HEADS_COUNT" -gt 1 ]; then
+    echo "Múltiplas heads detectadas, fazendo merge..."
+    flask db merge heads -m "Merge multiple heads"
+fi
 
-app = create_app()
-with app.app_context():
-    # Limpar tabela alembic_version se existir
-    try:
-        db.session.execute('DELETE FROM alembic_version WHERE version_num = \'1d81b88a3038\'')
-        db.session.commit()
-        print('âœ… MigraÃ§Ã£o problemÃ¡tica removida')
-    except:
-        print('âš ï¸ Tabela alembic_version nÃ£o encontrada ou jÃ¡ limpa')
-"
+# Verificar revisão problemática
+if ! flask db show 1d81b88a3038 >/dev/null 2>&1; then
+    echo "Revisão 1d81b88a3038 não encontrada, fazendo stamp da head atual..."
     flask db stamp head
 fi
 
-echo "âœ… MigraÃ§Ã£o corrigida!"
+# Tentar upgrade
+echo "Executando upgrade..."
+flask db upgrade
+
+echo "Correção de migração concluída"

@@ -1,41 +1,21 @@
 #!/bin/bash
 
-echo "🚀 Iniciando build do sistema de fretes..."
+set -o errexit
 
-# Instalar dependências
-echo "📦 Instalando dependências..."
+echo "Iniciando build do Render..."
+
+# Instalar depend�ncias Python
+echo "Instalando depend�ncias Python..."
 pip install -r requirements.txt
 
-# Corrigir problema de migração específico
-echo "🔄 Corrigindo migrações..."
-python -c "
-from flask import Flask
-from app import create_app, db
-import os
+# Instalar modelo spaCy portugu�s
+echo "Instalando modelo spaCy portugu�s..."
+python -m spacy download pt_core_news_sm || echo "Falha ao instalar spaCy, continuando..."
 
-try:
-    app = create_app()
-    with app.app_context():
-        # Limpar migração problemática
-        try:
-            db.session.execute('DELETE FROM alembic_version WHERE version_num = \'1d81b88a3038\'')
-            db.session.commit()
-            print('✅ Migração problemática removida')
-        except:
-            print('⚠️ Migração já limpa ou não existe')
-except Exception as e:
-    print(f'⚠️ Erro na limpeza: {e}')
-"
-
-# Aplicar migrações
-flask db stamp head 2>/dev/null || echo "⚠️ Stamp head falhou, continuando..."
-flask db merge heads 2>/dev/null || echo "⚠️ Merge heads falhou, continuando..."
-flask db upgrade || echo "⚠️ Upgrade falhou, tentando init..."
-
-# Se upgrade falhar, tentar init
-if [ $? -ne 0 ]; then
-    echo "🔄 Tentando inicializar banco..."
-    python init_db.py
+# Instalar depend�ncias AI se existirem
+if [ -f "requirements_ai.txt" ]; then
+    echo "Instalando depend�ncias AI..."
+    pip install -r requirements_ai.txt || echo "Falha ao instalar deps AI, continuando..."
 fi
 
-echo "✅ Build concluído!"
+echo "Build conclu�do com sucesso!"
