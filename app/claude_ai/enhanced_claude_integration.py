@@ -34,10 +34,16 @@ class EnhancedClaudeIntegration:
         """Inicializa a integração Claude melhorada"""
         # Import lazy para evitar circular import
         try:
+            # Import dentro do método para evitar circular import
+            from .claude_real_integration import ClaudeRealIntegration
             self.claude_integration = ClaudeRealIntegration()
         except ImportError as e:
-            print(f"⚠️ Warning: ClaudeRealIntegration não disponível: {e}")
+            logger.warning(f"⚠️ ClaudeRealIntegration não disponível: {e}")
             self.claude_integration = None
+        except Exception as e:
+            logger.error(f"❌ Erro ao inicializar ClaudeRealIntegration: {e}")
+            self.claude_integration = None
+        
         self.intelligent_analyzer = get_intelligent_analyzer()
         self.sistema_data = get_sistema_real_data()
         
@@ -76,9 +82,14 @@ class EnhancedClaudeIntegration:
         )
         
         # 5. PROCESSAR COM CLAUDE USANDO PROMPT OTIMIZADO
-        resposta_claude = self.claude_integration.processar_consulta_real(
-            interpretacao.prompt_otimizado, contexto_otimizado
-        )
+        if self.claude_integration:
+            resposta_claude = self.claude_integration.processar_consulta_real(
+                interpretacao.prompt_otimizado, contexto_otimizado
+            )
+        else:
+            # Fallback quando Claude não está disponível
+            logger.warning("⚠️ Claude Integration não disponível, usando resposta padrão")
+            resposta_claude = "⚠️ Sistema Claude temporariamente indisponível. Por favor, tente novamente em alguns instantes."
         
         # 6. PÓS-PROCESSAMENTO DA RESPOSTA
         resposta_final = self._pos_processar_resposta(
@@ -172,9 +183,14 @@ INSTRUÇÕES ESPECIAIS:
 Responda de forma DIRETA e ACIONÁVEL:
 """
         
-        resposta_claude = self.claude_integration.processar_consulta_real(
-            prompt_critico, user_context
-        )
+        if self.claude_integration:
+            resposta_claude = self.claude_integration.processar_consulta_real(
+                prompt_critico, user_context
+            )
+        else:
+            # Fallback para consultas críticas quando Claude não está disponível
+            logger.error("❌ CRÍTICO: Claude Integration não disponível para consulta urgente")
+            resposta_claude = "🚨 **ATENÇÃO**: Sistema Claude temporariamente indisponível para consulta crítica. Entre em contato com o suporte imediatamente."
         
         # Adicionar indicadores visuais de urgência
         resposta_final = f"🚨 **RESPOSTA PRIORITÁRIA - URGÊNCIA CRÍTICA** 🚨\n\n{resposta_claude}"
