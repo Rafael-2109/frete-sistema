@@ -109,8 +109,14 @@ class ClaudeRealIntegration:
             # 🚀 ENHANCED CLAUDE INTEGRATION - Claude Otimizado
             try:
                 # Import lazy para evitar circular import
-                from .enhanced_claude_integration import get_enhanced_claude_system
+                from .enhanced_claude_integration import get_enhanced_claude_system, enhanced_claude_integration
                 self.enhanced_claude = get_enhanced_claude_system(self.client)
+                
+                # Injetar dependência para resolver circular import
+                if self.enhanced_claude and hasattr(self.enhanced_claude, 'claude_integration'):
+                    self.enhanced_claude.claude_integration = self
+                    logger.info("✅ Dependência injetada no Enhanced Claude")
+                
                 logger.info("🚀 Enhanced Claude Integration carregado!")
             except ImportError as e:
                 logger.warning(f"⚠️ Enhanced Claude Integration não disponível: {e}")
