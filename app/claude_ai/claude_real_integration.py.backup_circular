@@ -107,14 +107,9 @@ class ClaudeRealIntegration:
             logger.info("🧠 Analisador Inteligente (1.058 linhas) carregado!")
             
             # 🚀 ENHANCED CLAUDE INTEGRATION - Claude Otimizado
-            try:
-                # Import lazy para evitar circular import
-                from .enhanced_claude_integration import get_enhanced_claude_system
-                self.enhanced_claude = get_enhanced_claude_system(self.client)
-                logger.info("🚀 Enhanced Claude Integration carregado!")
-            except ImportError as e:
-                logger.warning(f"⚠️ Enhanced Claude Integration não disponível: {e}")
-                self.enhanced_claude = None
+            from .enhanced_claude_integration import get_enhanced_claude_system
+            self.enhanced_claude = get_enhanced_claude_system(self.client)
+            logger.info("🚀 Enhanced Claude Integration carregado!")
             
             # 💡 SUGGESTION ENGINE COMPLETO (534 linhas)
             from .suggestion_engine import get_suggestion_engine
