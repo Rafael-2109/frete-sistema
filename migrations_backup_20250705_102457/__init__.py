@@ -1,0 +1,1 @@
+# Pasta para migrações - limpa para deploy 
