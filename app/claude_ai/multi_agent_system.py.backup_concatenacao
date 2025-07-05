@@ -594,19 +594,12 @@ class MultiAgentSystem:
             validation_note = f"\n⚠️ **Nota:** Validação cruzada detectou possíveis inconsistências (score: {validation_score:.2f})"
         
         # Construir resposta final - PROTEÇÃO ABSOLUTA CONTRA None
-        # Proteção ABSOLUTA contra None - verificação tripla
-        if main_response is None:
-            main_response = "Resposta não disponível"
-        if convergence_note is None:
-            convergence_note = ""
-        if validation_note is None:
-            validation_note = ""
+        # Proteção absoluta contra None
+        main_response = main_response or "Resposta não disponível"
+        convergence_note = convergence_note or ""
+        validation_note = validation_note or ""
         
-        # Conversão explícita para string com fallback
-        try:
-            final_response = str(main_response) + str(convergence_note) + str(validation_note)
-        except (TypeError, AttributeError) as e:
-            final_response = "Erro na concatenação de resposta: " + str(e)
+        final_response = str(main_response) + str(convergence_note) + str(validation_note)
         
         return final_response
     
