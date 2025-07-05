@@ -35,7 +35,7 @@ class EnhancedClaudeIntegration:
         # Import lazy para evitar circular import
         try:
             # Import dentro do método para evitar circular import
-            # from .claude_real_integration import ClaudeRealIntegration  # Removido para evitar circular import
+            from .claude_real_integration import ClaudeRealIntegration
             self.claude_integration = ClaudeRealIntegration()
         except ImportError as e:
             logger.warning(f"⚠️ ClaudeRealIntegration não disponível: {e}")

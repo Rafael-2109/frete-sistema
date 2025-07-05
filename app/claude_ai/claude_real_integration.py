@@ -47,6 +47,11 @@ from app.utils.grupo_empresarial import GrupoEmpresarialDetector, detectar_grupo
 class ClaudeRealIntegration:
     """Integração com Claude REAL da Anthropic"""
     
+    def set_enhanced_claude(self, enhanced_claude):
+        """Injeta o Enhanced Claude após a criação para evitar circular import"""
+        self.enhanced_claude = enhanced_claude
+        logger.info("✅ Enhanced Claude injetado com sucesso")
+    
     def __init__(self):
         """Inicializa integração com Claude real"""
         self.api_key = os.getenv('ANTHROPIC_API_KEY')
@@ -107,20 +112,9 @@ class ClaudeRealIntegration:
             logger.info("🧠 Analisador Inteligente (1.058 linhas) carregado!")
             
             # 🚀 ENHANCED CLAUDE INTEGRATION - Claude Otimizado
-            try:
-                # Import lazy para evitar circular import
-                from .enhanced_claude_integration import get_enhanced_claude_system, enhanced_claude_integration
-                self.enhanced_claude = get_enhanced_claude_system(self.client)
-                
-                # Injetar dependência para resolver circular import
-                if self.enhanced_claude and hasattr(self.enhanced_claude, 'claude_integration'):
-                    self.enhanced_claude.claude_integration = self
-                    logger.info("✅ Dependência injetada no Enhanced Claude")
-                
-                logger.info("🚀 Enhanced Claude Integration carregado!")
-            except ImportError as e:
-                logger.warning(f"⚠️ Enhanced Claude Integration não disponível: {e}")
-                self.enhanced_claude = None
+            # Será injetado posteriormente via set_enhanced_claude() para evitar circular import
+            self.enhanced_claude = None
+            logger.info("⚠️ Enhanced Claude será injetado posteriormente")
             
             # 💡 SUGGESTION ENGINE COMPLETO (534 linhas)
             from .suggestion_engine import get_suggestion_engine
@@ -3606,3 +3600,6 @@ def _calcular_estatisticas_por_dominio(analise: Dict[str, Any], filtros_usuario:
     except Exception as e:
         logger.error(f"❌ Erro ao calcular estatísticas do domínio {dominio}: {e}")
         return {"erro": str(e), "dominio": dominio}
+
+# Instância global
+claude_real_integration = ClaudeRealIntegration()

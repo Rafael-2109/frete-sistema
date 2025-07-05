@@ -109,6 +109,28 @@ def setup_claude_ai(app, redis_cache=None):
         app.logger.info("📊 Analisador de Dados configurado")
     except ImportError as e:
         app.logger.warning(f"⚠️ Analisador de dados não disponível: {e}")
+    
+    # 🔗 CONECTAR ENHANCED CLAUDE COM CLAUDE REAL (evita circular import)
+    try:
+        from .claude_real_integration import claude_real_integration
+        from .enhanced_claude_integration import enhanced_claude_integration
+        
+        # Injetar dependências para resolver circular import
+        if claude_real_integration and enhanced_claude_integration:
+            # Injetar enhanced no real
+            claude_real_integration.set_enhanced_claude(enhanced_claude_integration)
+            
+            # Injetar real no enhanced
+            enhanced_claude_integration.claude_integration = claude_real_integration
+            
+            app.logger.info("🔗 Enhanced Claude e Claude Real conectados com sucesso")
+        else:
+            app.logger.warning("⚠️ Não foi possível conectar Enhanced Claude e Claude Real")
+            
+    except ImportError as e:
+        app.logger.warning(f"⚠️ Erro ao conectar sistemas Claude: {e}")
+    except Exception as e:
+        app.logger.error(f"❌ Erro inesperado ao conectar Claude: {e}")
         
     return success
 
