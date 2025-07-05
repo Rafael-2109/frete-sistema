@@ -1,21 +1,32 @@
 #!/bin/bash
 
-set -o errexit
+# Build script para Render com correção de migrações
 
-echo "Iniciando build do Render..."
+echo "=== INICIANDO DEPLOY NO RENDER ==="
 
-# Instalar depend�ncias Python
-echo "Instalando depend�ncias Python..."
+# 1. Instalar dependências
+echo "📦 Instalando dependências..."
 pip install -r requirements.txt
 
-# Instalar modelo spaCy portugu�s
-echo "Instalando modelo spaCy portugu�s..."
-python -m spacy download pt_core_news_sm || echo "Falha ao instalar spaCy, continuando..."
+# 2. Verificar e corrigir migrações
+echo "🗃️ Verificando migrações..."
 
-# Instalar depend�ncias AI se existirem
-if [ -f "requirements_ai.txt" ]; then
-    echo "Instalando depend�ncias AI..."
-    pip install -r requirements_ai.txt || echo "Falha ao instalar deps AI, continuando..."
+# Verificar se há múltiplas heads
+if flask db heads | grep -q "Multiple head revisions"; then
+    echo "⚠️ Múltiplas heads detectadas, criando merge..."
+    flask db merge heads -m "Merge múltiplas heads automaticamente"
 fi
 
-echo "Build conclu�do com sucesso!"
+# Verificar se há heads não aplicadas
+if ! flask db current | grep -q "(head)"; then
+    echo "🔄 Aplicando migrações..."
+    flask db upgrade
+else
+    echo "✅ Banco já está atualizado"
+fi
+
+# 3. Inicializar banco se necessário
+echo "🗄️ Inicializando banco..."
+python init_db.py
+
+echo "✅ Build concluído com sucesso!"
