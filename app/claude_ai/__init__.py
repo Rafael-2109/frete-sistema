@@ -5,6 +5,12 @@ claude_ai_bp = Blueprint('claude_ai', __name__, url_prefix='/claude-ai')
 # Import routes to register them with the blueprint
 from . import routes 
 
+# Import ClaudeRealIntegration
+try:
+    from .claude_real_integration import ClaudeRealIntegration
+except ImportError:
+    ClaudeRealIntegration = None
+
 # 🚀 SISTEMA AVANÇADO DE IA v2.0 - ROTAS AVANÇADAS ATIVADAS
 # Versão: 25/06/2025 - Sistema Multi-Agent + Human Learning + PostgreSQL JSONB
 
