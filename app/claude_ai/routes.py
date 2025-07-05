@@ -42,9 +42,11 @@ except ImportError:
 
 # Import do InputValidator com fallback
 try:
-    from app.claude_ai.input_validator import InputValidator
+    from app.claude_ai.input_validator import InputValidator as _InputValidator
+    InputValidator = _InputValidator
 except ImportError:
-    class InputValidator:
+    # Fallback InputValidator para quando o módulo não está disponível
+    class _FallbackInputValidator:
         @staticmethod
         def validate_json_request(data, required_fields=None):
             if not data:
@@ -54,6 +56,8 @@ except ImportError:
                     if field not in data:
                         return False, f"Campo obrigatório: {field}", None
             return True, "", data
+    
+    InputValidator = _FallbackInputValidator
 
 # Sistema de logging
 logger = logging.getLogger(__name__)
@@ -497,7 +501,12 @@ def api_query():
             logger.error(f"❌ Widget: Validação falhou - {error_msg}")
             return jsonify({'success': False, 'error': error_msg}), 400
             
-        consulta = validated_data['query']
+        # Garantir que validated_data não é None
+        if validated_data is None:
+            logger.error("❌ Widget: validated_data é None após validação")
+            return jsonify({'success': False, 'error': 'Erro de validação'}), 400
+            
+        consulta = validated_data.get('query', '')
         csrf_token = validated_data.get('csrf_token', '')
         
         logger.info(f"📝 Widget Query: '{consulta[:50]}...' (CSRF: {bool(csrf_token)})")
@@ -988,6 +997,13 @@ def processar_comando_excel():
             return jsonify({
                 'success': False,
                 'error': error_msg
+            }), 400
+        
+        # Garantir que validated_data não é None
+        if validated_data is None:
+            return jsonify({
+                'success': False,
+                'error': 'Erro de validação'
             }), 400
         
         command = validated_data.get('command', validated_data.get('query', ''))
