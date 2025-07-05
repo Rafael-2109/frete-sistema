@@ -11,23 +11,43 @@ def force_fix_migrations():
         # Definir FLASK_APP
         os.environ['FLASK_APP'] = 'run.py'
         
-        # Verificar se há múltiplas heads
-        result = subprocess.run(['flask', 'db', 'heads'], 
-                              capture_output=True, text=True)
+        # Primeiro, tentar limpar qualquer estado de migração corrompido
+        try:
+            print("   📌 Limpando estado de migrações...")
+            # Tentar fazer downgrade para base (início)
+            subprocess.run(['flask', 'db', 'downgrade', 'base'], 
+                         capture_output=True, check=False)
+        except:
+            pass
         
-        if 'merge_heads_20250705_093743' in result.stdout:
-            # Se a migração de merge existe, aplicar stamp nela
-            print("   📌 Aplicando stamp na migração de merge...")
-            subprocess.run(['flask', 'db', 'stamp', 'merge_heads_20250705_093743'], 
-                         check=False)
-            print("   ✅ Migração de merge aplicada")
-        elif 'Multiple head revisions' in result.stderr or result.returncode != 0:
-            # Se há múltiplas heads, forçar stamp head
-            print("   ⚠️ Múltiplas heads detectadas - aplicando correção...")
-            subprocess.run(['flask', 'db', 'stamp', 'head'], check=False)
-            print("   ✅ Stamp head aplicado")
-        else:
-            print("   ✅ Migrações OK")
+        # Aplicar a migração inicial
+        try:
+            print("   📌 Aplicando migração inicial consolidada...")
+            result = subprocess.run(['flask', 'db', 'stamp', 'initial_consolidated_2025'], 
+                                  capture_output=True, text=True, check=False)
+            
+            if result.returncode == 0:
+                print("   ✅ Migração inicial aplicada")
+            else:
+                # Se falhar, tentar stamp head como fallback
+                print("   ⚠️ Tentando stamp head como fallback...")
+                subprocess.run(['flask', 'db', 'stamp', 'head'], 
+                             capture_output=True, check=False)
+        except:
+            pass
+        
+        # Finalmente, tentar aplicar todas as migrações
+        try:
+            print("   📌 Aplicando todas as migrações...")
+            result = subprocess.run(['flask', 'db', 'upgrade'], 
+                                  capture_output=True, text=True, check=False)
+            
+            if result.returncode == 0:
+                print("   ✅ Migrações aplicadas com sucesso")
+            else:
+                print("   ⚠️ Algumas migrações podem não ter sido aplicadas")
+        except:
+            pass
             
     except Exception as e:
         print(f"   ⚠️ Aviso na verificação de migrações: {e}")

@@ -1,7 +1,7 @@
 """aumentar_limite_observ_ped_1_para_700
 
 Revision ID: 43f95a1ac288
-Revises: 13d736405224
+Revises: initial_consolidated_2025
 Create Date: 2025-06-27 12:05:44.683935
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '43f95a1ac288'
-down_revision = '13d736405224'
+down_revision = 'initial_consolidated_2025'
 branch_labels = None
 depends_on = None
 
