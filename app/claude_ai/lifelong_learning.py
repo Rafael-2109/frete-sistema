@@ -352,7 +352,7 @@ class LifelongLearningSystem:
                             SET confidence = GREATEST(0.1, confidence - :reducao),
                                 success_rate = GREATEST(0.1, success_rate - :reducao)
                             WHERE pattern_type = 'cliente'
-                            AND interpretation::jsonb @> :filtro
+                            AND interpretation::jsonb @> CAST(:filtro AS jsonb)
                         """),
                         {
                             "reducao": self.learning_rate * 2,

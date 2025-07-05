@@ -642,11 +642,11 @@ class AdvancedAIIntegration:
                         :session_id, 
                         :created_at, 
                         :user_id, 
-                        :metadata::jsonb
+                        CAST(:metadata AS jsonb)
                     )
                     ON CONFLICT (session_id) 
                     DO UPDATE SET 
-                        metadata_jsonb = :metadata::jsonb,
+                        metadata_jsonb = CAST(:metadata AS jsonb),
                         updated_at = :created_at
                 """)
                 
@@ -725,7 +725,7 @@ class AdvancedAIIntegration:
             update_query = text("""
                 UPDATE ai_advanced_sessions 
                 SET metadata_jsonb = metadata_jsonb || CAST(:feedback_data AS jsonb)
-                WHERE session_id = %(session_id)s
+                WHERE session_id = :session_id
             """)
             
             feedback_data = json.dumps({

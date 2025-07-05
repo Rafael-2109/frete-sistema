@@ -15,9 +15,9 @@ python fix_all_render_issues.py 2>/dev/null || echo "⚠️  Correções aplicad
 echo "📦 Tentando instalar modelo spaCy..."
 python -m spacy download pt_core_news_sm 2>/dev/null || echo "⚠️  Modelo spaCy não instalado"
 
-# NOVO: Limpar migração fantasma ANTES de inicializar
-echo "🔧 Limpando migrações fantasmas..."
-python fix_migration_db.py 2>/dev/null || echo "⚠️  Limpeza de migrações aplicada"
+# NOVO: Limpar TODAS as migrações fantasmas ANTES de inicializar
+echo "🔧 Corrigindo TODAS as migrações fantasmas..."
+python fix_all_migrations.py 2>/dev/null || echo "⚠️  Correção de migrações aplicada"
 
 # Inicializar banco
 echo "🗄️  Inicializando banco de dados..."
