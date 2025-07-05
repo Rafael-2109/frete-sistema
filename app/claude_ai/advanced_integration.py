@@ -19,6 +19,7 @@ from .multi_agent_system import get_multi_agent_system, MultiAgentSystem
 from .human_in_loop_learning import get_human_learning_system, capture_user_feedback
 from .sistema_real_data import get_sistema_real_data
 from .conversation_context import get_conversation_context
+from .lifelong_learning import _get_db_session
 
 logger = logging.getLogger(__name__)
 

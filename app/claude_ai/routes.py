@@ -42,7 +42,7 @@ except ImportError:
 
 # Import do InputValidator com fallback
 try:
-    from .input_validator import InputValidator
+    from app.claude_ai.input_validator import InputValidator
 except ImportError:
     class InputValidator:
         @staticmethod

@@ -138,111 +138,111 @@ class LifelongLearningSystem:
         """Salva ou atualiza um padrão no banco"""
         with current_app.app_context():
             try:
-            # Verificar se já existe
-            existe = _get_db_session().execute(
-                text("""
-                    SELECT id, confidence, usage_count, success_rate
-                    FROM ai_knowledge_patterns
-                    WHERE pattern_type = :tipo AND pattern_text = :texto
-                """),
-                {"tipo": padrao["tipo"], "texto": padrao["texto"]}
-            ).first()
-            
-            if existe:
-                # Atualizar padrão existente
-                nova_confianca = min(1.0, existe.confidence + self.learning_rate)
-                novo_uso = existe.usage_count + 1
+                    # Verificar se já existe
+                existe = _get_db_session().execute(
+                    text("""
+                        SELECT id, confidence, usage_count, success_rate
+                        FROM ai_knowledge_patterns
+                        WHERE pattern_type = :tipo AND pattern_text = :texto
+                    """),
+                    {"tipo": padrao["tipo"], "texto": padrao["texto"]}
+                ).first()
                 
-                _get_db_session().execute(
-                    text("""
-                        UPDATE ai_knowledge_patterns
-                        SET confidence = :conf,
-                            usage_count = :uso,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = :id
-                    """),
-                    {"conf": nova_confianca, "uso": novo_uso, "id": existe.id}
-                )
-            else:
-                # Criar novo padrão
-                result = _get_db_session().execute(
-                    text("""
-                        INSERT INTO ai_knowledge_patterns 
-                        (pattern_type, pattern_text, interpretation, created_by)
-                        VALUES (:tipo, :texto, :interp, 'sistema')
-                        RETURNING id, pattern_type, pattern_text, confidence
-                    """),
-                    {
-                        "tipo": padrao["tipo"],
-                        "texto": padrao["texto"],
-                        "interp": json.dumps(padrao["interpretacao"])
-                    }
-                )
-                padrao_novo = result.first()
-                if padrao_novo:
-                    padrao["id"] = padrao_novo.id
-                    padrao["confidence"] = padrao_novo.confidence
-            
-            _get_db_session().commit()
-            return padrao
-            
-        except Exception as e:
-            logger.error(f"Erro ao salvar padrão: {e}")
-            _get_db_session().rollback()
-            return None
+                if existe:
+                    # Atualizar padrão existente
+                    nova_confianca = min(1.0, existe.confidence + self.learning_rate)
+                    novo_uso = existe.usage_count + 1
+                    
+                    _get_db_session().execute(
+                        text("""
+                            UPDATE ai_knowledge_patterns
+                            SET confidence = :conf,
+                                usage_count = :uso,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = :id
+                        """),
+                        {"conf": nova_confianca, "uso": novo_uso, "id": existe.id}
+                    )
+                else:
+                    # Criar novo padrão
+                    result = _get_db_session().execute(
+                        text("""
+                            INSERT INTO ai_knowledge_patterns 
+                            (pattern_type, pattern_text, interpretation, created_by)
+                            VALUES (:tipo, :texto, :interp, 'sistema')
+                            RETURNING id, pattern_type, pattern_text, confidence
+                        """),
+                        {
+                            "tipo": padrao["tipo"],
+                            "texto": padrao["texto"],
+                            "interp": json.dumps(padrao["interpretacao"])
+                        }
+                    )
+                    padrao_novo = result.first()
+                    if padrao_novo:
+                        padrao["id"] = padrao_novo.id
+                        padrao["confidence"] = padrao_novo.confidence
+                
+                _get_db_session().commit()
+                return padrao
+                
+            except Exception as e:
+                logger.error(f"Erro ao salvar padrão: {e}")
+                _get_db_session().rollback()
+                return None
     
     def _aprender_mapeamento_cliente(self, consulta: str, cliente: str) -> Optional[Dict]:
         """Aprende como usuários se referem a clientes"""
         with current_app.app_context():
             try:
-            # Extrair termos usados para o cliente
-            termos = self._extrair_termos_cliente(consulta, cliente)
-            
-            for termo in termos:
-                # Verificar se já existe
-                existe = _get_db_session().execute(
-                    text("""
-                        SELECT id, frequencia
-                        FROM ai_semantic_mappings
-                        WHERE termo_usuario = :termo 
-                        AND campo_sistema = :campo
-                        AND modelo = 'cliente'
-                    """),
-                    {"termo": termo.lower(), "campo": cliente}
-                ).first()
+                    # Extrair termos usados para o cliente
+                    termos = self._extrair_termos_cliente(consulta, cliente)
+                    
+                    for termo in termos:
+                        # Verificar se já existe
+                        existe = _get_db_session().execute(
+                            text("""
+                                SELECT id, frequencia
+                                FROM ai_semantic_mappings
+                                WHERE termo_usuario = :termo 
+                                AND campo_sistema = :campo
+                                AND modelo = 'cliente'
+                            """),
+                            {"termo": termo.lower(), "campo": cliente}
+                        ).first()
+                        
+                        if existe:
+                            # Incrementar frequência
+                            _get_db_session().execute(
+                                text("""
+                                    UPDATE ai_semantic_mappings
+                                    SET frequencia = frequencia + 1,
+                                        ultima_uso = CURRENT_TIMESTAMP
+                                    WHERE id = :id
+                                """),
+                                {"id": existe.id}
+                            )
+                        else:
+                            # Criar novo mapeamento
+                            _get_db_session().execute(
+                                text("""
+                                    INSERT INTO ai_semantic_mappings
+                                    (termo_usuario, campo_sistema, modelo, contexto)
+                                    VALUES (:termo, :campo, 'cliente', :contexto)
+                                """),
+                                {
+                                    "termo": termo.lower(),
+                                    "campo": cliente,
+                                    "contexto": consulta
+                                }
+                            )
+                    
+                    _get_db_session().commit()
+                    return {"cliente": cliente, "termos_aprendidos": termos}
                 
-                if existe:
-                    # Incrementar frequência
-                    _get_db_session().execute(
-                        text("""
-                            UPDATE ai_semantic_mappings
-                            SET frequencia = frequencia + 1,
-                                ultima_uso = CURRENT_TIMESTAMP
-                            WHERE id = :id
-                        """),
-                        {"id": existe.id}
-                    )
-                else:
-                    # Criar novo mapeamento
-                    _get_db_session().execute(
-                        text("""
-                            INSERT INTO ai_semantic_mappings
-                            (termo_usuario, campo_sistema, modelo, contexto)
-                            VALUES (:termo, :campo, 'cliente', :contexto)
-                        """),
-                        {
-                            "termo": termo.lower(),
-                            "campo": cliente,
-                            "contexto": consulta
-                        }
-                    )
-            
-            _get_db_session().commit()
-            return {"cliente": cliente, "termos_aprendidos": termos}
-            
-        except Exception as e:
-            logger.error(f"Erro ao aprender mapeamento: {e}")
-            _get_db_session().rollback()
+            except Exception as e:
+                logger.error(f"Erro ao aprender mapeamento: {e}")
+                _get_db_session().rollback()
             return None
     
     def _descobrir_grupo_empresarial(self, interpretacao: Dict) -> Optional[Dict]:
@@ -381,11 +381,11 @@ class LifelongLearningSystem:
         """Salva histórico completo da interação"""
         with current_app.app_context():
             try:
-            _get_db_session().execute(
+                _get_db_session().execute(
                 text("""
                     INSERT INTO ai_learning_history
                     (consulta_original, interpretacao_inicial, resposta_inicial,
-                     feedback_usuario, aprendizado_extraido, usuario_id)
+                        feedback_usuario, aprendizado_extraido, usuario_id)
                     VALUES (:consulta, :interp, :resp, :feedback, :aprendizado, :user_id)
                 """),
                 {
@@ -396,12 +396,12 @@ class LifelongLearningSystem:
                     "aprendizado": json.dumps(aprendizados),
                     "user_id": usuario_id
                 }
-            )
-            _get_db_session().commit()
+                )
+                _get_db_session().commit()
             
-        except Exception as e:
-            logger.error(f"Erro ao salvar histórico: {e}")
-            _get_db_session().rollback()
+            except Exception as e:
+                logger.error(f"Erro ao salvar histórico: {e}")
+                _get_db_session().rollback()
     
     def aplicar_conhecimento(self, consulta: str) -> Dict[str, Any]:
         """
@@ -670,36 +670,41 @@ class LifelongLearningSystem:
         """Atualiza métricas de performance"""
         with current_app.app_context():
             try:
-            # Calcular satisfação baseada no feedback
-            satisfacao = 1.0  # Default: satisfeito
-            if feedback:
-                if feedback.get("tipo") == "correction":
-                    satisfacao = 0.3  # Correção indica problema
-                elif feedback.get("tipo") == "improvement":
-                    satisfacao = 0.7  # Sugestão indica espaço para melhorar
-            
-            # Salvar métrica
-            _get_db_session().execute(
-                text("""
-                    INSERT INTO ai_learning_metrics
-                    (metrica_tipo, metrica_valor, contexto, periodo_inicio, periodo_fim)
-                    VALUES ('satisfaction', :valor, :contexto, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """),
-                {
-                    "valor": satisfacao,
-                    "contexto": json.dumps({"dominio": interpretacao.get("dominio")})
-                }
-            )
-            
-            _get_db_session().commit()
-            
-        except Exception as e:
-            logger.error(f"Erro ao atualizar métricas: {e}")
-            _get_db_session().rollback()
+                    # Calcular satisfação baseada no feedback
+                    satisfacao = 1.0  # Default: satisfeito
+                    if feedback:
+                        if feedback.get("tipo") == "correction":
+                            satisfacao = 0.3  # Correção indica problema
+                        elif feedback.get("tipo") == "improvement":
+                            satisfacao = 0.7  # Sugestão indica espaço para melhorar
+                    
+                    # Salvar métrica
+                    _get_db_session().execute(
+                        text("""
+                            INSERT INTO ai_learning_metrics
+                            (metrica_tipo, metrica_valor, contexto, periodo_inicio, periodo_fim)
+                            VALUES ('satisfaction', :valor, :contexto, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        """),
+                        {
+                            "valor": satisfacao,
+                            "contexto": json.dumps({"dominio": interpretacao.get("dominio")})
+                        }
+                    )
+                    
+                    _get_db_session().commit()
+                
+            except Exception as e:
+                logger.error(f"Erro ao atualizar métricas: {e}")
+                _get_db_session().rollback()
 
 
 # Singleton para uso global
 _lifelong_learning = None
+
+def _get_db_session():
+    """Retorna sessão do banco de dados"""
+    from app import db
+    return db.session
 
 def get_lifelong_learning() -> LifelongLearningSystem:
     """Retorna instância única do sistema de aprendizado"""
