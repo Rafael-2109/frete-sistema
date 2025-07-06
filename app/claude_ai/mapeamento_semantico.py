@@ -684,12 +684,20 @@ class MapeamentoSemantico:
         for relacionamento in resultado['relacionamentos_necessarios']:
             origem = relacionamento['origem'] 
             destino = relacionamento['destino']
-            campo = relacionamento['campo_ligacao']
+            campo = relacionamento.get('campo_ligacao', 'id')
+            if campo == 'id':
+                campo = 'id'
+            else:
+                campo = campo.lower()
+
+            if campo is None:
+                logger.warning(f"❌ Campo não encontrado para relacionamento: {relacionamento}")
+            else:
             
-            if origem == modelo_principal:
-                query += f" JOIN {destino} ON {origem}.{campo} = {destino}.{campo}"
-            elif destino == modelo_principal:
-                query += f" JOIN {origem} ON {destino}.{campo} = {origem}.{campo}"
+                if origem == modelo_principal:
+                    query += f" JOIN {destino} ON {origem}.{campo} = {destino}.{campo}"
+                elif destino == modelo_principal:
+                    query += f" JOIN {origem} ON {destino}.{campo} = {origem}.{campo}"
         
         return query
     
