@@ -69,7 +69,7 @@ class ClaudeRealIntegration:
                 
                 # Testar conexão
                 test_response = self.client.messages.create(
-                    model="claude-3-5-sonnet-20241022",  # Modelo mais estável para teste
+                    model="claude-sonnet-4-20250514",  # Claude 4 Sonnet - Modelo mais avançado
                     max_tokens=10,
                     messages=[{"role": "user", "content": "teste"}]
                 )
@@ -189,6 +189,15 @@ class ClaudeRealIntegration:
                 logger.warning("⚠️ Intelligent Cache não disponível - usando cache básico")
                 self.intelligent_cache = None
             
+            # 🔍 Claude Project Scanner (Sistema de Descoberta Dinâmica)
+            try:
+                from .claude_project_scanner import ClaudeProjectScanner
+                self.project_scanner = ClaudeProjectScanner()
+                logger.info("🔍 Claude Project Scanner (Descoberta Dinâmica) carregado!")
+            except ImportError:
+                logger.warning("⚠️ Claude Project Scanner não disponível")
+                self.project_scanner = None
+            
         except Exception as e:
             logger.warning(f"⚠️ Sistemas Avançados não disponíveis: {e}")
             self.multi_agent_system = None
@@ -210,20 +219,22 @@ class ClaudeRealIntegration:
             self.ai_logger = None
             self.intelligent_cache = None
 
-        # System prompt equilibrado - liberdade com contexto técnico
+        # System prompt honesto sobre capacidades reais
         sistema_real = get_sistema_real_data()
-        self.system_prompt = """Você é Claude 4 Sonnet, um assistente AI avançado integrado ao Sistema de Fretes com capacidades completas de desenvolvimento, análise e automação.
+        self.system_prompt = """Você é Claude 4 Sonnet integrado ao Sistema de Fretes.
 
-Este é um sistema Flask/Python com PostgreSQL, organizado em módulos (pedidos, fretes, embarques, monitoramento, etc). 
-Cada módulo tem models.py, routes.py, forms.py e templates HTML.
+IMPORTANTE - Minhas capacidades REAIS:
+- Tenho acesso a DADOS do banco (entregas, pedidos, fretes, etc) quando fornecidos
+- POSSO LER ARQUIVOS do sistema através do Project Scanner
+- Posso DESCOBRIR a estrutura completa do projeto dinamicamente
+- Posso CRIAR código novo quando solicitado
+- Posso ANALISAR código que você compartilhar ou que eu ler
+- Posso responder sobre os dados que recebo do sistema
 
-Você pode:
-- Analisar dados e responder consultas
-- Criar código, módulos e funcionalidades
-- Sugerir melhorias e otimizações
-- Resolver problemas técnicos
+Sistema: Flask/Python com PostgreSQL
+Módulos: pedidos, fretes, embarques, monitoramento, carteira (gestão de pedidos), transportadoras, portaria
 
-Seja preciso, analise tudo, seja sincero e seja objetivo. Use seu julgamento sobre o nível de detalhe necessário para cada resposta."""
+Quando solicitado, posso ler arquivos do projeto para entender melhor o código."""
 
     
     def processar_consulta_real(self, consulta: str, user_context: Optional[Dict] = None) -> str:
@@ -471,6 +482,14 @@ O sistema melhora continuamente. Cada consulta, correção e feedback contribui 
             logger.warning("⚠️ Sistema de entendimento inteligente não disponível, usando sistema padrão")
         except Exception as e:
             logger.error(f"❌ Erro no sistema avançado: {e}, usando sistema padrão")
+        
+        # 🔍 DETECTAR COMANDO DE ESTRUTURA DO PROJETO
+        if any(termo in consulta_lower for termo in ['estrutura do projeto', 'mostrar estrutura', 'mapear projeto', 'escanear projeto']):
+            return self._processar_comando_estrutura_projeto(consulta, user_context)
+        
+        # 📁 DETECTAR COMANDOS DE LEITURA DE ARQUIVO
+        if self._is_file_command(consulta):
+            return self._processar_comando_arquivo(consulta, user_context)
         
         # 💻 DETECTAR COMANDOS DE DESENVOLVIMENTO
         if self._is_dev_command(consulta):
@@ -2847,6 +2866,274 @@ Consulta recebida: "{consulta}"
         except Exception as e:
             logger.error(f"❌ Erro ao carregar todos os clientes: {e}")
             return {'erro': str(e), '_metodo_completo': False}
+
+    def _processar_comando_estrutura_projeto(self, consulta: str, user_context: Optional[Dict] = None) -> str:
+        """Processa comando para mostrar estrutura completa do projeto"""
+        logger.info("🔍 Processando comando de estrutura do projeto...")
+        
+        if not self.project_scanner:
+            return "❌ Sistema de descoberta de projeto não está disponível."
+        
+        try:
+            # Escanear projeto completo
+            estrutura = self.project_scanner.scan_complete_project()
+            
+            resposta = "🔍 **ESTRUTURA COMPLETA DO PROJETO**\n\n"
+            
+            # Resumo geral
+            summary = estrutura.get('scan_summary', {})
+            resposta += "📊 **RESUMO GERAL**:\n"
+            resposta += f"• Total de módulos: {summary.get('total_modules', 0)}\n"
+            resposta += f"• Total de modelos: {summary.get('total_models', 0)}\n"
+            resposta += f"• Total de formulários: {summary.get('total_forms', 0)}\n"
+            resposta += f"• Total de rotas: {summary.get('total_routes', 0)}\n"
+            resposta += f"• Total de templates: {summary.get('total_templates', 0)}\n"
+            resposta += f"• Total de tabelas no banco: {summary.get('total_database_tables', 0)}\n\n"
+            
+            # Módulos principais
+            resposta += "📁 **MÓDULOS PRINCIPAIS**:\n"
+            project_structure = estrutura.get('project_structure', {})
+            modulos_principais = [k for k in project_structure.keys() 
+                                if k != 'app_root' and 
+                                project_structure[k].get('python_files') and
+                                not k.startswith('app_root\\\\')]
+            
+            for modulo in sorted(modulos_principais)[:15]:  # Top 15 módulos
+                info = project_structure[modulo]
+                num_files = len(info.get('python_files', []))
+                resposta += f"• **{modulo}**: {num_files} arquivos Python\n"
+            
+            if len(modulos_principais) > 15:
+                resposta += f"... e mais {len(modulos_principais) - 15} módulos\n"
+            
+            # Modelos principais
+            resposta += "\n🗃️ **MODELOS PRINCIPAIS** (tabelas do banco):\n"
+            models = estrutura.get('models', {})
+            for i, (table_name, model_info) in enumerate(list(models.items())[:10], 1):
+                num_columns = len(model_info.get('columns', []))
+                resposta += f"{i}. **{table_name}**: {num_columns} colunas\n"
+            
+            if len(models) > 10:
+                resposta += f"... e mais {len(models) - 10} tabelas\n"
+            
+            # Rotas por módulo
+            resposta += "\n🌐 **ROTAS POR MÓDULO**:\n"
+            routes = estrutura.get('routes', {})
+            for modulo, route_info in list(routes.items())[:10]:
+                total_routes = route_info.get('total_routes', 0)
+                resposta += f"• **{modulo}**: {total_routes} rotas\n"
+            
+            # Informações do banco
+            db_info = estrutura.get('database_schema', {}).get('database_info', {})
+            if db_info:
+                resposta += f"\n🗄️ **BANCO DE DADOS**:\n"
+                resposta += f"• Dialeto: {db_info.get('dialect', 'N/A')}\n"
+                resposta += f"• Driver: {db_info.get('driver', 'N/A')}\n"
+                resposta += f"• Versão: {db_info.get('server_version', 'N/A')[:50]}...\n"
+            
+            resposta += f"\n🕒 **Escaneamento realizado em**: {summary.get('scan_timestamp', 'N/A')}"
+            resposta += "\n\n💡 **Dica**: Use comandos específicos para explorar cada parte:\n"
+            resposta += "• `listar arquivos em app/carteira` - Ver arquivos de um módulo\n"
+            resposta += "• `verificar app/carteira/routes.py` - Ler um arquivo específico\n"
+            resposta += "• `buscar def gerar_separacao` - Buscar função no código"
+            
+            return resposta
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao escanear projeto: {e}")
+            return f"❌ Erro ao escanear estrutura do projeto: {str(e)}"
+    
+    def _is_file_command(self, consulta: str) -> bool:
+        """Detecta comandos de leitura de arquivo"""
+        comandos_arquivo = [
+            # Comandos diretos
+            'verificar', 'ver arquivo', 'ler arquivo', 'mostrar arquivo',
+            'abrir arquivo', 'conteudo de', 'conteúdo de', 'código de',
+            'listar arquivos', 'listar diretorio', 'listar diretório',
+            
+            # Referências a arquivos
+            'routes.py', 'models.py', 'forms.py', '.html',
+            'app/', 'app/carteira/', 'app/pedidos/', 'app/fretes/',
+            
+            # Perguntas sobre código
+            'onde está', 'onde fica', 'qual arquivo', 'em que arquivo',
+            'procurar função', 'buscar função', 'encontrar função'
+        ]
+        
+        consulta_lower = consulta.lower()
+        return any(cmd in consulta_lower for cmd in comandos_arquivo)
+    
+    def _processar_comando_arquivo(self, consulta: str, user_context: Optional[Dict] = None) -> str:
+        """Processa comandos relacionados a arquivos"""
+        logger.info("📁 Processando comando de arquivo...")
+        
+        if not self.project_scanner:
+            return "❌ Sistema de descoberta de projeto não está disponível."
+        
+        consulta_lower = consulta.lower()
+        
+        # Detectar tipo de comando
+        if any(term in consulta_lower for term in ['listar arquivo', 'listar diretorio', 'listar diretório']):
+            # Comando de listagem
+            import re
+            # Tentar extrair caminho
+            match = re.search(r'app/[\w/]+', consulta)
+            if match:
+                dir_path = match.group()
+                # Remover 'app/' do início se presente
+                if dir_path.startswith('app/'):
+                    dir_path = dir_path[4:]
+                result = self.project_scanner.list_directory_contents(dir_path)
+            else:
+                # Listar app/ por padrão
+                result = self.project_scanner.list_directory_contents('')
+            
+            if 'error' not in result:
+                resposta = f"📁 **Conteúdo de {result.get('path', 'app')}**\n\n"
+                
+                if result.get('directories'):
+                    resposta += "📂 **Diretórios:**\n"
+                    for dir in result['directories']:
+                        resposta += f"  • {dir}/\n"
+                
+                if result.get('files'):
+                    resposta += "\n📄 **Arquivos:**\n"
+                    for file in result['files']:
+                        resposta += f"  • {file['name']} ({file['size_kb']} KB)\n"
+                
+                resposta += f"\n📊 Total: {len(result.get('files', []))} arquivos, {len(result.get('directories', []))} diretórios"
+                return resposta
+            else:
+                return f"❌ Erro ao listar diretório: {result['error']}"
+        
+        elif any(term in consulta_lower for term in ['buscar', 'procurar', 'encontrar']):
+            # Comando de busca
+            import re
+            # Tentar extrair padrão de busca
+            match = re.search(r'(buscar|procurar|encontrar)\s+["\']?([^"\']+)["\']?', consulta_lower)
+            if match:
+                pattern = match.group(2).strip()
+                result = self.project_scanner.search_in_files(pattern)
+                
+                if result.get('success'):
+                    if result['results']:
+                        resposta = f"🔍 **Busca por '{pattern}'**\n\n"
+                        resposta += f"Encontradas {result['total_matches']} ocorrências em {result['files_searched']} arquivos:\n\n"
+                        
+                        for i, match in enumerate(result['results'][:10], 1):
+                            resposta += f"{i}. **{match['file']}** (linha {match['line_number']})\n"
+                            resposta += f"   ```python\n   {match['line_content']}\n   ```\n"
+                        
+                        if result.get('truncated') or len(result['results']) > 10:
+                            resposta += f"\n... e mais {result['total_matches'] - 10} resultados"
+                        
+                        return resposta
+                    else:
+                        return f"❌ Nenhuma ocorrência de '{pattern}' encontrada nos arquivos."
+                else:
+                    return f"❌ Erro na busca: {result.get('error', 'Erro desconhecido')}"
+            else:
+                return "❌ Não consegui identificar o que você quer buscar. Use: 'buscar nome_da_funcao' ou 'procurar texto_específico'"
+        
+        else:
+            # Comando de leitura de arquivo
+            import re
+            # Tentar extrair caminho do arquivo
+            # Padrões: app/carteira/routes.py, carteira/routes.py, routes.py
+            patterns = [
+                r'app/[\w/]+\.py',
+                r'app/[\w/]+\.html',
+                r'[\w/]+/[\w]+\.py',
+                r'[\w]+\.py'
+            ]
+            
+            file_path = None
+            for pattern in patterns:
+                match = re.search(pattern, consulta)
+                if match:
+                    file_path = match.group()
+                    break
+            
+            if not file_path:
+                # Tentar detectar módulo mencionado
+                modulos = ['carteira', 'pedidos', 'fretes', 'embarques', 'monitoramento', 'transportadoras']
+                for modulo in modulos:
+                    if modulo in consulta_lower:
+                        # Tentar adivinhar arquivo
+                        if 'routes' in consulta_lower:
+                            file_path = f'{modulo}/routes.py'
+                        elif 'models' in consulta_lower:
+                            file_path = f'{modulo}/models.py'
+                        elif 'forms' in consulta_lower:
+                            file_path = f'{modulo}/forms.py'
+                        break
+            
+            if file_path:
+                # Remover 'app/' do início se presente (project_scanner já assume app/)
+                if file_path.startswith('app/'):
+                    file_path = file_path[4:]
+                
+                # Ler arquivo completo (project_scanner não tem suporte a linhas específicas)
+                content = self.project_scanner.read_file_content(file_path)
+                
+                if not content.startswith("❌"):
+                    # Detectar linhas específicas solicitadas
+                    line_match = re.search(r'linhas?\s+(\d+)(?:\s*[-a]\s*(\d+))?', consulta_lower)
+                    
+                    resposta = f"📄 **app/{file_path}**\n\n"
+                    
+                    if line_match:
+                        # Mostrar apenas linhas específicas
+                        start_line = int(line_match.group(1))
+                        end_line = int(line_match.group(2)) if line_match.group(2) else start_line + 50
+                        
+                        lines = content.split('\n')
+                        total_lines = len(lines)
+                        
+                        # Ajustar índices (converter de 1-based para 0-based)
+                        start_idx = max(0, start_line - 1)
+                        end_idx = min(total_lines, end_line)
+                        
+                        resposta += f"📍 Mostrando linhas {start_line}-{end_line} de {total_lines} totais\n\n"
+                        resposta += "```python\n"
+                        
+                        # Adicionar linhas com números
+                        for i in range(start_idx, end_idx):
+                            if i < len(lines):
+                                resposta += f"{i+1:4d}: {lines[i]}\n"
+                        
+                        resposta += "\n```\n"
+                    else:
+                        # Mostrar arquivo completo (limitado)
+                        lines = content.split('\n')
+                        total_lines = len(lines)
+                        
+                        if total_lines > 100:
+                            # Mostrar apenas primeiras 100 linhas
+                            resposta += f"📍 Arquivo grande ({total_lines} linhas). Mostrando primeiras 100 linhas.\n\n"
+                            resposta += "```python\n"
+                            for i in range(min(100, total_lines)):
+                                resposta += f"{i+1:4d}: {lines[i]}\n"
+                            resposta += "\n```\n"
+                            resposta += f"\n💡 Use 'linhas X-Y' para ver trechos específicos."
+                        else:
+                            resposta += "```python\n"
+                            resposta += content
+                            resposta += "\n```\n"
+                    
+                    return resposta
+                else:
+                    return content  # Retornar mensagem de erro
+            else:
+                return """❓ Não consegui identificar o arquivo solicitado.
+
+Por favor, seja mais específico. Exemplos:
+• "Verificar app/carteira/routes.py"
+• "Mostrar função gerar_separacao em carteira/routes.py"
+• "Listar arquivos em app/carteira"
+• "Buscar 'def processar' nos arquivos"
+
+Módulos disponíveis: carteira, pedidos, fretes, embarques, monitoramento, transportadoras"""
 
 # Instância global
 claude_integration = ClaudeRealIntegration()

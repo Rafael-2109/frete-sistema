@@ -559,6 +559,67 @@ class ClaudeProjectScanner:
         except Exception as e:
             logger.error(f"❌ Erro ao listar diretório {dir_path}: {e}")
             return {'error': str(e)}
+    
+    def search_in_files(self, pattern: str, file_extensions: Optional[List[str]] = None, 
+                       max_results: int = 50) -> Dict[str, Any]:
+        """Busca por padrão em arquivos do projeto"""
+        try:
+            import re
+            
+            if file_extensions is None:
+                file_extensions = ['.py', '.html', '.js', '.css']
+            
+            results = []
+            files_searched = 0
+            
+            # Buscar recursivamente
+            for root, dirs, files in os.walk(self.app_path):
+                # Ignorar diretórios desnecessários
+                dirs[:] = [d for d in dirs if not d.startswith(('.', '__pycache__', 'node_modules', 'venv'))]
+                
+                for file in files:
+                    # Verificar extensão
+                    if not any(file.endswith(ext) for ext in file_extensions):
+                        continue
+                    
+                    file_path = Path(root) / file
+                    files_searched += 1
+                    
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            for line_num, line in enumerate(f, 1):
+                                if re.search(pattern, line, re.IGNORECASE):
+                                    results.append({
+                                        'file': str(file_path.relative_to(self.app_path)),
+                                        'line_number': line_num,
+                                        'line_content': line.strip()[:200]  # Limitar tamanho
+                                    })
+                                    
+                                    if len(results) >= max_results:
+                                        return {
+                                            'success': True,
+                                            'results': results,
+                                            'total_matches': len(results),
+                                            'files_searched': files_searched,
+                                            'truncated': True
+                                        }
+                    except Exception as e:
+                        # Ignorar arquivos que não podem ser lidos
+                        pass
+            
+            logger.info(f"🔍 Busca '{pattern}': {len(results)} resultados em {files_searched} arquivos")
+            
+            return {
+                'success': True,
+                'results': results,
+                'total_matches': len(results),
+                'files_searched': files_searched,
+                'truncated': False
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na busca: {e}")
+            return {'success': False, 'error': str(e)}
 
 # Instância global do scanner
 project_scanner = None
