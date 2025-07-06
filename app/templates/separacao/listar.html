@@ -14,7 +14,8 @@
   </div>
 
   <!-- FILTROS -->
-  <form method="GET" class="row g-2 align-items-end mb-3">
+  <form>
+{{ csrf_token() }} method="GET" class="row g-2 align-items-end mb-3">
     <!-- Filtro por Pedido -->
     <div class="col-sm-2">
       <label class="form-label">Pedido</label>

@@ -1,5 +1,6 @@
 <!-- Formulário de edição para uso em modal AJAX -->
-<form method="POST" action="{{ url_for('pedidos.editar_pedido', pedido_id=pedido.id) }}?ajax=1">
+<form>
+{{ csrf_token() }} method="POST" action="{{ url_for('pedidos.editar_pedido', pedido_id=pedido.id) }}?ajax=1">
     {{ form.hidden_tag() }}
     
     <!-- Informações do pedido -->

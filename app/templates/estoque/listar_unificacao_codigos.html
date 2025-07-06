@@ -31,7 +31,8 @@
     <!-- Filtros -->
     <div class="card mb-4">
         <div class="card-body">
-            <form method="GET" class="row g-3">
+            <form>
+{{ csrf_token() }} method="GET" class="row g-3">
                 <div class="col-md-3">
                     <label class="form-label">Código (origem ou destino)</label>
                     <input type="number" name="codigo_busca" class="form-control" value="{{ codigo_busca }}" placeholder="Ex: 4080177">

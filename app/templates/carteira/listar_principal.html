@@ -27,7 +27,8 @@
             </h6>
         </div>
         <div class="card-body">
-            <form method="GET" id="form-filtros">
+            <form>
+{{ csrf_token() }} method="GET" id="form-filtros">
                 <div class="row">
                     <div class="col-md-2 mb-3">
                         <label for="num_pedido" class="form-label">Número Pedido</label>

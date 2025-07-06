@@ -57,7 +57,7 @@ class AdminFreeModeManager:
         """Verifica se usuário atual é administrador"""
         try:
             if hasattr(current_user, 'perfil'):
-                return current_user.perfil in ['admin', 'financeiro']
+                return current_user.perfil in ['administrador', 'financeiro']
             return False
         except:
             return False

@@ -40,7 +40,8 @@
                         </p>
                     </div>
                     
-                    <form method="POST">
+                    <form>
+{{ csrf_token() }} method="POST">
                         {{ form.hidden_tag() }}
 
                         <!-- Tipo e Responsável -->

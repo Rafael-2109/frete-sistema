@@ -24,7 +24,8 @@
         </div>
         <div class="collapse" id="filtrosFrete">
             <div class="card-body">
-                <form method="GET">
+                <form>
+{{ csrf_token() }} method="GET">
                     <div class="row">
                         <div class="col-md-3">
                             {{ form.embarque_numero.label(class="form-label") }}

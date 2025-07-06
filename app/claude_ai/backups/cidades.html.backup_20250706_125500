@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+
+  <h4>🔎 Códigos dos municípios IBGE</h4>
+
+  <!-- Filtros -->
+  <form method="GET" class="card p-3 shadow-sm mb-4">
+    <div class="row g-2">
+
+      <div class="col-md-2">
+        <label class="form-label">UF</label>
+        <select name="uf" class="form-control">
+          <option value="">Selecione UF</option>
+          {% for uf_code, uf_name in form.uf.choices %}
+          <option value="{{ uf_code }}" {% if uf_code == request.args.uf %}selected{% endif %}>{{ uf_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Cidade</label>
+        <select name="cidade" class="form-control">
+          <option value="">Selecione Cidade</option>
+          {% for cidade in cidades %}
+          <option value="{{ cidade.nome }}" {% if cidade.nome == request.args.cidade %}selected{% endif %}>{{ cidade.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Microrregião</label>
+        <select name="microrregiao" class="form-control">
+          <option value="">Selecione Microrregião</option>
+          {% for micro in microrregioes %}
+          <option value="{{ micro }}" {% if micro == request.args.microrregiao %}selected{% endif %}>{{ micro }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Mesorregião</label>
+        <select name="mesorregiao" class="form-control">
+          <option value="">Selecione Mesorregião</option>
+          {% for meso in mesorregioes %}
+          <option value="{{ meso }}" {% if meso == request.args.mesorregiao %}selected{% endif %}>{{ meso }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-1 d-grid align-self-end">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+      </div>
+
+    </div>
+  </form>
+
+  <!-- Botões Importar Regiões e Exportar Cidades Filtradas-->
+  <div class="d-flex justify-content-end mb-3 gap-2">
+    <a href="{{ url_for('localidades.exportar_cidades', uf=request.args.uf, microrregiao=request.args.microrregiao, mesorregiao=request.args.mesorregiao) }}" class="btn btn-info btn-sm">
+      ⬇️ Exportar Cidades
+    </a>
+
+  </div>
+
+  <!-- Tabela de Cidades -->
+  <table class="table table-bordered table-striped table-sm">
+    <thead class="table-light text-center">
+      <tr>
+        <th>ID</th>
+        <th>Cidade</th>
+        <th>UF</th>
+        <th>Código IBGE</th>
+        <th>Microrregião</th>
+        <th>Mesorregião</th>
+        <th>ICMS</th>
+        <th>Substitui ICMS por ISS</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cidade in cidades %}
+      <tr class="text-center">
+        <td>{{ cidade.id }}</td>
+        <td>{{ cidade.nome }}</td>
+        <td>{{ cidade.uf }}</td>
+        <td>{{ cidade.codigo_ibge }}</td>
+        <td>{{ cidade.microrregiao or '' }}</td>
+        <td>{{ cidade.mesorregiao or '' }}</td>
+        <td>{{ '{:.0f}%'.format(cidade.icms * 100) if cidade.icms else '' }}</td>
+        <td>{{ 'Sim' if cidade.substitui_icms_por_iss else 'Não' }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" class="text-center">Nenhuma cidade encontrada.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ufSelect = document.querySelector('select[name="uf"]');
+    const cidadeSelect = document.querySelector('select[name="cidade"]');
+    const microrregiaoSelect = document.querySelector('select[name="microrregiao"]');
+    const mesorregiaoSelect = document.querySelector('select[name="mesorregiao"]');
+
+    ufSelect.addEventListener('change', function() {
+    const uf = this.value;
+
+    fetch(`/localidades/ajax/cidades_por_uf/${uf}`)
+    .then(res => res.json())
+    .then(data => {
+        cidadeSelect.innerHTML = '<option value="">Selecione Cidade</option>';
+        data.forEach(cidade => {
+        cidadeSelect.innerHTML += `<option value="${cidade}">${cidade}</option>`;
+        });
+    });
+
+    fetch(`/localidades/ajax/microrregioes_por_uf/${uf}`)
+    .then(res => res.json())
+    .then(data => {
+        microrregiaoSelect.innerHTML = '<option value="">Selecione Microrregião</option>';
+        data.forEach(micro => {
+        microrregiaoSelect.innerHTML += `<option value="${micro}">${micro}</option>`;
+        });
+    });
+
+    fetch(`/localidades/ajax/mesorregioes_por_uf/${uf}`)
+    .then(res => res.json())
+    .then(data => {
+        mesorregiaoSelect.innerHTML = '<option value="">Selecione Mesorregião</option>';
+        data.forEach(meso => {
+        mesorregiaoSelect.innerHTML += `<option value="${meso}">${meso}</option>`;
+        });
+    });
+    });
+});
+</script>
+    
+{% endblock %}

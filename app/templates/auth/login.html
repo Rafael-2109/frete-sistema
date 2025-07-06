@@ -3,7 +3,8 @@
 {% block content %}
 <div class="container mt-5" style="max-width: 400px;">
     <h2 class="mb-4 text-center">Login</h2>
-    <form method="POST">
+    <form>
+{{ csrf_token() }} method="POST">
         {{ form.hidden_tag() }}
         <div class="form-group">
             {{ form.email.label }}

@@ -30,7 +30,8 @@
       <h5 class="mb-0">📤 Importar Arquivo</h5>
     </div>
     <div class="card-body">
-      <form method="POST" enctype="multipart/form-data">
+      <form>
+{{ csrf_token() }} method="POST" enctype="multipart/form-data">
         {{ form.hidden_tag() }}
         <div class="mb-3">
           {{ form.arquivo.label(class="form-label") }}

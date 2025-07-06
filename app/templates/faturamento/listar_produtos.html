@@ -41,7 +41,8 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form method="GET" id="filtrosForm">
+                    <form>
+{{ csrf_token() }} method="GET" id="filtrosForm">
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <label for="data_inicio">Data Início:</label>

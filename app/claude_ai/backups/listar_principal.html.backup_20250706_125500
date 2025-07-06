@@ -1,0 +1,511 @@
+{% extends "base.html" %}
+
+{% block title %}Carteira Principal{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-list text-primary"></i> 
+            Carteira Principal de Pedidos
+        </h1>
+        <div>
+            <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <a href="{{ url_for('carteira.importar_carteira') }}" class="btn btn-success btn-sm">
+                <i class="fas fa-upload"></i> Importar
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-filter"></i> Filtros de Busca
+            </h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" id="form-filtros">
+                <div class="row">
+                    <div class="col-md-2 mb-3">
+                        <label for="num_pedido" class="form-label">Número Pedido</label>
+                        <input type="text" class="form-control" id="num_pedido" name="num_pedido" 
+                               value="{{ num_pedido }}" placeholder="Ex: PED001">
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label for="cod_produto" class="form-label">Código Produto</label>
+                        <input type="text" class="form-control" id="cod_produto" name="cod_produto" 
+                               value="{{ cod_produto }}" placeholder="Ex: PROD001">
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label for="vendedor" class="form-label">Vendedor</label>
+                        <input type="text" class="form-control" id="vendedor" name="vendedor" 
+                               value="{{ vendedor }}" placeholder="Ex: João">
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <input type="text" class="form-control" id="status" name="status" 
+                               value="{{ status }}" placeholder="Ex: Pedido de venda" style="color: #000 !important;">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="cliente" class="form-label">Cliente</label>
+                        <input type="text" class="form-control" id="cliente" name="cliente" 
+                               value="{{ cliente }}" placeholder="Ex: Cliente LTDA">
+                    </div>
+                    <div class="col-md-1 mb-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm me-2">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <a href="{{ url_for('carteira.listar_principal') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-times"></i>
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lista de Itens -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-table"></i> Itens da Carteira
+            </h6>
+            {% if itens and itens.items %}
+            <span class="badge badge-info">
+                {{ itens.total }} itens encontrados
+            </span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if itens and itens.items %}
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Produto</th>
+                            <th>Cliente</th>
+                            <th>Vendedor</th>
+                            <th>Status</th>
+                            <th class="text-right">Saldo</th>
+                            <th class="text-right">Valor</th>
+                            <th class="text-center">Peso/Pallet</th>
+                            <th class="text-center">Expedição</th>
+                            <th class="text-center">Separação</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in itens.items %}
+                        <tr>
+                            <td>
+                                <strong>{{ item.num_pedido }}</strong>
+                                {% if item.protocolo %}
+                                <br><small class="text-muted">{{ item.protocolo|formatar_protocolo }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="text-truncate" style="max-width: 200px;" title="{{ item.nome_produto }}">
+                                    <strong>{{ item.cod_produto }}</strong><br>
+                                    <small class="text-muted">{{ item.nome_produto }}</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="text-truncate" style="max-width: 150px;" title="{{ item.raz_social }}">
+                                    {{ item.raz_social_red or item.raz_social }}
+                                    {% if item.municipio %}
+                                    <br><small class="text-muted">{{ item.municipio }}/{{ item.estado }}</small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>{{ item.vendedor or '-' }}</td>
+                            <td>
+                                {% if item.status_pedido %}
+                                <span class="badge badge-primary">{{ item.status_pedido }}</span>
+                                {% else %}
+                                <span class="badge badge-secondary">Sem Status</span>
+                                {% endif %}
+                                {% if item.cliente_nec_agendamento == 'Sim' %}
+                                <br><small class="badge badge-info">Agendamento</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                <strong>{{ item.qtd_saldo_produto_pedido|numero_br }}</strong>
+                                {% if item.qtd_cancelada_produto_pedido and item.qtd_cancelada_produto_pedido > 0 %}
+                                <br><small class="text-muted">Cancel: {{ item.qtd_cancelada_produto_pedido|numero_br }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                {% set valor_total = (item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0) %}
+                                <strong>{{ valor_total|valor_br }}</strong>
+                                <br><small class="text-muted">{{ item.preco_produto_pedido|valor_br if item.preco_produto_pedido else '-' }}/un</small>
+                            </td>
+                            <td class="text-center">
+                                {% if item.peso or item.pallet %}
+                                <span class="badge badge-secondary">
+                                    {% if item.peso %}{{ item.peso|numero_br }}kg{% endif %}
+                                    {% if item.peso and item.pallet %} | {% endif %}
+                                    {% if item.pallet %}{{ item.pallet|numero_br }}pl{% endif %}
+                                </span>
+                                {% else %}
+                                <span class="badge badge-light">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.expedicao %}
+                                <span class="badge badge-warning">{{ item.expedicao|formatar_data_brasil }}</span>
+                                {% else %}
+                                <span class="badge badge-light">-</span>
+                                {% endif %}
+                                {% if item.agendamento %}
+                                <br><small class="badge badge-info">{{ item.agendamento|formatar_data_brasil }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.lote_separacao_id %}
+                                <span class="badge badge-success" title="Vinculado ao lote {{ item.lote_separacao_id }}">
+                                    <i class="fas fa-link"></i> #{{ item.lote_separacao_id }}
+                                </span>
+                                {% else %}
+                                <span class="badge badge-secondary">
+                                    <i class="fas fa-unlink"></i> Sem separação
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <button class="btn btn-info btn-sm" onclick="verDetalhes({{ item.id }})" 
+                                        title="Ver detalhes completos">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if itens.pages > 1 %}
+            <nav aria-label="Paginação">
+                <ul class="pagination justify-content-center">
+                    {% if itens.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('carteira.listar_principal', page=itens.prev_num, **request.args) }}">
+                            <i class="fas fa-angle-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for page_num in itens.iter_pages() %}
+                        {% if page_num %}
+                            {% if page_num != itens.page %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('carteira.listar_principal', page=page_num, **request.args) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if itens.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('carteira.listar_principal', page=itens.next_num, **request.args) }}">
+                            <i class="fas fa-angle-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% elif itens is none %}
+            <div class="text-center py-5">
+                <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                <h5>Sistema Não Inicializado</h5>
+                <p class="text-muted">O sistema de carteira ainda não foi inicializado. Execute a migração do banco de dados.</p>
+                <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+                </a>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <h5>Nenhum item encontrado</h5>
+                <p class="text-muted">Nenhum item da carteira corresponde aos filtros aplicados.</p>
+                <a href="{{ url_for('carteira.listar_principal') }}" class="btn btn-primary">
+                    <i class="fas fa-refresh"></i> Limpar Filtros
+                </a>
+                <a href="{{ url_for('carteira.importar_carteira') }}" class="btn btn-success ms-2">
+                    <i class="fas fa-upload"></i> Importar Carteira
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-clipboard-list"></i> Análise Completa do Item da Carteira
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="conteudo-detalhes">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function verDetalhes(itemId) {
+    const modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
+    const conteudo = document.getElementById('conteudo-detalhes');
+    
+    // Mostrar loading
+    conteudo.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+        </div>
+    `;
+    
+    modal.show();
+    
+    // Buscar detalhes via API
+    fetch(`{{ url_for('carteira.api_item_detalhes', id=0) }}`.replace('0', itemId))
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                conteudo.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Erro: ${data.error}
+                    </div>
+                `;
+            } else {
+                // Status geral com cores
+                const statusColors = {
+                    'OK': 'success',
+                    'PENDENTE': 'warning',
+                    'PARCIAL': 'info',
+                    'ATENCAO': 'warning',
+                    'CRITICO': 'danger'
+                };
+                const statusColor = statusColors[data.indicadores.status_geral.status] || 'secondary';
+                
+                conteudo.innerHTML = `
+                    <!-- Status Geral -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="alert alert-${statusColor}" role="alert">
+                                <h5 class="alert-heading">
+                                    <i class="fas fa-clipboard-check"></i> Status: ${data.indicadores.status_geral.status}
+                                </h5>
+                                <p class="mb-0">${data.indicadores.status_geral.motivo}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Informações Principais -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-info-circle text-primary"></i> Informações Básicas</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr><td><strong>Pedido:</strong></td><td><span class="badge badge-primary">${data.num_pedido}</span></td></tr>
+                                <tr><td><strong>Produto:</strong></td><td>${data.cod_produto}</td></tr>
+                                <tr><td><strong>Descrição:</strong></td><td>${data.nome_produto}</td></tr>
+                                <tr><td><strong>Cliente:</strong></td><td>${data.raz_social_red || data.raz_social}</td></tr>
+                                <tr><td><strong>Cidade/UF:</strong></td><td>${data.municipio || '-'}/${data.estado || '-'}</td></tr>
+                                <tr><td><strong>Vendedor:</strong></td><td>${data.vendedor || '-'}</td></tr>
+                                <tr><td><strong>Status:</strong></td><td><span class="badge badge-secondary">${data.status_pedido || '-'}</span></td></tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-calculator text-success"></i> Quantidades e Valores</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr><td><strong>Qtd Pedido:</strong></td><td>${data.qtd_produto_pedido.toFixed(2)}</td></tr>
+                                <tr><td><strong>Qtd Saldo:</strong></td><td><strong>${data.qtd_saldo_produto_pedido.toFixed(2)}</strong></td></tr>
+                                <tr><td><strong>Qtd Cancelada:</strong></td><td>${data.qtd_cancelada_produto_pedido.toFixed(2)}</td></tr>
+                                <tr><td><strong>Preço Unit:</strong></td><td>R$ ${data.preco_produto_pedido.toFixed(2)}</td></tr>
+                                <tr><td><strong>Valor Total:</strong></td><td><strong>R$ ${data.valor_total.toFixed(2)}</strong></td></tr>
+                                <tr><td><strong>Peso Total:</strong></td><td>${data.peso.toFixed(2)} kg</td></tr>
+                                <tr><td><strong>Pallets:</strong></td><td>${data.pallet.toFixed(2)}</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Datas e Prazos -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-calendar text-warning"></i> Datas e Prazos</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr><td><strong>Expedição:</strong></td><td>${data.expedicao ? '<span class="badge badge-warning">' + data.expedicao + '</span>' : '-'}</td></tr>
+                                <tr><td><strong>Agendamento:</strong></td><td>${data.agendamento ? '<span class="badge badge-info">' + data.agendamento + '</span>' : '-'}</td></tr>
+                                <tr><td><strong>Data Entrega:</strong></td><td>${data.data_entrega_pedido ? '<span class="badge badge-success">' + data.data_entrega_pedido + '</span>' : '-'}</td></tr>
+                                <tr><td><strong>Protocolo:</strong></td><td>${data.protocolo || '-'}</td></tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-phone text-info"></i> Agendamento do Cliente</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr><td><strong>Precisa Agendamento:</strong></td><td>${data.agendamento_info.precisa_agendamento ? '<span class="badge badge-warning">Sim</span>' : '<span class="badge badge-success">Não</span>'}</td></tr>
+                                <tr><td><strong>Forma:</strong></td><td>${data.agendamento_info.forma_agendamento || '-'}</td></tr>
+                                <tr><td><strong>Contato:</strong></td><td>${data.agendamento_info.contato || '-'}</td></tr>
+                                <tr><td><strong>Observação:</strong></td><td><small>${data.agendamento_info.observacao || '-'}</small></td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Estoque e Separação -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-boxes text-primary"></i> Situação do Estoque</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr><td><strong>Saldo Atual:</strong></td><td><span class="badge badge-${data.estoque.disponivel ? 'success' : 'danger'}">${data.estoque.saldo_atual.toFixed(2)}</span></td></tr>
+                                <tr><td><strong>Necessário:</strong></td><td>${data.qtd_saldo_produto_pedido.toFixed(2)}</td></tr>
+                                <tr><td><strong>Disponível:</strong></td><td>${data.estoque.disponivel ? '<span class="badge badge-success">Sim</span>' : '<span class="badge badge-danger">Não</span>'}</td></tr>
+                                <tr><td><strong>Previsão Ruptura:</strong></td><td><span class="badge badge-${data.estoque.status_ruptura === 'OK' ? 'success' : data.estoque.status_ruptura === 'CRÍTICO' ? 'danger' : 'warning'}">${data.estoque.previsao_ruptura.toFixed(2)}</span></td></tr>
+                                <tr><td><strong>Status Estoque:</strong></td><td><span class="badge badge-${data.estoque.status_ruptura === 'OK' ? 'success' : data.estoque.status_ruptura === 'CRÍTICO' ? 'danger' : 'warning'}">${data.estoque.status_ruptura}</span></td></tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-cut text-success"></i> Situação da Separação</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr><td><strong>Tem Separação:</strong></td><td>${data.separacao_info.tem_separacao ? '<span class="badge badge-success">Sim</span>' : '<span class="badge badge-secondary">Não</span>'}</td></tr>
+                                <tr><td><strong>Lote ID:</strong></td><td>${data.separacao_info.lote_id ? '<span class="badge badge-info">#' + data.separacao_info.lote_id + '</span>' : '-'}</td></tr>
+                                <tr><td><strong>Qtd Separada:</strong></td><td>${data.separacao_info.qtd_separada.toFixed(2)}</td></tr>
+                                <tr><td><strong>Peso Separado:</strong></td><td>${data.separacao_info.peso_separado.toFixed(2)} kg</td></tr>
+                                <tr><td><strong>Pallets Separados:</strong></td><td>${data.separacao_info.pallet_separado.toFixed(2)}</td></tr>
+                                <tr><td><strong>% Separado:</strong></td><td><span class="badge badge-${data.separacao_info.separacao_completa ? 'success' : 'warning'}">${data.separacao_info.percentual_separado.toFixed(1)}%</span></td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Indicadores Finais -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="card border-left-${statusColor}">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-chart-line"></i> Resumo dos Indicadores</h6>
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <small><strong>Valor do Item:</strong></small><br>
+                                            <span class="h6">R$ ${data.indicadores.valor_total_item.toFixed(2)}</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <small><strong>Estoque:</strong></small><br>
+                                            <span class="badge badge-${data.indicadores.estoque_suficiente ? 'success' : 'danger'}">${data.indicadores.estoque_suficiente ? 'Suficiente' : 'Insuficiente'}</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <small><strong>Agendamento:</strong></small><br>
+                                            <span class="badge badge-${data.indicadores.necessita_agendamento ? 'warning' : 'success'}">${data.indicadores.necessita_agendamento ? 'Necessário' : 'Não precisa'}</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <small><strong>Separação:</strong></small><br>
+                                            <span class="badge badge-${data.indicadores.separacao_completa ? 'success' : data.indicadores.tem_separacao_vinculada ? 'warning' : 'secondary'}">${data.indicadores.separacao_completa ? 'Completa' : data.indicadores.tem_separacao_vinculada ? 'Parcial' : 'Pendente'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            conteudo.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> Erro ao carregar detalhes: ${error.message}
+                </div>
+            `;
+        });
+}
+</script>
+
+<style>
+.table th {
+    border-top: none;
+    font-size: 0.85rem;
+    color: #333 !important;
+}
+.table td {
+    font-size: 0.85rem;
+    vertical-align: middle;
+    color: #333 !important;
+}
+.badge {
+    font-size: 0.75rem;
+}
+.text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Forçar cor de texto visível */
+.form-control {
+    color: #333 !important;
+}
+.form-label {
+    color: #333 !important;
+}
+.text-muted {
+    color: #6c757d !important;
+}
+small.text-muted {
+    color: #6c757d !important;
+}
+
+/* Bordas coloridas para status */
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e !important;
+}
+.border-left-danger {
+    border-left: 0.25rem solid #e74a3b !important;
+}
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
+}
+.border-left-secondary {
+    border-left: 0.25rem solid #858796 !important;
+}
+
+/* Melhorar tabelas no modal */
+.table-borderless td {
+    border: none;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Cards no modal */
+.modal-body .card {
+    margin-bottom: 0;
+}
+</style>
+{% endblock %} 

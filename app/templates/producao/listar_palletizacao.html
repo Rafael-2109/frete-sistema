@@ -39,7 +39,8 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-body">
-                    <form method="GET" id="filtrosForm">
+                    <form>
+{{ csrf_token() }} method="GET" id="filtrosForm">
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <label for="cod_produto">Filtrar por Código:</label>

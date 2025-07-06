@@ -40,7 +40,8 @@
             </div>
 
             <!-- Formulário de aprovação -->
-            <form method="POST">
+            <form>
+{{ csrf_token() }} method="POST">
                 {{ form.hidden_tag() }}
                 
                 <div class="row">

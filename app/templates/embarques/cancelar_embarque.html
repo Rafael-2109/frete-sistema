@@ -40,7 +40,8 @@
                     </div>
 
                     <!-- Formulário de cancelamento -->
-                    <form method="POST" id="form-cancelamento" style="display: none;">
+                    <form>
+{{ csrf_token() }} method="POST" id="form-cancelamento" style="display: none;">
                         {{ form.hidden_tag() }}
                         
                         <div class="alert alert-danger">

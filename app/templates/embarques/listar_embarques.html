@@ -46,7 +46,8 @@
     </div>
     <div class="collapse" id="filtrosAvancados">
       <div class="card-body">
-        <form method="GET" action="{{ url_for('embarques.listar_embarques') }}">
+        <form>
+{{ csrf_token() }} method="GET" action="{{ url_for('embarques.listar_embarques') }}">
           <!-- ✅ NOVO: Preserva o parâmetro mostrar_todos ao aplicar filtros -->
           {% if mostrar_todos %}
             <input type="hidden" name="mostrar_todos" value="true">

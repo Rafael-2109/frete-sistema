@@ -3,7 +3,8 @@
 <div class="container mt-4">
   <h4>📂 Importar Vínculos de Cidades</h4>
 
-  <form method="POST" enctype="multipart/form-data" class="card p-3 shadow-sm mt-4">
+  <form>
+{{ csrf_token() }} method="POST" enctype="multipart/form-data" class="card p-3 shadow-sm mt-4">
     {{ upload_form.hidden_tag() }}
     <div class="row g-2">
       <div class="col-md-8">
@@ -47,7 +48,8 @@
       </tbody>
     </table>
 
-    <form method="POST" action="{{ url_for('vinculos.confirmar_importacao_vinculos') }}">
+    <form>
+{{ csrf_token() }} method="POST" action="{{ url_for('vinculos.confirmar_importacao_vinculos') }}">
       {{ confirmar_form.hidden_tag() }}
       <div class="d-grid">
         {{ confirmar_form.submit(class="btn btn-success") }}

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2>Importar Transportadoras</h2>
+            <hr>
+
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    Instruções
+                </div>
+                <div class="card-body">
+                    <p>O arquivo Excel deve conter as seguintes colunas:</p>
+                    <ul>
+                        <li><strong>CNPJ:</strong> CNPJ da transportadora (obrigatório)</li>
+                        <li><strong>Razão Social:</strong> Nome da empresa (obrigatório)</li>
+                        <li><strong>Cidade:</strong> Cidade sede (obrigatório)</li>
+                        <li><strong>UF:</strong> Estado (obrigatório, sigla com 2 letras)</li>
+                        <li><strong>OPTANTE:</strong> Se é optante do Simples Nacional (S/N)</li>
+                        <li><strong>Condição de pgto:</strong> Condição de pagamento</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        {{ form.hidden_tag() }}
+                        <div class="mb-3">
+                            {{ form.arquivo.label(class="form-label") }}
+                            {{ form.arquivo(class="form-control") }}
+                            {% if form.arquivo.errors %}
+                            <div class="alert alert-danger mt-2">
+                                {% for error in form.arquivo.errors %}
+                                <p>{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="mb-3">
+                            {{ form.submit(class="btn btn-primary") }}
+                            <a href="{{ url_for('transportadoras.cadastrar_transportadora') }}" class="btn btn-secondary">Voltar</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% if erros_importacao %}
+            <div class="card mt-4">
+                <div class="card-header bg-danger text-white">
+                    Erros na Importação
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Linha</th>
+                                    <th>CNPJ</th>
+                                    <th>Razão Social</th>
+                                    <th>Cidade</th>
+                                    <th>UF</th>
+                                    <th>Erro</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for erro in erros_importacao %}
+                                <tr>
+                                    <td>{{ erro.linha }}</td>
+                                    <td>{{ erro.cnpj }}</td>
+                                    <td>{{ erro.razao_social }}</td>
+                                    <td>{{ erro.cidade }}</td>
+                                    <td>{{ erro.uf }}</td>
+                                    <td>{{ erro.erro }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="mt-4">
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+        </div>
+    </div>
+</div>
+{% endblock %} 

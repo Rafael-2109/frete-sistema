@@ -20,7 +20,8 @@
         <h5 class="mb-0"><i class="fas fa-plus-circle"></i> Adicionar Novo Contato</h5>
       </div>
       <div class="card-body">
-        <form method="POST">
+        <form>
+{{ csrf_token() }} method="POST">
           {{ form.hidden_tag() }}
           <div class="row">
             <div class="col-md-3">
@@ -65,7 +66,8 @@
       <h5 class="mb-0"><i class="fas fa-search"></i> Pesquisar Contatos</h5>
     </div>
     <div class="card-body">
-      <form method="GET" id="formPesquisa">
+      <form>
+{{ csrf_token() }} method="GET" id="formPesquisa">
         <div class="row">
           <div class="col-md-3">
             {{ pesquisa_form.cnpj.label(class="form-label") }}
@@ -245,7 +247,8 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <form method="POST" id="formExclusao" style="display: inline;">
+        <form>
+{{ csrf_token() }} method="POST" id="formExclusao" style="display: inline;">
           <button type="submit" class="btn btn-danger">
             <i class="fas fa-trash"></i> Excluir
           </button>

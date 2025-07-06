@@ -282,6 +282,78 @@ def run_all_tests():
         print(f"⚠️ {total_tests - passed_tests} teste(s) falharam. Revisar implementação.")
         return False
 
+def test_admin_identity():
+    """Testa se o sistema de admin está funcionando"""
+    
+    try:
+        from app import create_app, db
+        from app.auth.models import Usuario
+        
+        app = create_app()
+        
+        with app.app_context():
+            print("🔍 TESTANDO SISTEMA DE IDENTIDADE ADMIN")
+            print("=" * 50)
+            
+            # Listar todos os usuários
+            usuarios = Usuario.query.all()
+            print(f"📊 Total de usuários: {len(usuarios)}")
+            
+            for usuario in usuarios:
+                print(f"\n👤 Usuário: {usuario.nome}")
+                print(f"   Email: {usuario.email}")
+                print(f"   Perfil: {usuario.perfil}")
+                print(f"   Status: {usuario.status}")
+                print(f"   É Admin?: {'✅ SIM' if usuario.perfil in ['administrador', 'financeiro'] else '❌ NÃO'}")
+            
+            # Verificar se há pelo menos um admin
+            admins = Usuario.query.filter(Usuario.perfil.in_(['administrador', 'financeiro'])).all()
+            print(f"\n🔐 Administradores encontrados: {len(admins)}")
+            
+            if not admins:
+                print("⚠️  PROBLEMA: Nenhum usuário com perfil 'administrador' ou 'financeiro' encontrado!")
+                print("   Para usar o Admin Free Mode, você precisa:")
+                print("   1. Ter um usuário com perfil 'administrador' ou 'financeiro'")
+                print("   2. Estar logado com esse usuário")
+                
+                # Sugestão para criar admin
+                print("\n💡 SOLUÇÃO: Criar usuário administrador")
+                print("   Você pode:")
+                print("   1. Editar um usuário existente no banco")
+                print("   2. Ou criar um novo usuário com perfil 'administrador'")
+            else:
+                print("✅ Sistema de admin configurado corretamente!")
+                for admin in admins:
+                    print(f"   - {admin.nome} ({admin.email}) - {admin.perfil}")
+            
+            # Testar importação dos módulos
+            print("\n🧪 TESTANDO IMPORTAÇÕES...")
+            
+            try:
+                from app.claude_ai.true_free_mode import get_true_free_mode
+                true_mode = get_true_free_mode()
+                print("✅ True Free Mode: Importado com sucesso")
+                
+                from app.claude_ai.admin_free_mode import get_admin_free_mode
+                admin_mode = get_admin_free_mode()
+                print("✅ Admin Free Mode: Importado com sucesso")
+                
+                print("\n🎯 SISTEMA PRONTO!")
+                print("   Para usar o Admin Free Mode:")
+                print("   1. Faça login com um usuário 'administrador' ou 'financeiro'")
+                print("   2. Acesse /claude-ai/true-free-mode/dashboard")
+                print("   3. Ou use o dropdown 'Modos IA' no chat")
+                
+            except Exception as e:
+                print(f"❌ Erro na importação: {e}")
+                return False
+            
+            return True
+            
+    except Exception as e:
+        print(f"❌ Erro geral: {e}")
+        return False
+
 if __name__ == "__main__":
     print("🧠 CLAUDE DEVELOPMENT AI - TESTE COMPLETO")
     print("="*60)

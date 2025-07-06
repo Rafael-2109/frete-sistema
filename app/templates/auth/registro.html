@@ -14,7 +14,8 @@
                 Sua solicitação será analisada pela administração.
             </p>
 
-            <form method="POST">
+            <form>
+{{ csrf_token() }} method="POST">
                 {{ form.hidden_tag() }}
                 
                 <div class="row">

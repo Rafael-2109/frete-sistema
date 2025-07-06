@@ -2,7 +2,8 @@
 {% block content %}
 <div class="container mt-4">
   <h2>Importar Pedidos (Separação)</h2>
-  <form method="POST" enctype="multipart/form-data">
+  <form>
+{{ csrf_token() }} method="POST" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
     <div class="mb-3">
       {{ form.arquivo_excel.label }}

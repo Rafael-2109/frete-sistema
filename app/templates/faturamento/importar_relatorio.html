@@ -14,7 +14,8 @@
     {% endif %}
   {% endwith %}
 
-  <form method="POST" enctype="multipart/form-data">
+  <form>
+{{ csrf_token() }} method="POST" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
     <div class="mb-3">
       {{ form.arquivo.label(class="form-label") }}
