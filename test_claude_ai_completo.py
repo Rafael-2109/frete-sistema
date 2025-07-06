@@ -111,10 +111,8 @@ async def test_nlp_analysis():
         
         for query in test_queries:
             result = nlp.analisar_com_nlp(query)
-            if result and hasattr(result, 'tipo_analise'):
-                print(f"  ✅ '{query[:30]}...' - Tipo: {result.tipo_analise}")
-            elif isinstance(result, dict) and 'tipo_analise' in result:
-                print(f"  ✅ '{query[:30]}...' - Tipo: {result['tipo_analise']}")
+            if result and hasattr(result, 'palavras_chave'):
+                print(f"  ✅ '{query[:30]}...' - Palavras-chave: {', '.join(result.palavras_chave[:3])}")
             else:
                 print(f"  ❌ Falha ao analisar: '{query[:30]}...'")
         
