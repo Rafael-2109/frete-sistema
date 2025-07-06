@@ -223,7 +223,7 @@ class LifelongLearningSystem:
                                 {"id": existe.id}
                             )
                         else:
-                            # Criar novo mapeamento
+                            # Criar novo mapeamento - ✅ CORREÇÃO: Formatar contexto como JSON válido
                             _get_db_session().execute(
                                 text("""
                                     INSERT INTO ai_semantic_mappings
@@ -233,7 +233,7 @@ class LifelongLearningSystem:
                                 {
                                     "termo": termo.lower(),
                                     "campo": cliente,
-                                    "contexto": consulta
+                                    "contexto": json.dumps({"consulta": consulta})  # ✅ Formatar como JSON
                                 }
                             )
                     

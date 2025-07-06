@@ -1588,8 +1588,14 @@ Claude 4 Sonnet | {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
         from app import db
         from app.monitoramento.models import EntregaMonitorada
         
+        # ✅ CORREÇÃO CRÍTICA: Incluir registros com data_embarque NULL
+        # Problema: data_embarque >= data_limite excluía NULL values
+        # Solução: Incluir entregas com data_embarque NULL ou dentro do período
         query_entregas = db.session.query(EntregaMonitorada).filter(
-            EntregaMonitorada.data_embarque >= data_limite
+            or_(
+                EntregaMonitorada.data_embarque >= data_limite,
+                EntregaMonitorada.data_embarque.is_(None)
+            )
         )
         
         # Aplicar filtro de cliente específico - APENAS SE ESPECIFICADO
@@ -1901,9 +1907,12 @@ Claude 4 Sonnet | {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
             
             data_limite = datetime.now() - timedelta(days=analise.get("periodo_dias", 30))
             
-            # Base query para entregas
+            # Base query para entregas - ✅ CORREÇÃO: Incluir NULL data_embarque
             query_base = db.session.query(EntregaMonitorada).filter(
-                EntregaMonitorada.data_embarque >= data_limite
+                or_(
+                    EntregaMonitorada.data_embarque >= data_limite,
+                    EntregaMonitorada.data_embarque.is_(None)
+                )
             )
             
             # Aplicar filtros específicos
