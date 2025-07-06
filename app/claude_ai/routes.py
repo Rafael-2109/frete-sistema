@@ -2738,3 +2738,226 @@ def claude_real_free_mode():
     except Exception as e:
         logger.error(f"❌ Erro no Claude Real modo livre: {e}")
         return jsonify({'error': str(e)}), 500
+
+# 🧠 MODO LIVRE VERDADEIRO - ROTAS (AUTONOMIA REAL)
+@claude_ai_bp.route('/true-free-mode/enable', methods=['POST'])
+@login_required
+@require_admin()
+def enable_true_autonomy():
+    """🧠 Ativar Verdadeira Autonomia do Claude"""
+    try:
+        from .true_free_mode import get_true_free_mode
+        
+        true_mode = get_true_free_mode()
+        result = true_mode.enable_true_autonomy(current_user.id)
+        
+        if result['success']:
+            flash('🧠 VERDADEIRA AUTONOMIA ATIVADA! Claude pode decidir TUDO sozinho.', 'success')
+            logger.info(f"🧠 Autonomia real ativada por {current_user.nome}")
+        else:
+            flash(f'❌ Erro: {result["error"]}', 'error')
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao ativar autonomia real: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/true-free-mode/disable', methods=['POST'])
+@login_required
+@require_admin()
+def disable_true_autonomy():
+    """🔒 Desativar Verdadeira Autonomia do Claude"""
+    try:
+        from .true_free_mode import get_true_free_mode
+        
+        true_mode = get_true_free_mode()
+        result = true_mode.disable_true_autonomy()
+        
+        flash('🔒 Autonomia real desativada. Claude voltou ao modo estruturado.', 'info')
+        logger.info(f"🔒 Autonomia real desativada por {current_user.nome}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao desativar autonomia real: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/true-free-mode/status')
+@login_required
+@require_admin()
+def true_autonomy_status():
+    """📊 Status da Verdadeira Autonomia"""
+    try:
+        from .true_free_mode import get_true_free_mode
+        
+        true_mode = get_true_free_mode()
+        dashboard_data = true_mode.get_autonomous_dashboard_data()
+        
+        return jsonify({
+            'success': True,
+            'autonomous_data': dashboard_data,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao obter status autonomia real: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/true-free-mode/dashboard')
+@login_required
+@require_admin()
+def true_autonomy_dashboard():
+    """🧠 Dashboard da Verdadeira Autonomia"""
+    try:
+        from .true_free_mode import get_true_free_mode
+        
+        true_mode = get_true_free_mode()
+        dashboard_data = true_mode.get_autonomous_dashboard_data()
+        
+        return render_template('claude_ai/true_autonomy_dashboard.html', 
+                             dashboard_data=dashboard_data)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no dashboard autonomia real: {e}")
+        flash('❌ Erro ao carregar dashboard da autonomia real', 'error')
+        return redirect(url_for('claude_ai.dashboard'))
+
+@claude_ai_bp.route('/true-free-mode/query', methods=['POST'])
+@login_required
+@require_admin()
+def claude_autonomous_query_route():
+    """🧠 Claude com Autonomia Verdadeira - Decide Tudo Sozinho"""
+    try:
+        from .true_free_mode import claude_autonomous_query
+        
+        data = request.get_json()
+        consulta = data.get('query', '')
+        
+        if not consulta:
+            return jsonify({'error': 'Query é obrigatória'}), 400
+        
+        # Contexto para Claude decidir sozinho
+        context = {
+            'user_id': current_user.id,
+            'username': current_user.nome,
+            'perfil': current_user.perfil,
+            'true_autonomy': True,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Claude decide TUDO sozinho e executa
+        resultado = claude_autonomous_query(consulta, context)
+        
+        return jsonify({
+            'response': resultado,
+            'status': 'success',
+            'mode': 'TRUE_AUTONOMY',
+            'claude_decided_everything': True,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro na consulta autônoma: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@claude_ai_bp.route('/true-free-mode/permission/<request_id>', methods=['POST'])
+@login_required
+@require_admin()
+def approve_claude_permission(request_id):
+    """✅ Aprovar/Rejeitar Solicitação de Permissão do Claude"""
+    try:
+        from .true_free_mode import get_true_free_mode
+        
+        data = request.get_json()
+        approved = data.get('approved', False)
+        reason = data.get('reason', '')
+        
+        true_mode = get_true_free_mode()
+        result = true_mode.approve_claude_request(request_id, approved, reason)
+        
+        if result.get('success'):
+            status = 'aprovada' if approved else 'rejeitada'
+            flash(f'✅ Solicitação do Claude {status}!', 'success')
+            logger.info(f"{'✅' if approved else '❌'} Permissão Claude {request_id} {status} por {current_user.nome}")
+        else:
+            flash(f'❌ Erro: {result.get("error", "Solicitação não encontrada")}', 'error')
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro na aprovação de permissão: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/true-free-mode/permissions')
+@login_required
+@require_admin()
+def list_claude_permissions():
+    """📋 Listar Solicitações de Permissão Pendentes do Claude"""
+    try:
+        from .true_free_mode import get_true_free_mode
+        
+        true_mode = get_true_free_mode()
+        dashboard_data = true_mode.get_autonomous_dashboard_data()
+        
+        pending_requests = dashboard_data.get('pending_requests', [])
+        
+        return jsonify({
+            'success': True,
+            'pending_requests': pending_requests,
+            'count': len(pending_requests),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao listar permissões: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/true-free-mode/data/<table_name>')
+@login_required
+@require_admin()
+def claude_autonomous_data_access(table_name):
+    """🗄️ Claude Acessa Dados Autonomamente"""
+    try:
+        from .true_free_mode import get_true_free_mode
+        
+        true_mode = get_true_free_mode()
+        
+        # Obter filtros da query string
+        filters = {}
+        for key, value in request.args.items():
+            filters[key] = value
+        
+        result = true_mode.autonomous_data_access(table_name, filters or None)
+        
+        if result.get('success'):
+            logger.info(f"🗄️ Claude acessou autonomamente: {table_name} por {current_user.nome}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no acesso autônomo de dados: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/true-free-mode/experiment/<experiment_name>', methods=['POST'])
+@login_required
+@require_admin()
+def claude_activate_experiment(experiment_name):
+    """🧪 Claude Ativa Experimento Autonomamente"""
+    try:
+        from .true_free_mode import get_true_free_mode
+        
+        true_mode = get_true_free_mode()
+        result = true_mode.claude_experimental_activation(experiment_name)
+        
+        if result.get('success'):
+            flash(f'🧪 Claude ativou experimento "{experiment_name}" autonomamente!', 'success')
+            logger.info(f"🧪 Experimento {experiment_name} ativado por Claude via {current_user.nome}")
+        else:
+            flash(f'❌ Erro: {result.get("error", "Experimento não encontrado")}', 'error')
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro na ativação de experimento: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

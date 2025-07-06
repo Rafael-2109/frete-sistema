@@ -369,7 +369,19 @@ Quando solicitado, posso ler arquivos do projeto para entender melhor o código.
         if not self.modo_real:
             return self._fallback_simulado(consulta)
         
-        # 🚀 MODO ADMINISTRADOR LIVRE - DETECÇÃO AUTOMÁTICA
+        # 🧠 AUTONOMIA VERDADEIRA - PRIORIDADE MÁXIMA
+        try:
+            from .true_free_mode import is_truly_autonomous, claude_autonomous_query
+            if is_truly_autonomous():
+                logger.info("🧠 AUTONOMIA VERDADEIRA ATIVA - Claude decide TUDO sozinho")
+                # Claude tem controle total das configurações
+                return claude_autonomous_query(consulta, user_context)
+        except ImportError:
+            logger.debug("🔍 true_free_mode não disponível")
+        except Exception as e:
+            logger.warning(f"⚠️ Erro na autonomia verdadeira: {e}")
+        
+        # 🚀 MODO ADMINISTRADOR LIVRE ESTRUTURADO - DETECÇÃO AUTOMÁTICA
         try:
             from .admin_free_mode import get_admin_free_mode
             

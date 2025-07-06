@@ -31,11 +31,25 @@
                                         <i class="fas fa-circle-notch fa-spin me-1"></i> Verificando...
                                     </span>
                                 </div>
-                                <!-- 🚀 MODO ADMINISTRADOR LIVRE -->
+                                <!-- 🧠 MODOS IA AVANÇADOS -->
                                 {% if current_user.perfil in ['admin', 'administrador'] %}
-                                <a href="{{ url_for('claude_ai.admin_free_mode_dashboard') }}" class="btn btn-outline-light" title="Modo Administrador Livre">
-                                    <i class="fas fa-unlock-alt me-1"></i> Modo Livre
-                                </a>
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown" title="Modos Especiais">
+                                        <i class="fas fa-brain me-1"></i> Modos IA
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="{{ url_for('claude_ai.admin_free_mode_dashboard') }}">
+                                            <i class="fas fa-unlock-alt"></i> Modo Estruturado
+                                        </a></li>
+                                        <li><a class="dropdown-item fw-bold" href="{{ url_for('claude_ai.true_autonomy_dashboard') }}">
+                                            <i class="fas fa-brain"></i> <span class="text-primary">Autonomia REAL</span>
+                                        </a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><small class="dropdown-item-text text-muted px-3">
+                                            <i class="fas fa-info-circle"></i> Autonomia Real = Claude decide tudo sozinho
+                                        </small></li>
+                                    </ul>
+                                </div>
                                 {% endif %}
                                 <button class="btn btn-outline-light" onclick="verificarStatus()" title="Atualizar Status">
                                     <i class="fas fa-sync-alt"></i>
