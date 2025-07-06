@@ -848,15 +848,11 @@ NÃO misturar com dados de outros clientes."""
                 except Exception as e:
                     logger.warning(f"⚠️ Validação Estrutural falhou: {e}")
             
-            # 🚀 PRIORIZAR CLAUDE 4 SONNET (dar liberdade ao modelo principal)
-            # Apenas usar sistemas avançados para casos específicos ou quando solicitado
-            use_advanced_systems = False
+            # 🎯 DETECTAR INTENÇÕES COM SCORES
+            intencoes = self._detectar_intencao_refinada(consulta)
             
-            # Detectar se usuário quer análise avançada específica
-            if any(termo in consulta.lower() for termo in ['análise avançada', 'análise profunda', 'análise detalhada', 
-                                                            'multi-agente', 'metacognitivo', 'loop semântico']):
-                use_advanced_systems = True
-                logger.info("🚀 Análise avançada solicitada explicitamente")
+            # 🚀 DECISÃO INTELIGENTE SOBRE SISTEMAS AVANÇADOS
+            use_advanced_systems = self._deve_usar_sistema_avancado(consulta, intencoes)
             
             advanced_result = None
             multi_agent_result = None
@@ -916,9 +912,7 @@ NÃO misturar com dados de outros clientes."""
                     max_tokens=4000,  # Restaurado para análises completas
                     temperature=0.0,  # Máxima precisão - sem criatividade
                     timeout=120.0,  # 2 minutos para análises profundas
-                    system=self.system_prompt.format(
-                        dados_contexto_especifico=self._descrever_contexto_carregado(contexto_analisado)
-                    ),
+                    system=self.system_prompt + "\n\n" + self._build_contexto_por_intencao(intencoes, contexto_analisado),
                     messages=messages  # type: ignore
                 )
                 
@@ -1011,6 +1005,97 @@ Claude 4 Sonnet | {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
             logger.error(f"❌ Erro no Claude real: {e}")
             return self._fallback_simulado(consulta)
     
+    def _detectar_intencao_refinada(self, consulta: str) -> Dict[str, float]:
+        """
+        Detecta múltiplas intenções com scores de confiança
+        Retorna dict com probabilidades ao invés de categoria única
+        """
+        consulta_lower = consulta.lower()
+        
+        intencoes_scores = {
+            "analise_dados": 0.0,
+            "desenvolvimento": 0.0,
+            "resolucao_problema": 0.0,
+            "explicacao_conceitual": 0.0,
+            "comando_acao": 0.0
+        }
+        
+        # Palavras-chave com pesos
+        padroes = {
+            "analise_dados": {
+                "palavras": ["quantos", "qual", "status", "relatório", "dados", "estatística", 
+                           "total", "quantidade", "listar", "mostrar", "ver"],
+                "peso": 0.2
+            },
+            "desenvolvimento": {
+                "palavras": ["criar", "desenvolver", "implementar", "código", "função", 
+                           "módulo", "classe", "api", "rota", "template"],
+                "peso": 0.25
+            },
+            "resolucao_problema": {
+                "palavras": ["erro", "bug", "problema", "não funciona", "corrigir", 
+                           "resolver", "falha", "exception", "debug"],
+                "peso": 0.3
+            },
+            "explicacao_conceitual": {
+                "palavras": ["como funciona", "o que é", "explique", "entender", 
+                           "por que", "quando usar", "diferença entre"],
+                "peso": 0.15
+            },
+            "comando_acao": {
+                "palavras": ["gerar", "exportar", "executar", "fazer", "processar",
+                           "excel", "relatório", "planilha", "baixar"],
+                "peso": 0.2
+            }
+        }
+        
+        # Calcular scores
+        for intencao, config in padroes.items():
+            for palavra in config["palavras"]:
+                if palavra in consulta_lower:
+                    intencoes_scores[intencao] += config["peso"]
+        
+        # Normalizar scores
+        total = sum(intencoes_scores.values())
+        if total > 0:
+            for intencao in intencoes_scores:
+                intencoes_scores[intencao] /= total
+        
+        return intencoes_scores
+    
+    def _deve_usar_sistema_avancado(self, consulta: str, intencoes: Dict[str, float]) -> bool:
+        """
+        Decide logicamente se deve usar sistemas avançados
+        Baseado em critérios objetivos, não apenas palavras-chave
+        """
+        # Critérios lógicos
+        criterios = {
+            "complexidade_alta": len(consulta.split()) > 20,
+            "multiplas_intencoes": sum(1 for s in intencoes.values() if s > 0.2) >= 2,
+            "solicitacao_explicita": any(termo in consulta.lower() for termo in 
+                                       ["análise avançada", "análise profunda", "detalhada"]),
+            "consulta_ambigua": max(intencoes.values()) < 0.4 if intencoes else False,
+            "historico_contexto": hasattr(self, '_ultimo_contexto_carregado') and 
+                                self._ultimo_contexto_carregado.get('registros_carregados', 0) > 1000
+        }
+        
+        # Log para debug
+        logger.debug(f"🔍 Critérios sistema avançado: {criterios}")
+        
+        # Decisão baseada em múltiplos fatores
+        pontos = sum(1 for criterio, valor in criterios.items() if valor)
+        
+        # Caso especial: múltiplas intenções sempre usa avançado
+        if criterios["multiplas_intencoes"]:
+            usar_avancado = True
+        else:
+            usar_avancado = pontos >= 2  # Precisa de pelo menos 2 critérios verdadeiros
+        
+        if usar_avancado:
+            logger.info(f"🚀 Sistema avançado ativado: {pontos} critérios atendidos")
+        
+        return usar_avancado
+
     def _analisar_consulta(self, consulta: str) -> Dict[str, Any]:
         """Análise simplificada da consulta para dar mais liberdade ao Claude"""
         
@@ -1702,6 +1787,48 @@ Claude 4 Sonnet | {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
             logger.error(f"❌ Erro ao calcular estatísticas: {e}")
             return {"erro": str(e)}
     
+    def _build_contexto_por_intencao(self, intencoes_scores: Dict[str, float], 
+                                      analise: Dict[str, Any]) -> str:
+        """
+        Constrói contexto específico baseado na intenção dominante
+        """
+        # Encontrar intenção dominante
+        intencao_principal = max(intencoes_scores, key=lambda k: intencoes_scores[k])
+        score_principal = intencoes_scores[intencao_principal]
+        
+        # Log da intenção detectada
+        logger.info(f"🎯 Intenção principal: {intencao_principal} ({score_principal:.1%})")
+        
+        # Se confiança baixa, usar contexto genérico
+        if score_principal < 0.4:
+            return self._descrever_contexto_carregado(analise)
+        
+        # Contextos específicos por intenção
+        periodo = analise.get('periodo_dias', 30)
+        cliente = analise.get('cliente_especifico')
+        
+        if intencao_principal == "desenvolvimento":
+            return """Contexto: Sistema Flask/PostgreSQL
+Estrutura: app/[modulo]/{models,routes,forms}.py  
+Padrões: SQLAlchemy, WTForms, Jinja2
+Módulos: pedidos, fretes, embarques, monitoramento, separacao, carteira, etc."""
+        
+        elif intencao_principal == "analise_dados":
+            registros = self._ultimo_contexto_carregado.get('registros_carregados', 0) if hasattr(self, '_ultimo_contexto_carregado') else 0
+            base = f"Dados: {registros} registros, {periodo} dias"
+            if cliente:
+                base += f", cliente: {cliente}"
+            return base
+        
+        elif intencao_principal == "resolucao_problema":
+            return "Contexto: Diagnóstico e resolução\nSistema: Flask/PostgreSQL\nLogs disponíveis"
+        
+        elif intencao_principal == "comando_acao":
+            return f"Ação solicitada. Período: {periodo} dias" + (f", Cliente: {cliente}" if cliente else "")
+        
+        else:
+            return self._descrever_contexto_carregado(analise)
+
     def _descrever_contexto_carregado(self, analise: Dict[str, Any]) -> str:
         """Descrição simplificada do contexto para o Claude"""
         if not hasattr(self, '_ultimo_contexto_carregado') or not self._ultimo_contexto_carregado:
