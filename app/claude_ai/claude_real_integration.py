@@ -841,12 +841,24 @@ NÃO misturar com dados de outros clientes."""
             if not enhanced_result and self.nlp_analyzer:
                 try:
                     logger.info("🔬 Aplicando análise NLP Avançada...")
-                    nlp_analysis = self.nlp_analyzer.analyze_advanced_query(consulta, dados_contexto)
+                    nlp_result = self.nlp_analyzer.analisar_com_nlp(consulta)
                     
-                    if nlp_analysis.get('confidence') >= 0.7:
-                        logger.info(f"✅ NLP Avançado detectou padrões (confiança: {nlp_analysis['confidence']:.1%})")
-                        # Usar análise NLP para enriquecer dados_contexto
-                        dados_contexto['nlp_insights'] = nlp_analysis
+                    # Aplicar correções sugeridas
+                    if nlp_result and nlp_result.correcoes_sugeridas:
+                        for erro, correcao in nlp_result.correcoes_sugeridas.items():
+                            consulta = consulta.replace(erro, correcao)
+                        logger.info(f"📝 NLP aplicou {len(nlp_result.correcoes_sugeridas)} correções")
+                    
+                    # Enriquecer dados_contexto com insights NLP
+                    if nlp_result and nlp_result.palavras_chave:
+                        logger.info(f"✅ NLP Avançado detectou {len(nlp_result.palavras_chave)} palavras-chave")
+                        dados_contexto['nlp_insights'] = {
+                            'tokens_limpos': nlp_result.tokens_limpos,
+                            'palavras_chave': nlp_result.palavras_chave,
+                            'sentimento': nlp_result.sentimento,
+                            'tempo_verbal': nlp_result.tempo_verbal,
+                            'entidades': nlp_result.entidades_nomeadas
+                        }
                 except Exception as e:
                     logger.warning(f"⚠️ NLP Avançado falhou: {e}")
             
@@ -888,6 +900,8 @@ NÃO misturar com dados de outros clientes."""
             if not enhanced_result and self.advanced_ai_system and hasattr(self.advanced_ai_system, 'process_advanced_query'):
                 try:
                     logger.info("🚀 Iniciando processamento IA AVANÇADA...")
+                    logger.debug(f"📊 Contexto: domínio={dados_contexto.get('dominio', 'N/A')}, cliente={dados_contexto.get('cliente_especifico', 'N/A')}")
+                    logger.debug(f"📊 Dados: {len(dados_contexto.get('dados', []))} registros carregados")
                     
                     # Preparar contexto enriquecido com NLP + ML
                     advanced_context = {

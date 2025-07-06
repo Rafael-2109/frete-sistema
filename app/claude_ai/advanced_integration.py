@@ -377,14 +377,24 @@ class SemanticLoopProcessor:
             mapeamento = get_mapeamento_semantico()
             
             # Mapear consulta completa
-            mapping_result = mapeamento.mapear_consulta_completa(query)
-            
-            return {
-                'mapped_terms': mapping_result.get('termos_mapeados', []),
-                'confidence': mapping_result.get('confianca_geral', 0.5),
-                'domain_detected': mapping_result.get('dominio_detectado', 'geral'),
-                'semantic_complexity': len(query.split()) / 20.0  # Normalizado
-            }
+            try:
+                mapping_result = mapeamento.mapear_consulta_completa(query)
+                
+                return {
+                    'mapped_terms': mapping_result.get('termos_mapeados', []),
+                    'confidence': mapping_result.get('confianca_geral', 0.5),
+                    'domain_detected': mapping_result.get('dominio_detectado', 'geral'),
+                    'semantic_complexity': len(query.split()) / 20.0  # Normalizado
+                }
+            except (AttributeError, KeyError) as e:
+                logger.warning(f"Erro no mapeamento semântico: {e}")
+                # Retornar análise básica sem mapeamento
+                return {
+                    'mapped_terms': [],
+                    'confidence': 0.5,
+                    'domain_detected': 'geral',
+                    'semantic_complexity': len(query.split()) / 20.0
+                }
             
         except Exception as e:
             logger.warning(f"Erro na análise semântica: {e}")

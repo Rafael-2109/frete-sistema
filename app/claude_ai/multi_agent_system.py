@@ -557,7 +557,7 @@ class MultiAgentSystem:
         
         if len(relevant_responses) == 1:
             # Uma resposta dominante
-            main_response = relevant_responses[0].get('response') or "Resposta não disponível"
+            main_response = relevant_responses[0].get('response') or "Desculpe, encontrei um problema ao processar sua consulta. Por favor, tente reformular ou seja mais específico."
             agent_name = relevant_responses[0].get('agent', 'desconhecido')
             convergence_note = f"\n\n---\n🤖 **Análise:** Resposta do agente especialista em {agent_name}"
         else:
@@ -565,7 +565,7 @@ class MultiAgentSystem:
             main_agent = relevant_responses[0]
             secondary_agents = relevant_responses[1:]
             
-            main_response = main_agent.get('response') or "Resposta não disponível"
+            main_response = main_agent.get('response') or "Desculpe, encontrei um problema ao processar sua consulta. Por favor, tente reformular ou seja mais específico."
             
             # Adicionar insights de outros agentes se relevantes
             additional_insights = []
@@ -596,7 +596,7 @@ class MultiAgentSystem:
         # Construir resposta final - PROTEÇÃO ABSOLUTA CONTRA None
         # Proteção ABSOLUTA contra None - verificação tripla
         if main_response is None:
-            main_response = "Resposta não disponível"
+            main_response = "Desculpe, encontrei um problema ao processar sua consulta. Por favor, tente reformular ou seja mais específico."
         if convergence_note is None:
             convergence_note = ""
         if validation_note is None:
@@ -606,7 +606,7 @@ class MultiAgentSystem:
         try:
             final_response = str(main_response) + str(convergence_note) + str(validation_note)
         except (TypeError, AttributeError) as e:
-            final_response = "Erro na concatenação de resposta: " + str(e)
+            final_response = "Desculpe, encontrei um problema ao processar sua consulta. Por favor, tente reformular ou seja mais específico."
         
         return final_response
     
