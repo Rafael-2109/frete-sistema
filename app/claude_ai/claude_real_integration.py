@@ -210,71 +210,20 @@ class ClaudeRealIntegration:
             self.ai_logger = None
             self.intelligent_cache = None
 
-        # System prompt gerado dinamicamente a partir de dados REAIS
+        # System prompt equilibrado - liberdade com contexto técnico
         sistema_real = get_sistema_real_data()
         self.system_prompt = """Você é Claude 4 Sonnet, um assistente AI avançado integrado ao Sistema de Fretes com capacidades completas de desenvolvimento, análise e automação.
 
-🎯 **SUAS CAPACIDADES PRINCIPAIS**:
+Este é um sistema Flask/Python com PostgreSQL, organizado em módulos (pedidos, fretes, embarques, monitoramento, etc). 
+Cada módulo tem models.py, routes.py, forms.py e templates HTML.
 
-**💻 DESENVOLVIMENTO & PROGRAMAÇÃO**:
-• Criar módulos Flask completos (models, routes, forms, templates)
-• Desenvolver APIs REST e integrações
-• Programar funcionalidades frontend (HTML, CSS, JavaScript)
-• Escrever scripts Python para automação
-• Implementar validações e sistemas de segurança
-• Criar dashboards e interfaces interativas
-
-**🗄️ BANCO DE DADOS & INFRAESTRUTURA**:
-• Acesso direto ao PostgreSQL (70+ tabelas)
-• Escrever e otimizar queries SQL complexas
-• Criar migrações Flask-Migrate
-• Modelar estruturas de dados
-• Implementar sistemas de cache
-
-**📊 ANÁLISE & RELATÓRIOS**:
-• Analisar dados de entregas, fretes, pedidos, embarques, faturamento
-• Gerar relatórios Excel avançados
-• Criar visualizações e dashboards
-• Análises estatísticas e tendências
-• Comparações temporais e métricas
-
-**🤖 AUTOMAÇÃO & IA**:
-• Desenvolver sistemas de automação
-• Implementar processamento de linguagem natural
-• Criar fluxos de trabalho automatizados
-• Integrar APIs externas
-• Otimizar performance do sistema
-
-**🎨 INTERFACE & EXPERIÊNCIA**:
-• Projetar interfaces responsivas
-• Criar componentes interativos
-• Melhorar experiência do usuário
-• Desenvolver formulários inteligentes
-
-🧠 **COMO FUNCIONO**:
-• Acesso automático aos dados do sistema através de análise inteligente
-• Capacidade de criar, modificar e desenvolver funcionalidades
-• Análise contextual para determinar a melhor abordagem
-• Resposta adaptada ao tipo de solicitação
-
-DADOS DISPONÍVEIS:
-{dados_contexto_especifico}
-
-⚡ **INSTRUÇÕES INTELIGENTES**:
-• **ANÁLISE DE DADOS**: Use dados carregados para insights e relatórios
-• **DESENVOLVIMENTO**: Foque em criar código, módulos e funcionalidades
-• **AUTOMAÇÃO**: Implemente scripts e processos automáticos
-• **CONSULTAS GERAIS**: Analise a intenção e ofereça soluções específicas
-• **DÚVIDAS TÉCNICAS**: Explique conceitos e forneça orientações detalhadas
-
-🎯 **IMPORTANTE**: Analise cuidadosamente cada consulta para identificar se o usuário quer:
-- Analisar dados existentes
-- Desenvolver novas funcionalidades  
-- Automatizar processos
+Você pode:
+- Analisar dados e responder consultas
+- Criar código, módulos e funcionalidades
+- Sugerir melhorias e otimizações
 - Resolver problemas técnicos
-- Obter informações específicas
 
-Sempre pergunte para esclarecer quando a intenção não estiver clara."""
+Seja preciso, analise tudo, seja sincero e seja objetivo. Use seu julgamento sobre o nível de detalhe necessário para cada resposta."""
 
     
     def processar_consulta_real(self, consulta: str, user_context: Optional[Dict] = None) -> str:
@@ -522,6 +471,10 @@ O sistema melhora continuamente. Cada consulta, correção e feedback contribui 
             logger.warning("⚠️ Sistema de entendimento inteligente não disponível, usando sistema padrão")
         except Exception as e:
             logger.error(f"❌ Erro no sistema avançado: {e}, usando sistema padrão")
+        
+        # 💻 DETECTAR COMANDOS DE DESENVOLVIMENTO
+        if self._is_dev_command(consulta):
+            return self._processar_comando_desenvolvimento(consulta, user_context)
         
         # 📊 DETECTAR COMANDOS DE EXPORT EXCEL
         if self._is_excel_command(consulta):
@@ -895,109 +848,62 @@ NÃO misturar com dados de outros clientes."""
                 except Exception as e:
                     logger.warning(f"⚠️ Validação Estrutural falhou: {e}")
             
-            # 🚀 FASE 5: IA AVANÇADA (Sistema Industrial Completo - Metacognitivo + Loop Semântico)
+            # 🚀 PRIORIZAR CLAUDE 4 SONNET (dar liberdade ao modelo principal)
+            # Apenas usar sistemas avançados para casos específicos ou quando solicitado
+            use_advanced_systems = False
+            
+            # Detectar se usuário quer análise avançada específica
+            if any(termo in consulta.lower() for termo in ['análise avançada', 'análise profunda', 'análise detalhada', 
+                                                            'multi-agente', 'metacognitivo', 'loop semântico']):
+                use_advanced_systems = True
+                logger.info("🚀 Análise avançada solicitada explicitamente")
+            
             advanced_result = None
-            if not enhanced_result and self.advanced_ai_system and hasattr(self.advanced_ai_system, 'process_advanced_query'):
-                try:
-                    logger.info("🚀 Iniciando processamento IA AVANÇADA...")
-                    logger.debug(f"📊 Contexto: domínio={dados_contexto.get('dominio', 'N/A')}, cliente={dados_contexto.get('cliente_especifico', 'N/A')}")
-                    logger.debug(f"📊 Dados: {len(dados_contexto.get('dados', []))} registros carregados")
-                    
-                    # Preparar contexto enriquecido com NLP + ML
-                    advanced_context = {
-                        'dados_carregados': dados_contexto,
-                        'tipo_consulta': tipo_analise,
-                        'cliente_especifico': cliente_contexto,
-                        'periodo_dias': periodo_dias,
-                        'user_context': user_context or {},
-                        'correcao_usuario': correcao_usuario,
-                        'debug': False  # Ativar para debug detalhado
-                    }
-                    
-                    # Executar processamento avançado (assíncrono)
-                    import asyncio
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        advanced_result = loop.run_until_complete(
-                            self.advanced_ai_system.process_advanced_query(consulta, advanced_context)
-                        )
-                        logger.info("✅ IA Avançada concluída com sucesso!")
-                    finally:
-                        loop.close()
-                    
-                    # Verificar se sistema avançado forneceu resposta satisfatória
-                    if (advanced_result and 
-                        advanced_result.get('success') and 
-                        advanced_result.get('advanced_metadata', {}).get('metacognitive_score', 0) >= 0.6):
-                        
-                        score = advanced_result['advanced_metadata']['metacognitive_score']
-                        logger.info(f"🎯 IA Avançada forneceu resposta válida (score metacognitivo: {score:.2f})")
-                        resultado = advanced_result['response']
-                        
-                    else:
-                        logger.info("⚠️ IA Avançada não atingiu score adequado, tentando Multi-Agente...")
-                        advanced_result = None
-                        
-                except Exception as e:
-                    logger.error(f"❌ Erro na IA Avançada: {e}, tentando Multi-Agente...")
-                    advanced_result = None
-            
-            # 🤖 FALLBACK: Sistema Multi-Agente se IA Avançada falhar
             multi_agent_result = None
-            if not advanced_result and self.multi_agent_system and hasattr(self.multi_agent_system, 'process_query'):
-                try:
-                    logger.info("🤖 Iniciando análise Multi-Agente (fallback)...")
-                    
-                    # Preparar contexto para multi-agente
-                    context_for_agents = {
-                        'dados_carregados': dados_contexto,
-                        'tipo_consulta': tipo_analise,
-                        'cliente_especifico': cliente_contexto,
-                        'periodo_dias': periodo_dias,
-                        'user_context': user_context or {}
-                    }
-                    
-                    # Executar análise multi-agente (assíncrona)
-                    import asyncio
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        multi_agent_result = loop.run_until_complete(
-                            self.multi_agent_system.process_query(consulta, context_for_agents)
-                        )
-                        logger.info("✅ Análise Multi-Agente concluída com sucesso!")
-                    finally:
-                        loop.close()
-                    
-                    # Verificar se multi-agente forneceu resposta satisfatória
-                    if (multi_agent_result and 
-                        multi_agent_result.get('success') and 
-                        multi_agent_result.get('metadata', {}).get('validation_score', 0) >= 0.7):
-                        
-                        logger.info(f"🎯 Multi-Agente forneceu resposta válida (score: {multi_agent_result['metadata']['validation_score']:.2f})")
-                        resultado = multi_agent_result['response']
-                        
-                        # Adicionar metadata do multi-agente
-                        metadata_info = multi_agent_result.get('metadata', {})
-                        agents_used = metadata_info.get('agents_used', 0)
-                        processing_time = metadata_info.get('processing_time', 0)
-                        
-                        resultado += f"\n\n---\n🤖 **Multi-Agent Analysis**\n"
-                        resultado += f"• Agentes especializados: {agents_used}\n"
-                        resultado += f"• Score de validação: {metadata_info.get('validation_score', 0):.1%}\n"
-                        resultado += f"• Tempo de processamento: {processing_time:.1f}s\n"
-                        resultado += f"• Claude 4 Sonnet | {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-                        
-                    else:
-                        logger.info("⚠️ Multi-Agente não forneceu resposta adequada, usando Claude padrão")
-                        multi_agent_result = None
-                        
-                except Exception as e:
-                    logger.error(f"❌ Erro no Multi-Agente: {e}, usando Claude padrão")
-                    multi_agent_result = None
             
-            # Se ambos sistemas avançados falharam, usar Claude padrão
+            if use_advanced_systems:
+                # Tentar sistemas avançados apenas se solicitado
+                if self.advanced_ai_system and hasattr(self.advanced_ai_system, 'process_advanced_query'):
+                    try:
+                        logger.info("🚀 Iniciando processamento IA AVANÇADA...")
+                        
+                        # Preparar contexto enriquecido
+                        advanced_context = {
+                            'dados_carregados': dados_contexto,
+                            'tipo_consulta': tipo_analise,
+                            'cliente_especifico': cliente_contexto,
+                            'periodo_dias': periodo_dias,
+                            'user_context': user_context or {},
+                            'correcao_usuario': correcao_usuario,
+                            'debug': False
+                        }
+                        
+                        # Executar processamento avançado
+                        import asyncio
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        try:
+                            advanced_result = loop.run_until_complete(
+                                self.advanced_ai_system.process_advanced_query(consulta, advanced_context)
+                            )
+                            logger.info("✅ IA Avançada concluída")
+                        finally:
+                            loop.close()
+                        
+                        # Usar resultado se for satisfatório
+                        if (advanced_result and 
+                            advanced_result.get('success') and 
+                            advanced_result.get('advanced_metadata', {}).get('metacognitive_score', 0) >= 0.6):
+                            
+                            score = advanced_result['advanced_metadata']['metacognitive_score']
+                            logger.info(f"🎯 IA Avançada forneceu resposta (score: {score:.2f})")
+                            resultado = advanced_result['response']
+                            
+                    except Exception as e:
+                        logger.error(f"❌ Erro na IA Avançada: {e}")
+                        advanced_result = None
+            
+            # Por padrão, usar Claude 4 Sonnet diretamente
             if not advanced_result and not multi_agent_result:
                 # Chamar Claude REAL (agora Claude 4 Sonnet!)
                 # 🤔 DELAY DE INTERPRETAÇÃO FINAL (ANTI-ATROPELO!)
@@ -1106,374 +1012,70 @@ Claude 4 Sonnet | {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
             return self._fallback_simulado(consulta)
     
     def _analisar_consulta(self, consulta: str) -> Dict[str, Any]:
-        """Analisa a consulta para determinar contexto específico"""
-        consulta_lower = consulta.lower()
+        """Análise simplificada da consulta para dar mais liberdade ao Claude"""
         
         analise = {
+            "tipo_consulta": "aberta",  # Deixar o Claude decidir
             "consulta_original": consulta,
-            "timestamp_analise": datetime.now().isoformat(),
-            "tipo_consulta": "geral",
-            "dominio": "geral",  # ✅ NOVO: Detectar domínio automaticamente (padrão: geral)
+            "periodo_dias": 30,  # Padrão
             "cliente_especifico": None,
-            "periodo_dias": 30,  # Default 30 dias para análises mais completas
-            "filtro_geografico": None,
+            "dominio": "geral",
             "foco_dados": [],
             "metricas_solicitadas": [],
-            "correcao_usuario": False,
-            "consulta_nfs_especificas": False,  # NOVO: Flag para NFs específicas
-            "nfs_detectadas": [],  # NOVO: Lista de NFs encontradas
-            "multi_dominio": False,  # ✅ NOVO: Flag para análise multi-tabela
-            "dominios_solicitados": []  # ✅ NOVO: Lista de domínios detectados
+            "requer_dados_completos": False,
+            "multi_dominio": False,
+            "dominios_solicitados": []
         }
         
-        # 🎯 DETECÇÃO DE CONSULTAS MULTI-DOMÍNIO (NOVA FUNCIONALIDADE)
-        consultas_completas = [
-            "status geral", "situação geral", "análise completa", "resumo completo",
-            "dados completos", "todas as informações", "relatório geral", "visão geral",
-            "análise multi", "cruzar dados", "comparar dados", "dados relacionados",
-            "informações completas", "status de tudo", "como está tudo", "relatório completo",
-            "dashboard completo", "visão 360", "análise 360", "panorama completo"
-        ]
+        consulta_lower = consulta.lower()
         
-        for consulta_completa in consultas_completas:
-            if consulta_completa in consulta_lower:
-                analise["multi_dominio"] = True
-                analise["tipo_consulta"] = "analise_completa"
-                analise["dominios_solicitados"] = ["entregas", "pedidos", "fretes", "embarques", "faturamento"]
-                logger.info(f"🌐 ANÁLISE MULTI-DOMÍNIO detectada: '{consulta_completa}'")
-                break
-        
-        # 🔍 DETECÇÃO DE CONSULTA DE NFs ESPECÍFICAS (NOVA PRIORIDADE)
+        # Detecção básica de período temporal (manter isso porque é útil)
         import re
-        nfs_encontradas = re.findall(r'1\d{5}', consulta)  # NFs começam com 1 e têm 6 dígitos
         
-        if nfs_encontradas and len(nfs_encontradas) >= 1:  # Pelo menos 1 NF para ser consulta específica
-            analise["consulta_nfs_especificas"] = True
-            analise["nfs_detectadas"] = nfs_encontradas
-            analise["tipo_consulta"] = "nfs_especificas"
-            analise["dominio"] = "entregas"  # NFs sempre relacionadas a entregas
-            logger.info(f"🔍 CONSULTA DE NFs ESPECÍFICAS detectada: {len(nfs_encontradas)} NFs")
-            return analise  # Retornar imediatamente para consulta específica
-        
-        # 📅 DETECÇÃO DE CONSULTA SOBRE AGENDAMENTOS PENDENTES
-        if any(termo in consulta_lower for termo in ['agendamento pendente', 'agendamentos pendentes', 
-                                                       'precisam de agendamento', 'sem agendamento',
-                                                       'agendar', 'aguardando agendamento', 
-                                                       'entregas com agendamento pendente']):
-            analise["tipo_consulta"] = "agendamentos_pendentes"
-            analise["dominio"] = "entregas"
-            analise["foco_dados"] = ["agendamentos_pendentes"]
-            logger.info("📅 CONSULTA SOBRE AGENDAMENTOS PENDENTES detectada")
-            return analise  # Processar como consulta específica
-        
-        # 🚨 DETECÇÃO DE CORREÇÕES DO USUÁRIO - PRIMEIRA VERIFICAÇÃO
-        palavras_correcao = [
-            "não pedi", "não é", "não pedí", "não era", "não quero",
-            "me trouxe", "trouxe errado", "dados incorretos", "não é isso",
-            "não era isso", "errou", "equivocado", "incorreto", "engano",
-            "não específico", "não cliente", "de novo", "novamente", "corrigir",
-            "não mencionei", "não falei", "não disse", "veja que", "veja as"
-        ]
-        
-        # Verificar se há palavras de correção
-        for palavra_correcao in palavras_correcao:
-            if palavra_correcao in consulta_lower:
-                analise["correcao_usuario"] = True
-                analise["tipo_consulta"] = "geral"  # Forçar consulta geral
-                analise["cliente_especifico"] = None  # Resetar cliente específico
-                logger.info(f"🚨 CORREÇÃO DETECTADA: Usuário corrigiu interpretação com '{palavra_correcao}'")
-                break
-        
-        # 🎯 DETECÇÃO AUTOMÁTICA DE DOMÍNIO (MELHORADA PARA MULTI-DOMÍNIO)
-        dominios = {
-            "pedidos": [
-                "pedido", "pedidos", "cotar", "cotação", "cotar frete", "faltam cotar",
-                "sem cotação", "aberto", "abertos", "num pedido", "valor pedido", 
-                "peso pedido", "expedição", "agenda", "protocolo", "rota", "sub rota", 
-                "separação", "pendente cotação", "aguardando cotação", "status aberto"
-            ],
-            "fretes": [
-                "frete", "valor frete", "tabela frete", "freteiro", "aprovação", 
-                "aprovado", "pendente aprovação", "cte", "conhecimento", "conta corrente", 
-                "valor pago", "desconto", "multa", "cotação aprovada", "frete aprovado"
-            ],
-            "transportadoras": [
-                "transportadora", "transportador", "freteiro", "motorista", "veiculo",
-                "placa", "cnpj transportadora", "razão social", "expresso", "jadlog",
-                "rapidão", "mercúrio", "rodonaves", "jamef"
-            ],
-            "embarques": [
-                "embarque", "embarcado", "data embarque", "separação", "nota fiscal",
-                "nf", "volumes", "peso embarque", "portaria", "saída", "despacho"
-            ],
-            "faturamento": [
-                "fatura", "faturado", "nota fiscal", "nf", "origem", "relatório",
-                "importado", "valor nf", "cliente faturamento", "status fatura",
-                "quanto faturou", "valor faturado", "receita", "vendas", "faturamento total",
-                "total faturado", "R$", "reais", "montante faturado", "valor total"
-            ],
-            "financeiro": [
-                "pendência", "pendente", "despesa extra", "documento", "vencimento",
-                "observação financeira", "status financeiro", "valor pendente"
-            ],
-            "entregas": [
-                "entrega", "entregue", "monitoramento", "reagendamento", "protocolo",
-                "canhoto", "data entrega", "prazo", "atraso", "pontualidade",
-                "status entrega", "pendência financeira"
-            ]
-        }
-        
-        # 💰 PRIORIDADE ESPECIAL: Se tem "quanto faturou" ou similar, forçar domínio faturamento
-        padroes_faturamento_prioritarios = [
-            r"\bquanto\s+fatur", r"\bvalor\s+fatur", r"\bfaturamento\s+total",
-            r"\btotal\s+faturado", r"\breceita", r"\bvendas\s+total"
-        ]
-        
-        for padrao in padroes_faturamento_prioritarios:
-            if re.search(padrao, consulta_lower, re.IGNORECASE):
-                pontuacao_dominios = {"faturamento": 100}  # Força máxima para faturamento
-                logger.info(f"💰 DOMÍNIO FORÇADO: faturamento (padrão prioritário: {padrao})")
-                break
-        else:
-            # ✅ CORREÇÃO: Detectar domínio baseado nas palavras-chave (MELHORADO)
-            pontuacao_dominios = {}
-            for dominio, palavras in dominios.items():
-                pontos = 0
-                for palavra in palavras:
-                    # 🔧 CORREÇÃO: Busca por palavra completa para evitar falsos positivos
-                    if re.search(rf'\b{re.escape(palavra)}\b', consulta_lower):
-                        pontos += 2  # Peso maior para matches de palavra completa
-                    elif palavra in consulta_lower:
-                        pontos += 1  # Peso menor para matches parciais
-                if pontos > 0:
-                    pontuacao_dominios[dominio] = pontos
-        
-        # 🎯 CORREÇÃO ESPECÍFICA: Priorizar "embarques" quando mencionado explicitamente
-        if "embarque" in consulta_lower or "embarques" in consulta_lower:
-            if "embarques" not in pontuacao_dominios:
-                pontuacao_dominios["embarques"] = 0
-            pontuacao_dominios["embarques"] += 5  # Bonus forte para embarques explícitos
-            logger.info("🎯 BONUS: +5 pontos para domínio 'embarques' (menção explícita)")
-        
-        # ✅ NOVO: Se múltiplos domínios foram detectados, habilitar multi-domínio
-        if len(pontuacao_dominios) >= 2:
-            analise["multi_dominio"] = True
-            analise["dominios_solicitados"] = list(pontuacao_dominios.keys())
-            analise["tipo_consulta"] = "multi_dominio"
-            # Usar o domínio com maior pontuação como principal
-            dominio_principal = max(pontuacao_dominios.keys(), key=lambda k: pontuacao_dominios[k])
-            analise["dominio"] = dominio_principal
-            logger.info(f"🌐 MÚLTIPLOS DOMÍNIOS detectados: {list(pontuacao_dominios.keys())} | Principal: {dominio_principal}")
-        elif pontuacao_dominios:
-            # Domínio único detectado
-            dominio_detectado = max(pontuacao_dominios.keys(), key=lambda k: pontuacao_dominios[k])
-            analise["dominio"] = dominio_detectado
-            logger.info(f"🎯 Domínio detectado: {dominio_detectado} (pontos: {pontuacao_dominios})")
-        else:
-            # Se não detectou nenhum domínio específico, manter como geral
-            analise["dominio"] = "geral"
-            logger.info("🎯 Domínio padrão: geral (aguardando especificação)")
-        
-        # ANÁLISE DE CLIENTE ESPECÍFICO - APENAS SE NÃO HOUVER CORREÇÃO
-        if not analise["correcao_usuario"]:
-            # 🏢 USAR SISTEMA DE GRUPOS EMPRESARIAIS INTELIGENTE
-            detector_grupos = GrupoEmpresarialDetector()
-            grupo_detectado = detector_grupos.detectar_grupo_na_consulta(consulta)
-            
-            if grupo_detectado:
-                # 🔧 CORREÇÃO: Validar campo metodo_deteccao
-                if not grupo_detectado.get('metodo_deteccao'):
-                    grupo_detectado['metodo_deteccao'] = 'auto_detectado'
-                    logger.warning(f"⚠️ Campo metodo_deteccao ausente, usando padrão: auto_detectado")
-                
-                # 🔍 VALIDAR SE GRUPO AUTO-DETECTADO TEM DADOS REAIS
-                if grupo_detectado.get('tipo_deteccao') == 'GRUPO_AUTOMATICO':
-                    # Verificar se existem dados para esse grupo
-                    from app import db
-                    from app.monitoramento.models import EntregaMonitorada
-                    
-                    filtro_sql = grupo_detectado.get('filtro_sql', '')
-                    if filtro_sql:
-                        # Verificar se há registros com esse filtro
-                        count = db.session.query(EntregaMonitorada).filter(
-                            EntregaMonitorada.cliente.ilike(filtro_sql)
-                        ).limit(1).count()
-                        
-                        if count == 0:
-                            logger.warning(f"⚠️ Grupo auto-detectado '{grupo_detectado['grupo_detectado']}' não tem dados reais")
-                            logger.info("🔄 Ignorando grupo sem dados e continuando análise geral")
-                            # Não processar grupos sem dados
-                            grupo_detectado = None
-                            analise["tipo_consulta"] = "geral"
-                            analise["cliente_especifico"] = None
-                
-                # GRUPO EMPRESARIAL DETECTADO!
-                if grupo_detectado:
-                    analise["tipo_consulta"] = "grupo_empresarial"
-                    analise["grupo_empresarial"] = grupo_detectado
-                    analise["cliente_especifico"] = grupo_detectado['grupo_detectado']
-                    analise["filtro_sql"] = grupo_detectado['filtro_sql']
-                    analise["tipo_negocio"] = grupo_detectado.get('tipo_negocio', 'N/A')
-                    analise["metodo_deteccao"] = grupo_detectado.get('metodo_deteccao', 'nome_padrao')
-                    analise["cnpj_prefixos"] = grupo_detectado.get('cnpj_prefixos', [])
-                    
-                    logger.info(f"🏢 GRUPO EMPRESARIAL: {grupo_detectado['grupo_detectado']}")
-                    logger.info(f"📊 Tipo: {grupo_detectado.get('tipo_negocio', 'N/A')} | Método: {grupo_detectado.get('metodo_deteccao', 'auto_detectado')}")
-                    logger.info(f"🔍 Filtro SQL: {grupo_detectado['filtro_sql']}")
-                    if grupo_detectado.get('cnpj_prefixos'):
-                        logger.info(f"📋 CNPJs: {', '.join(grupo_detectado['cnpj_prefixos'])}")
-            
-            # Detectar grupos genéricos apenas se não detectou grupo específico
-            elif re.search(r"supermercados|atacados|varejo", consulta_lower):
-                analise["tipo_consulta"] = "grupo_clientes"
-                analise["cliente_especifico"] = "GRUPO_CLIENTES"
-                logger.info("🎯 Grupo genérico de clientes detectado")
-            
-            # Detectar filiais por padrões numéricos
-            else:
-                filial_patterns = [
-                    r"(\w+)\s*(\d{3,4})",  # Cliente 123, Loja 456
-                    r"(\w+)\s*lj\s*(\d+)",  # Cliente LJ 189
-                    r"filial\s*(\d+)"      # Filial 001
-                ]
-                
-                for pattern in filial_patterns:
-                    match = re.search(pattern, consulta_lower)
-                    if match:
-                        analise["tipo_consulta"] = "filial_especifica"
-                        analise["filial_detectada"] = match.groups()
-                        logger.info(f"🎯 Filial específica detectada: {match.groups()}")
-                        break
-        else:
-            logger.info("🚨 ANÁLISE DE CLIENTE IGNORADA: Usuário fez correção - usando consulta geral")
-        
-        # 🔍 DETECÇÃO DE CONSULTAS EXPLICITAMENTE GENÉRICAS (CORRIGIDA)
-        # ⚠️ CORREÇÃO: Não forçar para geral se já tem cliente específico detectado
-        consultas_genericas = [
-            "todas as entregas", "dados gerais", "situação geral", "status geral",
-            "resumo geral", "relatório geral", "análise completa", "todas as pendencias"
-        ]
-        
-        # ✅ SÓ FORÇAR PARA GERAL SE NÃO HÁ CLIENTE ESPECÍFICO
-        if not analise.get("cliente_especifico"):
-            for consulta_generica in consultas_genericas:
-                if consulta_generica in consulta_lower:
-                    logger.info(f"🔄 CORREÇÃO: Consulta '{consulta_generica}' detectada - definindo como geral")
-                    analise["tipo_consulta"] = "geral"
-                    break
-        else:
-            logger.info(f"🎯 MANTENDO CLIENTE ESPECÍFICO: {analise['cliente_especifico']} mesmo com palavras genéricas")
-        
-        # 🆕 DETECTAR PERGUNTAS SOBRE TOTAL DE CLIENTES
-        perguntas_total_clientes = [
-            "quantos clientes", "total de clientes", "quantidade de clientes",
-            "numero de clientes", "número de clientes", "clientes existem",
-            "clientes no sistema", "clientes cadastrados", "clientes tem"
-        ]
-        
-        for pergunta in perguntas_total_clientes:
-            if pergunta in consulta_lower:
-                analise["pergunta_total_clientes"] = True
-                analise["requer_dados_completos"] = True
-                logger.info("🌐 PERGUNTA SOBRE TOTAL DE CLIENTES DETECTADA")
-                break
-        
-        # ANÁLISE TEMPORAL INTELIGENTE - CORRIGIDA
-        if "maio" in consulta_lower:
-            # Maio inteiro = todo o mês de maio
-            hoje = datetime.now()
-            if hoje.month >= 5:  # Se estivermos em maio ou depois
-                inicio_maio = datetime(hoje.year, 5, 1)
-                dias_maio = (hoje - inicio_maio).days + 1
-                analise["periodo_dias"] = min(dias_maio, 31)  # Máximo 31 dias de maio
-            else:
-                analise["periodo_dias"] = 31  # Maio do ano anterior
-            analise["mes_especifico"] = "maio"
-            
-        elif "junho" in consulta_lower:
-            # Junho inteiro = todo o mês de junho
-            hoje = datetime.now()
-            if hoje.month >= 6:  # Se estivermos em junho ou depois
-                inicio_junho = datetime(hoje.year, 6, 1)
-                dias_junho = (hoje - inicio_junho).days + 1
-                analise["periodo_dias"] = min(dias_junho, 30)  # Máximo 30 dias de junho
-            else:
-                analise["periodo_dias"] = 30  # Junho do ano anterior
-            analise["mes_especifico"] = "junho"
-            
-        elif re.search(r"(\d+)\s*dias?", consulta_lower):
-            dias_match = re.search(r"(\d+)\s*dias?", consulta_lower)
+        # Detectar dias específicos
+        dias_match = re.search(r'(\d+)\s*dias?', consulta_lower)
+        if dias_match:
             analise["periodo_dias"] = int(dias_match.group(1))
-        elif "30 dias" in consulta_lower or "mês" in consulta_lower:
-            analise["periodo_dias"] = 30
-        elif "60 dias" in consulta_lower or "2 meses" in consulta_lower:
-            analise["periodo_dias"] = 60
         elif "semana" in consulta_lower:
             analise["periodo_dias"] = 7
-            
-        # ANÁLISE GEOGRÁFICA - DETECÇÃO RIGOROSA
-        # Buscar padrões específicos para UF para evitar falsos positivos
-        uf_patterns = [
-            r'\b(SP|RJ|MG|RS|PR|SC|GO|DF|BA|PE)\b',  # UF maiúscula isolada
-            r'\bUF\s+(SP|RJ|MG|RS|PR|SC|GO|DF|BA|PE)\b',  # "UF SP"
-            r'\b(São Paulo|Rio de Janeiro|Minas Gerais|Rio Grande do Sul|Paraná|Santa Catarina|Goiás|Distrito Federal|Bahia|Pernambuco)\b',  # Nome completo
-            r'\b(sp|rj|mg|rs|pr|sc|go|df|ba|pe)\s+(clientes?|entregas?|vendas?)\b'  # "sp clientes", "pe entregas"
-        ]
+        elif "mês" in consulta_lower or "mes" in consulta_lower:
+            analise["periodo_dias"] = 30
         
-        for pattern in uf_patterns:
-            match = re.search(pattern, consulta, re.IGNORECASE)
-            if match:
-                uf_encontrada = match.group(1).upper()
-                # Mapear nomes completos para siglas
-                mapeamento_ufs = {
-                    'SÃO PAULO': 'SP', 'RIO DE JANEIRO': 'RJ', 'MINAS GERAIS': 'MG',
-                    'RIO GRANDE DO SUL': 'RS', 'PARANÁ': 'PR', 'SANTA CATARINA': 'SC',
-                    'GOIÁS': 'GO', 'DISTRITO FEDERAL': 'DF', 'BAHIA': 'BA', 'PERNAMBUCO': 'PE'
-                }
-                uf_final = mapeamento_ufs.get(uf_encontrada, uf_encontrada)
-                
-                analise["filtro_geografico"] = uf_final
-                analise["tipo_consulta"] = "geografico"
-                logger.info(f"🗺️ Filtro geográfico detectado: {uf_final}")
-                break
+        # Detecção básica de cliente (deixar mais flexível)
+        from app.utils.grupo_empresarial import GrupoEmpresarialDetector
+        detector_grupos = GrupoEmpresarialDetector()
+        grupo_detectado = detector_grupos.detectar_grupo_na_consulta(consulta)
         
-        # ANÁLISE DE FOCO DOS DADOS
-        if "entrega" in consulta_lower:
-            analise["foco_dados"].append("entregas_monitoradas")
-        if "frete" in consulta_lower:
-            analise["foco_dados"].append("fretes")
-        if "embarque" in consulta_lower:
-            analise["foco_dados"].append("embarques")
-        if "pedido" in consulta_lower:
-            analise["foco_dados"].append("pedidos")
-            
-        # Se não especificou, usar padrão baseado na consulta
-        if not analise["foco_dados"]:
-            if any(palavra in consulta_lower for palavra in ["como está", "status", "situação"]):
-                analise["foco_dados"] = ["entregas_monitoradas", "embarques"]
-            else:
-                analise["foco_dados"] = ["entregas_monitoradas"]
+        if grupo_detectado:
+            analise["cliente_especifico"] = grupo_detectado['grupo_detectado']
+            analise["filtro_sql"] = grupo_detectado.get('filtro_sql')
+            analise["grupo_empresarial"] = grupo_detectado
+            logger.info(f"🏢 Cliente detectado: {grupo_detectado['grupo_detectado']}")
         
-        # MÉTRICAS SOLICITADAS - EXPANDIDAS
-        if any(palavra in consulta_lower for palavra in ["prazo", "atraso", "pontualidade"]):
-            analise["metricas_solicitadas"].append("performance_prazo")
-        if any(palavra in consulta_lower for palavra in ["comparar", "comparação", "tendência"]):
-            analise["metricas_solicitadas"].append("comparacao_temporal")
-        if "média" in consulta_lower:
-            analise["metricas_solicitadas"].append("medias")
-        if any(palavra in consulta_lower for palavra in ["reagenda", "agendamento", "protocolo"]):
-            analise["metricas_solicitadas"].append("agendamentos")
+        # Deixar o Claude interpretar livremente o domínio e intenção
+        # Apenas marcar algumas palavras-chave básicas para ajudar
+        palavras_encontradas = []
         
-        # 📝 LOGS DE DEBUG DA ANÁLISE
-        logger.info(f"📊 ANÁLISE CONCLUÍDA: {analise['tipo_consulta'].upper()}")
-        if analise.get("multi_dominio"):
-            logger.info(f"🌐 MULTI-DOMÍNIO: {', '.join(analise.get('dominios_solicitados', []))}")
-        else:
-            logger.info(f"🎯 DOMÍNIO ÚNICO: {analise['dominio']}")
-        logger.info(f"👤 Cliente: {analise['cliente_especifico'] or 'TODOS'}")
-        logger.info(f"📅 Período: {analise['periodo_dias']} dias")
-        logger.info(f"🚨 Correção: {'SIM' if analise['correcao_usuario'] else 'NÃO'}")
-        logger.info(f"🎯 Foco: {', '.join(analise['foco_dados']) if analise['foco_dados'] else 'PADRÃO'}")
+        palavras_chave = {
+            "entregas": ["entrega", "entregue", "atraso", "prazo", "pendente"],
+            "pedidos": ["pedido", "cotar", "cotação"],
+            "faturamento": ["faturou", "faturamento", "receita", "vendas", "valor total"],
+            "embarques": ["embarque", "embarcado", "separação"],
+            "fretes": ["frete", "cte", "transportadora"],
+            "clientes": ["cliente", "clientes"]
+        }
+        
+        for dominio, palavras in palavras_chave.items():
+            for palavra in palavras:
+                if palavra in consulta_lower:
+                    palavras_encontradas.append(palavra)
+                    if dominio not in analise["foco_dados"]:
+                        analise["foco_dados"].append(dominio)
+        
+        # Log simplificado
+        logger.info(f"📊 Análise simplificada: período={analise['periodo_dias']}d, cliente={analise['cliente_especifico'] or 'todos'}")
+        if palavras_encontradas:
+            logger.info(f"🔍 Palavras-chave: {', '.join(palavras_encontradas[:5])}")
         
         return analise
     
@@ -2101,90 +1703,22 @@ Claude 4 Sonnet | {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
             return {"erro": str(e)}
     
     def _descrever_contexto_carregado(self, analise: Dict[str, Any]) -> str:
-        """Fornece TODOS os dados disponíveis para análise completa"""
+        """Descrição simplificada do contexto para o Claude"""
         if not hasattr(self, '_ultimo_contexto_carregado') or not self._ultimo_contexto_carregado:
-            return "Nenhum dado disponível."
+            return ""
         
         dados = self._ultimo_contexto_carregado.get('dados_especificos', {})
         if not dados:
-            return "Nenhum dado específico carregado."
+            return ""
         
-        resultado = []
-        
-        # ENTREGAS - DADOS COMPLETOS
-        if 'entregas' in dados:
-            entregas_data = dados['entregas']
-            registros = entregas_data.get('registros', [])
-            
-            if registros:
-                resultado.append(f"=== ENTREGAS MONITORADAS ({len(registros)} registros) ===")
-                
-                # Estatísticas calculadas dos dados reais
-                entregues = len([r for r in registros if r.get('entregue')])
-                pendentes = len(registros) - entregues
-                clientes_unicos = len(set(r.get('cliente', '') for r in registros if r.get('cliente')))
-                
-                resultado.append(f"Resumo: {entregues} entregues, {pendentes} pendentes")
-                resultado.append(f"Clientes únicos: {clientes_unicos}")
-                
-                # Agrupar por cliente para análise
-                by_cliente = {}
-                for r in registros:
-                    cliente = r.get('cliente', 'Sem cliente')
-                    if cliente not in by_cliente:
-                        by_cliente[cliente] = []
-                    by_cliente[cliente].append(r)
-                
-                resultado.append(f"\nDados por cliente:")
-                for cliente, entregas in by_cliente.items():
-                    entregues_cliente = len([e for e in entregas if e.get('entregue')])
-                    resultado.append(f"- {cliente}: {len(entregas)} entregas ({entregues_cliente} entregues)")
-                
-                # Listar TODAS as entregas (não apenas amostras)
-                resultado.append(f"\nDetalhes de todas as entregas:")
-                for r in registros:
-                    status = "✓ ENTREGUE" if r.get('entregue') else "○ PENDENTE"
-                    data_embarque = r.get('data_embarque', 'Sem data')[:10] if r.get('data_embarque') else 'Sem data'
-                    resultado.append(f"NF {r.get('numero_nf')} | {r.get('cliente', 'N/A')} | {status} | Embarque: {data_embarque}")
-        
-        # PEDIDOS - DADOS COMPLETOS
-        if 'pedidos' in dados:
-            pedidos_data = dados['pedidos']
-            if 'pedidos' in pedidos_data:
-                stats = pedidos_data['pedidos'].get('estatisticas', {})
-                registros_pedidos = pedidos_data.get('registros', [])
-                
-                resultado.append(f"\n=== PEDIDOS ({len(registros_pedidos)} registros) ===")
-                resultado.append(f"Abertos: {stats.get('pedidos_abertos', 0)}")
-                resultado.append(f"Cotados: {stats.get('pedidos_cotados', 0)}")
-                resultado.append(f"Faturados: {stats.get('pedidos_faturados', 0)}")
-                resultado.append(f"Valor total: R$ {stats.get('valor_total', 0):,.2f}")
-        
-        # EMBARQUES - DADOS COMPLETOS  
-        if 'embarques' in dados:
-            embarques_data = dados['embarques']
-            if 'embarques' in embarques_data:
-                stats = embarques_data['embarques'].get('estatisticas', {})
-                registros_embarques = embarques_data.get('registros', [])
-                
-                resultado.append(f"\n=== EMBARQUES ({len(registros_embarques)} registros) ===")
-                resultado.append(f"Despachados: {stats.get('embarques_despachados', 0)}")
-                resultado.append(f"Aguardando: {stats.get('embarques_aguardando', 0)}")
-        
-        # CONTEXTO DA CONSULTA
+        # Contexto básico
         periodo = analise.get('periodo_dias', 30)
         cliente = analise.get('cliente_especifico')
         
-        info_contexto = f"\nCONTEXTO DA ANÁLISE:"
-        info_contexto += f"\n- Período analisado: {periodo} dias"
         if cliente:
-            info_contexto += f"\n- Cliente específico: {cliente}"
+            return f"Contexto: {cliente}, últimos {periodo} dias."
         else:
-            info_contexto += f"\n- Análise geral de todos os clientes"
-        
-        resultado.insert(0, info_contexto)
-        
-        return "\n".join(resultado)
+            return f"Contexto: últimos {periodo} dias."
     
     def _get_tools_description(self) -> str:
         """Descrição das ferramentas disponíveis"""
@@ -2706,6 +2240,107 @@ FERRAMENTAS AVANÇADAS DISPONÍVEIS:
 ---
 ⚠️ **Sistema tentará auto-recuperação automaticamente**"""
     
+    def _is_dev_command(self, consulta: str) -> bool:
+        """Detecta comandos de desenvolvimento/criação de código"""
+        comandos_dev = [
+            # Comandos diretos
+            'criar módulo', 'crie módulo', 'criar modulo', 'crie modulo',
+            'criar funcionalidade', 'criar função', 'criar rota',
+            'criar modelo', 'criar model', 'criar tabela',
+            'criar template', 'criar formulário', 'criar form',
+            'desenvolver', 'programar', 'codificar', 'implementar',
+            
+            # Solicitações de código
+            'código para', 'codigo para', 'script para',
+            'função que', 'funcao que', 'método para',
+            'classe para', 'api para', 'endpoint para',
+            
+            # Melhorias e otimizações
+            'melhorar código', 'otimizar função', 'refatorar',
+            'corrigir bug', 'resolver erro', 'debug',
+            
+            # Arquitetura
+            'estrutura para', 'arquitetura de', 'design pattern',
+            'organizar módulo', 'reestruturar'
+        ]
+        
+        consulta_lower = consulta.lower()
+        return any(comando in consulta_lower for comando in comandos_dev)
+    
+    def _processar_comando_desenvolvimento(self, consulta: str, user_context: Optional[Dict] = None) -> str:
+        """Processa comandos de desenvolvimento com contexto do projeto"""
+        logger.info(f"💻 Processando comando de desenvolvimento: {consulta[:50]}...")
+        
+        # Adicionar contexto específico do projeto
+        contexto_projeto = """
+        
+**ESTRUTURA DO PROJETO**:
+```
+app/
+├── [módulo]/
+│   ├── __init__.py      # Blueprint e inicialização
+│   ├── models.py        # Modelos SQLAlchemy
+│   ├── routes.py        # Rotas Flask
+│   ├── forms.py         # Formulários WTForms
+├── templates/           # Templates HTML
+├── utils/               # Utilitários compartilhados
+├── static/              # CSS, JS, imagens
+```
+
+**PADRÕES DO SISTEMA**:
+- Modelos: SQLAlchemy com db.Model
+- Formulários: WTForms com FlaskForm
+- Templates: Jinja2 com herança de base.html
+- Autenticação: @login_required
+- Permissões: @require_financeiro(), @require_staff()
+- Logs: logger.info(), logger.error()
+"""
+        
+        # Processar com Claude incluindo contexto
+        messages = [
+            {
+                "role": "user",
+                "content": consulta + contexto_projeto
+            }
+        ]
+        
+        try:
+            response = self.client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=4000,
+                temperature=0.2,  # Mais determinístico para código
+                timeout=120.0,
+                system=self.system_prompt,
+                messages=messages  # type: ignore
+            )
+            
+            resultado = response.content[0].text
+            
+            # Adicionar rodapé
+            return f"""{resultado}
+
+---
+💻 **Desenvolvimento com Claude 4 Sonnet**
+🔧 Sistema Flask + PostgreSQL
+🕒 {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no comando de desenvolvimento: {e}")
+            return f"""❌ **Erro ao processar comando de desenvolvimento**
+
+Erro: {str(e)}
+
+💡 **Dicas**:
+- Seja específico sobre o que quer criar
+- Mencione o módulo relacionado
+- Descreva a funcionalidade desejada
+
+📝 **Exemplos**:
+- "Criar módulo para gestão de motoristas"
+- "Criar função para calcular prazo de entrega"
+- "Criar API para consultar status de pedidos"
+"""
+
     def _fallback_simulado(self, consulta: str) -> str:
         """Fallback quando Claude real não está disponível"""
         return f"""🤖 **MODO SIMULADO** (Claude Real não disponível)
