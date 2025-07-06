@@ -35,6 +35,7 @@ class SistemaRealData:
             from app.cadastros_agendamento.models import ContatoAgendamento
             from app.vinculos.models import CidadeAtendida
             from app.localidades.models import Cidade
+            from app.carteira.models import CarteiraPrincipal, CarteiraCopia, ControleCruzadoSeparacao, InconsistenciaFaturamento, HistoricoFaturamento, LogAtualizacaoCarteira, VinculacaoCarteiraSeparacao, EventoCarteira, TipoCarga, ValidacaoNFSimples
             
             modelos_sistema = {
                 'EntregaMonitorada': EntregaMonitorada,
@@ -51,7 +52,17 @@ class SistemaRealData:
                 'PendenciaFinanceiraNF': PendenciaFinanceiraNF,
                 'ContatoAgendamento': ContatoAgendamento,
                 'CidadeAtendida': CidadeAtendida,
-                'Cidade': Cidade
+                'Cidade': Cidade,
+                'CarteiraPrincipal': CarteiraPrincipal,
+                'CarteiraCopia': CarteiraCopia,
+                'ControleCruzadoSeparacao': ControleCruzadoSeparacao,
+                'InconsistenciaFaturamento': InconsistenciaFaturamento,
+                'HistoricoFaturamento': HistoricoFaturamento,
+                'LogAtualizacaoCarteira': LogAtualizacaoCarteira,
+                'VinculacaoCarteiraSeparacao': VinculacaoCarteiraSeparacao,
+                'EventoCarteira': EventoCarteira,
+                'TipoCarga': TipoCarga,
+                'ValidacaoNFSimples': ValidacaoNFSimples
             }
             
             campos_por_modelo = {}

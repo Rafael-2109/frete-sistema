@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Frete #{{ frete.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-edit"></i> Editar Frete #{{ frete.id }}
+            </h1>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}">Frete #{{ frete.id }}</a></li>
+            <li class="breadcrumb-item active">Editar</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Formulário de edição -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-file-alt"></i> Dados do CTe e Valores
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        {{ form.hidden_tag() }}
+
+                        <!-- Dados do CTe -->
+                        <h6 class="border-bottom pb-2 mb-3">
+                            <i class="fas fa-file-invoice"></i> Dados do CTe
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.numero_cte.label(class="form-label") }}
+                                    {{ form.numero_cte(class="form-control") }}
+                                    {% if form.numero_cte.errors %}
+                                        {% for error in form.numero_cte.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.vencimento.label(class="form-label") }}
+                                    {{ form.vencimento(class="form-control") }}
+                                    <small class="text-muted">{{ form.vencimento.description }}</small>
+                                    {% if form.vencimento.errors %}
+                                        {% for error in form.vencimento.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {% if frete.fatura_frete %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-file-invoice"></i> 
+                            <strong>Fatura Vinculada:</strong> 
+                            {{ frete.fatura_frete.numero_fatura }} 
+                            ({{ frete.fatura_frete.transportadora.razao_social }})
+                            <br>
+                            <small>Vencimento da fatura: {{ frete.fatura_frete.vencimento | formatar_data_segura if frete.fatura_frete.vencimento else 'Não informado' }}</small>
+                        </div>
+                        {% endif %}
+
+                        <!-- Os 4 Valores do Frete -->
+                        <h6 class="border-bottom pb-2 mb-3 mt-4">
+                            <i class="fas fa-dollar-sign"></i> Valores do Frete
+                        </h6>
+                        
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-info-circle"></i> Tipos de Valores:</h6>
+                            <ul class="mb-0 small">
+                                <li><strong>Valor Cotado:</strong> Calculado automaticamente pela tabela (não editável)</li>
+                                <li><strong>Valor CTe:</strong> Valor cobrado pela transportadora</li>
+                                <li><strong>Valor Considerado:</strong> Valor que consideramos válido</li>
+                                <li><strong>Valor Pago:</strong> Valor efetivamente pago</li>
+                            </ul>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label font-weight-bold text-primary">Valor Cotado</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">R$</span>
+                                        </div>
+                                        <input type="text" class="form-control bg-light" 
+                                               value="{{ '%.2f'|format(frete.valor_cotado) }}" readonly>
+                                    </div>
+                                    <small class="text-muted">Calculado automaticamente pela tabela</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.valor_cte.label(class="form-label font-weight-bold text-info") }}
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">R$</span>
+                                        </div>
+                                        {{ form.valor_cte(class="form-control", id="valor_cte") }}
+                                    </div>
+                                    <small class="text-muted">{{ form.valor_cte.description }}</small>
+                                    {% if form.valor_cte.errors %}
+                                        {% for error in form.valor_cte.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.valor_considerado.label(class="form-label font-weight-bold text-success") }}
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">R$</span>
+                                        </div>
+                                        {{ form.valor_considerado(class="form-control", id="valor_considerado") }}
+                                    </div>
+                                    <small class="text-muted">{{ form.valor_considerado.description }}</small>
+                                    {% if form.valor_considerado.errors %}
+                                        {% for error in form.valor_considerado.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.valor_pago.label(class="form-label font-weight-bold text-dark") }}
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">R$</span>
+                                        </div>
+                                        {{ form.valor_pago(class="form-control") }}
+                                    </div>
+                                    <small class="text-muted">{{ form.valor_pago.description }}</small>
+                                    {% if form.valor_pago.errors %}
+                                        {% for error in form.valor_pago.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Diferenças -->
+                        <div id="diferencas-info" class="row" style="display: none;">
+                            <div class="col-12">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <h6 class="mb-0">Análise das Diferenças:</h6>
+                                            <a href="{{ url_for('fretes.analise_diferencas', frete_id=frete.id) }}" 
+                                               class="btn btn-sm btn-info" target="_blank">
+                                                <i class="fas fa-calculator"></i> Análise Detalhada da Tabela
+                                            </a>
+                                        </div>
+                                        <div id="diferenca-cotado-cte"></div>
+                                        <div id="diferenca-considerado-pago"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Controles -->
+                        <h6 class="border-bottom pb-2 mb-3 mt-4">
+                            <i class="fas fa-cog"></i> Controles
+                        </h6>
+                        
+                        <div class="form-group">
+                            <div class="form-check">
+                                {{ form.considerar_diferenca(class="form-check-input") }}
+                                {{ form.considerar_diferenca.label(class="form-check-label") }}
+                            </div>
+                            <small class="form-text text-muted">{{ form.considerar_diferenca.description }}</small>
+                        </div>
+
+                        <!-- Observações -->
+                        <div class="form-group">
+                            {{ form.observacoes_aprovacao.label(class="form-label") }}
+                            {{ form.observacoes_aprovacao(class="form-control", rows="3") }}
+                            <small class="text-muted">Observações sobre o frete, diferenças ou aprovações</small>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                            <div class="btn-group">
+                                <button type="submit" name="acao" value="salvar_e_lancar_cte" class="btn btn-success btn-lg">
+                                    <i class="fas fa-plus"></i> Salvar e Adicionar + CTe
+                                </button>
+                                <button type="submit" name="acao" value="salvar_e_visualizar_fatura" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-eye"></i> Salvar e Visualizar a Fatura
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações complementares -->
+        <div class="col-md-4">
+            <!-- Resumo do frete -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Resumo do Frete
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Cliente:</strong> {{ frete.nome_cliente[:50] }}</p>
+                    <p><strong>CNPJ:</strong> {{ frete.cnpj_cliente }}</p>
+                    <p><strong>Embarque:</strong> #{{ frete.embarque.numero }}</p>
+                    <p><strong>Transportadora:</strong> {{ frete.transportadora.razao_social }}</p>
+                    <p><strong>Tipo:</strong> 
+                        <span class="badge {% if frete.tipo_carga == 'DIRETA' %}badge-info{% else %}badge-warning{% endif %}">
+                            {{ frete.tipo_carga }}
+                        </span>
+                    </p>
+                    <p><strong>Peso Total:</strong> {{ "%.2f"|format(frete.peso_total) }} kg</p>
+                    <p><strong>Valor NFs:</strong> R$ {{ "%.2f"|format(frete.valor_total_nfs) }}</p>
+                    <p><strong>Qtd NFs:</strong> {{ frete.quantidade_nfs }}</p>
+                </div>
+            </div>
+
+            <!-- Processo de aprovação -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-check-circle"></i> Processo de Aprovação
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <h6>Quando é necessária aprovação:</h6>
+                    <ul class="small">
+                        <li>Diferença > R$ 5,00 entre Valor Considerado e Valor Pago</li>
+                        <li>Diferença > R$ 5,00 entre Valor Considerado e Valor Cotado</li>
+                        <li>Status "EM TRATATIVA" - requer aprovação manual</li>
+                    </ul>
+                    
+                    <h6 class="mt-3">Controle de diferenças até R$ 5,00:</h6>
+                    <ul class="small">
+                        <li>Marcar "Considerar Diferença" = lança na conta corrente</li>
+                        <li>Não marcar "Considerar Diferença" = ignora diferença</li>
+                        <li>Status "LANÇADO" automaticamente para ambos os casos</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Conta corrente -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-exchange-alt"></i> Conta Corrente
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small">
+                        Diferenças entre <strong>Valor Considerado</strong> e <strong>Valor Pago</strong> 
+                        são registradas na conta corrente conforme regras:
+                    </p>
+                    <ul class="small">
+                        <li><strong>Até R$ 5,00:</strong> Lança somente se flag "Considerar Diferença" ativa</li>
+                        <li><strong>Acima R$ 5,00:</strong> Lança somente após aprovação</li>
+                        <li><strong>Valor Pago > Considerado:</strong> DÉBITO da transportadora</li>
+                        <li><strong>Valor Pago < Considerado:</strong> CRÉDITO da transportadora</li>
+                    </ul>
+                    <a href="{{ url_for('fretes.conta_corrente_transportadora', transportadora_id=frete.transportadora_id) }}" 
+                       class="btn btn-sm btn-outline-info">
+                        Ver Conta Corrente
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const valorCotado = parseFloat('{{ frete.valor_cotado }}');
+    const valorCteInput = document.getElementById('valor_cte');
+    const valorConsideradoInput = document.getElementById('valor_considerado');
+    const valorPagoInput = document.getElementById('valor_pago');
+    const diferencasInfo = document.getElementById('diferencas-info');
+    
+    function calcularDiferencas() {
+        // ✅ CONVERSÃO DE VALORES BRASILEIROS
+        function converterValorBrasileiro(valor) {
+            if (!valor || valor.trim() === '') return 0;
+            return parseFloat(valor.replace(/\./g, '').replace(',', '.')) || 0;
+        }
+        
+        const valorCte = converterValorBrasileiro(valorCteInput.value);
+        const valorConsiderado = converterValorBrasileiro(valorConsideradoInput.value);
+        const valorPago = converterValorBrasileiro(valorPagoInput.value);
+        
+        let showDiferencas = false;
+        let html = '';
+        
+        // Diferença entre cotado e CTe
+        if (valorCte > 0 && valorCotado > 0) {
+            const diferencaCte = valorCte - valorCotado;
+            const percentualCte = (diferencaCte / valorCotado) * 100;
+            
+            if (Math.abs(diferencaCte) > 0.01) {
+                showDiferencas = true;
+                const classe = diferencaCte > 0 ? 'text-danger' : 'text-success';
+                const diferencaFormatada = Math.abs(diferencaCte).toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL'
+                });
+                html += `<p class="${classe}">
+                    <strong>Diferença Cotado vs CTe:</strong> 
+                    ${diferencaCte > 0 ? '+' : '-'}${diferencaFormatada} 
+                    (${percentualCte.toFixed(1)}%)
+                </p>`;
+                
+                if (Math.abs(percentualCte) > 10) {
+                    html += '<div class="alert alert-warning alert-sm">⚠️ Diferença > R$ 5,00 - Pode requerer aprovação</div>';
+                }
+            }
+        }
+        
+        // Diferença entre considerado e pago
+        if (valorPago > 0 && valorConsiderado > 0) {
+            const diferencaPago = valorPago - valorConsiderado;
+            
+            if (Math.abs(diferencaPago) > 0.01) {
+                showDiferencas = true;
+                const classe = diferencaPago > 0 ? 'text-warning' : 'text-info';
+                const diferencaPagoFormatada = Math.abs(diferencaPago).toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL'
+                });
+                html += `<p class="${classe}">
+                    <strong>Diferença Considerado vs Pago:</strong> 
+                    ${diferencaPago > 0 ? '+' : '-'}${diferencaPagoFormatada}
+                    ${diferencaPago > 0 ? ' (Crédito empresa)' : ' (Débito transportadora)'}
+                </p>`;
+            }
+        }
+        
+        if (showDiferencas) {
+            document.getElementById('diferenca-cotado-cte').innerHTML = html;
+            diferencasInfo.style.display = 'block';
+        } else {
+            diferencasInfo.style.display = 'none';
+        }
+    }
+    
+    // ✅ FORMATAÇÃO BRASILEIRA DOS VALORES
+    function formatarValorBrasileiro(input) {
+        let valor = input.value.replace(/\D/g, ''); // Remove tudo que não é dígito
+        valor = (parseInt(valor) / 100).toFixed(2); // Divide por 100 para ter centavos
+        valor = valor.replace('.', ','); // Troca ponto por vírgula
+        valor = valor.replace(/\B(?=(\d{3})+(?!\d))/g, '.'); // Adiciona pontos para milhares
+        input.value = valor;
+    }
+    
+    // Aplica formatação aos campos de valor
+    [valorCteInput, valorConsideradoInput, valorPagoInput].forEach(function(input) {
+        if (input) {
+            input.addEventListener('input', function() {
+                // formatarValorBrasileiro(this); // Comentado para não interferir na digitação
+            });
+            
+            input.addEventListener('blur', function() {
+                // Formatar quando sair do campo
+                let valor = this.value.replace(/[^\d,-]/g, '');
+                if (valor && valor !== '0,00') {
+                    this.value = valor;
+                }
+                calcularDiferencas();
+            });
+        }
+    });
+
+    // Auto-preenchimento do valor considerado
+    valorCteInput.addEventListener('change', function() {
+        if (this.value && !valorConsideradoInput.value) {
+            valorConsideradoInput.value = this.value;
+        }
+        calcularDiferencas();
+    });
+    
+    valorConsideradoInput.addEventListener('change', calcularDiferencas);
+    valorPagoInput.addEventListener('change', calcularDiferencas);
+    
+    // ✅ PRÉ-PREENCHER VALORES EM FORMATO BRASILEIRO
+    function formatarValorParaBrasileiro(valor) {
+        if (!valor) return '';
+        return valor.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+    
+    // Pré-preencher campos se já existem valores
+    {% if frete.valor_cte %}
+        valorCteInput.value = formatarValorParaBrasileiro({{ frete.valor_cte }});
+    {% endif %}
+    
+    {% if frete.valor_considerado %}
+        valorConsideradoInput.value = formatarValorParaBrasileiro({{ frete.valor_considerado }});
+    {% endif %}
+    
+    {% if frete.valor_pago %}
+        valorPagoInput.value = formatarValorParaBrasileiro({{ frete.valor_pago }});
+    {% endif %}
+
+    // Calcular na carga inicial
+    calcularDiferencas();
+});
+</script>
+{% endblock %} 

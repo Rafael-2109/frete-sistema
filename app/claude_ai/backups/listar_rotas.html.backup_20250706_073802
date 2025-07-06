@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastro de Rotas{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-route"></i> Cadastro de Rotas
+                <small class="text-muted">Rotas por UF</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" id="filtrosForm">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="cod_uf">UF:</label>
+                                <select class="form-control" id="cod_uf" name="cod_uf">
+                                    <option value="">Todas</option>
+                                    {% for uf in ufs_disponiveis %}
+                                    <option value="{{ uf }}" {% if request.args.get('cod_uf') == uf %}selected{% endif %}>{{ uf }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="rota">Rota:</label>
+                                <select class="form-control" id="rota" name="rota">
+                                    <option value="">Todas</option>
+                                    {% for rota_item in rotas_disponiveis %}
+                                    <option value="{{ rota_item }}" {% if request.args.get('rota') == rota_item %}selected{% endif %}>{{ rota_item }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary me-2">
+                                    <i class="fas fa-search"></i> Pesquisar
+                                </button>
+                                <a href="{{ url_for('localidades.listar_rotas') }}" class="btn btn-secondary me-2">
+                                    <i class="fas fa-eraser"></i> Limpar
+                                </a>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('localidades.baixar_modelo_rotas') }}" class="btn btn-info">
+                                        <i class="fas fa-download"></i> Modelo
+                                    </a>
+                                    <a href="{{ url_for('localidades.importar_rotas') }}" class="btn btn-success">
+                                        <i class="fas fa-upload"></i> Importar
+                                    </a>
+                                    {% if rotas %}
+                                    <a href="{{ url_for('localidades.exportar_dados_rotas') }}" class="btn btn-warning">
+                                        <i class="fas fa-file-export"></i> Exportar
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-table"></i> Cadastro de Rotas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if rotas %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover" id="tabelaRotas">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>UF</th>
+                                        <th>Rota</th>
+                                        <th>Status</th>
+                                        <th>Criado em</th>
+                                        <th>Atualizado em</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in rotas %}
+                                    <tr>
+                                        <td>
+                                            <span class="fw-bold text-primary">{{ item.cod_uf }}</span>
+                                        </td>
+                                        <td>
+                                            <strong>{{ item.rota }}</strong>
+                                        </td>
+                                        <td>
+                                            {% if item.ativa %}
+                                                <span class="fw-bold text-success">Ativa</span>
+                                            {% else %}
+                                                <span class="fw-bold text-secondary">Inativa</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <small>{{ item.created_at | formatar_data_brasil }}</small>
+                                        </td>
+                                        <td>
+                                            <small>{{ item.updated_at | formatar_data_brasil }}</small>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="editarItem({{ item.id }})">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            {% if item.ativa %}
+                                            <button class="btn btn-sm btn-outline-warning" onclick="inativarItem({{ item.id }})">
+                                                <i class="fas fa-pause"></i>
+                                            </button>
+                                            {% else %}
+                                            <button class="btn btn-sm btn-outline-success" onclick="ativarItem({{ item.id }})">
+                                                <i class="fas fa-play"></i>
+                                            </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Paginação -->
+                        {% if pagination %}
+                        <nav aria-label="Navegação da página">
+                            <ul class="pagination justify-content-center">
+                                {% if pagination.has_prev %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('localidades.listar_rotas', page=pagination.prev_num, **request.args) }}">Anterior</a>
+                                </li>
+                                {% endif %}
+
+                                {% for page_num in pagination.iter_pages() %}
+                                    {% if page_num %}
+                                        {% if page_num != pagination.page %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="{{ url_for('localidades.listar_rotas', page=page_num, **request.args) }}">{{ page_num }}</a>
+                                        </li>
+                                        {% else %}
+                                        <li class="page-item active">
+                                            <span class="page-link">{{ page_num }}</span>
+                                        </li>
+                                        {% endif %}
+                                    {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">…</span>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+
+                                {% if pagination.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('localidades.listar_rotas', page=pagination.next_num, **request.args) }}">Próximo</a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                        {% endif %}
+
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-route fa-4x text-muted"></i>
+                            <h4 class="text-muted mt-3">Nenhum registro encontrado</h4>
+                            <p class="text-muted">Não há rotas cadastradas ou os filtros não retornaram resultados.</p>
+                            <a href="{{ url_for('localidades.importar_rotas') }}" class="btn btn-primary">
+                                <i class="fas fa-file-upload"></i> Importar Rotas
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-submit nos selects
+document.getElementById('cod_uf').addEventListener('change', function() {
+    document.getElementById('filtrosForm').submit();
+});
+
+document.getElementById('rota').addEventListener('change', function() {
+    document.getElementById('filtrosForm').submit();
+});
+
+// Função para editar item
+function editarItem(id) {
+    // TODO: Implementar modal de edição
+    alert('Funcionalidade de edição será implementada em breve');
+}
+
+// Função para inativar rota
+function inativarItem(id) {
+    if (confirm('Deseja realmente inativar esta rota?')) {
+        // TODO: Implementar inativação
+        alert('Funcionalidade será implementada em breve');
+    }
+}
+
+// Função para ativar rota
+function ativarItem(id) {
+    if (confirm('Deseja realmente ativar esta rota?')) {
+        // TODO: Implementar ativação
+        alert('Funcionalidade será implementada em breve');
+    }
+}
+</script>
+{% endblock %} 

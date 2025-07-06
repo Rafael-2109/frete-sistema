@@ -233,7 +233,7 @@ def index():
     """Página inicial do módulo {module_name}"""
     page = request.args.get('page', 1, type=int)
     items = {model_class}.query.paginate(
-        page=page, per_page=20, error_out=False
+        page=page, per_page=100, error_out=False
     )
     
     return render_template('{module_name}/list.html', 

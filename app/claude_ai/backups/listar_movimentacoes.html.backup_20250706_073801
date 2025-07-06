@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block title %}Movimentações de Estoque{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-exchange-alt"></i> Movimentações de Estoque
+                <small class="text-muted">Histórico de Movimentações</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('estoque.listar_movimentacoes') }}" class="row">
+                        <div class="col-md-3">
+                            <label for="cod_produto" class="form-label">Código do Produto</label>
+                            <input type="text" class="form-control" id="cod_produto" name="cod_produto" 
+                                   value="{{ cod_produto }}" placeholder="Digite o código">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="tipo_movimentacao" class="form-label">Tipo de Movimentação</label>
+                            <select class="form-select" id="tipo_movimentacao" name="tipo_movimentacao">
+                                <option value="">Todos os tipos</option>
+                                {% for tipo in tipos_disponiveis %}
+                                <option value="{{ tipo }}" {% if tipo == tipo_movimentacao %}selected{% endif %}>
+                                    {{ tipo }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="fas fa-search"></i> Pesquisar
+                            </button>
+                            <a href="{{ url_for('estoque.listar_movimentacoes') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Limpar
+                            </a>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end justify-content-end">
+                            {% if movimentacoes and movimentacoes.items %}
+                            <a href="{{ url_for('estoque.exportar_dados_movimentacoes') }}" class="btn btn-warning">
+                                <i class="fas fa-file-export"></i> Exportar
+                            </a>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botões de ação -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('estoque.baixar_modelo_movimentacoes') }}" class="btn btn-info">
+                    <i class="fas fa-download"></i> Modelo
+                </a>
+                <a href="{{ url_for('estoque.importar_movimentacoes') }}" class="btn btn-success">
+                    <i class="fas fa-upload"></i> Importar
+                </a>
+                <a href="{{ url_for('estoque.nova_movimentacao') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Nova Movimentação
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de movimentações -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list"></i> Movimentações
+                        {% if movimentacoes %}
+                        <span class="badge bg-secondary">
+                            Mostrando {{ movimentacoes.items|length }} de {{ movimentacoes.total }} (Página {{ movimentacoes.page }} de {{ movimentacoes.pages }})
+                        </span>
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if movimentacoes and movimentacoes.items %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Data</th>
+                                    <th>Tipo</th>
+                                    <th>Código</th>
+                                    <th>Produto</th>
+                                    <th>Quantidade</th>
+                                    <th>Local</th>
+                                    <th>Criado por</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for mov in movimentacoes.items %}
+                                <tr>
+                                    <td>{{ mov.id }}</td>
+                                    <td>{{ mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '-' }}</td>
+                                    <td>
+                                        <span class="fw-bold 
+                                            {% if 'ENTRADA' in mov.tipo_movimentacao or 'PRODUÇÃO' in mov.tipo_movimentacao %}text-success
+                                            {% elif 'SAÍDA' in mov.tipo_movimentacao or 'AVARIA' in mov.tipo_movimentacao %}text-danger
+                                            {% else %}text-primary{% endif %}">
+                                            {{ mov.tipo_movimentacao }}
+                                        </span>
+                                    </td>
+                                    <td class="fw-bold text-dark">{{ mov.cod_produto }}</td>
+                                    <td class="fw-bold text-dark">{{ mov.nome_produto }}</td>
+                                    <td>
+                                        <span class="fw-bold 
+                                            {% if mov.qtd_movimentacao > 0 %}text-success
+                                            {% else %}text-danger{% endif %}">
+                                            {{ mov.qtd_movimentacao }}
+                                        </span>
+                                    </td>
+                                    <td class="fw-bold text-dark">{{ mov.local_movimentacao or '-' }}</td>
+                                    <td>{{ mov.created_by or '-' }}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <a href="{{ url_for('estoque.editar_movimentacao', id=mov.id) }}" 
+                                               class="btn btn-outline-primary btn-sm" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <a href="javascript:void(0)" 
+                                               onclick="confirmarExclusao({{ mov.id }}, '{{ mov.cod_produto }}', '{{ mov.tipo_movimentacao }}')"
+                                               class="btn btn-outline-danger btn-sm" title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Controles de Paginação -->
+                    {% if movimentacoes.pages > 1 %}
+                    <nav aria-label="Paginação das movimentações">
+                        <ul class="pagination justify-content-center mt-4">
+                            <!-- Primeira página -->
+                            {% if movimentacoes.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('estoque.listar_movimentacoes', page=1, cod_produto=cod_produto, tipo_movimentacao=tipo_movimentacao) }}">
+                                    <i class="fas fa-angle-double-left"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('estoque.listar_movimentacoes', page=movimentacoes.prev_num, cod_produto=cod_produto, tipo_movimentacao=tipo_movimentacao) }}">
+                                    <i class="fas fa-angle-left"></i>
+                                </a>
+                            </li>
+                            {% endif %}
+
+                            <!-- Páginas numeradas -->
+                            {% for page_num in movimentacoes.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                                {% if page_num %}
+                                    {% if page_num != movimentacoes.page %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('estoque.listar_movimentacoes', page=page_num, cod_produto=cod_produto, tipo_movimentacao=tipo_movimentacao) }}">
+                                            {{ page_num }}
+                                        </a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item active" aria-current="page">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                    {% endif %}
+                                {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">…</span>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            <!-- Última página -->
+                            {% if movimentacoes.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('estoque.listar_movimentacoes', page=movimentacoes.next_num, cod_produto=cod_produto, tipo_movimentacao=tipo_movimentacao) }}">
+                                    <i class="fas fa-angle-right"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('estoque.listar_movimentacoes', page=movimentacoes.pages, cod_produto=cod_produto, tipo_movimentacao=tipo_movimentacao) }}">
+                                    <i class="fas fa-angle-double-right"></i>
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Nenhuma movimentação encontrada</h5>
+                        <p class="text-muted">
+                            {% if cod_produto or tipo_movimentacao %}
+                            Tente ajustar os filtros ou 
+                            <a href="{{ url_for('estoque.listar_movimentacoes') }}" class="btn btn-link p-0">limpar os filtros</a>
+                            {% else %}
+                            Comece importando movimentações ou criando manualmente
+                            {% endif %}
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function confirmarExclusao(id, codProduto, tipoMovimentacao) {
+    if (confirm(`Tem certeza que deseja excluir a movimentação ${tipoMovimentacao} do produto ${codProduto}?`)) {
+        window.location.href = "{{ url_for('estoque.excluir_movimentacao', id=0) }}".replace('0', id);
+    }
+}
+</script>
+{% endblock %} 

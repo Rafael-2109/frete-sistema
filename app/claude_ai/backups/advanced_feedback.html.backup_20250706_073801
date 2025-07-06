@@ -268,7 +268,6 @@
             
             <!-- Formulário de Feedback -->
             <form id="feedbackForm">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <!-- Avaliação por Estrelas -->
                 <div class="rating-container">
                     <h5>Como você avalia a resposta?</h5>

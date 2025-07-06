@@ -61,7 +61,7 @@ class EnhancedClaudeIntegration:
             Resposta completa com análise + resposta Claude
         """
         
-        logger.info(f"🚀 Processando consulta inteligente: '{consulta[:50]}...'")
+        logger.info(f"🚀 Processando consulta inteligente: '{consulta[:500]}...'")
         
         # 1. ANÁLISE INTELIGENTE DA CONSULTA
         interpretacao = self.intelligent_analyzer.analisar_consulta_inteligente(

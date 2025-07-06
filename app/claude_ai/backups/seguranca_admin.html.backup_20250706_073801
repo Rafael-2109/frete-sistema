@@ -76,7 +76,6 @@
                 </div>
                 <div class="card-body">
                     <form id="config-form">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="form-group">
                             <label for="modo-seguranca-select">Modo de Segurança:</label>
                             <select class="form-control" id="modo-seguranca-select">

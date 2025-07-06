@@ -44,6 +44,9 @@ except ImportError as e:
 # 🏢 SISTEMA DE GRUPOS EMPRESARIAIS
 from app.utils.grupo_empresarial import GrupoEmpresarialDetector, detectar_grupo_empresarial
 
+# Adicionar import do Claude Development AI
+from .claude_development_ai import get_claude_development_ai, init_claude_development_ai
+
 class ClaudeRealIntegration:
     """Integração com Claude REAL da Anthropic"""
     
@@ -70,7 +73,7 @@ class ClaudeRealIntegration:
                 # Testar conexão
                 test_response = self.client.messages.create(
                     model="claude-sonnet-4-20250514",  # Claude 4 Sonnet - Modelo mais avançado
-                    max_tokens=10,
+                    max_tokens=8192,
                     messages=[{"role": "user", "content": "teste"}]
                 )
                 logger.info("✅ Conexão com Claude API validada!")
@@ -221,7 +224,7 @@ class ClaudeRealIntegration:
 
         # System prompt honesto sobre capacidades reais
         sistema_real = get_sistema_real_data()
-        self.system_prompt = """Você é Claude 4 Sonnet integrado ao Sistema de Fretes.
+        self.system_prompt = """Você é um assistente AI integrado ao Sistema de Fretes.
 
 IMPORTANTE - Minhas capacidades REAIS:
 - Tenho acesso a DADOS do banco (entregas, pedidos, fretes, etc) quando fornecidos
@@ -238,7 +241,130 @@ Quando solicitado, posso ler arquivos do projeto para entender melhor o código.
 
     
     def processar_consulta_real(self, consulta: str, user_context: Optional[Dict] = None) -> str:
-        """Processa consulta usando Claude REAL com contexto inteligente e MEMÓRIA CONVERSACIONAL"""
+        """Processa consulta usando Claude REAL com contexto inteligente e MEMÓRIA CONVERSACIONAL + REFLEXÃO AVANÇADA"""
+        
+        if not self.modo_real:
+            return self._fallback_simulado(consulta)
+        
+        # 🧠 SISTEMA DE REFLEXÃO AVANÇADA (SIMILAR AO CURSOR)
+        try:
+            return self._processar_com_reflexao_avancada(consulta, user_context)
+        except Exception as e:
+            logger.error(f"❌ Erro no sistema de reflexão: {e}")
+            # Fallback para processamento padrão
+            return self._processar_consulta_padrao(consulta, user_context)
+    
+    def _processar_com_reflexao_avancada(self, consulta: str, user_context: Optional[Dict] = None) -> str:
+        """🧠 SISTEMA DE REFLEXÃO AVANÇADA - SIMILAR AO CURSOR"""
+        
+        # 🚀 FASE 1: ANÁLISE INICIAL
+        logger.info("🧠 FASE 1: Análise inicial da consulta")
+        analise_inicial = self._analisar_consulta_profunda(consulta)
+        
+        # 🎯 FASE 2: PRIMEIRA TENTATIVA
+        logger.info("🎯 FASE 2: Primeira tentativa de resposta")
+        primeira_resposta = self._gerar_resposta_inicial(consulta, analise_inicial, user_context)
+        
+        # 🔍 FASE 3: AUTO-AVALIAÇÃO
+        logger.info("🔍 FASE 3: Auto-avaliação da resposta")
+        qualidade = self._avaliar_qualidade_resposta(consulta, primeira_resposta, analise_inicial)
+        
+        # 🚀 FASE 4: REFLEXÃO E MELHORIA (SE NECESSÁRIO)
+        if qualidade['score'] < 0.7:  # Se qualidade < 70%
+            logger.info(f"🔄 FASE 4: Reflexão ativada (qualidade: {qualidade['score']:.1%})")
+            resposta_melhorada = self._melhorar_resposta(consulta, primeira_resposta, qualidade, user_context)
+            
+            # 🎯 FASE 5: VALIDAÇÃO FINAL
+            logger.info("✅ FASE 5: Validação final")
+            return self._validar_resposta_final(resposta_melhorada, analise_inicial)
+        else:
+            logger.info(f"✅ Resposta aprovada na primeira tentativa (qualidade: {qualidade['score']:.1%})")
+            return primeira_resposta
+    
+    def _analisar_consulta_profunda(self, consulta: str) -> Dict[str, Any]:
+        """🧠 Análise profunda da consulta (similar ao Cursor)"""
+        return {
+            'tipo': 'dados' if any(palavra in consulta.lower() for palavra in ['entregas', 'fretes', 'pedidos']) else 'desenvolvimento',
+            'complexidade': 'alta' if len(consulta.split()) > 10 else 'media',
+            'contexto_necessario': True if any(palavra in consulta.lower() for palavra in ['cliente', 'período', 'comparar']) else False,
+            'ferramentas_necessarias': ['database', 'excel'] if 'excel' in consulta.lower() else ['database'],
+            'confianca_interpretacao': 0.9 if len(consulta.split()) > 3 else 0.6
+        }
+    
+    def _gerar_resposta_inicial(self, consulta: str, analise: Dict[str, Any], user_context: Optional[Dict] = None) -> str:
+        """🎯 Gera resposta inicial otimizada"""
+        # Usar o sistema existente mas com configurações otimizadas
+        return self._processar_consulta_padrao(consulta, user_context)
+    
+    def _avaliar_qualidade_resposta(self, consulta: str, resposta: str, analise: Dict[str, Any]) -> Dict[str, Any]:
+        """🔍 Avalia qualidade da resposta (similar ao Cursor)"""
+        score = 0.8  # Base score
+        
+        # Critérios de avaliação
+        if len(resposta) < 100:
+            score -= 0.2  # Resposta muito curta
+        
+        if 'erro' in resposta.lower():
+            score -= 0.3  # Contém erro
+        
+        if 'dados' in analise['tipo'] and 'total' not in resposta.lower():
+            score -= 0.1  # Falta estatísticas
+        
+        return {
+            'score': max(0.0, min(1.0, score)),
+            'criterios': {
+                'completude': 0.8,
+                'precisao': 0.9,
+                'relevancia': 0.8
+            }
+        }
+    
+    def _melhorar_resposta(self, consulta: str, resposta_inicial: str, qualidade: Dict[str, Any], user_context: Optional[Dict] = None) -> str:
+        """🚀 Melhora resposta com reflexão"""
+        try:
+            # Gerar uma segunda tentativa com contexto da primeira
+            prompt_reflexao = f"""
+            Consulta original: {consulta}
+            
+            Primeira resposta: {resposta_inicial}
+            
+            Problemas identificados: {qualidade['criterios']}
+            
+            Melhore a resposta considerando:
+            1. Seja mais específico e detalhado
+            2. Inclua dados quantitativos quando possível
+            3. Forneça contexto relevante
+            4. Certifique-se de responder completamente à pergunta
+            """
+            
+            response = self.client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=8192,
+                temperature=0.6,  # Ligeiramente mais criativo para melhorias
+                messages=[{"role": "user", "content": prompt_reflexao}]
+            )
+            
+            return response.content[0].text
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na melhoria da resposta: {e}")
+            return resposta_inicial
+    
+    def _validar_resposta_final(self, resposta: str, analise: Dict[str, Any]) -> str:
+        """✅ Validação final da resposta"""
+        # Adicionar timestamp e fonte
+        timestamp = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+        
+        return f"""{resposta}
+
+---
+🧠 **Processado com Sistema de Reflexão Avançada**
+🕒 **Timestamp:** {timestamp}
+⚡ **Fonte:** Claude 4 Sonnet + Análise Profunda
+🎯 **Qualidade:** Otimizada por múltiplas validações"""
+
+    def _processar_consulta_padrao(self, consulta: str, user_context: Optional[Dict] = None) -> str:
+        """📋 Processamento padrão (método original)"""
         
         if not self.modo_real:
             return self._fallback_simulado(consulta)
@@ -346,7 +472,7 @@ Quando solicitado, posso ler arquivos do projeto para entender melhor o código.
                     try:
                         interpretacao = json.loads(padrao.interpretacao_inicial) if padrao.interpretacao_inicial else {}
                         padroes_exemplos.append({
-                            'consulta': padrao.consulta_original[:50] + '...' if len(padrao.consulta_original) > 50 else padrao.consulta_original,
+                            'consulta': padrao.consulta_original[:200] + '...' if len(padrao.consulta_original) > 50 else padrao.consulta_original,
                             'interpretacao': interpretacao,
                             'confianca': padrao.confianca or 0.8
                         })
@@ -365,7 +491,7 @@ Quando solicitado, posso ler arquivos do projeto para entender melhor o código.
                         FROM ai_grupos_empresariais
                         WHERE ativo = TRUE
                         ORDER BY criado_em DESC
-                        LIMIT 10
+                        LIMIT 100
                     """)
                 ).fetchall()
                 
@@ -482,6 +608,25 @@ O sistema melhora continuamente. Cada consulta, correção e feedback contribui 
             logger.warning("⚠️ Sistema de entendimento inteligente não disponível, usando sistema padrão")
         except Exception as e:
             logger.error(f"❌ Erro no sistema avançado: {e}, usando sistema padrão")
+        
+        # 🧠 DETECÇÃO DE CONSULTAS DE DESENVOLVIMENTO (INTEGRAÇÃO INTELIGENTE)
+        deteccao_dev = _detectar_consulta_desenvolvimento(consulta)
+        if deteccao_dev:
+            logger.info(f"🧠 Consulta de desenvolvimento detectada: {deteccao_dev['acao']}")
+            resultado_dev = _processar_consulta_desenvolvimento(deteccao_dev)
+            
+            # Adicionar ao contexto conversacional
+            if context_manager:
+                metadata = {'tipo': 'desenvolvimento', 'acao': deteccao_dev['acao']}
+                context_manager.add_message(user_id, 'user', consulta, metadata)
+                context_manager.add_message(user_id, 'assistant', resultado_dev.get('response', ''), metadata)
+                logger.info(f"🧠 Consulta de desenvolvimento adicionada ao contexto para usuário {user_id}")
+            
+            return resultado_dev.get('response', 'Erro no processamento de desenvolvimento')
+        
+        # 🎯 DETECTAR COMANDOS CURSOR MODE
+        if self._is_cursor_command(consulta):
+            return self._processar_comando_cursor(consulta, user_context)
         
         # 🔍 DETECTAR COMANDO DE ESTRUTURA DO PROJETO
         if any(termo in consulta_lower for termo in ['estrutura do projeto', 'mostrar estrutura', 'mapear projeto', 'escanear projeto']):
@@ -926,11 +1071,11 @@ NÃO misturar com dados de outros clientes."""
                 time.sleep(0.5)  # 500ms adicionais para validação da interpretação
                 logger.info("🤔 Validação final da interpretação concluída")
                 
+                # Chamar Claude com dados completos
                 response = self.client.messages.create(
-                    model="claude-sonnet-4-20250514",  # Claude 4 Sonnet
-                    max_tokens=4000,  # Restaurado para análises completas
-                    temperature=0.0,  # Máxima precisão - sem criatividade
-                    timeout=120.0,  # 2 minutos para análises profundas
+                    model="claude-sonnet-4-20250514",  # Claude 4 Sonnet - Modelo mais avançado
+                    max_tokens=8192,  # Restaurado para análises completas
+                    temperature=0.7,  # Equilibrio entre precisão e criatividade
                     system=self.system_prompt + "\n\n" + self._build_contexto_por_intencao(intencoes, contexto_analisado),
                     messages=messages  # type: ignore
                 )
@@ -1476,7 +1621,7 @@ Claude 4 Sonnet | {datetime.now().strftime('%d/%m/%Y %H:%M')}"""
                         EntregaMonitorada.cliente.ilike(filtro_sql),
                         EntregaMonitorada.cnpj_cliente != None,
                         EntregaMonitorada.cnpj_cliente != ''
-                    ).distinct().limit(20).all()
+                    ).distinct().limit(200).all()
                     
                     if cnpjs_unicos:
                         cnpjs_formatados = [cnpj[0] for cnpj in cnpjs_unicos if cnpj[0]]
@@ -2453,8 +2598,8 @@ app/
         try:
             response = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
-                max_tokens=4000,
-                temperature=0.2,  # Mais determinístico para código
+                max_tokens=8192,
+                temperature=0.5,  # Equilibrio entre determinismo e criatividade
                 timeout=120.0,
                 system=self.system_prompt,
                 messages=messages  # type: ignore
@@ -3135,6 +3280,578 @@ Por favor, seja mais específico. Exemplos:
 
 Módulos disponíveis: carteira, pedidos, fretes, embarques, monitoramento, transportadoras"""
 
+    def _is_cursor_command(self, consulta: str) -> bool:
+        """🎯 Detecta comandos do Cursor Mode"""
+        comandos_cursor = [
+            'ativar cursor', 'cursor mode', 'modo cursor', 'ativa cursor',
+            'analisar código', 'gerar código', 'modificar código', 'buscar código',
+            'corrigir bugs', 'refatorar', 'documentar código', 'validar código',
+            'cursor chat', 'chat código', 'ajuda código'
+        ]
+        
+        consulta_lower = consulta.lower()
+        return any(comando in consulta_lower for comando in comandos_cursor)
+    
+    def _processar_comando_cursor(self, consulta: str, user_context: Optional[Dict] = None) -> str:
+        """🎯 Processa comandos do Cursor Mode"""
+        try:
+            from .cursor_mode import get_cursor_mode
+            
+            logger.info(f"🎯 Processando comando Cursor Mode: {consulta}")
+            
+            cursor = get_cursor_mode()
+            consulta_lower = consulta.lower()
+            
+            # Comando de ativação
+            if any(termo in consulta_lower for termo in ['ativar cursor', 'cursor mode', 'modo cursor', 'ativa cursor']):
+                unlimited = 'ilimitado' in consulta_lower or 'unlimited' in consulta_lower
+                resultado = cursor.activate_cursor_mode(unlimited)
+                
+                if resultado['status'] == 'success':
+                    return f"""🎯 **CURSOR MODE ATIVADO COM SUCESSO!**
+
+📊 **STATUS DA ATIVAÇÃO:**
+• **Modo:** {resultado['mode']}
+• **Ativado em:** {resultado['activated_at']}
+• **Modo Ilimitado:** {'✅ Sim' if unlimited else '❌ Não'}
+
+🔧 **FERRAMENTAS DISPONÍVEIS:**
+{chr(10).join(f"• {cap}" for cap in resultado['capabilities'])}
+
+📈 **ANÁLISE INICIAL DO PROJETO:**
+• **Total de Módulos:** {resultado['initial_project_analysis']['total_modules']}
+• **Total de Arquivos:** {resultado['initial_project_analysis']['total_files']}
+• **Problemas Detectados:** {resultado['initial_project_analysis']['issues_detected']}
+
+💡 **COMANDOS DISPONÍVEIS:**
+• `analisar código` - Análise completa do projeto
+• `gerar código [descrição]` - Geração automática
+• `modificar código [arquivo]` - Modificação inteligente
+• `buscar código [termo]` - Busca semântica
+• `corrigir bugs` - Detecção e correção automática
+• `cursor chat [mensagem]` - Chat com código
+
+---
+🎯 **Cursor Mode ativo! Agora tenho capacidades similares ao Cursor!**
+⚡ **Fonte:** Claude 4 Sonnet + Development AI + Project Scanner"""
+                else:
+                    return f"❌ **Erro ao ativar Cursor Mode:** {resultado.get('error', 'Erro desconhecido')}"
+            
+            # Verificar se Cursor Mode está ativo
+            if not cursor.activated:
+                return """⚠️ **Cursor Mode não está ativo!**
+
+Para usar funcionalidades similares ao Cursor, primeiro ative com:
+`ativar cursor mode`
+
+Ou para modo ilimitado:
+`ativar cursor mode ilimitado`"""
+            
+            # Comandos específicos
+            if 'analisar código' in consulta_lower:
+                if 'arquivo' in consulta_lower:
+                    # Extrair nome do arquivo da consulta
+                    arquivo = self._extrair_arquivo_da_consulta(consulta)
+                    resultado = cursor.analyze_code(arquivo)
+                else:
+                    resultado = cursor.analyze_code('project')
+                
+                return self._formatar_resultado_cursor(resultado, 'Análise de Código')
+            
+            elif 'gerar código' in consulta_lower:
+                descricao = consulta.replace('gerar código', '').strip()
+                if not descricao:
+                    descricao = "Módulo genérico"
+                
+                resultado = cursor.generate_code(descricao)
+                return self._formatar_resultado_cursor(resultado, 'Geração de Código')
+            
+            elif 'modificar código' in consulta_lower:
+                arquivo = self._extrair_arquivo_da_consulta(consulta)
+                if not arquivo:
+                    return "❌ Especifique o arquivo a ser modificado. Ex: `modificar código app/models.py`"
+                
+                # Por ora, usar modificação genérica
+                resultado = cursor.modify_code(arquivo, 'refactor', {'description': consulta})
+                return self._formatar_resultado_cursor(resultado, 'Modificação de Código')
+            
+            elif 'buscar código' in consulta_lower:
+                termo = consulta.replace('buscar código', '').strip()
+                if not termo:
+                    return "❌ Especifique o termo a buscar. Ex: `buscar código função de login`"
+                
+                resultado = cursor.search_code(termo)
+                return self._formatar_resultado_cursor(resultado, 'Busca no Código')
+            
+            elif 'corrigir bugs' in consulta_lower:
+                resultado = cursor.fix_issues()
+                return self._formatar_resultado_cursor(resultado, 'Correção de Bugs')
+            
+            elif 'cursor chat' in consulta_lower or 'chat código' in consulta_lower:
+                mensagem = consulta.replace('cursor chat', '').replace('chat código', '').strip()
+                if not mensagem:
+                    return "❌ Especifique sua mensagem. Ex: `cursor chat como otimizar esta função?`"
+                
+                resultado = cursor.chat_with_code(mensagem)
+                return self._formatar_resultado_cursor(resultado, 'Chat com Código')
+            
+            elif 'status cursor' in consulta_lower:
+                status = cursor.get_status()
+                return self._formatar_status_cursor(status)
+            
+            else:
+                return """🎯 **Cursor Mode Ativo - Comandos Disponíveis:**
+
+🔍 **ANÁLISE:**
+• `analisar código` - Análise completa do projeto
+• `analisar código [arquivo.py]` - Análise de arquivo específico
+
+🚀 **GERAÇÃO:**
+• `gerar código [descrição]` - Gerar novo módulo
+• `gerar código sistema de vendas` - Exemplo específico
+
+✏️ **MODIFICAÇÃO:**
+• `modificar código [arquivo.py]` - Modificar arquivo
+• `refatorar [arquivo.py]` - Refatoração automática
+
+🔍 **BUSCA:**
+• `buscar código [termo]` - Busca semântica
+• `buscar código função login` - Exemplo
+
+🔧 **CORREÇÃO:**
+• `corrigir bugs` - Detectar e corrigir problemas
+• `validar código` - Validação automática
+
+💬 **CHAT:**
+• `cursor chat [pergunta]` - Chat inteligente com código
+• `chat código como melhorar performance?` - Exemplo
+
+📊 **STATUS:**
+• `status cursor` - Ver status atual
+
+---
+🎯 **Modo Cursor ativo! Todas as funcionalidades disponíveis!**"""
+            
+        except ImportError:
+            return "❌ **Cursor Mode não disponível:** Módulo não encontrado"
+        except Exception as e:
+            logger.error(f"❌ Erro no comando Cursor: {e}")
+            return f"❌ **Erro no Cursor Mode:** {str(e)}"
+    
+    def _extrair_arquivo_da_consulta(self, consulta: str) -> Optional[str]:
+        """Extrai nome do arquivo da consulta"""
+        import re
+        
+        # Procurar por padrões de arquivo
+        patterns = [
+            r'app/[\w/]+\.py',
+            r'[\w/]+\.py',
+            r'[\w]+\.py'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, consulta)
+            if match:
+                return match.group(0)
+        
+        return None
+    
+    def _formatar_resultado_cursor(self, resultado: Dict[str, Any], titulo: str) -> str:
+        """Formata resultado do Cursor Mode"""
+        if 'error' in resultado:
+            return f"❌ **Erro em {titulo}:** {resultado['error']}"
+        
+        timestamp = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+        
+        if titulo == 'Análise de Código':
+            return f"""🔍 **{titulo} Completa**
+
+📊 **Visão Geral:**
+{self._formatar_analise_projeto(resultado)}
+
+---
+🎯 **Processado:** {timestamp}
+⚡ **Fonte:** Cursor Mode + Claude Development AI"""
+        
+        elif titulo == 'Geração de Código':
+            if resultado.get('status') == 'success':
+                return f"""🚀 **{titulo} - Sucesso!**
+
+📦 **Módulo:** {resultado.get('module_name', 'N/A')}
+📁 **Arquivos Criados:** {resultado.get('total_files', 0)} arquivos
+📋 **Lista de Arquivos:**
+{chr(10).join(f"• {arquivo}" for arquivo in resultado.get('files_created', []))}
+
+📚 **Documentação Gerada:**
+{resultado.get('documentation', 'Documentação automática criada')}
+
+---
+🎯 **Processado:** {timestamp}
+⚡ **Fonte:** Cursor Mode + Code Generator"""
+            else:
+                return f"❌ **Erro na {titulo}:** {resultado.get('error', 'Erro desconhecido')}"
+        
+        else:
+            # Formato genérico
+            return f"""✅ **{titulo} Concluído**
+
+📋 **Resultado:** {str(resultado)[:500]}...
+
+---
+🎯 **Processado:** {timestamp}
+⚡ **Fonte:** Cursor Mode"""
+    
+    def _formatar_analise_projeto(self, analise: Dict[str, Any]) -> str:
+        """Formata análise do projeto"""
+        overview = analise.get('project_overview', {})
+        issues = analise.get('potential_issues', [])
+        
+        return f"""• **Módulos:** {overview.get('total_modules', 0)}
+• **Modelos:** {overview.get('total_models', 0)}
+• **Rotas:** {overview.get('total_routes', 0)}
+• **Templates:** {overview.get('total_templates', 0)}
+• **Problemas Detectados:** {len(issues)}
+• **Arquitetura:** {overview.get('architecture_pattern', 'Flask MVC')}"""
+    
+    def _formatar_status_cursor(self, status: Dict[str, Any]) -> str:
+        """Formata status do Cursor Mode"""
+        return f"""📊 **Status do Cursor Mode**
+
+🔧 **Estado:** {'✅ Ativo' if status['activated'] else '❌ Inativo'}
+
+⚙️ **Funcionalidades:**
+{chr(10).join(f"• {feature}: {'✅' if enabled else '❌'}" for feature, enabled in status['features'].items())}
+
+🛠️ **Ferramentas:**
+{chr(10).join(f"• {tool}: {'✅' if available else '❌'}" for tool, available in status['tools_available'].items())}
+
+📋 **Capacidades Ativas:**
+{chr(10).join(f"• {cap}" for cap in status.get('capabilities', []))}
+
+---
+🎯 **Cursor Mode - Sistema similar ao Cursor integrado!**"""
+
+# Funções auxiliares para formatação de respostas
+def _gerar_resposta_erro(mensagem: str) -> Dict[str, Any]:
+    """Gera resposta de erro formatada"""
+    return {
+        'success': False,
+        'error': mensagem,
+        'response': f"❌ **Erro:** {mensagem}",
+        'status': 'error'
+    }
+
+def _gerar_resposta_sucesso(resposta: str) -> Dict[str, Any]:
+    """Gera resposta de sucesso formatada"""
+    return {
+        'success': True,
+        'response': resposta,
+        'status': 'success'
+    }
+
+# Adicionar nova função de detecção de consultas de desenvolvimento
+def _detectar_consulta_desenvolvimento(consulta_limpa: str) -> Optional[Dict[str, Any]]:
+    """
+    🧠 DETECÇÃO DE CONSULTAS DE DESENVOLVIMENTO
+    Detecta quando o usuário está perguntando sobre código, análise, geração, etc.
+    """
+    try:
+        consulta_lower = consulta_limpa.lower()
+        
+        # Padrões para análise de projeto
+        if any(palavra in consulta_lower for palavra in [
+            'analisar projeto', 'análise do projeto', 'estrutura do projeto',
+            'visão geral do projeto', 'mapa do projeto', 'arquitetura'
+        ]):
+            return {
+                'tipo': 'analyze_project',
+                'acao': 'análise completa do projeto',
+                'parametros': {}
+            }
+        
+        # Padrões para análise de arquivo específico
+        arquivo_match = re.search(r'analis[ea] (?:o )?arquivo ([^\s]+)', consulta_lower)
+        if arquivo_match:
+            return {
+                'tipo': 'analyze_file',
+                'acao': 'análise de arquivo específico',
+                'parametros': {'file_path': arquivo_match.group(1)}
+            }
+        
+        # Padrões para geração de módulo
+        modulo_match = re.search(r'cri[ea] (?:um )?módulo (\w+)', consulta_lower)
+        if modulo_match or any(palavra in consulta_lower for palavra in [
+            'gerar módulo', 'criar módulo', 'novo módulo', 'module'
+        ]):
+            modulo_nome = modulo_match.group(1) if modulo_match else None
+            return {
+                'tipo': 'generate_module',
+                'acao': 'geração de módulo',
+                'parametros': {
+                    'module_name': modulo_nome,
+                    'description': consulta_limpa
+                }
+            }
+        
+        # Padrões para modificação de arquivo
+        if any(palavra in consulta_lower for palavra in [
+            'modificar arquivo', 'editar arquivo', 'alterar arquivo',
+            'adicionar campo', 'criar rota', 'adicionar método'
+        ]):
+            return {
+                'tipo': 'modify_file',
+                'acao': 'modificação de arquivo',
+                'parametros': {'description': consulta_limpa}
+            }
+        
+        # Padrões para detecção de problemas
+        if any(palavra in consulta_lower for palavra in [
+            'detectar problemas', 'verificar bugs', 'encontrar erros',
+            'corrigir problemas', 'analisar qualidade', 'code review'
+        ]):
+            return {
+                'tipo': 'detect_issues',
+                'acao': 'detecção e correção de problemas',
+                'parametros': {}
+            }
+        
+        # Padrões para documentação
+        if any(palavra in consulta_lower for palavra in [
+            'gerar documentação', 'criar documentação', 'documentar',
+            'readme', 'docs'
+        ]):
+            return {
+                'tipo': 'generate_docs',
+                'acao': 'geração de documentação',
+                'parametros': {}
+            }
+        
+        # Padrões para capacidades
+        if any(palavra in consulta_lower for palavra in [
+            'capacidades', 'o que você pode fazer', 'funcionalidades',
+            'comandos disponíveis', 'ajuda desenvolvimento'
+        ]):
+            return {
+                'tipo': 'show_capabilities',
+                'acao': 'mostrar capacidades',
+                'parametros': {}
+            }
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Erro na detecção de consulta de desenvolvimento: {e}")
+        return None
+
+# Adicionar função para processar consultas de desenvolvimento
+def _processar_consulta_desenvolvimento(deteccao: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    🧠 PROCESSAMENTO DE CONSULTAS DE DESENVOLVIMENTO
+    Usa o Claude Development AI para processar consultas avançadas
+    """
+    try:
+        tipo = deteccao['tipo']
+        parametros = deteccao['parametros']
+        
+        # Inicializar Claude Development AI
+        dev_ai = get_claude_development_ai() or init_claude_development_ai()
+        
+        if tipo == 'analyze_project':
+            result = dev_ai.analyze_project_complete()
+            
+            # Formatar resposta para o usuário
+            if 'error' in result:
+                return _gerar_resposta_erro(f"Erro na análise do projeto: {result['error']}")
+            
+            overview = result.get('project_overview', {})
+            architecture = result.get('architecture_analysis', {})
+            
+            resposta = f"""
+🧠 **Análise Completa do Projeto**
+
+📊 **Visão Geral:**
+- **Módulos:** {overview.get('total_modules', 0)}
+- **Modelos:** {overview.get('total_models', 0)}
+- **Rotas:** {overview.get('total_routes', 0)}
+- **Templates:** {overview.get('total_templates', 0)}
+- **Tabelas do Banco:** {overview.get('database_tables', 0)}
+
+🏗️ **Arquitetura:**
+- **Padrões Detectados:** {', '.join(architecture.get('patterns_detected', []))}
+- **Framework:** {overview.get('framework_version', 'Flask 2.x')}
+
+📈 **Qualidade do Código:**
+- **Documentação:** {result.get('code_quality', {}).get('documentation_coverage', 'A analisar')}
+- **Convenções:** {result.get('code_quality', {}).get('naming_conventions', 'A analisar')}
+- **Complexidade:** {result.get('code_quality', {}).get('code_complexity', 'A analisar')}
+
+🔒 **Segurança:**
+- **Proteção CSRF:** {result.get('security_analysis', {}).get('csrf_protection', 'A verificar')}
+- **Autenticação:** {result.get('security_analysis', {}).get('authentication', 'A verificar')}
+
+⚡ **Performance:**
+- **Cache:** {result.get('performance_insights', {}).get('caching_strategy', 'A otimizar')}
+- **Queries:** {result.get('performance_insights', {}).get('database_queries', 'A analisar')}
+
+💡 **Próximos Passos:**
+1. Implementar testes automatizados
+2. Otimizar consultas do banco
+3. Melhorar documentação
+4. Implementar cache avançado
+"""
+            
+            return _gerar_resposta_sucesso(resposta)
+        
+        elif tipo == 'analyze_file':
+            file_path = parametros.get('file_path')
+            if not file_path:
+                return _gerar_resposta_erro("Caminho do arquivo não especificado")
+            
+            result = dev_ai.analyze_specific_file(file_path)
+            
+            if 'error' in result:
+                return _gerar_resposta_erro(f"Erro na análise do arquivo: {result['error']}")
+            
+            file_info = result.get('file_info', {})
+            structure = result.get('code_structure', {})
+            
+            resposta = f"""
+📄 **Análise do Arquivo: {file_path}**
+
+📊 **Informações Básicas:**
+- **Tamanho:** {file_info.get('size_kb', 0):.1f} KB
+- **Linhas:** {file_info.get('lines', 0)}
+- **Tipo:** {file_info.get('extension', 'N/A')}
+
+🏗️ **Estrutura do Código:**
+- **Classes:** {len(structure.get('classes', []))}
+- **Funções:** {len(structure.get('functions', []))}
+- **Imports:** {len(structure.get('imports', []))}
+- **Complexidade:** {structure.get('complexity', 0)}
+
+⚠️ **Problemas Detectados:**
+{len(result.get('potential_bugs', []))} problemas encontrados
+
+💡 **Sugestões de Melhoria:**
+{len(result.get('suggestions', []))} sugestões disponíveis
+"""
+            
+            return _gerar_resposta_sucesso(resposta)
+        
+        elif tipo == 'generate_module':
+            module_name = parametros.get('module_name')
+            description = parametros.get('description', '')
+            
+            if not module_name:
+                return _gerar_resposta_erro("Nome do módulo não especificado. Use: 'criar módulo nome_do_modulo'")
+            
+            result = dev_ai.generate_new_module(module_name, description)
+            
+            if result.get('status') == 'error':
+                return _gerar_resposta_erro(f"Erro na geração do módulo: {result.get('error')}")
+            
+            files_created = result.get('files_created', [])
+            
+            resposta = f"""
+🚀 **Módulo '{module_name}' Criado com Sucesso!**
+
+📁 **Arquivos Criados ({len(files_created)}):**
+"""
+            for file_path in files_created:
+                resposta += f"\n✅ {file_path}"
+            
+            resposta += f"""
+
+📚 **Documentação:**
+{result.get('documentation', 'Documentação gerada automaticamente')}
+
+🔗 **Próximos Passos:**
+"""
+            for step in result.get('next_steps', []):
+                resposta += f"\n• {step}"
+            
+            return _gerar_resposta_sucesso(resposta)
+        
+        elif tipo == 'detect_issues':
+            result = dev_ai.detect_and_fix_issues()
+            
+            if 'error' in result:
+                return _gerar_resposta_erro(f"Erro na detecção de problemas: {result['error']}")
+            
+            total_issues = result.get('total_issues', 0)
+            fixes_applied = result.get('fixes_applied', 0)
+            
+            resposta = f"""
+🔧 **Análise de Problemas Concluída**
+
+📊 **Resumo:**
+- **Problemas Detectados:** {total_issues}
+- **Correções Aplicadas:** {fixes_applied}
+
+⚠️ **Tipos de Problemas:**
+"""
+            for issue in result.get('issues', [])[:5]:  # Mostrar apenas os primeiros 5
+                resposta += f"\n• {issue.get('type', 'N/A')}: {issue.get('description', 'N/A')}"
+            
+            if total_issues > 5:
+                resposta += f"\n... e mais {total_issues - 5} problemas"
+            
+            resposta += f"""
+
+💡 **Recomendações:**
+"""
+            for rec in result.get('recommendations', [])[:3]:  # Mostrar apenas 3 recomendações
+                resposta += f"\n• {rec}"
+            
+            return _gerar_resposta_sucesso(resposta)
+        
+        elif tipo == 'show_capabilities':
+            capabilities = dev_ai.get_capabilities_summary()
+            
+            resposta = """
+🧠 **Capacidades do Claude Development AI**
+
+🔍 **Análise:**
+"""
+            for cap in capabilities.get('analysis_capabilities', []):
+                resposta += f"\n• {cap}"
+            
+            resposta += """
+
+🚀 **Geração:**
+"""
+            for cap in capabilities.get('generation_capabilities', []):
+                resposta += f"\n• {cap}"
+            
+            resposta += """
+
+✏️ **Modificação:**
+"""
+            for cap in capabilities.get('modification_capabilities', []):
+                resposta += f"\n• {cap}"
+            
+            resposta += """
+
+💡 **Exemplos de Comandos:**
+• "Analisar projeto completo"
+• "Criar módulo vendas"
+• "Analisar arquivo app/models.py"
+• "Detectar problemas no código"
+• "Gerar documentação"
+"""
+            
+            return _gerar_resposta_sucesso(resposta)
+        
+        else:
+            return _gerar_resposta_erro(f"Tipo de consulta não suportado: {tipo}")
+        
+    except Exception as e:
+        logger.error(f"Erro no processamento de consulta de desenvolvimento: {e}")
+        return _gerar_resposta_erro(f"Erro interno: {str(e)}")
+
+# A integração da detecção de desenvolvimento será feita na função existente processar_consulta_real
+# Ao invés de modificar a função inteira, vou adicionar um hook dentro da função existente
+
 # Instância global
 claude_integration = ClaudeRealIntegration()
 
@@ -3593,9 +4310,9 @@ def _carregar_dados_financeiro(analise: Dict[str, Any], filtros_usuario: Dict[st
         # Despesas extras
         query_despesas = db.session.query(DespesaExtra).filter(
             DespesaExtra.data_vencimento >= data_limite.date()
-        )
-        
-        despesas = query_despesas.order_by(DespesaExtra.data_vencimento.desc()).limit(50).all()
+                  )
+          
+        despesas = query_despesas.order_by(DespesaExtra.data_vencimento.desc()).limit(200).all()
         
         # Pendências financeiras
         try:

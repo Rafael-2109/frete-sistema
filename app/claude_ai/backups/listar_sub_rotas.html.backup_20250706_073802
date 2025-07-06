@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastro de Sub Rotas{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-route"></i> Cadastro de Sub Rotas
+                <small class="text-muted">Sub Rotas por UF e Cidade</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('localidades.listar_sub_rotas') }}" class="row">
+                        <div class="col-md-3">
+                            <label for="cod_uf" class="form-label">UF</label>
+                            <select class="form-select" id="cod_uf" name="cod_uf">
+                                <option value="">Todas as UFs</option>
+                                {% for uf in opcoes_ufs %}
+                                <option value="{{ uf }}" {% if uf == cod_uf %}selected{% endif %}>
+                                    {{ uf }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="nome_cidade" class="form-label">Cidade</label>
+                            <input type="text" class="form-control" id="nome_cidade" name="nome_cidade" 
+                                   value="{{ nome_cidade }}" placeholder="Digite a cidade">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="sub_rota" class="form-label">Sub Rota</label>
+                            <input type="text" class="form-control" id="sub_rota" name="sub_rota" 
+                                   value="{{ sub_rota }}" placeholder="Digite a sub rota">
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="fas fa-search"></i> Pesquisar
+                            </button>
+                            <a href="{{ url_for('localidades.listar_sub_rotas') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Limpar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botões de ação -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('localidades.baixar_modelo_sub_rotas') }}" class="btn btn-info">
+                    <i class="fas fa-download"></i> Modelo
+                </a>
+                <a href="{{ url_for('localidades.importar_sub_rotas') }}" class="btn btn-success">
+                    <i class="fas fa-upload"></i> Importar
+                </a>
+                {% if sub_rotas and sub_rotas.items %}
+                <a href="{{ url_for('localidades.exportar_dados_sub_rotas') }}" class="btn btn-warning">
+                    <i class="fas fa-file-export"></i> Exportar
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de sub-rotas -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list"></i> Sub Rotas Cadastradas
+                        {% if sub_rotas %}
+                        <span class="badge bg-secondary">
+                            Mostrando {{ sub_rotas.items|length }} de {{ sub_rotas.total }} (Página {{ sub_rotas.page }} de {{ sub_rotas.pages }})
+                        </span>
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if sub_rotas and sub_rotas.items %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>UF</th>
+                                    <th>Cidade</th>
+                                    <th>Sub Rota</th>
+                                    <th>Status</th>
+                                    <th>Criado em</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for sr in sub_rotas.items %}
+                                <tr>
+                                    <td>{{ sr.id }}</td>
+                                    <td>
+                                        <span class="fw-bold text-primary">{{ sr.cod_uf }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-dark">{{ sr.nome_cidade }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-success">{{ sr.sub_rota }}</span>
+                                    </td>
+                                    <td>
+                                        {% if sr.ativa %}
+                                        <span class="badge bg-success">Ativa</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Inativa</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ sr.created_at.strftime('%d/%m/%Y %H:%M') if sr.created_at else '-' }}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Controles de Paginação -->
+                    {% if sub_rotas.pages > 1 %}
+                    <nav aria-label="Paginação das sub-rotas">
+                        <ul class="pagination justify-content-center mt-4">
+                            <!-- Primeira página -->
+                            {% if sub_rotas.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('localidades.listar_sub_rotas', page=1, cod_uf=cod_uf, nome_cidade=nome_cidade, sub_rota=sub_rota) }}">
+                                    <i class="fas fa-angle-double-left"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('localidades.listar_sub_rotas', page=sub_rotas.prev_num, cod_uf=cod_uf, nome_cidade=nome_cidade, sub_rota=sub_rota) }}">
+                                    <i class="fas fa-angle-left"></i>
+                                </a>
+                            </li>
+                            {% endif %}
+
+                            <!-- Páginas numeradas -->
+                            {% for page_num in sub_rotas.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                                {% if page_num %}
+                                    {% if page_num != sub_rotas.page %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('localidades.listar_sub_rotas', page=page_num, cod_uf=cod_uf, nome_cidade=nome_cidade, sub_rota=sub_rota) }}">
+                                            {{ page_num }}
+                                        </a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item active" aria-current="page">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                    {% endif %}
+                                {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">…</span>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            <!-- Última página -->
+                            {% if sub_rotas.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('localidades.listar_sub_rotas', page=sub_rotas.next_num, cod_uf=cod_uf, nome_cidade=nome_cidade, sub_rota=sub_rota) }}">
+                                    <i class="fas fa-angle-right"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('localidades.listar_sub_rotas', page=sub_rotas.pages, cod_uf=cod_uf, nome_cidade=nome_cidade, sub_rota=sub_rota) }}">
+                                    <i class="fas fa-angle-double-right"></i>
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-route fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Nenhuma sub-rota encontrada</h5>
+                        <p class="text-muted">
+                            {% if cod_uf or nome_cidade or sub_rota %}
+                            Tente ajustar os filtros ou 
+                            <a href="{{ url_for('localidades.listar_sub_rotas') }}" class="btn btn-link p-0">limpar os filtros</a>
+                            {% else %}
+                            Comece importando sub-rotas ou verificando se há dados no sistema
+                            {% endif %}
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

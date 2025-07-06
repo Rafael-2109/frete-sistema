@@ -413,7 +413,7 @@ class ClaudeProjectScanner:
                 if var_name:
                     variables.add(var_name)
             
-            return list(variables)[:20]  # Limitar a 20 variáveis
+            return list(variables)[:100]  # Limitar a 20 variáveis
             
         except Exception as e:
             logger.warning(f"⚠️ Erro ao extrair variáveis de {template_file}: {e}")
@@ -484,7 +484,7 @@ class ClaudeProjectScanner:
                 FROM pg_tables 
                 WHERE schemaname = 'public'
                 ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
-                LIMIT 20
+                LIMIT 200
             """)).fetchall()
             
             return {
@@ -561,7 +561,7 @@ class ClaudeProjectScanner:
             return {'error': str(e)}
     
     def search_in_files(self, pattern: str, file_extensions: Optional[List[str]] = None, 
-                       max_results: int = 50) -> Dict[str, Any]:
+                       max_results: int = 500) -> Dict[str, Any]:
         """Busca por padrão em arquivos do projeto"""
         try:
             import re
@@ -592,7 +592,7 @@ class ClaudeProjectScanner:
                                     results.append({
                                         'file': str(file_path.relative_to(self.app_path)),
                                         'line_number': line_num,
-                                        'line_content': line.strip()[:200]  # Limitar tamanho
+                                        'line_content': line.strip()[:1000]  # Limitar tamanho
                                     })
                                     
                                     if len(results) >= max_results:

@@ -18,7 +18,7 @@
 
     <!-- 📋 Formulário Principal -->
     <form method="POST" id="formSeparacaoAvancada">
-        {{ csrf_token() }}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         
         <!-- 📅 Seção de Datas e Protocolo -->
         <div class="card shadow mb-4">

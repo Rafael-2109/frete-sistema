@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Nova Fatura de Frete{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-file-pdf"></i> Nova Fatura de Frete
+            </h1>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.listar_faturas') }}">Faturas</a></li>
+            <li class="breadcrumb-item active">Nova Fatura</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Formulário -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-plus"></i> Dados da Fatura
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        {{ form.hidden_tag() }}
+
+                        <!-- Transportadora -->
+                        <div class="form-group mb-3">
+                            <label class="form-label">Transportadora</label>
+                            <select name="transportadora_id" class="form-control" required>
+                                <option value="">Selecione uma transportadora</option>
+                                {% for transportadora in transportadoras %}
+                                    <option value="{{ transportadora.id }}">
+                                        {{ transportadora.razao_social }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Número e Data -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    {{ form.numero_fatura.label(class="form-label") }}
+                                    {{ form.numero_fatura(class="form-control") }}
+                                    {% if form.numero_fatura.errors %}
+                                        {% for error in form.numero_fatura.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    {{ form.data_emissao.label(class="form-label") }}
+                                    {{ form.data_emissao(class="form-control") }}
+                                    {% if form.data_emissao.errors %}
+                                        {% for error in form.data_emissao.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Valor e Vencimento -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    {{ form.valor_total_fatura.label(class="form-label") }}
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">R$</span>
+                                        </div>
+                                        {{ form.valor_total_fatura(class="form-control") }}
+                                    </div>
+                                    {% if form.valor_total_fatura.errors %}
+                                        {% for error in form.valor_total_fatura.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    {{ form.vencimento.label(class="form-label") }}
+                                    {{ form.vencimento(class="form-control") }}
+                                    {% if form.vencimento.errors %}
+                                        {% for error in form.vencimento.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Upload do PDF -->
+                        <div class="form-group mb-3">
+                            {{ form.arquivo_pdf.label(class="form-label") }}
+                            {{ form.arquivo_pdf(class="form-control") }}
+                            <small class="text-muted">Arquivo PDF da fatura emitida pela transportadora</small>
+                            {% if form.arquivo_pdf.errors %}
+                                {% for error in form.arquivo_pdf.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <!-- Observações -->
+                        <div class="form-group mb-3">
+                            {{ form.observacoes_conferencia.label(class="form-label") }}
+                            {{ form.observacoes_conferencia(class="form-control", rows="3") }}
+                            <small class="text-muted">Observações sobre a conferência da fatura</small>
+                            {% if form.observacoes_conferencia.errors %}
+                                {% for error in form.observacoes_conferencia.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('fretes.listar_faturas') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-save"></i> Cadastrar Fatura
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações adicionais -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Informações
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <h6><i class="fas fa-lightbulb"></i> Sobre as Faturas</h6>
+                    <p class="small">
+                        As faturas de frete são documentos emitidos pelas transportadoras contendo um ou mais CTes. 
+                        Cada fatura pode agrupar várias entregas.
+                    </p>
+
+                    <h6><i class="fas fa-workflow"></i> Fluxo de Trabalho</h6>
+                    <ol class="small">
+                        <li>Cadastre a fatura recebida da transportadora</li>
+                        <li>Faça upload do PDF da fatura</li>
+                        <li>Lance CTes vinculando à fatura</li>
+                        <li>Confira os valores e aprove pagamentos</li>
+                    </ol>
+
+                    <h6><i class="fas fa-file-upload"></i> Upload de Arquivo</h6>
+                    <p class="small">
+                        <strong>Formatos aceitos:</strong> PDF<br>
+                        <strong>Tamanho máximo:</strong> 10MB<br>
+                        <strong>Recomendação:</strong> Use nomes descritivos para facilitar a busca
+                    </p>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-calculator"></i> Campos Obrigatórios
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="small">
+                        <li><strong>Transportadora:</strong> Empresa emissora da fatura</li>
+                        <li><strong>Número da Fatura:</strong> Código de identificação</li>
+                        <li><strong>Data de Emissão:</strong> Data da fatura</li>
+                        <li><strong>Valor Total:</strong> Valor total da fatura</li>
+                        <li><strong>Arquivo PDF:</strong> Documento digitalizado</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

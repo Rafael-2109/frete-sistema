@@ -23,6 +23,9 @@ from . import claude_ai_bp
 from app.utils.auth_decorators import require_admin
 from .claude_real_integration import processar_com_claude_real
 
+# Adicionar import do Claude Development AI no topo do arquivo
+from .claude_development_ai import ClaudeDevelopmentAI, get_claude_development_ai, init_claude_development_ai
+
 # Imports com fallback para MCP e Redis
 try:
     from .mcp_web_server import MCPSistemaOnline
@@ -2367,3 +2370,174 @@ def seguranca_admin():
         logger.error(f"❌ Erro na interface de segurança: {e}")
         flash('Erro ao carregar interface de segurança', 'danger')
         return redirect(url_for('main.dashboard'))
+
+# Adicionar nova rota após as rotas existentes de autonomia
+
+@claude_ai_bp.route('/dev-ai/analyze-project')
+@login_required
+def dev_ai_analyze_project():
+    """🧠 ANÁLISE COMPLETA DO PROJETO via Claude Development AI"""
+    try:
+        dev_ai = get_claude_development_ai() or init_claude_development_ai()
+        analysis = dev_ai.analyze_project_complete()
+        
+        return jsonify({
+            'status': 'success',
+            'analysis': analysis,
+            'message': 'Análise completa do projeto finalizada'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro na análise do projeto: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@claude_ai_bp.route('/dev-ai/analyze-file-v2', methods=['POST'])
+@login_required
+def dev_ai_analyze_file_v2():
+    """📄 ANÁLISE ESPECÍFICA DE ARQUIVO"""
+    try:
+        data = request.get_json()
+        file_path = data.get('file_path')
+        
+        if not file_path:
+            return jsonify({'status': 'error', 'message': 'Caminho do arquivo é obrigatório'}), 400
+        
+        dev_ai = get_claude_development_ai() or init_claude_development_ai()
+        analysis = dev_ai.analyze_specific_file(file_path)
+        
+        return jsonify({
+            'status': 'success',
+            'analysis': analysis,
+            'message': f'Análise do arquivo {file_path} finalizada'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro na análise do arquivo: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@claude_ai_bp.route('/dev-ai/generate-module-v2', methods=['POST'])
+@login_required
+def dev_ai_generate_module_v2():
+    """🚀 GERAÇÃO INTELIGENTE DE MÓDULO"""
+    try:
+        data = request.get_json()
+        module_name = data.get('module_name')
+        description = data.get('description', '')
+        fields = data.get('fields', [])
+        
+        if not module_name:
+            return jsonify({'status': 'error', 'message': 'Nome do módulo é obrigatório'}), 400
+        
+        dev_ai = get_claude_development_ai() or init_claude_development_ai()
+        result = dev_ai.generate_new_module(module_name, description, fields)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Erro na geração do módulo: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@claude_ai_bp.route('/dev-ai/modify-file-v2', methods=['POST'])
+@login_required
+def dev_ai_modify_file_v2():
+    """✏️ MODIFICAÇÃO INTELIGENTE DE ARQUIVO"""
+    try:
+        data = request.get_json()
+        file_path = data.get('file_path')
+        modification_type = data.get('modification_type')
+        details = data.get('details', {})
+        
+        if not file_path or not modification_type:
+            return jsonify({'status': 'error', 'message': 'Caminho do arquivo e tipo de modificação são obrigatórios'}), 400
+        
+        dev_ai = get_claude_development_ai() or init_claude_development_ai()
+        result = dev_ai.modify_existing_file(file_path, modification_type, details)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Erro na modificação do arquivo: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@claude_ai_bp.route('/dev-ai/analyze-and-suggest', methods=['POST'])
+@login_required
+def dev_ai_analyze_and_suggest():
+    """🤔 ANÁLISE E SUGESTÃO INTELIGENTE"""
+    try:
+        data = request.get_json()
+        query = data.get('query')
+        
+        if not query:
+            return jsonify({'status': 'error', 'message': 'Consulta é obrigatória'}), 400
+        
+        dev_ai = get_claude_development_ai() or init_claude_development_ai()
+        result = dev_ai.analyze_and_suggest(query)
+        
+        return jsonify({
+            'status': 'success',
+            'result': result,
+            'message': 'Análise e sugestão finalizada'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro na análise e sugestão: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@claude_ai_bp.route('/dev-ai/generate-documentation', methods=['POST'])
+@login_required
+def dev_ai_generate_documentation():
+    """📚 GERAÇÃO AUTOMÁTICA DE DOCUMENTAÇÃO"""
+    try:
+        data = request.get_json()
+        target = data.get('target', 'project')
+        
+        dev_ai = get_claude_development_ai() or init_claude_development_ai()
+        result = dev_ai.generate_documentation(target)
+        
+        return jsonify({
+            'status': 'success',
+            'documentation': result,
+            'message': f'Documentação gerada para: {target}'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro na geração de documentação: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@claude_ai_bp.route('/dev-ai/detect-and-fix')
+@login_required
+def dev_ai_detect_and_fix():
+    """🔧 DETECÇÃO E CORREÇÃO AUTOMÁTICA"""
+    try:
+        dev_ai = get_claude_development_ai() or init_claude_development_ai()
+        result = dev_ai.detect_and_fix_issues()
+        
+        return jsonify({
+            'status': 'success',
+            'result': result,
+            'message': f'Análise finalizada: {result.get("total_issues", 0)} problemas detectados'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro na detecção e correção: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@claude_ai_bp.route('/dev-ai/capabilities-v2')
+@login_required
+def dev_ai_capabilities_v2():
+    """📋 CAPACIDADES DO CLAUDE DEVELOPMENT AI"""
+    try:
+        dev_ai = get_claude_development_ai() or init_claude_development_ai()
+        capabilities = dev_ai.get_capabilities_summary()
+        
+        return jsonify({
+            'status': 'success',
+            'capabilities': capabilities,
+            'message': 'Capacidades do Claude Development AI'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao obter capacidades: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# Rotas duplicadas removidas - mantendo apenas as versões originais
