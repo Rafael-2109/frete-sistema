@@ -2541,3 +2541,200 @@ def dev_ai_capabilities_v2():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # Rotas duplicadas removidas - mantendo apenas as versões originais
+
+# Adicionar no final do arquivo, antes do fechamento
+
+# 🚀 MODO ADMINISTRADOR LIVRE - ROTAS
+@claude_ai_bp.route('/admin/free-mode/enable', methods=['POST'])
+@login_required
+@require_admin()
+def enable_admin_free_mode():
+    """🔓 Ativar Modo Administrador Livre"""
+    try:
+        from .admin_free_mode import get_admin_free_mode
+        
+        free_mode = get_admin_free_mode()
+        result = free_mode.enable_free_mode(current_user.id)
+        
+        if result['success']:
+            flash('🚀 Modo Administrador Livre ATIVADO! Claude AI tem autonomia total.', 'success')
+            logger.info(f"🚀 Modo livre ativado por {current_user.nome}")
+        else:
+            flash(f'❌ Erro: {result["error"]}', 'error')
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao ativar modo livre: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/admin/free-mode/disable', methods=['POST'])
+@login_required
+@require_admin()
+def disable_admin_free_mode():
+    """🔒 Desativar Modo Administrador Livre"""
+    try:
+        from .admin_free_mode import get_admin_free_mode
+        
+        free_mode = get_admin_free_mode()
+        result = free_mode.disable_free_mode()
+        
+        flash('🔒 Modo Administrador Livre desativado. Limitações padrão restauradas.', 'info')
+        logger.info(f"🔒 Modo livre desativado por {current_user.nome}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao desativar modo livre: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/admin/free-mode/status')
+@login_required
+@require_admin()
+def admin_free_mode_status():
+    """📊 Status do Modo Administrador Livre"""
+    try:
+        from .admin_free_mode import get_admin_free_mode
+        
+        free_mode = get_admin_free_mode()
+        dashboard_data = free_mode.get_admin_dashboard_data()
+        
+        return jsonify({
+            'success': True,
+            'dashboard_data': dashboard_data,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao obter status modo livre: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/admin/free-mode/experimental/<feature_name>', methods=['POST'])
+@login_required
+@require_admin()
+def enable_experimental_feature(feature_name):
+    """🧪 Ativar Funcionalidade Experimental"""
+    try:
+        from .admin_free_mode import get_admin_free_mode
+        
+        free_mode = get_admin_free_mode()
+        result = free_mode.enable_experimental_feature(feature_name)
+        
+        if result.get('success'):
+            flash(f'🧪 Funcionalidade experimental "{feature_name}" ativada!', 'success')
+            logger.info(f"🧪 Funcionalidade experimental {feature_name} ativada por {current_user.nome}")
+        else:
+            flash(f'❌ Erro: {result.get("error", "Funcionalidade não encontrada")}', 'error')
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao ativar funcionalidade experimental: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/admin/free-mode/data/<table_name>')
+@login_required
+@require_admin()
+def get_unlimited_data(table_name):
+    """🌐 Acesso Irrestrito aos Dados"""
+    try:
+        from .admin_free_mode import get_admin_free_mode
+        
+        free_mode = get_admin_free_mode()
+        
+        # Obter filtros da query string
+        filters = {}
+        for key, value in request.args.items():
+            if key != 'limit':  # Ignorar limit - modo livre não tem limites
+                filters[key] = value
+        
+        result = free_mode.get_unlimited_data_access(table_name, filters)
+        
+        if result.get('success'):
+            logger.info(f"🌐 Acesso irrestrito à tabela {table_name} por {current_user.nome}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no acesso irrestrito: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/admin/free-mode/dashboard')
+@login_required
+@require_admin()
+def admin_free_mode_dashboard():
+    """🎛️ Dashboard do Modo Administrador Livre"""
+    try:
+        from .admin_free_mode import get_admin_free_mode
+        
+        free_mode = get_admin_free_mode()
+        dashboard_data = free_mode.get_admin_dashboard_data()
+        
+        return render_template('claude_ai/admin_free_mode_dashboard.html', 
+                             dashboard_data=dashboard_data)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no dashboard modo livre: {e}")
+        flash('❌ Erro ao carregar dashboard do modo livre', 'error')
+        return redirect(url_for('claude_ai.dashboard'))
+
+# 🔄 INTEGRAÇÃO COM CLAUDE REAL - Modificar Claude Real para usar modo livre
+@claude_ai_bp.route('/real/free-mode', methods=['POST'])
+@login_required
+@require_admin()
+def claude_real_free_mode():
+    """🚀 Claude Real com Modo Administrador Livre"""
+    try:
+        from .admin_free_mode import get_admin_free_mode
+        
+        data = request.get_json()
+        consulta = data.get('query', '')
+        
+        if not consulta:
+            return jsonify({'error': 'Query é obrigatória'}), 400
+        
+        # Verificar se modo livre está ativo
+        free_mode = get_admin_free_mode()
+        if not free_mode.mode_enabled:
+            return jsonify({'error': 'Modo livre não está ativo'}), 400
+        
+        # Auto-configurar baseado na consulta
+        context = {
+            'user_id': current_user.id,
+            'username': current_user.nome,
+            'perfil': current_user.perfil,
+            'admin_free_mode': True,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        optimal_config = free_mode.auto_configure_for_query(consulta, context)
+        
+        # Usar configuração otimizada
+        user_context = {
+            **context,
+            'dynamic_config': optimal_config,
+            'unlimited_access': True,
+            'experimental_features': True
+        }
+        
+        # Processar com Claude Real usando configuração livre
+        resultado = processar_com_claude_real(consulta, user_context)
+        
+        # Log da ação administrativa
+        free_mode.log_admin_action('claude_real_free_query', {
+            'query': consulta[:100] + '...' if len(consulta) > 100 else consulta,
+            'config_used': optimal_config,
+            'response_length': len(resultado)
+        })
+        
+        return jsonify({
+            'response': resultado,
+            'status': 'success',
+            'mode': 'ADMIN_FREE_MODE',
+            'config_used': optimal_config,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no Claude Real modo livre: {e}")
+        return jsonify({'error': str(e)}), 500

@@ -369,12 +369,72 @@ Quando solicitado, posso ler arquivos do projeto para entender melhor o código.
         if not self.modo_real:
             return self._fallback_simulado(consulta)
         
-        # 🛡️ VALIDAÇÃO DE ENTRADA (ORPHAN SYSTEM INTEGRATION)
-        if self.input_validator:
-            valid, error_msg = self.input_validator.validate_query(consulta)
-            if not valid:
-                logger.warning(f"🛡️ CONSULTA INVÁLIDA: {error_msg}")
-                return f"❌ **Erro de Validação**: {error_msg}\n\nPor favor, reformule sua consulta seguindo as diretrizes de segurança."
+        # 🚀 MODO ADMINISTRADOR LIVRE - DETECÇÃO AUTOMÁTICA
+        try:
+            from .admin_free_mode import get_admin_free_mode
+            
+            free_mode = get_admin_free_mode()
+            if free_mode.is_admin_user() and free_mode.mode_enabled:
+                logger.info("🚀 MODO ADMINISTRADOR LIVRE ATIVO - Aplicando configurações otimizadas")
+                
+                # Auto-configurar para a consulta específica
+                optimal_config = free_mode.auto_configure_for_query(consulta, user_context or {})
+                
+                # Aplicar configurações do modo livre
+                if user_context:
+                    user_context.update({
+                        'admin_free_mode': True,
+                        'dynamic_config': optimal_config,
+                        'unlimited_access': True,
+                        'experimental_features': True
+                    })
+                else:
+                    user_context = {
+                        'admin_free_mode': True,
+                        'dynamic_config': optimal_config,
+                        'unlimited_access': True,
+                        'experimental_features': True
+                    }
+                
+                # Log da configuração aplicada
+                logger.info(f"🧠 Configuração otimizada aplicada: {optimal_config['max_tokens']} tokens, temp: {optimal_config['temperature']}")
+                
+                # Pular validações restritivas quando em modo livre
+                if optimal_config.get('validation_level') == 'minimal':
+                    logger.info("🔓 Validações mínimas aplicadas - Modo livre ativo")
+                    # Continuar processamento sem validações restritivas
+                else:
+                    # Aplicar validações normais
+                    if self.input_validator:
+                        valid, error_msg = self.input_validator.validate_query(consulta)
+                        if not valid:
+                            logger.warning(f"🛡️ CONSULTA INVÁLIDA: {error_msg}")
+                            return f"❌ **Erro de Validação**: {error_msg}\n\nPor favor, reformule sua consulta seguindo as diretrizes de segurança."
+            else:
+                # Modo padrão - aplicar validações normais
+                if self.input_validator:
+                    valid, error_msg = self.input_validator.validate_query(consulta)
+                    if not valid:
+                        logger.warning(f"🛡️ CONSULTA INVÁLIDA: {error_msg}")
+                        return f"❌ **Erro de Validação**: {error_msg}\n\nPor favor, reformule sua consulta seguindo as diretrizes de segurança."
+        
+        except ImportError:
+            logger.debug("⚠️ Admin Free Mode não disponível - usando modo padrão")
+            # Aplicar validações normais
+            if self.input_validator:
+                valid, error_msg = self.input_validator.validate_query(consulta)
+                if not valid:
+                    logger.warning(f"🛡️ CONSULTA INVÁLIDA: {error_msg}")
+                    return f"❌ **Erro de Validação**: {error_msg}\n\nPor favor, reformule sua consulta seguindo as diretrizes de segurança."
+        
+        except Exception as e:
+            logger.error(f"❌ Erro no Admin Free Mode: {e} - usando modo padrão")
+            # Aplicar validações normais
+            if self.input_validator:
+                valid, error_msg = self.input_validator.validate_query(consulta)
+                if not valid:
+                    logger.warning(f"🛡️ CONSULTA INVÁLIDA: {error_msg}")
+                    return f"❌ **Erro de Validação**: {error_msg}\n\nPor favor, reformule sua consulta seguindo as diretrizes de segurança."
         
         # 🤖 AUTO COMMAND PROCESSOR - DETECÇÃO E EXECUÇÃO DE COMANDOS AUTOMÁTICOS
         try:
