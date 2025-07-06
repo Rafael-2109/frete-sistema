@@ -215,8 +215,8 @@ class UnlimitedClaudeMode:
                 ('subprocess.call', 'Chamada de subprocess - verificar entrada'),
                 ('os.system', 'Uso de os.system - risco de injeção'),
                 ('sql.*%', 'Possível SQL injection'),
-                ('password.*=.*["']', 'Password hardcoded'),
-                ('api_key.*=.*["']', 'API key hardcoded')
+                (r'password.*=.*["\']', 'Password hardcoded'),
+                (r'api_key.*=.*["\']', 'API key hardcoded')
             ]
             
             for pattern, description in security_patterns:
@@ -225,10 +225,10 @@ class UnlimitedClaudeMode:
             
             # Detecção de problemas de performance
             performance_patterns = [
-                ('for.*in.*query\.all\(\)', 'Query em loop - usar select_related'),
-                ('time\.sleep', 'Sleep em código - pode afetar performance'),
-                ('print\(', 'Print em código de produção'),
-                ('\.filter\(.*\)\.filter\(', 'Múltiplos filters - considerar combinar')
+                (r'for.*in.*query\.all\(\)', 'Query em loop - usar select_related'),
+                (r'time\.sleep', 'Sleep em código - pode afetar performance'),
+                (r'print\(', 'Print em código de produção'),
+                (r'\.filter\(.*\)\.filter\(', 'Múltiplos filters - considerar combinar')
             ]
             
             for pattern, description in performance_patterns:
