@@ -10,5 +10,11 @@ from .cursor_commands import *
 
 __all__ = [
     'get_excel_commands',
-    'ExcelCommands'
+    'ExcelCommands',
+    'get_dev_commands',
+    'DevCommands',
+    'get_file_commands',
+    'FileCommands',
+    'get_cursor_commands',
+    'CursorCommands'
 ]

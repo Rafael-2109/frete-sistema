@@ -6,6 +6,7 @@ Sistema que traduz termos do usuário para campos reais do sistema
 import logging
 from typing import Dict, List, Any, Optional, Tuple
 import re
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -105,22 +106,169 @@ class MapeamentoSemantico:
     
     def _buscar_mapeamento_readme(self, nome_campo: str, nome_modelo: str) -> List[str]:
         """
-        Busca mapeamento específico do README para um campo
-        IMPLEMENTAÇÃO FUTURA: Integrar com README_MAPEAMENTO_SEMANTICO_COMPLETO.md
+        Busca mapeamento específico do README usando ReadmeReader integrado.
         """
+        try:
+            # Tentar usar os readers do sistema novo
+            from ..claude_ai_novo.semantic.readers import ReadmeReader
+            
+            readme_reader = ReadmeReader()
+            if readme_reader.esta_disponivel():
+                termos = readme_reader.buscar_termos_naturais(nome_campo, nome_modelo)
+                if termos:
+                    logger.info(f"✅ Campo {nome_campo} mapeado via ReadmeReader: {len(termos)} termos")
+                    return termos
+            
+        except Exception as e:
+            logger.debug(f"🔄 ReadmeReader não disponível: {e}")
         
-        # 🔧 TODO: IMPLEMENTAR LEITURA DO README DETALHADO
-        # Por enquanto, retornar None para forçar fallback
-        # Na próxima iteração, ler o arquivo README e buscar mapeamentos específicos
-        
-        # Placeholder para futura implementação
-        mapeamentos_readme = {
-            # Exemplo de como seria:
-            # 'num_pedido': ['número do pedido', 'numero do pedido', 'pedido'],
-            # 'raz_social_red': ['cliente', 'razão social', 'nome do cliente'],
+        # Fallback: alguns mapeamentos manuais específicos
+        mapeamentos_manuais = {
+            'num_pedido': ['pedido', 'pdd', 'numero do pedido'],
+            'origem': ['numero do pedido', 'num pedido', 'pedido'],  # Campo crítico corrigido
+            'raz_social_red': ['cliente', 'razão social', 'nome do cliente'],
+            'status_calculado': ['status', 'situação', 'estado'],
+            'transportadora': ['transportadora', 'freteiro', 'transportador'],
+            'vendedor': ['vendedor', 'representante'],
+            'data_embarque': ['data de embarque', 'quando embarcou'],
+            'entregue': ['foi entregue', 'está entregue'],
         }
         
-        return mapeamentos_readme.get(nome_campo, [])
+        return mapeamentos_manuais.get(nome_campo, [])
+    
+    def enriquecer_com_database_reader(self, campo: str, modelo: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Enriquece informações de um campo usando DatabaseReader.
+        
+        Args:
+            campo: Nome do campo
+            modelo: Nome do modelo (opcional)
+            
+        Returns:
+            Dict com informações enriquecidas do banco
+        """
+        resultado = {
+            'campo': campo,
+            'modelo': modelo,
+            'campos_similares': [],
+            'estatisticas_banco': {},
+            'disponivel': False
+        }
+        
+        try:
+            # Tentar usar DatabaseReader do sistema novo
+            from ..claude_ai_novo.semantic.readers import DatabaseReader
+            
+            db_reader = DatabaseReader()
+            if db_reader.esta_disponivel():
+                resultado['disponivel'] = True
+                
+                # Buscar campos similares
+                resultado['campos_similares'] = db_reader.buscar_campos_por_nome(campo)
+                
+                # Estatísticas gerais do banco
+                resultado['estatisticas_banco'] = db_reader.obter_estatisticas_gerais()
+                
+                logger.debug(f"✅ Campo {campo} enriquecido via DatabaseReader")
+            
+        except Exception as e:
+            logger.debug(f"🔄 DatabaseReader não disponível: {e}")
+        
+        return resultado
+    
+    def obter_informacoes_completas_campo(self, campo: str, modelo: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Obtém informações completas de um campo usando ambos os readers.
+        
+        Args:
+            campo: Nome do campo
+            modelo: Nome do modelo (opcional)
+            
+        Returns:
+            Dict com informações completas
+        """
+        resultado = {
+            'campo': campo,
+            'modelo': modelo,
+            'timestamp': datetime.now().isoformat(),
+            'readme_info': {},
+            'database_info': {},
+            'mapeamento_atual': {},
+            'readers_disponivel': False
+        }
+        
+        try:
+            # Importar readers do sistema novo
+            from ..claude_ai_novo.semantic.readers import ReadmeReader, DatabaseReader
+            
+            readme_reader = ReadmeReader()
+            db_reader = DatabaseReader()
+            
+            # README Reader
+            if readme_reader and readme_reader.esta_disponivel():
+                resultado['readme_info'] = {
+                    'termos_naturais': readme_reader.buscar_termos_naturais(campo, modelo),
+                    'informacoes_completas': readme_reader.obter_informacoes_campo(campo, modelo),
+                    'disponivel': True
+                }
+            else:
+                resultado['readme_info'] = {'disponivel': False}
+            
+            # Database Reader
+            if db_reader and db_reader.esta_disponivel():
+                resultado['database_info'] = {
+                    'campos_similares': db_reader.buscar_campos_por_nome(campo),
+                    'disponivel': True
+                }
+                
+                # Analisar dados reais se possível
+                if resultado['database_info']['campos_similares']:
+                    primeiro_campo = resultado['database_info']['campos_similares'][0]
+                    resultado['database_info']['analise_dados'] = db_reader.analisar_dados_reais(
+                        primeiro_campo['tabela'], 
+                        primeiro_campo['campo'], 
+                        limite=50
+                    )
+            else:
+                resultado['database_info'] = {'disponivel': False}
+            
+            # Mapeamento atual no sistema
+            resultado['mapeamento_atual'] = self._buscar_mapeamento_atual(campo, modelo)
+            
+            # Status geral
+            resultado['readers_disponivel'] = (
+                resultado['readme_info'].get('disponivel', False) or
+                resultado['database_info'].get('disponivel', False)
+            )
+            
+            logger.info(f"📊 Informações completas obtidas para {campo}: readers={'✅' if resultado['readers_disponivel'] else '❌'}")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao obter informações completas: {e}")
+            resultado['erro'] = str(e)
+        
+        return resultado
+    
+    def _buscar_mapeamento_atual(self, campo: str, modelo: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Busca mapeamento atual de um campo no sistema.
+        
+        Args:
+            campo: Nome do campo
+            modelo: Nome do modelo (opcional)
+            
+        Returns:
+            Dict com mapeamento atual
+        """
+        for chave, mapeamento in self.mapeamentos.items():
+            if (mapeamento['campo_principal'] == campo or 
+                mapeamento['campo_busca'] == campo or
+                campo in mapeamento.get('termos_naturais', [])):
+                
+                if modelo is None or mapeamento['modelo'].lower() == modelo.lower():
+                    return mapeamento
+        
+        return {}
     
     def _normalizar_tipo_sqlalchemy(self, tipo_sqlalchemy: str) -> str:
         """Normaliza tipos do SQLAlchemy para tipos simples"""

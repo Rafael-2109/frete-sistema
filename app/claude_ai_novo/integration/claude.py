@@ -19,7 +19,7 @@ from app.claude_ai_novo.data_loaders.database_loader import get_database_loader
 from app.claude_ai_novo.intelligence.conversation_context import init_conversation_context
 from app.claude_ai_novo.intelligence.human_in_loop_learning import get_human_learning_system
 from app.claude_ai_novo.intelligence.lifelong_learning import get_lifelong_learning
-from app.claude_ai_novo.core.suggestion_engine import SuggestionEngine
+from ..suggestions.engine import SuggestionEngine
 from app.claude_ai_novo.analyzers.intention_analyzer import IntentionAnalyzer
 from app.claude_ai_novo.analyzers.query_analyzer import QueryAnalyzer
 

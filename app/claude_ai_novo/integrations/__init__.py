@@ -1,3 +1,0 @@
-"""
-INTEGRATIONS - Módulo integrations
-"""

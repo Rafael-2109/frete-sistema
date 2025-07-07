@@ -12,14 +12,14 @@ from datetime import datetime, timedelta
 from flask import current_app
 from flask_login import current_user
 from sqlalchemy import text
-from flask import current_app
 
 # Importar sistemas especializados
-from .multi_agent_system import get_multi_agent_system, MultiAgentSystem
-from .human_in_loop_learning import get_human_learning_system, capture_user_feedback
-from .sistema_real_data import get_sistema_real_data
-from .conversation_context import get_conversation_context
-from .lifelong_learning import _get_db_session
+from ..multi_agent.system import get_multi_agent_system, MultiAgentSystem
+from ..intelligence.human_in_loop_learning import get_human_learning_system, capture_user_feedback
+
+# 🔧 IMPORTS CORRIGIDOS - Usando adaptadores
+from ..adapters.data_adapter import get_sistema_real_data
+from ..adapters.intelligence_adapter import get_conversation_context, get_db_session
 
 logger = logging.getLogger(__name__)
 
@@ -371,29 +371,31 @@ class SemanticLoopProcessor:
     async def _analyze_semantics(self, query: str) -> Dict[str, Any]:
         """Análise semântica da consulta"""
         
-        # Integrar com sistema de mapeamento semântico
+        # Integrar com novo sistema de mapeamento semântico modular
         try:
-            from .semantic_mapper import get_mapeamento_semantico
-            mapeamento = get_mapeamento_semantico()
+            from ..semantic.semantic_manager import SemanticManager
+            semantic_manager = SemanticManager()
             
-            # Mapear consulta completa
+            # Mapear consulta completa usando nova arquitetura
             try:
-                mapping_result = mapeamento.mapear_consulta_completa(query)
+                mapping_result = semantic_manager.mapear_consulta_completa(query)
                 
                 return {
                     'mapped_terms': mapping_result.get('termos_mapeados', []),
                     'confidence': mapping_result.get('confianca_geral', 0.5),
                     'domain_detected': mapping_result.get('dominio_detectado', 'geral'),
-                    'semantic_complexity': len(query.split()) / 20.0  # Normalizado
+                    'semantic_complexity': len(query.split()) / 20.0,  # Normalizado
+                    'semantic_manager_used': True  # Indica uso da nova arquitetura
                 }
             except (AttributeError, KeyError) as e:
-                logger.warning(f"Erro no mapeamento semântico: {e}")
+                logger.warning(f"Erro no mapeamento semântico modular: {e}")
                 # Retornar análise básica sem mapeamento
                 return {
                     'mapped_terms': [],
                     'confidence': 0.5,
                     'domain_detected': 'geral',
-                    'semantic_complexity': len(query.split()) / 20.0
+                    'semantic_complexity': len(query.split()) / 20.0,
+                    'semantic_manager_used': False
                 }
             
         except Exception as e:
@@ -402,7 +404,8 @@ class SemanticLoopProcessor:
                 'mapped_terms': [],
                 'confidence': 0.3,
                 'domain_detected': 'unknown',
-                'semantic_complexity': 0.5
+                'semantic_complexity': 0.5,
+                'semantic_manager_used': False
             }
     
     async def _validate_logic(self, semantic_analysis: Dict[str, Any]) -> Dict[str, Any]:
@@ -660,20 +663,20 @@ class AdvancedAIIntegration:
                         updated_at = :created_at
                 """)
                 
-                _get_db_session().execute(query, {
+                get_db_session().execute(query, {
                     'session_id': session_id,
                     'created_at': datetime.now(),
                     'user_id': getattr(current_user, 'id', None),
                     'metadata': json_metadata
                 })
                 
-                _get_db_session().commit()
+                get_db_session().commit()
                 
                 logger.info(f"💾 Metadata avançada armazenada: {session_id}")
                 
             except Exception as e:
                 logger.error(f"❌ Erro ao armazenar metadata: {e}")
-                _get_db_session().rollback()
+                get_db_session().rollback()
     
     async def _build_advanced_response(self, multi_agent_result: Dict[str, Any],
                                      semantic_result: Dict[str, Any],
@@ -748,18 +751,18 @@ class AdvancedAIIntegration:
                 }
             }, default=str)
             
-            _get_db_session().execute(update_query, {
+            get_db_session().execute(update_query, {
                 'session_id': session_id,
                 'feedback_data': feedback_data
             })
             
-            _get_db_session().commit()
+            get_db_session().commit()
             
             logger.info(f"💡 Feedback avançado capturado: {feedback_id}")
             
         except Exception as e:
             logger.error(f"❌ Erro ao atualizar feedback: {e}")
-            _get_db_session().rollback()
+            get_db_session().rollback()
         
         return feedback_id
     
@@ -779,7 +782,7 @@ class AdvancedAIIntegration:
             """)
             
             cutoff_date = datetime.now() - timedelta(days=days)
-            result = _get_db_session().execute(analytics_query, {'cutoff_date': cutoff_date})
+            result = get_db_session().execute(analytics_query, {'cutoff_date': cutoff_date})
             
             sessions_data = []
             for row in result:

@@ -1670,9 +1670,8 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'observacao': ag.observacao,
                 'autor': ag.autor,
                 'criado_em': limpar_timezone(ag.criado_em),
-                'criado_por': ag.criado_por,
-                'alterado_em': limpar_timezone(ag.alterado_em),
-                'alterado_por': ag.alterado_por
+                'confirmado_em': limpar_timezone(ag.confirmado_em),
+                'confirmado_por': ag.confirmado_por
             })
         
         # Eventos
@@ -1687,9 +1686,6 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'observacao': ev.observacao,
                 'autor': ev.autor,
                 'criado_em': limpar_timezone(ev.criado_em),
-                'criado_por': ev.criado_por,
-                'alterado_em': limpar_timezone(ev.alterado_em),
-                'alterado_por': ev.alterado_por
             })
         
         # Custos extras
@@ -1702,9 +1698,6 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'motivo': custo.motivo,
                 'autor': custo.autor,
                 'criado_em': limpar_timezone(custo.criado_em),
-                'criado_por': custo.criado_por,
-                'alterado_em': limpar_timezone(custo.alterado_em),
-                'alterado_por': custo.alterado_por
             })
         
         # Logs
@@ -1717,10 +1710,7 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'tipo': log.tipo,
                 'descricao': log.descricao,
                 'lembrete_para': log.lembrete_para,
-                'criado_em': limpar_timezone(log.criado_em),
-                'criado_por': log.criado_por,
-                'alterado_em': limpar_timezone(log.alterado_em),
-                'alterado_por': log.alterado_por
+                'autor': log.autor,
             })
         
         # Comentários

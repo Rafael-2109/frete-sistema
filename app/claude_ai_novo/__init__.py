@@ -3,9 +3,9 @@
 Sistema de IA avançado para análise de fretes e logística
 """
 
-from .core.claude_client import ClaudeClient
-from .core.query_processor import QueryProcessor
-from .core.response_formatter import ResponseFormatter
+from .integration.claude_client import ClaudeClient
+from .integration.query_processor import QueryProcessor
+from .integration.response_formatter import ResponseFormatter
 
 from .intelligence.context_manager import ContextManager
 from .intelligence.learning_system import LearningSystem

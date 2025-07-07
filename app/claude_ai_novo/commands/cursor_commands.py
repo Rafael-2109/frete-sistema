@@ -73,7 +73,7 @@ from app import db
 from app.faturamento.models import RelatorioFaturamentoImportado as RelatorioImportado
 from app import db
 from app.fretes.models import DespesaExtra
-# from app.monitoramento.models import PendenciaFinanceira  # Comentado temporariamente
+from app.financeiro.models import PendenciaFinanceiraNF  # Comentado temporariamente
 
 # Configurar logger
 logger = logging.getLogger(__name__)
