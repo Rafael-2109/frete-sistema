@@ -2228,8 +2228,8 @@ def calcular_frete_otimizacao_conservadora(pedidos):
         
         # REGRA 10: Busca nas tabelas as modalidades que atendam aos vínculos
         # ✅ NOVO: Filtro por tipo_carga = "DIRETA"
-        # Agrupa vínculos por transportadora + modalidade
-        combinacoes_transporte = {}  # (transportadora_id, modalidade) -> [tabelas]
+        # Agrupa vínculos por transportadora + UF + modalidade
+        combinacoes_transporte = {}  # (transportadora_id, uf_destino, modalidade) -> [tabelas]
         
         for vinculo in vinculos:
             tabelas = TabelaFrete.query.filter(
@@ -2240,7 +2240,8 @@ def calcular_frete_otimizacao_conservadora(pedidos):
             
             for tabela in tabelas:
                 modalidade = tabela.modalidade or 'FRETE PESO'
-                chave = (tabela.transportadora_id, modalidade)
+                # ✅ NOVA CHAVE: Inclui UF de destino
+                chave = (tabela.transportadora_id, tabela.uf_destino, modalidade)
                 
                 if chave not in combinacoes_transporte:
                     combinacoes_transporte[chave] = []
@@ -2254,15 +2255,15 @@ def calcular_frete_otimizacao_conservadora(pedidos):
         # REGRA 11: Descarta opções que não atendem TODAS as cidades
         combinacoes_validas = {}
         
-        for (transportadora_id, modalidade), dados in combinacoes_transporte.items():
+        for (transportadora_id, uf_destino, modalidade), dados in combinacoes_transporte.items():
             # Verifica se esta combinação atende TODAS as cidades cotadas
             cidades_atendidas = set(item['cidade_id'] for item in dados)
             
             if cidades_atendidas.issuperset(cidades_cotadas):
-                combinacoes_validas[(transportadora_id, modalidade)] = dados
-                print(f"[DEBUG] ✅ Combinação válida: Transp {transportadora_id}, Modal {modalidade}")
+                combinacoes_validas[(transportadora_id, uf_destino, modalidade)] = dados
+                print(f"[DEBUG] ✅ Combinação válida: Transp {transportadora_id}, UF {uf_destino}, Modal {modalidade}")
             else:
-                print(f"[DEBUG] ❌ Combinação descartada: Transp {transportadora_id}, Modal {modalidade} - não atende todas as cidades")
+                print(f"[DEBUG] ❌ Combinação descartada: Transp {transportadora_id}, UF {uf_destino}, Modal {modalidade} - não atende todas as cidades")
         
         if not combinacoes_validas:
             print("[DEBUG] ❌ Nenhuma combinação atende todas as cidades")
@@ -2272,14 +2273,14 @@ def calcular_frete_otimizacao_conservadora(pedidos):
         veiculos = {v.nome: v.peso_maximo for v in Veiculo.query.all()}
         combinacoes_com_peso_ok = {}
         
-        for (transportadora_id, modalidade), dados in combinacoes_validas.items():
+        for (transportadora_id, uf_destino, modalidade), dados in combinacoes_validas.items():
             peso_maximo = veiculos.get(modalidade, 0)
             
             if peso_maximo >= peso_total:
-                combinacoes_com_peso_ok[(transportadora_id, modalidade)] = dados
-                print(f"[DEBUG] ✅ Peso OK: Modal {modalidade} suporta {peso_maximo}kg >= {peso_total}kg")
+                combinacoes_com_peso_ok[(transportadora_id, uf_destino, modalidade)] = dados
+                print(f"[DEBUG] ✅ Peso OK: Modal {modalidade} para {uf_destino} suporta {peso_maximo}kg >= {peso_total}kg")
             else:
-                print(f"[DEBUG] ❌ Peso excedido: Modal {modalidade} suporta {peso_maximo}kg < {peso_total}kg")
+                print(f"[DEBUG] ❌ Peso excedido: Modal {modalidade} para {uf_destino} suporta {peso_maximo}kg < {peso_total}kg")
         
         if not combinacoes_com_peso_ok:
             print("[DEBUG] ❌ Nenhuma modalidade suporta o peso total")
@@ -2288,7 +2289,7 @@ def calcular_frete_otimizacao_conservadora(pedidos):
         # REGRA 13: Calcula fretes e pega a opção MAIS CARA
         opcoes_calculadas = []
         
-        for (transportadora_id, modalidade), dados in combinacoes_com_peso_ok.items():
+        for (transportadora_id, uf_destino, modalidade), dados in combinacoes_com_peso_ok.items():
             # Para cada combinação válida, pega a tabela MAIS CARA entre as que atendem as cidades
             tabelas_da_combinacao = []
             

@@ -117,11 +117,11 @@ def calcular_fretes_possiveis(
     if not atendimentos:
         return []
     
-    # ✅ NOVA LÓGICA: Para carga DIRETA, agrupa por transportadora/modalidade para aplicar "tabela mais cara"
+    # ✅ NOVA LÓGICA: Para carga DIRETA, agrupa por transportadora/uf_destino/modalidade para aplicar "tabela mais cara"
     if tipo_carga == "DIRETA":
-        grupos_direta = {}  # (transportadora_id, modalidade) -> [opcoes_calculadas]
+        grupos_direta = {}  # (transportadora_id, uf_destino, modalidade) -> [opcoes_calculadas]
         
-        print(f"[DEBUG] 🎯 CARGA DIRETA: Aplicando lógica de tabela mais cara")
+        print(f"[DEBUG] 🎯 CARGA DIRETA: Aplicando lógica de tabela mais cara por transportadora/UF/modalidade")
         
     # Processa todas as transportadoras
     for at in atendimentos:        
@@ -227,8 +227,8 @@ def calcular_fretes_possiveis(
                 
                 # ✅ APLICA LÓGICA ESPECÍFICA POR TIPO DE CARGA
                 if tipo_carga == "DIRETA":
-                    # 🎯 CARGA DIRETA: Agrupa por (transportadora_id, modalidade)
-                    chave_grupo = (at.transportadora_id, tf.modalidade)
+                    # 🎯 CARGA DIRETA: Agrupa por (transportadora_id, uf_destino, modalidade)
+                    chave_grupo = (at.transportadora_id, cidade_uf, tf.modalidade)
                     
                     if chave_grupo not in grupos_direta:
                         grupos_direta[chave_grupo] = []
@@ -239,18 +239,22 @@ def calcular_fretes_possiveis(
 
     # ✅ APLICA LÓGICA "TABELA MAIS CARA" apenas para carga DIRETA
     if tipo_carga == "DIRETA":
-        print(f"[DEBUG] 🎯 CARGA DIRETA: Processando {len(grupos_direta)} grupos")
+        print(f"[DEBUG] 🎯 CARGA DIRETA: Processando {len(grupos_direta)} grupos (transportadora/UF/modalidade)")
         
-        for (transportadora_id, modalidade), opcoes in grupos_direta.items():
+        for (transportadora_id, uf_destino, modalidade), opcoes in grupos_direta.items():
             if len(opcoes) > 1:
                 # Tem mais de uma tabela para esta combinação -> escolhe a MAIS CARA
                 opcao_mais_cara = max(opcoes, key=lambda x: x['valor_liquido'])
-                print(f"[DEBUG] 📊 Transp {transportadora_id} {modalidade}: {len(opcoes)} tabelas → escolhida mais cara: {opcao_mais_cara['nome_tabela']} (R${opcao_mais_cara['valor_liquido']:.2f})")
-                opcao_mais_cara['nome_tabela'] = f"{opcao_mais_cara['nome_tabela']} (MAIS CARA)"
+                print(f"[DEBUG] 📊 Transp {transportadora_id} {uf_destino} {modalidade}: {len(opcoes)} tabelas → escolhida mais cara: {opcao_mais_cara['nome_tabela']} (R${opcao_mais_cara['valor_liquido']:.2f})")
+                
+                # ✅ MELHORIA: Adiciona informação sobre o critério de seleção
+                opcao_mais_cara['nome_tabela'] = f"{opcao_mais_cara['nome_tabela']} (MAIS CARA p/ {uf_destino})"
+                opcao_mais_cara['criterio_selecao'] = f"Tabela mais cara entre {len(opcoes)} opções para {uf_destino}"
                 resultados.append(opcao_mais_cara)
             else:
                 # Apenas uma tabela para esta combinação
-                print(f"[DEBUG] 📋 Transp {transportadora_id} {modalidade}: 1 tabela única: {opcoes[0]['nome_tabela']} (R${opcoes[0]['valor_liquido']:.2f})")
+                print(f"[DEBUG] 📋 Transp {transportadora_id} {uf_destino} {modalidade}: 1 tabela única: {opcoes[0]['nome_tabela']} (R${opcoes[0]['valor_liquido']:.2f})")
+                opcoes[0]['criterio_selecao'] = f"Tabela única para {uf_destino}"
                 resultados.append(opcoes[0])
 
     return resultados
@@ -423,30 +427,79 @@ def calcular_frete_por_cnpj(pedidos, veiculo_forcado=None):
     if todos_mesmo_uf:
         # Se são do mesmo UF, pode ser DIRETA ou FRACIONADA
         
-        # Pega primeiro pedido como referência
-        pedido = pedidos[0]
+        # ✅ CORREÇÃO CRÍTICA: Para CARGA DIRETA, precisa buscar tabelas de TODAS as cidades
+        print(f"[DEBUG] 🎯 CARGA DIRETA: Iniciando busca para múltiplas cidades do mesmo UF")
         
-        # Busca cidade destino
-        cidade = buscar_cidade_unificada(
-            cidade=pedido.cidade_normalizada,
-            uf=pedido.uf_normalizada,
-            rota=pedido.rota
-        )
-        if not cidade:
+        # Identifica todas as cidades únicas dos pedidos
+        cidades_unicas = set()
+        uf_comum = None
+        
+        for pedido in pedidos:
+            cidade = buscar_cidade_unificada(
+                cidade=pedido.cidade_normalizada,
+                uf=pedido.uf_normalizada,
+                rota=pedido.rota
+            )
+            if cidade:
+                cidades_unicas.add(cidade.id)
+                uf_comum = cidade.uf
+        
+        if not cidades_unicas:
             return resultados
         
-        # Para carga DIRETA, usa peso/valor total de TODOS os pedidos
-        fretes_diretos = calcular_fretes_possiveis(
-            cidade_destino_id=cidade.id,
-            peso_utilizado=peso_total_geral,  # Usa peso total GERAL
-            valor_carga=valor_total_geral,    # Usa valor total GERAL
-            veiculo_forcado=veiculo_forcado,
-            rota=pedido.rota,
-            tipo_carga="DIRETA"
-        )
+        print(f"[DEBUG] 📍 Encontradas {len(cidades_unicas)} cidades únicas para UF {uf_comum}")
         
-        # Para cada opção de frete DIRETA
-        resultados['diretas'].extend(fretes_diretos)
+        # ✅ NOVA LÓGICA: Busca tabelas para TODAS as cidades e compara
+        grupos_direta_multiplas_cidades = {}  # (transportadora_id, modalidade) -> [opcoes_todas_cidades]
+        
+        for cidade_id in cidades_unicas:
+            print(f"[DEBUG] 🔍 Buscando tabelas para cidade_id {cidade_id}")
+            
+            # Busca fretes para esta cidade específica
+            fretes_cidade = calcular_fretes_possiveis(
+                cidade_destino_id=cidade_id,
+                peso_utilizado=peso_total_geral,
+                valor_carga=valor_total_geral,
+                veiculo_forcado=veiculo_forcado,
+                rota=pedidos[0].rota if pedidos else None,
+                tipo_carga="DIRETA"
+            )
+            
+            # Adiciona ao grupo geral para comparação
+            for opcao in fretes_cidade:
+                chave = (opcao['transportadora_id'], opcao['modalidade'])
+                
+                if chave not in grupos_direta_multiplas_cidades:
+                    grupos_direta_multiplas_cidades[chave] = []
+                
+                # Adiciona informação da cidade de origem da tabela
+                opcao['cidade_origem_tabela'] = opcao.get('cidade', 'N/A')
+                grupos_direta_multiplas_cidades[chave].append(opcao)
+        
+        # ✅ APLICA LÓGICA "TABELA MAIS CARA" considerando TODAS as cidades
+        print(f"[DEBUG] 🎯 Aplicando lógica tabela mais cara para {len(grupos_direta_multiplas_cidades)} grupos")
+        
+        for (transportadora_id, modalidade), opcoes_todas_cidades in grupos_direta_multiplas_cidades.items():
+            if len(opcoes_todas_cidades) > 1:
+                # ✅ CORREÇÃO: Escolhe a MAIS CARA entre todas as cidades
+                opcao_mais_cara = max(opcoes_todas_cidades, key=lambda x: x['valor_liquido'])
+                
+                cidades_consideradas = [opt['cidade_origem_tabela'] for opt in opcoes_todas_cidades]
+                print(f"[DEBUG] 📊 Transp {transportadora_id} {modalidade}: {len(opcoes_todas_cidades)} tabelas de {len(set(cidades_consideradas))} cidades → mais cara: {opcao_mais_cara['nome_tabela']} de {opcao_mais_cara['cidade_origem_tabela']} (R${opcao_mais_cara['valor_liquido']:.2f})")
+                
+                # Atualiza informações da seleção
+                opcao_mais_cara['nome_tabela'] = f"{opcao_mais_cara['nome_tabela']} (MAIS CARA - {opcao_mais_cara['cidade_origem_tabela']})"
+                opcao_mais_cara['criterio_selecao'] = f"Tabela mais cara entre {len(opcoes_todas_cidades)} opções de {len(set(cidades_consideradas))} cidades"
+                opcao_mais_cara['cidades_comparadas'] = list(set(cidades_consideradas))
+                
+                resultados['diretas'].append(opcao_mais_cara)
+            else:
+                # Apenas uma tabela encontrada
+                opcao_unica = opcoes_todas_cidades[0]
+                print(f"[DEBUG] 📋 Transp {transportadora_id} {modalidade}: tabela única de {opcao_unica['cidade_origem_tabela']}: {opcao_unica['nome_tabela']} (R${opcao_unica['valor_liquido']:.2f})")
+                
+                opcao_unica['criterio_selecao'] = f"Tabela única encontrada de {opcao_unica['cidade_origem_tabela']}"
+                resultados['diretas'].append(opcao_unica)
     
     # Para cada grupo de pedidos do mesmo CNPJ
     for cnpj, pedidos_grupo in grupos.items():
