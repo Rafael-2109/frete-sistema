@@ -21,7 +21,7 @@ from app import db
 # Módulos internos
 from . import claude_ai_bp
 from app.utils.auth_decorators import require_admin
-from .claude_real_integration import processar_com_claude_real
+from app.claude_transition import processar_consulta_transicao
 
 # Adicionar import do Claude Development AI no topo do arquivo
 from .claude_development_ai import ClaudeDevelopmentAI, get_claude_development_ai, init_claude_development_ai
@@ -290,7 +290,7 @@ def claude_real():
             if not consulta:
                 return jsonify({'error': 'Query é obrigatória'}), 400
             
-            # Usar Claude REAL
+            # Usar Claude com Interface de Transição
             user_context = {
                 'user_id': current_user.id,
                 'username': current_user.nome,
@@ -299,7 +299,7 @@ def claude_real():
                 'timestamp': datetime.now().isoformat()
             }
             
-            resultado = processar_com_claude_real(consulta, user_context)
+            resultado = processar_consulta_transicao(consulta, user_context)
             
             return jsonify({
                 'response': resultado,
@@ -539,7 +539,7 @@ def api_query():
         
         try:
             # Tentar processar com Claude REAL primeiro
-            resposta = processar_com_claude_real(consulta, user_context)
+            resposta = processar_consulta_transicao(consulta, user_context)
             
             logger.info(f"✅ Widget: Resposta Claude Real gerada ({len(resposta)} chars)")
             
@@ -927,7 +927,6 @@ def api_relatorio_automatizado():
     """🤖 Geração automática de relatórios via Claude"""
     try:
         # Usar a integração Claude existente para gerar relatório
-        from .claude_real_integration import processar_com_claude_real
         
         consulta_relatorio = """
         Gere um relatório executivo completo com:
@@ -941,7 +940,7 @@ def api_relatorio_automatizado():
         """
         
         # Processar com Claude Real
-        relatorio = processar_com_claude_real(consulta_relatorio)
+        relatorio = processar_consulta_transicao(consulta_relatorio)
         
         return jsonify({
             'success': True,
@@ -2718,7 +2717,7 @@ def claude_real_free_mode():
         }
         
         # Processar com Claude Real usando configuração livre
-        resultado = processar_com_claude_real(consulta, user_context)
+        resultado = processar_consulta_transicao(consulta, user_context)
         
         # Log da ação administrativa
         free_mode.log_admin_action('claude_real_free_query', {
@@ -2928,7 +2927,7 @@ def claude_autonomous_data_access(table_name):
         for key, value in request.args.items():
             filters[key] = value
         
-        result = true_mode.autonomous_data_access(table_name, filters or None)
+        result = true_mode.autonomous_data_access(table_name, filters or {})
         
         if result.get('success'):
             logger.info(f"🗄️ Claude acessou autonomamente: {table_name} por {current_user.nome}")

@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}Criar Despesa Extra - Frete #{{ frete.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-plus"></i> Criar Despesa Extra
+                <small class="text-muted">Frete #{{ frete.id }}</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}">Nova Despesa Extra</a></li>
+            <li class="breadcrumb-item active">Criar Despesa</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Formulário -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-circle"></i> Dados da Despesa Extra
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- ✅ AVISO IMPORTANTE -->
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> Fluxo Simplificado</h6>
+                        <p class="mb-0">
+                            Preencha apenas os <strong>dados básicos</strong> da despesa. 
+                            O <strong>documento</strong> e <strong>vencimento</strong> serão definidos quando vincular a uma fatura.
+                        </p>
+                    </div>
+                    
+                    <form method="POST">
+                        {{ form.hidden_tag() }}
+
+                        <!-- Tipo e Responsável -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.tipo_despesa.label(class="form-label") }}
+                                    {{ form.tipo_despesa(class="form-control") }}
+                                    {% if form.tipo_despesa.errors %}
+                                        {% for error in form.tipo_despesa.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.setor_responsavel.label(class="form-label") }}
+                                    {{ form.setor_responsavel(class="form-control") }}
+                                    {% if form.setor_responsavel.errors %}
+                                        {% for error in form.setor_responsavel.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Motivo -->
+                        <div class="form-group">
+                            {{ form.motivo_despesa.label(class="form-label") }}
+                            {{ form.motivo_despesa(class="form-control") }}
+                            {% if form.motivo_despesa.errors %}
+                                {% for error in form.motivo_despesa.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <!-- ✅ REMOVIDO: Campos de documento (serão preenchidos na fatura) -->
+
+                        <!-- Valor -->
+                        <h6 class="border-bottom pb-2 mb-3 mt-4">
+                            <i class="fas fa-dollar-sign"></i> Valor da Despesa
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.valor_despesa.label(class="form-label") }}
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">R$</span>
+                                        </div>
+                                        {{ form.valor_despesa(class="form-control") }}
+                                    </div>
+                                    {% if form.valor_despesa.errors %}
+                                        {% for error in form.valor_despesa.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    {% endif %}
+                                    <small class="text-muted">Valor estimado (pode ser ajustado na fatura)</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="alert alert-warning small">
+                                    <i class="fas fa-clock"></i>
+                                    <strong>Vencimento:</strong> Será copiado automaticamente da fatura quando vinculada.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Observações -->
+                        <div class="form-group">
+                            {{ form.observacoes.label(class="form-label") }}
+                            {{ form.observacoes(class="form-control", rows="3") }}
+                            <small class="text-muted">Observações adicionais sobre a despesa</small>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-arrow-right"></i> Continuar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações do frete -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Resumo do Frete
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Cliente:</strong> {{ frete.nome_cliente[:35] }}{% if frete.nome_cliente|length > 35 %}...{% endif %}</p>
+                    <p><strong>CNPJ:</strong> <span style="color: black;">{{ frete.cnpj_cliente }}</span></p>
+                    <p><strong>Embarque:</strong> 
+                        <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque.id) }}">#{{ frete.embarque.numero }}</a>
+                    </p>
+                    <p><strong>Transportadora:</strong> {{ frete.transportadora.razao_social[:30] }}{% if frete.transportadora.razao_social|length > 30 %}...{% endif %}</p>
+                    <p><strong>Valor Cotado:</strong> R$ {{ "%.2f"|format(frete.valor_cotado) }}</p>
+                    {% if frete.numero_cte %}
+                        <p><strong>CTe:</strong> {{ frete.numero_cte }}</p>
+                    {% else %}
+                        <p><strong>CTe:</strong> <span class="text-muted">Não lançado</span></p>
+                    {% endif %}
+                    <p><strong>Status:</strong> 
+                        <span class="badge 
+                            {% if frete.status == 'APROVADO' %}badge-success{% endif %}
+                            {% if frete.status == 'EM_TRATATIVA' %}badge-warning{% endif %}
+                            {% if frete.status == 'REJEITADO' %}badge-danger{% endif %}
+                            {% if frete.status == 'PAGO' %}badge-primary{% endif %}
+                            {% if frete.status == 'CANCELADO' %}badge-secondary{% endif %}
+                            {% if frete.status == 'LANCADO' %}badge-info{% endif %}
+                            {% if frete.status == 'PENDENTE' %}badge-secondary{% endif %}"
+                            style="{% if frete.status == 'APROVADO' %}color: white; background-color: #28a745;{% endif %}
+                                   {% if frete.status == 'EM_TRATATIVA' %}color: #212529; background-color: #ffc107;{% endif %}
+                                   {% if frete.status == 'REJEITADO' %}color: white; background-color: #dc3545;{% endif %}
+                                   {% if frete.status == 'PAGO' %}color: white; background-color: #007bff;{% endif %}
+                                   {% if frete.status == 'CANCELADO' %}color: white; background-color: #6c757d;{% endif %}
+                                   {% if frete.status == 'LANCADO' %}color: white; background-color: #17a2b8;{% endif %}
+                                   {% if frete.status == 'PENDENTE' %}color: white; background-color: #6c757d;{% endif %}">
+                            {{ frete.status }}
+                        </span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- NFs do frete -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-list"></i> Detalhes das NFs no Frete
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if frete.numeros_nfs %}
+                        {% set nfs_list = frete.numeros_nfs.split(',') %}
+                        {% for nf in nfs_list %}
+                            {% if nf.strip() %}
+                                <span class="badge badge-primary mr-1 mb-1" style="color: white; background-color: #007bff;">{{ nf.strip() }}</span>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-muted">Nenhuma NF informada</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Próximas etapas -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Próximas Etapas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <small>
+                        <strong>Após preencher os dados:</strong><br>
+                        1. <strong>Confirmação:</strong> Revisar dados da despesa<br>
+                        2. <strong>Fatura:</strong> Informar se existe fatura para cobrança<br>
+                        3. <strong>Documento:</strong> Preencher número do CTe/NFS após vincular fatura<br>
+                        4. <strong>Finalização:</strong> Salvar despesa extra<br><br>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-lightbulb"></i>
+                            <strong>Dica:</strong> Documento e vencimento só são preenchidos APÓS vincular uma fatura.
+                        </div>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

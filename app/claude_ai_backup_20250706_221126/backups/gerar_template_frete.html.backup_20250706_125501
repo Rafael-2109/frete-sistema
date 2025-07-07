@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+  <h3>🔧 Gerar Template para Importação de Tabelas</h3>
+
+  <div class="alert alert-info">
+    <h5><i class="fas fa-info-circle"></i> Como usar:</h5>
+    <ol>
+      <li>Preencha os dados básicos abaixo</li>
+      <li>Defina quantas linhas deseja no template</li>
+      <li>Clique em "Gerar Template" para baixar o arquivo Excel</li>
+      <li>Preencha os valores específicos no Excel baixado</li>
+      <li>Use o arquivo preenchido na função "Importar Tabelas"</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h5 class="card-title"><i class="fas fa-cogs"></i> Configurações do Template</h5>
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        
+        <div class="row mb-3">
+          <div class="col-md-6">
+            {{ form.transportadora.label(class="form-label") }}
+            {{ form.transportadora(class="form-select") }}
+            <div class="form-text">Todas as linhas serão pré-preenchidas com esta transportadora</div>
+          </div>
+          <div class="col-md-3">
+            {{ form.uf_origem.label(class="form-label") }}
+            {{ form.uf_origem(class="form-select") }}
+          </div>
+          <div class="col-md-3">
+            {{ form.uf_destino.label(class="form-label") }}
+            {{ form.uf_destino(class="form-select") }}
+          </div>
+        </div>
+
+        <div class="row mb-3">
+          <div class="col-md-3">
+            {{ form.tipo_carga.label(class="form-label") }}
+            {{ form.tipo_carga(class="form-select") }}
+            <div class="form-text">Todas as linhas terão este tipo de carga</div>
+          </div>
+          <div class="col-md-3">
+            {{ form.modalidade.label(class="form-label") }}
+            {{ form.modalidade(class="form-select") }}
+            <div class="form-text">Todas as linhas terão esta modalidade</div>
+          </div>
+          <div class="col-md-3">
+            {{ form.icms_incluso.label(class="form-label") }}
+            {{ form.icms_incluso(class="form-select") }}
+            <div class="form-text">ICMS incluso no valor do frete</div>
+          </div>
+          <div class="col-md-3">
+            {{ form.quantidade_linhas.label(class="form-label") }}
+            {{ form.quantidade_linhas(class="form-control", min="1", max="1000") }}
+            <div class="form-text">Número de linhas no template (máx: 1000)</div>
+          </div>
+        </div>
+
+        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+          <a href="{{ url_for('tabelas.importar_tabela_frete') }}" class="btn btn-secondary me-md-2">
+            <i class="fas fa-arrow-left"></i> Voltar para Importar
+          </a>
+          {{ form.submit(class="btn btn-success") }}
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card mt-4">
+    <div class="card-body">
+      <h5 class="card-title"><i class="fas fa-table"></i> Estrutura do Template</h5>
+      <p>O template gerado conterá as seguintes colunas pré-preenchidas:</p>
+      
+      <div class="row">
+        <div class="col-md-6">
+          <h6>✅ Colunas Pré-preenchidas:</h6>
+          <ul class="list-group list-group-flush">
+            <li class="list-group-item"><strong>ATIVO:</strong> 'A' (Ativo)</li>
+            <li class="list-group-item"><strong>CÓD. TRANSP:</strong> CNPJ da transportadora</li>
+            <li class="list-group-item"><strong>ORIGEM:</strong> UF de origem selecionada</li>
+            <li class="list-group-item"><strong>DESTINO:</strong> UF de destino selecionada</li>
+            <li class="list-group-item"><strong>CARGA:</strong> Tipo de carga selecionado</li>
+            <li class="list-group-item"><strong>FRETE:</strong> Modalidade selecionada</li>
+            <li class="list-group-item"><strong>INC.:</strong> ICMS incluso selecionado (S/N)</li>
+          </ul>
+        </div>
+        <div class="col-md-6">
+          <h6>📝 Colunas para Preenchimento:</h6>
+          <ul class="list-group list-group-flush">
+            <li class="list-group-item"><strong>NOME TABELA:</strong> Nome da tabela</li>
+            <li class="list-group-item"><strong>VALOR:</strong> Frete mínimo por valor</li>
+            <li class="list-group-item"><strong>PESO:</strong> Frete mínimo por peso</li>
+            <li class="list-group-item"><strong>FRETE PESO:</strong> Valor por kg</li>
+            <li class="list-group-item"><strong>FRETE VALOR:</strong> % sobre valor</li>
+            <li class="list-group-item"><strong>GRIS, ADV, RCA:</strong> Percentuais</li>
+            <li class="list-group-item"><strong>DESPACHO, CTE, TAS:</strong> Valores fixos</li>
+            <li class="list-group-item"><strong>PEDAGIO:</strong> Por 100kg</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,116 @@
+<!-- Formulário de edição para uso em modal AJAX -->
+<form method="POST" action="{{ url_for('pedidos.editar_pedido', pedido_id=pedido.id) }}?ajax=1">
+    {{ form.hidden_tag() }}
+    
+    <!-- Informações do pedido -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-info-circle"></i> Informações do Pedido
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <strong>Número:</strong> {{ pedido.num_pedido }}<br>
+                    <strong>Cliente:</strong> {{ pedido.raz_social_red or 'N/A' }}<br>
+                    <strong>CNPJ:</strong> {{ pedido.cnpj_cpf or 'N/A' }}
+                </div>
+                <div class="col-md-6">
+                    <strong>Cidade:</strong> {{ pedido.nome_cidade or 'N/A' }}<br>
+                    <strong>UF:</strong> {{ pedido.cod_uf or 'N/A' }}<br>
+                    <strong>Valor:</strong> {{ pedido.valor_saldo_total|valor_br(0) if pedido.valor_saldo_total else 'N/A' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informações de agendamento (se existir) -->
+    {% if contato_agendamento %}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-phone"></i> Informações de Agendamento
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <strong>Forma:</strong> 
+                    {% if contato_agendamento.forma %}
+                        <span class="badge bg-primary">{{ contato_agendamento.forma }}</span>
+                    {% else %}
+                        <span class="badge bg-danger">Não cadastrado</span>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <strong>Contato:</strong> {{ contato_agendamento.contato }}
+                </div>
+                {% if contato_agendamento.observacao %}
+                <div class="col-12 mt-2">
+                    <strong>Observação:</strong> {{ contato_agendamento.observacao }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Formulário de edição -->
+    <div class="card">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-edit"></i> Editar Dados
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    {{ form.expedicao.label(class="form-label") }}
+                    {{ form.expedicao(class="form-control") }}
+                    {% if form.expedicao.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.expedicao.errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    {{ form.agendamento.label(class="form-label") }}
+                    {{ form.agendamento(class="form-control") }}
+                    {% if form.agendamento.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.agendamento.errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    {{ form.protocolo.label(class="form-label") }}
+                    {{ form.protocolo(class="form-control") }}
+                    {% if form.protocolo.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.protocolo.errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botões de ação -->
+    <div class="d-flex justify-content-end mt-3">
+        <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">
+            <i class="fas fa-times"></i> Cancelar
+        </button>
+        <button type="submit" class="btn btn-success">
+            <i class="fas fa-save"></i> Salvar Alterações
+        </button>
+    </div>
+</form> 

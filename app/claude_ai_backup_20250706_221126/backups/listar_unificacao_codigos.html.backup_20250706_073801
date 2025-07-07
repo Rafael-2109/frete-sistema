@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}📋 Unificação de Códigos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-0">🔄 Unificação de Códigos</h2>
+            <small class="text-muted">Gestão de códigos unificados para estoque consolidado</small>
+        </div>
+        <div>
+            <a href="{{ url_for('estoque.baixar_modelo_unificacao') }}" class="btn btn-info me-2">
+                <i class="fas fa-download"></i> Baixar Modelo
+            </a>
+            <a href="{{ url_for('estoque.nova_unificacao_codigo') }}" class="btn btn-success me-2">
+                <i class="fas fa-plus"></i> Nova Unificação
+            </a>
+            <a href="{{ url_for('estoque.importar_unificacao_codigos') }}" class="btn btn-warning me-2">
+                <i class="fas fa-file-upload"></i> Importar
+            </a>
+            {% if total_unificacoes > 0 %}
+            <a href="{{ url_for('estoque.exportar_dados_unificacao') }}" class="btn btn-secondary">
+                <i class="fas fa-file-export"></i> Exportar
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Código (origem ou destino)</label>
+                    <input type="number" name="codigo_busca" class="form-control" value="{{ codigo_busca }}" placeholder="Ex: 4080177">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="ativo" {% if status_filtro == 'ativo' %}selected{% endif %}>Ativo</option>
+                        <option value="inativo" {% if status_filtro == 'inativo' %}selected{% endif %}>Inativo</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('estoque.listar_unificacao_codigos') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Unificações -->
+    <div class="card">
+        <div class="card-body">
+            {% if unificacoes %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Código A</th>
+                            <th>=</th>
+                            <th>Código B</th>
+                            <th>Status</th>
+                            <th>Observação</th>
+                            <th>Criado Por</th>
+                            <th>Data Criação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for unificacao in unificacoes %}
+                        <tr>
+                            <td>
+                                <span class="badge bg-primary">{{ unificacao.codigo_origem }}</span>
+                            </td>
+                            <td class="text-center">
+                                <i class="fas fa-equals text-success fw-bold"></i>
+                            </td>
+                            <td>
+                                <span class="badge bg-primary">{{ unificacao.codigo_destino }}</span>
+                            </td>
+                            <td>
+                                {% if unificacao.ativo %}
+                                    <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ unificacao.observacao or '-' }}</small>
+                            </td>
+                            <td>
+                                <small>{{ unificacao.created_by or '-' }}</small>
+                            </td>
+                            <td>
+                                <small>{{ unificacao.created_at.strftime('%d/%m/%Y %H:%M') if unificacao.created_at else '-' }}</small>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    {% if unificacao.ativo %}
+                                        <a href="{{ url_for('estoque.toggle_unificacao_codigo', id=unificacao.id) }}" 
+                                           class="btn btn-outline-warning" 
+                                           onclick="return confirm('Desativar esta unificação?')"
+                                           title="Desativar">
+                                            <i class="fas fa-pause"></i>
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ url_for('estoque.toggle_unificacao_codigo', id=unificacao.id) }}" 
+                                           class="btn btn-outline-success"
+                                           onclick="return confirm('Ativar esta unificação?')"
+                                           title="Ativar">
+                                            <i class="fas fa-play"></i>
+                                        </a>
+                                    {% endif %}
+                                    
+                                    <a href="#" 
+                                       class="btn btn-outline-secondary disabled" 
+                                       title="Disponível após módulo 4 - Saldo Estoque">
+                                        <i class="fas fa-calculator"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <h5>Nenhuma unificação encontrada</h5>
+                <p class="text-muted">Comece criando uma nova unificação de códigos.</p>
+                <a href="{{ url_for('estoque.nova_unificacao_codigo') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Criar Primeira Unificação
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Info Box -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                <strong>Como funciona:</strong>
+                A unificação permite tratar códigos diferentes como o mesmo produto físico. 
+                Para efeitos de estoque, movimentações e consultas, os códigos unificados são consolidados automaticamente.
+                <br><strong>Exemplo:</strong> Código 4080177 = 4729098 significa que ambos são equivalentes e representam o mesmo produto, 
+                somando estoques e movimentações de ambos os códigos.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -835,5 +835,95 @@ function showFallbackSuggestions() {
     
     fallbackContainer.classList.remove('d-none');
 }
+
+// 👥 SISTEMA DE FEEDBACK REAL (CORRIGIDO)
+function adicionarBotoesFeedback(messageElement, consulta, resposta) {
+    if (messageElement.querySelector('.feedback-buttons')) {
+        return; // Já tem botões
+    }
+    
+    const feedbackDiv = document.createElement('div');
+    feedbackDiv.className = 'feedback-buttons mt-2';
+    feedbackDiv.innerHTML = `
+        <div class="feedback-section">
+            <small class="text-muted">Esta resposta foi útil?</small><br>
+            <button class="btn btn-sm btn-success me-1" onclick="enviarFeedback('positive', this, '${consulta.substring(0, 100)}', '${resposta.substring(0, 200)}')">
+                👍 Sim
+            </button>
+            <button class="btn btn-sm btn-warning me-1" onclick="enviarFeedback('improvement', this, '${consulta.substring(0, 100)}', '${resposta.substring(0, 200)}')">
+                📝 Pode melhorar
+            </button>
+            <button class="btn btn-sm btn-danger me-1" onclick="enviarFeedback('negative', this, '${consulta.substring(0, 100)}', '${resposta.substring(0, 200)}')">
+                👎 Não
+            </button>
+            <div class="feedback-details mt-2" style="display: none;">
+                <textarea class="form-control" placeholder="Opcional: Como posso melhorar?" rows="2"></textarea>
+                <button class="btn btn-sm btn-primary mt-1" onclick="enviarFeedbackDetalhado(this)">
+                    Enviar Feedback
+                </button>
+            </div>
+        </div>
+    `;
+    
+    messageElement.appendChild(feedbackDiv);
+}
+
+function enviarFeedback(tipo, botao, consulta, resposta) {
+    const feedbackSection = botao.closest('.feedback-section');
+    const detailsDiv = feedbackSection.querySelector('.feedback-details');
+    
+    if (tipo === 'improvement' || tipo === 'negative') {
+        detailsDiv.style.display = 'block';
+        detailsDiv.dataset.feedbackType = tipo;
+    } else {
+        // Feedback positivo direto
+        enviarFeedbackParaServidor(tipo, '', consulta, resposta);
+        feedbackSection.innerHTML = '<small class="text-success">✅ Obrigado pelo feedback!</small>';
+    }
+}
+
+function enviarFeedbackDetalhado(botao) {
+    const detailsDiv = botao.closest('.feedback-details');
+    const feedbackSection = botao.closest('.feedback-section');
+    const tipo = detailsDiv.dataset.feedbackType;
+    const detalhes = detailsDiv.querySelector('textarea').value;
+    const consulta = feedbackSection.closest('.message').dataset.consulta || '';
+    const resposta = feedbackSection.closest('.message').dataset.resposta || '';
+    
+    enviarFeedbackParaServidor(tipo, detalhes, consulta, resposta);
+    feedbackSection.innerHTML = '<small class="text-success">✅ Obrigado pelo feedback detalhado!</small>';
+}
+
+function enviarFeedbackParaServidor(tipo, detalhes, consulta, resposta) {
+    fetch('/claude-ai/api/advanced-feedback', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify({
+            query: consulta,
+            response: resposta,
+            feedback_text: detalhes || `Feedback ${tipo}`,
+            feedback_type: tipo,
+            session_id: Date.now().toString()
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('✅ Feedback enviado com sucesso:', data);
+        } else {
+            console.error('❌ Erro ao enviar feedback:', data);
+        }
+    })
+    .catch(error => {
+        console.error('❌ Erro na requisição de feedback:', error);
+    });
+}
+
+// Variável para armazenar última mensagem do usuário
+let lastUserMessage = "";
+
 </script>
 {% endblock %} 

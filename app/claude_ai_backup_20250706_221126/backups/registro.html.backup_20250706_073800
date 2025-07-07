@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5" style="max-width: 600px;">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h3 class="card-title mb-0">
+                <i class="fas fa-user-plus"></i> Solicitar Acesso ao Sistema
+            </h3>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-4">
+                Preencha os dados abaixo para solicitar acesso ao sistema. 
+                Sua solicitação será analisada pela administração.
+            </p>
+
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        {{ form.nome.label(class="form-label") }}
+                        {{ form.nome(class="form-control") }}
+                        {% if form.nome.errors %}
+                            <div class="text-danger small">{{ form.nome.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.email.label(class="form-label") }}
+                        {{ form.email(class="form-control") }}
+                        {% if form.email.errors %}
+                            <div class="text-danger small">{{ form.email.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        {{ form.telefone.label(class="form-label") }}
+                        {{ form.telefone(class="form-control") }}
+                        {% if form.telefone.errors %}
+                            <div class="text-danger small">{{ form.telefone.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.empresa.label(class="form-label") }}
+                        {{ form.empresa(class="form-control") }}
+                        {% if form.empresa.errors %}
+                            <div class="text-danger small">{{ form.empresa.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        {{ form.cargo.label(class="form-label") }}
+                        {{ form.cargo(class="form-control") }}
+                        {% if form.cargo.errors %}
+                            <div class="text-danger small">{{ form.cargo.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    {{ form.perfil.label(class="form-label") }}
+                    {{ form.perfil(class="form-select") }}
+                    {% if form.perfil.errors %}
+                        <div class="text-danger small">{{ form.perfil.errors[0] }}</div>
+                    {% endif %}
+                    <div class="form-text">
+                        <small class="text-muted">
+                            <strong>Vendedor:</strong> Acesso apenas ao monitoramento de suas vendas<br>
+                            <strong>Portaria:</strong> Acesso aos embarques e controle de portaria<br>
+                            <strong>Financeiro/Logística:</strong> Acesso geral ao sistema
+                        </small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.senha.label(class="form-label") }}
+                        {{ form.senha(class="form-control") }}
+                        {% if form.senha.errors %}
+                            <div class="text-danger small">{{ form.senha.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        {{ form.confirmar_senha.label(class="form-label") }}
+                        {{ form.confirmar_senha(class="form-control") }}
+                        {% if form.confirmar_senha.errors %}
+                            <div class="text-danger small">{{ form.confirmar_senha.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 mt-4">
+                    {{ form.submit(class="btn btn-primary btn-lg") }}
+                </div>
+            </form>
+
+            <div class="text-center mt-3">
+                <p class="text-muted">
+                    Já tem acesso? 
+                    <a href="{{ url_for('auth.login') }}" class="text-decoration-none">Fazer login</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-edit"></i> Editar Pedido
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Informações do pedido -->
+                    <div class="alert alert-info mb-4">
+                        <h5 class="alert-heading">
+                            <i class="fas fa-info-circle"></i> Informações do Pedido
+                        </h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Número:</strong> {{ pedido.num_pedido }}<br>
+                                <strong>Cliente:</strong> {{ pedido.raz_social_red or 'N/A' }}<br>
+                                <strong>CNPJ/CPF:</strong> {{ pedido.cnpj_cpf or 'N/A' }}
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Cidade:</strong> {{ pedido.nome_cidade or 'N/A' }}<br>
+                                <strong>UF:</strong> {{ pedido.cod_uf or 'N/A' }}<br>
+                                <strong>Status:</strong> 
+                                <span class="{{ pedido.status_badge_class }}">
+                                    {{ pedido.status_calculado }}
+                                </span>
+                            </div>
+                        </div>
+                        {% if pedido.separacao_lote_id %}
+                            <div class="mt-2">
+                                <strong>Lote de Separação:</strong> 
+                                <code>{{ pedido.separacao_lote_id }}</code>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Aviso sobre restrições -->
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Atenção:</strong> As alterações feitas neste pedido serão automaticamente 
+                        sincronizadas com os itens de separação relacionados.
+                    </div>
+
+                    <!-- Formulário de edição -->
+                    <form method="POST">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    {{ form.expedicao.label(class="form-label") }}
+                                    {{ form.expedicao(class="form-control") }}
+                                    {% if form.expedicao.description %}
+                                        <div class="form-text">{{ form.expedicao.description }}</div>
+                                    {% endif %}
+                                    {% if form.expedicao.errors %}
+                                        <div class="text-danger">
+                                            {% for error in form.expedicao.errors %}
+                                                <small>{{ error }}</small>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    {{ form.agendamento.label(class="form-label") }}
+                                    {{ form.agendamento(class="form-control") }}
+                                    {% if form.agendamento.description %}
+                                        <div class="form-text">{{ form.agendamento.description }}</div>
+                                    {% endif %}
+                                    {% if form.agendamento.errors %}
+                                        <div class="text-danger">
+                                            {% for error in form.agendamento.errors %}
+                                                <small>{{ error }}</small>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    {{ form.protocolo.label(class="form-label") }}
+                                    {{ form.protocolo(class="form-control", placeholder="Ex: 12345") }}
+                                    {% if form.protocolo.description %}
+                                        <div class="form-text">{{ form.protocolo.description }}</div>
+                                    {% endif %}
+                                    {% if form.protocolo.errors %}
+                                        <div class="text-danger">
+                                            {% for error in form.protocolo.errors %}
+                                                <small>{{ error }}</small>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botões de ação -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('pedidos.lista_pedidos') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Cancelar
+                            </a>
+                            
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> {{ form.submit.label.text }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Script para melhorar UX com datas -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Foca no primeiro campo ao carregar
+    const firstInput = document.querySelector('input[type="date"]');
+    if (firstInput) {
+        firstInput.focus();
+    }
+    
+    // Validação básica no frontend
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        const expedicao = document.querySelector('#expedicao').value;
+        const agendamento = document.querySelector('#agendamento').value;
+        
+        // Verifica se agendamento não é anterior à expedição
+        if (expedicao && agendamento && new Date(agendamento) < new Date(expedicao)) {
+            e.preventDefault();
+            alert('A data de agendamento não pode ser anterior à data de expedição.');
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %} 

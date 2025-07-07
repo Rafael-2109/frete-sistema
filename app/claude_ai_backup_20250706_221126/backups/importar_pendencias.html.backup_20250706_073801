@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Importar Pendências Financeiras</h2>
+  
+  <!-- Card de orientações -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5 class="mb-0">📋 Orientações para Importação</h5>
+    </div>
+    <div class="card-body">
+      <p class="mb-2"><strong>Antes de importar:</strong></p>
+      <ul class="mb-3">
+        <li>Baixe o modelo Excel oficial abaixo</li>
+        <li>Preencha com seus dados seguindo o exemplo</li>
+        <li><strong>Importante:</strong> O sistema lê pela posição das colunas:
+          <ul>
+            <li><span class="badge bg-info">Coluna A</span> = Número da NF (somente números)</li>
+            <li><span class="badge bg-info">Coluna B</span> = Observação da pendência</li>
+          </ul>
+        </li>
+      </ul>
+      <a href="{{ url_for('financeiro.baixar_modelo_pendencias') }}" class="btn btn-success btn-sm">
+        <i class="fas fa-download"></i> Baixar Modelo Excel
+      </a>
+    </div>
+  </div>
+
+  <!-- Formulário de importação -->
+  <div class="card">
+    <div class="card-header">
+      <h5 class="mb-0">📤 Importar Arquivo</h5>
+    </div>
+    <div class="card-body">
+      <form method="POST" enctype="multipart/form-data">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          <label for="arquivo" class="form-label">Selecione o arquivo Excel (.xlsx)</label>
+          <input class="form-control" type="file" name="arquivo" accept=".xlsx" required>
+          <div class="form-text">Arquivo deve estar no formato do modelo oficial.</div>
+        </div>
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-upload"></i> Importar Pendências
+        </button>
+        <a href="{{ url_for('financeiro.consultar_pendencias') }}" class="btn btn-secondary ms-2">
+          <i class="fas fa-list"></i> Ver Pendências
+        </a>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
