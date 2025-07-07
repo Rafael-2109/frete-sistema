@@ -161,3 +161,7 @@ def get_code_generator():
 
 # ❌ REMOVIDO: Inicialização automática que causava problemas
 # init_intelligent_suggestions() 
+
+# Imports adicionados automaticamente
+from . import claude_development_ai
+from . import claude_project_scanner
