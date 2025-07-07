@@ -1,4 +1,3 @@
-
 """
 Interface de Transição - Claude AI
 Permite usar tanto o sistema antigo quanto o novo
@@ -11,7 +10,7 @@ class ClaudeTransition:
     """Classe de transição entre sistemas antigo e novo"""
     
     def __init__(self):
-        self.usar_sistema_novo = os.getenv('USE_NEW_CLAUDE_SYSTEM', 'false').lower() == 'true'
+        self.usar_sistema_novo = os.getenv('USE_NEW_CLAUDE_SYSTEM', 'true').lower() == 'true'
         
         if self.usar_sistema_novo:
             self._inicializar_sistema_novo()
@@ -32,8 +31,8 @@ class ClaudeTransition:
     def _inicializar_sistema_antigo(self):
         """Inicializa sistema antigo"""
         try:
-            from app.claude_ai.claude_real_integration import processar_consulta_real
-            self.processar_consulta_real = processar_consulta_real
+            from app.claude_ai.claude_real_integration import processar_com_claude_real
+            self.processar_consulta_real = processar_com_claude_real
             self.sistema_ativo = "antigo"
             print("✅ Sistema Claude AI ANTIGO ativado")
         except Exception as e:

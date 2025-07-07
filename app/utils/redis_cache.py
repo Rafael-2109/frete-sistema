@@ -77,7 +77,10 @@ class RedisCache:
         try:
             valor = self.client.get(chave)
             if valor:
-                return json.loads(valor)
+                # Garantir que valor é string antes do json.loads
+                valor_str = str(valor) if valor is not None else None
+                if valor_str:
+                    return json.loads(valor_str)
             return None
         except Exception as e:
             logger.error(f"❌ Erro ao buscar cache {chave}: {e}")
@@ -114,9 +117,13 @@ class RedisCache:
             return 0
         
         try:
-            chaves = self.client.keys(f"{pattern}*")
-            if chaves:
-                return self.client.delete(*chaves)
+            chaves_raw = self.client.keys(f"{pattern}*")
+            if chaves_raw:
+                # Type cast explícito para resolver tipagem Redis
+                from typing import cast
+                chaves = cast(List[str], chaves_raw)
+                resultado = cast(int, self.client.delete(*chaves))
+                return resultado if resultado is not None else 0
             return 0
         except Exception as e:
             logger.error(f"❌ Erro ao limpar cache {pattern}: {e}")
@@ -124,7 +131,7 @@ class RedisCache:
     
     # MÉTODOS ESPECÍFICOS PARA O SISTEMA DE FRETES
     
-    def cache_consulta_claude(self, consulta: str, cliente: str = None, 
+    def cache_consulta_claude(self, consulta: str, cliente: Optional[str] = None, 
                              periodo_dias: int = 30, resultado: Any = None, 
                              ttl: int = 300) -> Optional[Any]:
         """Cache específico para consultas do Claude AI"""
@@ -258,7 +265,7 @@ REDIS_DISPONIVEL = redis_cache.disponivel
 class CacheAsideManager:
     """Implementa padrão Cache-Aside conforme documentação Redis oficial"""
     
-    def __init__(self, cache_instance: RedisCache = None):
+    def __init__(self, cache_instance: Optional[RedisCache] = None):
         self.cache = cache_instance or redis_cache
     
     def get_or_set(self, cache_key: str, fetch_function, ttl: int = 300, *args, **kwargs):
@@ -294,7 +301,7 @@ cache_aside = CacheAsideManager()
 class IntelligentCache:
     """Cache inteligente com categorização para IA avançada"""
     
-    def __init__(self, base_cache: RedisCache = None):
+    def __init__(self, base_cache: Optional[RedisCache] = None):
         self.cache = base_cache or redis_cache
         self.categories = {}
     

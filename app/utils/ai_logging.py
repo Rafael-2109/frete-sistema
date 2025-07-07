@@ -169,8 +169,8 @@ class AILogger:
         
         self.metrics['total_logs'] += 1
     
-    def log_cache_operation(self, operation: str, key: str, hit: bool = None, 
-                           category: str = None, **kwargs):
+    def log_cache_operation(self, operation: str, key: str, hit: Optional[bool] = None, 
+                           category: Optional[str] = None, **kwargs):
         """Log específico para operações de cache"""
         self.metrics['cache_operations'] += 1
         
@@ -191,7 +191,7 @@ class AILogger:
         self.metrics['total_logs'] += 1
     
     def log_api_call(self, endpoint: str, method: str, duration: float, 
-                    status_code: int, user_id: str = None, **kwargs):
+                    status_code: int, user_id: Optional[str] = None, **kwargs):
         """Log específico para chamadas de API"""
         self.metrics['api_calls'] += 1
         
@@ -217,7 +217,7 @@ class AILogger:
         self.metrics['total_logs'] += 1
     
     def log_performance(self, component: str, operation: str, duration: float, 
-                       memory_usage: float = None, cpu_usage: float = None, **kwargs):
+                       memory_usage: Optional[float] = None, cpu_usage: Optional[float] = None, **kwargs):
         """Log específico para métricas de performance"""
         
         log_data = {
@@ -269,8 +269,8 @@ class AILogger:
         
         self.metrics['total_logs'] += 1
     
-    def log_user_interaction(self, user_id: str, action: str, query: str = None, 
-                           response_time: float = None, **kwargs):
+    def log_user_interaction(self, user_id: str, action: str, query: Optional[str] = None, 
+                           response_time: Optional[float] = None, **kwargs):
         """Log específico para interações do usuário"""
         
         log_data = {
@@ -287,8 +287,8 @@ class AILogger:
         
         self.metrics['total_logs'] += 1
     
-    def log_error(self, error: Exception, context: Dict[str, Any] = None, 
-                 operation: str = None):
+    def log_error(self, error: Exception, context: Optional[Dict[str, Any]] = None, 
+                 operation: Optional[str] = None):
         """Log estruturado para erros"""
         self.metrics['errors'] += 1
         
@@ -319,8 +319,8 @@ class AILogger:
             'error_rate': self.metrics['errors'] / max(self.metrics['total_logs'], 1)
         }
     
-    def export_logs(self, start_time: datetime = None, end_time: datetime = None, 
-                   log_types: list = None) -> Dict[str, list]:
+    def export_logs(self, start_time: Optional[datetime] = None, end_time: Optional[datetime] = None, 
+                   log_types: Optional[list] = None) -> Dict[str, list]:
         """Exporta logs para análise"""
         
         if log_types is None:
@@ -354,7 +354,7 @@ class AILogger:
         return exported_logs
 
 # Decoradores para logging automático
-def log_execution_time(operation_name: str = None, component: str = "general"):
+def log_execution_time(operation_name: Optional[str] = None, component: str = "general"):
     """Decorador para log automático de tempo de execução"""
     def decorator(func):
         @wraps(func)
@@ -434,7 +434,7 @@ def log_ml_operation(model_name: str, operation_type: str = "prediction"):
         return wrapper
     return decorator
 
-def log_api_endpoint(endpoint_name: str = None):
+def log_api_endpoint(endpoint_name: Optional[str] = None):
     """Decorador para log automático de endpoints de API"""
     def decorator(func):
         @wraps(func)
@@ -480,6 +480,9 @@ def log_api_endpoint(endpoint_name: str = None):
 # Instância global do logger
 ai_logger = AILogger()
 
+# Logger principal para compatibilidade
+logger = ai_logger.logger
+
 # Funções de conveniência
 def log_info(message: str, **kwargs):
     """Log de informação"""
@@ -494,7 +497,7 @@ def log_warning(message: str, **kwargs):
     ai_logger.metrics['warnings'] += 1
     ai_logger.metrics['total_logs'] += 1
 
-def log_error(message: str, error: Exception = None, **kwargs):
+def log_error(message: str, error: Optional[Exception] = None, **kwargs):
     """Log de erro"""
     logger = structlog.get_logger("mcp_v4")
     
