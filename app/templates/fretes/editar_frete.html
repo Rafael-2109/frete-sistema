@@ -31,8 +31,8 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form>
-{{ csrf_token() }} method="POST">
+                    <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         {{ form.hidden_tag() }}
 
                         <!-- Dados do CTe -->

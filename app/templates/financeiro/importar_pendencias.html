@@ -32,8 +32,8 @@
       <h5 class="mb-0">📤 Importar Arquivo</h5>
     </div>
     <div class="card-body">
-      <form>
-{{ csrf_token() }} method="POST" enctype="multipart/form-data">
+      <form method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         {{ form.hidden_tag() }}
         <div class="mb-3">
           <label for="arquivo" class="form-label">Selecione o arquivo Excel (.xlsx)</label>

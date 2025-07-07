@@ -18,8 +18,8 @@
         </div>
         <div class="collapse" id="filtrosFreteiros">
             <div class="card-body">
-                <form>
-{{ csrf_token() }} method="GET">
+                <form method="GET">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <div class="row align-items-end">
                         <div class="col-md-8">
                             {{ filtro_form.transportadora_id.label(class="form-label") }}

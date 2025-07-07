@@ -4,8 +4,8 @@
     <h2 class="mb-4">Simulação de Frete</h2>
 
     <div class="card p-4 shadow-sm">
-        <form>
-{{ csrf_token() }} method="POST">
+        <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             {{ form.hidden_tag() }}
 
             <div class="row mb-3">

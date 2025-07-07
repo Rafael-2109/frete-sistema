@@ -22,8 +22,8 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form>
-{{ csrf_token() }} method="POST">
+                    <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         {{ form.hidden_tag() }}
                         
                         <!-- Seleção de Fatura (obrigatório) -->
@@ -184,8 +184,8 @@
                                                 <i class="fas fa-eye"></i> Visualizar
                                             </a>
                                         {% else %}
-                                            <form>
-{{ csrf_token() }} method="POST" action="{{ url_for('fretes.processar_cte_frete_existente') }}" style="display: inline;">
+                                            <form method="POST" action="{{ url_for('fretes.processar_cte_frete_existente') }}" style="display: inline;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                                 {{ form.hidden_tag() }}
                                                 <input type="hidden" name="frete_id" value="{{ frete.id }}">
                                                 <input type="hidden" name="fatura_frete_id" value="{{ request.form.get('fatura_frete_id') or fatura_preselecionada_id }}">

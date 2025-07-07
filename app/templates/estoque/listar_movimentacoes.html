@@ -21,8 +21,8 @@
                     <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros</h5>
                 </div>
                 <div class="card-body">
-                    <form>
-{{ csrf_token() }} method="GET" action="{{ url_for('estoque.listar_movimentacoes') }}" class="row">
+                    <form method="GET" action="{{ url_for('estoque.listar_movimentacoes') }}" class="row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="col-md-3">
                             <label for="cod_produto" class="form-label">Código do Produto</label>
                             <input type="text" class="form-control" id="cod_produto" name="cod_produto" 

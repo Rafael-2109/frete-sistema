@@ -10,8 +10,8 @@
           </h4>
         </div>
         <div class="card-body">
-          <form>
-{{ csrf_token() }} method="POST">
+          <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             {{ form.hidden_tag() }}
             
             <div class="row">
@@ -136,8 +136,8 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <form>
-{{ csrf_token() }} method="POST" id="formExclusao" style="display: inline;">
+        <form method="POST" id="formExclusao" style="display: inline;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <button type="submit" class="btn btn-danger">
             <i class="fas fa-trash"></i> Excluir
           </button>
