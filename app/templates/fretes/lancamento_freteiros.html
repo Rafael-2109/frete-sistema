@@ -19,7 +19,6 @@
         <div class="collapse" id="filtrosFreteiros">
             <div class="card-body">
                 <form method="GET">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <div class="row align-items-end">
                         <div class="col-md-8">
                             {{ filtro_form.transportadora_id.label(class="form-label") }}
@@ -81,13 +80,12 @@
                         <small>{{ dados.total_pendencias }} pendência(s)</small>
                     </div>
                     <div class="col-md-4">
-                        <form>
-{{ csrf_token() }} method="POST" 
+                        <form method="POST" 
                               action="{{ url_for('fretes.emitir_fatura_freteiro', transportadora_id=dados.freteiro.id) }}" 
                               class="fatura-form" 
                               data-transportadora-id="{{ dados.freteiro.id }}"
                               id="form_{{ dados.freteiro.id }}">
-                            {{ form.hidden_tag() }}
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                             <!-- Campos hidden para valores considerados alterados -->
                             <div id="valores_considerados_{{ dados.freteiro.id }}"></div>
                             <div class="input-group">

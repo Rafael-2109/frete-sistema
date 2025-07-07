@@ -152,7 +152,12 @@ class ClaudeRealIntegration:
             return {}
         
         try:
-            return self.intention_analyzer.analisar_intencao(consulta, user_context)
+            # Usar o método correto _detectar_intencao_refinada
+            intencoes = self.intention_analyzer._detectar_intencao_refinada(consulta)
+            return {
+                'intencoes_detectadas': intencoes,
+                'deve_usar_avancado': self.intention_analyzer._deve_usar_sistema_avancado(consulta, intencoes)
+            }
         except Exception as e:
             logger.error(f"❌ Erro na análise de intenção: {e}")
             return {}
@@ -291,7 +296,15 @@ class ClaudeRealIntegration:
             return
         
         try:
-            self.human_learning.capture_interaction(consulta, resposta, user_context)
+            # Usar o método correto capture_feedback com parâmetros apropriados
+            self.human_learning.capture_feedback(
+                query=consulta, 
+                response=resposta, 
+                user_feedback="Interação automática registrada",
+                feedback_type="positive",  # Assumir positivo para interações normais
+                severity="low",
+                context=user_context
+            )
             logger.debug("🎓 Feedback capturado para aprendizado")
         except Exception as e:
             logger.error(f"❌ Erro ao capturar feedback: {e}")

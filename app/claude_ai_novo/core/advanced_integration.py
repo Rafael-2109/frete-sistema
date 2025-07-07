@@ -373,7 +373,7 @@ class SemanticLoopProcessor:
         
         # Integrar com sistema de mapeamento semântico
         try:
-            from .mapeamento_semantico import get_mapeamento_semantico
+            from .semantic_mapper import get_mapeamento_semantico
             mapeamento = get_mapeamento_semantico()
             
             # Mapear consulta completa
