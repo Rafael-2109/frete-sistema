@@ -1,136 +1,171 @@
 """
-📋 PEDIDOS AGENT - Agente Especialista em Pedidos
+📦 PEDIDOS AGENT - Agente Especialista em Pedidos
 
-Agente especializado em gestão de pedidos e fluxo comercial:
-- Status de pedidos e faturamento
-- Cotações e aprovações comerciais
-- Agendamentos e protocolos
-- Separação e expedição
-- Clientes e vendedores
+Agente especializado em gestão de pedidos:
+- Pedidos em aberto e processamento
+- Cotações e aprovações
+- Carteira de pedidos
+- Separação e faturamento
+- Acompanhamento de status
+- Integração com clientes
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from ..agent_types import AgentType
-from .base_agent import BaseSpecialistAgent
+from .smart_base_agent import SmartBaseAgent
 
 
-class PedidosAgent(BaseSpecialistAgent):
-    """Agente especialista em pedidos e fluxo comercial"""
+class PedidosAgent(SmartBaseAgent):
+    """Agente especialista em pedidos - COM TODAS AS CAPACIDADES"""
     
     def __init__(self, claude_client=None):
         super().__init__(AgentType.PEDIDOS, claude_client)
+        # SmartBaseAgent já inicializa TODAS as capacidades automaticamente!
+    
+    def _resumir_dados_reais(self, dados_reais: Dict[str, Any]) -> Dict[str, Any]:
+        """Resume dados reais específicos para PEDIDOS"""
+        try:
+            resumo = {
+                'timestamp': dados_reais.get('timestamp', ''),
+                'dominio': 'pedidos',
+                'total_registros': 0,
+                'dados_encontrados': False
+            }
+            
+            # Processar dados específicos de pedidos
+            if 'pedidos' in dados_reais:
+                dados_pedidos = dados_reais['pedidos']
+                if isinstance(dados_pedidos, dict):
+                    resumo['total_pedidos'] = dados_pedidos.get('total_pedidos', 0)
+                    resumo['pedidos_pendentes'] = dados_pedidos.get('pedidos_pendentes', 0)
+                    resumo['pedidos_aprovados'] = dados_pedidos.get('pedidos_aprovados', 0)
+                    resumo['valor_carteira'] = dados_pedidos.get('valor_carteira', 0)
+                    resumo['dados_encontrados'] = True
+                    
+                    # Adicionar insights específicos de pedidos
+                    if resumo['pedidos_pendentes'] > 0:
+                        resumo['alerta_pendentes'] = f"{resumo['pedidos_pendentes']} pedidos pendentes"
+                    
+                    if resumo['valor_carteira'] > 500000:
+                        resumo['alerta_carteira'] = f"Carteira robusta: R$ {resumo['valor_carteira']:,.2f}"
+            
+            # Processar dados de cotações
+            if 'cotacoes' in dados_reais:
+                dados_cotacoes = dados_reais['cotacoes']
+                if isinstance(dados_cotacoes, dict):
+                    resumo['cotacoes_pendentes'] = dados_cotacoes.get('cotacoes_pendentes', 0)
+                    resumo['cotacoes_aprovadas'] = dados_cotacoes.get('cotacoes_aprovadas', 0)
+                    resumo['dados_encontrados'] = True
+            
+            return resumo
+            
+        except Exception as e:
+            self.logger_estruturado.error(f"❌ Erro ao resumir dados de pedidos: {e}")
+            return {'erro': str(e)}
     
     def _load_specialist_prompt(self) -> str:
-        """System prompt especializado em pedidos"""
+        """System prompt especializado em pedidos COM TODAS AS CAPACIDADES"""
         return """
-📋 AGENTE ESPECIALISTA EM PEDIDOS
+📦 AGENTE ESPECIALISTA EM PEDIDOS - INTELIGÊNCIA COMPLETA
 
-Você é um especialista em gestão de pedidos e fluxo comercial. Sua expertise inclui:
+Você é um especialista em gestão de pedidos equipado com TODAS as capacidades avançadas:
 
-**DOMÍNIO DE CONHECIMENTO:**
-- Status de pedidos e faturamento
-- Cotações e aprovações comerciais
-- Agendamentos e protocolos
-- Separação e expedição
-- Clientes e vendedores
-- Carteira de pedidos e pipeline
-- Processo comercial completo
-- Performance por vendedor/cliente
+**CAPACIDADES ATIVAS:**
+✅ Dados reais do banco PostgreSQL
+✅ Claude 4 Sonnet (não simulado)
+✅ Cache Redis para performance
+✅ Contexto conversacional (memória)
+✅ Mapeamento semântico inteligente
+✅ ML Models para predições
+✅ Logs estruturados para auditoria
+✅ Análise de tendências temporais
+✅ Sistema de validação e confiança
+✅ Sugestões inteligentes contextuais
+✅ Alertas operacionais automáticos
+
+**DOMÍNIO DE ESPECIALIZAÇÃO:**
+- Pedidos em aberto e processamento
+- Cotações e aprovações
+- Carteira de pedidos ativos
+- Separação e faturamento
+- Acompanhamento de status
+- Integração com clientes
+- Análise de demanda
+- Gestão de prazos
 
 **DADOS QUE VOCÊ ANALISA:**
-- Pedido: status_calculado, valor_saldo_total, agendamento
-- Separação e itens por produto
-- Relacionamento com embarques e faturamento
-- Performance por cliente/vendedor
-- Histórico de cotações e aprovações
-- Prazos de entrega e cumprimento
+- Pedido: num_pedido, status, valor_total, data_pedido
+- CarteiraPedidos: saldo, faturamento, separação
+- Cotacao: status_cotacao, valor_cotado, aprovação
+- Cliente: histórico de pedidos, frequência
+- Agendamento: datas previstas, contatos
 
-**SUA ESPECIALIDADE:**
-- Analisar carteira de pedidos por status
-- Identificar gargalos no processo comercial
-- Monitorar performance comercial por vendedor
-- Detectar pedidos pendentes de ação
-- Otimizar fluxo de separação e expedição
-- Calcular conversão de cotação → pedido → faturamento
-- Analisar tempo médio do processo
-- Identificar clientes com pedidos parados
+**SEMPRE RESPONDA COM:**
+1. Status atual dos pedidos
+2. Carteira de pedidos por cliente
+3. Prazos e agendamentos
+4. Alertas para atrasos
+5. Análise de demanda
+6. Sugestões de priorização
 
-**SEMPRE RESPONDA:**
-1. Com foco específico em PEDIDOS e PROCESSO COMERCIAL
-2. Com análise do pipeline comercial (funil de vendas)
-3. Com métricas de conversão e performance
-4. Com sugestões de melhoria operacional/comercial
-5. Identifique gargalos no processo
-6. Analise performance por vendedor/cliente
-7. Sugira ações para acelerar fechamentos
-8. Monitore prazos e compromissos comerciais
+**EXEMPLOS DE ALERTAS A GERAR:**
+- "🚨 CRÍTICO: 12 pedidos vencidos sem cotação"
+- "⚠️ ATENÇÃO: Carteira do Assai baixa (R$ 45.000)"
+- "📈 TENDÊNCIA: Aumento de 20% nos pedidos urgentes"
+- "💡 OPORTUNIDADE: Antecipar separação de 5 pedidos"
 """
     
     def _load_domain_knowledge(self) -> Dict[str, Any]:
         """Conhecimento específico do domínio de pedidos"""
         return {
             'main_models': [
-                'Pedido', 
-                'Separacao',
+                'Pedido',
+                'CarteiraPedidos',
                 'Cotacao',
-                'Cliente',
-                'Vendedor'
+                'AgendamentoEntrega'
             ],
             'key_fields': [
-                'status_calculado',
-                'valor_saldo_total',
-                'peso_total',
-                'agendamento',
-                'protocolo',
-                'nf',
-                'cotacao_id',
-                'vendedor_codigo',
-                'raz_social_red',
-                'expedicao'
+                'num_pedido',
+                'status_pedido',
+                'valor_total',
+                'data_pedido',
+                'cliente_codigo',
+                'status_cotacao',
+                'data_prevista_entrega'
             ],
             'kpis': [
-                'taxa_conversao_cotacao',
-                'tempo_medio_separacao',
-                'valor_medio_pedido',
-                'pedidos_por_vendedor',
-                'ticket_medio_cliente',
-                'taxa_faturamento',
-                'tempo_ciclo_comercial',
-                'carteira_em_aberto'
+                'carteira_ativa',
+                'tempo_medio_cotacao',
+                'taxa_aprovacao',
+                'pedidos_no_prazo',
+                'demanda_por_cliente'
             ],
             'common_queries': [
                 'pedidos pendentes',
-                'carteira cliente', 
-                'separação atrasada',
-                'pedidos sem cotação',
-                'faturamento pendente',
-                'performance vendedor',
-                'pipeline comercial',
-                'pedidos parados'
-            ],
-            'business_rules': [
-                'Pedido precisa de cotação antes do faturamento',
-                'Separação obrigatória antes do embarque',
-                'Agendamento necessário para entrega',
-                'Protocolo único por pedido'
+                'carteira cliente',
+                'cotações aprovadas',
+                'pedidos atrasados',
+                'agendamentos hoje',
+                'demanda mensal',
+                'status pedidos'
             ]
         }
     
     def _get_domain_keywords(self) -> List[str]:
         """Palavras-chave específicas do domínio de pedidos"""
         return [
-            'pedido', 'pedidos', 'cotação', 'cotações',
-            'cliente', 'clientes', 'vendedor', 'vendedores',
-            'separação', 'expedição', 'faturamento',
-            'status', 'aberto', 'cotado', 'faturado',
-            'agendamento', 'protocolo', 'aprovação',
-            'carteira', 'pipeline', 'comercial',
-            'valor', 'peso', 'produto', 'item',
-            'prazo', 'entrega', 'expedição'
+            'pedido', 'pedidos', 'pedir',
+            'cotacao', 'cotação', 'cotar',
+            'carteira', 'saldo', 'faturamento',
+            'separacao', 'separação', 'separar',
+            'agendamento', 'agendado', 'agendar',
+            'cliente', 'demanda', 'solicitacao',
+            'prazo', 'urgente', 'prioritario',
+            'aprovacao', 'aprovado', 'pendente'
         ]
 
 
 # Exportações principais
 __all__ = [
     'PedidosAgent'
-] 
+]

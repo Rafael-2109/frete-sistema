@@ -1,29 +1,35 @@
 """
-🤖 AGENTS MODULE - Agentes Especializados Individuais
+🧠 MULTI-AGENT SYSTEM - Agentes Especializados COM TODAS AS CAPACIDADES
 
-Este módulo contém todos os agentes especializados em arquivos separados:
-- base_agent.py: Classe base para todos os agentes
-- entregas_agent.py: Agente especialista em entregas  
-- fretes_agent.py: Agente especialista em fretes
-- pedidos_agent.py: Agente especialista em pedidos
-- embarques_agent.py: Agente especialista em embarques
-- financeiro_agent.py: Agente especialista em financeiro
+Sistema de agentes especializados em diferentes domínios do sistema de fretes.
+TODOS os agentes agora herdam de SmartBaseAgent e possuem:
+
+✅ Dados reais do banco PostgreSQL
+✅ Claude 4 Sonnet real (não simulado)
+✅ Cache Redis para performance
+✅ Sistema de contexto conversacional
+✅ Mapeamento semântico inteligente
+✅ ML Models para predições
+✅ Sistema de logs estruturados
+✅ Análise de tendências temporais
+✅ Sistema de validação e confiança
+✅ Sugestões inteligentes contextuais
+✅ Alertas operacionais automáticos
 """
 
-# Imports dos agentes especializados
-from .base_agent import BaseSpecialistAgent
+from .smart_base_agent import SmartBaseAgent
 from .entregas_agent import EntregasAgent
-from .fretes_agent import FretesAgent
-from .pedidos_agent import PedidosAgent
 from .embarques_agent import EmbarquesAgent
 from .financeiro_agent import FinanceiroAgent
+from .pedidos_agent import PedidosAgent
+from .fretes_agent import FretesAgent
 
 # Exportações principais
 __all__ = [
-    'BaseSpecialistAgent',
+    'SmartBaseAgent',
     'EntregasAgent',
-    'FretesAgent', 
+    'EmbarquesAgent', 
+    'FinanceiroAgent',
     'PedidosAgent',
-    'EmbarquesAgent',
-    'FinanceiroAgent'
-] 
+    'FretesAgent'
+]

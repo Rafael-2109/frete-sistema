@@ -1,136 +1,170 @@
 """
 💰 FINANCEIRO AGENT - Agente Especialista em Financeiro
 
-Agente especializado em gestão financeira e faturamento:
+Agente especializado em gestão financeira:
 - Faturamento e notas fiscais
-- Despesas extras e multas
+- Contas a pagar e receber
+- Fluxo de caixa
+- Análise de custos
 - Pendências financeiras
-- Fluxo de caixa logístico
-- Performance financeira
+- Relatórios contábeis
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from ..agent_types import AgentType
-from .base_agent import BaseSpecialistAgent
+from .smart_base_agent import SmartBaseAgent
 
 
-class FinanceiroAgent(BaseSpecialistAgent):
-    """Agente especialista em financeiro e faturamento"""
+class FinanceiroAgent(SmartBaseAgent):
+    """Agente especialista em financeiro - COM TODAS AS CAPACIDADES"""
     
     def __init__(self, claude_client=None):
         super().__init__(AgentType.FINANCEIRO, claude_client)
+        # SmartBaseAgent já inicializa TODAS as capacidades automaticamente!
+    
+    def _resumir_dados_reais(self, dados_reais: Dict[str, Any]) -> Dict[str, Any]:
+        """Resume dados reais específicos para FINANCEIRO"""
+        try:
+            resumo = {
+                'timestamp': dados_reais.get('timestamp', ''),
+                'dominio': 'financeiro',
+                'total_registros': 0,
+                'dados_encontrados': False
+            }
+            
+            # Processar dados específicos de faturamento
+            if 'faturamento' in dados_reais:
+                dados_faturamento = dados_reais['faturamento']
+                if isinstance(dados_faturamento, dict):
+                    resumo['total_faturamento'] = dados_faturamento.get('total_faturamento', 0)
+                    resumo['nfs_pendentes'] = dados_faturamento.get('nfs_pendentes', 0)
+                    resumo['valor_total'] = dados_faturamento.get('valor_total', 0)
+                    resumo['dados_encontrados'] = True
+                    
+                    # Adicionar insights específicos financeiros
+                    if resumo['nfs_pendentes'] > 0:
+                        resumo['alerta_nfs'] = f"{resumo['nfs_pendentes']} NFs pendentes"
+                    
+                    if resumo['valor_total'] > 1000000:
+                        resumo['alerta_valor'] = f"Alto volume: R$ {resumo['valor_total']:,.2f}"
+            
+            # Processar dados de pendências
+            if 'pendencias' in dados_reais:
+                dados_pendencias = dados_reais['pendencias']
+                if isinstance(dados_pendencias, dict):
+                    resumo['pendencias_abertas'] = dados_pendencias.get('pendencias_abertas', 0)
+                    resumo['valor_pendencias'] = dados_pendencias.get('valor_pendencias', 0)
+                    resumo['dados_encontrados'] = True
+            
+            return resumo
+            
+        except Exception as e:
+            self.logger_estruturado.error(f"❌ Erro ao resumir dados financeiros: {e}")
+            return {'erro': str(e)}
     
     def _load_specialist_prompt(self) -> str:
-        """System prompt especializado em financeiro"""
+        """System prompt especializado em financeiro COM TODAS AS CAPACIDADES"""
         return """
-💰 AGENTE ESPECIALISTA EM FINANCEIRO
+💰 AGENTE ESPECIALISTA EM FINANCEIRO - INTELIGÊNCIA COMPLETA
 
-Você é um especialista em gestão financeira e faturamento. Sua expertise inclui:
+Você é um especialista em gestão financeira equipado com TODAS as capacidades avançadas:
 
-**DOMÍNIO DE CONHECIMENTO:**
+**CAPACIDADES ATIVAS:**
+✅ Dados reais do banco PostgreSQL
+✅ Claude 4 Sonnet (não simulado)
+✅ Cache Redis para performance
+✅ Contexto conversacional (memória)
+✅ Mapeamento semântico inteligente
+✅ ML Models para predições
+✅ Logs estruturados para auditoria
+✅ Análise de tendências temporais
+✅ Sistema de validação e confiança
+✅ Sugestões inteligentes contextuais
+✅ Alertas operacionais automáticos
+
+**DOMÍNIO DE ESPECIALIZAÇÃO:**
 - Faturamento e notas fiscais
-- Despesas extras e multas
-- Pendências financeiras por cliente/NF
-- Fluxo de caixa logístico
-- Performance financeira operacional
-- Análise de rentabilidade
-- Controle de inadimplência
-- Margem de contribuição
+- Contas a pagar e receber
+- Fluxo de caixa e liquidez
+- Análise de custos e margens
+- Pendências financeiras
+- Relatórios contábeis e fiscais
+- Conciliação bancária
+- Análise de inadimplência
 
 **DADOS QUE VOCÊ ANALISA:**
-- RelatorioFaturamentoImportado: faturamento e valores
-- DespesaExtra: custos adicionais e justificativas
-- PendenciaFinanceiraNF: pendências por nota fiscal
-- Performance financeira por cliente/período
-- Fluxo de recebimentos e pagamentos
-- Análise de margem e rentabilidade
+- RelatorioFaturamentoImportado: NFs, valores, datas
+- PendenciaFinanceiraNF: pendências e resoluções
+- Fretes: custos e margens
+- DespesaExtra: custos adicionais
+- Clientes: histórico financeiro
 
-**SUA ESPECIALIDADE:**
-- Analisar rentabilidade operacional por cliente
-- Monitorar fluxo de faturamento e recebimento
-- Detectar pendências críticas e riscos
-- Otimizar custos operacionais e despesas
-- Prever impactos financeiros de decisões
-- Calcular margens e indicadores financeiros
-- Identificar oportunidades de melhoria financeira
-- Analisar inadimplência e riscos de crédito
+**SEMPRE RESPONDA COM:**
+1. Valores financeiros exatos
+2. Análise de fluxo de caixa
+3. Alertas para pendências críticas
+4. Sugestões de otimização financeira
+5. KPIs financeiros calculados
+6. Tendências de faturamento
 
-**SEMPRE RESPONDA:**
-1. Com foco específico em FINANCEIRO e RENTABILIDADE
-2. Com análise de rentabilidade detalhada (valores, %)
-3. Com métricas financeiras (margem, ROI, inadimplência)
-4. Com sugestões de otimização financeira
-5. Identifique riscos financeiros e pendências críticas
-6. Analise impacto financeiro de operações
-7. Sugira estratégias de melhoria da margem
-8. Monitore indicadores de saúde financeira
+**EXEMPLOS DE ALERTAS A GERAR:**
+- "🚨 CRÍTICO: R$ 250.000 em pendências vencidas"
+- "⚠️ ATENÇÃO: Queda de 15% no faturamento mensal"
+- "📈 TENDÊNCIA: Crescimento de 8% na margem"
+- "💡 OPORTUNIDADE: Negociar prazo com 3 clientes"
 """
     
     def _load_domain_knowledge(self) -> Dict[str, Any]:
         """Conhecimento específico do domínio financeiro"""
         return {
             'main_models': [
-                'RelatorioFaturamentoImportado', 
-                'DespesaExtra',
+                'RelatorioFaturamentoImportado',
                 'PendenciaFinanceiraNF',
                 'Frete',
-                'Cliente'
+                'DespesaExtra'
             ],
             'key_fields': [
+                'numero_nf',
                 'valor_total',
                 'data_fatura',
-                'numero_nf',
-                'nome_cliente',
-                'valor_despesa',
-                'data_vencimento',
-                'observacao',
-                'valor_frete',
-                'margem_contribuicao'
+                'cnpj_cliente',
+                'pendencia_tipo',
+                'valor_pendencia',
+                'data_vencimento'
             ],
             'kpis': [
-                'margem_contribuicao',
-                'fluxo_caixa_operacional',
-                'inadimplencia_percentual',
-                'ticket_medio_faturamento',
-                'despesas_extras_percentual',
-                'rentabilidade_cliente',
-                'prazo_medio_recebimento',
-                'crescimento_faturamento'
+                'faturamento_mensal',
+                'margem_bruta',
+                'inadimplencia',
+                'tempo_medio_recebimento',
+                'pendencias_criticas'
             ],
             'common_queries': [
-                'faturamento mensal',
-                'despesas pendentes', 
-                'margem operacional',
-                'pendências financeiras',
-                'rentabilidade cliente',
-                'fluxo de caixa',
+                'faturamento mês',
+                'pendências cliente',
+                'notas fiscais',
+                'fluxo caixa',
+                'margem lucro',
                 'inadimplência',
-                'performance financeira'
-            ],
-            'business_rules': [
-                'Faturamento deve ter NF válida',
-                'Despesas requerem justificativa',
-                'Pendências devem ter responsável',
-                'Margem mínima para viabilidade operacional'
+                'contas receber'
             ]
         }
     
     def _get_domain_keywords(self) -> List[str]:
         """Palavras-chave específicas do domínio financeiro"""
         return [
-            'faturamento', 'faturar', 'faturado',
-            'nota fiscal', 'nf', 'valor', 'valores',
-            'despesa', 'despesas', 'custo', 'custos',
-            'multa', 'multas', 'taxa', 'taxas',
-            'pagamento', 'pagamentos', 'recebimento',
-            'vencimento', 'vencer', 'vencido',
-            'pendência', 'pendências', 'pendente',
-            'margem', 'rentabilidade', 'lucro',
-            'financeiro', 'financeira', 'inadimplência'
+            'faturamento', 'faturar', 'fatura',
+            'nota fiscal', 'nf', 'nfs',
+            'pendencia', 'pendências', 'pendente',
+            'pagamento', 'recebimento', 'cobranca',
+            'valor', 'valores', 'total', 'subtotal',
+            'margem', 'lucro', 'custo', 'despesa',
+            'vencimento', 'prazo', 'atraso',
+            'cliente', 'fornecedor', 'conta'
         ]
 
 
 # Exportações principais
 __all__ = [
     'FinanceiroAgent'
-] 
+]
