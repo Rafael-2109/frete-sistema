@@ -52,7 +52,7 @@ class MultiAgentOrchestrator:
         self.config = {
             'parallel_execution': True,
             'validation_enabled': True,
-            'min_relevance_threshold': 0.3,
+            'min_relevance_threshold': 0.35,  # Ajustado para nova lógica (era 0.3)
             'validation_threshold': 0.7,
             'max_agents_per_query': 5,
             'response_timeout': 30.0  # segundos

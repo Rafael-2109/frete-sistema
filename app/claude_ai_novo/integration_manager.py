@@ -535,12 +535,12 @@ class IntegrationManager:
             'last_check': datetime.now().isoformat()
         }
     
-    async def process_unified_query(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
+    async def process_unified_query(self, query: Optional[str], context: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Processa uma consulta usando TODO o sistema integrado.
         
         Args:
-            query: Consulta do usuário
+            query: Consulta do usuário (pode ser None)
             context: Contexto adicional
             
         Returns:

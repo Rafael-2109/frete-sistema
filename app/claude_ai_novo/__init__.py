@@ -102,12 +102,12 @@ class ClaudeAINovo:
                 'system_ready': False
             }
     
-    async def process_query(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
+    async def process_query(self, query: Optional[str], context: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Processa uma consulta usando todo o sistema integrado.
         
         Args:
-            query: Consulta do usuário
+            query: Consulta do usuário (pode ser None)
             context: Contexto adicional
             
         Returns:
@@ -167,12 +167,12 @@ class ClaudeAINovo:
     
     # ===== MÉTODOS DE COMPATIBILIDADE =====
     
-    async def processar_consulta(self, query: str, context: Optional[Dict] = None) -> str:
+    async def processar_consulta(self, query: Optional[str], context: Optional[Dict] = None) -> str:
         """
         Método de compatibilidade para interface anterior.
         
         Args:
-            query: Consulta do usuário
+            query: Consulta do usuário (pode ser None)
             context: Contexto adicional
             
         Returns:

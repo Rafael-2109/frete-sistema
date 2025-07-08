@@ -99,8 +99,22 @@ class BaseSpecialistAgent(ABC):
         if not keywords:
             return 0.5  # Score neutro se não há keywords
         
+        # Contar matches de keywords
         matches = sum(1 for keyword in keywords if keyword in query_lower)
-        return min(matches / len(keywords), 1.0)
+        
+        if matches == 0:
+            return 0.0
+        
+        # Lógica corrigida: dar peso adequado aos matches
+        # 1 match = relevância 0.4, 2+ matches = relevância alta
+        if matches == 1:
+            return 0.4  # Acima do threshold de 0.3
+        elif matches == 2:
+            return 0.7
+        elif matches >= 3:
+            return 0.9
+        else:
+            return min(matches * 0.3, 1.0)  # Fallback scaling
     
     async def _process_specialized_query(self, query: str, context: Dict[str, Any]) -> str:
         """Processa consulta com especialização de domínio"""
