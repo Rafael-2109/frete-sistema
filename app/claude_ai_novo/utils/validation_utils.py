@@ -209,7 +209,7 @@ class ValidationUtils:
     def _calcular_estatisticas_por_dominio(self, analise: Dict[str, Any], filtros_usuario: Dict[str, Any], dominio: str) -> Optional[Dict[str, Any]]:
         """📊 Calcula estatísticas específicas baseadas no domínio"""
         try:
-            from app.claude_ai_novo.core.claude_integration import get_claude_integration
+            from app.claude_ai_novo.integration.claude import get_claude_integration
             claude_integration = get_claude_integration()
             
             if not claude_integration:

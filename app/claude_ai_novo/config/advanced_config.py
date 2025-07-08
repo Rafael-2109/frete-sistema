@@ -56,6 +56,125 @@ ADVANCED_FEATURES = {
     "self_improvement": True,        # Auto-melhoria
 }
 
+class AdvancedConfig:
+    """
+    Classe de configuração avançada do Claude AI.
+    
+    Fornece acesso estruturado a todas as configurações avançadas
+    e métodos para gerenciamento dinâmico.
+    """
+    
+    def __init__(self, claude_client=None, db_engine=None, db_session=None):
+        """
+        Inicializa configuração avançada.
+        
+        Args:
+            claude_client: Cliente Claude API
+            db_engine: Engine do banco de dados  
+            db_session: Sessão do banco de dados
+        """
+        self.claude_client = claude_client
+        self.db_engine = db_engine
+        self.db_session = db_session
+        
+        # Configurações carregadas
+        self.claude_config = CLAUDE_CONFIG.copy()
+        self.analysis_config = ANALYSIS_CONFIG.copy()
+        self.advanced_features = ADVANCED_FEATURES.copy()
+        
+        # Estado do sistema
+        self.unlimited_mode = True
+        self.initialized = True
+    
+    def get_config(self) -> dict:
+        """Retorna configuração completa."""
+        return {
+            **self.claude_config,
+            **self.analysis_config, 
+            **self.advanced_features,
+            "unlimited_mode": self.unlimited_mode,
+            "initialized": self.initialized
+        }
+    
+    def get_claude_config(self) -> dict:
+        """Retorna apenas configurações do Claude."""
+        return self.claude_config.copy()
+    
+    def get_analysis_config(self) -> dict:
+        """Retorna apenas configurações de análise."""
+        return self.analysis_config.copy()
+    
+    def get_advanced_features(self) -> dict:
+        """Retorna apenas recursos avançados.""" 
+        return self.advanced_features.copy()
+    
+    def is_unlimited_mode(self) -> bool:
+        """Verifica se modo ilimitado está ativo."""
+        return self.unlimited_mode
+    
+    def enable_feature(self, feature_name: str) -> bool:
+        """
+        Habilita um recurso específico.
+        
+        Args:
+            feature_name: Nome do recurso
+            
+        Returns:
+            True se habilitado com sucesso
+        """
+        if feature_name in self.advanced_features:
+            self.advanced_features[feature_name] = True
+            return True
+        elif feature_name in self.analysis_config:
+            self.analysis_config[feature_name] = True  
+            return True
+        return False
+    
+    def disable_feature(self, feature_name: str) -> bool:
+        """
+        Desabilita um recurso específico.
+        
+        Args:
+            feature_name: Nome do recurso
+            
+        Returns:
+            True se desabilitado com sucesso
+        """
+        if feature_name in self.advanced_features:
+            self.advanced_features[feature_name] = False
+            return True
+        elif feature_name in self.analysis_config:
+            self.analysis_config[feature_name] = False
+            return True
+        return False
+    
+    def update_claude_config(self, **kwargs) -> None:
+        """
+        Atualiza configurações do Claude.
+        
+        Args:
+            **kwargs: Configurações para atualizar
+        """
+        self.claude_config.update(kwargs)
+    
+    def get_status(self) -> dict:
+        """
+        Obtém status completo da configuração.
+        
+        Returns:
+            Dict com status detalhado
+        """
+        return {
+            "initialized": self.initialized,
+            "unlimited_mode": self.unlimited_mode,
+            "claude_client_available": self.claude_client is not None,
+            "database_available": self.db_engine is not None,
+            "features_enabled": sum(1 for v in self.advanced_features.values() if v),
+            "total_features": len(self.advanced_features),
+            "analysis_enabled": sum(1 for v in self.analysis_config.values() if v),
+            "total_analysis": len(self.analysis_config)
+        }
+
 def get_advanced_config():
     """Retorna configuração avançada completa"""
     return {
@@ -67,3 +186,13 @@ def get_advanced_config():
 def is_unlimited_mode():
     """Verifica se modo ilimitado está ativo"""
     return True  # Sempre ativo após otimização
+
+# Instância global para compatibilidade
+_advanced_config_instance = None
+
+def get_advanced_config_instance():
+    """Obtém instância global da configuração avançada."""
+    global _advanced_config_instance
+    if _advanced_config_instance is None:
+        _advanced_config_instance = AdvancedConfig()
+    return _advanced_config_instance

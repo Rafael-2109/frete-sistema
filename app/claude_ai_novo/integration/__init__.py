@@ -1,25 +1,43 @@
 """
-🔗 INTEGRATION SYSTEM
-Sistema de integração e processamento avançado
+🔗 INTEGRATION MODULE - Sistemas de Integração
+
+Este módulo contém todos os sistemas de integração:
+- Integration Manager (orquestrador principal)
+- Advanced (integração avançada)
+- Claude (integração Claude)
+- Data (provedor de dados)
+- Processing (processamento)
 """
 
-from .advanced import get_advanced_ai_integration, AdvancedAIIntegration
-from .claude import get_claude_integration, ClaudeRealIntegration
-from .data_provider import get_sistema_real_data, SistemaRealData
+# Imports do manager principal
+from .integration_manager import (
+    IntegrationManager,
+    IntegrationResult,
+    integration_manager,
+    get_integration_manager
+)
 
-# Classes diretas (sem funções get_*)
-from .claude_client import ClaudeClient
-from .query_processor import QueryProcessor
-from .response_formatter import ResponseFormatter
+# Imports das subpastas especializadas
+from .advanced.advanced_integration import AdvancedAIIntegration
+from .claude.claude_integration import ClaudeRealIntegration
+from .claude.claude_client import ClaudeClient
+from ..data.providers.data_provider import SistemaRealData
+from ..processors.query_processor import QueryProcessor
+from .processing.response_formatter import ResponseFormatter
 
+# Exportações principais
 __all__ = [
-    'get_advanced_ai_integration',
+    # Manager principal
+    'IntegrationManager',
+    'IntegrationResult',
+    'integration_manager',
+    'get_integration_manager',
+    
+    # Sistemas especializados
     'AdvancedAIIntegration',
-    'get_claude_integration',
     'ClaudeRealIntegration',
-    'get_sistema_real_data',
-    'SistemaRealData',
     'ClaudeClient',
+    'SistemaRealData',
     'QueryProcessor',
-    'ResponseFormatter'
+    'ResponseFormatter',
 ] 

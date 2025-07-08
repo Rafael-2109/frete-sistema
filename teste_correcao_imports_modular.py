@@ -50,7 +50,7 @@ def testar_imports_modular():
     try:
         # 3. Testar import direto pelo claude_integration
         print("\n🎯 Testando import no claude_integration...")
-        from app.claude_ai_novo.core.claude_integration import get_claude_integration
+        from app.claude_ai_novo.integration.claude import get_claude_integration
         claude_int = get_claude_integration()
         print("✅ claude_integration importado com sucesso")
         print(f"   📦 Tipo: {type(claude_int).__name__}")

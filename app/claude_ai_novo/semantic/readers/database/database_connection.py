@@ -1,0 +1,286 @@
+"""
+🔌 DATABASE CONNECTION - Gestão de Conexões com Banco de Dados
+
+Módulo responsável por gerenciar conexões com o banco de dados PostgreSQL.
+Suporta múltiplas formas de conexão (Flask, direta, etc.).
+"""
+
+import logging
+from typing import Optional, Any
+from sqlalchemy import create_engine, inspect
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm.session import Session
+from sqlalchemy.engine.reflection import Inspector
+import os
+import sys
+
+# Adicionar path para importar modelos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
+
+logger = logging.getLogger(__name__)
+
+
+class DatabaseConnection:
+    """
+    Gerenciador de conexões com banco de dados.
+    
+    Responsável por estabelecer e manter conexões com o banco
+    através de diferentes métodos (Flask, direto, etc.).
+    """
+    
+    def __init__(self, db_engine: Optional[Engine] = None, db_session: Optional[Session] = None):
+        """
+        Inicializa o gerenciador de conexões.
+        
+        Args:
+            db_engine: Engine do SQLAlchemy (opcional)
+            db_session: Sessão do SQLAlchemy (opcional)
+        """
+        self.db_engine = db_engine
+        self.db_session = db_session
+        self.inspector: Optional[Inspector] = None
+        self.connection_method = "none"
+        
+        # Tentar obter conexão se não fornecida
+        if not self.db_engine or not self.db_session:
+            self._establish_connection()
+        
+        # Inicializar inspector se engine disponível
+        if self.db_engine:
+            self._initialize_inspector()
+    
+    def _establish_connection(self) -> None:
+        """
+        Estabelece conexão com o banco usando diferentes métodos.
+        """
+        # Método 1: Tentar via Flask
+        if self._try_flask_connection():
+            self.connection_method = "flask"
+            return
+        
+        # Método 2: Tentar conexão direta
+        if self._try_direct_connection():
+            self.connection_method = "direct"
+            return
+        
+        # Método 3: Tentar variáveis de ambiente
+        if self._try_env_connection():
+            self.connection_method = "environment"
+            return
+        
+        logger.warning("⚠️ Nenhuma conexão com banco estabelecida")
+        self.connection_method = "none"
+    
+    def _try_flask_connection(self) -> bool:
+        """
+        Tenta obter conexão através do Flask app.
+        
+        Returns:
+            True se conexão foi estabelecida
+        """
+        try:
+            # Tentar importar Flask app
+            from app import create_app, db
+            
+            # Criar app se não existir
+            app = create_app()
+            
+            with app.app_context():
+                self.db_engine = db.engine
+                self.db_session = db.session
+                
+            logger.info("✅ Conexão Flask estabelecida")
+            return True
+            
+        except Exception as e:
+            logger.debug(f"🔄 Conexão Flask falhou: {e}")
+            return False
+    
+    def _try_direct_connection(self) -> bool:
+        """
+        Tenta conexão direta com o banco.
+        
+        Returns:
+            True se conexão foi estabelecida
+        """
+        try:
+            database_url = os.getenv('DATABASE_URL')
+            if not database_url:
+                return False
+            
+            # Corrigir URL para SQLAlchemy 1.4+
+            if database_url.startswith('postgres://'):
+                database_url = database_url.replace('postgres://', 'postgresql://', 1)
+            
+            self.db_engine = create_engine(database_url)
+            
+            # Criar session maker
+            session_maker = sessionmaker(bind=self.db_engine)
+            self.db_session = session_maker()
+            
+            logger.info("✅ Conexão direta estabelecida")
+            return True
+            
+        except Exception as e:
+            logger.debug(f"🔄 Conexão direta falhou: {e}")
+            return False
+    
+    def _try_env_connection(self) -> bool:
+        """
+        Tenta conexão usando variáveis de ambiente específicas.
+        
+        Returns:
+            True se conexão foi estabelecida
+        """
+        try:
+            # Buscar variáveis de ambiente
+            db_host = os.getenv('DB_HOST', 'localhost')
+            db_port = os.getenv('DB_PORT', '5432')
+            db_name = os.getenv('DB_NAME', 'sistema_fretes')
+            db_user = os.getenv('DB_USER', 'postgres')
+            db_password = os.getenv('DB_PASSWORD', '')
+            
+            if not db_password:
+                return False
+            
+            # Construir URL de conexão
+            database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+            
+            self.db_engine = create_engine(database_url)
+            
+            # Criar session maker
+            session_maker = sessionmaker(bind=self.db_engine)
+            self.db_session = session_maker()
+            
+            logger.info("✅ Conexão por variáveis de ambiente estabelecida")
+            return True
+            
+        except Exception as e:
+            logger.debug(f"🔄 Conexão por env falhou: {e}")
+            return False
+    
+    def _initialize_inspector(self) -> None:
+        """
+        Inicializa o inspector do SQLAlchemy.
+        """
+        try:
+            self.inspector = inspect(self.db_engine)
+            logger.debug("🔍 Inspector do banco inicializado")
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao inicializar inspector: {e}")
+            self.inspector = None
+    
+    def is_connected(self) -> bool:
+        """
+        Verifica se há conexão ativa com o banco.
+        
+        Returns:
+            True se conectado
+        """
+        return self.db_engine is not None and self.db_session is not None
+    
+    def is_inspector_available(self) -> bool:
+        """
+        Verifica se o inspector está disponível.
+        
+        Returns:
+            True se inspector está disponível
+        """
+        return self.inspector is not None
+    
+    def get_engine(self) -> Optional[Engine]:
+        """
+        Retorna o engine do banco.
+        
+        Returns:
+            Engine ou None se não disponível
+        """
+        return self.db_engine
+    
+    def get_session(self) -> Optional[Session]:
+        """
+        Retorna a sessão do banco.
+        
+        Returns:
+            Session ou None se não disponível
+        """
+        return self.db_session
+    
+    def get_inspector(self) -> Optional[Inspector]:
+        """
+        Retorna o inspector do banco.
+        
+        Returns:
+            Inspector ou None se não disponível
+        """
+        return self.inspector
+    
+    def test_connection(self) -> bool:
+        """
+        Testa se a conexão está funcionando.
+        
+        Returns:
+            True se conexão funciona
+        """
+        if not self.db_engine:
+            return False
+        
+        try:
+            with self.db_engine.connect() as conn:
+                conn.execute("SELECT 1")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Teste de conexão falhou: {e}")
+            return False
+    
+    def get_connection_info(self) -> dict:
+        """
+        Retorna informações sobre a conexão.
+        
+        Returns:
+            Dict com informações da conexão
+        """
+        return {
+            'connected': self.is_connected(),
+            'inspector_available': self.is_inspector_available(),
+            'connection_method': self.connection_method,
+            'engine_available': self.db_engine is not None,
+            'session_available': self.db_session is not None,
+            'test_result': self.test_connection() if self.is_connected() else False
+        }
+    
+    def close_connection(self) -> None:
+        """
+        Fecha a conexão com o banco.
+        """
+        try:
+            if self.db_session:
+                self.db_session.close()
+                self.db_session = None
+            
+            if self.db_engine:
+                self.db_engine.dispose()
+                self.db_engine = None
+            
+            self.inspector = None
+            self.connection_method = "none"
+            
+            logger.info("🔒 Conexão com banco fechada")
+        except Exception as e:
+            logger.error(f"❌ Erro ao fechar conexão: {e}")
+    
+    def __del__(self):
+        """
+        Destrutor - fecha conexão ao destruir objeto.
+        """
+        try:
+            self.close_connection()
+        except:
+            pass  # Ignorar erros no destrutor
+
+
+# Exportações principais
+__all__ = [
+    'DatabaseConnection'
+] 

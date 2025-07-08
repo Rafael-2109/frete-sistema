@@ -14,12 +14,12 @@ def get_conversation_context():
     """
     try:
         # Primeiro tentar na pasta intelligence (sistema novo)
-        from ...intelligence.conversation_context import get_conversation_context as _get_context
+        from ..intelligence.conversation.conversation_context import get_conversation_context as _get_context
         return _get_context()
     except ImportError:
         try:
             # Fallback para sistema antigo
-            from ....claude_ai.conversation_context import get_conversation_context as _get_context_old
+            from ...claude_ai.conversation_context import get_conversation_context as _get_context_old
             return _get_context_old()
         except ImportError:
             logger.warning("⚠️ ConversationContext não disponível - criando mock")
@@ -31,12 +31,12 @@ def get_db_session():
     """
     try:
         # Primeiro tentar na pasta intelligence (sistema novo)
-        from ...intelligence.lifelong_learning import _get_db_session
+        from ..intelligence.learning.lifelong_learning import _get_db_session
         return _get_db_session()
     except ImportError:
         try:
             # Fallback para sistema antigo
-            from ....claude_ai.lifelong_learning import _get_db_session as _get_db_old
+            from ...claude_ai.lifelong_learning import _get_db_session as _get_db_old
             return _get_db_old()
         except ImportError:
             logger.warning("⚠️ DB Session não disponível")

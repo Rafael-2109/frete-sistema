@@ -135,7 +135,7 @@ class TestadorSistemasClaude:
         
         try:
             # Importar sistema novo
-            from app.claude_ai_novo.core.claude_integration import ClaudeRealIntegration as ClaudeNovo
+            from app.claude_ai_novo.integration.claude import ClaudeRealIntegration as ClaudeNovo
             
             sistema_novo = ClaudeNovo()
             

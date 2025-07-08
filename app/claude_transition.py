@@ -20,7 +20,7 @@ class ClaudeTransition:
     def _inicializar_sistema_novo(self):
         """Inicializa sistema novo"""
         try:
-            from app.claude_ai_novo.core.claude_integration import get_claude_integration
+            from app.claude_ai_novo.integration.claude import get_claude_integration
             self.claude = get_claude_integration()
             self.sistema_ativo = "novo"
             print("✅ Sistema Claude AI NOVO ativado")

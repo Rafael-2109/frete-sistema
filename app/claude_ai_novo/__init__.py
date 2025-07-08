@@ -1,81 +1,228 @@
 """
-🤖 CLAUDE AI - MÓDULO PRINCIPAL
-Sistema de IA avançado para análise de fretes e logística
+🚀 CLAUDE AI NOVO - Sistema Modular Integrado
+
+Sistema de IA avançado completamente modularizado com arquitetura industrial:
+
+MÓDULOS PRINCIPAIS:
+- 🤖 Multi-Agent System: 6 agentes especializados
+- 📊 Database Readers: 6 módulos de banco de dados  
+- 🧠 Intelligence Learning: 5 módulos de aprendizado
+- 🔍 Semantic Processing: Processamento semântico avançado
+- 🎯 Suggestion Engine: Motor de sugestões inteligente
+- 🔗 Integration Manager: Coordenação de todos os módulos
+
+ARQUITETURA:
+- Responsabilidade única por módulo
+- Baixo acoplamento, alta coesão
+- Escalabilidade e manutenibilidade
+- Performance otimizada
+- Compatibilidade total com versões anteriores
 """
 
-from .integration.claude_client import ClaudeClient
-from .integration.query_processor import QueryProcessor
-from .integration.response_formatter import ResponseFormatter
+import logging
+from typing import Dict, List, Any, Optional
+import asyncio
 
-from .intelligence.context_manager import ContextManager
-from .intelligence.learning_system import LearningSystem
+# Import principal: Integration Manager
+from .integration_manager import IntegrationManager
 
-# Versão do módulo
-__version__ = "2.0.0"
+# Imports de compatibilidade (somente funções)
+from .claude_ai_modular import processar_consulta_modular, get_nlp_analyzer
 
-# Configuração padrão
-DEFAULT_CONFIG = {
-    'model': 'claude-sonnet-4-20250514',
-    'max_tokens': 8192,
-    'temperature': 0.7,
-    'context_max_messages': 20,
-    'context_ttl_hours': 1
-}
+logger = logging.getLogger(__name__)
 
-class ClaudeAI:
-    """Classe principal do sistema Claude AI"""
+
+class ClaudeAINovo:
+    """
+    Classe principal do Claude AI Novo - Sistema Modular Integrado.
     
-    def __init__(self, api_key: str, db_session=None, redis_client=None):
-        self.claude_client = ClaudeClient(api_key)
-        self.context_manager = ContextManager(redis_client)
-        self.learning_system = LearningSystem(db_session)
-        self.query_processor = QueryProcessor(
-            self.claude_client,
-            self.context_manager, 
-            self.learning_system
+    Fornece interface unificada para todos os módulos especializados
+    através do Integration Manager.
+    """
+    
+    def __init__(self, claude_client=None, db_engine=None, db_session=None):
+        """
+        Inicializa o Claude AI Novo completo.
+        
+        Args:
+            claude_client: Cliente do Claude API
+            db_engine: Engine do banco de dados
+            db_session: Sessão do banco de dados
+        """
+        self.claude_client = claude_client
+        self.db_engine = db_engine
+        self.db_session = db_session
+        
+        # Gerenciador de integração principal
+        self.integration_manager = IntegrationManager(
+            claude_client=claude_client,
+            db_engine=db_engine, 
+            db_session=db_session
         )
-        self.response_formatter = ResponseFormatter()
+        
+        # Estado do sistema
+        self.system_ready = False
+        self.initialization_result = None
+        
+        logger.info("🚀 Claude AI Novo inicializado - aguardando integração completa")
     
-    def process_query(self, query: str, user_context: dict) -> str:
-        """Interface principal para processar consultas"""
+    async def initialize_system(self) -> Dict[str, Any]:
+        """
+        Inicializa todo o sistema modular integrado.
+        
+        Returns:
+            Dict com resultado da inicialização
+        """
+        logger.info("🔄 Iniciando sistema completo Claude AI Novo...")
         
         try:
-            # Processar consulta
-            result = self.query_processor.process_query(query, user_context)
+            # Inicializar todos os módulos
+            self.initialization_result = await self.integration_manager.initialize_all_modules()
             
-            # Formatar resposta
-            response = self.response_formatter.format_standard_response(
-                result['response'], 
-                result
-            )
+            # Verificar se sistema está pronto
+            self.system_ready = self.initialization_result.get('ready_for_operation', False)
             
-            # Adicionar ao contexto conversacional
-            user_id = user_context.get('user_id', 'anonymous')
-            self.context_manager.add_message(user_id, 'user', query)
-            self.context_manager.add_message(user_id, 'assistant', response)
+            if self.system_ready:
+                logger.info("✅ Claude AI Novo totalmente operacional!")
+            else:
+                logger.warning("⚠️ Claude AI Novo inicializado com limitações")
             
-            return response
+            return self.initialization_result
             
         except Exception as e:
-            return self.response_formatter.format_error_response(str(e))
+            logger.error(f"❌ Erro na inicialização do sistema: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'system_ready': False
+            }
     
-    def clear_context(self, user_id: str):
-        """Limpa contexto conversacional do usuário"""
-        self.context_manager.clear_context(user_id)
+    async def process_query(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
+        """
+        Processa uma consulta usando todo o sistema integrado.
+        
+        Args:
+            query: Consulta do usuário
+            context: Contexto adicional
+            
+        Returns:
+            Resposta processada pelo sistema completo
+        """
+        if not self.system_ready:
+            return {
+                'success': False,
+                'error': 'Sistema não está pronto. Execute initialize_system() primeiro.',
+                'fallback_response': 'Sistema em inicialização...'
+            }
+        
+        return await self.integration_manager.process_unified_query(query, context)
     
-    def record_feedback(self, query: str, response: str, feedback: dict):
-        """Registra feedback do usuário"""
-        self.learning_system.learn_from_feedback(query, response, feedback)
+    def get_module(self, module_name: str) -> Any:
+        """
+        Obtém acesso direto a um módulo específico.
+        
+        Args:
+            module_name: Nome do módulo
+            
+        Returns:
+            Instância do módulo ou None
+        """
+        return self.integration_manager.get_module(module_name)
+    
+    def get_system_status(self) -> Dict[str, Any]:
+        """
+        Obtém status completo do sistema.
+        
+        Returns:
+            Dict com status detalhado
+        """
+        base_status = self.integration_manager.get_system_status()
+        
+        base_status.update({
+            'system_ready': self.system_ready,
+            'claude_client_available': self.claude_client is not None,
+            'database_available': self.db_engine is not None,
+            'initialization_result': self.initialization_result
+        })
+        
+        return base_status
+    
+    def get_available_modules(self) -> List[str]:
+        """
+        Lista todos os módulos disponíveis.
+        
+        Returns:
+            Lista de nomes dos módulos
+        """
+        return list(self.integration_manager.modules.keys())
+    
+    # ===== MÉTODOS DE COMPATIBILIDADE =====
+    
+    async def processar_consulta(self, query: str, context: Optional[Dict] = None) -> str:
+        """
+        Método de compatibilidade para interface anterior.
+        
+        Args:
+            query: Consulta do usuário
+            context: Contexto adicional
+            
+        Returns:
+            Resposta como string
+        """
+        result = await self.process_query(query, context)
+        
+        if result.get('success'):
+            # Extrair resposta principal
+            agent_response = result.get('agent_response', {})
+            if isinstance(agent_response, dict) and 'response' in agent_response:
+                return agent_response['response']
+            elif isinstance(agent_response, str):
+                return agent_response
+            else:
+                return str(result.get('agent_response', 'Resposta não disponível'))
+        else:
+            return result.get('fallback_response', 'Erro no processamento')
+    
+    def obter_estatisticas(self) -> Dict[str, Any]:
+        """
+        Método de compatibilidade para estatísticas.
+        
+        Returns:
+            Dict com estatísticas do sistema
+        """
+        return self.get_system_status()
 
-# Instância global (será inicializada nas rotas)
-claude_ai_instance = None
 
-def get_claude_ai_instance():
-    """Obtém instância global do Claude AI"""
-    return claude_ai_instance
+# Factory function para criação simplificada
+async def create_claude_ai_novo(claude_client=None, db_engine=None, db_session=None, 
+                               auto_initialize: bool = True) -> ClaudeAINovo:
+    """
+    Factory function para criar e inicializar Claude AI Novo.
+    
+    Args:
+        claude_client: Cliente do Claude API
+        db_engine: Engine do banco de dados
+        db_session: Sessão do banco de dados
+        auto_initialize: Se deve inicializar automaticamente
+        
+    Returns:
+        Instância do Claude AI Novo pronta para uso
+    """
+    claude_ai = ClaudeAINovo(claude_client, db_engine, db_session)
+    
+    if auto_initialize:
+        await claude_ai.initialize_system()
+    
+    return claude_ai
 
-def initialize_claude_ai(api_key: str, db_session=None, redis_client=None):
-    """Inicializa instância global"""
-    global claude_ai_instance
-    claude_ai_instance = ClaudeAI(api_key, db_session, redis_client)
-    return claude_ai_instance
+
+# Exports principais
+__all__ = [
+    'ClaudeAINovo',
+    'IntegrationManager', 
+    'create_claude_ai_novo',
+    
+    # Compatibilidade
+    'processar_consulta_modular',
+    'get_nlp_analyzer'
+]

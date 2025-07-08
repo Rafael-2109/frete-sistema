@@ -25,7 +25,7 @@ def testar_sistema_novo():
         
         # Teste 3: Importar claude_integration
         print("3. Testando claude_integration...")
-        from app.claude_ai_novo.core.claude_integration import get_claude_integration
+        from app.claude_ai_novo.integration.claude import get_claude_integration
         print("   ✅ claude_integration OK")
         
         # Teste 4: Testar interface de transição

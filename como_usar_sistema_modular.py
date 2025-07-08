@@ -44,7 +44,7 @@ db_loader = get_database_loader()
 dados = db_loader.carregar_dados_entregas(analise, filtros, data_limite)
 
 # Usar integração completa:
-from app.claude_ai_novo.core.claude_integration import get_claude_integration
+from app.claude_ai_novo.integration.claude import get_claude_integration
 
 claude = get_claude_integration()
 resposta = claude.processar_consulta_real("consulta complexa", user_context)
