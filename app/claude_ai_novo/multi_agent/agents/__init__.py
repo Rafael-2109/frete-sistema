@@ -17,6 +17,7 @@ TODOS os agentes agora herdam de SmartBaseAgent e possuem:
 ✅ Alertas operacionais automáticos
 """
 
+# CORREÇÃO: Apenas SmartBaseAgent e agentes específicos para evitar import circular
 from .smart_base_agent import SmartBaseAgent
 from .entregas_agent import EntregasAgent
 from .embarques_agent import EmbarquesAgent
@@ -24,7 +25,7 @@ from .financeiro_agent import FinanceiroAgent
 from .pedidos_agent import PedidosAgent
 from .fretes_agent import FretesAgent
 
-# Exportações principais
+# Exportações principais - REMOVIDO BaseSpecialistAgent para evitar conflitos
 __all__ = [
     'SmartBaseAgent',
     'EntregasAgent',

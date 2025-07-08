@@ -6,6 +6,7 @@ while delegating to individual specialist agent files.
 
 ESTRUTURA MODULAR:
 - agents/base_agent.py: Classe base
+- agents/smart_base_agent.py: Classe base inteligente
 - agents/entregas_agent.py: Agente de Entregas
 - agents/fretes_agent.py: Agente de Fretes  
 - agents/pedidos_agent.py: Agente de Pedidos
@@ -16,15 +17,14 @@ ESTRUTURA MODULAR:
 import logging
 from typing import Dict, Any
 
-# Imports dos agentes individuais
-from .agents import (
-    BaseSpecialistAgent,
-    EntregasAgent,
-    FretesAgent,
-    PedidosAgent,
-    EmbarquesAgent,
-    FinanceiroAgent
-)
+# CORREÇÃO: Imports diretos dos módulos específicos para evitar import circular
+from .agents.base_agent import BaseSpecialistAgent
+from .agents.smart_base_agent import SmartBaseAgent
+from .agents.entregas_agent import EntregasAgent
+from .agents.fretes_agent import FretesAgent
+from .agents.pedidos_agent import PedidosAgent
+from .agents.embarques_agent import EmbarquesAgent
+from .agents.financeiro_agent import FinanceiroAgent
 from .agent_types import AgentType
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class SpecialistAgent:
     def __new__(cls, agent_type: AgentType, claude_client=None):
         """Factory method que retorna o agente especializado correto"""
         
-        # Mapear tipos para classes específicas
+        # Mapear tipos para classes específicas (TODAS são SmartBaseAgent)
         agent_classes = {
             AgentType.ENTREGAS: EntregasAgent,
             AgentType.FRETES: FretesAgent,
@@ -55,8 +55,8 @@ class SpecialistAgent:
             return agent_class(claude_client)
         else:
             logger.warning(f"Tipo de agente não reconhecido: {agent_type}")
-            # Fallback para agente base
-            return BaseSpecialistAgent(agent_type, claude_client)
+            # Fallback para SmartBaseAgent ao invés de BaseSpecialistAgent
+            return SmartBaseAgent(agent_type, claude_client)
 
 
 # Factory functions para fácil criação
@@ -101,15 +101,16 @@ __all__ = [
     # Wrapper de compatibilidade
     'SpecialistAgent',
     
-    # Agentes especializados individuais
+    # Agentes especializados individuais (TODOS SmartBaseAgent)
     'EntregasAgent',
     'FretesAgent',
     'PedidosAgent', 
     'EmbarquesAgent',
     'FinanceiroAgent',
     
-    # Classe base
+    # Classes base
     'BaseSpecialistAgent',
+    'SmartBaseAgent',
     
     # Factory functions
     'create_entregas_agent',
