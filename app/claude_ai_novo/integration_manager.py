@@ -546,6 +546,15 @@ class IntegrationManager:
         Returns:
             Resposta processada por todo o sistema
         """
+        # Validar query antes de usar
+        if not query or not isinstance(query, str):
+            logger.warning("⚠️ Query inválida ou vazia recebida")
+            return {
+                'success': False,
+                'error': 'Query inválida',
+                'fallback_response': 'Consulta vazia ou inválida'
+            }
+        
         logger.info(f"🔄 Processando consulta unificada: {query[:100]}...")
         
         try:
@@ -553,6 +562,8 @@ class IntegrationManager:
             semantic_enricher = self.get_module('semantic_enricher')
             if semantic_enricher:
                 enhanced_query = await self._safe_call(semantic_enricher, 'enrich', query)
+                if enhanced_query is None:
+                    enhanced_query = query
             else:
                 enhanced_query = query
             
@@ -601,7 +612,7 @@ class IntegrationManager:
             return {
                 'success': True,
                 'original_query': query,
-                'enhanced_query': enhanced_query,
+                'enhanced_query': enhanced_query or query,
                 'agent_response': agent_response,
                 'data_insights': data_insights,
                 'suggestions': suggestions,

@@ -123,11 +123,13 @@ class ClaudeRealIntegration:
             
             validation_result = await self._validate_complete_system()
             
-            if validation_result['overall_score'] >= 0.8:
+            # Verificar se validation_result não é None e tem a chave esperada
+            if validation_result and validation_result.get('overall_score', 0) >= 0.8:
                 self.system_ready = True
                 logger.info("🎉 SISTEMA COMPLETO DE IA INDUSTRIAL OPERACIONAL!")
             else:
-                logger.warning(f"⚠️ Sistema com limitações - Score: {validation_result['overall_score']:.2f}")
+                score = validation_result.get('overall_score', 0) if validation_result else 0
+                logger.warning(f"⚠️ Sistema com limitações - Score: {score:.2f}")
             
             # 📊 MÉTRICAS FINAIS
             end_time = datetime.now()
@@ -142,14 +144,14 @@ class ClaudeRealIntegration:
                 'integration_manager': initialization_result,
                 'advanced_ai_available': self.advanced_ai is not None,
                 'redis_available': self.redis_disponivel,
-                'validation': validation_result,
-                'modules_status': system_status.get('module_status', {}),
-                'total_modules': system_status.get('modules_loaded', 0),
-                'active_modules': system_status.get('modules_active', 0),
-                'performance_class': self._classify_performance(validation_result)
+                'validation': validation_result or {},
+                'modules_status': system_status.get('modules_status', {}) if system_status else {},
+                'total_modules': system_status.get('total_modules', 0) if system_status else 0,
+                'active_modules': system_status.get('active_modules', 0) if system_status else 0,
+                'performance_class': self._classify_performance(validation_result or {})
             }
             
-            logger.info(f"✅ Inicialização completa: {result['active_modules']}/{result['total_modules']} módulos ativos")
+            logger.info(f"✅ Inicialização completa: {result.get('active_modules', 0)}/{result.get('total_modules', 0)} módulos ativos")
             return result
             
         except Exception as e:
@@ -172,6 +174,10 @@ class ClaudeRealIntegration:
         Returns:
             Resposta processada pelo sistema completo
         """
+        # Validar entrada
+        if not consulta or not isinstance(consulta, str):
+            return self._fallback_response(consulta or "Consulta vazia", "Query inválida")
+        
         if not self.system_ready:
             # Tentar inicialização automática
             initialization = await self.initialize_complete_system()
@@ -200,6 +206,9 @@ class ClaudeRealIntegration:
     
     def _is_complex_query(self, consulta: str) -> bool:
         """Detecta se consulta requer processamento avançado"""
+        if not consulta or not isinstance(consulta, str):
+            return False
+        
         complex_indicators = [
             # Múltiplas condições
             ' e ', ' ou ', ' mas ', ' porém ',
@@ -213,8 +222,11 @@ class ClaudeRealIntegration:
             'deveria', 'recomenda', 'sugere', 'decidir'
         ]
         
-        complexity_score = sum(1 for indicator in complex_indicators if indicator in consulta.lower())
-        return complexity_score >= 2 or len(consulta.split()) > 20
+        try:
+            complexity_score = sum(1 for indicator in complex_indicators if indicator in consulta.lower())
+            return complexity_score >= 2 or len(consulta.split()) > 20
+        except:
+            return False
     
     async def _process_with_advanced_ai(self, consulta: str, user_context: Optional[Dict] = None) -> str:
         """Processa usando sistema avançado de IA industrial"""
@@ -255,7 +267,8 @@ class ClaudeRealIntegration:
             manager = self._get_integration_manager()
             result = await manager.process_unified_query(consulta, user_context)
             
-            if result.get('success'):
+            # Garantir que result não seja None
+            if result and result.get('success'):
                 response = result.get('agent_response', {})
                 
                 # Extrair resposta do resultado
@@ -271,7 +284,8 @@ class ClaudeRealIntegration:
                 
                 return final_response
             else:
-                return result.get('fallback_response', 'Erro no processamento')
+                error_msg = result.get('fallback_response', 'Erro no processamento') if result else 'Resultado vazio'
+                return error_msg
                 
         except Exception as e:
             logger.error(f"❌ Erro no Integration Manager: {e}")
@@ -299,46 +313,62 @@ Intelligence Learning, Semantic Processing e muito mais.
     
     async def _validate_complete_system(self) -> Dict[str, Any]:
         """Valida se todo o sistema está funcionando corretamente"""
-        validation = {
-            'integration_manager': 0.0,
-            'advanced_ai': 0.0,
-            'database_access': 0.0,
-            'cache_system': 0.0,
-            'overall_score': 0.0
-        }
-        
-        # Validar Integration Manager
-        if self.integration_manager:
-            manager = self._get_integration_manager()
-            status = manager.get_system_status()
-            if status.get('ready_for_operation'):
-                validation['integration_manager'] = 1.0
-            else:
-                validation['integration_manager'] = 0.5
-        
-        # Validar Advanced AI
-        if self.advanced_ai:
-            validation['advanced_ai'] = 1.0
-        
-        # Validar acesso a banco
         try:
-            from app import db
-            db.session.execute(text('SELECT 1'))
-            validation['database_access'] = 1.0
-        except:
-            validation['database_access'] = 0.0
-        
-        # Validar cache
-        if self.redis_disponivel:
-            validation['cache_system'] = 1.0
-        else:
-            validation['cache_system'] = 0.5  # Fallback em memória
-        
-        # Score geral
-        scores = list(validation.values())[:-1]  # Excluir overall_score
-        validation['overall_score'] = sum(scores) / len(scores)
-        
-        return validation
+            validation = {
+                'integration_manager': 0.0,
+                'advanced_ai': 0.0,
+                'database_access': 0.0,
+                'cache_system': 0.0,
+                'overall_score': 0.0
+            }
+            
+            # Validar Integration Manager
+            if self.integration_manager:
+                try:
+                    manager = self._get_integration_manager()
+                    status = manager.get_system_status()
+                    if status and status.get('ready_for_operation'):
+                        validation['integration_manager'] = 1.0
+                    else:
+                        validation['integration_manager'] = 0.5
+                except Exception as e:
+                    logger.debug(f"⚠️ Erro na validação do Integration Manager: {e}")
+                    validation['integration_manager'] = 0.0
+            
+            # Validar Advanced AI
+            if self.advanced_ai:
+                validation['advanced_ai'] = 1.0
+            
+            # Validar acesso a banco
+            try:
+                from app import db
+                db.session.execute(text('SELECT 1'))
+                validation['database_access'] = 1.0
+            except Exception as e:
+                logger.debug(f"⚠️ Erro no acesso ao banco: {e}")
+                validation['database_access'] = 0.0
+            
+            # Validar cache
+            if self.redis_disponivel:
+                validation['cache_system'] = 1.0
+            else:
+                validation['cache_system'] = 0.5  # Fallback em memória
+            
+            # Score geral
+            scores = list(validation.values())[:-1]  # Excluir overall_score
+            validation['overall_score'] = sum(scores) / len(scores) if scores else 0.0
+            
+            return validation
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na validação completa: {e}")
+            return {
+                'integration_manager': 0.0,
+                'advanced_ai': 0.0,
+                'database_access': 0.0,
+                'cache_system': 0.0,
+                'overall_score': 0.0
+            }
     
     def _classify_performance(self, validation: Dict[str, Any]) -> str:
         """Classifica performance do sistema"""
