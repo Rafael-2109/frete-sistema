@@ -257,9 +257,9 @@ class ProjectScanner:
                                      if m.get('source', '').startswith('models_file')])
             
             if total_modules > 0:
-                metrics['code_organization_score'] = round(
-                    (modules_with_models / total_modules) * 100, 2
-                )
+                metrics['code_organization_score'] = int(round(
+                    (modules_with_models / total_modules) * 100, 0
+                ))
             
         except Exception as e:
             logger.warning(f"⚠️ Erro ao calcular métricas: {e}")

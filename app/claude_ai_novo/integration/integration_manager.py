@@ -107,7 +107,7 @@ class IntegrationManager:
             'response_formatter': self.response_formatter is not None
         }
     
-    def process_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def process_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Processa consulta usando sistemas de integração.
         
@@ -121,7 +121,12 @@ class IntegrationManager:
         try:
             # Usar Claude Integration se disponível
             if self.claude_integration:
-                return self.claude_integration.processar_consulta_real(query, context or {})
+                response = await self.claude_integration.processar_consulta_real(query, context or {})
+                return {
+                    'success': True,
+                    'response': response,
+                    'metadata': {'source': 'claude_integration'}
+                }
             else:
                 return {
                     'success': False,

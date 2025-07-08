@@ -282,9 +282,9 @@ class StructureScanner:
                         # Extrair argumentos nomeados
                         for keyword in value_node.keywords:
                             if keyword.arg == 'nullable':
-                                field_info['nullable'] = self._extract_boolean_value(keyword.value)
+                                field_info['nullable'] = str(self._extract_boolean_value(keyword.value))
                             elif keyword.arg == 'primary_key':
-                                field_info['primary_key'] = self._extract_boolean_value(keyword.value)
+                                field_info['primary_key'] = str(self._extract_boolean_value(keyword.value))
                             elif keyword.arg == 'default':
                                 field_info['default'] = self._extract_value(keyword.value)
                     
@@ -301,9 +301,13 @@ class StructureScanner:
                         # Extrair argumentos nomeados
                         for keyword in value_node.keywords:
                             if keyword.arg == 'back_populates':
-                                field_info['back_populates'] = self._extract_string_value(keyword.value)
+                                back_populates_value = self._extract_string_value(keyword.value)
+                                if back_populates_value is not None:
+                                    field_info['back_populates'] = back_populates_value
                             elif keyword.arg == 'foreign_keys':
-                                field_info['foreign_keys'] = self._extract_string_value(keyword.value)
+                                foreign_keys_value = self._extract_string_value(keyword.value)
+                                if foreign_keys_value is not None:
+                                    field_info['foreign_keys'] = foreign_keys_value
                 
                 elif isinstance(value_node.func, ast.Name):
                     field_info['type'] = value_node.func.id
@@ -368,7 +372,7 @@ class StructureScanner:
 # Singleton para uso global
 _structure_scanner = None
 
-def get_structure_scanner(app_path: Path = None) -> StructureScanner:
+def get_structure_scanner(app_path: Optional[Path] = None) -> StructureScanner:
     """
     Obtém instância do scanner de estrutura.
     

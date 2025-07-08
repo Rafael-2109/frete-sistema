@@ -36,7 +36,7 @@ class ContextManager:
         
         return query
     
-    def add_message(self, user_id: str, role: str, content: str, metadata: Dict = None):
+    def add_message(self, user_id: str, role: str, content: str, metadata: Optional[Dict] = None):
         """Adiciona mensagem ao contexto"""
         
         message = {

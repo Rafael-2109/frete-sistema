@@ -23,9 +23,6 @@ import logging
 from typing import Dict, List, Any, Optional
 import asyncio
 
-# Import principal: Integration Manager
-from .integration_manager import IntegrationManager
-
 # Imports de compatibilidade (somente funções)
 from .claude_ai_modular import processar_consulta_modular, get_nlp_analyzer
 
@@ -53,18 +50,25 @@ class ClaudeAINovo:
         self.db_engine = db_engine
         self.db_session = db_session
         
-        # Gerenciador de integração principal
-        self.integration_manager = IntegrationManager(
-            claude_client=claude_client,
-            db_engine=db_engine, 
-            db_session=db_session
-        )
+        # Gerenciador de integração principal (import lazy)
+        self.integration_manager = None
         
         # Estado do sistema
         self.system_ready = False
         self.initialization_result = None
         
         logger.info("🚀 Claude AI Novo inicializado - aguardando integração completa")
+    
+    def _get_integration_manager(self):
+        """Import lazy do Integration Manager para evitar ciclos"""
+        if self.integration_manager is None:
+            from .integration_manager import IntegrationManager
+            self.integration_manager = IntegrationManager(
+                claude_client=self.claude_client,
+                db_engine=self.db_engine, 
+                db_session=self.db_session
+            )
+        return self.integration_manager
     
     async def initialize_system(self) -> Dict[str, Any]:
         """
@@ -77,7 +81,8 @@ class ClaudeAINovo:
         
         try:
             # Inicializar todos os módulos
-            self.initialization_result = await self.integration_manager.initialize_all_modules()
+            manager = self._get_integration_manager()
+            self.initialization_result = await manager.initialize_all_modules()
             
             # Verificar se sistema está pronto
             self.system_ready = self.initialization_result.get('ready_for_operation', False)
@@ -115,7 +120,8 @@ class ClaudeAINovo:
                 'fallback_response': 'Sistema em inicialização...'
             }
         
-        return await self.integration_manager.process_unified_query(query, context)
+        manager = self._get_integration_manager()
+        return await manager.process_unified_query(query, context)
     
     def get_module(self, module_name: str) -> Any:
         """
@@ -127,7 +133,8 @@ class ClaudeAINovo:
         Returns:
             Instância do módulo ou None
         """
-        return self.integration_manager.get_module(module_name)
+        manager = self._get_integration_manager()
+        return manager.get_module(module_name)
     
     def get_system_status(self) -> Dict[str, Any]:
         """
@@ -136,7 +143,8 @@ class ClaudeAINovo:
         Returns:
             Dict com status detalhado
         """
-        base_status = self.integration_manager.get_system_status()
+        manager = self._get_integration_manager()
+        base_status = manager.get_system_status()
         
         base_status.update({
             'system_ready': self.system_ready,
@@ -154,7 +162,8 @@ class ClaudeAINovo:
         Returns:
             Lista de nomes dos módulos
         """
-        return list(self.integration_manager.modules.keys())
+        manager = self._get_integration_manager()
+        return list(manager.modules.keys())
     
     # ===== MÉTODOS DE COMPATIBILIDADE =====
     
@@ -219,7 +228,6 @@ async def create_claude_ai_novo(claude_client=None, db_engine=None, db_session=N
 # Exports principais
 __all__ = [
     'ClaudeAINovo',
-    'IntegrationManager', 
     'create_claude_ai_novo',
     
     # Compatibilidade

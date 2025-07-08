@@ -21,6 +21,7 @@ from .agents import (
     EmbarquesAgent,
     FinanceiroAgent
 )
+
 from .critic_agent import CriticAgent
 
 logger = logging.getLogger(__name__)

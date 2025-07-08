@@ -7,7 +7,7 @@ Suporta múltiplas formas de conexão (Flask, direta, etc.).
 
 import logging
 from typing import Optional, Any
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm.session import Session
@@ -87,8 +87,11 @@ class DatabaseConnection:
             app = create_app()
             
             with app.app_context():
-                self.db_engine = db.engine
-                self.db_session = db.session
+                if hasattr(db, 'engine') and hasattr(db, 'session'):
+                    self.db_engine = db.engine
+                    self.db_session = db.session
+                else:
+                    return False
                 
             logger.info("✅ Conexão Flask estabelecida")
             return True
@@ -165,8 +168,9 @@ class DatabaseConnection:
         Inicializa o inspector do SQLAlchemy.
         """
         try:
-            self.inspector = inspect(self.db_engine)
-            logger.debug("🔍 Inspector do banco inicializado")
+            if self.db_engine:
+                self.inspector = inspect(self.db_engine)
+                logger.debug("🔍 Inspector do banco inicializado")
         except Exception as e:
             logger.warning(f"⚠️ Erro ao inicializar inspector: {e}")
             self.inspector = None
@@ -198,7 +202,7 @@ class DatabaseConnection:
         """
         return self.db_engine
     
-    def get_session(self) -> Optional[Session]:
+    def get_session(self) -> Optional[Any]:
         """
         Retorna a sessão do banco.
         
@@ -228,7 +232,7 @@ class DatabaseConnection:
         
         try:
             with self.db_engine.connect() as conn:
-                conn.execute("SELECT 1")
+                conn.execute(text("SELECT 1"))
             return True
         except Exception as e:
             logger.error(f"❌ Teste de conexão falhou: {e}")

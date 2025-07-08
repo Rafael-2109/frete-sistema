@@ -137,4 +137,7 @@ def get_lifelong_learning() -> LifelongLearningSystem:
 __all__ = [
     'LifelongLearningSystem',
     'get_lifelong_learning'
-] 
+]
+
+# Alias para compatibilidade
+LifelongLearning = LifelongLearningSystem 

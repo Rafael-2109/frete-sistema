@@ -365,7 +365,7 @@ class FileScanner:
 # Singleton para uso global
 _file_scanner = None
 
-def get_file_scanner(app_path: Path = None) -> FileScanner:
+def get_file_scanner(app_path: Optional[Path] = None) -> FileScanner:
     """
     Obtém instância do scanner de arquivos.
     
