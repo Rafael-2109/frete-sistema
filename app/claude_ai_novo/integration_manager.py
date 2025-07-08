@@ -560,15 +560,31 @@ class IntegrationManager:
             multi_agent = self.get_module('multi_agent_orchestrator')
             if multi_agent:
                 agent_response = await self._safe_call(multi_agent, 'process_query', enhanced_query, context)
+                # Garantir que agent_response nunca seja None
+                if agent_response is None:
+                    agent_response = {'response': 'Sistema multi-agente retornou resposta vazia', 'success': False}
             else:
-                agent_response = {'response': 'Sistema multi-agente não disponível'}
+                agent_response = {'response': 'Sistema multi-agente não disponível', 'success': False}
             
             # 3. Enriquecimento com dados do banco
             database_reader = self.get_module('database_reader')
+            data_insights = {}
             if database_reader:
-                data_insights = await self._safe_call(database_reader, 'analisar_dados_reais', enhanced_query)
-            else:
-                data_insights = {}
+                # Usar método que existe para obter estatísticas gerais
+                try:
+                    # Obter estatísticas gerais do banco para contexto
+                    stats = await self._safe_call(database_reader, 'obter_estatisticas_gerais') or {}
+                    if stats and 'erro' not in stats:
+                        data_insights = {
+                            'database_available': True,
+                            'connection_info': stats.get('conexao', {}),
+                            'total_tables': stats.get('metadata', {}).get('total_tabelas', 0)
+                        }
+                    else:
+                        data_insights = {'database_available': False}
+                except Exception as e:
+                    logger.debug(f"⚠️ Erro ao obter dados do banco: {e}")
+                    data_insights = {'database_available': False}
             
             # 4. Aprendizado e feedback
             learning_core = self.get_module('learning_core')

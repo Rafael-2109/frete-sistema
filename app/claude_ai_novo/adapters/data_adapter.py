@@ -10,11 +10,11 @@ logger = logging.getLogger(__name__)
 
 def get_sistema_real_data():
     """
-    Adaptador para sistema_real_data que está no sistema antigo
+    Adaptador para sistema_real_data - usa data_provider do sistema novo
     """
     try:
-        # Importar do sistema antigo (claude_ai)
-        from ....claude_ai.sistema_real_data import get_sistema_real_data as _get_real_data
+        # Importar do data_provider do sistema novo
+        from ..data.providers.data_provider import get_sistema_real_data as _get_real_data
         return _get_real_data()
     except ImportError:
         logger.warning("⚠️ Sistema Real Data não disponível - criando mock")
