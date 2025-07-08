@@ -256,7 +256,7 @@ class MultiAgentOrchestrator:
             combined_score = (relevance + confidence) / 2
             scored_responses.append((combined_score, response))
         
-        scored_responses.sort(reverse=True)  # Maior score primeiro
+        scored_responses.sort(key=lambda x: x[0], reverse=True)  # Maior score primeiro - corrigido para evitar comparação de dicts
         
         # Estratégia de convergência
         if len(scored_responses) == 1:
