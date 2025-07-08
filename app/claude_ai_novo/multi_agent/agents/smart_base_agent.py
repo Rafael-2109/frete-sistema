@@ -492,9 +492,8 @@ RESPONDA SEMPRE EM PORTUGUÊS.
             
             # Processar com Claude real se disponível
             if self.tem_claude_real:
-                resposta_ia = await self.claude_real.processar_consulta_especializada(
+                resposta_ia = self.claude_real.processar_consulta_real(
                     prompt_enriquecido,
-                    self.specialist_prompt,
                     context
                 )
             else:
@@ -576,9 +575,8 @@ RESPONDA SEMPRE EM PORTUGUÊS.
         """Processa consulta com Claude 4 Sonnet real"""
         if self.tem_claude_real:
             try:
-                resposta = await self.claude_real.processar_consulta_especializada(
+                resposta = self.claude_real.processar_consulta_real(
                     query,
-                    self.specialist_prompt,
                     context
                 )
                 
