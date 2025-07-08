@@ -84,6 +84,26 @@ class IntentionAnalyzer:
     
     def __init__(self):
         pass
+    
+    def analyze_intention(self, query: str) -> Dict[str, Any]:
+        """Analisa a intenção do usuário na consulta"""
+        intencoes = self._detectar_intencao_refinada(query)
+        
+        # Determinar intenção principal
+        intencao_principal = max(intencoes, key=intencoes.get) if intencoes else "analise_dados"
+        confianca = max(intencoes.values()) if intencoes else 0.5
+        
+        # Determinar se deve usar sistema avançado
+        usar_avancado = self._deve_usar_sistema_avancado(query, intencoes)
+        
+        return {
+            'intention': intencao_principal,
+            'confidence': confianca,
+            'all_intentions': intencoes,
+            'use_advanced': usar_avancado,
+            'query_length': len(query.split()),
+            'complexity': 'high' if len(query.split()) > 15 else 'medium' if len(query.split()) > 8 else 'low'
+        }
         
     def _detectar_intencao_refinada(self, consulta: str) -> Dict[str, float]:
         """
@@ -184,3 +204,15 @@ def get_intentionanalyzer():
     if _intentionanalyzer is None:
         _intentionanalyzer = IntentionAnalyzer()
     return _intentionanalyzer
+
+# Alias para compatibilidade
+def get_intention_analyzer():
+    """Retorna instância de IntentionAnalyzer (alias para compatibilidade)"""
+    return get_intentionanalyzer()
+
+# Exportações
+__all__ = [
+    'IntentionAnalyzer',
+    'get_intentionanalyzer', 
+    'get_intention_analyzer'
+]

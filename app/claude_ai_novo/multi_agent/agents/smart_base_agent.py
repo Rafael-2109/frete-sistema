@@ -16,8 +16,9 @@ Classe base que integra TODAS as funcionalidades avançadas já implementadas:
 """
 
 import logging
+from socket import timeout
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from .base_agent import BaseSpecialistAgent
 from ..agent_types import AgentType
 
@@ -33,12 +34,76 @@ class SmartBaseAgent(BaseSpecialistAgent):
     """
     
     def __init__(self, agent_type: AgentType, claude_client=None):
+        # Inicializar capacidades avançadas ANTES de chamar super()
+        self._inicializar_flags()
+        
+        # Chamar construtor da classe base
         super().__init__(agent_type, claude_client)
         
-        # 🎯 INICIALIZAR TODAS AS CAPACIDADES AVANÇADAS
+        # Carregar todas as capacidades avançadas
         self._inicializar_capacidades_avancadas()
+    
+    def _inicializar_flags(self):
+        """Inicializa flags de capacidades para evitar erros"""
+        self.tem_dados_reais = False
+        self.tem_claude_real = False
+        self.tem_cache = False
+        self.tem_contexto = False
+        self.tem_mapeamento = False
+        self.tem_ml_models = False
+        self.tem_logs_estruturados = False
+        self.tem_trend_analyzer = False
+        self.tem_validation = False
+        self.tem_suggestions = False
+        self.tem_alerts = False
+        self.tem_analyzers = False
+        self.tem_knowledge_manager = False
+    
+    def _load_specialist_prompt(self) -> str:
+        """Carrega system prompt especializado para o domínio"""
+        return f"""
+Você é um agente IA especialista em {self.agent_type.value} para sistema de gestão de fretes.
+
+DOMÍNIO DE ESPECIALIZAÇÃO: {self.agent_type.value.upper()}
+
+CAPACIDADES AVANÇADAS ATIVAS:
+- Análise de dados reais em tempo real
+- Processamento com Claude 4 Sonnet
+- Análise multicamada com 5 analyzers especializados
+- Autoavaliação contínua (metacognição)
+- Validação estrutural automática
+- Cache inteligente para performance
+
+INSTRUÇÕES:
+1. Forneça análises precisas e acionáveis
+2. Use dados reais do sistema quando disponíveis
+3. Aplique conhecimento especializado no seu domínio
+4. Seja direto e profissional
+5. Cite números específicos quando possível
+
+RESPONDA SEMPRE EM PORTUGUÊS.
+"""
+    
+    def _load_domain_knowledge(self) -> Dict[str, Any]:
+        """Conhecimento básico - cada agente especializado sobrescreve com seu conhecimento específico"""
         
-        logger.info(f"🧠 SmartBaseAgent {self.agent_type.value} inicializado com todas as capacidades")
+        # Conhecimento básico genérico apenas para fallback
+        # Cada agente especializado deve sobrescrever este método
+        return {
+            'tipo_agente': self.agent_type.value,
+            'sistema': 'frete_sistema',
+            'capacidades': 'multi_agent_system',
+            'nota': 'Conhecimento específico deve ser implementado no agente especializado'
+        }
+    
+    def _get_domain_keywords(self) -> List[str]:
+        """Palavras-chave básicas - cada agente especializado sobrescreve com suas palavras específicas"""
+        
+        # Keywords básicas apenas para fallback
+        # Cada agente especializado deve sobrescrever este método
+        return [
+            'sistema', 'dados', 'informação', 'relatório', 'análise', 'consulta'
+        ]
     
     def _inicializar_capacidades_avancadas(self):
         """Inicializa TODAS as capacidades avançadas disponíveis"""
@@ -75,6 +140,12 @@ class SmartBaseAgent(BaseSpecialistAgent):
         
         # 11. 🚨 SISTEMA DE ALERTAS
         self._carregar_sistema_alertas()
+        
+        # 12. 🧠 ANALYZERS AVANÇADOS
+        self._carregar_analyzers_avancados()
+        
+        # 13. 📚 KNOWLEDGE MANAGER
+        self._carregar_knowledge_manager()
     
     def _carregar_sistema_dados_reais(self):
         """Carrega sistema de dados reais com fallback seguro"""
@@ -97,7 +168,7 @@ class SmartBaseAgent(BaseSpecialistAgent):
     def _carregar_claude_real(self):
         """Carrega Claude 4 Sonnet real (não simulado)"""
         try:
-            from app.claude_ai_novo.integration.claude import get_claude_integration
+            from app.claude_ai_novo.integration.claude.claude_integration import get_claude_integration
             
             self.claude_real = get_claude_integration()
             self.tem_claude_real = self.claude_real is not None
@@ -146,14 +217,14 @@ class SmartBaseAgent(BaseSpecialistAgent):
         except Exception as e:
             self.contexto_conversacional = None
             self.tem_contexto = False
-            logger.warning(f"⚠️ {self.agent_type.value}: Contexto não disponível: {e}")
+            logger.warning(f"⚠️ {self.agent_type.value}: Contexto conversacional não disponível: {e}")
     
     def _carregar_mapeamento_semantico(self):
         """Carrega sistema de mapeamento semântico"""
         try:
-            from app.claude_ai_novo.semantic.mappers.base_mapper import get_semantic_mapper
+            from app.claude_ai_novo.semantic.semantic_manager import get_semantic_manager
             
-            self.mapeamento_semantico = get_semantic_mapper()
+            self.mapeamento_semantico = get_semantic_manager()
             self.tem_mapeamento = self.mapeamento_semantico is not None
             
             if self.tem_mapeamento:
@@ -169,9 +240,9 @@ class SmartBaseAgent(BaseSpecialistAgent):
     def _carregar_ml_models(self):
         """Carrega ML Models para análises preditivas"""
         try:
-            from app.utils.ml_models_real import get_ml_models_real
+            from app.utils.ml_models_real import get_ml_models_system
             
-            self.ml_models = get_ml_models_real()
+            self.ml_models = get_ml_models_system()
             self.tem_ml_models = self.ml_models is not None
             
             if self.tem_ml_models:
@@ -236,7 +307,7 @@ class SmartBaseAgent(BaseSpecialistAgent):
     def _carregar_sugestoes_inteligentes(self):
         """Carrega sistema de sugestões inteligentes"""
         try:
-            from app.claude_ai_novo.suggestions.suggestion_engine import get_suggestion_engine
+            from app.claude_ai_novo.suggestions.engine import get_suggestion_engine
             
             self.suggestion_engine = get_suggestion_engine()
             self.tem_suggestions = self.suggestion_engine is not None
@@ -269,15 +340,64 @@ class SmartBaseAgent(BaseSpecialistAgent):
             self.tem_alerts = False
             logger.warning(f"⚠️ {self.agent_type.value}: Alertas não disponíveis: {e}")
     
+    def _carregar_analyzers_avancados(self):
+        """Carrega analyzers avançados de análise"""
+        try:
+            from app.claude_ai_novo.analyzers.intention_analyzer import get_intention_analyzer
+            from app.claude_ai_novo.analyzers.metacognitive_analyzer import get_metacognitive_analyzer
+            from app.claude_ai_novo.analyzers.nlp_enhanced_analyzer import get_nlp_enhanced_analyzer
+            from app.claude_ai_novo.analyzers.query_analyzer import get_query_analyzer
+            from app.claude_ai_novo.analyzers.structural_ai import get_structural_ai
+            
+            self.intention_analyzer = get_intention_analyzer()
+            self.metacognitive_analyzer = get_metacognitive_analyzer()
+            self.nlp_analyzer = get_nlp_enhanced_analyzer()
+            self.query_analyzer = get_query_analyzer()
+            self.structural_ai = get_structural_ai()
+            
+            self.tem_analyzers = True
+            logger.info(f"✅ {self.agent_type.value}: 5 analyzers avançados conectados")
+            
+        except Exception as e:
+            self.intention_analyzer = None
+            self.metacognitive_analyzer = None
+            self.nlp_analyzer = None
+            self.query_analyzer = None
+            self.structural_ai = None
+            self.tem_analyzers = False
+            logger.warning(f"⚠️ {self.agent_type.value}: Analyzers não disponíveis: {e}")
+    
+    def _carregar_knowledge_manager(self):
+        """Carrega sistema de gestão de conhecimento"""
+        try:
+            from app.claude_ai_novo.knowledge.knowledge_manager import get_knowledge_manager
+            
+            self.knowledge_manager = get_knowledge_manager()
+            self.tem_knowledge_manager = self.knowledge_manager is not None
+            
+            if self.tem_knowledge_manager:
+                logger.info(f"✅ {self.agent_type.value}: Knowledge Manager conectado")
+            else:
+                logger.warning(f"⚠️ {self.agent_type.value}: Knowledge Manager não disponível")
+                
+        except Exception as e:
+            self.knowledge_manager = None
+            self.tem_knowledge_manager = False
+            logger.warning(f"⚠️ {self.agent_type.value}: Knowledge Manager não disponível: {e}")
+    
     async def analyze(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Análise INTELIGENTE usando TODAS as capacidades avançadas
+        Análise INTELIGENTE usando TODAS as capacidades avançadas + ANALYZERS
         
         Override do método base para integrar todas as funcionalidades
         """
         try:
             # 📊 LOG ESTRUTURADO DA CONSULTA
             self._log_consulta_estruturada(query, context)
+            
+            # 🧠 ANÁLISE COM ANALYZERS AVANÇADOS (NOVA ETAPA)
+            if self.tem_analyzers:
+                context = await self._analisar_com_analyzers(query, context)
             
             # 🎯 EXECUTAR CONSULTA COM DADOS REAIS (se disponível)
             if self.tem_dados_reais:
@@ -309,6 +429,10 @@ class SmartBaseAgent(BaseSpecialistAgent):
             # 🔍 VALIDAÇÃO E CONFIANÇA
             if self.tem_validation:
                 resposta = await self._validar_resposta(resposta, query, context)
+            
+            # 🧠 ANÁLISE METACOGNITIVA DA RESPOSTA (NOVA ETAPA)
+            if self.tem_analyzers and self.metacognitive_analyzer:
+                resposta = await self._analisar_metacognitivamente(resposta, query, context)
             
             # 🚨 GERAR ALERTAS (se necessário)
             if self.tem_alerts:
@@ -502,9 +626,77 @@ class SmartBaseAgent(BaseSpecialistAgent):
         if self.tem_cache:
             try:
                 cache_key = f"agent_{self.agent_type.value}_{hash(query)}_{context.get('user_id', 'anon')}"
-                self.redis_cache.set(cache_key, resposta, timeout=300)  # 5 minutos
+                self.redis_cache.set(cache_key, resposta, ttl=300)  # 5 minutos
             except Exception as e:
                 logger.warning(f"⚠️ Erro no cache: {e}")
+    
+    async def _analisar_com_analyzers(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Análise completa com todos os analyzers avançados"""
+        if not self.tem_analyzers:
+            return context
+        
+        try:
+            # 1. ANÁLISE DE INTENÇÃO
+            if self.intention_analyzer:
+                intention_result = self.intention_analyzer.analyze_intention(query)
+                context['intention_analysis'] = intention_result
+                logger.debug(f"🎯 Intenção detectada: {intention_result.get('intention', 'N/A')}")
+            
+            # 2. ANÁLISE DE CONSULTA
+            if self.query_analyzer:
+                query_analysis = self.query_analyzer.analyze_query(query)
+                context['query_analysis'] = query_analysis
+                logger.debug(f"❓ Tipo consulta: {query_analysis.get('query_type', 'N/A')}")
+            
+            # 3. ANÁLISE NLP AVANÇADA
+            if self.nlp_analyzer:
+                nlp_result = self.nlp_analyzer.analyze_text(query)
+                context['nlp_analysis'] = nlp_result
+                logger.debug(f"🔤 Entidades NLP: {len(nlp_result.get('entities', []))}")
+            
+            # 4. VALIDAÇÃO ESTRUTURAL
+            if self.structural_ai:
+                structural_validation = self.structural_ai.validate_business_logic(context)
+                context['structural_validation'] = structural_validation
+                logger.debug(f"🏗️ Consistência estrutural: {structural_validation.get('structural_consistency', 0):.2f}")
+            
+            return context
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Erro na análise com analyzers: {e}")
+            return context
+    
+    async def _analisar_metacognitivamente(self, resposta: Dict[str, Any], query: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Análise metacognitiva da resposta gerada"""
+        if not self.tem_analyzers or not self.metacognitive_analyzer:
+            return resposta
+        
+        try:
+            response_text = resposta.get('response', '')
+            
+            # Análise metacognitiva
+            metacognitive_result = self.metacognitive_analyzer.analyze_own_performance(
+                query, response_text
+            )
+            
+            # Adicionar resultados à resposta
+            resposta['metacognitive_analysis'] = metacognitive_result
+            
+            # Ajustar confiança baseado na análise metacognitiva
+            metacognitive_confidence = metacognitive_result.get('confidence_score', 0.5)
+            original_confidence = resposta.get('confidence', 0.5)
+            
+            # Combinar confianças (média ponderada)
+            combined_confidence = (original_confidence * 0.7) + (metacognitive_confidence * 0.3)
+            resposta['confidence'] = combined_confidence
+            
+            logger.debug(f"🧠 Análise metacognitiva: {metacognitive_confidence:.2f}")
+            
+            return resposta
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Erro na análise metacognitiva: {e}")
+            return resposta
     
     def _listar_capacidades_ativas(self) -> List[str]:
         """Lista capacidades que estão ativas neste agente"""
@@ -532,6 +724,10 @@ class SmartBaseAgent(BaseSpecialistAgent):
             capacidades.append("sugestoes_inteligentes")
         if self.tem_alerts:
             capacidades.append("sistema_alertas")
+        if self.tem_analyzers:
+            capacidades.append("analyzers_avancados")
+        if self.tem_knowledge_manager:
+            capacidades.append("knowledge_manager")
         
         return capacidades
     
@@ -552,8 +748,17 @@ class SmartBaseAgent(BaseSpecialistAgent):
                 'analise_tendencias': self.tem_trend_analyzer,
                 'sistema_validacao': self.tem_validation,
                 'sugestoes_inteligentes': self.tem_suggestions,
-                'sistema_alertas': self.tem_alerts
+                'sistema_alertas': self.tem_alerts,
+                'analyzers_avancados': self.tem_analyzers,
+                'knowledge_manager': self.tem_knowledge_manager
             },
+            'analyzers_detalhados': {
+                'intention_analyzer': hasattr(self, 'intention_analyzer') and self.intention_analyzer is not None,
+                'metacognitive_analyzer': hasattr(self, 'metacognitive_analyzer') and self.metacognitive_analyzer is not None,
+                'nlp_analyzer': hasattr(self, 'nlp_analyzer') and self.nlp_analyzer is not None,
+                'query_analyzer': hasattr(self, 'query_analyzer') and self.query_analyzer is not None,
+                'structural_ai': hasattr(self, 'structural_ai') and self.structural_ai is not None
+            } if hasattr(self, 'tem_analyzers') and self.tem_analyzers else {},
             'timestamp': datetime.now().isoformat()
         }
 

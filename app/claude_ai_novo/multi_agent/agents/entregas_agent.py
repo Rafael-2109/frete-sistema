@@ -19,7 +19,60 @@ class EntregasAgent(SmartBaseAgent):
     
     def __init__(self, claude_client=None):
         super().__init__(AgentType.ENTREGAS, claude_client)
-        # SmartBaseAgent já inicializa TODAS as capacidades automaticamente!
+    
+    def _calculate_relevance(self, query: str) -> float:
+        """Calcula relevância específica para consultas de entregas"""
+        if not query:
+            return 0.0
+        
+        keywords_entregas = {
+            # Core delivery terms
+            'entrega': 3.0, 'entregar': 3.0, 'entregou': 3.0, 'entregue': 3.0,
+            'entreg': 2.5,  # partial match
+            
+            # Status and timing
+            'atrasada': 2.5, 'atrasado': 2.5, 'atraso': 2.5,
+            'pontual': 2.0, 'pontualidade': 2.0,
+            'pendente': 2.0, 'pendentes': 2.0,
+            'urgente': 2.0, 'urgentes': 2.0,
+            'prazo': 2.0, 'prazos': 2.0,
+            
+            # Problems and exceptions
+            'problema': 2.0, 'problemas': 2.0,
+            'falhou': 2.0, 'falha': 2.0,
+            'devolvida': 2.0, 'devolução': 2.0,
+            'cancelada': 2.0, 'cancelamento': 2.0,
+            
+            # Scheduling
+            'agendamento': 2.0, 'agendada': 2.0,
+            'reagendar': 2.0, 'reagendamento': 2.0,
+            
+            # Logistics
+            'rota': 1.5, 'rotas': 1.5,
+            'motorista': 1.5, 'entregador': 1.5,
+            'veiculo': 1.0, 'veículo': 1.0,
+            
+            # Performance metrics  
+            'performance': 1.5, 'eficiência': 1.5,
+            'tempo': 1.0, 'duração': 1.0,
+            'distância': 1.0, 'distancia': 1.0,
+            
+            # Monitoring
+            'monitoramento': 1.5, 'tracking': 1.5,
+            'localização': 1.0, 'localizacao': 1.0,
+            'posição': 1.0, 'posicao': 1.0
+        }
+        
+        query_lower = query.lower()
+        score = 0.0
+        
+        for keyword, weight in keywords_entregas.items():
+            if keyword in query_lower:
+                score += weight
+        
+        # Normalize to 0-1 range
+        max_possible_score = 10.0
+        return min(score / max_possible_score, 1.0)
     
     def _resumir_dados_reais(self, dados_reais: Dict[str, Any]) -> Dict[str, Any]:
         """Resume dados reais específicos para ENTREGAS"""

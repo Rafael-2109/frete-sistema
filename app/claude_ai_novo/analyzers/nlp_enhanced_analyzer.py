@@ -154,6 +154,23 @@ class NLPEnhancedAnalyzer:
             sentimento=sentimento
         )
     
+    def analyze_text(self, text: str) -> Dict[str, Any]:
+        """Alias para analisar_com_nlp para compatibilidade"""
+        resultado = self.analisar_com_nlp(text)
+        
+        # Converter AnaliseNLP para dict
+        return {
+            'entities': resultado.entidades_nomeadas,
+            'keywords': resultado.palavras_chave,
+            'sentiment': resultado.sentimento,
+            'complexity': 1.0, # Placeholder, as confianca_analise is not in AnaliseNLP
+            'tokens': resultado.tokens_limpos,
+            'corrections': resultado.correcoes_sugeridas,
+            'similarity_scores': resultado.similaridades,
+            'verb_tense': resultado.tempo_verbal,
+            'confidence': 1.0
+        }
+    
     def _aplicar_correcoes(self, texto: str) -> Dict[str, Any]:
         """Aplica correções ortográficas comuns"""
         texto_corrigido = texto
