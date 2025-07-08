@@ -4,6 +4,7 @@ Permite usar tanto o sistema antigo quanto o novo
 """
 
 import os
+import asyncio
 from typing import Dict, Optional, Any
 
 class ClaudeTransition:
@@ -39,12 +40,14 @@ class ClaudeTransition:
             print(f"❌ Erro ao inicializar sistema antigo: {e}")
             self.sistema_ativo = "nenhum"
     
-    def processar_consulta(self, consulta: str, user_context: Optional[Dict] = None) -> str:
-        """Processa consulta usando o sistema ativo"""
+    async def processar_consulta(self, consulta: str, user_context: Optional[Dict] = None) -> str:
+        """Processa consulta usando o sistema ativo (agora async)"""
         
         if self.sistema_ativo == "novo":
-            return self.claude.processar_consulta_real(consulta, user_context)
+            # Sistema novo é assíncrono - usar await
+            return await self.claude.processar_consulta_real(consulta, user_context)
         elif self.sistema_ativo == "antigo":
+            # Sistema antigo é síncrono
             return self.processar_consulta_real(consulta, user_context)
         else:
             return "❌ Nenhum sistema Claude AI disponível"
@@ -68,7 +71,33 @@ def get_claude_transition():
         _claude_transition = ClaudeTransition()
     return _claude_transition
 
-def processar_consulta_transicao(consulta: str, user_context: Optional[Dict] = None) -> str:
-    """Função única para processar consultas independente do sistema"""
+async def processar_consulta_transicao_async(consulta: str, user_context: Optional[Dict] = None) -> str:
+    """Função ASYNC para processar consultas independente do sistema"""
     transition = get_claude_transition()
-    return transition.processar_consulta(consulta, user_context)
+    return await transition.processar_consulta(consulta, user_context)
+
+def processar_consulta_transicao(consulta: str, user_context: Optional[Dict] = None) -> str:
+    """Função SÍNCRONA para compatibilidade - executa versão async"""
+    try:
+        # Tentar usar loop existente
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Se loop já está rodando, criar uma task
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, 
+                    processar_consulta_transicao_async(consulta, user_context))
+                return future.result(timeout=30)  # 30 segundos timeout
+        else:
+            # Loop não está rodando, usar run_until_complete
+            return loop.run_until_complete(
+                processar_consulta_transicao_async(consulta, user_context)
+            )
+    except RuntimeError:
+        # Se não há loop, criar um novo
+        return asyncio.run(
+            processar_consulta_transicao_async(consulta, user_context)
+        )
+    except Exception as e:
+        print(f"❌ Erro na transição: {e}")
+        return f"❌ Erro no sistema de transição: {e}"

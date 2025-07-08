@@ -145,6 +145,19 @@ class SuggestionEngine:
             )
         ]
     
+    def generate_suggestions(self, user_context: Dict[str, Any], conversation_context: Optional[Dict] = None) -> List[Dict[str, Any]]:
+        """
+        Método principal para gerar sugestões (nome alternativo)
+        
+        Args:
+            user_context: Informações do usuário (perfil, vendedor_codigo, etc.)
+            conversation_context: Contexto da conversa atual
+            
+        Returns:
+            Lista de sugestões personalizadas
+        """
+        return self.get_intelligent_suggestions(user_context, conversation_context)
+    
     def get_intelligent_suggestions(self, user_context: Dict[str, Any], conversation_context: Optional[Dict] = None) -> List[Dict[str, Any]]:
         """
         Gera sugestões inteligentes baseadas no contexto do usuário e conversa
@@ -225,8 +238,8 @@ class SuggestionEngine:
                 if user_profile in s.user_profiles or 'admin' in s.user_profiles
             ]
             
-            # 🧠 GERAR SUGESTÕES BASEADAS EM DADOS REAIS
-            data_based_suggestions = self._generate_data_based_suggestions(user_context)
+            # 🧠 GERAR SUGESTÕES BASEADAS EM DADOS REAIS (VERSÃO SIMPLIFICADA)
+            data_based_suggestions = self._generate_data_based_suggestions_simple(user_context)
             
             # Analisar contexto conversacional para sugestões contextuais
             contextual_suggestions = self._get_contextual_suggestions(conversation_context, user_profile)
@@ -299,125 +312,82 @@ class SuggestionEngine:
         
         return valid_suggestions
     
-    def _generate_data_based_suggestions(self, user_context: Dict[str, Any]) -> List[Suggestion]:
+    def _generate_data_based_suggestions_simple(self, user_context: Dict[str, Any]) -> List[Suggestion]:
         """
-        Gera sugestões baseadas em dados reais do sistema
-        Implementa: https://fastbots.ai/blog/how-chatbots-use-customer-data-to-improve-service-recommendations
+        Versão simplificada de sugestões baseadas em dados (sem dependência externa)
         """
         suggestions = []
         user_profile = user_context.get('perfil', 'usuario').lower()
         vendedor_codigo = user_context.get('vendedor_codigo')
         
-        # Apenas para vendedores com código específico
+        # Sugestões específicas por perfil
         if user_profile == 'vendedor' and vendedor_codigo:
-            try:
-                # Importar analisador de dados
-                from .data_analyzer import get_vendedor_analyzer
-                analyzer = get_vendedor_analyzer()
-                
-                if analyzer:
-                    # 1. SUGESTÕES DOS MAIORES CLIENTES
-                    maiores_clientes = analyzer.get_maiores_clientes_vendedor(vendedor_codigo, 3)
-                    if maiores_clientes:
-                        # Criar sugestão para o maior cliente
-                        maior_cliente = maiores_clientes[0]
-                        suggestions.append(Suggestion(
-                            text=f"Entregas do {maior_cliente['nome_cliente']} (seu maior cliente)",
-                            category="data_maior_cliente",
-                            priority=5,
-                            icon="👑",
-                            description=f"Análise do seu maior cliente: {maior_cliente['total_entregas']} entregas",
-                            user_profiles=["vendedor"],
-                            context_keywords=[maior_cliente['nome_cliente'].lower()]
-                        ))
-                        
-                        # Sugestão para todos os maiores clientes
-                        clientes_nomes = [c['nome_cliente'] for c in maiores_clientes]
-                        suggestions.append(Suggestion(
-                            text=f"Status dos meus 3 maiores clientes",
-                            category="data_top_clientes",
-                            priority=4,
-                            icon="📊",
-                            description=f"Análise dos seus principais clientes: {', '.join(clientes_nomes[:2])}...",
-                            user_profiles=["vendedor"],
-                            context_keywords=clientes_nomes
-                        ))
-                    
-                    # 2. SUGESTÕES DE CLIENTES SEM AGENDAMENTO
-                    clientes_sem_agendamento = analyzer.get_clientes_sem_agendamento(vendedor_codigo, 5)
-                    if clientes_sem_agendamento:
-                        total_sem_agendamento = len(clientes_sem_agendamento)
-                        primeiro_cliente = clientes_sem_agendamento[0]
-                        
-                        suggestions.append(Suggestion(
-                            text=f"🚨 {total_sem_agendamento} clientes precisam de agendamento",
-                            category="data_agendamento_urgente",
-                            priority=5,
-                            icon="📅",
-                            description=f"Primeiro: {primeiro_cliente['nome_cliente']} ({primeiro_cliente['entregas_pendentes']} entregas)",
-                            user_profiles=["vendedor"],
-                            context_keywords=["agendamento", "pendente"]
-                        ))
-                    
-                    # 3. SUGESTÕES DE ENTREGAS URGENTES
-                    entregas_urgentes = analyzer.get_entregas_pendentes_urgentes(vendedor_codigo, 5)
-                    if entregas_urgentes:
-                        atrasadas = [e for e in entregas_urgentes if e['is_atrasada']]
-                        
-                        if atrasadas:
-                            suggestions.append(Suggestion(
-                                text=f"🔴 {len(atrasadas)} entregas ATRASADAS",
-                                category="data_entregas_atrasadas",
-                                priority=5,
-                                icon="⚠️",
-                                description=f"Primeira: {atrasadas[0]['nome_cliente']} - NF {atrasadas[0]['numero_nf']}",
-                                user_profiles=["vendedor"],
-                                context_keywords=["atrasada", "urgente"]
-                            ))
-                        else:
-                            proximas = entregas_urgentes[:3]
-                            suggestions.append(Suggestion(
-                                text=f"🟡 {len(proximas)} entregas próximas do prazo",
-                                category="data_entregas_proximas",
-                                priority=4,
-                                icon="⏰",
-                                description=f"Primeira: {proximas[0]['nome_cliente']} - {proximas[0]['data_prevista']}",
-                                user_profiles=["vendedor"],
-                                context_keywords=["prazo", "próximas"]
-                            ))
-                
-            except Exception as e:
-                logger.error(f"❌ Erro ao gerar sugestões baseadas em dados: {e}")
-        
-        # Para perfis administrativos e financeiros
-        elif user_profile in ['admin', 'financeiro', 'operacional']:
-            try:
-                # Sugestões gerais baseadas em dados do sistema
-                suggestions.append(Suggestion(
-                    text="Embarques aguardando liberação hoje",
-                    category="data_embarques_pendentes",
+            suggestions.extend([
+                Suggestion(
+                    text="Meus clientes com entregas pendentes",
+                    category="data_vendedor_pendentes",
+                    priority=5,
+                    icon="📋",
+                    description="Verificar entregas pendentes da sua carteira",
+                    user_profiles=["vendedor"],
+                    context_keywords=["pendente", "carteira"]
+                ),
+                Suggestion(
+                    text="Clientes que precisam de agendamento",
+                    category="data_vendedor_agendamento",
                     priority=4,
+                    icon="📅",
+                    description="Clientes sem agendamento de entrega",
+                    user_profiles=["vendedor"],
+                    context_keywords=["agendamento", "sem data"]
+                )
+            ])
+        
+        elif user_profile in ['admin', 'financeiro']:
+            suggestions.extend([
+                Suggestion(
+                    text="Relatório financeiro mensal",
+                    category="data_financeiro_mensal",
+                    priority=4,
+                    icon="💰",
+                    description="Análise financeira do mês atual",
+                    user_profiles=["admin", "financeiro"],
+                    context_keywords=["financeiro", "mensal"]
+                ),
+                Suggestion(
+                    text="Faturas próximas do vencimento",
+                    category="data_faturas_vencimento",
+                    priority=5,
+                    icon="⚠️",
+                    description="Faturas que vencem nos próximos dias",
+                    user_profiles=["admin", "financeiro"],
+                    context_keywords=["fatura", "vencimento"]
+                )
+            ])
+        
+        elif user_profile in ['admin', 'operacional']:
+            suggestions.extend([
+                Suggestion(
+                    text="Embarques aguardando liberação",
+                    category="data_embarques_liberacao",
+                    priority=5,
                     icon="🚛",
-                    description="Verificar embarques que precisam ser liberados",
+                    description="Embarques que precisam ser liberados",
                     user_profiles=["admin", "operacional"],
                     context_keywords=["embarque", "liberação"]
-                ))
-                
-                if user_profile in ['admin', 'financeiro']:
-                    suggestions.append(Suggestion(
-                        text="Faturas vencendo nos próximos 7 dias",
-                        category="data_faturas_vencimento",
-                        priority=4,
-                        icon="💸",
-                        description="Verificar faturas próximas do vencimento",
-                        user_profiles=["admin", "financeiro"],
-                        context_keywords=["fatura", "vencimento"]
-                    ))
-                
-            except Exception as e:
-                logger.error(f"❌ Erro ao gerar sugestões administrativas: {e}")
+                ),
+                Suggestion(
+                    text="Entregas programadas para hoje",
+                    category="data_entregas_hoje",
+                    priority=4,
+                    icon="📦",
+                    description="Entregas agendadas para hoje",
+                    user_profiles=["admin", "operacional", "vendedor"],
+                    context_keywords=["entrega", "hoje", "programada"]
+                )
+            ])
         
-        logger.debug(f"🧠 Geradas {len(suggestions)} sugestões baseadas em dados para {user_profile}")
+        logger.debug(f"🧠 Geradas {len(suggestions)} sugestões simples para {user_profile}")
         return suggestions
     
     def _get_contextual_suggestions(self, conversation_context: Optional[Dict], user_profile: str) -> List[Suggestion]:
