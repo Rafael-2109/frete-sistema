@@ -15,6 +15,7 @@ from .claude.claude_client import ClaudeClient
 from ..data.providers.data_provider import SistemaRealData
 from ..processors.query_processor import QueryProcessor
 from .processing.response_formatter import ResponseFormatter
+from ..intelligence.intelligence_manager import IntelligenceManager, get_intelligence_manager
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +31,14 @@ class IntegrationResult:
 
 class IntegrationManager:
     """
-    Gerenciador principal das integrações.
+    🔗 GERENCIADOR PRINCIPAL DAS INTEGRAÇÕES
     
-    Orquestra todos os sistemas de integração disponíveis.
+    Orquestra todos os sistemas de integração disponíveis:
+    - Claude Integration (IA principal)
+    - Data Provider (dados reais)  
+    - Intelligence Manager (sistemas de IA)
+    - Advanced Integration (IA avançada)
+    - Processamento e formatação
     """
     
     def __init__(self):
@@ -46,6 +52,9 @@ class IntegrationManager:
         self.query_processor = None
         self.response_formatter = None
         
+        # Sistema de inteligência (NOVO)
+        self.intelligence_manager = None
+        
         # Inicializar sistemas
         self._inicializar_sistemas()
         
@@ -54,42 +63,83 @@ class IntegrationManager:
     def _inicializar_sistemas(self):
         """Inicializa todos os sistemas de integração"""
         
-        # Inicializar Claude Client
+        # 🧠 INTELLIGENCE MANAGER (PRIORIDADE MÁXIMA)
         try:
-            # Normalmente seria inicializado com API key
-            # self.claude_client = ClaudeClient(api_key="...")
-            logger.warning("⚠️ Cliente Claude não disponível: ClaudeClient.__init__() missing 1 required positional argument: 'api_key'")
+            self.intelligence_manager = get_intelligence_manager()
+            logger.info("🧠 Intelligence Manager integrado")
         except Exception as e:
-            logger.warning(f"⚠️ Cliente Claude não disponível: {e}")
+            logger.error(f"❌ Erro ao integrar Intelligence Manager: {e}")
         
-        # Inicializar Claude Integration
+        # 🤖 CLAUDE INTEGRATION
         try:
             self.claude_integration = ClaudeRealIntegration()
             logger.info("🤖 Sistema de Integração Claude inicializado")
         except Exception as e:
             logger.error(f"❌ Erro ao inicializar Claude Integration: {e}")
         
-        # Inicializar Data Provider
+        # 📊 DATA PROVIDER
         try:
             self.data_provider = SistemaRealData()
             logger.info("📊 Provedor de Dados inicializado")
         except Exception as e:
             logger.error(f"❌ Erro ao inicializar Data Provider: {e}")
         
-        # Inicializar Query Processor
+        # 🚀 ADVANCED INTEGRATION
         try:
-            # Normalmente seria inicializado com dependências
-            # self.query_processor = QueryProcessor(claude_client, context_manager, learning_system)
-            logger.warning("⚠️ Processador de Consultas não disponível: QueryProcessor.__init__() missing 3 required positional arguments: 'claude_client', 'context_manager', and 'learning_system'")
+            self.advanced_integration = AdvancedAIIntegration()
+            logger.info("🚀 Sistema Avançado de IA inicializado")
         except Exception as e:
-            logger.warning(f"⚠️ Processador de Consultas não disponível: {e}")
+            logger.warning(f"⚠️ Sistema Avançado de IA não disponível: {e}")
         
-        # Inicializar Response Formatter
+        # 📄 RESPONSE FORMATTER
         try:
             self.response_formatter = ResponseFormatter()
             logger.info("📄 Formatador de Respostas inicializado")
         except Exception as e:
             logger.error(f"❌ Erro ao inicializar Response Formatter: {e}")
+        
+        # ⚙️ CLAUDE CLIENT (opcional)
+        try:
+            # Normalmente seria inicializado com API key
+            logger.debug("⚙️ Claude Client: requer configuração de API key")
+        except Exception as e:
+            logger.debug(f"⚙️ Claude Client não configurado: {e}")
+        
+        # 🔍 QUERY PROCESSOR (opcional - requer dependências)
+        try:
+            # Normalmente seria inicializado com dependências completas
+            logger.debug("🔍 Query Processor: requer configuração completa")
+        except Exception as e:
+            logger.debug(f"🔍 Query Processor não configurado: {e}")
+    
+    def get_system_status(self) -> Dict[str, bool]:
+        """
+        Retorna status de todos os sistemas integrados.
+        
+        Returns:
+            Dict com status dos sistemas
+        """
+        return {
+            # Sistemas principais
+            'claude_integration_available': self.claude_integration is not None,
+            'data_provider_available': self.data_provider is not None,
+            'intelligence_manager_available': self.intelligence_manager is not None,
+            
+            # Sistemas avançados
+            'advanced_integration_available': self.advanced_integration is not None,
+            'response_formatter_available': self.response_formatter is not None,
+            
+            # Sistemas opcionais
+            'claude_client_available': self.claude_client is not None,
+            'query_processor_available': self.query_processor is not None,
+            
+            # Status consolidado
+            'core_systems_ready': all([
+                self.claude_integration is not None,
+                self.data_provider is not None,
+                self.intelligence_manager is not None
+            ])
+        }
     
     def get_available_integrations(self) -> Dict[str, bool]:
         """
@@ -98,14 +148,7 @@ class IntegrationManager:
         Returns:
             Dict com status das integrações
         """
-        return {
-            'claude_client': self.claude_client is not None,
-            'claude_integration': self.claude_integration is not None,
-            'advanced_integration': self.advanced_integration is not None,
-            'data_provider': self.data_provider is not None,
-            'query_processor': self.query_processor is not None,
-            'response_formatter': self.response_formatter is not None
-        }
+        return self.get_system_status()
     
     async def process_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -119,19 +162,45 @@ class IntegrationManager:
             Resultado do processamento
         """
         try:
-            # Usar Claude Integration se disponível
+            # 🧠 INTELLIGENCE PREPROCESSING
+            intelligence_result = None
+            if self.intelligence_manager:
+                intelligence_result = self.intelligence_manager.process_intelligence(query, context)
+                if intelligence_result.success:
+                    # Enriquecer contexto com inteligência
+                    context = {**(context or {}), 'intelligence': intelligence_result.data}
+            
+            # 🤖 CLAUDE PROCESSING
             if self.claude_integration:
-                response = await self.claude_integration.processar_consulta_real(query, context or {})
+                # Verificar se método é assíncrono e garantir tipo string
+                if hasattr(self.claude_integration.processar_consulta_real, '__await__'):
+                    response_result = await self.claude_integration.processar_consulta_real(query, context or {})
+                else:
+                    response_result = self.claude_integration.processar_consulta_real(query, context or {})
+                
+                # Garantir que response seja sempre string
+                response: str = str(response_result) if response_result is not None else "Resposta não disponível"
+                
+                # 🧠 INTELLIGENCE POSTPROCESSING (feedback learning)
+                if self.intelligence_manager and context and context.get('user_id'):
+                    self.intelligence_manager.update_conversation_context(
+                        str(context['user_id']), query, response
+                    )
+                
                 return {
                     'success': True,
                     'response': response,
-                    'metadata': {'source': 'claude_integration'}
+                    'metadata': {
+                        'source': 'claude_integration',
+                        'intelligence_used': intelligence_result is not None,
+                        'systems_active': list(self.get_system_status().keys())
+                    }
                 }
             else:
                 return {
                     'success': False,
-                    'error': 'Nenhum sistema de integração disponível',
-                    'response': 'Sistema de integração indisponível'
+                    'error': 'Claude Integration não disponível',
+                    'response': 'Sistema de IA principal indisponível'
                 }
                 
         except Exception as e:
@@ -141,6 +210,110 @@ class IntegrationManager:
                 'error': str(e),
                 'response': f'Erro no processamento: {str(e)}'
             }
+    
+    async def process_unified_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Processa consulta unificada com todos os sistemas integrados.
+        Método esperado pelo SmartBaseAgent.
+        
+        Args:
+            query: Consulta do usuário
+            context: Contexto especializado do agente
+            
+        Returns:
+            Resultado unificado do processamento
+        """
+        try:
+            # Extrair informações do especialista
+            agent_type = context.get('agent_type', 'generic') if context else 'generic'
+            specialist_prompt = context.get('specialist_prompt', '') if context else ''
+            relevance_score = context.get('relevance_score', 0.5) if context else 0.5
+            
+            logger.info(f"🔗 Processando consulta unificada | Agente: {agent_type} | Relevância: {relevance_score:.2f}")
+            
+            # 🧠 INTELLIGENCE PREPROCESSING
+            intelligence_result = None
+            if self.intelligence_manager:
+                intelligence_result = self.intelligence_manager.process_intelligence(query, context)
+                if intelligence_result.success:
+                    # Enriquecer contexto com inteligência
+                    context = {**(context or {}), 'intelligence': intelligence_result.data}
+            
+            # 🤖 CLAUDE PROCESSING - DIRETO SEM RECURSÃO
+            if self.claude_integration:
+                # Verificar se método é assíncrono e garantir tipo string
+                if hasattr(self.claude_integration.processar_consulta_real, '__await__'):
+                    response_result = await self.claude_integration.processar_consulta_real(query, context or {})
+                else:
+                    response_result = self.claude_integration.processar_consulta_real(query, context or {})
+                
+                # Garantir que response seja sempre string
+                response: str = str(response_result) if response_result is not None else "Resposta não disponível"
+                
+                # 🧠 INTELLIGENCE POSTPROCESSING (feedback learning)
+                if self.intelligence_manager and context and context.get('user_id'):
+                    self.intelligence_manager.update_conversation_context(
+                        str(context['user_id']), query, response
+                    )
+                
+                return {
+                    'success': True,
+                    'agent_response': {
+                        'response': response,
+                        'agent_type': agent_type,
+                        'relevance': relevance_score,
+                        'confidence': 0.85,  # Alta confiança com sistema completo
+                        'specialist_analysis': True,
+                        'processing_mode': 'unified_integration'
+                    },
+                    'metadata': {
+                        'source': 'claude_integration',
+                        'intelligence_used': intelligence_result is not None,
+                        'systems_active': list(self.get_system_status().keys()),
+                        'specialist_context': {
+                            'agent_type': agent_type,
+                            'relevance_score': relevance_score,
+                            'has_specialist_prompt': bool(specialist_prompt)
+                        }
+                    }
+                }
+            else:
+                return {
+                    'success': False,
+                    'agent_response': 'Claude Integration não disponível',
+                    'error': 'Sistema de IA principal indisponível',
+                    'fallback_response': f"Agente {agent_type}: Processamento indisponível"
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Erro no processamento unificado: {e}")
+            return {
+                'success': False,
+                'agent_response': f'Erro no sistema integrado: {str(e)}',
+                'error': str(e),
+                'fallback_response': 'Sistema de integração indisponível'
+            }
+    
+    def get_module(self, module_name: str) -> Any:
+        """
+        Obtém acesso direto a um módulo específico.
+        
+        Args:
+            module_name: Nome do módulo
+            
+        Returns:
+            Instância do módulo ou None
+        """
+        modules = {
+            'claude_integration': self.claude_integration,
+            'data_provider': self.data_provider,
+            'intelligence_manager': self.intelligence_manager,
+            'advanced_integration': self.advanced_integration,
+            'response_formatter': self.response_formatter,
+            'claude_client': self.claude_client,
+            'query_processor': self.query_processor
+        }
+        return modules.get(module_name)
 
 # Instância global
 integration_manager = None

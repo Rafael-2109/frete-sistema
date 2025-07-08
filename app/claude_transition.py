@@ -44,11 +44,19 @@ class ClaudeTransition:
         """Processa consulta usando o sistema ativo (agora async)"""
         
         if self.sistema_ativo == "novo":
-            # Sistema novo é assíncrono - usar await
-            return await self.claude.processar_consulta_real(consulta, user_context)
+            # Sistema novo - verificar se é assíncrono e garantir retorno string
+            if hasattr(self.claude.processar_consulta_real, '__await__'):
+                result = await self.claude.processar_consulta_real(consulta, user_context)
+            else:
+                result = self.claude.processar_consulta_real(consulta, user_context)
+            
+            # Garantir que sempre retorne string
+            return str(result) if result is not None else "Resposta não disponível"
+            
         elif self.sistema_ativo == "antigo":
             # Sistema antigo é síncrono
-            return self.processar_consulta_real(consulta, user_context)
+            result = self.processar_consulta_real(consulta, user_context)
+            return str(result) if result is not None else "Resposta não disponível"
         else:
             return "❌ Nenhum sistema Claude AI disponível"
     
