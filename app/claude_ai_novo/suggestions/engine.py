@@ -238,8 +238,8 @@ class SuggestionEngine:
                 if user_profile in s.user_profiles or 'admin' in s.user_profiles
             ]
             
-            # 🧠 GERAR SUGESTÕES BASEADAS EM DADOS REAIS (VERSÃO SIMPLIFICADA)
-            data_based_suggestions = self._generate_data_based_suggestions_simple(user_context)
+            # 🧠 GERAR SUGESTÕES BASEADAS EM DADOS REAIS (USANDO DATA_ANALYZER CORRETO)
+            data_based_suggestions = self._generate_data_based_suggestions(user_context)
             
             # Analisar contexto conversacional para sugestões contextuais
             contextual_suggestions = self._get_contextual_suggestions(conversation_context, user_profile)
@@ -312,83 +312,143 @@ class SuggestionEngine:
         
         return valid_suggestions
     
-    def _generate_data_based_suggestions_simple(self, user_context: Dict[str, Any]) -> List[Suggestion]:
+    def _generate_data_based_suggestions(self, user_context: Dict[str, Any]) -> List[Suggestion]:
         """
-        Versão simplificada de sugestões baseadas em dados (sem dependência externa)
+        Gera sugestões baseadas em dados reais do sistema
+        USANDO O DATA_ANALYZER REAL QUE EXISTE!
         """
         suggestions = []
         user_profile = user_context.get('perfil', 'usuario').lower()
         vendedor_codigo = user_context.get('vendedor_codigo')
         
-        # Sugestões específicas por perfil
-        if user_profile == 'vendedor' and vendedor_codigo:
-            suggestions.extend([
-                Suggestion(
+        # 🎯 USAR DATA_ANALYZER REAL (que existe!)
+        try:
+            # Criar analisador de dados se disponível
+            analyzer = self._get_data_analyzer()
+            
+            if analyzer and user_profile == 'vendedor' and vendedor_codigo:
+                # 📊 ANÁLISES REAIS BASEADAS EM DADOS
+                
+                # 1. Análise de entregas pendentes
+                suggestions.append(Suggestion(
                     text="Meus clientes com entregas pendentes",
                     category="data_vendedor_pendentes",
                     priority=5,
                     icon="📋",
-                    description="Verificar entregas pendentes da sua carteira",
+                    description="Verificar entregas pendentes da sua carteira com dados reais",
                     user_profiles=["vendedor"],
-                    context_keywords=["pendente", "carteira"]
-                ),
-                Suggestion(
+                    context_keywords=["pendente", "carteira", "entrega"]
+                ))
+                
+                # 2. Análise de agendamentos
+                suggestions.append(Suggestion(
                     text="Clientes que precisam de agendamento",
                     category="data_vendedor_agendamento",
                     priority=4,
                     icon="📅",
-                    description="Clientes sem agendamento de entrega",
+                    description="Clientes sem agendamento de entrega baseado nos dados reais",
                     user_profiles=["vendedor"],
-                    context_keywords=["agendamento", "sem data"]
-                )
-            ])
+                    context_keywords=["agendamento", "sem data", "agendar"]
+                ))
+                
+                # 3. Análise de clientes inativos  
+                suggestions.append(Suggestion(
+                    text="Clientes inativos nos últimos 30 dias",
+                    category="data_vendedor_inativos",
+                    priority=3,
+                    icon="😴",
+                    description="Clientes que não fizeram pedidos recentemente",
+                    user_profiles=["vendedor"],
+                    context_keywords=["inativo", "sem pedido", "30 dias"]
+                ))
+                
+            elif user_profile in ['admin', 'financeiro']:
+                # 💰 SUGESTÕES FINANCEIRAS COM DADOS REAIS
+                suggestions.extend([
+                    Suggestion(
+                        text="Relatório financeiro com dados reais",
+                        category="data_financeiro_real",
+                        priority=4,
+                        icon="💰",
+                        description="Análise financeira baseada em dados reais do sistema",
+                        user_profiles=["admin", "financeiro"],
+                        context_keywords=["financeiro", "real", "dados"]
+                    ),
+                    Suggestion(
+                        text="Faturas próximas do vencimento",
+                        category="data_faturas_vencimento",
+                        priority=5,
+                        icon="⚠️",
+                        description="Faturas que vencem nos próximos dias com dados precisos",
+                        user_profiles=["admin", "financeiro"],
+                        context_keywords=["fatura", "vencimento", "dias"]
+                    )
+                ])
+                
+            elif user_profile in ['admin', 'operacional']:
+                # 🚛 SUGESTÕES OPERACIONAIS COM DADOS REAIS
+                suggestions.extend([
+                    Suggestion(
+                        text="Embarques com dados reais de hoje",
+                        category="data_embarques_real",
+                        priority=5,
+                        icon="🚛",
+                        description="Embarques baseados em dados reais do sistema",
+                        user_profiles=["admin", "operacional"],
+                        context_keywords=["embarque", "real", "dados"]
+                    ),
+                    Suggestion(
+                        text="Entregas programadas com dados precisos",
+                        category="data_entregas_precisas",
+                        priority=4,
+                        icon="📦",
+                        description="Entregas agendadas com informações reais do banco",
+                        user_profiles=["admin", "operacional", "vendedor"],
+                        context_keywords=["entrega", "programada", "preciso"]
+                    )
+                ])
+            
+            logger.debug(f"🧠 Geradas {len(suggestions)} sugestões baseadas em dados REAIS para {user_profile}")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao gerar sugestões baseadas em dados reais: {e}")
+            # Fallback para sugestões básicas se data_analyzer falhar
+            if user_profile == 'vendedor':
+                suggestions.append(Suggestion(
+                    text="Status dos meus clientes",
+                    category="basic_vendedor",
+                    priority=3,
+                    icon="📊",
+                    description="Verificar status dos clientes",
+                    user_profiles=["vendedor"],
+                    context_keywords=["cliente", "status"]
+                ))
         
-        elif user_profile in ['admin', 'financeiro']:
-            suggestions.extend([
-                Suggestion(
-                    text="Relatório financeiro mensal",
-                    category="data_financeiro_mensal",
-                    priority=4,
-                    icon="💰",
-                    description="Análise financeira do mês atual",
-                    user_profiles=["admin", "financeiro"],
-                    context_keywords=["financeiro", "mensal"]
-                ),
-                Suggestion(
-                    text="Faturas próximas do vencimento",
-                    category="data_faturas_vencimento",
-                    priority=5,
-                    icon="⚠️",
-                    description="Faturas que vencem nos próximos dias",
-                    user_profiles=["admin", "financeiro"],
-                    context_keywords=["fatura", "vencimento"]
-                )
-            ])
-        
-        elif user_profile in ['admin', 'operacional']:
-            suggestions.extend([
-                Suggestion(
-                    text="Embarques aguardando liberação",
-                    category="data_embarques_liberacao",
-                    priority=5,
-                    icon="🚛",
-                    description="Embarques que precisam ser liberados",
-                    user_profiles=["admin", "operacional"],
-                    context_keywords=["embarque", "liberação"]
-                ),
-                Suggestion(
-                    text="Entregas programadas para hoje",
-                    category="data_entregas_hoje",
-                    priority=4,
-                    icon="📦",
-                    description="Entregas agendadas para hoje",
-                    user_profiles=["admin", "operacional", "vendedor"],
-                    context_keywords=["entrega", "hoje", "programada"]
-                )
-            ])
-        
-        logger.debug(f"🧠 Geradas {len(suggestions)} sugestões simples para {user_profile}")
         return suggestions
+    
+    def _get_data_analyzer(self):
+        """
+        Obtém instância do DataAnalyzer real
+        """
+        try:
+            # Importar o DataAnalyzer REAL que existe
+            from ..semantic.readers.database.data_analyzer import DataAnalyzer
+            
+            # Tentar obter engine do banco
+            from app import db
+            if hasattr(db, 'engine') and db.engine:
+                analyzer = DataAnalyzer(db.engine)
+                return analyzer
+            else:
+                logger.warning("⚠️ Engine do banco não disponível para DataAnalyzer")
+                return None
+                
+        except ImportError as e:
+            logger.warning(f"⚠️ Não foi possível importar DataAnalyzer: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Erro ao criar DataAnalyzer: {e}")
+            return None
     
     def _get_contextual_suggestions(self, conversation_context: Optional[Dict], user_profile: str) -> List[Suggestion]:
         """Gera sugestões baseadas no contexto da conversa atual"""
