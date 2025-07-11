@@ -73,7 +73,7 @@ except ImportError as e:
     _response_utils_available = False
 
 try:
-    from .validation_utils import ValidationUtils, get_validation_utils
+    from .validation_utils import BaseValidationUtils, get_validation_utils
     _validation_utils_available = True
 except ImportError as e:
     logger.warning(f"⚠️ ValidationUtils não disponível: {e}")

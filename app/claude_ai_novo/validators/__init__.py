@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from .semantic_validator import SemanticValidator
     from .structural_validator import StructuralAI
     from .critic_validator import CriticAgent
-    from ..utils.validation_utils import ValidationUtils
+    from .data_validator import ValidationUtils
     from .validator_manager import ValidatorManager
 
 # Configuração de logging
@@ -38,7 +38,7 @@ except ImportError as e:
     logger.warning(f"CriticValidator não disponível: {e}")
 
 try:
-    from ..utils.validation_utils import ValidationUtils
+    from .data_validator import ValidationUtils
     _components['ValidationUtils'] = ValidationUtils
 except ImportError as e:
     logger.warning(f"DataValidator não disponível: {e}")

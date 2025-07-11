@@ -8,7 +8,7 @@ Herda infraestrutura base de utils/base_classes.py
 import re
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Dict, List, Optional, Any, Union
 
 # Import da classe base de infraestrutura

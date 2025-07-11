@@ -47,7 +47,7 @@ class LearningCore:
         # Inicializar módulos especializados (lazy loading)
         self._pattern_learner = None
         self._feedback_processor = None
-        self._knowledge_manager = None
+        self._knowledge_memory = None
         
         logger.info("🧠 Learning Core inicializado")
     
@@ -68,12 +68,12 @@ class LearningCore:
         return self._feedback_processor
     
     @property
-    def knowledge_manager(self):
-        """Lazy loading do KnowledgeManager"""
-        if self._knowledge_manager is None:
-            from ..memorizers.knowledge_memory import get_knowledge_manager
-            self._knowledge_manager = get_knowledge_manager()
-        return self._knowledge_manager
+    def knowledge_memory(self):
+        """Lazy loading do KnowledgeMemory"""
+        if self._knowledge_memory is None:
+            from ..memorizers.knowledge_memory import get_knowledge_memory
+            self._knowledge_memory = get_knowledge_memory()
+        return self._knowledge_memory
     
     def aprender_com_interacao(self, 
                                consulta: str, 
@@ -110,14 +110,14 @@ class LearningCore:
             
             # 2. APRENDER MAPEAMENTOS E GRUPOS
             if interpretacao.get("cliente_especifico"):
-                mapeamento = self.knowledge_manager.aprender_mapeamento_cliente(
+                mapeamento = self.knowledge_memory.aprender_mapeamento_cliente(
                     consulta, interpretacao["cliente_especifico"]
                 )
                 if mapeamento:
                     aprendizados["mapeamentos_atualizados"].append(mapeamento)
             
             if interpretacao.get("tipo_consulta") == "grupo_empresarial":
-                grupo = self.knowledge_manager.descobrir_grupo_empresarial(interpretacao)
+                grupo = self.knowledge_memory.descobrir_grupo_empresarial(interpretacao)
                 if grupo:
                     aprendizados["grupos_descobertos"].append(grupo)
             
@@ -176,8 +176,8 @@ class LearningCore:
             conhecimento["padroes_aplicaveis"] = padroes
             
             # 2. Aplicar conhecimento de grupos e mapeamentos
-            grupos = self.knowledge_manager.buscar_grupos_aplicaveis(consulta)
-            mapeamentos = self.knowledge_manager.buscar_mapeamentos_aplicaveis(consulta)
+            grupos = self.knowledge_memory.buscar_grupos_aplicaveis(consulta)
+            mapeamentos = self.knowledge_memory.buscar_mapeamentos_aplicaveis(consulta)
             
             conhecimento["grupos_conhecidos"] = grupos
             conhecimento["mapeamentos"] = mapeamentos
@@ -227,12 +227,12 @@ class LearningCore:
             status["modulos_carregados"] = {
                 "pattern_learner": self._pattern_learner is not None,
                 "feedback_processor": self._feedback_processor is not None,
-                "knowledge_manager": self._knowledge_manager is not None
+                "knowledge_memory": self._knowledge_memory is not None
             }
             
             # Estatísticas gerais via knowledge_manager
             try:
-                status["estatisticas_gerais"] = self.knowledge_manager.obter_estatisticas_aprendizado()
+                status["estatisticas_gerais"] = self.knowledge_memory.obter_estatisticas_aprendizado()
             except Exception as e:
                 logger.warning(f"Erro ao obter estatísticas: {e}")
                 status["estatisticas_gerais"] = {"erro": str(e)}

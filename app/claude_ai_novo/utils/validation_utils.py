@@ -15,21 +15,22 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-class ValidationUtils:
+class BaseValidationUtils:
     """
-    Classe centralizada para utilitários de validação.
+    Classe centralizada para utilitários de validação genéricos.
     
     Responsabilidades:
     - Validar estruturas de dados
-    - Validar regras de negócio
+    - Validar regras de negócio genéricas
     - Validar formatos e padrões
     - Validar consistência de dados
+    - Sanitização e segurança
     """
     
     def __init__(self):
-        """Inicializa ValidationUtils"""
-        self.logger = logging.getLogger(__name__ + ".ValidationUtils")
-        self.logger.info("ValidationUtils inicializado")
+        """Inicializa BaseValidationUtils"""
+        self.logger = logging.getLogger(__name__ + ".BaseValidationUtils")
+        self.logger.info("BaseValidationUtils inicializado")
     
     # ========================================================================
     # VALIDAÇÕES BÁSICAS
@@ -438,7 +439,7 @@ class ValidationUtils:
 # Instância global para conveniência
 _validation_utils = None
 
-def get_validation_utils() -> ValidationUtils:
+def get_validation_utils() -> BaseValidationUtils:
     """
     Retorna instância global de ValidationUtils.
     
@@ -447,8 +448,10 @@ def get_validation_utils() -> ValidationUtils:
     """
     global _validation_utils
     if _validation_utils is None:
-        _validation_utils = ValidationUtils()
+        _validation_utils = BaseValidationUtils()
     return _validation_utils
+
+
 
 # Funções de conveniência
 def validate_data(data: Any, rules: Optional[Dict] = None) -> bool:
@@ -469,7 +472,7 @@ def sanitize_input(input_data: str) -> str:
 
 if __name__ == "__main__":
     # Testes básicos
-    print("🧪 Testando ValidationUtils...")
+    print("🧪 Testando BaseValidationUtils...")
     
     utils = get_validation_utils()
     

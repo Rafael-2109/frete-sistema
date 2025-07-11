@@ -62,3 +62,18 @@ class QueryProcessor:
             base_prompt += f"\n\nContexto adicional: {context}"
             
         return base_prompt
+
+# Instância global
+_query_processor = None
+
+def get_query_processor():
+    """Retorna instância de QueryProcessor"""
+    global _query_processor
+    if _query_processor is None:
+        # Para compatibilidade, criar com clients mock se necessário
+        _query_processor = QueryProcessor(
+            claude_client=None,
+            context_manager=None,
+            learning_system=None
+        )
+    return _query_processor

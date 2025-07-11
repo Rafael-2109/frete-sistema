@@ -18,11 +18,11 @@ except ImportError:
     ResponseUtils = None
 
 try:
-    from .validation_utils import ValidationUtils
+    from .validation_utils import BaseValidationUtils
     _validation_utils_available = True
 except ImportError:
     _validation_utils_available = False
-    ValidationUtils = None
+    BaseValidationUtils = None
 
 # Flask Context Wrapper - Implementação de fallbacks
 class FlaskContextWrapper:
@@ -94,8 +94,8 @@ class UtilsManager(FlaskContextWrapper):
         try:
             # Inicializar ValidationUtils
             try:
-                if _validation_utils_available and ValidationUtils is not None:
-                    self.components['validationutils'] = ValidationUtils()
+                if _validation_utils_available and BaseValidationUtils is not None:
+                    self.components['validationutils'] = BaseValidationUtils()
                     self.logger.debug(f"ValidationUtils inicializado")
                 else:
                     self.logger.warning("ValidationUtils não disponível")

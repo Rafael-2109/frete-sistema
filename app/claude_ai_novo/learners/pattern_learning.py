@@ -302,7 +302,7 @@ class PatternLearner:
                         {
                             "tipo": padrao["tipo"],
                             "texto": padrao["texto"],
-                            "interp": json.dumps(padrao["interpretacao"]),
+                            "interp": self._safe_json_dumps(padrao["interpretacao"]),
                             "conf": padrao.get("confianca", 0.5)
                         }
                     )
@@ -491,6 +491,17 @@ class PatternLearner:
         
         # Default para perguntas sem palavra interrogativa clara
         return {"tipo": "generica", "palavra_chave": "?"}
+
+    def _safe_json_dumps(self, obj: Any) -> str:
+        """
+        Safely dumps an object to JSON, handling potential errors.
+        Returns an empty string on error.
+        """
+        try:
+            return json.dumps(obj, ensure_ascii=False, default=str)
+        except Exception as e:
+            logger.error(f"❌ Erro ao serializar JSON: {e}")
+            return ""
 
 
 # Singleton para uso global

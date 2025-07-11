@@ -463,3 +463,6 @@ def get_contextprocessor():
     if _contextprocessor is None:
         _contextprocessor = ContextProcessor()
     return _contextprocessor
+
+# Alias para compatibilidade
+get_context_processor = get_contextprocessor

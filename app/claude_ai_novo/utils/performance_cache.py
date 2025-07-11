@@ -212,6 +212,9 @@ class ScannersCache:
 # Instância global singleton
 _cache_instance = ScannersCache()
 
+# Alias para compatibilidade
+PerformanceCache = ScannersCache
+
 def get_cache() -> ScannersCache:
     """
     Obtém instância global do cache.
