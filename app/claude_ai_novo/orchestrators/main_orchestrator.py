@@ -54,6 +54,9 @@ class MainOrchestrator:
         # Lazy loading do SecurityGuard (CRÍTICO)
         self._security_guard = None
         
+        # Lazy loading do SuggestionsManager (SUGESTÕES INTELIGENTES)
+        self._suggestions_manager = None
+        
         self._setup_default_workflows()
     
     @property
@@ -94,6 +97,19 @@ class MainOrchestrator:
                 logger.warning(f"⚠️ SecurityGuard não disponível: {e}")
                 self._security_guard = False  # Marcar como indisponível
         return self._security_guard if self._security_guard is not False else None
+    
+    @property
+    def suggestions_manager(self):
+        """Lazy loading do SuggestionsManager"""
+        if self._suggestions_manager is None:
+            try:
+                from app.claude_ai_novo.suggestions.suggestions_manager import get_suggestions_manager
+                self._suggestions_manager = get_suggestions_manager()
+                logger.info("💡 SuggestionsManager integrado ao MainOrchestrator")
+            except ImportError as e:
+                logger.warning(f"⚠️ SuggestionsManager não disponível: {e}")
+                self._suggestions_manager = False  # Marcar como indisponível
+        return self._suggestions_manager if self._suggestions_manager is not False else None
     
     def _setup_default_workflows(self):
         """Configura workflows padrão"""
@@ -188,6 +204,23 @@ class MainOrchestrator:
                 dependencies=["detect_commands"]
             )
         ])
+        
+        # NOVO: Workflow de sugestões inteligentes
+        self.add_workflow("intelligent_suggestions", [
+            OrchestrationStep(
+                name="analyze_context",
+                component="analyzers",
+                method="analyze_intention",
+                parameters={"query": "{query}", "context": "{context}"}
+            ),
+            OrchestrationStep(
+                name="generate_suggestions",
+                component="suggestions",
+                method="generate_intelligent_suggestions",
+                parameters={"analysis": "{analyze_context_result}", "user_context": "{context}"},
+                dependencies=["analyze_context"]
+            )
+        ])
     
     def register_component(self, name: str, component: Any):
         """
@@ -247,6 +280,8 @@ class MainOrchestrator:
                 result = self._execute_intelligent_coordination(data)
             elif workflow_name == "natural_commands" or operation_type == "natural_command":
                 result = self._execute_natural_commands(data)
+            elif workflow_name == "intelligent_suggestions" or operation_type == "intelligent_suggestions":
+                result = self._execute_intelligent_suggestions(data)
             # Fallback para workflows customizados
             else:
                 result = self._execute_generic_workflow(workflow_name, data)
@@ -444,6 +479,54 @@ class MainOrchestrator:
                 "success": False,
                 "error": str(e),
                 "fallback_result": self._execute_analyze_query(data)
+            }
+    
+    def _execute_intelligent_suggestions(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Executa geração de sugestões inteligentes"""
+        try:
+            result = {
+                "workflow": "intelligent_suggestions",
+                "operation_type": "intelligent_suggestions",
+                "success": True,
+                "suggestions_result": None,
+                "fallback_suggestions": None
+            }
+            
+            # NOVA funcionalidade: Sugestões inteligentes
+            if self.suggestions_manager:
+                query = data.get("query", data.get("text", ""))
+                context = data.get("context", {})
+                user_id = data.get("user_id")
+                
+                suggestions_result = self.suggestions_manager.generate_intelligent_suggestions(
+                    query=query,
+                    context=context,
+                    user_id=user_id
+                )
+                
+                result["suggestions_result"] = suggestions_result
+                logger.info(f"💡 Sugestões inteligentes geradas: {len(suggestions_result.get('suggestions', []))} sugestões")
+            else:
+                logger.warning("⚠️ SuggestionsManager não disponível - gerando sugestões básicas")
+                result["fallback_suggestions"] = {
+                    "suggestions": ["Tente ser mais específico", "Forneça mais contexto"],
+                    "confidence": 0.3,
+                    "source": "fallback"
+                }
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na geração de sugestões inteligentes: {e}")
+            return {
+                "workflow": "intelligent_suggestions",
+                "success": False,
+                "error": str(e),
+                "fallback_result": {
+                    "suggestions": ["Erro na geração de sugestões"],
+                    "confidence": 0.1,
+                    "source": "error_fallback"
+                }
             }
     
     def _execute_analyze_query(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -677,6 +760,12 @@ class MainOrchestrator:
                     self.components[component_name] = self.security_guard
                 else:
                     self.components[component_name] = MockComponent("security_guard")
+            elif component_name == "suggestions":
+                # NOVO: Carregar SuggestionsManager
+                if self.suggestions_manager:
+                    self.components[component_name] = self.suggestions_manager
+                else:
+                    self.components[component_name] = MockComponent("suggestions")
             # Adicionar outros componentes conforme necessário
             
             logger.info(f"Componente carregado dinamicamente: {component_name}")
@@ -795,6 +884,14 @@ class MainOrchestrator:
         else:
             self.components["security_guard"] = MockComponent("security_guard")
             logger.debug("⚠️ SecurityGuard mock")
+        
+        # SuggestionsManager
+        if self.suggestions_manager:
+            self.components["suggestions"] = self.suggestions_manager
+            logger.debug("✅ SuggestionsManager pré-carregado")
+        else:
+            self.components["suggestions"] = MockComponent("suggestions")
+            logger.debug("⚠️ SuggestionsManager mock")
     
     def _resolve_parameters(self, parameters: Dict[str, Any], context: Dict[str, Any], 
                            results: Dict[str, Any]) -> Dict[str, Any]:
@@ -849,6 +946,12 @@ class MockComponent:
     
     def process_natural_command(self, **kwargs):
         return {"status": "mock", "detected_commands": [], "message": "Mock command processing"}
+    
+    def generate_intelligent_suggestions(self, **kwargs):
+        return {"suggestions": ["Sugestão mock 1", "Sugestão mock 2", "Sugestão mock 3"], "confidence": 0.7, "source": "mock"}
+    
+    def manage_conversation(self, **kwargs):
+        return {"total_turns": 1, "conversation_score": 0.8, "context_continuity": 0.6, "source": "mock"}
     
     # Métodos de segurança para SecurityGuard mock
     def validate_user_access(self, operation: str, resource: Optional[str] = None) -> bool:

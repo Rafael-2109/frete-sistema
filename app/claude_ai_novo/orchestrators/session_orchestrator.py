@@ -143,6 +143,9 @@ class SessionOrchestrator:
         # Lazy loading do SecurityGuard (CRÍTICO)
         self._security_guard = None
         
+        # Lazy loading do ConversationManager (GESTÃO DE CONVERSAS)
+        self._conversation_manager = None
+        
         logger.info("🔄 SessionOrchestrator inicializado")
     
     @property
@@ -170,6 +173,19 @@ class SessionOrchestrator:
                 logger.warning(f"⚠️ SecurityGuard não disponível: {e}")
                 self._security_guard = False  # Marcar como indisponível
         return self._security_guard if self._security_guard is not False else None
+    
+    @property
+    def conversation_manager(self):
+        """Lazy loading do ConversationManager"""
+        if self._conversation_manager is None:
+            try:
+                from app.claude_ai_novo.conversers.conversation_manager import get_conversation_manager
+                self._conversation_manager = get_conversation_manager()
+                logger.info("💬 ConversationManager integrado ao SessionOrchestrator")
+            except ImportError as e:
+                logger.warning(f"⚠️ ConversationManager não disponível: {e}")
+                self._conversation_manager = False  # Marcar como indisponível
+        return self._conversation_manager if self._conversation_manager is not False else None
     
     def _get_session_memory_safe(self):
         """Obtém session_memory com fallback seguro"""
@@ -350,6 +366,11 @@ class SessionOrchestrator:
                 learning_result = self._execute_learning_workflow(session, workflow_data, result)
                 result['learning_insights'] = learning_result
             
+            # NOVA funcionalidade: Gestão de conversas
+            if self.conversation_manager and workflow_type in ['query', 'intelligent_query', 'conversation']:
+                conversation_result = self._execute_conversation_workflow(session, workflow_data, result)
+                result['conversation_insights'] = conversation_result
+            
             # Atualizar estado do workflow
             session.workflow_state[workflow_type] = {
                 'executed_at': datetime.now().isoformat(),
@@ -426,6 +447,50 @@ class SessionOrchestrator:
         except Exception as e:
             logger.error(f"❌ Erro no aprendizado da sessão {session.session_id}: {e}")
             return {'error': str(e), 'learning_failed': True}
+    
+    def _execute_conversation_workflow(self, session: SessionContext, 
+                                     workflow_data: Dict[str, Any],
+                                     result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Executa workflow de gestão de conversas.
+        
+        Args:
+            session: Contexto da sessão
+            workflow_data: Dados do workflow
+            result: Resultado do workflow
+            
+        Returns:
+            Resultado da gestão de conversas
+        """
+        try:
+            # Extrair informações da conversa
+            mensagem = workflow_data.get('query', workflow_data.get('message', ''))
+            contexto = workflow_data.get('context', {})
+            resposta = str(result.get('response', result.get('result', '')))
+            
+            # Executar gestão de conversas
+            conversation_result = self.conversation_manager.manage_conversation(
+                session_id=session.session_id,
+                user_message=mensagem,
+                ai_response=resposta,
+                context=contexto,
+                user_id=session.user_id
+            )
+            
+            # Atualizar metadata da sessão com insights de conversa
+            session.metadata.update({
+                'conversation_turns': conversation_result.get('total_turns', 0),
+                'conversation_score': conversation_result.get('conversation_score', 0),
+                'context_continuity': conversation_result.get('context_continuity', 0),
+                'last_conversation_at': datetime.now().isoformat()
+            })
+            
+            logger.info(f"💬 Conversa gerenciada na sessão {session.session_id}: {conversation_result.get('total_turns', 0)} turnos")
+            return conversation_result
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na gestão de conversa da sessão {session.session_id}: {e}")
+            return {'error': str(e), 'conversation_failed': True}
     
     def apply_learned_knowledge(self, session_id: str, query: str) -> Dict[str, Any]:
         """
