@@ -4,16 +4,15 @@
 Sistema de refinamento semântico iterativo para melhorar interpretação de consultas
 """
 
-import logging
-import asyncio
+# Imports da base comum
+from .base import ProcessorBase, logging, datetime
 from typing import Dict, List, Any
 
-logger = logging.getLogger(__name__)
-
-class SemanticLoopProcessor:
+class SemanticLoopProcessor(ProcessorBase):
     """Processador de Loop Semântico-Lógico"""
     
     def __init__(self):
+        super().__init__()
         self.loop_history = []
         self.refinement_patterns = {}
         
@@ -21,62 +20,98 @@ class SemanticLoopProcessor:
                                   max_iterations: int = 3) -> Dict[str, Any]:
         """Processa consulta através de loop semântico-lógico"""
         
-        loop_result = {
-            'initial_query': initial_query,
-            'iterations': [],
-            'final_interpretation': None,
-            'confidence_evolution': [],
-            'semantic_refinements': []
-        }
+        # Validar entrada
+        if not self._validate_input(initial_query):
+            return self._get_error_response("Consulta inválida")
         
-        current_query = initial_query
+        # Sanitizar entrada
+        query = self._sanitize_input(initial_query)
         
-        for iteration in range(max_iterations):
-            logger.info(f"🔄 Loop Semântico - Iteração {iteration + 1}")
-            
-            # Análise semântica
-            semantic_analysis = await self._analyze_semantics(current_query)
-            
-            # Validação lógica
-            logic_validation = await self._validate_logic(semantic_analysis)
-            
-            # Decisão de refinamento
-            needs_refinement = logic_validation['confidence'] < 0.8 or \
-                             len(logic_validation['inconsistencies']) > 0
-            
-            iteration_result = {
-                'iteration': iteration + 1,
-                'query': current_query,
-                'semantic_analysis': semantic_analysis,
-                'logic_validation': logic_validation,
-                'needs_refinement': needs_refinement,
-                'refinement_applied': None
+        # Log da operação
+        self._log_operation(f"process_semantic_loop", f"query: {query[:50]}...")
+        
+        # Verificar cache
+        cache_key = self._generate_cache_key("semantic_loop", query, max_iterations)
+        cached_result = self._get_cached_result(cache_key)
+        
+        if cached_result:
+            self._log_operation("Cache hit para loop semântico")
+            return cached_result
+        
+        start_time = datetime.now()
+        
+        try:
+            loop_result = {
+                'initial_query': initial_query,
+                'iterations': [],
+                'final_interpretation': None,
+                'confidence_evolution': [],
+                'semantic_refinements': []
             }
             
-            if needs_refinement and iteration < max_iterations - 1:
-                # Aplicar refinamento
-                refined_query = await self._refine_query(current_query, logic_validation)
-                iteration_result['refinement_applied'] = refined_query
-                current_query = refined_query
-                loop_result['semantic_refinements'].append(refined_query)
+            current_query = query
             
-            loop_result['iterations'].append(iteration_result)
-            loop_result['confidence_evolution'].append(logic_validation['confidence'])
+            for iteration in range(max_iterations):
+                self.logger.info(f"🔄 Loop Semântico - Iteração {iteration + 1}")
+                
+                # Análise semântica
+                semantic_analysis = await self._analyze_semantics(current_query)
+                
+                # Validação lógica
+                logic_validation = await self._validate_logic(semantic_analysis)
+                
+                # Decisão de refinamento
+                needs_refinement = logic_validation['confidence'] < 0.8 or \
+                                 len(logic_validation['inconsistencies']) > 0
+                
+                iteration_result = {
+                    'iteration': iteration + 1,
+                    'query': current_query,
+                    'semantic_analysis': semantic_analysis,
+                    'logic_validation': logic_validation,
+                    'needs_refinement': needs_refinement,
+                    'refinement_applied': None
+                }
+                
+                if needs_refinement and iteration < max_iterations - 1:
+                    # Aplicar refinamento
+                    refined_query = await self._refine_query(current_query, logic_validation)
+                    iteration_result['refinement_applied'] = refined_query
+                    current_query = refined_query
+                    loop_result['semantic_refinements'].append(refined_query)
+                
+                loop_result['iterations'].append(iteration_result)
+                loop_result['confidence_evolution'].append(logic_validation['confidence'])
+                
+                # Se atingiu confiança alta, parar o loop
+                if logic_validation['confidence'] >= 0.9:
+                    self._log_operation(f"Confiança alta atingida: {logic_validation['confidence']:.2f}")
+                    break
             
-            # Se atingiu confiança alta, parar o loop
-            if logic_validation['confidence'] >= 0.9:
-                break
-        
-        loop_result['final_interpretation'] = current_query
-        
-        return loop_result
+            loop_result['final_interpretation'] = current_query
+            
+            # Adicionar metadados
+            processing_time = (datetime.now() - start_time).total_seconds()
+            loop_result['metadata'] = {
+                'processing_time': processing_time,
+                'iterations_used': len(loop_result['iterations']),
+                'final_confidence': loop_result['confidence_evolution'][-1] if loop_result['confidence_evolution'] else 0
+            }
+            
+            # Armazenar no cache
+            self._set_cached_result(cache_key, loop_result, ttl=600)
+            
+            return loop_result
+            
+        except Exception as e:
+            return self._get_error_response(f"Erro no loop semântico: {str(e)}")
     
     async def _analyze_semantics(self, query: str) -> Dict[str, Any]:
         """Análise semântica da consulta"""
         
         # Integrar com novo sistema de mapeamento semântico modular
         try:
-            from ...semantic.semantic_manager import SemanticManager
+            from app.claude_ai_novo.orchestrators.semantic_manager import SemanticManager
             semantic_manager = SemanticManager()
             
             # Mapear consulta completa usando nova arquitetura
@@ -91,7 +126,7 @@ class SemanticLoopProcessor:
                     'semantic_manager_used': True  # Indica uso da nova arquitetura
                 }
             except (AttributeError, KeyError) as e:
-                logger.warning(f"Erro no mapeamento semântico modular: {e}")
+                self.logger.warning(f"Erro no mapeamento semântico modular: {e}")
                 # Retornar análise básica sem mapeamento
                 return {
                     'mapped_terms': [],
@@ -102,7 +137,7 @@ class SemanticLoopProcessor:
                 }
             
         except Exception as e:
-            logger.warning(f"Erro na análise semântica: {e}")
+            self.logger.warning(f"Erro na análise semântica: {e}")
             return {
                 'mapped_terms': [],
                 'confidence': 0.3,
@@ -155,7 +190,7 @@ class SemanticLoopProcessor:
                 # Clarificar domínio
                 refined_query = self._clarify_domain_context(refined_query)
         
-        logger.info(f"🔧 Query refinada: {query} → {refined_query}")
+        self.logger.info(f"🔧 Query refinada: {query} → {refined_query}")
         
         return refined_query
     
@@ -183,8 +218,30 @@ class SemanticLoopProcessor:
             query += " (contexto: operações de entrega)"
         
         return query
+    
+    def _get_error_response(self, error_msg: str) -> Dict[str, Any]:
+        """Retorna resposta de erro padronizada"""
+        
+        return {
+            'initial_query': "",
+            'iterations': [],
+            'final_interpretation': None,
+            'confidence_evolution': [0.0],
+            'semantic_refinements': [],
+            'error': error_msg,
+            'metadata': {
+                'processing_time': 0,
+                'iterations_used': 0,
+                'final_confidence': 0.0
+            }
+        }
 
-# Função de conveniência para criar instância
+# Instância global
+_semantic_loop_processor = None
+
 def get_semantic_loop_processor() -> SemanticLoopProcessor:
     """Retorna instância do processador de loop semântico"""
-    return SemanticLoopProcessor() 
+    global _semantic_loop_processor
+    if _semantic_loop_processor is None:
+        _semantic_loop_processor = SemanticLoopProcessor()
+    return _semantic_loop_processor 

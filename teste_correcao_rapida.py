@@ -30,7 +30,7 @@ def teste_suggestion_engine():
     print("\n🎯 Testando Suggestion Engine...")
     
     try:
-        from app.claude_ai_novo.suggestions.engine import SuggestionEngine
+        from claude_ai_novo.suggestions.sugestion_engine import SuggestionEngine
         
         # Criar instância
         engine = SuggestionEngine()

@@ -1,3 +1,0 @@
-"""
-MODELS - Módulo models
-"""

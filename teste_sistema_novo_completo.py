@@ -210,7 +210,7 @@ class TesteSistemaNovoCompleto:
     async def teste_suggestion_engine(self) -> str:
         """Testa motor de sugestões"""
         try:
-            from app.claude_ai_novo.suggestions.engine import SuggestionEngine
+            from claude_ai_novo.suggestions.sugestion_engine import SuggestionEngine
             
             # Tentar instanciar
             engine = SuggestionEngine()

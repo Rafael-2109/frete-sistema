@@ -1,3 +1,0 @@
-"""
-INTERFACES - Módulo interfaces
-"""

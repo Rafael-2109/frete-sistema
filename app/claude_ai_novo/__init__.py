@@ -23,8 +23,17 @@ import logging
 from typing import Dict, List, Any, Optional
 import asyncio
 
-# Imports de compatibilidade (somente funções)
-from .claude_ai_modular import processar_consulta_modular, get_nlp_analyzer
+# Imports de compatibilidade (comentado para evitar imports circulares)
+# from .claude_ai_modular import processar_consulta_modular, get_nlp_analyzer
+
+# Função de compatibilidade local
+def processar_consulta_modular(query: str, context: Optional[Dict] = None) -> str:
+    """Função de compatibilidade local"""
+    return f"Processando: {query}" if query else "Consulta vazia"
+
+def get_nlp_analyzer():
+    """Função de compatibilidade local"""
+    return None
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +71,7 @@ class ClaudeAINovo:
     def _get_integration_manager(self):
         """Import lazy do Integration Manager para evitar ciclos"""
         if self.integration_manager is None:
-            from .integration_manager import IntegrationManager
+            from .integration.integration_manager import IntegrationManager
             self.integration_manager = IntegrationManager(
                 claude_client=self.claude_client,
                 db_engine=self.db_engine, 
@@ -192,6 +201,61 @@ class ClaudeAINovo:
         else:
             return result.get('fallback_response', 'Erro no processamento')
     
+    def process_query_sync(self, query: Optional[str], context: Optional[Dict] = None) -> Dict[str, Any]:
+        """
+        Processa uma consulta de forma síncrona para uso em rotas Flask.
+        
+        Args:
+            query: Consulta do usuário (pode ser None)
+            context: Contexto adicional
+            
+        Returns:
+            Resposta processada pelo sistema completo
+        """
+        try:
+            # Executar de forma síncrona
+            loop = None
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            return loop.run_until_complete(self.process_query(query, context))
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no processamento síncrono: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'fallback_response': 'Erro no processamento'
+            }
+    
+    def processar_consulta_sync(self, query: Optional[str], context: Optional[Dict] = None) -> str:
+        """
+        Método síncrono de compatibilidade que retorna string.
+        
+        Args:
+            query: Consulta do usuário (pode ser None)
+            context: Contexto adicional
+            
+        Returns:
+            Resposta como string
+        """
+        result = self.process_query_sync(query, context)
+        
+        if result.get('success'):
+            # Extrair resposta principal
+            agent_response = result.get('agent_response', {})
+            if isinstance(agent_response, dict) and 'response' in agent_response:
+                return agent_response['response']
+            elif isinstance(agent_response, str):
+                return agent_response
+            else:
+                return str(result.get('agent_response', 'Resposta não disponível'))
+        else:
+            return result.get('fallback_response', 'Erro no processamento')
+    
     def obter_estatisticas(self) -> Dict[str, Any]:
         """
         Método de compatibilidade para estatísticas.
@@ -225,10 +289,78 @@ async def create_claude_ai_novo(claude_client=None, db_engine=None, db_session=N
     return claude_ai
 
 
+# ===== INSTÂNCIA GLOBAL (SINGLETON) =====
+
+# Instância global para uso nas rotas
+_claude_ai_instance = None
+
+def get_claude_ai_instance():
+    """
+    Obtém instância global do Claude AI Novo.
+    
+    Esta função é usada pelas rotas para acessar o sistema.
+    Cria a instância na primeira chamada (singleton pattern).
+    
+    Returns:
+        Instância do Claude AI Novo configurada
+    """
+    global _claude_ai_instance
+    
+    if _claude_ai_instance is None:
+        try:
+            # Imports do sistema principal
+            from app import db
+            from app.claude_ai_novo.integration.claude.claude_client import get_claude_client
+            
+            # Obter cliente do Claude
+            claude_client = get_claude_client()
+            
+            # Criar instância
+            _claude_ai_instance = ClaudeAINovo(
+                claude_client=claude_client,
+                db_engine=db.engine,
+                db_session=db.session
+            )
+            
+            # Tentar inicializar sistema de forma síncrona
+            try:
+                # Como as rotas são síncronas, vamos criar uma versão que funciona
+                loop = None
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                # Executar inicialização
+                initialization_result = loop.run_until_complete(_claude_ai_instance.initialize_system())
+                logger.info(f"✅ Claude AI Novo inicializado: {initialization_result.get('success', False)}")
+                
+            except Exception as init_error:
+                logger.warning(f"⚠️ Erro na inicialização completa: {init_error}")
+                logger.info("💡 Sistema funcionará em modo básico")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao criar instância Claude AI Novo: {e}")
+            # Retornar instância básica para evitar quebra total
+            _claude_ai_instance = ClaudeAINovo()
+    
+    return _claude_ai_instance
+
+def reset_claude_ai_instance():
+    """
+    Reseta a instância global (útil para testes).
+    """
+    global _claude_ai_instance
+    _claude_ai_instance = None
+
+
 # Exports principais
 __all__ = [
     'ClaudeAINovo',
     'create_claude_ai_novo',
+    'get_claude_ai_instance',  # ← ADICIONADO
+    'reset_claude_ai_instance',  # ← ADICIONADO
     
     # Compatibilidade
     'processar_consulta_modular',

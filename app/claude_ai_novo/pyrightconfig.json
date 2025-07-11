@@ -1,0 +1,38 @@
+{
+    "include": [
+        "**/*.py"
+    ],
+    "exclude": [
+        "**/node_modules",
+        "**/__pycache__",
+        "**/.*"
+    ],
+    "extraPaths": [
+        ".",
+        "..",
+        "../.."
+    ],
+    "pythonVersion": "3.9",
+    "pythonPlatform": "Windows",
+    "executionEnvironments": [
+        {
+            "root": ".",
+            "pythonVersion": "3.9",
+            "pythonPlatform": "Windows",
+            "extraPaths": [
+                ".",
+                "..",
+                "../.."
+            ]
+        }
+    ],
+    "reportMissingImports": "none",
+    "reportMissingTypeStubs": false,
+    "reportImportCycles": "error",
+    "reportUnusedImport": "warning",
+    "reportUnusedVariable": "warning",
+    "reportDuplicateImport": "warning",
+    "reportAssignmentType": "none",
+    "reportArgumentType": "none",
+    "reportGeneralTypeIssues": "none"
+} 

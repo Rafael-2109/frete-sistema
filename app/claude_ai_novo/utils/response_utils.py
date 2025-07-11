@@ -16,7 +16,7 @@ import json
 from app.utils.redis_cache import redis_cache, cache_aside, cached_query
 from app.utils.grupo_empresarial import GrupoEmpresarialDetector, detectar_grupo_empresarial
 from app.utils.ml_models_real import get_ml_models_system
-import config_ai
+from app.claude_ai_novo.config import ClaudeAIConfig, AdvancedConfig
 from app.utils.api_helper import get_system_alerts
 from app.utils.ai_logging import ai_logger, AILogger
 from app.utils.redis_cache import intelligent_cache

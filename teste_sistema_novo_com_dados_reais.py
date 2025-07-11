@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath('.'))
 
 from app import create_app
 from app.claude_transition import get_claude_transition
-from app.claude_ai_novo.data.providers.data_executor import get_data_executor
+# DataExecutor removido - funcionalidade redundante
 import json
 
 def teste_sistema_transicao():
@@ -34,60 +34,42 @@ def teste_sistema_transicao():
         print(f"❌ Erro no teste de transição: {e}")
         return False
 
-def teste_data_executor():
-    """Testa se o DataExecutor está funcionando"""
-    print("\n🎯 TESTE 2: Data Executor")
-    
-    try:
-        with create_app().app_context():
-            executor = get_data_executor()
-            print(f"✅ Data Executor inicializado")
-            print(f"✅ Funções disponíveis: {list(executor.funcoes_dados.keys())}")
-            
-            # Testar detecção de domínio
-            consulta_teste = "Como foram as entregas hoje?"
-            dominio = executor._detectar_dominio_consulta(consulta_teste)
-            print(f"✅ Domínio detectado para '{consulta_teste}': {dominio}")
-            
-            return True
-            
-    except Exception as e:
-        print(f"❌ Erro no teste do Data Executor: {e}")
-        return False
+# def teste_data_executor():
+#     """Testa se o DataExecutor está funcionando"""
+#     # DataExecutor removido - funcionalidade redundante
+#     print("\n🎯 TESTE 2: Data Executor (REMOVIDO)")
+#     print("✅ DataExecutor foi removido - funcionalidade redundante")
+#     return True
 
 def teste_consulta_real():
     """Testa consulta real com dados do banco"""
-    print("\n📊 TESTE 3: Consulta Real com Dados")
+    print("\n📊 TESTE 2: Consulta Real com Dados")
     
     try:
         with create_app().app_context():
-            executor = get_data_executor()
+            # Usar sistema de transição ao invés do data_executor
+            transition = get_claude_transition()
             
             # Testar consulta sobre entregas
             consulta = "Quantas entregas tivemos hoje?"
             print(f"🔍 Executando consulta: '{consulta}'")
             
-            dados = executor.executar_consulta_dados(consulta)
+            resposta = transition.processar_consulta(consulta)
             
-            print(f"✅ Dados retornados:")
-            print(f"   - Domínio: {dados.get('dominio_detectado', 'N/A')}")
-            print(f"   - Tipo: {dados.get('tipo_dados', 'N/A')}")
-            print(f"   - Registros: {dados.get('registros_carregados', 'N/A')}")
+            print(f"✅ Resposta recebida:")
+            print(f"   - Tamanho: {len(resposta)} caracteres")
             
-            if 'erro' in dados:
-                print(f"❌ Erro nos dados: {dados['erro']}")
+            if 'erro' in resposta.lower():
+                print(f"❌ Erro na resposta: {resposta[:100]}...")
                 return False
             
-            # Verificar se tem dados estruturados
-            if 'entregas' in dados:
-                entregas = dados['entregas']
-                if 'estatisticas' in entregas:
-                    stats = entregas['estatisticas']
-                    print(f"✅ Estatísticas encontradas:")
-                    for key, value in stats.items():
-                        print(f"   - {key}: {value}")
-            
-            return True
+            # Verificar se tem dados úteis
+            if len(resposta) > 50:
+                print(f"✅ Resposta com conteúdo adequado")
+                return True
+            else:
+                print(f"❌ Resposta muito curta")
+                return False
             
     except Exception as e:
         print(f"❌ Erro no teste de consulta real: {e}")
@@ -139,7 +121,7 @@ def main():
     
     testes = [
         ("Sistema de Transição", teste_sistema_transicao),
-        ("Data Executor", teste_data_executor),
+        # ("Data Executor", teste_data_executor),  # Removido
         ("Consulta Real", teste_consulta_real),
         ("Integração Completa", teste_integracao_completa)
     ]

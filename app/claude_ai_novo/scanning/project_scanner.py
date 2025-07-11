@@ -57,7 +57,7 @@ class ProjectScanner:
     def structure_scanner(self):
         """Lazy loading do StructureScanner"""
         if self._structure_scanner is None:
-            from .structure_scanner import get_structure_scanner
+            from app.claude_ai_novo.scanning.structure_scanner import get_structure_scanner
             self._structure_scanner = get_structure_scanner(self.app_path)
         return self._structure_scanner
     
@@ -65,7 +65,7 @@ class ProjectScanner:
     def code_scanner(self):
         """Lazy loading do CodeScanner"""
         if self._code_scanner is None:
-            from .code_scanner import get_code_scanner
+            from app.claude_ai_novo.scanning.code_scanner import get_code_scanner
             self._code_scanner = get_code_scanner(self.app_path)
         return self._code_scanner
     
@@ -73,7 +73,7 @@ class ProjectScanner:
     def file_scanner(self):
         """Lazy loading do FileScanner"""
         if self._file_scanner is None:
-            from .file_scanner import get_file_scanner
+            from app.claude_ai_novo.scanning.file_scanner import get_file_scanner
             self._file_scanner = get_file_scanner(self.app_path)
         return self._file_scanner
     
@@ -81,7 +81,7 @@ class ProjectScanner:
     def database_scanner(self):
         """Lazy loading do DatabaseScanner"""
         if self._database_scanner is None:
-            from .database_scanner import get_database_scanner
+            from app.claude_ai_novo.scanning.database_scanner import get_database_scanner
             self._database_scanner = get_database_scanner()
         return self._database_scanner
     

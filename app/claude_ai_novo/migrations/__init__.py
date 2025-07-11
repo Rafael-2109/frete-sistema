@@ -1,3 +1,0 @@
-"""
-MIGRATIONS - Módulo migrations
-"""

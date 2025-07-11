@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 def test_data_adapter_import():
     """Testa se o data_adapter consegue importar o sistema real"""
     try:
-        from app.claude_ai_novo.adapters.data_adapter import get_sistema_real_data
+        from app.claude_ai_novo.data.providers.data_provider import get_sistema_real_data
         
         # Tentar obter sistema real
         sistema = get_sistema_real_data()
@@ -116,7 +116,7 @@ def test_database_reader_methods():
 def test_suggestion_engine_fixed():
     """Testa se o SuggestionEngine usa DataAnalyzer real"""
     try:
-        from app.claude_ai_novo.suggestions.engine import SuggestionEngine
+        from claude_ai_novo.suggestions.sugestion_engine import SuggestionEngine
         
         # Criar engine
         engine = SuggestionEngine()

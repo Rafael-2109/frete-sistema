@@ -1,0 +1,820 @@
+{
+  "analise_executada_em": "2025-07-08T20:24:17.882592",
+  "objetivo": "Identificar dependências Flask nos 7 managers problemáticos",
+  "managers_analisados": {
+    "integration_manager.py": {
+      "arquivo": "integration_manager.py",
+      "existe": true,
+      "linhas_total": 660,
+      "dependencias_flask": {
+        "imports": [
+          {
+            "padrao": "session",
+            "linha": 37,
+            "conteudo": "def __init__(self, claude_client=None, db_engine=None, db_session=None):",
+            "posicao": 1096
+          },
+          {
+            "padrao": "session",
+            "linha": 44,
+            "conteudo": "db_session: Sessão do banco de dados",
+            "posicao": 1306
+          },
+          {
+            "padrao": "session",
+            "linha": 48,
+            "conteudo": "self.db_session = db_session",
+            "posicao": 1446
+          },
+          {
+            "padrao": "session",
+            "linha": 48,
+            "conteudo": "self.db_session = db_session",
+            "posicao": 1459
+          },
+          {
+            "padrao": "session",
+            "linha": 142,
+            "conteudo": "{'db_engine': self.db_engine, 'db_session': self.db_session}",
+            "posicao": 5254
+          },
+          {
+            "padrao": "session",
+            "linha": 142,
+            "conteudo": "{'db_engine': self.db_engine, 'db_session': self.db_session}",
+            "posicao": 5272
+          },
+          {
+            "padrao": "session",
+            "linha": 226,
+            "conteudo": "'db_session': db_connection.get_session()",
+            "posicao": 8303
+          },
+          {
+            "padrao": "session",
+            "linha": 226,
+            "conteudo": "'db_session': db_connection.get_session()",
+            "posicao": 8331
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 22,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 660
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 148,
+            "conteudo": "'config.advanced_config',",
+            "posicao": 5414
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 239,
+            "conteudo": "'intelligence.learning.learning_core',",
+            "posicao": 8818
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 247,
+            "conteudo": "'intelligence.learning.pattern_learner',",
+            "posicao": 9059
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 263,
+            "conteudo": "'intelligence.learning.human_in_loop_learning',",
+            "posicao": 9481
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 271,
+            "conteudo": "'intelligence.learning.feedback_processor',",
+            "posicao": 9709
+          }
+        ],
+        "uso_contexto": [
+          {
+            "padrao": "g\\.",
+            "linha": 22,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 660
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 148,
+            "conteudo": "'config.advanced_config',",
+            "posicao": 5414
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 239,
+            "conteudo": "'intelligence.learning.learning_core',",
+            "posicao": 8818
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 247,
+            "conteudo": "'intelligence.learning.pattern_learner',",
+            "posicao": 9059
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 263,
+            "conteudo": "'intelligence.learning.human_in_loop_learning',",
+            "posicao": 9481
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 271,
+            "conteudo": "'intelligence.learning.feedback_processor',",
+            "posicao": 9709
+          }
+        ],
+        "banco_dados": []
+      },
+      "problemas_identificados": [],
+      "nivel_dependencia": "CRÍTICA",
+      "estrategia_correcao": "Reescrita completa: reimplementar manager sem dependências Flask",
+      "linhas_problematicas": [
+        {
+          "linha": 37,
+          "conteudo": "def __init__(self, claude_client=None, db_engine=None, db_session=None):",
+          "tipo": "imports",
+          "padrao": "session"
+        },
+        {
+          "linha": 44,
+          "conteudo": "db_session: Sessão do banco de dados",
+          "tipo": "imports",
+          "padrao": "session"
+        },
+        {
+          "linha": 48,
+          "conteudo": "self.db_session = db_session",
+          "tipo": "imports",
+          "padrao": "session"
+        },
+        {
+          "linha": 48,
+          "conteudo": "self.db_session = db_session",
+          "tipo": "imports",
+          "padrao": "session"
+        },
+        {
+          "linha": 142,
+          "conteudo": "{'db_engine': self.db_engine, 'db_session': self.db_session}",
+          "tipo": "imports",
+          "padrao": "session"
+        },
+        {
+          "linha": 142,
+          "conteudo": "{'db_engine': self.db_engine, 'db_session': self.db_session}",
+          "tipo": "imports",
+          "padrao": "session"
+        },
+        {
+          "linha": 226,
+          "conteudo": "'db_session': db_connection.get_session()",
+          "tipo": "imports",
+          "padrao": "session"
+        },
+        {
+          "linha": 226,
+          "conteudo": "'db_session': db_connection.get_session()",
+          "tipo": "imports",
+          "padrao": "session"
+        },
+        {
+          "linha": 22,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 148,
+          "conteudo": "'config.advanced_config',",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 239,
+          "conteudo": "'intelligence.learning.learning_core',",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 247,
+          "conteudo": "'intelligence.learning.pattern_learner',",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 263,
+          "conteudo": "'intelligence.learning.human_in_loop_learning',",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 271,
+          "conteudo": "'intelligence.learning.feedback_processor',",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 22,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 148,
+          "conteudo": "'config.advanced_config',",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 239,
+          "conteudo": "'intelligence.learning.learning_core',",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 247,
+          "conteudo": "'intelligence.learning.pattern_learner',",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 263,
+          "conteudo": "'intelligence.learning.human_in_loop_learning',",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 271,
+          "conteudo": "'intelligence.learning.feedback_processor',",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        }
+      ],
+      "caminho_completo": "C:\\Users\\rafael.nascimento\\Desktop\\Sistema Online\\frete_sistema\\app\\claude_ai_novo\\integration_manager.py"
+    },
+    "intelligence_manager.py": {
+      "arquivo": "intelligence_manager.py",
+      "existe": true,
+      "linhas_total": 231,
+      "dependencias_flask": {
+        "imports": [
+          {
+            "padrao": "g\\.",
+            "linha": 17,
+            "conteudo": "from .learning.lifelong_learning import LifelongLearningSystem",
+            "posicao": 483
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 18,
+            "conteudo": "from .learning.human_in_loop_learning import HumanInLoopLearning",
+            "posicao": 546
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 21,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 665
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 103,
+            "conteudo": "learning_result = self.lifelong_learning.apply_learning(query, user_context or {})",
+            "posicao": 3913
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 117,
+            "conteudo": "feedback_id = self.human_learning.capture_feedback(",
+            "posicao": 4740
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 176,
+            "conteudo": "feedback_id = self.human_learning.capture_feedback(",
+            "posicao": 7296
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 191,
+            "conteudo": "return self.lifelong_learning.apply_learning(query, context or {})",
+            "posicao": 7988
+          }
+        ],
+        "uso_contexto": [
+          {
+            "padrao": "g\\.",
+            "linha": 17,
+            "conteudo": "from .learning.lifelong_learning import LifelongLearningSystem",
+            "posicao": 483
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 18,
+            "conteudo": "from .learning.human_in_loop_learning import HumanInLoopLearning",
+            "posicao": 546
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 21,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 665
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 103,
+            "conteudo": "learning_result = self.lifelong_learning.apply_learning(query, user_context or {})",
+            "posicao": 3913
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 117,
+            "conteudo": "feedback_id = self.human_learning.capture_feedback(",
+            "posicao": 4740
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 176,
+            "conteudo": "feedback_id = self.human_learning.capture_feedback(",
+            "posicao": 7296
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 191,
+            "conteudo": "return self.lifelong_learning.apply_learning(query, context or {})",
+            "posicao": 7988
+          }
+        ],
+        "banco_dados": []
+      },
+      "problemas_identificados": [],
+      "nivel_dependencia": "ALTA",
+      "estrategia_correcao": "Refatoração complexa: criar versão independente com adapter pattern",
+      "linhas_problematicas": [
+        {
+          "linha": 17,
+          "conteudo": "from .learning.lifelong_learning import LifelongLearningSystem",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 18,
+          "conteudo": "from .learning.human_in_loop_learning import HumanInLoopLearning",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 21,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 103,
+          "conteudo": "learning_result = self.lifelong_learning.apply_learning(query, user_context or {})",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 117,
+          "conteudo": "feedback_id = self.human_learning.capture_feedback(",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 176,
+          "conteudo": "feedback_id = self.human_learning.capture_feedback(",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 191,
+          "conteudo": "return self.lifelong_learning.apply_learning(query, context or {})",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 17,
+          "conteudo": "from .learning.lifelong_learning import LifelongLearningSystem",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 18,
+          "conteudo": "from .learning.human_in_loop_learning import HumanInLoopLearning",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 21,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 103,
+          "conteudo": "learning_result = self.lifelong_learning.apply_learning(query, user_context or {})",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 117,
+          "conteudo": "feedback_id = self.human_learning.capture_feedback(",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 176,
+          "conteudo": "feedback_id = self.human_learning.capture_feedback(",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 191,
+          "conteudo": "return self.lifelong_learning.apply_learning(query, context or {})",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        }
+      ],
+      "caminho_completo": "C:\\Users\\rafael.nascimento\\Desktop\\Sistema Online\\frete_sistema\\app\\claude_ai_novo\\intelligence\\intelligence_manager.py"
+    },
+    "multi_agent_orchestrator.py": {
+      "arquivo": "multi_agent_orchestrator.py",
+      "existe": true,
+      "linhas_total": 448,
+      "dependencias_flask": {
+        "imports": [
+          {
+            "padrao": "g\\.",
+            "linha": 27,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 604
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 434,
+            "conteudo": "for key, value in new_config.items():",
+            "posicao": 18849
+          }
+        ],
+        "uso_contexto": [
+          {
+            "padrao": "g\\.",
+            "linha": 27,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 604
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 434,
+            "conteudo": "for key, value in new_config.items():",
+            "posicao": 18849
+          }
+        ],
+        "banco_dados": []
+      },
+      "problemas_identificados": [],
+      "nivel_dependencia": "MEDIA",
+      "estrategia_correcao": "Refatoração moderada: abstrair contexto Flask com classe wrapper",
+      "linhas_problematicas": [
+        {
+          "linha": 27,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 434,
+          "conteudo": "for key, value in new_config.items():",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 27,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 434,
+          "conteudo": "for key, value in new_config.items():",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        }
+      ],
+      "caminho_completo": "C:\\Users\\rafael.nascimento\\Desktop\\Sistema Online\\frete_sistema\\app\\claude_ai_novo\\multi_agent\\multi_agent_orchestrator.py"
+    },
+    "analyzer_manager.py": {
+      "arquivo": "analyzer_manager.py",
+      "existe": true,
+      "linhas_total": 273,
+      "dependencias_flask": {
+        "imports": [
+          {
+            "padrao": "g\\.",
+            "linha": 18,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 526
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 28,
+            "conteudo": "self.logger = logging.getLogger(f\"{__name__}.AnalyzerManager\")",
+            "posicao": 773
+          }
+        ],
+        "uso_contexto": [
+          {
+            "padrao": "g\\.",
+            "linha": 18,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 526
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 28,
+            "conteudo": "self.logger = logging.getLogger(f\"{__name__}.AnalyzerManager\")",
+            "posicao": 773
+          }
+        ],
+        "banco_dados": []
+      },
+      "problemas_identificados": [],
+      "nivel_dependencia": "MEDIA",
+      "estrategia_correcao": "Refatoração moderada: abstrair contexto Flask com classe wrapper",
+      "linhas_problematicas": [
+        {
+          "linha": 18,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 28,
+          "conteudo": "self.logger = logging.getLogger(f\"{__name__}.AnalyzerManager\")",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 18,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 28,
+          "conteudo": "self.logger = logging.getLogger(f\"{__name__}.AnalyzerManager\")",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        }
+      ],
+      "caminho_completo": "C:\\Users\\rafael.nascimento\\Desktop\\Sistema Online\\frete_sistema\\app\\claude_ai_novo\\analyzers\\analyzer_manager.py"
+    },
+    "processor_manager.py": {
+      "arquivo": "processor_manager.py",
+      "existe": true,
+      "linhas_total": 264,
+      "dependencias_flask": {
+        "imports": [
+          {
+            "padrao": "g\\.",
+            "linha": 17,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 470
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 27,
+            "conteudo": "self.logger = logging.getLogger(f\"{__name__}.ProcessorManager\")",
+            "posicao": 706
+          }
+        ],
+        "uso_contexto": [
+          {
+            "padrao": "g\\.",
+            "linha": 17,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 470
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 27,
+            "conteudo": "self.logger = logging.getLogger(f\"{__name__}.ProcessorManager\")",
+            "posicao": 706
+          }
+        ],
+        "banco_dados": []
+      },
+      "problemas_identificados": [],
+      "nivel_dependencia": "MEDIA",
+      "estrategia_correcao": "Refatoração moderada: abstrair contexto Flask com classe wrapper",
+      "linhas_problematicas": [
+        {
+          "linha": 17,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 27,
+          "conteudo": "self.logger = logging.getLogger(f\"{__name__}.ProcessorManager\")",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 17,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 27,
+          "conteudo": "self.logger = logging.getLogger(f\"{__name__}.ProcessorManager\")",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        }
+      ],
+      "caminho_completo": "C:\\Users\\rafael.nascimento\\Desktop\\Sistema Online\\frete_sistema\\app\\claude_ai_novo\\processors\\processor_manager.py"
+    },
+    "data_manager.py": {
+      "arquivo": "data_manager.py",
+      "existe": true,
+      "linhas_total": 255,
+      "dependencias_flask": {
+        "imports": [
+          {
+            "padrao": "g\\.",
+            "linha": 16,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 412
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 26,
+            "conteudo": "self.logger = logging.getLogger(f\"{__name__}.DataManager\")",
+            "posicao": 634
+          }
+        ],
+        "uso_contexto": [
+          {
+            "padrao": "g\\.",
+            "linha": 16,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 412
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 26,
+            "conteudo": "self.logger = logging.getLogger(f\"{__name__}.DataManager\")",
+            "posicao": 634
+          }
+        ],
+        "banco_dados": []
+      },
+      "problemas_identificados": [],
+      "nivel_dependencia": "MEDIA",
+      "estrategia_correcao": "Refatoração moderada: abstrair contexto Flask com classe wrapper",
+      "linhas_problematicas": [
+        {
+          "linha": 16,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 26,
+          "conteudo": "self.logger = logging.getLogger(f\"{__name__}.DataManager\")",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 16,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 26,
+          "conteudo": "self.logger = logging.getLogger(f\"{__name__}.DataManager\")",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        }
+      ],
+      "caminho_completo": "C:\\Users\\rafael.nascimento\\Desktop\\Sistema Online\\frete_sistema\\app\\claude_ai_novo\\data\\data_manager.py"
+    },
+    "utils_manager.py": {
+      "arquivo": "utils_manager.py",
+      "existe": true,
+      "linhas_total": 220,
+      "dependencias_flask": {
+        "imports": [
+          {
+            "padrao": "g\\.",
+            "linha": 15,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 353
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 25,
+            "conteudo": "self.logger = logging.getLogger(f\"{__name__}.UtilsManager\")",
+            "posicao": 581
+          }
+        ],
+        "uso_contexto": [
+          {
+            "padrao": "g\\.",
+            "linha": 15,
+            "conteudo": "logger = logging.getLogger(__name__)",
+            "posicao": 353
+          },
+          {
+            "padrao": "g\\.",
+            "linha": 25,
+            "conteudo": "self.logger = logging.getLogger(f\"{__name__}.UtilsManager\")",
+            "posicao": 581
+          }
+        ],
+        "banco_dados": []
+      },
+      "problemas_identificados": [],
+      "nivel_dependencia": "MEDIA",
+      "estrategia_correcao": "Refatoração moderada: abstrair contexto Flask com classe wrapper",
+      "linhas_problematicas": [
+        {
+          "linha": 15,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 25,
+          "conteudo": "self.logger = logging.getLogger(f\"{__name__}.UtilsManager\")",
+          "tipo": "imports",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 15,
+          "conteudo": "logger = logging.getLogger(__name__)",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        },
+        {
+          "linha": 25,
+          "conteudo": "self.logger = logging.getLogger(f\"{__name__}.UtilsManager\")",
+          "tipo": "uso_contexto",
+          "padrao": "g\\."
+        }
+      ],
+      "caminho_completo": "C:\\Users\\rafael.nascimento\\Desktop\\Sistema Online\\frete_sistema\\app\\claude_ai_novo\\utils\\utils_manager.py"
+    }
+  },
+  "resumo_geral": {
+    "managers_total": 7,
+    "managers_existentes": 7,
+    "managers_nao_encontrados": 0,
+    "distribuicao_niveis": {
+      "NENHUMA": 0,
+      "BAIXA": 0,
+      "MEDIA": 5,
+      "ALTA": 1,
+      "CRÍTICA": 1
+    },
+    "total_dependencias_flask": 54,
+    "percentual_problematicos": 100.0
+  },
+  "recomendacoes": [
+    {
+      "tipo": "MODERADO",
+      "titulo": "Refatoração moderada",
+      "descricao": "5 managers com dependências médias",
+      "acao": "Criar wrapper classes para abstrair contexto Flask"
+    },
+    {
+      "tipo": "COMPLEXO",
+      "titulo": "Refatoração complexa",
+      "descricao": "1 managers com muitas dependências",
+      "acao": "Implementar adapter pattern para isolamento"
+    },
+    {
+      "tipo": "CRÍTICO",
+      "titulo": "Reescrita necessária",
+      "descricao": "1 managers com dependências críticas",
+      "acao": "Reescrever completamente sem Flask"
+    },
+    {
+      "tipo": "ESTRATÉGICO",
+      "titulo": "Abordagem sistemática",
+      "descricao": "100.0% dos managers têm dependências Flask",
+      "acao": "Implementar padrão arquitetural consistente para todos"
+    }
+  ]
+}

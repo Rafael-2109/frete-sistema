@@ -52,7 +52,7 @@ def test_data_analyzer_methods():
 def test_suggestions_engine_with_real_analyzer():
     """Testa se o suggestions/engine.py pode usar o DataAnalyzer real"""
     try:
-        from app.claude_ai_novo.suggestions.engine import SuggestionEngine
+        from claude_ai_novo.suggestions.sugestion_engine import SuggestionEngine
         
         # Criar engine
         engine = SuggestionEngine()
