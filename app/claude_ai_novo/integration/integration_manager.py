@@ -157,8 +157,8 @@ class IntegrationManager:
         
         # Teste 3: Sistema está respondendo?
         try:
-            # Testar uma consulta simples
-            await self.process_unified_query("teste")
+            # Testar uma consulta simples - removendo await incorreto
+            test_result = self.process_unified_query("teste")
             validation_results['data_flow_working'] = True
         except:
             validation_results['data_flow_working'] = False

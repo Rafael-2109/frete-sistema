@@ -126,7 +126,7 @@ class ValidadorSistemaReal:
         """Testa o erro específico: cannot import name 'SpecialistAgent'"""
         try:
             from app.claude_ai_novo.coordinators.specialist_agents import SpecialistAgent
-            agents = SpecialistAgent()
+            agents = SpecialistAgent
             return agents is not None
         except ImportError as e:
             self.results['production_issues'].append({

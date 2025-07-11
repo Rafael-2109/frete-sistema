@@ -63,15 +63,64 @@ def get_processor_coordinator() -> Optional[Any]:
 
 def get_specialist_coordinator() -> Optional[Any]:
     """
-    Obtém coordenador de especialistas.
+    Obtém coordenador de especialistas que pode gerenciar todos os agentes de domínio.
     
     Returns:
-        Instância do SpecialistCoordinator ou None
+        Instância do SpecialistCoordinator que pode criar agentes para qualquer domínio
     """
     try:
-        from .specialist_agents import SpecialistAgent
-        agent = SpecialistAgent()
-        return agent
+        from .specialist_agents import (
+            create_fretes_agent, create_entregas_agent, 
+            create_pedidos_agent, create_embarques_agent, 
+            create_financeiro_agent, get_all_agent_types
+        )
+        
+        class SpecialistCoordinator:
+            """Coordinator que gerencia todos os agentes especializados"""
+            
+            def __init__(self):
+                self.agent_types = get_all_agent_types()
+                self._agents_cache = {}
+                
+            def get_agent(self, domain: str):
+                """
+                Obtém agente específico por domínio.
+                
+                Args:
+                    domain: Nome do domínio ('fretes', 'entregas', 'pedidos', etc.)
+                    
+                Returns:
+                    Instância do agente especializado ou None
+                """
+                if domain in self._agents_cache:
+                    return self._agents_cache[domain]
+                
+                factories = {
+                    'fretes': create_fretes_agent,
+                    'entregas': create_entregas_agent,
+                    'pedidos': create_pedidos_agent,
+                    'embarques': create_embarques_agent,
+                    'financeiro': create_financeiro_agent
+                }
+                
+                factory = factories.get(domain)
+                if factory:
+                    agent = factory()
+                    self._agents_cache[domain] = agent
+                    return agent
+                
+                return None
+                
+            def get_all_agents(self):
+                """Obtém todos os agentes disponíveis"""
+                return {domain: self.get_agent(domain) for domain in self.agent_types.keys()}
+                
+            def get_available_domains(self):
+                """Retorna lista de domínios disponíveis"""
+                return list(self.agent_types.keys())
+        
+        return SpecialistCoordinator()
+        
     except ImportError as e:
         logger.warning(f"⚠️ Não foi possível carregar specialist_coordinator: {e}")
         return None

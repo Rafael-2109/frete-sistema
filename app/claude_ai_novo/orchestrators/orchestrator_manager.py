@@ -488,29 +488,27 @@ class OrchestratorManager:
         params = task.parameters
         
         if 'create' in operation:
-            # Importar enum necessário
-            try:
-                from .session_orchestrator import SessionPriority
-            except ImportError:
-                try:
-                    from app.claude_ai_novo.orchestrators.session_orchestrator import SessionPriority
-                except ImportError:
-                    # Fallback - usar valor padrão
-                    class SessionPriority:
-                        NORMAL = "normal"
+            # Usar valores diretos para evitar conflitos de tipo
+            priority_value = params.get('priority', 'normal')
             
-            # Converter priority para enum se necessário
-            priority_value = params.get('priority')
-            if priority_value and hasattr(SessionPriority, priority_value.upper()):
-                priority = getattr(SessionPriority, priority_value.upper())
-            elif hasattr(SessionPriority, 'NORMAL'):
-                priority = SessionPriority.NORMAL
-            else:
-                priority = "normal"  # Fallback string
+            # Tentar import e uso direto
+            try:
+                from app.claude_ai_novo.orchestrators.session_orchestrator import SessionPriority
+                if priority_value.upper() == 'HIGH':
+                    session_priority = SessionPriority.HIGH
+                elif priority_value.upper() == 'LOW':
+                    session_priority = SessionPriority.LOW
+                elif priority_value.upper() == 'CRITICAL':
+                    session_priority = SessionPriority.CRITICAL
+                else:
+                    session_priority = SessionPriority.NORMAL
+            except ImportError:
+                # Fallback para string simples
+                session_priority = priority_value
             
             return orchestrator.create_session(
                 user_id=params.get('user_id'),
-                priority=priority,
+                priority=session_priority,
                 timeout=params.get('timeout'),
                 metadata=params.get('metadata')
             )

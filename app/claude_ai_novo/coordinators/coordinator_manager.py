@@ -20,7 +20,7 @@ class MockSpecialistAgent:
         self.agent_type = "mock"
         logger.info("🔧 MockSpecialistAgent inicializado como fallback")
     
-    def process_query(self, query: str, context: Dict[str, Any] = None):
+    def process_query(self, query: str, context: Optional[Dict[str, Any]] = None):
         return {
             'status': 'mock_response',
             'message': 'SpecialistAgent em modo mock',
@@ -28,7 +28,7 @@ class MockSpecialistAgent:
             'agent_type': self.agent_type
         }
     
-    def coordinate_specialists(self, query: str, context: Dict[str, Any] = None):
+    def coordinate_specialists(self, query: str, context: Optional[Dict[str, Any]] = None):
         return self.process_query(query, context)
 
 class CoordinatorType(Enum):
