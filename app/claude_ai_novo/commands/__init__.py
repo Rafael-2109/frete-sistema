@@ -32,8 +32,8 @@ AUTO_DISCOVERY_CONFIG = {
 
 # Prioridades de carregamento
 LOAD_PRIORITIES = {
-    'base': 1,
-    'excel_orchestrator': 2,
+    'base_command': 1,
+    'excel_command_manager': 2,
     'cursor_commands': 3,
     'dev_commands': 4,
     'file_commands': 5,
@@ -72,8 +72,8 @@ class CommandsRegistry:
     def _discover_main_commands(self):
         """Descobre comandos principais"""
         main_commands = [
-            ('base', 'BaseCommand', 'Classe base para todos os comandos'),
-            ('excel_orchestrator', 'ExcelOrchestrator', 'Orquestrador de Excel'),
+            ('base_command', 'BaseCommand', 'Classe base para todos os comandos'),
+            ('excel_command_manager', 'ExcelOrchestrator', 'Orquestrador de Excel'),
             ('cursor_commands', 'CursorCommands', 'Comandos do Cursor Mode'),
             ('dev_commands', 'DevCommands', 'Comandos de desenvolvimento'),
             ('file_commands', 'FileCommands', 'Comandos de arquivos')
@@ -227,8 +227,8 @@ except ImportError:
 def get_commands_status() -> Dict[str, bool]:
     """Retorna status de disponibilidade de todos os comandos"""
     return {
-        'base': BASE_AVAILABLE,
-        'excel_orchestrator': EXCEL_ORCHESTRATOR_AVAILABLE,
+        'base_command': BASE_AVAILABLE,
+        'excel_command_manager': EXCEL_ORCHESTRATOR_AVAILABLE,
         'cursor_commands': CURSOR_COMMANDS_AVAILABLE,
         'dev_commands': DEV_COMMANDS_AVAILABLE,
         'file_commands': FILE_COMMANDS_AVAILABLE,

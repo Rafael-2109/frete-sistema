@@ -31,7 +31,7 @@ except ImportError:
         def get_session_memory():
             return MockSessionMemory()
         def get_performance_analyzer():
-            return MockPerformanceAnalyzer()
+            return MockPerformanceAnalyzer
         def get_current_user():
             return None
 

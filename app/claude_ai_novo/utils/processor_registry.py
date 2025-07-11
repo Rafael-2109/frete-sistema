@@ -84,7 +84,16 @@ class ProcessorRegistry(BaseProcessor):
                 full_module_name = f"app.claude_ai_novo.processors.{module_name}"
                 module = __import__(full_module_name, fromlist=[class_name])
                 processor_class = getattr(module, class_name)
-                processor_instance = processor_class()
+                
+                # Instanciar com argumentos específicos para QueryProcessor
+                if name == 'query':
+                    processor_instance = processor_class(
+                        claude_client=None,
+                        context_manager=None,
+                        learning_system=None
+                    )
+                else:
+                    processor_instance = processor_class()
                 
                 self.logger.debug(f"✅ Processador '{name}' registrado (método absoluto)")
                 
@@ -95,7 +104,16 @@ class ProcessorRegistry(BaseProcessor):
                         module_name_rel = f"..processors.{module_name}"
                         module = __import__(module_name_rel, fromlist=[class_name], level=1)
                         processor_class = getattr(module, class_name)
-                        processor_instance = processor_class()
+                        
+                        # Instanciar com argumentos específicos para QueryProcessor
+                        if name == 'query':
+                            processor_instance = processor_class(
+                                claude_client=None,
+                                context_manager=None,
+                                learning_system=None
+                            )
+                        else:
+                            processor_instance = processor_class()
                         
                         self.logger.debug(f"✅ Processador '{name}' registrado (método relativo)")
                     else:

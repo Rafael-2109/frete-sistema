@@ -92,7 +92,12 @@ def get_query_processor() -> Optional[object]:
     if _query_processor_instance is None:
         try:
             from .query_processor import QueryProcessor
-            _query_processor_instance = QueryProcessor()
+            # QueryProcessor com argumentos mock para compatibilidade
+            _query_processor_instance = QueryProcessor(
+                claude_client=None,
+                context_manager=None,
+                learning_system=None
+            )
             logger.info("✅ QueryProcessor inicializado com sucesso")
         except Exception as e:
             logger.error(f"❌ Erro ao inicializar QueryProcessor: {e}")

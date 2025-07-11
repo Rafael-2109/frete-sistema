@@ -185,7 +185,7 @@ class IntegrationManager:
         try:
             if self.orchestrator_manager:
                 # Usar o maestro para processar
-                result = await self.orchestrator_manager.process_query(query, context)
+                result = self.orchestrator_manager.process_query(query, context)
                 return result
             else:
                 # Fallback simples

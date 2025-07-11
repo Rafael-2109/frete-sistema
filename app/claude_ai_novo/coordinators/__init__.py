@@ -70,7 +70,8 @@ def get_specialist_coordinator() -> Optional[Any]:
     """
     try:
         from .specialist_agents import SpecialistAgent
-        return SpecialistAgent()    
+        agent = SpecialistAgent()
+        return agent
     except ImportError as e:
         logger.warning(f"⚠️ Não foi possível carregar specialist_coordinator: {e}")
         return None

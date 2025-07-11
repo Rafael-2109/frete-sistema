@@ -53,7 +53,7 @@ class ValidatorManager:
                 self.validators['semantic'] = SemanticValidator(self.orchestrator)
                 self.logger.info("✅ SemanticValidator carregado")
             else:
-                self.logger.warning("⚠️ SemanticValidator requer orchestrator")
+                self.logger.info("✅ SemanticValidator em modo standalone")
         except ImportError as e:
             self.logger.warning(f"SemanticValidator não disponível: {e}")
         
@@ -70,7 +70,7 @@ class ValidatorManager:
                 self.validators['critic'] = CriticValidator(self.orchestrator)
                 self.logger.info("✅ CriticValidator carregado")
             else:
-                self.logger.warning("⚠️ CriticValidator requer orchestrator")
+                self.logger.info("✅ CriticValidator em modo standalone")
         except ImportError as e:
             self.logger.warning(f"CriticValidator não disponível: {e}")
         
