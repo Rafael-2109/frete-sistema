@@ -1,0 +1,2228 @@
+{
+  "timestamp": "2025-07-11T16:37:18.432928",
+  "arquivos_python": [
+    {
+      "nome": "analisar_imports.py",
+      "caminho": "analisar_imports.py",
+      "tamanho_linhas": 475,
+      "tamanho_bytes": 17987,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "analisar_imports_quebrados.py",
+      "caminho": "analisar_imports_quebrados.py",
+      "tamanho_linhas": 622,
+      "tamanho_bytes": 24802,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "analisar_imports_simples.py",
+      "caminho": "analisar_imports_simples.py",
+      "tamanho_linhas": 386,
+      "tamanho_bytes": 15562,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "analisar_integracao_modulos.py",
+      "caminho": "analisar_integracao_modulos.py",
+      "tamanho_linhas": 622,
+      "tamanho_bytes": 25610,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "analisar_pontas_soltas_orquestradores.py",
+      "caminho": "analisar_pontas_soltas_orquestradores.py",
+      "tamanho_linhas": 267,
+      "tamanho_bytes": 10527,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "check_imports.py",
+      "caminho": "check_imports.py",
+      "tamanho_linhas": 122,
+      "tamanho_bytes": 4962,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "contagem_detalhada_modulos.py",
+      "caminho": "contagem_detalhada_modulos.py",
+      "tamanho_linhas": 267,
+      "tamanho_bytes": 9457,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "detector_modulos_orfaos.py",
+      "caminho": "detector_modulos_orfaos.py",
+      "tamanho_linhas": 407,
+      "tamanho_bytes": 16972,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "fix_imports.py",
+      "caminho": "fix_imports.py",
+      "tamanho_linhas": 159,
+      "tamanho_bytes": 6334,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "fix_validation_conflicts.py",
+      "caminho": "fix_validation_conflicts.py",
+      "tamanho_linhas": 201,
+      "tamanho_bytes": 6346,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "inventory_scanner_completo.py",
+      "caminho": "inventory_scanner_completo.py",
+      "tamanho_linhas": 573,
+      "tamanho_bytes": 22541,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "MAPEAMENTO_ARQUITETURAL_COMPLETO.py",
+      "caminho": "MAPEAMENTO_ARQUITETURAL_COMPLETO.py",
+      "tamanho_linhas": 405,
+      "tamanho_bytes": 16931,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "MAPEAMENTO_COMPLETO_ESTRUTURA_REAL.py",
+      "caminho": "MAPEAMENTO_COMPLETO_ESTRUTURA_REAL.py",
+      "tamanho_linhas": 277,
+      "tamanho_bytes": 11143,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "scanner_sistema_simples.py",
+      "caminho": "scanner_sistema_simples.py",
+      "tamanho_linhas": 275,
+      "tamanho_bytes": 10816,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "testar_falso_positivos.py",
+      "caminho": "testar_falso_positivos.py",
+      "tamanho_linhas": 129,
+      "tamanho_bytes": 4746,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "testar_todos_modulos_completo.py",
+      "caminho": "testar_todos_modulos_completo.py",
+      "tamanho_linhas": 275,
+      "tamanho_bytes": 11720,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "testar_todos_tijolos.py",
+      "caminho": "testar_todos_tijolos.py",
+      "tamanho_linhas": 254,
+      "tamanho_bytes": 9464,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_100_porcento.py",
+      "caminho": "teste_100_porcento.py",
+      "tamanho_linhas": 89,
+      "tamanho_bytes": 3279,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_correcoes_arquitetura.py",
+      "caminho": "teste_correcoes_arquitetura.py",
+      "tamanho_linhas": 151,
+      "tamanho_bytes": 5316,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_correcoes_finais.py",
+      "caminho": "teste_correcoes_finais.py",
+      "tamanho_linhas": 166,
+      "tamanho_bytes": 5247,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_correcoes_logs.py",
+      "caminho": "teste_correcoes_logs.py",
+      "tamanho_linhas": 157,
+      "tamanho_bytes": 5130,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_correcoes_logs_producao.py",
+      "caminho": "teste_correcoes_logs_producao.py",
+      "tamanho_linhas": 245,
+      "tamanho_bytes": 8931,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_correcoes_producao.py",
+      "caminho": "teste_correcoes_producao.py",
+      "tamanho_linhas": 209,
+      "tamanho_bytes": 7199,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_flask_shell.py",
+      "caminho": "teste_flask_shell.py",
+      "tamanho_linhas": 156,
+      "tamanho_bytes": 5740,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_imports_corrigidos.py",
+      "caminho": "teste_imports_corrigidos.py",
+      "tamanho_linhas": 156,
+      "tamanho_bytes": 4984,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_integracao_completa.py",
+      "caminho": "teste_integracao_completa.py",
+      "tamanho_linhas": 277,
+      "tamanho_bytes": 11101,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_integracao_completa_todos_modulos.py",
+      "caminho": "teste_integracao_completa_todos_modulos.py",
+      "tamanho_linhas": 452,
+      "tamanho_bytes": 19315,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_integracao_modulos_alto_valor.py",
+      "caminho": "teste_integracao_modulos_alto_valor.py",
+      "tamanho_linhas": 193,
+      "tamanho_bytes": 8217,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_integracao_modulos_orfaos.py",
+      "caminho": "teste_integracao_modulos_orfaos.py",
+      "tamanho_linhas": 178,
+      "tamanho_bytes": 6570,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_integracao_orchestrator.py",
+      "caminho": "teste_integracao_orchestrator.py",
+      "tamanho_linhas": 158,
+      "tamanho_bytes": 4992,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "teste_integracao_sistema_antigo.py",
+      "caminho": "teste_integracao_sistema_antigo.py",
+      "tamanho_linhas": 142,
+      "tamanho_bytes": 4846,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_modulos_esquecidos.py",
+      "caminho": "teste_modulos_esquecidos.py",
+      "tamanho_linhas": 199,
+      "tamanho_bytes": 8061,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_modulos_reais.py",
+      "caminho": "teste_modulos_reais.py",
+      "tamanho_linhas": 97,
+      "tamanho_bytes": 3435,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_rapido_sistema_novo.py",
+      "caminho": "teste_rapido_sistema_novo.py",
+      "tamanho_linhas": 220,
+      "tamanho_bytes": 8154,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_security_guard_integrado.py",
+      "caminho": "teste_security_guard_integrado.py",
+      "tamanho_linhas": 288,
+      "tamanho_bytes": 9884,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_simples_correcoes.py",
+      "caminho": "teste_simples_correcoes.py",
+      "tamanho_linhas": 149,
+      "tamanho_bytes": 4732,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "verificacao_integracao_real_183_modulos.py",
+      "caminho": "verificacao_integracao_real_183_modulos.py",
+      "tamanho_linhas": 295,
+      "tamanho_bytes": 12023,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "verificacao_manual_estrutura.py",
+      "caminho": "verificacao_manual_estrutura.py",
+      "tamanho_linhas": 247,
+      "tamanho_bytes": 8191,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "verificar_sistema_ativo.py",
+      "caminho": "verificar_sistema_ativo.py",
+      "tamanho_linhas": 200,
+      "tamanho_bytes": 7595,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "__init__.py",
+      "tamanho_linhas": 368,
+      "tamanho_bytes": 12665,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "analyzer_manager.py",
+      "caminho": "analyzers\\analyzer_manager.py",
+      "tamanho_linhas": 670,
+      "tamanho_bytes": 28946,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "diagnostics_analyzer.py",
+      "caminho": "analyzers\\diagnostics_analyzer.py",
+      "tamanho_linhas": 372,
+      "tamanho_bytes": 13570,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "intention_analyzer.py",
+      "caminho": "analyzers\\intention_analyzer.py",
+      "tamanho_linhas": 323,
+      "tamanho_bytes": 13160,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "metacognitive_analyzer.py",
+      "caminho": "analyzers\\metacognitive_analyzer.py",
+      "tamanho_linhas": 198,
+      "tamanho_bytes": 8375,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "nlp_enhanced_analyzer.py",
+      "caminho": "analyzers\\nlp_enhanced_analyzer.py",
+      "tamanho_linhas": 360,
+      "tamanho_bytes": 13522,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "performance_analyzer.py",
+      "caminho": "analyzers\\performance_analyzer.py",
+      "tamanho_linhas": 663,
+      "tamanho_bytes": 26069,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "query_analyzer.py",
+      "caminho": "analyzers\\query_analyzer.py",
+      "tamanho_linhas": 235,
+      "tamanho_bytes": 9286,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "semantic_analyzer.py",
+      "caminho": "analyzers\\semantic_analyzer.py",
+      "tamanho_linhas": 401,
+      "tamanho_bytes": 14781,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "structural_analyzer.py",
+      "caminho": "analyzers\\structural_analyzer.py",
+      "tamanho_linhas": 283,
+      "tamanho_bytes": 10087,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "analyzers\\__init__.py",
+      "tamanho_linhas": 178,
+      "tamanho_bytes": 6824,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "auto_command_processor.py",
+      "caminho": "commands\\auto_command_processor.py",
+      "tamanho_linhas": 515,
+      "tamanho_bytes": 19353,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "base_command.py",
+      "caminho": "commands\\base_command.py",
+      "tamanho_linhas": 439,
+      "tamanho_bytes": 16334,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "cursor_commands.py",
+      "caminho": "commands\\cursor_commands.py",
+      "tamanho_linhas": 314,
+      "tamanho_bytes": 11232,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "dev_commands.py",
+      "caminho": "commands\\dev_commands.py",
+      "tamanho_linhas": 632,
+      "tamanho_bytes": 20349,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "excel_command_manager.py",
+      "caminho": "commands\\excel_command_manager.py",
+      "tamanho_linhas": 428,
+      "tamanho_bytes": 16750,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "file_commands.py",
+      "caminho": "commands\\file_commands.py",
+      "tamanho_linhas": 52,
+      "tamanho_bytes": 1740,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "commands\\__init__.py",
+      "tamanho_linhas": 357,
+      "tamanho_bytes": 12397,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "entregas.py",
+      "caminho": "commands\\excel\\entregas.py",
+      "tamanho_linhas": 490,
+      "tamanho_bytes": 19836,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "faturamento.py",
+      "caminho": "commands\\excel\\faturamento.py",
+      "tamanho_linhas": 253,
+      "tamanho_bytes": 9611,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "fretes.py",
+      "caminho": "commands\\excel\\fretes.py",
+      "tamanho_linhas": 456,
+      "tamanho_bytes": 19221,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "pedidos.py",
+      "caminho": "commands\\excel\\pedidos.py",
+      "tamanho_linhas": 466,
+      "tamanho_bytes": 18789,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "commands\\excel\\__init__.py",
+      "tamanho_linhas": 48,
+      "tamanho_bytes": 1336,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "advanced_config.py",
+      "caminho": "config\\advanced_config.py",
+      "tamanho_linhas": 122,
+      "tamanho_bytes": 4443,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "basic_config.py",
+      "caminho": "config\\basic_config.py",
+      "tamanho_linhas": 61,
+      "tamanho_bytes": 1673,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "system_config.py",
+      "caminho": "config\\system_config.py",
+      "tamanho_linhas": 737,
+      "tamanho_bytes": 27159,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "config\\__init__.py",
+      "tamanho_linhas": 468,
+      "tamanho_bytes": 14826,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "context_converser.py",
+      "caminho": "conversers\\context_converser.py",
+      "tamanho_linhas": 326,
+      "tamanho_bytes": 13216,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "conversation_manager.py",
+      "caminho": "conversers\\conversation_manager.py",
+      "tamanho_linhas": 425,
+      "tamanho_bytes": 15469,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "conversers\\__init__.py",
+      "tamanho_linhas": 64,
+      "tamanho_bytes": 2133,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "coordinator_manager.py",
+      "caminho": "coordinators\\coordinator_manager.py",
+      "tamanho_linhas": 368,
+      "tamanho_bytes": 14858,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "intelligence_coordinator.py",
+      "caminho": "coordinators\\intelligence_coordinator.py",
+      "tamanho_linhas": 961,
+      "tamanho_bytes": 41291,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "processor_coordinator.py",
+      "caminho": "coordinators\\processor_coordinator.py",
+      "tamanho_linhas": 290,
+      "tamanho_bytes": 11689,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "specialist_agents.py",
+      "caminho": "coordinators\\specialist_agents.py",
+      "tamanho_linhas": 122,
+      "tamanho_bytes": 4096,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "coordinators\\__init__.py",
+      "tamanho_linhas": 216,
+      "tamanho_bytes": 6562,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "base_agent.py",
+      "caminho": "coordinators\\domain_agents\\base_agent.py",
+      "tamanho_linhas": 186,
+      "tamanho_bytes": 6526,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "embarques_agent.py",
+      "caminho": "coordinators\\domain_agents\\embarques_agent.py",
+      "tamanho_linhas": 171,
+      "tamanho_bytes": 6427,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "entregas_agent.py",
+      "caminho": "coordinators\\domain_agents\\entregas_agent.py",
+      "tamanho_linhas": 281,
+      "tamanho_bytes": 11507,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "financeiro_agent.py",
+      "caminho": "coordinators\\domain_agents\\financeiro_agent.py",
+      "tamanho_linhas": 170,
+      "tamanho_bytes": 6179,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "fretes_agent.py",
+      "caminho": "coordinators\\domain_agents\\fretes_agent.py",
+      "tamanho_linhas": 171,
+      "tamanho_bytes": 6275,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "pedidos_agent.py",
+      "caminho": "coordinators\\domain_agents\\pedidos_agent.py",
+      "tamanho_linhas": 171,
+      "tamanho_bytes": 6262,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "smart_base_agent.py",
+      "caminho": "coordinators\\domain_agents\\smart_base_agent.py",
+      "tamanho_linhas": 258,
+      "tamanho_bytes": 10682,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "coordinators\\domain_agents\\__init__.py",
+      "tamanho_linhas": 36,
+      "tamanho_bytes": 1195,
+      "tem_classes": false,
+      "tem_funcoes": false,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "context_enricher.py",
+      "caminho": "enrichers\\context_enricher.py",
+      "tamanho_linhas": 295,
+      "tamanho_bytes": 9872,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "performance_cache.py",
+      "caminho": "enrichers\\performance_cache.py",
+      "tamanho_linhas": 122,
+      "tamanho_bytes": 3821,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "semantic_enricher.py",
+      "caminho": "enrichers\\semantic_enricher.py",
+      "tamanho_linhas": 509,
+      "tamanho_bytes": 18032,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "enrichers\\__init__.py",
+      "tamanho_linhas": 63,
+      "tamanho_bytes": 1886,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "external_api_integration.py",
+      "caminho": "integration\\external_api_integration.py",
+      "tamanho_linhas": 515,
+      "tamanho_bytes": 19357,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "integration_manager.py",
+      "caminho": "integration\\integration_manager.py",
+      "tamanho_linhas": 284,
+      "tamanho_bytes": 10556,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "integration_manager_backup.py",
+      "caminho": "integration\\integration_manager_backup.py",
+      "tamanho_linhas": 687,
+      "tamanho_bytes": 24957,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "integration_manager_orchestrator.py",
+      "caminho": "integration\\integration_manager_orchestrator.py",
+      "tamanho_linhas": 244,
+      "tamanho_bytes": 8921,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "integration_manager_simplificado.py",
+      "caminho": "integration\\integration_manager_simplificado.py",
+      "tamanho_linhas": 155,
+      "tamanho_bytes": 5940,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "standalone_integration.py",
+      "caminho": "integration\\standalone_integration.py",
+      "tamanho_linhas": 350,
+      "tamanho_bytes": 12450,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "web_integration.py",
+      "caminho": "integration\\web_integration.py",
+      "tamanho_linhas": 653,
+      "tamanho_bytes": 25046,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "integration\\__init__.py",
+      "tamanho_linhas": 352,
+      "tamanho_bytes": 12998,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "adaptive_learning.py",
+      "caminho": "learners\\adaptive_learning.py",
+      "tamanho_linhas": 545,
+      "tamanho_bytes": 21105,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "feedback_learning.py",
+      "caminho": "learners\\feedback_learning.py",
+      "tamanho_linhas": 526,
+      "tamanho_bytes": 19291,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "human_in_loop_learning.py",
+      "caminho": "learners\\human_in_loop_learning.py",
+      "tamanho_linhas": 431,
+      "tamanho_bytes": 17140,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "learning_core.py",
+      "caminho": "learners\\learning_core.py",
+      "tamanho_linhas": 471,
+      "tamanho_bytes": 17781,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "lifelong_learning.py",
+      "caminho": "learners\\lifelong_learning.py",
+      "tamanho_linhas": 143,
+      "tamanho_bytes": 4857,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "pattern_learning.py",
+      "caminho": "learners\\pattern_learning.py",
+      "tamanho_linhas": 531,
+      "tamanho_bytes": 20372,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "learners\\__init__.py",
+      "tamanho_linhas": 152,
+      "tamanho_bytes": 5064,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "context_loader.py",
+      "caminho": "loaders\\context_loader.py",
+      "tamanho_linhas": 582,
+      "tamanho_bytes": 29702,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "database_loader.py",
+      "caminho": "loaders\\database_loader.py",
+      "tamanho_linhas": 258,
+      "tamanho_bytes": 8244,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "loader_manager.py",
+      "caminho": "loaders\\loader_manager.py",
+      "tamanho_linhas": 338,
+      "tamanho_bytes": 13828,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "loaders\\__init__.py",
+      "tamanho_linhas": 242,
+      "tamanho_bytes": 6886,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "agendamentos_loader.py",
+      "caminho": "loaders\\domain\\agendamentos_loader.py",
+      "tamanho_linhas": 184,
+      "tamanho_bytes": 7040,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "embarques_loader.py",
+      "caminho": "loaders\\domain\\embarques_loader.py",
+      "tamanho_linhas": 205,
+      "tamanho_bytes": 7815,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "entregas_loader.py",
+      "caminho": "loaders\\domain\\entregas_loader.py",
+      "tamanho_linhas": 197,
+      "tamanho_bytes": 7620,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "faturamento_loader.py",
+      "caminho": "loaders\\domain\\faturamento_loader.py",
+      "tamanho_linhas": 177,
+      "tamanho_bytes": 6264,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "fretes_loader.py",
+      "caminho": "loaders\\domain\\fretes_loader.py",
+      "tamanho_linhas": 230,
+      "tamanho_bytes": 8765,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "pedidos_loader.py",
+      "caminho": "loaders\\domain\\pedidos_loader.py",
+      "tamanho_linhas": 178,
+      "tamanho_bytes": 6483,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "loaders\\domain\\__init__.py",
+      "tamanho_linhas": 29,
+      "tamanho_bytes": 899,
+      "tem_classes": false,
+      "tem_funcoes": false,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "context_mapper.py",
+      "caminho": "mappers\\context_mapper.py",
+      "tamanho_linhas": 130,
+      "tamanho_bytes": 4079,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "field_mapper.py",
+      "caminho": "mappers\\field_mapper.py",
+      "tamanho_linhas": 180,
+      "tamanho_bytes": 6642,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "mapper_manager.py",
+      "caminho": "mappers\\mapper_manager.py",
+      "tamanho_linhas": 295,
+      "tamanho_bytes": 10689,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "query_mapper.py",
+      "caminho": "mappers\\query_mapper.py",
+      "tamanho_linhas": 190,
+      "tamanho_bytes": 6043,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "mappers\\__init__.py",
+      "tamanho_linhas": 133,
+      "tamanho_bytes": 4267,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "base_mapper.py",
+      "caminho": "mappers\\domain\\base_mapper.py",
+      "tamanho_linhas": 201,
+      "tamanho_bytes": 7409,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "embarques_mapper.py",
+      "caminho": "mappers\\domain\\embarques_mapper.py",
+      "tamanho_linhas": 285,
+      "tamanho_bytes": 11283,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "faturamento_mapper.py",
+      "caminho": "mappers\\domain\\faturamento_mapper.py",
+      "tamanho_linhas": 252,
+      "tamanho_bytes": 9840,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "monitoramento_mapper.py",
+      "caminho": "mappers\\domain\\monitoramento_mapper.py",
+      "tamanho_linhas": 247,
+      "tamanho_bytes": 9820,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "pedidos_mapper.py",
+      "caminho": "mappers\\domain\\pedidos_mapper.py",
+      "tamanho_linhas": 212,
+      "tamanho_bytes": 7941,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "transportadoras_mapper.py",
+      "caminho": "mappers\\domain\\transportadoras_mapper.py",
+      "tamanho_linhas": 153,
+      "tamanho_bytes": 5579,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "mappers\\domain\\__init__.py",
+      "tamanho_linhas": 47,
+      "tamanho_bytes": 1371,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "context_memory.py",
+      "caminho": "memorizers\\context_memory.py",
+      "tamanho_linhas": 321,
+      "tamanho_bytes": 11096,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "conversation_memory.py",
+      "caminho": "memorizers\\conversation_memory.py",
+      "tamanho_linhas": 211,
+      "tamanho_bytes": 7053,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "knowledge_memory.py",
+      "caminho": "memorizers\\knowledge_memory.py",
+      "tamanho_linhas": 574,
+      "tamanho_bytes": 22930,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "memory_manager.py",
+      "caminho": "memorizers\\memory_manager.py",
+      "tamanho_linhas": 374,
+      "tamanho_bytes": 13149,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "session_memory.py",
+      "caminho": "memorizers\\session_memory.py",
+      "tamanho_linhas": 416,
+      "tamanho_bytes": 15420,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "system_memory.py",
+      "caminho": "memorizers\\system_memory.py",
+      "tamanho_linhas": 400,
+      "tamanho_bytes": 14897,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "memorizers\\__init__.py",
+      "tamanho_linhas": 219,
+      "tamanho_bytes": 7100,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "analise_orchestrators_tempo_real.py",
+      "caminho": "orchestrators\\analise_orchestrators_tempo_real.py",
+      "tamanho_linhas": 370,
+      "tamanho_bytes": 14411,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "main_orchestrator.py",
+      "caminho": "orchestrators\\main_orchestrator.py",
+      "tamanho_linhas": 1349,
+      "tamanho_bytes": 56773,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "orchestrator_manager.py",
+      "caminho": "orchestrators\\orchestrator_manager.py",
+      "tamanho_linhas": 792,
+      "tamanho_bytes": 32037,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "session_orchestrator.py",
+      "caminho": "orchestrators\\session_orchestrator.py",
+      "tamanho_linhas": 916,
+      "tamanho_bytes": 35484,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "teste_maestro.py",
+      "caminho": "orchestrators\\teste_maestro.py",
+      "tamanho_linhas": 29,
+      "tamanho_bytes": 1010,
+      "tem_classes": false,
+      "tem_funcoes": false,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "teste_validacao_orchestrators.py",
+      "caminho": "orchestrators\\teste_validacao_orchestrators.py",
+      "tamanho_linhas": 182,
+      "tamanho_bytes": 6845,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "workflow_orchestrator.py",
+      "caminho": "orchestrators\\workflow_orchestrator.py",
+      "tamanho_linhas": 394,
+      "tamanho_bytes": 15066,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "orchestrators\\__init__.py",
+      "tamanho_linhas": 263,
+      "tamanho_bytes": 9164,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "base.py",
+      "caminho": "processors\\base.py",
+      "tamanho_linhas": 201,
+      "tamanho_bytes": 6893,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "context_processor.py",
+      "caminho": "processors\\context_processor.py",
+      "tamanho_linhas": 468,
+      "tamanho_bytes": 17612,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "data_processor.py",
+      "caminho": "processors\\data_processor.py",
+      "tamanho_linhas": 623,
+      "tamanho_bytes": 24585,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "intelligence_processor.py",
+      "caminho": "processors\\intelligence_processor.py",
+      "tamanho_linhas": 792,
+      "tamanho_bytes": 33532,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "processor_manager.py",
+      "caminho": "processors\\processor_manager.py",
+      "tamanho_linhas": 291,
+      "tamanho_bytes": 11339,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "query_processor.py",
+      "caminho": "processors\\query_processor.py",
+      "tamanho_linhas": 79,
+      "tamanho_bytes": 2708,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "response_formatter.py",
+      "caminho": "processors\\response_formatter.py",
+      "tamanho_linhas": 56,
+      "tamanho_bytes": 1492,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "response_processor.py",
+      "caminho": "processors\\response_processor.py",
+      "tamanho_linhas": 470,
+      "tamanho_bytes": 16825,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "semantic_loop_processor.py",
+      "caminho": "processors\\semantic_loop_processor.py",
+      "tamanho_linhas": 247,
+      "tamanho_bytes": 10172,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "processors\\__init__.py",
+      "tamanho_linhas": 368,
+      "tamanho_bytes": 12482,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "context_provider.py",
+      "caminho": "providers\\context_provider.py",
+      "tamanho_linhas": 583,
+      "tamanho_bytes": 21601,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "data_provider.py",
+      "caminho": "providers\\data_provider.py",
+      "tamanho_linhas": 337,
+      "tamanho_bytes": 13981,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "provider_manager.py",
+      "caminho": "providers\\provider_manager.py",
+      "tamanho_linhas": 413,
+      "tamanho_bytes": 15592,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "providers\\__init__.py",
+      "tamanho_linhas": 203,
+      "tamanho_bytes": 6069,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "code_scanner.py",
+      "caminho": "scanning\\code_scanner.py",
+      "tamanho_linhas": 385,
+      "tamanho_bytes": 14329,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "database_manager.py",
+      "caminho": "scanning\\database_manager.py",
+      "tamanho_linhas": 443,
+      "tamanho_bytes": 16055,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "database_scanner.py",
+      "caminho": "scanning\\database_scanner.py",
+      "tamanho_linhas": 399,
+      "tamanho_bytes": 15146,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "file_scanner.py",
+      "caminho": "scanning\\file_scanner.py",
+      "tamanho_linhas": 383,
+      "tamanho_bytes": 14691,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "project_scanner.py",
+      "caminho": "scanning\\project_scanner.py",
+      "tamanho_linhas": 396,
+      "tamanho_bytes": 14784,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "readme_scanner.py",
+      "caminho": "scanning\\readme_scanner.py",
+      "tamanho_linhas": 452,
+      "tamanho_bytes": 17856,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "scanning_manager.py",
+      "caminho": "scanning\\scanning_manager.py",
+      "tamanho_linhas": 415,
+      "tamanho_bytes": 16626,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "structure_scanner.py",
+      "caminho": "scanning\\structure_scanner.py",
+      "tamanho_linhas": 390,
+      "tamanho_bytes": 16390,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "scanning\\__init__.py",
+      "tamanho_linhas": 211,
+      "tamanho_bytes": 7030,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "auto_mapper.py",
+      "caminho": "scanning\\database\\auto_mapper.py",
+      "tamanho_linhas": 589,
+      "tamanho_bytes": 23159,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "database_connection.py",
+      "caminho": "scanning\\database\\database_connection.py",
+      "tamanho_linhas": 290,
+      "tamanho_bytes": 9065,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "data_analyzer.py",
+      "caminho": "scanning\\database\\data_analyzer.py",
+      "tamanho_linhas": 487,
+      "tamanho_bytes": 16734,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "field_searcher.py",
+      "caminho": "scanning\\database\\field_searcher.py",
+      "tamanho_linhas": 540,
+      "tamanho_bytes": 20902,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "metadata_reader.py",
+      "caminho": "scanning\\database\\metadata_reader.py",
+      "tamanho_linhas": 328,
+      "tamanho_bytes": 10755,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "relationship_mapper.py",
+      "caminho": "scanning\\database\\relationship_mapper.py",
+      "tamanho_linhas": 429,
+      "tamanho_bytes": 15329,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "scanning\\database\\__init__.py",
+      "tamanho_linhas": 29,
+      "tamanho_bytes": 923,
+      "tem_classes": false,
+      "tem_funcoes": false,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "security_guard.py",
+      "caminho": "security\\security_guard.py",
+      "tamanho_linhas": 334,
+      "tamanho_bytes": 11413,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "security\\__init__.py",
+      "tamanho_linhas": 113,
+      "tamanho_bytes": 3313,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "suggestions_manager.py",
+      "caminho": "suggestions\\suggestions_manager.py",
+      "tamanho_linhas": 793,
+      "tamanho_bytes": 31593,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "suggestion_engine.py",
+      "caminho": "suggestions\\suggestion_engine.py",
+      "tamanho_linhas": 568,
+      "tamanho_bytes": 24927,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "suggestions\\__init__.py",
+      "tamanho_linhas": 281,
+      "tamanho_bytes": 9196,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "tests\\__init__.py",
+      "tamanho_linhas": 3,
+      "tamanho_bytes": 30,
+      "tem_classes": false,
+      "tem_funcoes": false,
+      "tem_imports": false,
+      "e_critico": false
+    },
+    {
+      "nome": "tools_manager.py",
+      "caminho": "tools\\tools_manager.py",
+      "tamanho_linhas": 203,
+      "tamanho_bytes": 6037,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "tools\\__init__.py",
+      "tamanho_linhas": 6,
+      "tamanho_bytes": 135,
+      "tem_classes": false,
+      "tem_funcoes": false,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "agent_types.py",
+      "caminho": "utils\\agent_types.py",
+      "tamanho_linhas": 64,
+      "tamanho_bytes": 1370,
+      "tem_classes": true,
+      "tem_funcoes": false,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "base_classes.py",
+      "caminho": "utils\\base_classes.py",
+      "tamanho_linhas": 542,
+      "tamanho_bytes": 17054,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "base_context_manager.py",
+      "caminho": "utils\\base_context_manager.py",
+      "tamanho_linhas": 109,
+      "tamanho_bytes": 2896,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "data_manager.py",
+      "caminho": "utils\\data_manager.py",
+      "tamanho_linhas": 421,
+      "tamanho_bytes": 14490,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "flask_context_wrapper.py",
+      "caminho": "utils\\flask_context_wrapper.py",
+      "tamanho_linhas": 107,
+      "tamanho_bytes": 4003,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "flask_fallback.py",
+      "caminho": "utils\\flask_fallback.py",
+      "tamanho_linhas": 321,
+      "tamanho_bytes": 10903,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "legacy_compatibility.py",
+      "caminho": "utils\\legacy_compatibility.py",
+      "tamanho_linhas": 109,
+      "tamanho_bytes": 3721,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "performance_cache.py",
+      "caminho": "utils\\performance_cache.py",
+      "tamanho_linhas": 304,
+      "tamanho_bytes": 9989,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "processor_registry.py",
+      "caminho": "utils\\processor_registry.py",
+      "tamanho_linhas": 280,
+      "tamanho_bytes": 11171,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "response_utils.py",
+      "caminho": "utils\\response_utils.py",
+      "tamanho_linhas": 184,
+      "tamanho_bytes": 6616,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "utils_manager.py",
+      "caminho": "utils\\utils_manager.py",
+      "tamanho_linhas": 304,
+      "tamanho_bytes": 9901,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "validation_utils.py",
+      "caminho": "utils\\validation_utils.py",
+      "tamanho_linhas": 491,
+      "tamanho_bytes": 16336,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "utils\\__init__.py",
+      "tamanho_linhas": 260,
+      "tamanho_bytes": 8717,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "critic_validator.py",
+      "caminho": "validators\\critic_validator.py",
+      "tamanho_linhas": 354,
+      "tamanho_bytes": 15471,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "data_validator.py",
+      "caminho": "validators\\data_validator.py",
+      "tamanho_linhas": 217,
+      "tamanho_bytes": 10151,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "semantic_validator.py",
+      "caminho": "validators\\semantic_validator.py",
+      "tamanho_linhas": 464,
+      "tamanho_bytes": 16845,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "structural_validator.py",
+      "caminho": "validators\\structural_validator.py",
+      "tamanho_linhas": 117,
+      "tamanho_bytes": 4313,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    },
+    {
+      "nome": "validator_manager.py",
+      "caminho": "validators\\validator_manager.py",
+      "tamanho_linhas": 494,
+      "tamanho_bytes": 19895,
+      "tem_classes": true,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": true
+    },
+    {
+      "nome": "__init__.py",
+      "caminho": "validators\\__init__.py",
+      "tamanho_linhas": 190,
+      "tamanho_bytes": 6638,
+      "tem_classes": false,
+      "tem_funcoes": true,
+      "tem_imports": true,
+      "e_critico": false
+    }
+  ],
+  "diretorios": [
+    {
+      "nome": "analyzers",
+      "caminho": "analyzers",
+      "arquivos_python": 10,
+      "e_critico": true
+    },
+    {
+      "nome": "commands",
+      "caminho": "commands",
+      "arquivos_python": 7,
+      "e_critico": true
+    },
+    {
+      "nome": "config",
+      "caminho": "config",
+      "arquivos_python": 4,
+      "e_critico": false
+    },
+    {
+      "nome": "conversers",
+      "caminho": "conversers",
+      "arquivos_python": 3,
+      "e_critico": false
+    },
+    {
+      "nome": "coordinators",
+      "caminho": "coordinators",
+      "arquivos_python": 5,
+      "e_critico": false
+    },
+    {
+      "nome": "enrichers",
+      "caminho": "enrichers",
+      "arquivos_python": 4,
+      "e_critico": false
+    },
+    {
+      "nome": "flask_session",
+      "caminho": "flask_session",
+      "arquivos_python": 0,
+      "e_critico": false
+    },
+    {
+      "nome": "integration",
+      "caminho": "integration",
+      "arquivos_python": 8,
+      "e_critico": true
+    },
+    {
+      "nome": "learners",
+      "caminho": "learners",
+      "arquivos_python": 7,
+      "e_critico": false
+    },
+    {
+      "nome": "loaders",
+      "caminho": "loaders",
+      "arquivos_python": 4,
+      "e_critico": false
+    },
+    {
+      "nome": "logs",
+      "caminho": "logs",
+      "arquivos_python": 0,
+      "e_critico": false
+    },
+    {
+      "nome": "mappers",
+      "caminho": "mappers",
+      "arquivos_python": 5,
+      "e_critico": true
+    },
+    {
+      "nome": "memorizers",
+      "caminho": "memorizers",
+      "arquivos_python": 7,
+      "e_critico": false
+    },
+    {
+      "nome": "orchestrators",
+      "caminho": "orchestrators",
+      "arquivos_python": 8,
+      "e_critico": true
+    },
+    {
+      "nome": "processors",
+      "caminho": "processors",
+      "arquivos_python": 10,
+      "e_critico": true
+    },
+    {
+      "nome": "providers",
+      "caminho": "providers",
+      "arquivos_python": 4,
+      "e_critico": true
+    },
+    {
+      "nome": "scanning",
+      "caminho": "scanning",
+      "arquivos_python": 9,
+      "e_critico": false
+    },
+    {
+      "nome": "security",
+      "caminho": "security",
+      "arquivos_python": 2,
+      "e_critico": false
+    },
+    {
+      "nome": "static",
+      "caminho": "static",
+      "arquivos_python": 0,
+      "e_critico": false
+    },
+    {
+      "nome": "suggestions",
+      "caminho": "suggestions",
+      "arquivos_python": 3,
+      "e_critico": false
+    },
+    {
+      "nome": "tests",
+      "caminho": "tests",
+      "arquivos_python": 1,
+      "e_critico": false
+    },
+    {
+      "nome": "tools",
+      "caminho": "tools",
+      "arquivos_python": 2,
+      "e_critico": false
+    },
+    {
+      "nome": "uploads",
+      "caminho": "uploads",
+      "arquivos_python": 0,
+      "e_critico": false
+    },
+    {
+      "nome": "utils",
+      "caminho": "utils",
+      "arquivos_python": 13,
+      "e_critico": true
+    },
+    {
+      "nome": "validators",
+      "caminho": "validators",
+      "arquivos_python": 6,
+      "e_critico": true
+    },
+    {
+      "nome": "excel",
+      "caminho": "commands\\excel",
+      "arquivos_python": 5,
+      "e_critico": false
+    },
+    {
+      "nome": "domain_agents",
+      "caminho": "coordinators\\domain_agents",
+      "arquivos_python": 8,
+      "e_critico": false
+    },
+    {
+      "nome": "domain",
+      "caminho": "loaders\\domain",
+      "arquivos_python": 7,
+      "e_critico": false
+    },
+    {
+      "nome": "domain",
+      "caminho": "mappers\\domain",
+      "arquivos_python": 7,
+      "e_critico": false
+    },
+    {
+      "nome": "database",
+      "caminho": "scanning\\database",
+      "arquivos_python": 7,
+      "e_critico": false
+    },
+    {
+      "nome": "reports",
+      "caminho": "static\\reports",
+      "arquivos_python": 0,
+      "e_critico": false
+    },
+    {
+      "nome": "agendamentos",
+      "caminho": "uploads\\agendamentos",
+      "arquivos_python": 0,
+      "e_critico": false
+    },
+    {
+      "nome": "faturamento",
+      "caminho": "uploads\\faturamento",
+      "arquivos_python": 0,
+      "e_critico": false
+    },
+    {
+      "nome": "separacao",
+      "caminho": "uploads\\separacao",
+      "arquivos_python": 0,
+      "e_critico": false
+    }
+  ],
+  "componentes_criticos": [
+    "analyzers",
+    "validators\\__init__.py",
+    "config\\__init__.py",
+    "scanning\\__init__.py",
+    "tools\\__init__.py",
+    "memorizers\\__init__.py",
+    "utils\\__init__.py",
+    "integration",
+    "enrichers\\__init__.py",
+    "commands",
+    "suggestions\\__init__.py",
+    "validators",
+    "mappers",
+    "providers",
+    "mappers\\__init__.py",
+    "commands\\excel\\__init__.py",
+    "processors",
+    "security\\__init__.py",
+    "__init__.py",
+    "loaders\\domain\\__init__.py",
+    "integration\\__init__.py",
+    "integration\\integration_manager.py",
+    "processors\\__init__.py",
+    "orchestrators\\main_orchestrator.py",
+    "coordinators\\domain_agents\\__init__.py",
+    "learners\\__init__.py",
+    "orchestrators\\__init__.py",
+    "mappers\\domain\\__init__.py",
+    "conversers\\__init__.py",
+    "utils",
+    "orchestrators\\orchestrator_manager.py",
+    "commands\\__init__.py",
+    "loaders\\__init__.py",
+    "scanning\\database\\__init__.py",
+    "utils\\processor_registry.py",
+    "tests\\__init__.py",
+    "providers\\__init__.py",
+    "coordinators\\__init__.py",
+    "orchestrators",
+    "analyzers\\__init__.py"
+  ],
+  "estatisticas": {
+    "total_arquivos": 196,
+    "total_diretorios": 34,
+    "total_linhas_codigo": 61958,
+    "total_bytes": 2337734,
+    "arquivos_com_classes": 146,
+    "arquivos_com_funcoes": 189,
+    "arquivos_criticos": 50,
+    "diretorios_criticos": 9,
+    "media_linhas_por_arquivo": 316.1,
+    "percentual_arquivos_criticos": 25.5
+  },
+  "recomendacoes": [
+    "📊 TESTES: Sistema grande - implementar testes automatizados"
+  ]
+}

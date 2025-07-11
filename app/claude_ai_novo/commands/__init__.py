@@ -291,6 +291,23 @@ def get_commands_info() -> Dict[str, Any]:
         'auto_discovery': AUTO_DISCOVERY_CONFIG['enabled']
     }
 
+def get_command_manager():
+    """
+    Retorna manager de comandos (AutoCommandProcessor).
+    
+    Este é o verdadeiro gerenciador de comandos do sistema, responsável por:
+    - Processamento automático de comandos naturais
+    - Detecção inteligente de comandos
+    - Validação de segurança
+    - Execução de comandos
+    - Histórico e sugestões
+    
+    Returns:
+        AutoCommandProcessor: Manager real de comandos
+    """
+    from .auto_command_processor import get_auto_command_processor
+    return get_auto_command_processor()
+
 def reset_commands_cache():
     """Limpa cache e força re-discovery"""
     global _commands_registry
@@ -336,7 +353,7 @@ if EXCEL_MINI_AVAILABLE:
 # Funções utilitárias
 __all__.extend([
     'get_commands_status', 'get_available_commands', 'get_command_registry',
-    'initialize_all_commands', 'get_commands_info', 'reset_commands_cache'
+    'initialize_all_commands', 'get_commands_info', 'get_command_manager', 'reset_commands_cache'
 ])
 
 # ====================================

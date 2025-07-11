@@ -4,7 +4,7 @@ Excel Fretes - Mini esqueleto especializado para relatórios de fretes
 Versão otimizada integrada com BaseCommand
 """
 
-from claude_ai_novo.commands.base_command import (
+from app.claude_ai_novo.commands.base_command import (
     BaseCommand, format_response_advanced, create_excel_summary,
     logging, datetime, db, current_user
 )
