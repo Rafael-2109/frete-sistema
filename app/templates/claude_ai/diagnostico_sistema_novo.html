@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}🔬 Diagnóstico Sistema Novo Claude AI{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header -->
+            <div class="card border-primary mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-microscope"></i>
+                        Diagnóstico Sistema Novo Claude AI
+                    </h3>
+                    <small>Análise completa dos componentes do sistema novo</small>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Sistema Ativo:</h5>
+                            <span class="badge badge-{% if diagnostico.sistema_ativo == 'novo' %}success{% else %}warning{% endif %} badge-lg">
+                                {{ diagnostico.sistema_ativo|upper }}
+                            </span>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Última Verificação:</h5>
+                            <small class="text-muted">{{ diagnostico.timestamp }}</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Componentes -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4><i class="fas fa-puzzle-piece"></i> Componentes do Sistema</h4>
+                </div>
+                <div class="card-body">
+                    {% if diagnostico.componentes %}
+                        <div class="row">
+                            {% for nome, status in diagnostico.componentes.items() %}
+                            <div class="col-md-6 mb-3">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6>{{ nome }}</h6>
+                                        <span class="badge badge-{% if status.startswith('✅') %}success{% else %}danger{% endif %}">
+                                            {{ status }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Nenhum componente testado ainda.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Problemas -->
+            {% if diagnostico.problemas %}
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h4><i class="fas fa-exclamation-triangle"></i> Problemas Identificados</h4>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        {% for problema in diagnostico.problemas %}
+                        <li class="list-group-item">
+                            <i class="fas fa-times text-danger"></i>
+                            {{ problema }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Recomendações -->
+            {% if diagnostico.recomendacoes %}
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h4><i class="fas fa-lightbulb"></i> Recomendações</h4>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        {% for recomendacao in diagnostico.recomendacoes %}
+                        <li class="list-group-item">
+                            <i class="fas fa-arrow-right text-info"></i>
+                            {{ recomendacao }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Teste Sistema Novo -->
+            {% if diagnostico.teste_sistema_novo %}
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h4><i class="fas fa-vial"></i> Teste Forçado Sistema Novo</h4>
+                </div>
+                <div class="card-body">
+                    <p><strong>Sucesso:</strong> 
+                        <span class="badge badge-{% if diagnostico.teste_sistema_novo.forced_activation %}success{% else %}danger{% endif %}">
+                            {{ diagnostico.teste_sistema_novo.forced_activation }}
+                        </span>
+                    </p>
+                    
+                    {% if diagnostico.teste_sistema_novo.componentes %}
+                    <h6>Componentes Testados:</h6>
+                    <div class="row">
+                        {% for nome, status in diagnostico.teste_sistema_novo.componentes.items() %}
+                        <div class="col-md-4 mb-2">
+                            <small class="{% if status.startswith('✅') %}text-success{% else %}text-danger{% endif %}">
+                                {{ nome }}: {{ status }}
+                            </small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Ações -->
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="fas fa-tools"></i> Ações Disponíveis</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <button class="btn btn-primary btn-block" onclick="recarregarDiagnostico()">
+                                <i class="fas fa-sync"></i> Recarregar Diagnóstico
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-warning btn-block" onclick="forcarSistemaNovo()">
+                                <i class="fas fa-rocket"></i> Forçar Sistema Novo
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-info btn-block" onclick="testeRapido()">
+                                <i class="fas fa-tachometer-alt"></i> Teste Rápido
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <div id="resultado-teste" class="alert" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function recarregarDiagnostico() {
+    window.location.reload();
+}
+
+function forcarSistemaNovo() {
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Forçando...';
+    btn.disabled = true;
+    
+    fetch('/claude-ai/api/forcar-sistema-novo', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        const resultado = document.getElementById('resultado-teste');
+        resultado.style.display = 'block';
+        
+        if (data.success) {
+            resultado.className = 'alert alert-success';
+            resultado.innerHTML = `
+                <h6>✅ Sistema Novo Ativado!</h6>
+                <p>Sistema ativo: <strong>${data.sistema_ativo}</strong></p>
+                <small>Recarregue a página para ver o diagnóstico completo.</small>
+            `;
+        } else {
+            resultado.className = 'alert alert-danger';
+            resultado.innerHTML = `
+                <h6>❌ Falha na Ativação</h6>
+                <p>Erro: ${data.error}</p>
+            `;
+        }
+    })
+    .catch(error => {
+        const resultado = document.getElementById('resultado-teste');
+        resultado.style.display = 'block';
+        resultado.className = 'alert alert-danger';
+        resultado.innerHTML = `<h6>❌ Erro na Requisição</h6><p>${error}</p>`;
+    })
+    .finally(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+
+function testeRapido() {
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testando...';
+    btn.disabled = true;
+    
+    fetch('/claude-ai/api/diagnostico-rapido')
+    .then(response => response.json())
+    .then(data => {
+        const resultado = document.getElementById('resultado-teste');
+        resultado.style.display = 'block';
+        resultado.className = 'alert alert-info';
+        resultado.innerHTML = `
+            <h6>⚡ Teste Rápido</h6>
+            <p>Sistema: <strong>${data.sistema_ativo}</strong></p>
+            <p>Status: <strong>${data.status}</strong></p>
+            <small>Timestamp: ${data.timestamp}</small>
+        `;
+    })
+    .catch(error => {
+        const resultado = document.getElementById('resultado-teste');
+        resultado.style.display = 'block';
+        resultado.className = 'alert alert-danger';
+        resultado.innerHTML = `<h6>❌ Erro no Teste</h6><p>${error}</p>`;
+    })
+    .finally(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+</script>
+{% endblock %} 

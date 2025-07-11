@@ -73,6 +73,13 @@ except ImportError as e:
     _response_utils_available = False
 
 try:
+    from .validation_utils import ValidationUtils, get_validation_utils
+    _validation_utils_available = True
+except ImportError as e:
+    logger.warning(f"⚠️ ValidationUtils não disponível: {e}")
+    _validation_utils_available = False
+
+try:
     from .performance_cache import PerformanceCache
     _performance_cache_available = True
 except ImportError as e:

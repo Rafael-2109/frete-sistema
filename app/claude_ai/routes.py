@@ -2960,3 +2960,76 @@ def claude_activate_experiment(experiment_name):
     except Exception as e:
         logger.error(f"❌ Erro na ativação de experimento: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@claude_ai_bp.route('/diagnostico-sistema-novo')
+@login_required
+@require_admin()
+def diagnostico_sistema_novo():
+    """🔬 Diagnóstico completo do sistema novo Claude AI"""
+    try:
+        from app.claude_transition import diagnosticar_claude_ai, get_claude_transition
+        
+        # Executar diagnóstico
+        transition = get_claude_transition()
+        diagnostico = transition.diagnosticar_sistema()
+        
+        # Tentar forçar sistema novo para teste
+        if diagnostico['sistema_ativo'] == 'antigo':
+            diagnostico_novo = transition.forcar_sistema_novo()
+            diagnostico['teste_sistema_novo'] = diagnostico_novo
+        
+        return render_template('claude_ai/diagnostico_sistema_novo.html', 
+                             diagnostico=diagnostico,
+                             user=current_user)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no diagnóstico: {e}")
+        return jsonify({
+            'erro': str(e),
+            'status': 'erro_critico'
+        }), 500
+
+@claude_ai_bp.route('/api/forcar-sistema-novo', methods=['POST'])
+@login_required
+@require_admin()
+def api_forcar_sistema_novo():
+    """🚀 API para forçar ativação do sistema novo"""
+    try:
+        from app.claude_transition import get_claude_transition
+        
+        transition = get_claude_transition()
+        diagnostico = transition.forcar_sistema_novo()
+        
+        return jsonify({
+            'success': True,
+            'sistema_ativo': transition.sistema_ativo,
+            'diagnostico': diagnostico
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao forçar sistema novo: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@claude_ai_bp.route('/api/diagnostico-rapido')
+@login_required
+def api_diagnostico_rapido():
+    """⚡ API para diagnóstico rápido (qualquer usuário)"""
+    try:
+        from app.claude_transition import get_claude_transition
+        
+        transition = get_claude_transition()
+        
+        return jsonify({
+            'sistema_ativo': transition.sistema_ativo,
+            'timestamp': __import__('datetime').datetime.now().isoformat(),
+            'status': 'ok'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'erro'
+        }), 500

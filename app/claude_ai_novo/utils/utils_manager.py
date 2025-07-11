@@ -9,8 +9,20 @@ from typing import Dict, List, Any, Optional
 from pathlib import Path
 import asyncio
 
-# from .* (removido)
-# from .* (removido)
+# Imports dos componentes
+try:
+    from .response_utils import ResponseUtils
+    _response_utils_available = True
+except ImportError:
+    _response_utils_available = False
+    ResponseUtils = None
+
+try:
+    from .validation_utils import ValidationUtils
+    _validation_utils_available = True
+except ImportError:
+    _validation_utils_available = False
+    ValidationUtils = None
 
 # Flask Context Wrapper - Implementação de fallbacks
 class FlaskContextWrapper:
@@ -58,9 +70,6 @@ class FlaskContextWrapper:
         """Verifica se Flask está disponível"""
         return self._flask_available
 
-
-
-        super().__init__()
 logger = logging.getLogger(__name__)
 
 class UtilsManager(FlaskContextWrapper):
@@ -71,6 +80,7 @@ class UtilsManager(FlaskContextWrapper):
     """
     
     def __init__(self):
+        super().__init__()
         self.logger = logging.getLogger(f"{__name__}.UtilsManager")
         self.components = {}
         self.initialized = False
@@ -82,18 +92,26 @@ class UtilsManager(FlaskContextWrapper):
         """Inicializa todos os componentes gerenciados"""
         
         try:
-                        # Inicializar ValidationUtils
+            # Inicializar ValidationUtils
             try:
-                self.components['validationutils'] = ValidationUtils()
-                self.logger.debug(f"ValidationUtils inicializado")
+                if _validation_utils_available and ValidationUtils is not None:
+                    self.components['validationutils'] = ValidationUtils()
+                    self.logger.debug(f"ValidationUtils inicializado")
+                else:
+                    self.logger.warning("ValidationUtils não disponível")
+                    self.components['validationutils'] = None
             except Exception as e:
                 self.logger.warning(f"Erro ao inicializar ValidationUtils: {e}")
                 self.components['validationutils'] = None
 
             # Inicializar ResponseUtils
             try:
-                self.components['responseutils'] = ResponseUtils()
-                self.logger.debug(f"ResponseUtils inicializado")
+                if _response_utils_available and ResponseUtils is not None:
+                    self.components['responseutils'] = ResponseUtils()
+                    self.logger.debug(f"ResponseUtils inicializado")
+                else:
+                    self.logger.warning("ResponseUtils não disponível")
+                    self.components['responseutils'] = None
             except Exception as e:
                 self.logger.warning(f"Erro ao inicializar ResponseUtils: {e}")
                 self.components['responseutils'] = None
@@ -123,6 +141,11 @@ class UtilsManager(FlaskContextWrapper):
             raise RuntimeError(f"UtilsManager não foi inicializado")
         
         try:
+            # Usar ValidationUtils se disponível
+            validator = self.components.get('validationutils')
+            if validator is not None:
+                return validator.validate(*args, **kwargs)
+            
             # Implementar lógica específica aqui
             self.logger.debug(f"Executando validate")
             
@@ -149,6 +172,11 @@ class UtilsManager(FlaskContextWrapper):
             raise RuntimeError(f"UtilsManager não foi inicializado")
         
         try:
+            # Usar ResponseUtils se disponível
+            if self.components.get('responseutils'):
+                # ResponseUtils pode ter métodos específicos
+                return {"method": "format_response", "args": args, "kwargs": kwargs}
+            
             # Implementar lógica específica aqui
             self.logger.debug(f"Executando format_response")
             
@@ -175,6 +203,10 @@ class UtilsManager(FlaskContextWrapper):
             raise RuntimeError(f"UtilsManager não foi inicializado")
         
         try:
+            # Retornar ValidationUtils se disponível
+            if self.components.get('validationutils'):
+                return self.components['validationutils']
+            
             # Implementar lógica específica aqui
             self.logger.debug(f"Executando get_validator")
             
@@ -201,6 +233,10 @@ class UtilsManager(FlaskContextWrapper):
             raise RuntimeError(f"UtilsManager não foi inicializado")
         
         try:
+            # Retornar ResponseUtils se disponível
+            if self.components.get('responseutils'):
+                return self.components['responseutils']
+            
             # Implementar lógica específica aqui
             self.logger.debug(f"Executando get_formatter")
             

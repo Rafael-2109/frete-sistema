@@ -516,7 +516,7 @@ Quando solicitado, posso ler arquivos do projeto para entender melhor o código.
             logger.info("🧠 CONSULTA SOBRE MEMÓRIA VITALÍCIA detectada")
             
             # Usar sistema de aprendizado vitalício
-            from .lifelong_learning import get_lifelong_learning
+            from app.claude_ai_novo.learners.lifelong_learning import get_lifelong_learning
             lifelong = get_lifelong_learning()
             
             # Obter estatísticas de aprendizado

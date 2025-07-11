@@ -10,18 +10,18 @@ from typing import Dict, Any, Optional, Union
 _processar_com_claude_real = None
 _get_claude_integration = None
 _get_nlp_enhanced_analyzer = None
-_ClaudeRealIntegration = None
+_ExternalAPIIntegration = None
 
 try:
     # Tentar imports do sistema modular
-    from app.claude_ai_novo.integration.claude.claude_integration import ClaudeRealIntegration, get_claude_integration, processar_com_claude_real
+    from app.claude_ai_novo.integration.external_api_integration import ExternalAPIIntegration, get_external_api_integration, processar_com_claude_real
     from app.claude_ai_novo.analyzers.nlp_enhanced_analyzer import get_nlp_enhanced_analyzer
     
     # Armazenar nas variáveis globais
     _processar_com_claude_real = processar_com_claude_real
-    _get_claude_integration = get_claude_integration
+    _get_claude_integration = get_external_api_integration
     _get_nlp_enhanced_analyzer = get_nlp_enhanced_analyzer
-    _ClaudeRealIntegration = ClaudeRealIntegration
+    _ExternalAPIIntegration = ExternalAPIIntegration
     
 except ImportError as e:
     # Fallback para compatibilidade
@@ -39,14 +39,14 @@ except ImportError as e:
     def _get_nlp_enhanced_analyzer_fallback():
         return None
     
-    class _ClaudeRealIntegrationFallback:
+    class _ExternalAPIIntegrationFallback:
         pass
     
     # Atribuir fallbacks
     _processar_com_claude_real = _processar_com_claude_real_fallback
     _get_claude_integration = _get_claude_integration_fallback
     _get_nlp_enhanced_analyzer = _get_nlp_enhanced_analyzer_fallback
-    _ClaudeRealIntegration = _ClaudeRealIntegrationFallback
+    _ExternalAPIIntegration = _ExternalAPIIntegrationFallback
 
 # Função principal de compatibilidade
 def processar_consulta_modular(consulta: str, user_context: Optional[Dict[str, Any]] = None) -> str:
@@ -93,10 +93,14 @@ def get_nlp_enhanced_analyzer():
     return None
 
 # Classe principal (para compatibilidade)
-ClaudeRealIntegration = _ClaudeRealIntegration
+ExternalAPIIntegration = _ExternalAPIIntegration
+
+# Alias para compatibilidade com código legado
+ClaudeRealIntegration = _ExternalAPIIntegration
 
 __all__ = [
-    'ClaudeRealIntegration',
+    'ExternalAPIIntegration',
+    'ClaudeRealIntegration',  # Alias para compatibilidade
     'get_claude_integration', 
     'processar_com_claude_real',
     'processar_consulta_modular',

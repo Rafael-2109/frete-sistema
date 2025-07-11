@@ -1,12 +1,12 @@
 """
-🚀 PERFORMANCE CACHE - Sistema de Cache para Readers
+🚀 PERFORMANCE CACHE - Sistema de Cache para Scanners
 ==================================================
 
-Módulo responsável por otimizar a performance dos readers através
+Módulo responsável por otimizar a performance dos scanners através
 de cache inteligente e reutilização de instâncias.
 
 Funcionalidades:
-- Singleton pattern para readers
+- Singleton pattern para scanners
 - Cache de resultados com TTL
 - Lazy loading de dados
 - Pool de conexões
@@ -20,11 +20,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class ReadersCache:
+class ScannersCache:
     """
-    Sistema de cache global para otimização de performance dos readers.
+    Sistema de cache global para otimização de performance dos scanners.
     
-    Implementa padrão Singleton para evitar múltiplas instâncias dos readers
+    Implementa padrão Singleton para evitar múltiplas instâncias dos scanners
     e cache de resultados para evitar reprocessamento desnecessário.
     """
     
@@ -43,70 +43,70 @@ class ReadersCache:
         if self._initialized:
             return
             
-        self._readers_pool = {}
+        self._scanners_pool = {}
         self._results_cache = {}
         self._cache_timestamps = {}
         self._cache_ttl = 300  # 5 minutos
         self._access_stats = {
             'hits': 0,
             'misses': 0,
-            'readers_created': 0
+            'scanners_created': 0
         }
         self._initialized = True
         
-        logger.info("🚀 ReadersCache inicializado")
+        logger.info("🚀 ScannersCache inicializado")
     
-    def get_readme_reader(self):
+    def get_readme_scanner(self):
         """
-        Obtém instância do ReadmeReader usando pool singleton.
+        Obtém instância do ReadmeScanner usando pool singleton.
         
         Returns:
-            Instância cached do ReadmeReader ou None se não disponível
+            Instância cached do ReadmeScanner ou None se não disponível
         """
-        if 'readme_reader' not in self._readers_pool:
+        if 'readme_scanner' not in self._scanners_pool:
             try:
-                from app.claude_ai_novo.readme_reader import ReadmeReader
+                from app.claude_ai_novo.scanning.readme_scanner import ReadmeScanner
                 
-                reader = ReadmeReader()
-                if reader.esta_disponivel():
-                    self._readers_pool['readme_reader'] = reader
-                    self._access_stats['readers_created'] += 1
-                    logger.debug("📄 ReadmeReader criado e adicionado ao pool")
+                scanner = ReadmeScanner()
+                if scanner.esta_disponivel():
+                    self._scanners_pool['readme_scanner'] = scanner
+                    self._access_stats['scanners_created'] += 1
+                    logger.debug("📄 ReadmeScanner criado e adicionado ao pool")
                 else:
-                    logger.debug("📄 ReadmeReader não disponível")
+                    logger.debug("📄 ReadmeScanner não disponível")
                     return None
                     
             except Exception as e:
-                logger.error(f"❌ Erro ao criar ReadmeReader: {e}")
+                logger.error(f"❌ Erro ao criar ReadmeScanner: {e}")
                 return None
         
-        return self._readers_pool.get('readme_reader')
+        return self._scanners_pool.get('readme_scanner')
     
-    def get_database_reader(self):
+    def get_database_scanner(self):
         """
-        Obtém instância do DatabaseReader usando pool singleton.
+        Obtém instância do DatabaseScanner usando pool singleton.
         
         Returns:
-            Instância cached do DatabaseReader ou None se não disponível
+            Instância cached do DatabaseScanner ou None se não disponível
         """
-        if 'database_reader' not in self._readers_pool:
+        if 'database_scanner' not in self._scanners_pool:
             try:
-                from app.claude_ai_novo.database_reader import DatabaseReader
+                from app.claude_ai_novo.scanning.database_scanner import DatabaseScanner
                 
-                reader = DatabaseReader()
-                if reader.esta_disponivel():
-                    self._readers_pool['database_reader'] = reader
-                    self._access_stats['readers_created'] += 1
-                    logger.debug("📊 DatabaseReader criado e adicionado ao pool")
+                scanner = DatabaseScanner()
+                if scanner.esta_disponivel():
+                    self._scanners_pool['database_scanner'] = scanner
+                    self._access_stats['scanners_created'] += 1
+                    logger.debug("📊 DatabaseScanner criado e adicionado ao pool")
                 else:
-                    logger.debug("📊 DatabaseReader não disponível")
+                    logger.debug("📊 DatabaseScanner não disponível")
                     return None
                     
             except Exception as e:
-                logger.error(f"❌ Erro ao criar DatabaseReader: {e}")
+                logger.error(f"❌ Erro ao criar DatabaseScanner: {e}")
                 return None
         
-        return self._readers_pool.get('database_reader')
+        return self._scanners_pool.get('database_scanner')
     
     def get_cached_result(self, cache_key: str) -> Optional[Any]:
         """
@@ -185,9 +185,9 @@ class ReadersCache:
             'hits': self._access_stats['hits'],
             'misses': self._access_stats['misses'],
             'hit_rate_percent': round(hit_rate, 1),
-            'readers_in_pool': len(self._readers_pool),
+            'scanners_in_pool': len(self._scanners_pool),
             'cached_results': len(self._results_cache),
-            'readers_created_total': self._access_stats['readers_created']
+            'scanners_created_total': self._access_stats['scanners_created']
         }
     
     def clear_cache(self) -> None:
@@ -198,46 +198,46 @@ class ReadersCache:
         
         logger.info(f"🧹 Cache limpo: {cleared_count} entradas removidas")
     
-    def invalidate_reader(self, reader_type: str) -> None:
+    def invalidate_scanner(self, scanner_type: str) -> None:
         """
-        Invalida e remove reader específico do pool.
+        Invalida e remove scanner específico do pool.
         
         Args:
-            reader_type: Tipo do reader ('readme_reader' ou 'database_reader')
+            scanner_type: Tipo do scanner ('readme_scanner' ou 'database_scanner')
         """
-        if reader_type in self._readers_pool:
-            del self._readers_pool[reader_type]
-            logger.debug(f"🔄 Reader {reader_type} invalidado e removido do pool")
+        if scanner_type in self._scanners_pool:
+            del self._scanners_pool[scanner_type]
+            logger.debug(f"🔄 Scanner {scanner_type} invalidado e removido do pool")
 
 # Instância global singleton
-_cache_instance = ReadersCache()
+_cache_instance = ScannersCache()
 
-def get_cache() -> ReadersCache:
+def get_cache() -> ScannersCache:
     """
     Obtém instância global do cache.
     
     Returns:
-        Instância singleton do ReadersCache
+        Instância singleton do ScannersCache
     """
     return _cache_instance
 
-def cached_readme_reader():
+def cached_readme_scanner():
     """
-    Obtém ReadmeReader com cache otimizado.
+    Obtém ReadmeScanner com cache otimizado.
     
     Returns:
-        Instância cached do ReadmeReader
+        Instância cached do ReadmeScanner
     """
-    return get_cache().get_readme_reader()
+    return get_cache().get_readme_scanner
 
-def cached_database_reader():
+def cached_database_scanner():
     """
-    Obtém DatabaseReader com cache otimizado.
+    Obtém DatabaseScanner com cache otimizado.
     
     Returns:
-        Instância cached do DatabaseReader  
+        Instância cached do DatabaseScanner  
     """
-    return get_cache().get_database_reader()
+    return get_cache().get_database_scanner()
 
 def cached_result(cache_key: str, compute_func=None, *args, **kwargs):
     """

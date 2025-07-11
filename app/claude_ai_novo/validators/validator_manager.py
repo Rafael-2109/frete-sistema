@@ -58,7 +58,7 @@ class ValidatorManager:
             self.logger.warning(f"SemanticValidator não disponível: {e}")
         
         try:
-            from .data_validator import ValidationUtils as DataValidator
+            from ..utils.validation_utils import ValidationUtils as DataValidator
             self.validators['data'] = DataValidator()
             self.logger.info("✅ DataValidator carregado")
         except ImportError as e:
