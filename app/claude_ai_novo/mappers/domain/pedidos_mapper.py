@@ -160,7 +160,11 @@ class PedidosMapper(BaseMapper):
             filters["periodo"] = "mes"
         
         # Detectar UF
-        ufs = ["SP", "RJ", "MG", "RS", "PR", "SC", "BA", "GO", "PE", "CE"]
+        ufs = [
+            'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+            'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+            'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+        ]
         for uf in ufs:
             if uf.lower() in query_lower:
                 filters["uf_destino"] = uf

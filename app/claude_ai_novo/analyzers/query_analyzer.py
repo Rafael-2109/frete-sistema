@@ -174,11 +174,15 @@ class QueryAnalyzer:
         except Exception as e:
             logger.debug(f"Erro na detecção geográfica: {e}")
             # Fallback para lista reduzida
-            estados_basicos = ['sp', 'rj', 'mg', 'rs', 'pr', 'sc', 'ba', 'go']
+            estados_basicos = [
+            'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+            'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+            'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+        ]
             for estado in estados_basicos:
                 if f" {estado} " in f" {query.lower()} ":
                     entities.append(f"estado:{estado.upper()}")
-        
+      
         return entities
     
     def _detect_temporal_patterns(self, query: str) -> List[str]:

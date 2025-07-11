@@ -872,7 +872,7 @@ Não há entregas pendentes de agendamento no momento!
                 )
             
             # 🧠 APLICAR CONHECIMENTO APRENDIDO
-            from app.claude_ai_novo.intelligence.learning.learning_core import get_lifelong_learning
+            from app.claude_ai_novo.learners.learning_core import get_lifelong_learning
             lifelong = get_lifelong_learning()
             conhecimento_previo = lifelong.aplicar_conhecimento(consulta)
             
