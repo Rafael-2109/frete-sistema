@@ -7255,13 +7255,13 @@
           "type": "from_import",
           "module": "specialist_agents",
           "names": [
-            "SpecialistAgents"
+            "SpecialistAgent"
           ],
           "line": 103,
           "level": 1
         }
       ],
-      "used_names": "{'query', '', 'ValueError', 'getattr', 'DOMAIN_AGENT', 'CoordinatorManager', 'domain_keywords', 'list', 'class_name', 'keywords', 'query_lower', 'SPECIALIST', 'metrics', 'datetime', '_coordinator_manager', 'manager', 'logger', 'result', 'ImportError', '__name__', 'logging', 'Optional', 'PROCESSOR', 'ProcessorCoordinator', 'Exception', 'word', 'e', 'keyword', 'get_intelligence_coordinator', '__import__', 'bool', 'self', 'any', 'get_coordinator_manager', 'coordinator_name', 'SpecialistAgents', 'str', 'coordinator', 'Any', 'INTELLIGENCE', 'domain_types', 'module', 'len', 'Dict', 'Enum', 'preferred_coordinator', 'module_name', 'agent', 'context', 'agent_class', 'domain'}",
+      "used_names": "{'query', '', 'ValueError', 'getattr', 'DOMAIN_AGENT', 'CoordinatorManager', 'domain_keywords', 'list', 'class_name', 'keywords', 'query_lower', 'SPECIALIST', 'metrics', 'datetime', '_coordinator_manager', 'manager', 'logger', 'result', 'ImportError', '__name__', 'logging', 'Optional', 'PROCESSOR', 'ProcessorCoordinator', 'Exception', 'word', 'e', 'keyword', 'get_intelligence_coordinator', '__import__', 'bool', 'self', 'any', 'get_coordinator_manager', 'coordinator_name', 'SpecialistAgent', 'str', 'coordinator', 'Any', 'INTELLIGENCE', 'domain_types', 'module', 'len', 'Dict', 'Enum', 'preferred_coordinator', 'module_name', 'agent', 'context', 'agent_class', 'domain'}",
       "unused_imports": [
         {
           "type": "from_import",
@@ -7314,7 +7314,7 @@
           "type": "from_import",
           "module": "specialist_agents",
           "names": [
-            "SpecialistAgents"
+            "SpecialistAgent"
           ],
           "line": 103,
           "level": 1
@@ -7749,13 +7749,13 @@
           "type": "from_import",
           "module": "specialist_agents",
           "names": [
-            "SpecialistAgents"
+            "SpecialistAgent"
           ],
           "line": 72,
           "level": 1
         }
       ],
-      "used_names": "{'query', 'processors', 'CoordinatorManager', 'list', 'specialist_coordinator', 'get_processor_coordinator', 'coordinators', '__all__', 'processor_coordinator', 'manager', 'logger', 'ImportError', 'intelligence_coordinator', '__name__', 'logging', 'Optional', 'ProcessorCoordinator', 'e', 'Exception', 'get_specialist_coordinator', 'get_intelligence_coordinator', 'dict', 'get_coordinator_manager', 'IntelligenceCoordinator', 'SpecialistAgents', 'str', 'coordinator', 'Any', 'data', 'operation_type', 'coordinator_manager', 'kwargs', 'context', 'domain'}",
+      "used_names": "{'query', 'processors', 'CoordinatorManager', 'list', 'specialist_coordinator', 'get_processor_coordinator', 'coordinators', '__all__', 'processor_coordinator', 'manager', 'logger', 'ImportError', 'intelligence_coordinator', '__name__', 'logging', 'Optional', 'ProcessorCoordinator', 'e', 'Exception', 'get_specialist_coordinator', 'get_intelligence_coordinator', 'dict', 'get_coordinator_manager', 'IntelligenceCoordinator', 'SpecialistAgent', 'str', 'coordinator', 'Any', 'data', 'operation_type', 'coordinator_manager', 'kwargs', 'context', 'domain'}",
       "unused_imports": [],
       "missing_imports": [],
       "broken_imports": [
@@ -7790,7 +7790,7 @@
           "type": "from_import",
           "module": "specialist_agents",
           "names": [
-            "SpecialistAgents"
+            "SpecialistAgent"
           ],
           "line": 72,
           "level": 1

@@ -112,6 +112,37 @@ class ClaudeAIConfig:
     def is_debug(self) -> bool:
         """Verifica se está em modo debug."""
         return is_debug_mode()
+    
+    def get_anthropic_api_key(self) -> Optional[str]:
+        """
+        Obtém a chave da API Anthropic.
+        
+        Returns:
+            Chave da API ou None se não configurada
+        """
+        try:
+            # Tentar obter de variável de ambiente primeiro
+            import os
+            api_key = os.environ.get('ANTHROPIC_API_KEY')
+            if api_key:
+                return api_key
+            
+            # Fallback para sistema de configuração
+            api_key = get_config('ai.anthropic_api_key', None)
+            if api_key:
+                return api_key
+            
+            # Fallback para configuração Claude
+            api_key = get_config('claude.api_key', None)
+            if api_key:
+                return api_key
+            
+            self.logger.warning("⚠️ ANTHROPIC_API_KEY não configurada - usando modo simulado")
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao obter API key: {e}")
+            return None
 
 def get_config(key: str, default: Any = None, profile: Optional[str] = None) -> Any:
     """

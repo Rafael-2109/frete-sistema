@@ -25,7 +25,7 @@ class CoordinatorManager:
     Gerenciador central que coordena todos os coordenadores do sistema.
     
     Responsabilidades:
-    - Coordenar IntelligenceCoordinator, ProcessorCoordinator e SpecialistAgents
+    - Coordenar IntelligenceCoordinator, ProcessorCoordinator e SpecialistAgent
     - Gerenciar Domain Agents especializados
     - Distribuir tarefas inteligentemente
     - Monitorar performance dos coordenadores
@@ -100,8 +100,8 @@ class CoordinatorManager:
         """Carrega o Specialist Coordinator."""
         try:
             # Nota: specialist_agents.py deveria ser specialist_coordinator.py
-            from .specialist_agents import SpecialistAgents
-            coordinator = SpecialistAgents()
+            from .specialist_agents import SpecialistAgent
+            coordinator = SpecialistAgent()
             self.coordinators['specialist'] = coordinator
             self.performance_metrics['specialist'] = {
                 'loaded_at': datetime.now().isoformat(),

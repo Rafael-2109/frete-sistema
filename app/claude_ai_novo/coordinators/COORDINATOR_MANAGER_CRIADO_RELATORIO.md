@@ -45,7 +45,7 @@ class CoordinatorManager:
     Gerenciador central que coordena todos os coordenadores do sistema.
     
     Responsabilidades:
-    - Coordenar IntelligenceCoordinator, ProcessorCoordinator e SpecialistAgents
+    - Coordenar IntelligenceCoordinator, ProcessorCoordinator e SpecialistAgent
     - Gerenciar Domain Agents especializados  
     - Distribuir tarefas inteligentemente
     - Monitorar performance dos coordenadores

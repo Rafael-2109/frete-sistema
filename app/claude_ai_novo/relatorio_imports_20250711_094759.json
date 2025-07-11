@@ -3202,7 +3202,7 @@
         "import": {
           "type": "from_import",
           "module": "specialist_agents",
-          "name": "SpecialistAgents",
+          "name": "SpecialistAgent",
           "alias": null,
           "line": 103,
           "level": 1
@@ -3449,7 +3449,7 @@
         "import": {
           "type": "from_import",
           "module": "specialist_agents",
-          "name": "SpecialistAgents",
+          "name": "SpecialistAgent",
           "alias": null,
           "line": 72,
           "level": 1

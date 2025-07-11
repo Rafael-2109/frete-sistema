@@ -3511,7 +3511,7 @@
         "Enum",
         "get_intelligence_coordinator",
         "ProcessorCoordinator",
-        "SpecialistAgents"
+        "SpecialistAgent"
       ],
       "coordinators\\intelligence_coordinator.py": [
         ".analyzers",

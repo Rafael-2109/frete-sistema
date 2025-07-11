@@ -1,0 +1,83 @@
+{
+  "timestamp": "2025-07-11T17:19:16.239460",
+  "validator": "ValidadorSistemaReal v1.0",
+  "environment": "REAL",
+  "tests": {
+    "import_flask_app": {
+      "status": "FAIL",
+      "details": "Import test for flask_app"
+    },
+    "import_anthropic_config": {
+      "status": "FAIL",
+      "details": "Import test for anthropic_config"
+    },
+    "import_specialist_agents": {
+      "status": "FAIL",
+      "details": "Import test for specialist_agents"
+    },
+    "import_domain_agents": {
+      "status": "FAIL",
+      "details": "Import test for domain_agents"
+    },
+    "import_query_processor": {
+      "status": "PASS",
+      "details": "Import test for query_processor"
+    },
+    "import_response_processor": {
+      "status": "FAIL",
+      "details": "Import test for response_processor"
+    },
+    "basic_imports": {
+      "status": "FAIL",
+      "timestamp": "2025-07-11T17:19:34.461821"
+    },
+    "async_issues": {
+      "status": "PASS",
+      "timestamp": "2025-07-11T17:19:34.461821"
+    },
+    "production_health": {
+      "status": "PASS",
+      "timestamp": "2025-07-11T17:19:34.529822"
+    }
+  },
+  "summary": {
+    "total_tests": 3,
+    "total": 3,
+    "passed": 2,
+    "failed": 1,
+    "score": 66.66666666666666,
+    "classification": "⚠️ ACEITÁVEL",
+    "critical_issues": 5,
+    "health_status": "WARNING"
+  },
+  "critical_errors": [],
+  "production_issues": [
+    {
+      "issue": "flask_app_import",
+      "error": "'utf-8' codec can't decode byte 0xe3 in position 82: invalid continuation byte",
+      "impact": "CRITICAL - Sistema não pode inicializar"
+    },
+    {
+      "issue": "missing_get_anthropic_api_key",
+      "error": "ClaudeAIConfig missing get_anthropic_api_key method",
+      "impact": "HIGH - Claude API não pode ser inicializada",
+      "log_evidence": "'ClaudeAIConfig' object has no attribute 'get_anthropic_api_key'"
+    },
+    {
+      "issue": "missing_specialist_agents",
+      "error": "cannot import name 'SpecialistAgent' from 'app.claude_ai_novo.coordinators.specialist_agents' (C:\\Users\\rafael.nascimento\\Desktop\\Sistema Online\\frete_sistema\\app\\claude_ai_novo\\coordinators\\specialist_agents.py)",
+      "impact": "MEDIUM - Agentes especializados não disponíveis",
+      "log_evidence": "cannot import name 'SpecialistAgent'"
+    },
+    {
+      "issue": "domain_agents_error",
+      "error": "'EmbarquesAgent' object has no attribute 'agent_type'",
+      "impact": "MEDIUM - Erro nos agentes de domínio"
+    },
+    {
+      "issue": "response_processor_error",
+      "error": "cannot import name 'ResponseProcessor' from 'app.claude_ai_novo.utils.base_classes' (C:\\Users\\rafael.nascimento\\Desktop\\Sistema Online\\frete_sistema\\app\\claude_ai_novo\\utils\\base_classes.py)",
+      "impact": "HIGH - ResponseProcessor não funciona"
+    }
+  ]
+}

@@ -69,8 +69,8 @@ def get_specialist_coordinator() -> Optional[Any]:
         Instância do SpecialistCoordinator ou None
     """
     try:
-        from .specialist_agents import SpecialistAgents
-        return SpecialistAgents()
+        from .specialist_agents import SpecialistAgent
+        return SpecialistAgent()    
     except ImportError as e:
         logger.warning(f"⚠️ Não foi possível carregar specialist_coordinator: {e}")
         return None

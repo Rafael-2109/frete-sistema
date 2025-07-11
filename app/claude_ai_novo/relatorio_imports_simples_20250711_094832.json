@@ -1710,7 +1710,7 @@
       },
       {
         "file": "coordinators\\coordinator_manager.py",
-        "import": "from .specialist_agents import SpecialistAgents",
+        "import": "from .specialist_agents import SpecialistAgent",
         "line": 103,
         "error": "Módulo relativo 'specialist_agents' não encontrado",
         "type": "relative_import_error"
@@ -1822,7 +1822,7 @@
       },
       {
         "file": "coordinators\\__init__.py",
-        "import": "from .specialist_agents import SpecialistAgents",
+        "import": "from .specialist_agents import SpecialistAgent",
         "line": 72,
         "error": "Módulo relativo 'specialist_agents' não encontrado",
         "type": "relative_import_error"
