@@ -177,6 +177,67 @@ class ValidatorManager:
                 'valid': False
             }
     
+    def validate_agent_responses(self, agent_responses: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Valida consistência entre respostas de agentes usando CriticValidator.
+        
+        Args:
+            agent_responses: Lista de respostas dos agentes
+            
+        Returns:
+            Resultado da validação de consistência
+        """
+        try:
+            validator = self.validators.get('critic')
+            if validator:
+                # Usar o método principal do CriticValidator para validar respostas
+                if hasattr(validator, 'validate_responses'):
+                    # Executar validação assíncrona de forma síncrona
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Se já há um loop rodando, usar task
+                        task = loop.create_task(validator.validate_responses(agent_responses))
+                        # Aguardar um pouco para ver se completa rapidamente
+                        try:
+                            result = task.result() if task.done() else None
+                            if result is None:
+                                return {
+                                    'error': 'Validação assíncrona não completou',
+                                    'valid': False,
+                                    'responses_count': len(agent_responses)
+                                }
+                            return result
+                        except Exception:
+                            return {
+                                'error': 'Erro na execução assíncrona',
+                                'valid': False,
+                                'responses_count': len(agent_responses)
+                            }
+                    else:
+                        # Executar em novo loop
+                        result = loop.run_until_complete(validator.validate_responses(agent_responses))
+                        return result
+                else:
+                    return {
+                        'error': 'Método validate_responses não disponível',
+                        'valid': False,
+                        'responses_count': len(agent_responses)
+                    }
+            else:
+                return {
+                    'error': 'CriticValidator não disponível',
+                    'valid': False,
+                    'responses_count': len(agent_responses)
+                }
+        except Exception as e:
+            self.logger.error(f"❌ Erro na validação de respostas dos agentes: {e}")
+            return {
+                'error': str(e),
+                'valid': False,
+                'responses_count': len(agent_responses) if agent_responses else 0
+            }
+    
     def validate_structural_integrity(self, structure: Dict[str, Any]) -> Dict[str, Any]:
         """
         Executa validação de integridade estrutural.
@@ -311,7 +372,7 @@ class ValidatorManager:
             if 'data' in self.validators:
                 status['capabilities'].extend(['data_structure', 'statistical_analysis'])
             if 'critic' in self.validators:
-                status['capabilities'].extend(['critical_validation', 'agent_criticism'])
+                status['capabilities'].extend(['critical_validation', 'agent_criticism', 'agent_responses_validation'])
             if 'structural' in self.validators:
                 status['capabilities'].extend(['structural_integrity', 'ai_validation'])
             
@@ -369,6 +430,9 @@ class ValidatorManager:
             
             if target_type in ['critical', 'mapping', 'general']:
                 validations_to_run.append(('critical_rules', self.validate_critical_rules, [target]))
+            
+            if target_type in ['agent_responses', 'multi_agent', 'general'] and 'agent_responses' in target:
+                validations_to_run.append(('agent_responses', self.validate_agent_responses, [target['agent_responses']]))
             
             # Sempre executar validação de consistência
             validations_to_run.append(('consistency', self.validate_consistency, []))

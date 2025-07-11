@@ -57,6 +57,15 @@ class MainOrchestrator:
         # Lazy loading do SuggestionsManager (SUGESTÕES INTELIGENTES)
         self._suggestions_manager = None
         
+        # Lazy loading do ToolsManager (GERENCIAMENTO DE FERRAMENTAS)
+        self._tools_manager = None
+        
+        # Lazy loading do BaseCommand (COMANDOS BÁSICOS)
+        self._base_command = None
+        
+        # Lazy loading do ResponseProcessor (PROCESSAMENTO DE RESPOSTAS)
+        self._response_processor = None
+        
         self._setup_default_workflows()
     
     @property
@@ -110,6 +119,45 @@ class MainOrchestrator:
                 logger.warning(f"⚠️ SuggestionsManager não disponível: {e}")
                 self._suggestions_manager = False  # Marcar como indisponível
         return self._suggestions_manager if self._suggestions_manager is not False else None
+    
+    @property
+    def tools_manager(self):
+        """Lazy loading do ToolsManager"""
+        if self._tools_manager is None:
+            try:
+                from app.claude_ai_novo.tools.tools_manager import get_toolsmanager
+                self._tools_manager = get_toolsmanager()
+                logger.info("🔧 ToolsManager integrado ao MainOrchestrator")
+            except ImportError as e:
+                logger.warning(f"⚠️ ToolsManager não disponível: {e}")
+                self._tools_manager = False  # Marcar como indisponível
+        return self._tools_manager if self._tools_manager is not False else None
+    
+    @property
+    def base_command(self):
+        """Lazy loading do BaseCommand"""
+        if self._base_command is None:
+            try:
+                from app.claude_ai_novo.commands.base_command import BaseCommand
+                self._base_command = BaseCommand()
+                logger.info("⚡ BaseCommand integrado ao MainOrchestrator")
+            except ImportError as e:
+                logger.warning(f"⚠️ BaseCommand não disponível: {e}")
+                self._base_command = False  # Marcar como indisponível
+        return self._base_command if self._base_command is not False else None
+    
+    @property
+    def response_processor(self):
+        """Lazy loading do ResponseProcessor"""
+        if self._response_processor is None:
+            try:
+                from app.claude_ai_novo.processors.response_processor import get_responseprocessor
+                self._response_processor = get_responseprocessor()
+                logger.info("📝 ResponseProcessor integrado ao MainOrchestrator")
+            except ImportError as e:
+                logger.warning(f"⚠️ ResponseProcessor não disponível: {e}")
+                self._response_processor = False  # Marcar como indisponível
+        return self._response_processor if self._response_processor is not False else None
     
     def _setup_default_workflows(self):
         """Configura workflows padrão"""
@@ -221,6 +269,54 @@ class MainOrchestrator:
                 dependencies=["analyze_context"]
             )
         ])
+        
+        # NOVO: Workflow de comandos básicos
+        self.add_workflow("basic_commands", [
+            OrchestrationStep(
+                name="validate_command",
+                component="base_command",
+                method="validate_input",
+                parameters={"consulta": "{query}"}
+            ),
+            OrchestrationStep(
+                name="extract_filters",
+                component="base_command",
+                method="extract_filters_advanced",
+                parameters={"consulta": "{query}"},
+                dependencies=["validate_command"]
+            ),
+            OrchestrationStep(
+                name="execute_command",
+                component="base_command",
+                method="process_command",
+                parameters={"consulta": "{query}", "filtros": "{extract_filters_result}"},
+                dependencies=["extract_filters"]
+            )
+        ])
+        
+        # NOVO: Workflow de processamento de respostas
+        self.add_workflow("response_processing", [
+            OrchestrationStep(
+                name="analyze_query",
+                component="analyzers",
+                method="analyze_intention",
+                parameters={"query": "{query}"}
+            ),
+            OrchestrationStep(
+                name="generate_response",
+                component="response_processor",
+                method="gerar_resposta_otimizada",
+                parameters={"consulta": "{query}", "analise": "{analyze_query_result}", "user_context": "{context}"},
+                dependencies=["analyze_query"]
+            ),
+            OrchestrationStep(
+                name="validate_response",
+                component="validators",
+                method="validate_result",
+                parameters={"result": "{generate_response_result}"},
+                dependencies=["generate_response"]
+            )
+        ])
     
     def register_component(self, name: str, component: Any):
         """
@@ -282,6 +378,10 @@ class MainOrchestrator:
                 result = self._execute_natural_commands(data)
             elif workflow_name == "intelligent_suggestions" or operation_type == "intelligent_suggestions":
                 result = self._execute_intelligent_suggestions(data)
+            elif workflow_name == "basic_commands" or operation_type == "basic_command":
+                result = self._execute_basic_commands(data)
+            elif workflow_name == "response_processing" or operation_type == "response_processing":
+                result = self._execute_response_processing(data)
             # Fallback para workflows customizados
             else:
                 result = self._execute_generic_workflow(workflow_name, data)
@@ -529,6 +629,133 @@ class MainOrchestrator:
                 }
             }
     
+    def _execute_basic_commands(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Executa comandos básicos usando BaseCommand"""
+        try:
+            result = {
+                "workflow": "basic_commands",
+                "operation_type": "basic_command",
+                "success": True,
+                "command_result": None,
+                "filters_extracted": None
+            }
+            
+            # NOVA funcionalidade: Comandos básicos
+            if self.base_command:
+                query = data.get("query", data.get("consulta", ""))
+                
+                # Validar entrada
+                if not self.base_command._validate_input(query):
+                    return {
+                        "workflow": "basic_commands",
+                        "success": False,
+                        "error": "Entrada inválida",
+                        "query": query
+                    }
+                
+                # Extrair filtros
+                filters = self.base_command._extract_filters_advanced(query)
+                result["filters_extracted"] = filters
+                
+                # Sanitizar entrada
+                sanitized_query = self.base_command._sanitize_input(query)
+                
+                # Preparar resultado do comando
+                command_result = {
+                    "original_query": query,
+                    "sanitized_query": sanitized_query,
+                    "filters": filters,
+                    "command_type": self.base_command.__class__.__name__,
+                    "processed_at": datetime.now().isoformat()
+                }
+                
+                result["command_result"] = command_result
+                logger.info(f"⚡ Comando básico processado: {len(filters)} filtros extraídos")
+            else:
+                logger.warning("⚠️ BaseCommand não disponível - processamento básico")
+                result["command_result"] = {
+                    "status": "no_base_command",
+                    "message": "BaseCommand não disponível",
+                    "query": data.get("query", "")
+                }
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no processamento de comandos básicos: {e}")
+            return {
+                "workflow": "basic_commands",
+                "success": False,
+                "error": str(e),
+                "query": data.get("query", "")
+            }
+    
+    def _execute_response_processing(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Executa processamento de respostas usando ResponseProcessor"""
+        try:
+            result = {
+                "workflow": "response_processing",
+                "operation_type": "response_processing",
+                "success": True,
+                "analysis_result": None,
+                "response_result": None,
+                "validation_result": None
+            }
+            
+            # NOVA funcionalidade: Processamento de respostas
+            if self.response_processor:
+                query = data.get("query", "")
+                context = data.get("context", {})
+                
+                # Análise da consulta (usar analyzers se disponível)
+                analysis = {"tipo_consulta": "geral", "dominio": "sistema"}
+                if hasattr(self, 'components') and 'analyzers' in self.components:
+                    try:
+                        analysis = self.components['analyzers'].analyze_intention(query=query)
+                    except Exception as e:
+                        logger.warning(f"Erro na análise: {e}")
+                
+                result["analysis_result"] = analysis
+                
+                # Gerar resposta otimizada
+                response = self.response_processor.gerar_resposta_otimizada(
+                    consulta=query,
+                    analise=analysis,
+                    user_context=context
+                )
+                
+                result["response_result"] = response
+                logger.info(f"📝 Resposta processada: {len(response)} caracteres")
+                
+                # Validar resposta (usar validators se disponível)
+                validation = {"valid": True, "status": "validated"}
+                if hasattr(self, 'components') and 'validators' in self.components:
+                    try:
+                        validation = self.components['validators'].validate_result(result=response)
+                    except Exception as e:
+                        logger.warning(f"Erro na validação: {e}")
+                
+                result["validation_result"] = validation
+                
+            else:
+                logger.warning("⚠️ ResponseProcessor não disponível - processamento básico")
+                result["response_result"] = {
+                    "status": "no_response_processor",
+                    "message": "ResponseProcessor não disponível",
+                    "query": data.get("query", "")
+                }
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no processamento de respostas: {e}")
+            return {
+                "workflow": "response_processing",
+                "success": False,
+                "error": str(e),
+                "query": data.get("query", "")
+            }
+    
     def _execute_analyze_query(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Executa análise de consulta (funcionalidade existente preservada)"""
         return {
@@ -766,6 +993,24 @@ class MainOrchestrator:
                     self.components[component_name] = self.suggestions_manager
                 else:
                     self.components[component_name] = MockComponent("suggestions")
+            elif component_name == "tools":
+                # NOVO: Carregar ToolsManager
+                if self.tools_manager:
+                    self.components[component_name] = self.tools_manager
+                else:
+                    self.components[component_name] = MockComponent("tools")
+            elif component_name == "base_command":
+                # NOVO: Carregar BaseCommand
+                if self.base_command:
+                    self.components[component_name] = self.base_command
+                else:
+                    self.components[component_name] = MockComponent("base_command")
+            elif component_name == "response_processor":
+                # NOVO: Carregar ResponseProcessor
+                if self.response_processor:
+                    self.components[component_name] = self.response_processor
+                else:
+                    self.components[component_name] = MockComponent("response_processor")
             # Adicionar outros componentes conforme necessário
             
             logger.info(f"Componente carregado dinamicamente: {component_name}")
@@ -892,6 +1137,30 @@ class MainOrchestrator:
         else:
             self.components["suggestions"] = MockComponent("suggestions")
             logger.debug("⚠️ SuggestionsManager mock")
+        
+        # ToolsManager
+        if self.tools_manager:
+            self.components["tools"] = self.tools_manager
+            logger.debug("✅ ToolsManager pré-carregado")
+        else:
+            self.components["tools"] = MockComponent("tools")
+            logger.debug("⚠️ ToolsManager mock")
+        
+        # BaseCommand
+        if self.base_command:
+            self.components["base_command"] = self.base_command
+            logger.debug("✅ BaseCommand pré-carregado")
+        else:
+            self.components["base_command"] = MockComponent("base_command")
+            logger.debug("⚠️ BaseCommand mock")
+        
+        # ResponseProcessor
+        if self.response_processor:
+            self.components["response_processor"] = self.response_processor
+            logger.debug("✅ ResponseProcessor pré-carregado")
+        else:
+            self.components["response_processor"] = MockComponent("response_processor")
+            logger.debug("⚠️ ResponseProcessor mock")
     
     def _resolve_parameters(self, parameters: Dict[str, Any], context: Dict[str, Any], 
                            results: Dict[str, Any]) -> Dict[str, Any]:
@@ -979,6 +1248,81 @@ class MockComponent:
             'module': f'Mock{self.component_type.title()}',
             'version': '1.0.0-mock'
         }
+    
+    # Métodos de ferramentas para ToolsManager mock
+    def get_available_tools(self, **kwargs):
+        """Mock de ferramentas disponíveis"""
+        return {
+            "tools": ["mock_tool1", "mock_tool2", "mock_tool3"],
+            "count": 3,
+            "source": "mock"
+        }
+    
+    def execute_tool(self, **kwargs):
+        """Mock de execução de ferramentas"""
+        return {
+            "status": "mock_executed",
+            "result": "mock_result",
+            "tool": kwargs.get("tool_name", "unknown")
+        }
+    
+    def register_tool(self, **kwargs):
+        """Mock de registro de ferramentas"""
+        return {
+            "status": "mock_registered",
+            "tool": kwargs.get("tool_name", "unknown")
+        }
+    
+    def validate_tool(self, **kwargs):
+        """Mock de validação de ferramentas"""
+        return {
+            "valid": True,
+            "status": "mock_validated",
+            "tool": kwargs.get("tool_name", "unknown")
+        }
+    
+    # Métodos de comandos básicos para BaseCommand mock
+    def _validate_input(self, **kwargs):
+        """Mock de validação de entrada"""
+        return True
+    
+    def _extract_filters_advanced(self, **kwargs):
+        """Mock de extração de filtros"""
+        return {
+            "cliente": "Mock Cliente",
+            "periodo": "mock",
+            "status": "mock"
+        }
+    
+    def _sanitize_input(self, **kwargs):
+        """Mock de sanitização"""
+        return kwargs.get("consulta", "mock_query")
+    
+    def process_command(self, **kwargs):
+        """Mock de processamento de comando"""
+        return {
+            "status": "mock_processed",
+            "consulta": kwargs.get("consulta", "mock"),
+            "filtros": kwargs.get("filtros", {})
+        }
+    
+    # Métodos de processamento de respostas para ResponseProcessor mock
+    def gerar_resposta_otimizada(self, **kwargs):
+        """Mock de geração de resposta otimizada"""
+        consulta = kwargs.get("consulta", "mock_query")
+        analise = kwargs.get("analise", {})
+        
+        return f"""**Resposta Mock do ResponseProcessor**
+
+Consulta: {consulta}
+Análise: {analise.get('tipo_consulta', 'mock')}
+Domínio: {analise.get('dominio', 'sistema')}
+
+Esta é uma resposta simulada gerada pelo sistema mock.
+O ResponseProcessor real não está disponível no momento.
+
+Status: Mock ativo
+Timestamp: {datetime.now().isoformat()}"""
 
 # Instância global
 _main_orchestrator = None

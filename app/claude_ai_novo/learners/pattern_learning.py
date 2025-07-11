@@ -354,10 +354,21 @@ class PatternLearner:
                 
                 padroes_aplicaveis = []
                 for padrao in padroes:
+                    # Fazer parse seguro da interpretação
+                    try:
+                        if isinstance(padrao.interpretation, str):
+                            interpretacao = json.loads(padrao.interpretation)
+                        else:
+                            # Já é um dict, usar diretamente
+                            interpretacao = padrao.interpretation
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning(f"⚠️ Erro ao fazer parse da interpretação: {e}")
+                        interpretacao = {}
+                    
                     padroes_aplicaveis.append({
                         "tipo": padrao.pattern_type,
                         "texto": padrao.pattern_text,
-                        "interpretacao": json.loads(padrao.interpretation),
+                        "interpretacao": interpretacao,
                         "confianca": padrao.confidence,
                         "uso_count": padrao.usage_count
                     })

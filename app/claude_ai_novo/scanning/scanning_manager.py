@@ -43,6 +43,9 @@ class ScanningManager:
         # Inicializar módulo principal (lazy loading)
         self._project_scanner = None
         
+        # Lazy loading do DatabaseManager (OPERAÇÕES DE BANCO)
+        self._database_manager = None
+        
         # Para compatibilidade - propriedades herdadas
         self.project_structure = {}
         self.discovered_models = {}
@@ -59,6 +62,19 @@ class ScanningManager:
         if self._project_scanner is None:
             self._project_scanner = init_project_scanner(str(self.app_path))
         return self._project_scanner
+    
+    @property
+    def database_manager(self):
+        """Lazy loading do DatabaseManager"""
+        if self._database_manager is None:
+            try:
+                from app.claude_ai_novo.scanning.database_manager import DatabaseManager
+                self._database_manager = DatabaseManager()
+                logger.info("📊 DatabaseManager integrado ao ScanningManager")
+            except ImportError as e:
+                logger.warning(f"⚠️ DatabaseManager não disponível: {e}")
+                self._database_manager = False  # Marcar como indisponível
+        return self._database_manager if self._database_manager is not False else None
     
     # ================================
     # INTERFACE DE COMPATIBILIDADE
@@ -101,6 +117,89 @@ class ScanningManager:
                        max_results: int = 500) -> Dict[str, Any]:
         """Busca em arquivos - delega para FileScanner"""
         return self.project_scanner.file_scanner.search_in_files(pattern, file_extensions, max_results)
+    
+    def scan_database(self, operation: str = "list_tables", **kwargs) -> Dict[str, Any]:
+        """Executa operações de banco usando DatabaseManager"""
+        try:
+            if not self.database_manager:
+                return {
+                    "error": "DatabaseManager não disponível",
+                    "operation": operation,
+                    "available": False
+                }
+            
+            if operation == "list_tables":
+                tables = self.database_manager.listar_tabelas()
+                return {
+                    "operation": "list_tables",
+                    "tables": tables,
+                    "count": len(tables),
+                    "success": True
+                }
+            elif operation == "table_info":
+                table_name = kwargs.get("table_name")
+                if not table_name:
+                    return {"error": "table_name não fornecido"}
+                
+                fields = self.database_manager.obter_campos_tabela(table_name)
+                return {
+                    "operation": "table_info",
+                    "table": table_name,
+                    "fields": fields,
+                    "success": True
+                }
+            elif operation == "analyze_table":
+                table_name = kwargs.get("table_name")
+                if not table_name:
+                    return {"error": "table_name não fornecido"}
+                
+                analysis = self.database_manager.analisar_tabela_completa(table_name)
+                return {
+                    "operation": "analyze_table",
+                    "table": table_name,
+                    "analysis": analysis,
+                    "success": True
+                }
+            elif operation == "database_stats":
+                stats = self.database_manager.obter_estatisticas_gerais()
+                return {
+                    "operation": "database_stats",
+                    "statistics": stats,
+                    "success": True
+                }
+            elif operation == "search_fields":
+                field_type = kwargs.get("field_type")
+                field_name = kwargs.get("field_name")
+                
+                if field_type:
+                    results = self.database_manager.buscar_campos_por_tipo(field_type)
+                elif field_name:
+                    results = self.database_manager.buscar_campos_por_nome(field_name)
+                else:
+                    return {"error": "field_type ou field_name deve ser fornecido"}
+                
+                return {
+                    "operation": "search_fields",
+                    "results": results,
+                    "count": len(results),
+                    "success": True
+                }
+            else:
+                return {
+                    "error": f"Operação '{operation}' não suportada",
+                    "supported_operations": [
+                        "list_tables", "table_info", "analyze_table", 
+                        "database_stats", "search_fields"
+                    ]
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Erro na operação de banco {operation}: {e}")
+            return {
+                "error": str(e),
+                "operation": operation,
+                "success": False
+            }
     
     # ================================
     # MÉTODOS ESPECÍFICOS DOS MÓDULOS
@@ -151,7 +250,8 @@ class ScanningManager:
             'project_scanner': self.project_scanner,
             'structure_scanner': self.project_scanner.structure_scanner,
             'code_scanner': self.project_scanner.code_scanner,
-            'file_scanner': self.project_scanner.file_scanner
+            'file_scanner': self.project_scanner.file_scanner,
+            'database_manager': self.database_manager
         }
     
     def executar_diagnostico_completo(self) -> Dict[str, Any]:
@@ -168,11 +268,12 @@ class ScanningManager:
                 "scan_light": self.project_scanner.scan_project_light(),
                 "arquitetura": {
                     "modular": True,
-                    "modulos_ativos": 4,
+                    "modulos_ativos": 5,
                     "project_scanner": "ProjectScanner",
                     "structure_scanner": "StructureScanner", 
                     "code_scanner": "CodeScanner",
-                    "file_scanner": "FileScanner"
+                    "file_scanner": "FileScanner",
+                    "database_manager": "DatabaseManager"
                 },
                 "capacidades": [
                     "Escaneamento completo de projeto",
@@ -180,7 +281,11 @@ class ScanningManager:
                     "Análise de formulários e rotas",
                     "Manipulação de arquivos e templates",
                     "Busca avançada em código",
-                    "Inspeção de banco de dados"
+                    "Inspeção de banco de dados",
+                    "Análise de tabelas e campos",
+                    "Mapeamento de relacionamentos",
+                    "Busca de campos por tipo/nome",
+                    "Estatísticas de banco de dados"
                 ]
             }
             
@@ -306,5 +411,5 @@ __all__ = [
 ]
 
 logger.info("🔍 Sistema de Escaneamento Modular carregado com sucesso")
-logger.info("📊 Arquitetura: 4 módulos especializados (ProjectScanner, StructureScanner, CodeScanner, FileScanner)")
+logger.info("📊 Arquitetura: 5 módulos especializados (ProjectScanner, StructureScanner, CodeScanner, FileScanner, DatabaseManager)")
 logger.info("✅ Interface de compatibilidade mantida para código existente") 

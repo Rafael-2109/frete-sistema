@@ -89,6 +89,9 @@ class OrchestratorManager:
         # Lazy loading do SecurityGuard (CRÍTICO)
         self._security_guard = None
         
+        # Lazy loading do IntegrationManager (INTEGRAÇÕES)
+        self._integration_manager = None
+        
         # Inicializar orquestradores
         self._initialize_orchestrators()
         
@@ -106,6 +109,19 @@ class OrchestratorManager:
                 logger.warning(f"⚠️ SecurityGuard não disponível: {e}")
                 self._security_guard = False  # Marcar como indisponível
         return self._security_guard if self._security_guard is not False else None
+    
+    @property
+    def integration_manager(self):
+        """Lazy loading do IntegrationManager"""
+        if self._integration_manager is None:
+            try:
+                from app.claude_ai_novo.integration.integration_manager import get_integration_manager
+                self._integration_manager = get_integration_manager()
+                logger.info("🔗 IntegrationManager integrado ao MAESTRO")
+            except ImportError as e:
+                logger.warning(f"⚠️ IntegrationManager não disponível: {e}")
+                self._integration_manager = False  # Marcar como indisponível
+        return self._integration_manager if self._integration_manager is not False else None
     
     def _initialize_orchestrators(self):
         """Inicializa todos os orquestradores disponíveis."""
@@ -335,6 +351,7 @@ class OrchestratorManager:
         # Mapeamento inteligente baseado em palavras-chave
         session_keywords = ['session', 'user', 'conversation', 'context']
         workflow_keywords = ['workflow', 'process', 'step', 'pipeline']
+        integration_keywords = ['integration', 'api', 'external', 'service', 'connect']
         
         operation_lower = operation_type.lower()
         data_str = str(data).lower()
@@ -452,11 +469,60 @@ class OrchestratorManager:
     
     def _execute_generic_operation(self, orchestrator, task: OrchestrationTask) -> Any:
         """Executa operação genérica."""
+        # Verificar se é uma operação de integração
+        if self._is_integration_operation(task.operation):
+            return self._execute_integration_operation(task)
+        
         if hasattr(orchestrator, task.operation):
             method = getattr(orchestrator, task.operation)
             if callable(method):
                 return method(**task.parameters)
         return f"Generic operation: {task.operation} executed"
+    
+    def _is_integration_operation(self, operation: str) -> bool:
+        """Verifica se é uma operação de integração."""
+        integration_keywords = ['integration', 'api', 'external', 'service', 'connect']
+        return any(keyword in operation.lower() for keyword in integration_keywords)
+    
+    def _execute_integration_operation(self, task: OrchestrationTask) -> Any:
+        """Executa operação de integração usando IntegrationManager."""
+        try:
+            if not self.integration_manager:
+                return {
+                    "status": "no_integration_manager",
+                    "message": "IntegrationManager não disponível",
+                    "operation": task.operation
+                }
+            
+            # Mapear operações para métodos do IntegrationManager
+            operation_lower = task.operation.lower()
+            
+            if 'initialize' in operation_lower:
+                return self.integration_manager.initialize_all_modules()
+            elif 'health' in operation_lower:
+                return self.integration_manager.get_system_health()
+            elif 'status' in operation_lower:
+                return self.integration_manager.get_integration_status()
+            elif 'process' in operation_lower:
+                query = task.parameters.get('query')
+                context = task.parameters.get('context', {})
+                return self.integration_manager.process_unified_query(query, context)
+            else:
+                # Operação genérica de integração
+                return {
+                    "status": "integration_executed",
+                    "operation": task.operation,
+                    "parameters": task.parameters,
+                    "manager": "IntegrationManager"
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Erro na operação de integração {task.operation}: {e}")
+            return {
+                "status": "integration_error",
+                "error": str(e),
+                "operation": task.operation
+            }
     
     def _record_operation(self, task: OrchestrationTask):
         """Registra operação no histórico."""

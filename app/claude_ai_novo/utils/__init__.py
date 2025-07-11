@@ -80,7 +80,7 @@ except ImportError as e:
     _validation_utils_available = False
 
 try:
-    from .performance_cache import PerformanceCache
+    from .performance_cache import ScannersCache as PerformanceCache
     _performance_cache_available = True
 except ImportError as e:
     logger.warning(f"⚠️ PerformanceCache não disponível: {e}")
@@ -101,11 +101,12 @@ except ImportError as e:
     _flask_context_wrapper_available = False
 
 try:
-    from .legacy_compatibility import LegacyCompatibility
+    from .legacy_compatibility import ExternalAPIIntegration as LegacyCompatibility
     _legacy_compatibility_available = True
 except ImportError as e:
     logger.warning(f"⚠️ LegacyCompatibility não disponível: {e}")
     _legacy_compatibility_available = False
+    LegacyCompatibility = None
 
 logger.info("✅ Utils carregado com sucesso")
 

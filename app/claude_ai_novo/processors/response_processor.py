@@ -7,15 +7,84 @@ ResponseProcessor - Processamento especializado de respostas
 from app.claude_ai_novo.processors.base import (
     ProcessorBase,
     logging, datetime, timedelta, date,
-    current_user, db, func, and_, or_, text,
-    json, asyncio, time,
-    format_response_advanced, create_processor_summary,
-    FLASK_AVAILABLE, UTILS_AVAILABLE, CONFIG_AVAILABLE, MODELS_AVAILABLE
+    format_response
 )
 
 # Imports específicos
 from typing import Dict, List, Optional, Any
 import anthropic
+import json
+import asyncio
+import time
+
+# Imports com fallback seguro
+try:
+    from flask_login import current_user
+    from flask_sqlalchemy import db
+    from sqlalchemy import func, and_, or_, text
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_user = None
+    db = None
+    func = and_ = or_ = text = None
+    FLASK_AVAILABLE = False
+
+# Utilitários
+try:
+    from app.claude_ai_novo.utils.response_utils import get_responseutils
+    UTILS_AVAILABLE = True
+except ImportError:
+    UTILS_AVAILABLE = False
+
+# Fallbacks para formatação de respostas
+def format_response_advanced(content, source="ResponseProcessor", metadata=None):
+    """Formata resposta avançada com metadados"""
+    if not metadata:
+        metadata = {}
+    
+    formatted = f"{content}\n\n---\n"
+    formatted += f"📝 **{source}**\n"
+    formatted += f"⏱️ **Timestamp:** {metadata.get('timestamp', 'N/A')}\n"
+    
+    if metadata.get('processing_time'):
+        formatted += f"⚡ **Tempo:** {metadata['processing_time']:.2f}s\n"
+    
+    if metadata.get('quality_score'):
+        formatted += f"📊 **Qualidade:** {metadata['quality_score']:.2f}\n"
+    
+    if metadata.get('enhanced'):
+        formatted += f"🚀 **Melhorada:** {'Sim' if metadata['enhanced'] else 'Não'}\n"
+    
+    if metadata.get('cache_hit'):
+        formatted += f"💾 **Cache:** {'Hit' if metadata['cache_hit'] else 'Miss'}\n"
+    
+    return formatted
+
+def create_processor_summary(data):
+    """Cria resumo do processador"""
+    if not data:
+        return {"summary": "Processor summary"}
+    
+    return {
+        "summary": f"Processamento concluído: {data.get('status', 'N/A')}",
+        "items_processed": data.get('items_processed', 0),
+        "success_rate": data.get('success_rate', 0.0),
+        "timestamp": datetime.now().isoformat()
+    }
+
+# Configuração
+try:
+    from app.claude_ai_novo.config import ClaudeAIConfig
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+
+# Models
+try:
+    from app.fretes.models import Frete
+    MODELS_AVAILABLE = True
+except ImportError:
+    MODELS_AVAILABLE = False
 
 # Configuração local
 try:
