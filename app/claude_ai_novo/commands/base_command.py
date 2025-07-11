@@ -48,8 +48,24 @@ class BaseCommand:
     def __init__(self, claude_client=None):
         self.client = claude_client
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.output_dir = Path("static/reports")
-        self.output_dir.mkdir(exist_ok=True)
+        
+        # Criar diretório de relatórios com fallback seguro para produção
+        try:
+            self.output_dir = Path("static/reports")
+            self.output_dir.mkdir(exist_ok=True, parents=True)
+        except (PermissionError, OSError) as e:
+            # Fallback para ambientes sem permissão de escrita (Render, etc.)
+            self.logger.warning(f"Não foi possível criar static/reports: {e}")
+            # Usar diretório temporário
+            import tempfile
+            self.output_dir = Path(tempfile.gettempdir()) / "claude_reports"
+            try:
+                self.output_dir.mkdir(exist_ok=True, parents=True)
+                self.logger.info(f"Usando diretório temporário: {self.output_dir}")
+            except Exception as e2:
+                self.logger.error(f"Erro ao criar diretório temporário: {e2}")
+                # Último recurso - usar diretório atual
+                self.output_dir = Path(".")
     
     # ==============================
     # VALIDAÇÃO E INPUT

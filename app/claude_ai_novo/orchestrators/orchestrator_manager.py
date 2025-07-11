@@ -152,6 +152,76 @@ class OrchestratorManager:
         
         logger.info(f"🎭 OrchestratorManager: {initialized_count} orquestradores inicializados")
     
+    def process_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Processa uma consulta usando os orquestradores apropriados.
+        
+        Args:
+            query: Consulta a processar
+            context: Contexto adicional
+            
+        Returns:
+            Resultado do processamento
+        """
+        try:
+            # Preparar dados para orquestração
+            data = {
+                'query': query,
+                'context': context or {},
+                'user_id': context.get('user_id') if context else None,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Detectar tipo de operação baseado na consulta
+            operation_type = self._detect_operation_type(query)
+            
+            # Orquestrar usando o sistema inteligente
+            result = self.orchestrate_operation(
+                operation_type=operation_type,
+                data=data,
+                mode=OrchestrationMode.INTELLIGENT,
+                priority=1
+            )
+            
+            logger.info(f"🎭 Query processada: {query[:50]}... via {operation_type}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao processar query: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'query': query,
+                'fallback': True,
+                'timestamp': datetime.now().isoformat()
+            }
+    
+    def _detect_operation_type(self, query: str) -> str:
+        """
+        Detecta o tipo de operação baseado na consulta.
+        
+        Args:
+            query: Consulta a analisar
+            
+        Returns:
+            Tipo da operação
+        """
+        query_lower = query.lower()
+        
+        # Mapeamento de palavras-chave para tipos de operação
+        if any(word in query_lower for word in ['conversa', 'sessão', 'contexto', 'usuário']):
+            return 'session_query'
+        elif any(word in query_lower for word in ['workflow', 'processo', 'etapa', 'pipeline']):
+            return 'workflow_query'
+        elif any(word in query_lower for word in ['integração', 'api', 'externo', 'conectar']):
+            return 'integration_query'
+        elif any(word in query_lower for word in ['sugestão', 'ajuda', 'dica', 'recomendar']):
+            return 'intelligent_suggestions'
+        elif any(word in query_lower for word in ['comando', 'executar', 'fazer']):
+            return 'natural_command'
+        else:
+            return 'intelligent_query'
+    
     def orchestrate_operation(self, operation_type: str, 
                             data: Dict[str, Any],
                             target_orchestrator: Optional[OrchestratorType] = None,

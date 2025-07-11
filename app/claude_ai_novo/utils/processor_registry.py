@@ -21,7 +21,7 @@ class ProcessorRegistry(BaseProcessor):
     def _initialize_processors(self):
         """Inicializa todos os processadores disponíveis"""
         
-        # Definir processadores disponíveis
+        # Definir processadores disponíveis - TODOS os processadores existentes
         processor_configs = [
             {
                 'name': 'context',
@@ -46,6 +46,18 @@ class ProcessorRegistry(BaseProcessor):
                 'class_name': 'QueryProcessor',
                 'module': 'query_processor',
                 'description': 'Processamento de consultas'
+            },
+            {
+                'name': 'intelligence',
+                'class_name': 'IntelligenceProcessor',
+                'module': 'intelligence_processor',
+                'description': 'Processamento de inteligência artificial'
+            },
+            {
+                'name': 'data',
+                'class_name': 'DataProcessor',
+                'module': 'data_processor',
+                'description': 'Processamento de dados'
             }
         ]
         
@@ -61,31 +73,49 @@ class ProcessorRegistry(BaseProcessor):
         name = config['name']
         
         try:
-            # Importar dinamicamente o módulo
-            module_name = f".{config['module']}"
             class_name = config['class_name']
+            module_name = config['module']
             
-            # Tentar importar
+            # Tentar múltiplas formas de importar para evitar erro de globals
+            processor_instance = None
+            
             try:
-                module = __import__(module_name, fromlist=[class_name], level=1)
+                # Método 1: Import absoluto
+                full_module_name = f"app.claude_ai_novo.processors.{module_name}"
+                module = __import__(full_module_name, fromlist=[class_name])
                 processor_class = getattr(module, class_name)
-                
-                # Instanciar processador
                 processor_instance = processor_class()
                 
-                # Registrar
+                self.logger.debug(f"✅ Processador '{name}' registrado (método absoluto)")
+                
+            except (ImportError, AttributeError) as e1:
+                try:
+                    # Método 2: Import relativo seguro
+                    if __name__ and '.' in __name__:
+                        module_name_rel = f"..processors.{module_name}"
+                        module = __import__(module_name_rel, fromlist=[class_name], level=1)
+                        processor_class = getattr(module, class_name)
+                        processor_instance = processor_class()
+                        
+                        self.logger.debug(f"✅ Processador '{name}' registrado (método relativo)")
+                    else:
+                        raise ImportError("Contexto de módulo inadequado para import relativo")
+                        
+                except (ImportError, AttributeError) as e2:
+                    self.logger.warning(f"⚠️ Não foi possível importar {class_name}: {e1}, {e2}")
+                    processor_instance = None
+            
+            if processor_instance:
+                # Registrar com sucesso
                 self.processors[name] = processor_instance
-                self.processor_types[name] = processor_class
-                
-                self.logger.debug(f"Processador '{name}' registrado com sucesso")
-                
-            except ImportError as e:
-                self.logger.warning(f"Não foi possível importar {class_name}: {e}")
+                self.processor_types[name] = type(processor_instance)
+            else:
                 # Criar fallback
+                self.logger.warning(f"Usando fallback para {name}")
                 self.processors[name] = self._create_fallback_processor(name, config)
                 
         except Exception as e:
-            self.logger.error(f"Erro ao registrar processador '{name}': {e}")
+            self.logger.error(f"❌ Erro ao registrar processador '{name}': {e}")
             # Criar fallback
             self.processors[name] = self._create_fallback_processor(name, config)
     

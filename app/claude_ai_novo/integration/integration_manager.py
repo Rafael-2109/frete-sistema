@@ -223,6 +223,46 @@ class IntegrationManager:
             "integration_score": 1.0 if self.orchestrator_manager else 0.0,
             "ready_for_operation": self.orchestrator_manager is not None
         }
+    
+    def get_integration_status(self) -> Dict[str, Any]:
+        """
+        Retorna status detalhado da integração.
+        
+        Returns:
+            Dict com status completo da integração
+        """
+        try:
+            # Status básico
+            status = {
+                'integration_active': self.orchestrator_manager is not None,
+                'orchestrator_status': 'active' if self.orchestrator_manager else 'inactive',
+                'modules_integrated': 21 if self.orchestrator_manager else 0,
+                'integration_score': 1.0 if self.orchestrator_manager else 0.0,
+                'health_status': 'healthy' if self.orchestrator_manager else 'degraded',
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Adicionar métricas do sistema
+            status.update(self.system_metrics)
+            
+            # Status detalhado se orchestrator disponível
+            if self.orchestrator_manager:
+                status['orchestrator_components'] = {
+                    'main_orchestrator': hasattr(self.orchestrator_manager, 'main_orchestrator'),
+                    'session_orchestrator': hasattr(self.orchestrator_manager, 'session_orchestrator'),
+                    'workflow_orchestrator': hasattr(self.orchestrator_manager, 'workflow_orchestrator'),
+                    'maestro_active': True
+                }
+            
+            return status
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter status de integração: {e}")
+            return {
+                'integration_active': False,
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }
 
 
 def get_integration_manager(claude_client=None, db_engine=None, db_session=None) -> IntegrationManager:
