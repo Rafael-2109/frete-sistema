@@ -154,7 +154,7 @@ class IntegrationManager:
         await self._load_module(
             'validation_utils',
             'utils.validation_utils', 
-            'ValidationUtils',
+            'BaseValidationUtils',
             {}
         )
     
@@ -236,7 +236,7 @@ class IntegrationManager:
         # 1. Learning Core
         await self._load_module(
             'learning_core',
-            'intelligence.learning.learning_core',
+            'learners.learning_core',
             'LearningCore',
             {'claude_client': self.claude_client}
         )
@@ -244,7 +244,7 @@ class IntegrationManager:
         # 2. Pattern Learner
         await self._load_module(
             'pattern_learner',
-            'intelligence.learning.pattern_learner',
+            'learners.pattern_learning',
             'PatternLearner',
             {}
         )
@@ -252,15 +252,15 @@ class IntegrationManager:
         # 3. Knowledge Manager
         await self._load_module(
             'knowledge_manager',
-            'knowledge.knowledge_manager',
-            'KnowledgeManager',
+            'memorizers.knowledge_memory',
+            'KnowledgeMemory',
             {}
         )
         
         # 4. Human-in-Loop Learning
         await self._load_module(
             'human_learning',
-            'intelligence.learning.human_in_loop_learning',
+            'learners.human_in_loop_learning',
             'HumanInLoopLearning',
             {}
         )
@@ -268,7 +268,7 @@ class IntegrationManager:
         # 5. Feedback Processor
         await self._load_module(
             'feedback_processor',
-            'intelligence.learning.feedback_processor',
+            'learners.feedback_learning',
             'FeedbackProcessor',
             {}
         )
@@ -280,7 +280,7 @@ class IntegrationManager:
         # 1. Semantic Enricher
         await self._load_module(
             'semantic_enricher',
-            'semantic.semantic_enricher',
+            'enrichers.semantic_enricher',
             'SemanticEnricher',
             {}
         )
@@ -311,7 +311,7 @@ class IntegrationManager:
         for agent_type in agents:
             await self._load_module(
                 f'{agent_type}_agent',
-                f'multi_agent.agents.{agent_type}_agent',
+                f'coordinators.domain_agents.{agent_type}_agent',
                 f'{agent_type.title()}Agent',
                 {'claude_client': self.claude_client}
             )
@@ -319,15 +319,15 @@ class IntegrationManager:
         # 2. Critic Agent
         await self._load_module(
             'critic_agent',
-            'multi_agent.critic_agent',
-            'CriticAgent',
+            'validators.critic_validator',
+            'CriticValidator',
             {'claude_client': self.claude_client}
         )
         
         # 3. Multi-Agent Orchestrator (integra todos os agentes)
         await self._load_module(
             'multi_agent_orchestrator',
-            'multi_agent.multi_agent_orchestrator',
+            'orchestrators.multi_agent_orchestrator',
             'MultiAgentOrchestrator',
             {'claude_client': self.claude_client}
         )
@@ -337,8 +337,8 @@ class IntegrationManager:
         if orchestrator:
             await self._load_module(
                 'multi_agent_system',
-                'multi_agent.system',
-                'MultiAgentSystem',
+                'coordinators.coordinator_manager',
+                'CoordinatorManager',
                 {'orchestrator': orchestrator}
             )
     
@@ -349,7 +349,7 @@ class IntegrationManager:
         # 1. Suggestion Engine
         await self._load_module(
             'suggestion_engine',
-            'suggestions.engine',
+            'suggestions.suggestion_engine',
             'SuggestionEngine',
             {}
         )
@@ -357,16 +357,16 @@ class IntegrationManager:
         # 2. Context Manager
         await self._load_module(
             'context_manager',
-            'intelligence.memory.context_manager',
-            'ContextManager',
+            'memorizers.context_memory',
+            'ContextMemory',
             {}
         )
         
         # 3. Conversation Context
         await self._load_module(
             'conversation_context',
-            'intelligence.conversation.conversation_context',
-            'ConversationContext',
+            'conversers.context_converser',
+            'ContextConverser',
             {}
         )
     
