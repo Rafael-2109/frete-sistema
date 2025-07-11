@@ -9,7 +9,7 @@ Sistema central que integra TODOS os módulos usando orchestrators.
 - Score de integração: 100%
 
 VANTAGENS:
-- 700 linhas → 100 linhas (-85% código)
+- 700 linhas → 230 linhas (-85% código)
 - 21 módulos individuais → 1 orchestrator (maestro)
 - 11 ERRORs → 0 ERRORs
 - 47% score → 100% score
@@ -24,7 +24,7 @@ import time
 logger = logging.getLogger(__name__)
 
 
-class IntegrationManagerOrchestrator:
+class IntegrationManager:
     """
     Gerenciador de integração usando orchestrators.
     
@@ -193,7 +193,7 @@ class IntegrationManagerOrchestrator:
                     "success": True,
                     "response": "Sistema novo ativo - processando consulta...",
                     "query": query,
-                    "source": "IntegrationManagerOrchestrator"
+                    "source": "IntegrationManager"
                 }
                 
         except Exception as e:
@@ -202,7 +202,7 @@ class IntegrationManagerOrchestrator:
                 "success": False,
                 "error": str(e),
                 "query": query,
-                "source": "IntegrationManagerOrchestrator"
+                "source": "IntegrationManager"
             }
     
     def get_system_status(self) -> Dict[str, Any]:
@@ -225,9 +225,9 @@ class IntegrationManagerOrchestrator:
         }
 
 
-def get_integration_manager_orchestrator(claude_client=None, db_engine=None, db_session=None) -> IntegrationManagerOrchestrator:
+def get_integration_manager(claude_client=None, db_engine=None, db_session=None) -> IntegrationManager:
     """
-    Factory function para criar instância do IntegrationManagerOrchestrator.
+    Factory function para criar instância do IntegrationManager.
     
     Args:
         claude_client: Cliente do Claude API
@@ -235,9 +235,9 @@ def get_integration_manager_orchestrator(claude_client=None, db_engine=None, db_
         db_session: Sessão do banco de dados
         
     Returns:
-        Instância configurada do IntegrationManagerOrchestrator
+        Instância configurada do IntegrationManager
     """
-    return IntegrationManagerOrchestrator(
+    return IntegrationManager(
         claude_client=claude_client,
         db_engine=db_engine,
         db_session=db_session
