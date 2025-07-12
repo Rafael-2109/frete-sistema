@@ -8,6 +8,7 @@ from typing import Optional, TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .semantic_enricher import SemanticEnricher
+    from .enricher_manager import EnricherManager
 
 # Configuração de logging
 logger = logging.getLogger(__name__)
@@ -26,6 +27,12 @@ try:
     _components['ContextEnricher'] = ContextEnricher
 except ImportError as e:
     logger.warning(f"ContextEnricher não disponível: {e}")
+
+try:
+    from .enricher_manager import EnricherManager
+    _components['EnricherManager'] = EnricherManager
+except ImportError as e:
+    logger.warning(f"EnricherManager não disponível: {e}")
 
 # Função de conveniência OBRIGATÓRIA
 def get_semantic_enricher() -> Optional[Any]:
@@ -56,8 +63,23 @@ def get_context_enricher() -> Optional[Any]:
         logger.error(f"Erro ao criar ContextEnricher: {e}")
         return None
 
+def get_enricher_manager() -> Optional[Any]:
+    """Retorna instância configurada do EnricherManager."""
+    try:
+        cls = _components.get('EnricherManager')
+        if cls:
+            logger.info("Criando instância EnricherManager")
+            return cls()
+        else:
+            logger.warning("EnricherManager não disponível")
+            return None
+    except Exception as e:
+        logger.error(f"Erro ao criar EnricherManager: {e}")
+        return None
+
 # Export explícito
 __all__ = [
     'get_semantic_enricher',
-    'get_context_enricher'
+    'get_context_enricher',
+    'get_enricher_manager'
 ] 

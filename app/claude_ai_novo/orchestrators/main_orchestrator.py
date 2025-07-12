@@ -282,10 +282,18 @@ class MainOrchestrator:
         # NOVO: Workflow de processamento de respostas
         self.add_workflow("response_processing", [
             OrchestrationStep(
+                name="load_memory",
+                component="memorizers",
+                method="get_context",
+                parameters={"session_id": "{session_id}"},
+                dependencies=[]
+            ),
+            OrchestrationStep(
                 name="analyze_query",
                 component="analyzers",
                 method="analyze_intention",
-                parameters={"query": "{query}"}
+                parameters={"query": "{query}", "context": "{load_memory_result}"},
+                dependencies=["load_memory"]
             ),
             OrchestrationStep(
                 name="load_data",
@@ -295,11 +303,33 @@ class MainOrchestrator:
                 dependencies=["analyze_query"]
             ),
             OrchestrationStep(
+                name="enrich_data",
+                component="enrichers",
+                method="enrich_context",
+                parameters={
+                    "data": "{load_data_result}",
+                    "query": "{query}",
+                    "domain": "{analyze_query_result.dominio}"
+                },
+                dependencies=["load_data"]
+            ),
+            OrchestrationStep(
                 name="generate_response",
                 component="response_processor",
                 method="gerar_resposta_otimizada",
-                parameters={"consulta": "{query}", "analise": "{analyze_query_result}", "user_context": "{context}", "dados_reais": "{load_data_result}"},
-                dependencies=["analyze_query", "load_data"]
+                parameters={"consulta": "{query}", "analise": "{analyze_query_result}", "user_context": "{context}", "dados_reais": "{enrich_data_result}"},
+                dependencies=["analyze_query", "enrich_data"]
+            ),
+            OrchestrationStep(
+                name="save_memory",
+                component="memorizers",
+                method="save_interaction",
+                parameters={
+                    "session_id": "{session_id}",
+                    "query": "{query}",
+                    "response": "{generate_response_result}"
+                },
+                dependencies=["generate_response"]
             ),
             OrchestrationStep(
                 name="validate_response",
@@ -1009,6 +1039,12 @@ class MainOrchestrator:
                     self.components[component_name] = self.components['providers']
                 else:
                     self.components[component_name] = MockComponent("providers")
+            elif component_name == "memorizers":
+                # NOVO: Carregar MemoryManager
+                if hasattr(self, 'components') and 'memorizers' in self.components:
+                    self.components[component_name] = self.components['memorizers']
+                else:
+                    self.components[component_name] = MockComponent("memorizers")
             # Adicionar outros componentes conforme necessário
             
             logger.info(f"Componente carregado dinamicamente: {component_name}")
@@ -1070,29 +1106,39 @@ class MainOrchestrator:
             self.components["memorizers"] = MockComponent("memorizers")
             logger.debug("⚠️ Memorizers mock")
         
-        # Enrichers - Não tem manager, tem funções individuais
+        # Enrichers - Agora tem manager
         try:
-            from app.claude_ai_novo.enrichers import get_semantic_enricher, get_context_enricher
-            # Criar um wrapper para os enrichers
-            class EnrichersWrapper:
-                def __init__(self):
-                    self.semantic = get_semantic_enricher()
-                    self.context = get_context_enricher()
-                
-                def enrich_data(self, **kwargs):
-                    # Usar ambos os enrichers
-                    data = kwargs.get('processed_data', {})
-                    if self.semantic:
-                        data = self.semantic.enrich(data)
-                    if self.context:
-                        data = self.context.enrich(data)
-                    return data
-            
-            self.components["enrichers"] = EnrichersWrapper()
-            logger.debug("✅ Enrichers (semantic + context) carregados")
+            from app.claude_ai_novo.enrichers import get_enricher_manager
+            self.components["enrichers"] = get_enricher_manager()
+            logger.debug("✅ EnricherManager carregado")
         except ImportError:
-            self.components["enrichers"] = MockComponent("enrichers")
-            logger.debug("⚠️ Enrichers mock")
+            # Fallback para enrichers individuais
+            try:
+                from app.claude_ai_novo.enrichers import get_semantic_enricher, get_context_enricher
+                # Criar um wrapper para os enrichers
+                class EnrichersWrapper:
+                    def __init__(self):
+                        self.semantic = get_semantic_enricher()
+                        self.context = get_context_enricher()
+                    
+                    def enrich_data(self, **kwargs):
+                        # Usar ambos os enrichers
+                        data = kwargs.get('processed_data', {})
+                        if self.semantic:
+                            data = self.semantic.enrich(data)
+                        if self.context:
+                            data = self.context.enrich(data)
+                        return data
+                    
+                    def enrich_context(self, **kwargs):
+                        # Método compatível com EnricherManager
+                        return self.enrich_data(**kwargs)
+                
+                self.components["enrichers"] = EnrichersWrapper()
+                logger.debug("✅ Enrichers (semantic + context) carregados")
+            except ImportError:
+                self.components["enrichers"] = MockComponent("enrichers")
+                logger.debug("⚠️ Enrichers mock")
         
         # Loaders - Não tem manager único, usar data_manager
         try:

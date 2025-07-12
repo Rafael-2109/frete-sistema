@@ -361,6 +361,82 @@ class MemoryManager:
                 'error': str(e),
                 'last_check': datetime.now().isoformat()
             }
+    
+    def get_context(self, session_id: str) -> Dict[str, Any]:
+        """
+        Obtém contexto completo da sessão para o workflow.
+        
+        Args:
+            session_id: ID da sessão
+            
+        Returns:
+            Contexto completo incluindo histórico e preferências
+        """
+        try:
+            context: Dict[str, Any] = {
+                'session_id': session_id,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Histórico de conversação
+            history = self.get_conversation_history(session_id)
+            if history:
+                context['historico'] = history
+                context['ultima_mensagem'] = history[-1] if history else None
+            
+            # Contexto armazenado
+            stored_context = self.retrieve_conversation_context(session_id)
+            if stored_context:
+                context['contexto_anterior'] = stored_context
+            
+            # Preferências do usuário (se disponível no sistema)
+            # TODO: Implementar quando houver sistema de preferências
+            context['preferencias'] = {}
+            
+            return context
+            
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao obter contexto: {e}")
+            return {'session_id': session_id, 'error': str(e)}
+    
+    def save_interaction(self, session_id: str, query: str, response: str) -> bool:
+        """
+        Salva interação completa na memória.
+        
+        Args:
+            session_id: ID da sessão
+            query: Pergunta do usuário
+            response: Resposta do sistema
+            
+        Returns:
+            True se salvo com sucesso
+        """
+        try:
+            # Criar mensagem estruturada
+            interaction = {
+                'timestamp': datetime.now().isoformat(),
+                'query': query,
+                'response': response,
+                'type': 'interaction'
+            }
+            
+            # Adicionar à conversa
+            success = self.add_conversation_message(session_id, interaction)
+            
+            # Atualizar contexto
+            if success:
+                context = {
+                    'last_query': query,
+                    'last_response': response,
+                    'last_interaction': datetime.now().isoformat()
+                }
+                self.store_conversation_context(session_id, context)
+            
+            return success
+            
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao salvar interação: {e}")
+            return False
 
 
 # Instância global
