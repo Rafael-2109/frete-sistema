@@ -1,0 +1,191 @@
+{
+  "summary": {
+    "total_dependencies": 22,
+    "installed": 16,
+    "missing": 6,
+    "with_fallback": 0,
+    "critical_issues": 1,
+    "warnings": 6
+  },
+  "details": {
+    "installed": {
+      "flask": {
+        "category": "core",
+        "description": "Flask framework",
+        "version": "3.0.3",
+        "import_ok": true
+      },
+      "sqlalchemy": {
+        "category": "core",
+        "description": "ORM para banco de dados",
+        "version": "2.0.40",
+        "import_ok": true
+      },
+      "anthropic": {
+        "category": "core",
+        "description": "Claude API client",
+        "version": "0.54.0",
+        "import_ok": true
+      },
+      "flask_login": {
+        "category": "core",
+        "description": "Autenticação Flask",
+        "version": "0.6.3",
+        "import_ok": true
+      },
+      "flask_wtf": {
+        "category": "core",
+        "description": "Formulários Flask",
+        "version": "1.2.2",
+        "import_ok": true
+      },
+      "flask_sqlalchemy": {
+        "category": "core",
+        "description": "SQLAlchemy para Flask",
+        "version": "3.1.1",
+        "import_ok": true
+      },
+      "redis": {
+        "category": "optional",
+        "description": "Cache distribuído",
+        "version": "6.2.0",
+        "import_ok": true
+      },
+      "numpy": {
+        "category": "optional",
+        "description": "Computação numérica",
+        "version": "2.1.2",
+        "import_ok": true
+      },
+      "pandas": {
+        "category": "optional",
+        "description": "Análise de dados",
+        "version": "2.2.3",
+        "import_ok": true
+      },
+      "openpyxl": {
+        "category": "optional",
+        "description": "Manipulação de Excel",
+        "version": "3.1.5",
+        "import_ok": true
+      },
+      "psutil": {
+        "category": "optional",
+        "description": "Informações do sistema",
+        "version": "5.9.6",
+        "import_ok": true
+      },
+      "fuzzywuzzy": {
+        "category": "optional",
+        "description": "Fuzzy string matching",
+        "version": "0.18.0",
+        "import_ok": true
+      },
+      "spacy": {
+        "category": "ai_ml",
+        "description": "NLP avançado",
+        "version": "3.8.7",
+        "import_ok": true
+      },
+      "nltk": {
+        "category": "ai_ml",
+        "description": "Natural Language Toolkit",
+        "version": "3.9.1",
+        "import_ok": true
+      },
+      "sklearn": {
+        "category": "ai_ml",
+        "description": "Machine Learning",
+        "version": "unknown",
+        "import_ok": true
+      },
+      "pytest": {
+        "category": "dev",
+        "description": "Framework de testes",
+        "version": "8.4.1",
+        "import_ok": true
+      }
+    },
+    "missing": {
+      "python-Levenshtein": {
+        "category": "optional",
+        "description": "Otimização para fuzzywuzzy",
+        "error": "No module named 'python-Levenshtein'",
+        "has_fallback": false
+      },
+      "torch": {
+        "category": "ai_ml",
+        "description": "PyTorch para ML",
+        "error": "No module named 'torch'",
+        "has_fallback": false
+      },
+      "transformers": {
+        "category": "ai_ml",
+        "description": "Modelos de linguagem",
+        "error": "No module named 'transformers'",
+        "has_fallback": false
+      },
+      "black": {
+        "category": "dev",
+        "description": "Formatador de código",
+        "error": "No module named 'black'",
+        "has_fallback": false
+      },
+      "pylint": {
+        "category": "dev",
+        "description": "Linter Python",
+        "error": "No module named 'pylint'",
+        "has_fallback": false
+      },
+      "mypy": {
+        "category": "dev",
+        "description": "Type checking",
+        "error": "No module named 'mypy'",
+        "has_fallback": false
+      }
+    },
+    "fallbacks": {},
+    "issues": [
+      {
+        "type": "missing_fallback",
+        "module": "python-Levenshtein",
+        "category": "optional",
+        "severity": "medium"
+      },
+      {
+        "type": "missing_fallback",
+        "module": "torch",
+        "category": "ai_ml",
+        "severity": "medium"
+      },
+      {
+        "type": "missing_fallback",
+        "module": "transformers",
+        "category": "ai_ml",
+        "severity": "medium"
+      },
+      {
+        "type": "missing_fallback",
+        "module": "black",
+        "category": "dev",
+        "severity": "medium"
+      },
+      {
+        "type": "missing_fallback",
+        "module": "pylint",
+        "category": "dev",
+        "severity": "medium"
+      },
+      {
+        "type": "missing_fallback",
+        "module": "mypy",
+        "category": "dev",
+        "severity": "medium"
+      },
+      {
+        "type": "database_unavailable",
+        "severity": "critical"
+      }
+    ]
+  }
+}

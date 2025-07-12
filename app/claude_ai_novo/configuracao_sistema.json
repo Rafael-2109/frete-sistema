@@ -1,0 +1,235 @@
+{
+  "summary": {
+    "total_issues": 1,
+    "total_warnings": 3,
+    "critical_issues": 1,
+    "configuration_score": 89
+  },
+  "issues": [
+    {
+      "type": "missing_main_function",
+      "function": "get_claude_ai_instance"
+    }
+  ],
+  "warnings": [
+    {
+      "type": "config_import_error",
+      "file": "config/__init__.py",
+      "error": "No module named 'app'"
+    },
+    {
+      "type": "config_import_error",
+      "file": "config/basic_config.py",
+      "error": "No module named 'app'"
+    },
+    {
+      "type": "config_import_error",
+      "file": "config/advanced_config.py",
+      "error": "No module named 'app'"
+    }
+  ],
+  "details": {
+    "environment": {
+      "ANTHROPIC_API_KEY": {
+        "status": "OK",
+        "value": "sk-a***lwAA",
+        "using_fallback": false
+      },
+      "DATABASE_URL": {
+        "status": "OK",
+        "value": "postgresql://sistema_user:R80cswDpRJGsmpTdA73XxvV2xqEfzYm9@dpg-d13m38vfte5s738t6p50-a/sistema_fretes",
+        "using_fallback": false
+      },
+      "SECRET_KEY": {
+        "status": "OK",
+        "value": "3535***34f4",
+        "using_fallback": false
+      },
+      "REDIS_URL": {
+        "status": "OK",
+        "value": "redis://red-d1c4jheuk2gs73absk10:6379",
+        "using_fallback": false
+      },
+      "FLASK_ENV": {
+        "status": "OK",
+        "value": "development",
+        "using_fallback": false
+      }
+    },
+    "config_files": {
+      "config/__init__.py": {
+        "exists": true,
+        "importable": false,
+        "error": "No module named 'app'"
+      },
+      "config/basic_config.py": {
+        "exists": true,
+        "importable": false,
+        "error": "No module named 'app'"
+      },
+      "config/advanced_config.py": {
+        "exists": true,
+        "importable": false,
+        "error": "No module named 'app'"
+      },
+      "config/config_paths.json": {
+        "exists": true,
+        "valid_json": true,
+        "size": 1175
+      },
+      "config/semantic_mapping.json": {
+        "exists": true,
+        "valid_json": true,
+        "size": 2291
+      }
+    },
+    "initialization": {
+      "steps": [
+        {
+          "step": "__init__.py imports",
+          "status": "OK",
+          "imports_count": 6
+        },
+        {
+          "step": "get_claude_ai_instance",
+          "status": "MISSING",
+          "error": "No module named 'app'"
+        },
+        {
+          "step": "flask_context",
+          "status": "INACTIVE"
+        }
+      ],
+      "total_steps": 3,
+      "successful_steps": 1
+    },
+    "module_loading": [
+      {
+        "module": "config",
+        "description": "Configurações",
+        "status": "OK",
+        "has_manager": false,
+        "has_get_function": true
+      },
+      {
+        "module": "utils",
+        "description": "Utilitários",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": true
+      },
+      {
+        "module": "scanning",
+        "description": "Scanners",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": true
+      },
+      {
+        "module": "mappers",
+        "description": "Mapeadores",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": false
+      },
+      {
+        "module": "loaders",
+        "description": "Carregadores",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": false
+      },
+      {
+        "module": "validators",
+        "description": "Validadores",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": false
+      },
+      {
+        "module": "analyzers",
+        "description": "Analisadores",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": false
+      },
+      {
+        "module": "processors",
+        "description": "Processadores",
+        "status": "OK",
+        "has_manager": false,
+        "has_get_function": true
+      },
+      {
+        "module": "enrichers",
+        "description": "Enriquecedores",
+        "status": "OK",
+        "has_manager": false,
+        "has_get_function": false
+      },
+      {
+        "module": "memorizers",
+        "description": "Memorizadores",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": false
+      },
+      {
+        "module": "learners",
+        "description": "Aprendizes",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": false
+      },
+      {
+        "module": "conversers",
+        "description": "Conversadores",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": false
+      },
+      {
+        "module": "coordinators",
+        "description": "Coordenadores",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": false
+      },
+      {
+        "module": "orchestrators",
+        "description": "Orquestradores",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": false
+      },
+      {
+        "module": "integration",
+        "description": "Integração",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": true
+      },
+      {
+        "module": "commands",
+        "description": "Comandos",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": true
+      },
+      {
+        "module": "tools",
+        "description": "Ferramentas",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": true
+      },
+      {
+        "module": "suggestions",
+        "description": "Sugestões",
+        "status": "OK",
+        "has_manager": true,
+        "has_get_function": true
+      }
+    ]
+  }
+}

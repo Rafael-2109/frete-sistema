@@ -288,11 +288,18 @@ class MainOrchestrator:
                 parameters={"query": "{query}"}
             ),
             OrchestrationStep(
+                name="load_data",
+                component="providers",
+                method="get_data_by_domain",
+                parameters={"domain": "{analyze_query_result.dominio}", "filters": "{analyze_query_result.filters}"},
+                dependencies=["analyze_query"]
+            ),
+            OrchestrationStep(
                 name="generate_response",
                 component="response_processor",
                 method="gerar_resposta_otimizada",
-                parameters={"consulta": "{query}", "analise": "{analyze_query_result}", "user_context": "{context}"},
-                dependencies=["analyze_query"]
+                parameters={"consulta": "{query}", "analise": "{analyze_query_result}", "user_context": "{context}", "dados_reais": "{load_data_result}"},
+                dependencies=["analyze_query", "load_data"]
             ),
             OrchestrationStep(
                 name="validate_response",
@@ -996,6 +1003,12 @@ class MainOrchestrator:
                     self.components[component_name] = self.response_processor
                 else:
                     self.components[component_name] = MockComponent("response_processor")
+            elif component_name == "providers":
+                # NOVO: Carregar DataProvider
+                if hasattr(self, 'components') and 'providers' in self.components:
+                    self.components[component_name] = self.components['providers']
+                else:
+                    self.components[component_name] = MockComponent("providers")
             # Adicionar outros componentes conforme necessário
             
             logger.info(f"Componente carregado dinamicamente: {component_name}")

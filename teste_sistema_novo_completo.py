@@ -175,10 +175,10 @@ class TesteSistemaNovoCompleto:
     async def teste_semantic_system(self) -> str:
         """Testa sistema semântico"""
         try:
-            # Semantic core
-            from app.claude_ai_novo.semantic.semantic_manager import SemanticManager
-            from app.claude_ai_novo.semantic.semantic_enricher import SemanticEnricher
-            from app.claude_ai_novo.semantic.semantic_orchestrator import SemanticOrchestrator
+            # Semantic core - corrigido para usar mappers
+            from app.claude_ai_novo.mappers import get_semantic_mapper, SemanticMapper
+            from app.claude_ai_novo.enrichers import get_semantic_enricher
+            # SemanticOrchestrator não existe mais - removido
             
             # Readers
             from app.claude_ai_novo.semantic.readers.database_reader import DatabaseReader

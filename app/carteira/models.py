@@ -539,7 +539,7 @@ class AprovacaoMudancaCarteira(db.Model):
     cod_produto = db.Column(db.String(50), nullable=False, index=True)
     
     # 🎯 DADOS DA COTAÇÃO AFETADA
-    cotacao_id = db.Column(db.Integer, nullable=True, index=True)  # FK para CotacaoFrete (se existir)
+    cotacao_id = db.Column(db.Integer, nullable=True, index=True)  # FK para CotacaoItem (se existir)
     responsavel_cotacao = db.Column(db.String(100), nullable=False, index=True)
     valor_frete_cotado = db.Column(db.Numeric(15,2), nullable=True)
     transportadora_cotada = db.Column(db.String(100), nullable=True)

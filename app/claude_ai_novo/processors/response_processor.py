@@ -29,6 +29,13 @@ except ImportError:
     func = and_ = or_ = text = None
     FLASK_AVAILABLE = False
 
+# Import do DataProvider
+try:
+    from app.claude_ai_novo.providers.data_provider import get_data_provider
+    DATA_PROVIDER_AVAILABLE = True
+except ImportError:
+    DATA_PROVIDER_AVAILABLE = False
+
 # Utilitários
 try:
     from app.claude_ai_novo.utils.response_utils import get_responseutils
@@ -101,6 +108,51 @@ class ResponseProcessor(ProcessorBase):
         self.client = None
         self._init_anthropic_client()
         
+    def _obter_dados_reais(self, consulta: str, analise: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Obtém dados reais do DataProvider baseado na análise
+        
+        DEPRECATED: Este método será removido em versões futuras.
+        O Orchestrator deve ser responsável por fornecer os dados.
+        """
+        
+        # Log deprecation warning
+        self.logger.warning(
+            "⚠️ DEPRECATED: _obter_dados_reais() no ResponseProcessor. "
+            "Use o Orchestrator para coordenar a busca de dados."
+        )
+        
+        if not DATA_PROVIDER_AVAILABLE:
+            self.logger.warning("DataProvider não disponível")
+            return {}
+            
+        try:
+            data_provider = get_data_provider()
+            
+            # Determinar domínio e filtros baseado na análise
+            dominio = analise.get('dominio', 'geral')
+            filters = {}
+            
+            # Adicionar filtros baseados na análise
+            if analise.get('cliente_especifico'):
+                filters['cliente'] = analise['cliente_especifico']
+                
+            if analise.get('periodo_dias'):
+                from datetime import datetime, timedelta
+                filters['data_inicio'] = datetime.now() - timedelta(days=analise['periodo_dias'])
+                filters['data_fim'] = datetime.now()
+                
+            # Buscar dados
+            dados = data_provider.get_data_by_domain(dominio, filters)
+            
+            self.logger.info(f"Dados obtidos do domínio {dominio}: {dados.get('total', 0)} registros")
+            
+            return dados
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao obter dados reais: {e}")
+            return {}
+        
     def _init_anthropic_client(self):
         """Inicializa cliente Anthropic se configurado"""
         
@@ -121,7 +173,7 @@ class ResponseProcessor(ProcessorBase):
             self.logger.error(f"Erro ao inicializar cliente Anthropic: {e}")
     
     def gerar_resposta_otimizada(self, consulta: str, analise: Dict[str, Any], 
-                               user_context: Optional[Dict] = None) -> str:
+                               user_context: Optional[Dict] = None, dados_reais: Optional[Dict] = None) -> str:
         """🎯 Gera resposta otimizada com sistema de reflexão"""
         
         # Validar entrada
@@ -146,7 +198,7 @@ class ResponseProcessor(ProcessorBase):
         
         try:
             # Etapa 1: Resposta inicial
-            resposta_inicial = self._gerar_resposta_inicial(consulta, analise, user_context)
+            resposta_inicial = self._gerar_resposta_inicial(consulta, analise, user_context, dados_reais)
             
             # Etapa 2: Avaliar qualidade
             qualidade = self._avaliar_qualidade_resposta(consulta, resposta_inicial, analise)
@@ -194,7 +246,7 @@ class ResponseProcessor(ProcessorBase):
             return error_msg
     
     def _gerar_resposta_inicial(self, consulta: str, analise: Dict[str, Any], 
-                               user_context: Optional[Dict] = None) -> str:
+                               user_context: Optional[Dict] = None, dados_reais: Optional[Dict] = None) -> str:
         """🎯 Gera resposta inicial otimizada"""
         
         try:
@@ -203,7 +255,7 @@ class ResponseProcessor(ProcessorBase):
                 return self._processar_consulta_padrao(consulta, user_context)
             
             # Construir prompt otimizado
-            prompt = self._construir_prompt_otimizado(consulta, analise, user_context)
+            prompt = self._construir_prompt_otimizado(consulta, analise, user_context, dados_reais)
             
             # Gerar resposta com Claude
             response = self.client.messages.create(
@@ -220,8 +272,13 @@ class ResponseProcessor(ProcessorBase):
             return self._processar_consulta_padrao(consulta, user_context)
     
     def _construir_prompt_otimizado(self, consulta: str, analise: Dict[str, Any], 
-                                   user_context: Optional[Dict] = None) -> str:
+                                   user_context: Optional[Dict] = None, dados_reais: Optional[Dict] = None) -> str:
         """Constrói prompt otimizado baseado na análise"""
+        
+        # Se dados_reais foi passado como parâmetro, usar ele
+        # Senão, buscar usando o método interno
+        if dados_reais is None:
+            dados_reais = self._obter_dados_reais(consulta, analise)
         
         # Base do prompt
         prompt = f"""Você é um assistente especializado em sistema de fretes e logística.
@@ -234,17 +291,52 @@ class ResponseProcessor(ProcessorBase):
 - Cliente específico: {analise.get('cliente_especifico', 'Não especificado')}
 - Tipo de consulta: {analise.get('tipo_consulta', 'informacao')}
 
+**DADOS REAIS DO SISTEMA:**
+"""
+        
+        # Adicionar dados reais ao prompt
+        if dados_reais and dados_reais.get('data'):
+            prompt += f"- Total de registros: {dados_reais.get('total', 0)}\n"
+            
+            # Adicionar resumo dos dados
+            if dados_reais.get('domain') == 'entregas':
+                entregas = dados_reais.get('data', [])
+                if entregas:
+                    # Calcular estatísticas
+                    total_entregues = len([e for e in entregas if e.get('status') == 'ENTREGUE'])
+                    total_pendentes = len([e for e in entregas if e.get('status') != 'ENTREGUE'])
+                    
+                    prompt += f"- Entregas realizadas: {total_entregues}\n"
+                    prompt += f"- Entregas pendentes: {total_pendentes}\n"
+                    
+                    # Listar algumas entregas recentes
+                    prompt += "\n**Entregas recentes:**\n"
+                    for entrega in entregas[:5]:
+                        prompt += f"- NF {entrega.get('numero_nf')} - {entrega.get('destino')} - Status: {entrega.get('status', 'N/A')}\n"
+                        
+            elif dados_reais.get('domain') == 'pedidos':
+                pedidos = dados_reais.get('data', [])
+                if pedidos:
+                    prompt += f"\n**Pedidos encontrados: {len(pedidos)}**\n"
+                    for pedido in pedidos[:5]:
+                        prompt += f"- Pedido {pedido.get('num_pedido')} - {pedido.get('cliente')} - R$ {pedido.get('valor_total', 0):.2f}\n"
+                        
+        else:
+            prompt += "Nenhum dado específico encontrado para esta consulta.\n"
+            
+        prompt += """
 **Instruções:**
-1. Responda de forma clara e objetiva
-2. Use dados específicos quando disponíveis
-3. Forneça contexto relevante
-4. Seja preciso e factual
-5. Evite informações genéricas
+1. Use os dados reais fornecidos acima
+2. Seja específico e quantitativo
+3. Forneça análises baseadas nos dados
+4. Evite respostas genéricas
+5. Se não houver dados, informe claramente
 
 **Formato da resposta:**
-- Comece com um resumo direto
-- Inclua dados quantitativos quando relevantes
-- Termine com insights ou recomendações se apropriado"""
+- Comece com um resumo dos dados
+- Apresente estatísticas relevantes
+- Forneça insights baseados nos dados reais
+- Sugira ações se apropriado"""
 
         # Adicionar contexto do usuário se disponível
         if user_context:

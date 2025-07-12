@@ -1011,7 +1011,8 @@ NÃO misturar com dados de outros clientes."""
                         'tipo_consulta': tipo_analise,
                         'cliente_especifico': cliente_contexto,
                         'periodo_dias': periodo_dias,
-                        'user_context': user_context or {}
+                        'user_context': user_context or {},
+                        '_from_claude_real': True  # Flag para evitar loop
                     }
                     enhanced_result = self.enhanced_claude.process_enhanced_query(consulta, enhanced_context)
                     

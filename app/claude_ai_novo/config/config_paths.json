@@ -1,0 +1,36 @@
+{
+  "base_paths": {
+    "project_root": "/opt/render/project/src",
+    "claude_ai_novo": "/opt/render/project/src/app/claude_ai_novo",
+    "logs": "/opt/render/project/src/app/claude_ai_novo/logs",
+    "uploads": "/opt/render/project/src/app/claude_ai_novo/uploads",
+    "static": "/opt/render/project/src/app/claude_ai_novo/static"
+  },
+  "module_paths": {
+    "analyzers": "analyzers",
+    "processors": "processors",
+    "mappers": "mappers",
+    "loaders": "loaders",
+    "validators": "validators",
+    "enrichers": "enrichers",
+    "learners": "learners",
+    "memorizers": "memorizers",
+    "conversers": "conversers",
+    "orchestrators": "orchestrators",
+    "coordinators": "coordinators",
+    "providers": "providers",
+    "integration": "integration",
+    "scanning": "scanning",
+    "commands": "commands",
+    "tools": "tools",
+    "suggestions": "suggestions",
+    "utils": "utils",
+    "config": "config",
+    "security": "security"
+  },
+  "api_endpoints": {
+    "claude_api": "https://api.anthropic.com/v1/messages",
+    "health_check": "/claude-ai/api/health",
+    "metrics": "/claude-ai/api/claude-ai-novo-metrics"
+  }
+} 

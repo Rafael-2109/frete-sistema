@@ -1,0 +1,29 @@
+{
+  "summary": {
+    "total_issues": 2,
+    "critical_issues": 0,
+    "findings": 1
+  },
+  "issues": [
+    {
+      "type": "missing_provider_integration",
+      "file": "utils/base_classes.py",
+      "severity": "high"
+    },
+    {
+      "type": "orchestrator_no_data_integration",
+      "file": "orchestrators/orchestrator_manager.py",
+      "severity": "high"
+    }
+  ],
+  "findings": [
+    "DataProvider tem queries ao banco"
+  ],
+  "recommendations": [
+    {
+      "priority": "HIGH",
+      "action": "Integrar Orchestrator com DataProvider",
+      "description": "O Orchestrator precisa chamar o DataProvider para obter dados reais"
+    }
+  ]
+}
