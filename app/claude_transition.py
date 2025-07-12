@@ -136,11 +136,39 @@ class ClaudeTransition:
                 # Sistema novo - verificar se é assíncrono
                 if hasattr(self.claude, 'process_query'):
                     result = await self.claude.process_query(consulta, user_context)
+                    
+                    # CORREÇÃO: Extrair resposta corretamente do resultado complexo
+                    if isinstance(result, dict):
+                        # Tentar extrair a resposta real do resultado
+                        if result.get('success'):
+                            # Verificar diferentes estruturas de resposta
+                            if 'agent_response' in result:
+                                agent_resp = result.get('agent_response')
+                                if isinstance(agent_resp, dict) and 'response' in agent_resp:
+                                    return agent_resp.get('response', '')
+                                elif isinstance(agent_resp, str):
+                                    return agent_resp
+                            elif 'response' in result:
+                                return result.get('response', '')
+                            elif 'result' in result:
+                                nested_result = result.get('result')
+                                if isinstance(nested_result, dict) and 'result' in nested_result:
+                                    return nested_result.get('result', '')
+                                else:
+                                    return str(nested_result)
+                        
+                        # Fallback - tentar extrair qualquer resposta útil
+                        for key in ['response', 'result', 'answer', 'message']:
+                            if result.get(key):
+                                return str(result.get(key))
+                    
+                    # Se chegou até aqui, converter para string mas de forma mais inteligente
+                    return str(result) if result is not None else "Resposta não disponível"
                 else:
                     # Fallback para método síncrono
                     result = str(self.claude.get_system_status())
                 
-                return str(result) if result is not None else "Resposta não disponível"
+                return result
                 
             except Exception as e:
                 logger.error(f"❌ Erro no sistema novo: {e}")

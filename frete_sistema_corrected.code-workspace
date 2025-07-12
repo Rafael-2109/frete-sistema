@@ -1,0 +1,122 @@
+{
+  "folders": [
+    {
+      "name": "Sistema Fretes",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "./venv/Scripts/python.exe",
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.terminal.activateEnvironment": true,
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/*.pyc": true,
+      ".pytest_cache": true,
+      "**/.git": false,
+      "**/migrations_backup*": true,
+      "**/validacao_*.json": true,
+      "**/relatorio_*.json": true
+    },
+    "python.analysis.typeCheckingMode": "basic",
+    "rest-client.environmentVariables": {
+      "production": {
+        "baseUrl": "https://sistema-fretes.onrender.com"
+      },
+      "local": {
+        "baseUrl": "http://localhost:5000"
+      }
+    }
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "\ud83d\ude80 Start Flask (Corrected)",
+        "type": "shell",
+        "command": "venv/Scripts/python.exe",
+        "args": [
+          "run.py"
+        ],
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        },
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+        },
+        "options": {
+          "env": {
+            "FLASK_ENV": "development",
+            "FLASK_DEBUG": "1",
+            "PYTHONPATH": "${workspaceFolder}"
+          }
+        }
+      },
+      {
+        "label": "\ud83d\udd0d System Validator (Real)",
+        "type": "shell",
+        "command": "venv/Scripts/python.exe",
+        "args": [
+          "app/claude_ai_novo/validador_sistema_real.py"
+        ],
+        "group": "test"
+      },
+      {
+        "label": "\ud83d\udcca Quick Status Check",
+        "type": "shell",
+        "command": "venv/Scripts/python.exe",
+        "args": [
+          "app/claude_ai_novo/check_status.py"
+        ],
+        "group": "test"
+      },
+      {
+        "label": "\ud83d\udd0d Monitor System (Real)",
+        "type": "shell",
+        "command": "venv/Scripts/python.exe",
+        "args": [
+          "app/claude_ai_novo/monitoring/cursor_monitor.py"
+        ],
+        "group": "build",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": true,
+          "panel": "dedicated"
+        }
+      }
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "\ud83c\udf10 Flask App (Real Env)",
+        "type": "python",
+        "request": "launch",
+        "program": "${workspaceFolder}/run.py",
+        "python": "./venv/Scripts/python.exe",
+        "env": {
+          "FLASK_ENV": "development",
+          "FLASK_DEBUG": "1",
+          "PYTHONPATH": "${workspaceFolder}"
+        },
+        "console": "integratedTerminal",
+        "justMyCode": false
+      },
+      {
+        "name": "\ud83e\uddea Claude AI Validator",
+        "type": "python",
+        "request": "launch",
+        "program": "${workspaceFolder}/app/claude_ai_novo/validador_sistema_real.py",
+        "python": "./venv/Scripts/python.exe",
+        "console": "integratedTerminal"
+      }
+    ]
+  }
+}

@@ -1,0 +1,165 @@
+{
+    "folders": [
+        {
+            "name": "Sistema Fretes",
+            "path": "."
+        }
+    ],
+    "settings": {
+        "python.defaultInterpreterPath": "./venv/Scripts/python.exe",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": true,
+        "python.linting.flake8Enabled": false,
+        "python.terminal.activateEnvironment": true,
+        "files.exclude": {
+            "**/__pycache__": true,
+            "**/*.pyc": true,
+            ".pytest_cache": true,
+            "**/.git": false,
+            "**/node_modules": true,
+            "**/.venv": true,
+            "**/migrations_backup*": true
+        },
+        "files.watcherExclude": {
+            "**/__pycache__/**": true,
+            "**/node_modules/**": true,
+            "**/.git/objects/**": true,
+            "**/.git/subtree-cache/**": true
+        },
+        "python.analysis.typeCheckingMode": "basic",
+        "python.analysis.autoImportCompletions": true,
+        "editor.formatOnSave": false,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": false
+        },
+        "terminal.integrated.defaultProfile.windows": "PowerShell",
+        "rest-client.environmentVariables": {
+            "production": {
+                "baseUrl": "https://sistema-fretes.onrender.com",
+                "apiKey": "${RENDER_API_KEY}"
+            },
+            "local": {
+                "baseUrl": "http://localhost:5000",
+                "apiKey": "dev-key"
+            }
+        },
+        "rest-client.defaultHeaders": {
+            "Content-Type": "application/json",
+            "User-Agent": "Cursor-REST-Client"
+        }
+    },
+    "extensions": {
+        "recommendations": [
+            "ms-python.python",
+            "ms-python.debugpy",
+            "humao.rest-client",
+            "ms-vscode.vscode-json",
+            "redhat.vscode-yaml",
+            "usernamehw.errorlens",
+            "eamodio.gitlens",
+            "ms-python.flake8",
+            "njpwerner.autodocstring"
+        ]
+    },
+    "tasks": {
+        "version": "2.0.0",
+        "tasks": [
+            {
+                "label": "🚀 Start Flask Development",
+                "type": "shell",
+                "command": "python",
+                "args": ["run.py"],
+                "group": {
+                    "kind": "build",
+                    "isDefault": true
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": false,
+                    "panel": "shared",
+                    "showReuseMessage": false
+                },
+                "options": {
+                    "env": {
+                        "FLASK_ENV": "development",
+                        "FLASK_DEBUG": "1",
+                        "PYTHONPATH": "${workspaceFolder}"
+                    }
+                },
+                "problemMatcher": []
+            },
+            {
+                "label": "🔍 Run System Validator",
+                "type": "shell",
+                "command": "python",
+                "args": ["app/claude_ai_novo/validador_sistema_real.py"],
+                "group": "test",
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "dedicated"
+                }
+            },
+            {
+                "label": "🔧 Fix Critical Issues",
+                "type": "shell",
+                "command": "python",
+                "args": ["app/claude_ai_novo/teste_correcoes_finais.py"],
+                "group": "test"
+            },
+            {
+                "label": "📊 System Health Check",
+                "type": "shell",
+                "command": "python",
+                "args": ["app/claude_ai_novo/check_status.py"],
+                "group": "test",
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": false,
+                    "panel": "shared"
+                }
+            }
+        ]
+    },
+    "launch": {
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "🌐 Flask App (Debug)",
+                "type": "python",
+                "request": "launch",
+                "program": "${workspaceFolder}/run.py",
+                "env": {
+                    "FLASK_ENV": "development",
+                    "FLASK_DEBUG": "1",
+                    "PYTHONPATH": "${workspaceFolder}"
+                },
+                "console": "integratedTerminal",
+                "justMyCode": false,
+                "args": [],
+                "stopOnEntry": false,
+                "cwd": "${workspaceFolder}"
+            },
+            {
+                "name": "🧪 Claude AI Tests",
+                "type": "python",
+                "request": "launch",
+                "program": "${workspaceFolder}/app/claude_ai_novo/validador_sistema_real.py",
+                "console": "integratedTerminal",
+                "justMyCode": false,
+                "cwd": "${workspaceFolder}"
+            },
+            {
+                "name": "⚡ Quick Status Check",
+                "type": "python",
+                "request": "launch",
+                "program": "${workspaceFolder}/app/claude_ai_novo/check_status.py",
+                "console": "integratedTerminal",
+                "cwd": "${workspaceFolder}"
+            }
+        ]
+    }
+} 

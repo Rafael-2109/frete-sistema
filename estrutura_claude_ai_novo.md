@@ -547,7 +547,7 @@
 
 ### specialist_agents.py
 **Classes:**
-- `SpecialistAgents` - Agentes especialistas
+- `SpecialistAgent` - Agente especialista
 
 **Métodos:**
 - `get_specialist()` - Obtém especialista

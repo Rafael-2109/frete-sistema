@@ -1,0 +1,235 @@
+# 🎯 CURSOR RULES - SISTEMA FRETES
+# ===============================
+
+Este é um sistema Flask complexo com arquitetura de orquestradores e sistema de IA integrado.
+
+## 🏗️ ESTRUTURA DO PROJETO
+
+### Principais Módulos:
+- `app/claude_ai_novo/` - Sistema de IA integrado (Anthropic Claude)
+- `app/fretes/` - Gestão de fretes e cotações
+- `app/pedidos/` - Gestão de pedidos
+- `app/embarques/` - Controle de embarques e separação
+- `app/financeiro/` - Gestão financeira e faturamento
+- `app/transportadoras/` - Cadastro de transportadoras
+
+### Arquitetura Claude AI Novo:
+```
+claude_ai_novo/
+├── orchestrators/     # Coordenação de processos complexos
+├── processors/        # Processamento de dados e contexto
+├── analyzers/         # Análise de consultas e intenções
+├── mappers/          # Mapeamento semântico de dados
+├── validators/       # Validação de dados e estruturas
+├── coordinators/     # Coordenação de agentes
+├── providers/        # Provedores de dados
+├── utils/           # Utilitários e classes base
+└── config/          # Configurações
+```
+
+## 🔧 COMANDOS ESSENCIAIS
+
+### Para testar o sistema:
+```bash
+# Validação completa do sistema
+python app/claude_ai_novo/validador_sistema_real.py
+
+# Status rápido
+python app/claude_ai_novo/check_status.py
+
+# Monitor em tempo real
+python app/claude_ai_novo/monitoring/cursor_monitor.py
+
+# Iniciar Flask
+python run.py
+```
+
+### Para debugging:
+- Use as configurações de debug no workspace (`frete_sistema.code-workspace`)
+- Testes de API disponíveis em `api_tests.http`
+- Monitor integrado em `monitoring/cursor_monitor.py`
+
+## 🚨 PROBLEMAS CONHECIDOS E SOLUÇÕES
+
+### 1. UTF-8 Encoding Issues
+**Problema**: 'utf-8' codec can't decode byte 0xe3
+**Solução**: Verificar DATABASE_URL, configurações de PostgreSQL
+
+### 2. Import Errors
+**Problema**: Imports circulares entre módulos
+**Solução**: 
+- Usar imports relativos corretos
+- Verificar com: `python -m py_compile arquivo.py`
+
+### 3. Claude AI Configuration
+**Problema**: ANTHROPIC_API_KEY não configurada
+**Solução**: 
+- Configurar variável ambiente
+- Verificar `app/claude_ai_novo/config/__init__.py`
+
+### 4. Processador Response
+**Problema**: ResponseProcessor import error
+**Localização**: `app/claude_ai_novo/processors/response_processor.py`
+
+## 📋 REGRAS DE DESENVOLVIMENTO
+
+### Ao fazer alterações:
+1. **SEMPRE** rodar o validador primeiro:
+   ```bash
+   python app/claude_ai_novo/validador_sistema_real.py
+   ```
+
+2. **SEMPRE** verificar imports não quebram:
+   ```bash
+   python -c "from app.claude_ai_novo import *"
+   ```
+
+3. **SEMPRE** seguir arquitetura por responsabilidade:
+   - `analyzers/` para análise
+   - `processors/` para processamento
+   - `orchestrators/` para coordenação
+
+### Padrões de Código:
+- Usar logging: `logger = logging.getLogger(__name__)`
+- Docstrings obrigatórias em classes e métodos principais
+- Tratamento de erros com fallbacks
+- Imports organizados: padrão → externos → locais
+
+### Estrutura de Arquivos:
+```python
+"""
+Docstring explicando responsabilidade do arquivo
+"""
+
+import logging
+from typing import Dict, List, Optional, Any
+
+# Imports locais
+from ..utils.base_classes import BaseProcessor
+
+logger = logging.getLogger(__name__)
+
+class MinhaClasse(BaseProcessor):
+    """Classe que faz X"""
+    
+    def __init__(self):
+        super().__init__()
+        logger.info(f"{self.__class__.__name__} inicializado")
+```
+
+## 🧪 TESTING E VALIDAÇÃO
+
+### Workflow de Testes:
+1. **Unit Tests**: Métodos individuais
+2. **Integration Tests**: Módulos completos  
+3. **System Tests**: Sistema como um todo
+4. **API Tests**: Endpoints (`api_tests.http`)
+
+### Ferramentas Disponíveis:
+- `validador_sistema_real.py` - Validação completa
+- `check_status.py` - Status rápido
+- `cursor_monitor.py` - Monitoramento em tempo real
+- `api_tests.http` - Testes de API
+
+## 🔗 INTEGRAÇÃO COM CURSOR
+
+### Extensões Recomendadas:
+- Python (ms-python.python)
+- REST Client (humao.rest-client)
+- Error Lens (usernamehw.errorlens)
+- GitLens (eamodio.gitlens)
+
+### Tasks Configuradas:
+- `🚀 Start Flask Development` - Inicia servidor
+- `🔍 Run System Validator` - Valida sistema
+- `📊 System Health Check` - Status rápido
+- `🔧 Fix Critical Issues` - Correções
+
+### Debugging:
+- `🌐 Flask App (Debug)` - Debug do Flask
+- `🧪 Claude AI Tests` - Debug do Claude AI
+- `⚡ Quick Status Check` - Status check
+
+## 🏃‍♂️ QUICK START NO CURSOR
+
+### 1. Abrir Workspace:
+```bash
+# No Cursor:
+File > Open Workspace > frete_sistema.code-workspace
+```
+
+### 2. Configurar Python:
+```bash
+# Ctrl+Shift+P > "Python: Select Interpreter"
+# Selecionar: ./venv/Scripts/python.exe
+```
+
+### 3. Iniciar Desenvolvimento:
+```bash
+# Terminal integrado:
+python run.py
+
+# Ou Task: Ctrl+Shift+P > "Tasks: Run Task" > "🚀 Start Flask Development"
+```
+
+### 4. Testar APIs:
+```bash
+# Abrir: api_tests.http
+# Usar REST Client para testar endpoints
+```
+
+### 5. Monitor em Tempo Real:
+```bash
+# Terminal separado:
+python app/claude_ai_novo/monitoring/cursor_monitor.py
+```
+
+## 🎯 METAS DE QUALIDADE
+
+### Métricas Alvo:
+- **System Score**: > 95%
+- **Import Success**: 100%
+- **API Response Time**: < 500ms
+- **Error Rate**: < 1%
+
+### Validação Contínua:
+- Rodar validador antes de commits
+- Monitor durante desenvolvimento
+- API tests para mudanças críticas
+- Performance tests semanais
+
+## 📚 DOCUMENTAÇÃO ADICIONAL
+
+### Arquivos de Referência:
+- `GUIA_CONFIGURACAO_CURSOR.md` - Setup detalhado
+- `PLANO_CORRECAO_CRITICA.md` - Issues conhecidos
+- `STATUS_VALIDACAO_FINAL.md` - Status atual
+- `GARANTIA_TOTAL_FUNCIONAMENTO.md` - Processo de qualidade
+
+### Logs de Produção:
+- Render: `https://sistema-fretes.onrender.com`
+- Logs disponíveis via dashboard do Render
+- Alertas críticos via sistema de monitoramento
+
+---
+
+## 💡 DICAS PARA O CURSOR
+
+### Composer Integration:
+Quando usar o Composer, mencione:
+- "Sistema Flask com arquitetura de orquestradores"
+- "Claude AI Novo para processamento inteligente"  
+- "Validador sistema real para verificações"
+- "Arquitetura por responsabilidade (analyzers, processors, etc.)"
+
+### Context Awareness:
+- Use `validador_sistema_real.py` para entender estado atual
+- Check `api_tests.http` para endpoints disponíveis
+- Monitor real-time com `cursor_monitor.py`
+- Consulte logs de produção para debugging
+
+### Performance Tips:
+- Use tasks predefinidas (Ctrl+Shift+P > Tasks)
+- Monitor em terminal separado
+- REST Client para API testing
+- Debug integrado do Python 

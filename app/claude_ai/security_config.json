@@ -1,4 +1,29 @@
 {
+  "modo_seguranca": "MAXIMO",
+  "require_approval": true,
+  "whitelist_paths": [
+    "app/teste_*",
+    "app/templates/teste_*",
+    "app/static/temp_*"
+  ],
+  "blacklist_paths": [
+    "app/__init__.py",
+    "app/*/models.py",
+    "config.py",
+    "requirements.txt",
+    "migrations/",
+    "app/auth/",
+    "app/utils/",
+    ".env",
+    "*.pyc",
+    "__pycache__/"
+  ],
+  "max_file_size_kb": 100,
+  "max_files_per_action": 5,
+  "admin_users": [],
+  "auto_backup": true,
+  "require_reason": true,
+  "action_timeout_hours": 24,
   "allowed_paths": [
     "/opt/render/project/src/app",
     "/opt/render/project/src/instance",

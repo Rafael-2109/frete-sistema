@@ -480,7 +480,16 @@ def create_app(config_name=None):
 
     # 🧱 Cria tabelas se ainda não existirem (em ambiente local)
     with app.app_context():
-        db.create_all()
+        # Verificar se deve pular criação de tabelas (para evitar erro UTF-8)
+        if not os.getenv('SKIP_DB_CREATE'):
+            try:
+                db.create_all()
+            except UnicodeDecodeError as e:
+                print(f"⚠️ Erro UTF-8 na criação de tabelas: {e}")
+                print("💡 Tabelas serão criadas manualmente quando necessário")
+            except Exception as e:
+                print(f"⚠️ Erro na criação de tabelas: {e}")
+                print("💡 Continuando sem criação automática de tabelas")
 
     # Importa os modelos para que o Flask-Migrate os detecte
     from app.auth.models import Usuario

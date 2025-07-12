@@ -1,0 +1,134 @@
+###
+### 🎯 API TESTS - SISTEMA FRETES (CONFIGURAÇÃO REAL)
+### Baseado no ambiente detectado: http://localhost:5000
+###
+
+@baseUrl = {{baseUrl}}
+
+### ==========================================
+### 📊 SYSTEM HEALTH & STATUS (VERIFICADOS)
+### ==========================================
+
+### Health Check (Endpoint básico)
+GET {{baseUrl}}/health
+Accept: application/json
+
+### Claude AI Novo Status
+GET {{baseUrl}}/api/claude-ai-novo/status
+Accept: application/json
+
+### ==========================================
+### 🧪 TESTES ESPECÍFICOS DO SEU AMBIENTE
+### ==========================================
+
+### Testar se Flask está rodando
+GET {{baseUrl}}
+Accept: application/json
+
+### Validador Sistema (via API se disponível)
+GET {{baseUrl}}/api/claude-ai-novo/validate
+Accept: application/json
+
+### ==========================================
+### 🤖 CLAUDE AI NOVO - BASEADO NA ESTRUTURA REAL
+### ==========================================
+
+### Query Simples ao Claude
+POST {{baseUrl}}/claude-ai/query
+Content-Type: application/json
+
+{
+    "query": "Status do sistema",
+    "context": {
+        "source": "cursor_test",
+        "environment": "local"
+    }
+}
+
+### ==========================================
+### 📋 ESTRUTURA DETECTADA NO SEU PROJETO
+### ==========================================
+
+### Módulos disponíveis detectados:
+# # - api
+# - auth
+# - cadastros_agendamento
+# - carteira
+# - claude_ai
+# - claude_ai_backup_20250706_221126
+# - claude_ai_novo
+# - cotacao
+# - embarques
+# - estoque
+# - faturamento
+# - financeiro
+# - fretes
+# - localidades
+# - main
+# - monitoramento
+# - pedidos
+# - portaria
+# - producao
+# - routes
+# - separacao
+# - static
+# - tabelas
+# - templates
+# - tests
+# - transportadoras
+# - uploads
+# - utils
+# - veiculos
+# - vinculos
+# - __pycache__
+
+### Claude AI Novo subdirs detectados:
+# # - .vscode
+# - analyzers
+# - commands
+# - config
+# - conversers
+# - coordinators
+# - enrichers
+# - flask_session
+# - integration
+# - learners
+# - loaders
+# - logs
+# - mappers
+# - memorizers
+# - monitoring
+# - orchestrators
+# - processors
+# - providers
+# - scanning
+# - security
+# - static
+# - suggestions
+# - tests
+# - tools
+# - uploads
+# - utils
+# - validators
+# - __pycache__
+
+### ==========================================
+### 🔧 COMANDOS DE DESENVOLVIMENTO 
+### ==========================================
+
+### Para iniciar o sistema:
+### python ./venv/Scripts/python.exe run.py
+
+### Para validar:
+### python ./venv/Scripts/python.exe app/claude_ai_novo/validador_sistema_real.py
+
+### Para monitorar:
+### python ./venv/Scripts/python.exe app/claude_ai_novo/monitoring/cursor_monitor.py
+
+###
+### 📝 CONFIGURAÇÃO BASEADA EM:
+### - Python: 3.11.9 (ta
+### - Virtual Env: Detectado
+### - Flask Entry: run.py
+### - Database: PostgreSQL
+###
