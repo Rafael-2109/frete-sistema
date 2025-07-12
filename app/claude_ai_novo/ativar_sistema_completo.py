@@ -130,7 +130,7 @@ class SistemaCompleto:
         try:
             # 4. Ativar Orchestrator Manager
             logger.info("\n🎭 Ativando Orchestrator Manager...")
-            from app.claude_ai_novo.orchestrators import get_orchestrator_manager
+            from app.claude_ai_novo.orchestrators.orchestrator_manager import get_orchestrator_manager
             
             orchestrator = get_orchestrator_manager()
             if orchestrator.health_check():

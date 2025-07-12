@@ -59,14 +59,14 @@ class IntegrationManager:
         
         logger.info("🔗 Integration Manager iniciado")
         
-        # Inicializar orchestrator automaticamente
-        self._ensure_orchestrator_loaded()
+        # NÃO inicializar orchestrator automaticamente para evitar loop circular
+        # O orchestrator será carregado sob demanda quando necessário
     
     def _ensure_orchestrator_loaded(self):
         """Garante que o orchestrator está carregado."""
         if self.orchestrator_manager is None:
             try:
-                from app.claude_ai_novo.orchestrators import get_orchestrator_manager
+                from app.claude_ai_novo.orchestrators.orchestrator_manager import get_orchestrator_manager
                 self.orchestrator_manager = get_orchestrator_manager()
                 self.system_metrics['orchestrator_loaded'] = True
                 self.system_metrics['orchestrator_active'] = True
@@ -129,7 +129,7 @@ class IntegrationManager:
         
         try:
             # Importar o orchestrator manager
-            from app.claude_ai_novo.orchestrators import get_orchestrator_manager
+            from app.claude_ai_novo.orchestrators.orchestrator_manager import get_orchestrator_manager
             
             # Instanciar o maestro
             self.orchestrator_manager = get_orchestrator_manager()

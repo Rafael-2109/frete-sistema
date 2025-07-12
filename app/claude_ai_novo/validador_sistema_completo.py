@@ -251,7 +251,7 @@ class ValidadorSistemaCompleto:
         resultados = []
         
         try:
-            from app.claude_ai_novo.orchestrators import get_orchestrator_manager
+            from app.claude_ai_novo.orchestrators.orchestrator_manager import get_orchestrator_manager
             orchestrator_manager = get_orchestrator_manager()
             
             # Testar method process_query
@@ -360,7 +360,7 @@ class ValidadorSistemaCompleto:
         resultados = []
         
         try:
-            from app.claude_ai_novo.analyzers import get_analyzer_manager
+            from app.claude_ai_novo.analyzers.analyzer_manager import get_analyzer_manager
             analyzer_manager = get_analyzer_manager()
             
             if analyzer_manager:
@@ -632,7 +632,7 @@ class ValidadorSistemaCompleto:
         try:
             # Teste de import speed
             start_time = time.time()
-            from app.claude_ai_novo.orchestrators import get_orchestrator_manager
+            from app.claude_ai_novo.orchestrators.orchestrator_manager import get_orchestrator_manager
             orchestrator_manager = get_orchestrator_manager()
             import_time = time.time() - start_time
             
@@ -664,7 +664,7 @@ class ValidadorSistemaCompleto:
         
         try:
             # Testar health check do OrchestratorManager
-            from app.claude_ai_novo.orchestrators import get_orchestrator_manager
+            from app.claude_ai_novo.orchestrators.orchestrator_manager import get_orchestrator_manager
             orchestrator_manager = get_orchestrator_manager()
             
             if hasattr(orchestrator_manager, 'health_check'):

@@ -27,7 +27,7 @@ async def testar_dados_reais():
     # 1. Testar IntegrationManager
     print("1️⃣ TESTANDO INTEGRATION MANAGER:")
     try:
-        from app.claude_ai_novo.integration import get_integration_manager
+        from app.claude_ai_novo.integration.integration_manager import get_integration_manager
         integration = get_integration_manager()
         
         # Testar query simples
@@ -107,7 +107,7 @@ async def testar_dados_reais():
     # 5. Teste completo via OrchestratorManager
     print("\n5️⃣ TESTE COMPLETO VIA ORCHESTRATOR MANAGER:")
     try:
-        from app.claude_ai_novo.orchestrators import get_orchestrator_manager
+        from app.claude_ai_novo.orchestrators.orchestrator_manager import get_orchestrator_manager
         orchestrator = get_orchestrator_manager()
         
         # Query completa

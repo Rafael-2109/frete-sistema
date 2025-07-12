@@ -950,7 +950,7 @@ class MainOrchestrator:
             # Tentar carregar componentes conhecidos
             if component_name == "analyzers":
                 try:
-                    from app.claude_ai_novo.analyzers import get_analyzer_manager
+                    from app.claude_ai_novo.analyzers.analyzer_manager import get_analyzer_manager
                     self.components[component_name] = get_analyzer_manager()
                 except ImportError:
                     # Fallback - criar componente mock
@@ -1025,7 +1025,7 @@ class MainOrchestrator:
         
         # Componentes com managers
         try:
-            from app.claude_ai_novo.analyzers import get_analyzer_manager
+            from app.claude_ai_novo.analyzers.analyzer_manager import get_analyzer_manager
             self.components["analyzers"] = get_analyzer_manager()
             logger.debug("✅ Analyzers carregado")
         except ImportError:

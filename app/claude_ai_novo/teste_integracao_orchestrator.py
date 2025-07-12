@@ -38,7 +38,7 @@ def teste_orchestrator_import():
     print("\n🔍 Testando importação do orchestrator...")
     
     try:
-        from app.claude_ai_novo.orchestrators import get_orchestrator_manager
+        from app.claude_ai_novo.orchestrators.orchestrator_manager import get_orchestrator_manager
         print("✅ get_orchestrator_manager importado com sucesso")
         
         # Testar chamada da função

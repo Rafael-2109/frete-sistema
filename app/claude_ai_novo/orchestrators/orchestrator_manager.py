@@ -115,7 +115,7 @@ class OrchestratorManager:
         """Lazy loading do IntegrationManager"""
         if self._integration_manager is None:
             try:
-                from app.claude_ai_novo.integration.integration_manager import get_integration_manager
+# from app.claude_ai_novo.integration.integration_manager import get_integration_manager # REMOVIDO: Import circular
                 self._integration_manager = get_integration_manager()
                 logger.info("🔗 IntegrationManager integrado ao MAESTRO")
             except ImportError as e:

@@ -53,7 +53,7 @@ async def testar_sistema():
     # 3. Testar IntegrationManager
     print("\n3️⃣ TESTANDO INTEGRATION MANAGER:")
     try:
-        from app.claude_ai_novo.integration import get_integration_manager
+        from app.claude_ai_novo.integration.integration_manager import get_integration_manager
         
         integration = get_integration_manager()
         

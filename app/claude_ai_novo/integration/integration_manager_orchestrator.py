@@ -113,7 +113,7 @@ class IntegrationManagerOrchestrator:
         
         try:
             # Importar o orchestrator manager
-            from app.claude_ai_novo.orchestrators import get_orchestrator_manager
+            from app.claude_ai_novo.orchestrators.orchestrator_manager import get_orchestrator_manager
             
             # Instanciar o maestro
             self.orchestrator_manager = get_orchestrator_manager()

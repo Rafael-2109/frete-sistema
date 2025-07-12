@@ -62,7 +62,7 @@ class AwaitFixTester:
             Resultado do teste
         """
         try:
-            from app.claude_ai_novo.orchestrators import get_orchestrator_manager
+            from app.claude_ai_novo.orchestrators.orchestrator_manager import get_orchestrator_manager
             
             # Criar instância
             manager = get_orchestrator_manager()
