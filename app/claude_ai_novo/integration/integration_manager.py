@@ -58,6 +58,21 @@ class IntegrationManager:
         }
         
         logger.info("🔗 Integration Manager iniciado")
+        
+        # Inicializar orchestrator automaticamente
+        self._ensure_orchestrator_loaded()
+    
+    def _ensure_orchestrator_loaded(self):
+        """Garante que o orchestrator está carregado."""
+        if self.orchestrator_manager is None:
+            try:
+                from app.claude_ai_novo.orchestrators import get_orchestrator_manager
+                self.orchestrator_manager = get_orchestrator_manager()
+                self.system_metrics['orchestrator_loaded'] = True
+                self.system_metrics['orchestrator_active'] = True
+                logger.info("✅ Orchestrator carregado automaticamente")
+            except Exception as e:
+                logger.error(f"❌ Erro ao carregar orchestrator automaticamente: {e}")
     
     async def initialize_all_modules(self) -> Dict[str, Any]:
         """
@@ -169,6 +184,9 @@ class IntegrationManager:
     
     async def process_unified_query(self, query: Optional[str], context: Optional[Dict] = None) -> Dict[str, Any]:
         """Processa uma consulta usando o orchestrator."""
+        
+        # Garantir que orchestrator está carregado
+        self._ensure_orchestrator_loaded()
         
         # ✅ LOG PARA DEBUG
         logger.info(f"🔄 INTEGRATION: Query='{query}' | Orchestrator={self.orchestrator_manager is not None}")

@@ -775,14 +775,24 @@ class SessionOrchestrator:
         # Usar IntegrationManager se disponível
         if self.integration_manager and workflow_type in ['query', 'intelligent_query']:
             try:
-                result = self.integration_manager.process_unified_query(
-                    workflow_data.get('query', ''),
-                    workflow_data.get('context', {})
-                )
-                if asyncio.iscoroutine(result):
-                    loop = asyncio.get_event_loop()
-                    result = loop.run_until_complete(result)
-                return result
+                # Criar uma nova tarefa assíncrona para evitar conflito com loop existente
+                import concurrent.futures
+                
+                async def _process_async():
+                    return await self.integration_manager.process_unified_query(
+                        workflow_data.get('query', ''),
+                        workflow_data.get('context', {})
+                    )
+                
+                # Executar em thread separada para evitar conflito com event loop
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _process_async())
+                    result = future.result(timeout=30)
+                
+                # Se obteve resultado válido, retornar
+                if isinstance(result, dict):
+                    return result
+                    
             except Exception as e:
                 logger.error(f"Erro no IntegrationManager: {e}")
         
@@ -956,11 +966,29 @@ class SessionOrchestrator:
         # Usar IntegrationManager para dados reais
         if self.integration_manager:
             try:
-                result = self.integration_manager.process_unified_query(query, context)
-                if asyncio.iscoroutine(result):
-                    loop = asyncio.get_event_loop()
-                    result = loop.run_until_complete(result)
-                return result
+                # Criar uma nova tarefa assíncrona para evitar conflito com loop existente
+                import concurrent.futures
+                import asyncio
+                
+                async def _process_async():
+                    return await self.integration_manager.process_unified_query(query, context)
+                
+                # Executar em thread separada para evitar conflito com event loop
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _process_async())
+                    result = future.result(timeout=30)
+                
+                # Se obteve resultado válido, retornar
+                if isinstance(result, dict) and result.get('response'):
+                    return {
+                        'success': True,
+                        'result': result['response'],
+                        'query': query,
+                        'intent': 'status_entregas',
+                        'source': 'integration_manager',
+                        'data': result.get('data', {})
+                    }
+                
             except Exception as e:
                 logger.error(f"Erro ao processar entregas via IntegrationManager: {e}")
         
