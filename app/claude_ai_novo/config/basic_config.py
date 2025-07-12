@@ -4,7 +4,7 @@ Fonte única da verdade para todas as configurações Claude
 """
 
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 class ClaudeAIConfig:
     """Configurações básicas do Claude AI - FONTE DA VERDADE"""
@@ -34,6 +34,16 @@ class ClaudeAIConfig:
     # Logs
     LOG_LEVEL = "INFO"
     LOG_FILE = "logs/claude_ai.log"
+    
+    @classmethod
+    def get_anthropic_api_key(cls) -> Optional[str]:
+        """
+        Retorna a chave da API Anthropic.
+        
+        Returns:
+            Optional[str]: A chave da API Anthropic ou None se não configurada
+        """
+        return cls.ANTHROPIC_API_KEY
     
     @classmethod
     def get_claude_params(cls) -> Dict[str, Any]:
