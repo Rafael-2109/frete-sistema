@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Tuple
 import json
+import asyncio
 
 # Adicionar o diretório raiz do projeto ao path ANTES de qualquer import
 project_root = Path(__file__).resolve().parent.parent.parent
@@ -256,7 +257,7 @@ class ValidadorSistemaReal:
             })
             return False
     
-    def test_production_health(self) -> bool:
+    async def test_production_health(self) -> bool:
         """Testa se o sistema consegue responder adequadamente"""
         self.log("🔍 Testando saúde do sistema...")
         
@@ -267,8 +268,8 @@ class ValidadorSistemaReal:
             
             # Verificar se consegue processar uma query simples
             if hasattr(manager, 'process_query'):
-                # Tentar processamento básico
-                result = manager.process_query("teste de saúde", {})
+                # Tentar processamento básico (CORRIGIDO: usando await)
+                result = await manager.process_query("teste de saúde", {})
                 return result is not None
             else:
                 self.results['production_issues'].append({
@@ -285,7 +286,7 @@ class ValidadorSistemaReal:
             })
             return False
             
-    def run_comprehensive_validation(self) -> Dict[str, Any]:
+    async def run_comprehensive_validation(self) -> Dict[str, Any]:
         """Executa validação completa no ambiente real"""
         self.log("🔥 INICIANDO VALIDAÇÃO SISTEMA REAL")
         self.log("=" * 50)
@@ -303,7 +304,13 @@ class ValidadorSistemaReal:
         for test_name, test_func in tests:
             self.log(f"\n🧪 Executando: {test_name}")
             try:
-                result = test_func()
+                # Verificar se é função async
+                import inspect
+                if inspect.iscoroutinefunction(test_func):
+                    result = await test_func()
+                else:
+                    result = test_func()
+                    
                 self.results['tests'][test_name] = {
                     'status': 'PASS' if result else 'FAIL',
                     'timestamp': datetime.now().isoformat()
@@ -388,7 +395,7 @@ def main():
     """Função principal"""
     try:
         validator = ValidadorSistemaReal()
-        results = validator.run_comprehensive_validation()
+        results = asyncio.run(validator.run_comprehensive_validation())
         
         # Exit code baseado no resultado
         if results['summary']['score'] < 50:

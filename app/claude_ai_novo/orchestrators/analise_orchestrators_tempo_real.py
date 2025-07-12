@@ -10,6 +10,7 @@ import os
 import sys
 import time
 import json
+import asyncio
 from datetime import datetime
 from typing import Dict, Any, List
 
@@ -49,7 +50,7 @@ def analisar_init_orchestrators():
         print(f"   ❌ Erro na análise do __init__.py: {e}")
         return {'sucesso': False, 'erro': str(e)}
 
-def analisar_orchestrator_manager():
+async def analisar_orchestrator_manager():
     """Analisa o OrchestratorManager em tempo real"""
     print("🎭 Analisando OrchestratorManager (MAESTRO)...")
     
@@ -82,9 +83,9 @@ def analisar_orchestrator_manager():
         print(f"   🔍 Detecção para sessão: {session_detect.value}")
         print(f"   🔍 Detecção para workflow: {workflow_detect.value}")
         
-        # Teste de operação
+        # Teste de operação (CORRIGIDO: usando await)
         start_time = time.time()
-        result = manager.orchestrate_operation("test_operation", {"teste": "dados"})
+        result = await manager.orchestrate_operation("test_operation", {"teste": "dados"})
         operation_time = time.time() - start_time
         
         print(f"   ⏱️ Tempo de operação: {operation_time:.3f}s")
@@ -275,14 +276,14 @@ def analisar_workflow_orchestrator():
         print(f"   ❌ Erro no WorkflowOrchestrator: {e}")
         return {'sucesso': False, 'erro': str(e)}
 
-def gerar_relatorio_completo():
+async def gerar_relatorio_completo():
     """Gera relatório completo da análise"""
     print("📋 Gerando relatório completo...")
     
     relatorio = {
         'timestamp': datetime.now().isoformat(),
         'analise_init': analisar_init_orchestrators(),
-        'orchestrator_manager': analisar_orchestrator_manager(),
+        'orchestrator_manager': await analisar_orchestrator_manager(),
         'main_orchestrator': analisar_main_orchestrator(),
         'session_orchestrator': analisar_session_orchestrator(),
         'workflow_orchestrator': analisar_workflow_orchestrator()
@@ -356,15 +357,19 @@ def exibir_resumo_executivo(relatorio: Dict[str, Any]):
     else:
         print("❌ AVALIAÇÃO: CRÍTICO - Sistema com problemas sérios")
 
-if __name__ == "__main__":
+async def main():
+    """Função principal async"""
     print("🚀 ANÁLISE DOS ORCHESTRATORS EM TEMPO REAL")
     print("="*60)
     
     try:
-        relatorio = gerar_relatorio_completo()
+        relatorio = await gerar_relatorio_completo()
         exibir_resumo_executivo(relatorio)
         
     except Exception as e:
         print(f"❌ Erro crítico na análise: {e}")
         import traceback
-        traceback.print_exc() 
+        traceback.print_exc()
+
+if __name__ == "__main__":
+    asyncio.run(main()) 

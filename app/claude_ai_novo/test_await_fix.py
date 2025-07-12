@@ -99,8 +99,8 @@ class AwaitFixTester:
             # Criar instância
             manager = IntegrationManager()
             
-            # Testar process_unified_query
-            result = manager.process_unified_query("teste")
+            # Testar process_unified_query (agora com await correto)
+            result = asyncio.run(manager.process_unified_query("teste"))
             
             return {
                 'test': 'integration_manager_main',

@@ -7,13 +7,14 @@ Este arquivo valida o funcionamento dos orchestrators para documentação.
 """
 import logging
 import sys
+import asyncio
 from typing import Dict, Any
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def testar_orchestrator_manager():
+async def testar_orchestrator_manager():
     """Testa o OrchestratorManager (MAESTRO)"""
     print("🎭 Testando OrchestratorManager (MAESTRO)...")
     try:
@@ -33,8 +34,8 @@ def testar_orchestrator_manager():
         workflow_detect = manager._detect_appropriate_orchestrator("execute_workflow", {"workflow": "test"})
         print(f"   🔍 Detecção para workflow: {workflow_detect.value}")
         
-        # Teste de operação
-        result = manager.orchestrate_operation("test_operation", {"teste": "dados"})
+        # Teste de operação (CORRIGIDO: usando await)
+        result = await manager.orchestrate_operation("test_operation", {"teste": "dados"})
         print(f"   ✅ Operação de teste: {result['success']}")
         
         return True
@@ -121,7 +122,7 @@ def testar_workflow_orchestrator():
         print(f"   ❌ Erro no WorkflowOrchestrator: {e}")
         return False
 
-def testar_integracao_completa():
+async def testar_integracao_completa():
     """Testa integração entre orchestrators"""
     print("🔗 Testando integração completa...")
     try:
@@ -129,16 +130,16 @@ def testar_integracao_completa():
         
         manager = get_orchestrator_manager()
         
-        # Teste de operação de sessão via manager
-        session_result = manager.orchestrate_operation(
+        # Teste de operação de sessão via manager (CORRIGIDO: usando await)
+        session_result = await manager.orchestrate_operation(
             "create_session", 
             {"user_id": 1, "metadata": {"teste": "integracao"}},
             target_orchestrator=manager._detect_appropriate_orchestrator("create_session", {})
         )
         print(f"   ✅ Operação de sessão via manager: {session_result['success']}")
         
-        # Teste de workflow via manager
-        workflow_result = manager.orchestrate_operation(
+        # Teste de workflow via manager (CORRIGIDO: usando await)
+        workflow_result = await manager.orchestrate_operation(
             "analise_completa",
             {"dados": "teste_integracao"},
             target_orchestrator=manager._detect_appropriate_orchestrator("workflow", {})
@@ -151,16 +152,17 @@ def testar_integracao_completa():
         print(f"   ❌ Erro na integração: {e}")
         return False
 
-if __name__ == "__main__":
+async def main():
+    """Função principal async"""
     print("🧪 TESTE DE VALIDAÇÃO DOS ORCHESTRATORS")
     print("=" * 50)
     
     resultados = {
-        "OrchestratorManager": testar_orchestrator_manager(),
+        "OrchestratorManager": await testar_orchestrator_manager(),
         "MainOrchestrator": testar_main_orchestrator(),
         "SessionOrchestrator": testar_session_orchestrator(),
         "WorkflowOrchestrator": testar_workflow_orchestrator(),
-        "Integração": testar_integracao_completa()
+        "Integração": await testar_integracao_completa()
     }
     
     print("\n📋 RESUMO DOS TESTES:")
@@ -176,7 +178,10 @@ if __name__ == "__main__":
     
     if total_sucesso == total_testes:
         print("🎉 TODOS OS ORCHESTRATORS FUNCIONANDO CORRETAMENTE!")
-        sys.exit(0)
+        return 0
     else:
         print("⚠️ ALGUNS ORCHESTRATORS APRESENTAM PROBLEMAS")
-        sys.exit(1) 
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(asyncio.run(main())) 
