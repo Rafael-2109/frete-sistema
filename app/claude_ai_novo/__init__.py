@@ -5,7 +5,7 @@ Sistema de IA avançado completamente modularizado com arquitetura industrial:
 
 MÓDULOS PRINCIPAIS:
 - 🤖 Multi-Agent System: 6 agentes especializados
-- 📊 Database Readers: 6 módulos de banco de dados  
+- 📊 Database scanners: 6 módulos de banco de dados  
 - 🧠 Intelligence Learning: 5 módulos de aprendizado
 - 🔍 Semantic Processing: Processamento semântico avançado
 - 🎯 Suggestion Engine: Motor de sugestões inteligente
@@ -310,7 +310,7 @@ def get_claude_ai_instance():
         try:
             # Imports do sistema principal
             from app import db
-            from app.claude_ai_novo.integration.claude.claude_client import get_claude_client
+            from app.claude_ai_novo.integration.external_api_integration import get_claude_client
             
             # Obter cliente do Claude
             claude_client = get_claude_client()

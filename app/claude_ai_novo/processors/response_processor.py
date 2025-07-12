@@ -20,7 +20,7 @@ import time
 # Imports com fallback seguro
 try:
     from flask_login import current_user
-    from flask_sqlalchemy import db
+    from app import db
     from sqlalchemy import func, and_, or_, text
     FLASK_AVAILABLE = True
 except ImportError:

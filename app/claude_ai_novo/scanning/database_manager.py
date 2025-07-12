@@ -1,9 +1,9 @@
 """
-📊 DATABASE READER - Wrapper Principal Modularizado
+📊 DATABASE SCANNER - Wrapper Principal Modularizado
 
-Wrapper principal que integra todos os módulos especializados de leitura do banco:
+Wrapper principal que integra todos os módulos especializados de leitura do banco de dados:
 - DatabaseConnection: Gestão de conexões
-- MetadataReader: Leitura de metadados  
+- MetadataScanner: Leitura de metadados  
 - DataAnalyzer: Análise de dados reais
 - RelationshipMapper: Mapeamento de relacionamentos
 - FieldSearcher: Busca de campos
@@ -20,7 +20,7 @@ from datetime import datetime
 # Imports dos módulos especializados
 from app.claude_ai_novo.scanning.database import (
     DatabaseConnection,
-    MetadataReader,
+    MetadataScanner,
     DataAnalyzer,
     RelationshipMapper,
     FieldSearcher,
@@ -39,7 +39,7 @@ class DatabaseManager:
     
     MÓDULOS INTEGRADOS:
     - DatabaseConnection: Conexões com banco
-    - MetadataReader: Metadados das tabelas
+    - MetadataScanner: Metadados das tabelas
     - DataAnalyzer: Análise de dados reais  
     - RelationshipMapper: Relacionamentos
     - FieldSearcher: Busca de campos
@@ -58,15 +58,15 @@ class DatabaseManager:
         self.connection = DatabaseConnection(db_engine, db_session)
         
         # Inicializar módulos especializados
-        self.metadata_reader = MetadataReader(self.connection.get_inspector())
+        self.metadata_scanner = MetadataScanner(self.connection.get_inspector())
         self.data_analyzer = DataAnalyzer(self.connection.get_engine())
         self.relationship_mapper = RelationshipMapper(self.connection.get_inspector())
         self.field_searcher = FieldSearcher(
             self.connection.get_inspector(), 
-            self.metadata_reader
+            self.metadata_scanner
         )
         self.auto_mapper = AutoMapper(
-            self.metadata_reader,
+            self.metadata_scanner,
             self.data_analyzer
         )
         
@@ -77,7 +77,7 @@ class DatabaseManager:
         self.tabelas_cache = {}  # Para compatibilidade
         self.modelos_cache = {}  # Para compatibilidade
         
-        logger.info("🔍 DatabaseReader modular inicializado com 6 módulos especializados")
+        logger.info("🔍 DatabaseScanner modular inicializado com 6 módulos especializados")
     
     # ===== MÉTODOS DE COMPATIBILIDADE (Interface anterior) =====
     
@@ -88,7 +88,7 @@ class DatabaseManager:
         Returns:
             Lista de nomes das tabelas
         """
-        return self.metadata_reader.listar_tabelas()
+        return self.metadata_scanner.listar_tabelas()
     
     def obter_campos_tabela(self, nome_tabela: str) -> Dict[str, Any]:
         """
@@ -100,7 +100,7 @@ class DatabaseManager:
         Returns:
             Dict com informações dos campos
         """
-        return self.metadata_reader.obter_campos_tabela(nome_tabela)
+        return self.metadata_scanner.obter_campos_tabela(nome_tabela)
     
     def analisar_dados_reais(self, nome_tabela: str, nome_campo: str, limite: int = 100) -> Dict[str, Any]:
         """
@@ -210,7 +210,7 @@ class DatabaseManager:
         
         try:
             # Estatísticas básicas
-            estatisticas_metadata = self.metadata_reader.obter_estatisticas_tabelas()
+            estatisticas_metadata = self.metadata_scanner.obter_estatisticas_tabelas()
             
             # Informações de conexão
             info_conexao = self.connection.get_connection_info()
@@ -223,7 +223,7 @@ class DatabaseManager:
                 'metadata': estatisticas_metadata,
                 'relacionamentos': grafo_relacionamentos.get('estatisticas', {}),
                 'modulos': {
-                    'metadata_reader': self.metadata_reader.is_available(),
+                    'metadata_scanner': self.metadata_scanner.is_available(),
                     'data_analyzer': self.data_analyzer.is_available(),
                     'relationship_mapper': self.relationship_mapper.is_available(),
                     'field_searcher': self.field_searcher.is_available(),
@@ -321,7 +321,7 @@ class DatabaseManager:
         """
         Limpa todos os caches dos módulos.
         """
-        self.metadata_reader.limpar_cache()
+        self.metadata_scanner.limpar_cache()
         self.data_analyzer.limpar_cache()
         self.relationship_mapper.limpar_cache()
         self.field_searcher.limpar_cache()
@@ -352,14 +352,14 @@ class DatabaseManager:
             engine = self.connection.get_engine()
             
             if inspector is not None:
-                self.metadata_reader.set_inspector(inspector)
+                self.metadata_scanner.set_inspector(inspector)
                 self.relationship_mapper.set_inspector(inspector)
                 self.field_searcher.set_inspector(inspector)
             
             if engine is not None:
                 self.data_analyzer.set_engine(engine)
-            self.field_searcher.set_metadata_reader(self.metadata_reader)
-            self.auto_mapper.set_metadata_reader(self.metadata_reader)
+            self.field_searcher.set_metadata_scanner(self.metadata_scanner)
+            self.auto_mapper.set_metadata_scanner(self.metadata_scanner)
             self.auto_mapper.set_data_analyzer(self.data_analyzer)
             
             # Atualizar propriedades de compatibilidade
@@ -390,9 +390,9 @@ class DatabaseManager:
                 'metodo_conexao': self.connection.connection_method,
                 'inspector_disponivel': self.connection.is_inspector_available()
             },
-            'metadata_reader': {
-                'disponivel': self.metadata_reader.is_available(),
-                'cache_size': len(self.metadata_reader.tabelas_cache)
+            'metadata_scanner': {
+                'disponivel': self.metadata_scanner.is_available(),
+                'cache_size': len(self.metadata_scanner.tabelas_cache)
             },
             'data_analyzer': {
                 'disponivel': self.data_analyzer.is_available(),
@@ -415,8 +415,8 @@ class DatabaseManager:
     # ===== MÉTODOS DE COMPATIBILIDADE ADICIONAL =====
     
     def _normalizar_tipo_sqlalchemy(self, tipo_sqlalchemy: str) -> str:
-        """Método de compatibilidade - usa MetadataReader"""
-        return self.metadata_reader._normalizar_tipo_sqlalchemy(tipo_sqlalchemy)
+        """Método de compatibilidade - usa MetadataScanner"""
+        return self.metadata_scanner._normalizar_tipo_sqlalchemy(tipo_sqlalchemy)
     
     def _calcular_score_match(self, nome_campo: str, nome_padrao: str) -> float:
         """Método de compatibilidade - usa FieldSearcher"""

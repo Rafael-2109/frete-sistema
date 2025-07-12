@@ -24,8 +24,8 @@ def verificar_sistema_ativo():
     
     # Tentar importar sistema de transição
     try:
-        from app.claude_transition import get_claude_transition
-        transition = get_claude_transition()
+        from app.claude_transition import ClaudeTransitionManager
+        transition = ClaudeTransitionManager()
         
         print(f"🎯 Sistema Ativo: {transition.sistema_ativo.upper()}")
         

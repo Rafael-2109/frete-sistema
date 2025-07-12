@@ -7,6 +7,13 @@ Sistema de refinamento semântico iterativo para melhorar interpretação de con
 # Imports da base comum
 from .base import ProcessorBase, logging, datetime
 from typing import Dict, List, Any
+from app.claude_ai_novo.mappers import get_semantic_mapper, SemanticMapper
+
+# Import correto do SemanticMapper
+try:
+    from ..mappers import get_semantic_mapper
+except ImportError:
+    get_semantic_mapper = None
 
 class SemanticLoopProcessor(ProcessorBase):
     """Processador de Loop Semântico-Lógico"""
@@ -109,42 +116,44 @@ class SemanticLoopProcessor(ProcessorBase):
     async def _analyze_semantics(self, query: str) -> Dict[str, Any]:
         """Análise semântica da consulta"""
         
-        # Integrar com novo sistema de mapeamento semântico modular
+        # Usar o SemanticMapper real da pasta mappers/
         try:
-            from app.claude_ai_novo.orchestrators.semantic_manager import SemanticManager
-            semantic_manager = SemanticManager()
-            
-            # Mapear consulta completa usando nova arquitetura
-            try:
-                mapping_result = semantic_manager.mapear_consulta_completa(query)
+            if get_semantic_mapper:
+                semantic_mapper = get_semantic_mapper()
                 
-                return {
-                    'mapped_terms': mapping_result.get('termos_mapeados', []),
-                    'confidence': mapping_result.get('confianca_geral', 0.5),
-                    'domain_detected': mapping_result.get('dominio_detectado', 'geral'),
-                    'semantic_complexity': len(query.split()) / 20.0,  # Normalizado
-                    'semantic_manager_used': True  # Indica uso da nova arquitetura
-                }
-            except (AttributeError, KeyError) as e:
-                self.logger.warning(f"Erro no mapeamento semântico modular: {e}")
-                # Retornar análise básica sem mapeamento
-                return {
-                    'mapped_terms': [],
-                    'confidence': 0.5,
-                    'domain_detected': 'geral',
-                    'semantic_complexity': len(query.split()) / 20.0,
-                    'semantic_manager_used': False
-                }
+                # Usar o método correto do SemanticMapper
+                try:
+                    mapping_result = semantic_mapper.analisar_consulta_semantica(query)
+                    
+                    return {
+                        'mapped_terms': mapping_result.get('termos_mapeados', []),
+                        'confidence': mapping_result.get('confianca_geral', 0.5),
+                        'domain_detected': mapping_result.get('dominio_detectado', 'geral'),
+                        'semantic_complexity': len(query.split()) / 20.0,  # Normalizado
+                        'semantic_mapper_used': True  # Indica uso do mapper real
+                    }
+                except (AttributeError, KeyError) as e:
+                    self.logger.warning(f"Erro no mapeamento semântico: {e}")
+                    # Retornar análise básica sem mapeamento
+                    return self._get_fallback_semantic_analysis(query)
+            else:
+                # SemanticMapper não disponível, usar fallback
+                self.logger.warning("SemanticMapper não disponível, usando fallback")
+                return self._get_fallback_semantic_analysis(query)
             
         except Exception as e:
             self.logger.warning(f"Erro na análise semântica: {e}")
-            return {
-                'mapped_terms': [],
-                'confidence': 0.3,
-                'domain_detected': 'unknown',
-                'semantic_complexity': 0.5,
-                'semantic_manager_used': False
-            }
+            return self._get_fallback_semantic_analysis(query)
+    
+    def _get_fallback_semantic_analysis(self, query: str) -> Dict[str, Any]:
+        """Análise semântica fallback quando mapper não está disponível"""
+        return {
+            'mapped_terms': query.split()[:5],  # Primeiros 5 termos como fallback
+            'confidence': 0.5,
+            'domain_detected': 'geral',
+            'semantic_complexity': len(query.split()) / 20.0,
+            'semantic_mapper_used': False
+        }
     
     async def _validate_logic(self, semantic_analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Validação lógica da interpretação semântica"""

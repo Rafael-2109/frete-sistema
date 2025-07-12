@@ -11,9 +11,12 @@ import uuid
 import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Callable
-from enum import Enum
 from dataclasses import dataclass, field
 from threading import Lock
+from enum import Enum
+
+# Import dos tipos compartilhados
+from .types import SessionStatus, SessionPriority
 
 # Imports internos
 try:
@@ -28,13 +31,10 @@ except ImportError:
         from ..utils.flask_fallback import get_current_user
     except ImportError as e:
         logging.warning(f"⚠️ Dependências não disponíveis: {e}")
-        # Fallbacks seguros
-        def get_session_memory():
-            return MockSessionMemory()
-        def get_performance_analyzer():
-            return MockPerformanceAnalyzer()
-        def get_current_user():
-            return None
+        # Fallbacks seguros - sem anotações de tipo para evitar conflitos
+        get_session_memory = lambda: MockSessionMemory()
+        get_performance_analyzer = lambda: MockPerformanceAnalyzer()
+        get_current_user = lambda: None
 
 logger = logging.getLogger(__name__)
 
@@ -64,25 +64,6 @@ class MockPerformanceAnalyzer:
     
     def get_metrics(self):
         return {"metrics": "mock", "healthy": True}
-
-class SessionStatus(Enum):
-    """Status possíveis de uma sessão."""
-    CREATED = "created"
-    INITIALIZING = "initializing"
-    ACTIVE = "active"
-    PROCESSING = "processing"
-    WAITING_INPUT = "waiting_input"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    EXPIRED = "expired"
-    TERMINATED = "terminated"
-
-class SessionPriority(Enum):
-    """Prioridade de uma sessão."""
-    LOW = "low"
-    NORMAL = "normal"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 @dataclass
 class SessionContext:
@@ -187,9 +168,6 @@ class SessionOrchestrator:
                 logger.warning(f"⚠️ ConversationManager não disponível: {e}")
                 self._conversation_manager = False  # Marcar como indisponível
         return self._conversation_manager if self._conversation_manager is not False else None
-    
-    # REMOVIDO: @property main_orchestrator - CAUSA LOOP CIRCULAR
-    # REMOVIDO: @property integration_manager - CAUSA LOOP CIRCULAR
     
     def _get_session_memory_safe(self):
         """Obtém session_memory com fallback seguro"""
@@ -759,14 +737,15 @@ class SessionOrchestrator:
             
             # Usar Claude diretamente se disponível
             try:
-                from app.claude_ai_novo.utils.base_classes import ResponseProcessor
+                # Usar ResponseProcessor do utils.base_classes
+                from app.claude_ai_novo.processors.response_processor import ResponseProcessor
                 processor = ResponseProcessor()
                 
                 # Processar com Claude
-                response = processor.process_with_claude(
-                    query=query,
-                    context=context,
-                    system_prompt="Você é um assistente especializado em logística e fretes."
+                response = processor.gerar_resposta_otimizada(
+                    consulta=query,
+                    analise={'dominio': 'entregas', 'query_type': 'status'},
+                    user_context=context
                 )
                 
                 if response:
@@ -951,7 +930,7 @@ class SessionOrchestrator:
         # Agora usa Claude diretamente
         
         try:
-            from app.claude_ai_novo.utils.base_classes import ResponseProcessor
+            from app.claude_ai_novo.processors.response_processor import ResponseProcessor
             processor = ResponseProcessor()
             
             # Preparar contexto específico para entregas
@@ -962,12 +941,14 @@ class SessionOrchestrator:
             }
             
             # Processar com Claude
-            response = processor.process_with_claude(
-                query=query,
-                context=delivery_context,
-                system_prompt="""Você é um assistente especializado em logística e entregas.
-                Forneça informações precisas sobre status de entregas, prazos e monitoramento.
-                Se a query mencionar um cliente específico como Atacadão, inclua detalhes relevantes."""
+            response = processor.gerar_resposta_otimizada(
+                consulta=query,
+                analise={
+                    'dominio': 'entregas',
+                    'query_type': 'status',
+                    'cliente_especifico': 'Atacadão' if 'atacadão' in query.lower() else None
+                },
+                user_context=delivery_context
             )
             
             if response:
@@ -1028,20 +1009,18 @@ class SessionOrchestrator:
         # Agora usa Claude diretamente
         
         try:
-            from app.claude_ai_novo.utils.base_classes import ResponseProcessor
+            from app.claude_ai_novo.processors.response_processor import ResponseProcessor
             processor = ResponseProcessor()
             
             # Processar com Claude
-            response = processor.process_with_claude(
-                query=query,
-                context=context or {},
-                system_prompt="""Você é um assistente especializado em logística, fretes e gestão de entregas.
-                Ajude com informações sobre:
-                - Status de entregas e pedidos
-                - Consultas de fretes e transportadoras
-                - Relatórios financeiros e faturamento
-                - Monitoramento de embarques
-                Seja preciso e útil em suas respostas."""
+            response = processor.gerar_resposta_otimizada(
+                consulta=query,
+                analise={
+                    'dominio': 'geral',
+                    'query_type': 'informacao',
+                    'tipo_consulta': 'geral'
+                },
+                user_context=context or {}
             )
             
             if response:

@@ -11,28 +11,13 @@ Data: 2025-01-07
 
 import logging
 from typing import Dict, List, Any, Optional, Union
-from dataclasses import dataclass
-from enum import Enum
 import asyncio
 from datetime import datetime
 
+# Import dos tipos compartilhados
+from .types import OrchestrationMode, OrchestrationStep
+
 logger = logging.getLogger(__name__)
-
-class OrchestrationMode(Enum):
-    """Modos de orquestração"""
-    SEQUENTIAL = "sequential"
-    PARALLEL = "parallel"
-    ADAPTIVE = "adaptive"
-
-@dataclass
-class OrchestrationStep:
-    """Definição de um passo de orquestração"""
-    name: str
-    component: str
-    method: str
-    parameters: Optional[Dict[str, Any]] = None
-    dependencies: Optional[List[str]] = None
-    timeout: int = 30
 
 class MainOrchestrator:
     """
@@ -1033,7 +1018,7 @@ class MainOrchestrator:
             logger.debug("⚠️ Analyzers mock")
         
         try:
-            from app.claude_ai_novo.processors import get_processormanager
+            from app.claude_ai_novo.processors.processor_manager import get_processormanager
             self.components["processors"] = get_processormanager()
             logger.debug("✅ Processors carregado")
         except ImportError:

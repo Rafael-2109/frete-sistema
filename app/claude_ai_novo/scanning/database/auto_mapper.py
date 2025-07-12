@@ -23,29 +23,29 @@ class AutoMapper:
     automáticos baseado em análise de metadados e dados.
     """
     
-    def __init__(self, metadata_reader=None, data_analyzer=None):
+    def __init__(self, metadata_scanner, data_analyzer=None):
         """
         Inicializa o mapeador automático.
         
         Args:
-            metadata_reader: MetadataReader para metadados
+            metadata_scanner: MetadataScanner para metadados
             data_analyzer: DataAnalyzer para análise de dados
         """
-        self.metadata_reader = metadata_reader
+        self.metadata_scanner = metadata_scanner
         self.data_analyzer = data_analyzer
         self.mapping_cache: Dict[str, Dict[str, Any]] = {}
         
         # Padrões para geração automática de termos
         self.term_patterns = self._load_term_patterns()
     
-    def set_metadata_reader(self, metadata_reader) -> None:
+    def set_metadata_scanner(self, metadata_scanner) -> None:
         """
-        Define o metadata reader a ser usado.
+        Define o metadata scanner a ser usado.
         
         Args:
-            metadata_reader: MetadataReader instance
+            metadata_scanner: MetadataScanner instance
         """
-        self.metadata_reader = metadata_reader
+        self.metadata_scanner = metadata_scanner
         self.mapping_cache.clear()
     
     def set_data_analyzer(self, data_analyzer) -> None:
@@ -69,8 +69,8 @@ class AutoMapper:
         Returns:
             Dict com mapeamento automático
         """
-        if not self.metadata_reader:
-            logger.error("❌ MetadataReader não disponível")
+        if not self.metadata_scanner:
+            logger.error("❌ MetadataScanner não disponível")
             return {}
         
         # Usar cache se disponível
@@ -80,7 +80,7 @@ class AutoMapper:
         
         try:
             # Obter metadados da tabela
-            info_tabela = self.metadata_reader.obter_campos_tabela(nome_tabela)
+            info_tabela = self.metadata_scanner.obter_campos_tabela(nome_tabela)
             
             if not info_tabela:
                 return {}
@@ -580,7 +580,7 @@ class AutoMapper:
         Returns:
             True se disponível
         """
-        return self.metadata_reader is not None
+        return self.metadata_scanner is not None
 
 
 # Exportações principais

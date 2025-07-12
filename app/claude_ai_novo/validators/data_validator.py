@@ -183,16 +183,21 @@ class ValidationUtils:
     def _calcular_estatisticas_por_dominio(self, analise: Dict[str, Any], filtros_usuario: Dict[str, Any], dominio: str) -> Optional[Dict[str, Any]]:
         """📊 Calcula estatísticas específicas baseadas no domínio"""
         try:
-            from app.claude_ai_novo.integration.claude import get_claude_integration
-            claude_integration = get_claude_integration()
-            
-            if not claude_integration:
+            # Validação avançada com Claude
+            try:
+                from app.claude_ai_novo.integration.external_api_integration import get_claude_integration
+                claude = get_claude_integration()
+            except Exception as e:
+                self.logger.warning(f"⚠️ Não foi possível carregar Claude Integration: {e}")
+                claude = None
+
+            if not claude:
                 return {"erro": "Sistema de Claude não está disponível"}
             
             # Para entregas, usar a função existente
             if dominio == "entregas":
-                # Usar a instância global para acessar o método
-                return claude_integration._calcular_estatisticas_especificas(analise, filtros_usuario)
+                # Usar o método local da própria classe
+                return self._calcular_estatisticas_especificas(analise, filtros_usuario)
             
             # Para outros domínios, estatísticas já estão incluídas nos dados carregados
             return {

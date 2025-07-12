@@ -1,0 +1,7 @@
+{
+  "total_modules": 57,
+  "modules_with_deps": 57,
+  "total_dependencies": 118,
+  "circular_dependencies": 0,
+  "cycles": []
+}

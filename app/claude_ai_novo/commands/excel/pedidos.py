@@ -9,6 +9,10 @@ from app.claude_ai_novo.commands.base_command import (
     logging, datetime, db, current_user
 )
 from pathlib import Path
+from typing import cast, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Query
 
 # Excel generation imports
 try:
@@ -20,14 +24,15 @@ except ImportError:
     EXCEL_AVAILABLE = False
 
 # Sistema imports (com fallbacks)
-try:
-    from app.pedidos.models import Pedido
-    from app.cotacao.models import CotacaoFrete
-    from app.cadastros_agendamento.models import ContatoAgendamento
-    from sqlalchemy import func, and_, or_
-    SISTEMA_AVAILABLE = True
-except ImportError:
-    SISTEMA_AVAILABLE = False
+from app.pedidos.models import Pedido
+from app.cadastros_agendamento.models import ContatoAgendamento
+from sqlalchemy import func, and_, or_
+from app.cotacao.models import CotacaoItem
+SISTEMA_AVAILABLE = True
+Pedido = None
+CotacaoItem = None
+ContatoAgendamento = None
+func = and_ = or_ = None
 
 logger = logging.getLogger(__name__)
 
@@ -112,17 +117,22 @@ class ExcelPedidos(BaseCommand):
     def _buscar_dados_pedidos(self, filtros: dict) -> list:
         """Busca dados de pedidos com filtros avançados"""
         
-        query = db.session.query(Pedido).join(ContatoAgendamento, isouter=True)
+        # Verificar se modelos estão disponíveis
+        if not SISTEMA_AVAILABLE or Pedido is None or ContatoAgendamento is None:
+            return []
+            
+        query = db.session.query(cast(Any, Pedido)).join(cast(Any, ContatoAgendamento), isouter=True)
         
         # Aplicar filtros
         if filtros.get('cliente'):
             cliente = filtros['cliente']
-            query = query.filter(
-                or_(
-                    Pedido.raz_social_red.ilike(f'%{cliente}%'),
-                    Pedido.cnpj_cpf.ilike(f'%{cliente}%')
+            if or_ is not None:
+                query = query.filter(
+                    or_(
+                        Pedido.raz_social_red.ilike(f'%{cliente}%'),
+                        Pedido.cnpj_cpf.ilike(f'%{cliente}%')
+                    )
                 )
-            )
         
         if filtros.get('uf'):
             uf = filtros['uf']
@@ -142,11 +152,17 @@ class ExcelPedidos(BaseCommand):
                 )
             elif status == 'embarcado':
                 # Status EMBARCADO: Tem data_embarque mas não tem NF
-                query = query.filter(
-                    Pedido.data_embarque.isnot(None),
-                    or_(Pedido.nf.is_(None), Pedido.nf == ''),
-                    Pedido.nf_cd == False
-                )
+                if or_ is not None:
+                    query = query.filter(
+                        Pedido.data_embarque.isnot(None),
+                        or_(Pedido.nf.is_(None), Pedido.nf == ''),
+                        Pedido.nf_cd == False
+                    )
+                else:
+                    query = query.filter(
+                        Pedido.data_embarque.isnot(None),
+                        Pedido.nf_cd == False
+                    )
             elif status == 'cotado':
                 # Status COTADO: Tem cotação mas não tem data_embarque e não está no CD
                 query = query.filter(
@@ -162,12 +178,18 @@ class ExcelPedidos(BaseCommand):
                 )
         
         if filtros.get('data_inicio') and filtros.get('data_fim'):
-            query = query.filter(
-                and_(
+            if and_ is not None:
+                query = query.filter(
+                    and_(
+                        Pedido.data_pedido >= filtros['data_inicio'],
+                        Pedido.data_pedido <= filtros['data_fim']
+                    )
+                )
+            else:
+                query = query.filter(
                     Pedido.data_pedido >= filtros['data_inicio'],
                     Pedido.data_pedido <= filtros['data_fim']
                 )
-            )
         
         if filtros.get('valor_minimo'):
             query = query.filter(Pedido.valor_saldo_total >= filtros['valor_minimo'])

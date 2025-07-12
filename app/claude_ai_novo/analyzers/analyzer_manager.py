@@ -662,6 +662,14 @@ def get_manager() -> AnalyzerManager:
     """Alias para get_analyzermanager()"""
     return get_analyzermanager()
 
+# Função para compatibilidade com imports antigos
+def get_analyzer_manager(orchestrator=None) -> AnalyzerManager:
+    """Retorna instância do AnalyzerManager (compatibilidade)"""
+    manager = get_analyzermanager()
+    if orchestrator and hasattr(manager, 'initialize_diagnostics_analyzer'):
+        manager.initialize_diagnostics_analyzer(orchestrator)
+    return manager
+
 if __name__ == "__main__":
     # Teste básico
     manager = get_analyzermanager()

@@ -14,7 +14,7 @@ from datetime import datetime
 # DataExecutor removido - funcionalidade redundante
 
 try:
-    from app.claude_ai_novo.providers.data_provider import SistemaRealData as RealSistemaRealData
+    from app.claude_ai_novo.providers.data_provider import DataProvider as RealSistemaRealData
     SistemaRealData = RealSistemaRealData
 except ImportError:
     class FallbackSistemaRealData:
@@ -65,7 +65,7 @@ class DataManager(BaseContextManager):
 
             # Inicializar SistemaRealData
             try:
-                self.components['provider'] = SistemaRealData()
+                self.components['provider'] = RealSistemaRealData()
                 self.logger.debug(f"SistemaRealData inicializado")
             except Exception as e:
                 self.logger.warning(f"Erro ao inicializar SistemaRealData: {e}")
@@ -75,7 +75,7 @@ class DataManager(BaseContextManager):
 
             # Inicializar ContextLoader
             try:
-                self.components['context'] = ContextLoader()
+                self.components['context'] = RealContextLoader()
                 self.logger.debug(f"ContextLoader inicializado")
             except Exception as e:
                 self.logger.warning(f"Erro ao inicializar ContextLoader: {e}")

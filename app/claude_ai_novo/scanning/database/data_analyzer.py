@@ -433,17 +433,17 @@ class DataAnalyzer:
             logger.error("❌ Engine do banco não disponível")
             return {}
         
-        # Usar MetadataReader para obter campos
+        # Usar MetadataScanner para obter campos
         try:
-            from app.claude_ai_novo.scanning.database.metadata_reader import MetadataReader
+            from app.claude_ai_novo.scanning.database.metadata_scanner import MetadataScanner
             from app.claude_ai_novo.scanning.database.database_connection import DatabaseConnection
             
             # Criar conexão temporária
             db_conn = DatabaseConnection(self.db_engine)
-            metadata_reader = MetadataReader(db_conn.get_inspector())
+            metadata_scanner = MetadataScanner(db_conn.get_inspector())
             
             # Obter campos da tabela
-            info_tabela = metadata_reader.obter_campos_tabela(nome_tabela)
+            info_tabela = metadata_scanner.obter_campos_tabela(nome_tabela)
             
             if not info_tabela:
                 return {}

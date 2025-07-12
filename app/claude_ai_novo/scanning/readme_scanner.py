@@ -1,5 +1,5 @@
 """
-📚 README READER - Leitor Inteligente do README de Mapeamento
+📚 README SCANNER - Leitor Inteligente do README de Mapeamento
 ==========================================================
 
 Módulo responsável por ler e extrair informações semânticas
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class ReadmeScanner:
     """
-    Scanner inteligente do README de mapeamento semântico.
+    Scanner inteligente do README de mapeamento semântico do banco de dados.
     
     Responsável por extrair termos naturais e informações de contexto
     do arquivo README_MAPEAMENTO_SEMANTICO_COMPLETO.md.
@@ -443,10 +443,10 @@ class ReadmeScanner:
         return self.readme_path is not None and self.conteudo is not None
     
     def __str__(self) -> str:
-        """Representação string do reader"""
+        """Representação string do scanner"""
         status = "DISPONÍVEL" if self.esta_disponivel() else "INDISPONÍVEL"
         return f"<ReadmeScanner status={status} path={self.readme_path}>"
     
     def __repr__(self) -> str:
-        """Representação detalhada do reader"""
+        """Representação detalhada do scanner"""
         return self.__str__() 

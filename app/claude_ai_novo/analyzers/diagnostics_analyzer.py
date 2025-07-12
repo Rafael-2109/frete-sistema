@@ -34,7 +34,20 @@ class DiagnosticsAnalyzer:
             orchestrator: Instância do SemanticOrchestrator
         """
         self.orchestrator = orchestrator
+        self._scanning_manager = None
         logger.info("📊 DiagnosticsAnalyzer inicializado")
+    
+    @property
+    def scanning_manager(self):
+        """Lazy loading do ScanningManager"""
+        if self._scanning_manager is None:
+            try:
+                from app.claude_ai_novo.scanning import get_scanning_manager
+                self._scanning_manager = get_scanning_manager()
+            except ImportError:
+                logger.warning("⚠️ ScanningManager não disponível")
+                self._scanning_manager = False
+        return self._scanning_manager if self._scanning_manager is not False else None
     
     def gerar_estatisticas_completas(self) -> Dict[str, Any]:
         """
@@ -184,7 +197,7 @@ class DiagnosticsAnalyzer:
     
     def gerar_relatorio_enriquecido(self) -> Dict[str, Any]:
         """
-        Gera relatório completo com dados dos readers integrados.
+        Gera relatório completo com dados dos scanners integrados.
         
         Returns:
             Dict com relatório enriquecido
@@ -192,71 +205,72 @@ class DiagnosticsAnalyzer:
         relatorio = {
             'timestamp': datetime.now().isoformat(),
             'sistema_semantic_manager': self.gerar_estatisticas_completas(),
-            'readme_reader_status': {},
-            'database_reader_status': {},
+            'readme_scanner_status': {},
+            'database_scanner_status': {},
             'integracao_status': {},
             'recomendacoes': [],
             'saude_sistema': {}
         }
         
-        # Obter readers
-        readers = self.orchestrator.obter_readers()
-        readme_reader = readers.get('readme_reader')
-        database_reader = readers.get('database_reader')
+        # Obter scanners diretamente do ScanningManager
+        readme_scanner = None
+        database_scanner = None
         
-        # Status ReadmeReader
-        if readme_reader:
-            relatorio['readme_reader_status'] = {
+        if self.scanning_manager:
+            readme_scanner = self.scanning_manager.get_readme_scanner()
+            database_scanner = self.scanning_manager.get_database_scanner()
+        
+        # Status ReadmeScanner
+        if readme_scanner:
+            relatorio['readme_scanner_status'] = {
                 'disponivel': True,
-                'validacao': readme_reader.validar_estrutura_readme()
+                'validacao': readme_scanner.validar_estrutura_readme()
             }
         else:
-            relatorio['readme_reader_status'] = {'disponivel': False}
+            relatorio['readme_scanner_status'] = {'disponivel': False}
         
-        # Status DatabaseReader
-        if database_reader:
-            relatorio['database_reader_status'] = {
+        # Status DatabaseScanner
+        if database_scanner:
+            relatorio['database_scanner_status'] = {
                 'disponivel': True,
-                'estatisticas': database_reader.obter_estatisticas_gerais()
+                'estatisticas': database_scanner.obter_estatisticas_gerais()
             }
         else:
-            relatorio['database_reader_status'] = {'disponivel': False}
+            relatorio['database_scanner_status'] = {'disponivel': False}
         
         # Status da integração
-        relatorio['integracao_status'] = self._avaliar_integracao(readers)
+        relatorio['integracao_status'] = self._avaliar_integracao(readme_scanner, database_scanner)
         
         # Saúde geral do sistema
-        relatorio['saude_sistema'] = self.orchestrator.verificar_saude_sistema()
+        relatorio['saude_sistema'] = self._verificar_saude_sistema()
         
         # Gerar recomendações
         relatorio['recomendacoes'] = self._gerar_recomendacoes_sistema(relatorio)
         
         return relatorio
     
-    def _avaliar_integracao(self, readers: Dict[str, Any]) -> Dict[str, Any]:
+    def _avaliar_integracao(self, readme_scanner, database_scanner) -> Dict[str, Any]:
         """
-        Avalia status da integração dos readers.
+        Avalia status da integração dos scanners.
         
         Args:
-            readers: Dict com readers disponíveis
+            readme_scanner: Instância do ReadmeScanner
+            database_scanner: Instância do DatabaseScanner
             
         Returns:
             Status da integração
         """
-        readme_reader = readers.get('readme_reader')
-        database_reader = readers.get('database_reader')
-        
         status = {
-            'readers_integrados': 2,
-            'readers_funcionais': sum([
-                readme_reader is not None,
-                database_reader is not None
+            'scanners_integrados': 2,
+            'scanners_funcionais': sum([
+                readme_scanner is not None,
+                database_scanner is not None
             ]),
             'consistencia_validacao': {}
         }
         
         # Executar validação de consistência se ambos disponíveis
-        if readme_reader and database_reader:
+        if readme_scanner and database_scanner:
             try:
                 from app.claude_ai_novo.validators.semantic_validator import get_semantic_validator
                 validator = get_semantic_validator(self.orchestrator)
@@ -265,6 +279,46 @@ class DiagnosticsAnalyzer:
                 status['consistencia_validacao'] = {'erro': str(e)}
         
         return status
+    
+    def _verificar_saude_sistema(self) -> Dict[str, Any]:
+        """
+        Verifica a saúde do sistema baseado nos componentes disponíveis.
+        
+        Returns:
+            Dict com status de saúde
+        """
+        saude = {
+            'timestamp': datetime.now().isoformat(),
+            'status_geral': 'OK',
+            'scanning_manager_disponivel': self.scanning_manager is not None,
+            'readme_scanner_disponivel': False,
+            'database_scanner_disponivel': False
+        }
+        
+        # Verificar scanners
+        if self.scanning_manager:
+            readme_scanner = self.scanning_manager.get_readme_scanner()
+            database_scanner = self.scanning_manager.get_database_scanner()
+            saude['readme_scanner_disponivel'] = readme_scanner is not None
+            saude['database_scanner_disponivel'] = database_scanner is not None
+        
+        # Determinar status geral baseado em componentes disponíveis
+        componentes_disponiveis = sum([
+            saude['scanning_manager_disponivel'],
+            saude['readme_scanner_disponivel'],
+            saude['database_scanner_disponivel']
+        ])
+        
+        if componentes_disponiveis >= 3:
+            saude['status_geral'] = 'EXCELENTE'
+        elif componentes_disponiveis >= 2:
+            saude['status_geral'] = 'BOM'
+        elif componentes_disponiveis >= 1:
+            saude['status_geral'] = 'REGULAR'
+        else:
+            saude['status_geral'] = 'CRÍTICO'
+            
+        return saude
     
     def _gerar_recomendacoes_sistema(self, relatorio: Dict[str, Any]) -> List[str]:
         """
@@ -278,15 +332,15 @@ class DiagnosticsAnalyzer:
         """
         recomendacoes = []
         
-        # Verificar readers funcionais
+        # Verificar scanners funcionais
         integracao = relatorio.get('integracao_status', {})
-        readers_funcionais = integracao.get('readers_funcionais', 0)
+        scanners_funcionais = integracao.get('scanners_funcionais', 0)
         
-        if readers_funcionais < 2:
-            recomendacoes.append("🔧 Ativar todos os readers para funcionalidade completa")
+        if scanners_funcionais < 2:
+            recomendacoes.append("🔧 Ativar todos os scanners para funcionalidade completa")
         
         # Verificar qualidade do README
-        readme_status = relatorio.get('readme_reader_status', {})
+        readme_status = relatorio.get('readme_scanner_status', {})
         if readme_status.get('disponivel'):
             validacao = readme_status.get('validacao', {})
             warnings = validacao.get('warnings', [])
@@ -294,7 +348,7 @@ class DiagnosticsAnalyzer:
                 recomendacoes.append(f"📄 Melhorar README: {len(warnings)} avisos encontrados")
         
         # Verificar banco de dados
-        db_status = relatorio.get('database_reader_status', {})
+        db_status = relatorio.get('database_scanner_status', {})
         if db_status.get('disponivel'):
             stats = db_status.get('estatisticas', {})
             total_tabelas = stats.get('total_tabelas', 0)
@@ -330,7 +384,7 @@ class DiagnosticsAnalyzer:
         """
         estatisticas = self.gerar_estatisticas_completas()
         diagnostico = self.diagnosticar_qualidade()
-        saude = self.orchestrator.verificar_saude_sistema()
+        saude = self._verificar_saude_sistema()
         
         return {
             'timestamp': datetime.now().isoformat(),
@@ -343,9 +397,9 @@ class DiagnosticsAnalyzer:
             },
             'alertas': {
                 'erros_criticos': len(diagnostico['erros_encontrados']),
-                'readers_indisponiveis': 2 - sum([
-                    saude['readme_reader_disponivel'],
-                    saude['database_reader_disponivel']
+                'scanners_indisponiveis': 2 - sum([
+                    saude['readme_scanner_disponivel'],
+                    saude['database_scanner_disponivel']
                 ])
             },
             'metricas_rapidas': {

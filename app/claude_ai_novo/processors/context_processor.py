@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta, date
 #!/usr/bin/env python3
 """
 ContextProcessor - Processamento especializado de contexto
@@ -6,11 +5,12 @@ ContextProcessor - Processamento especializado de contexto
 
 # Imports da base comum (apenas o que realmente existe)
 from .base import ProcessorBase, logging
+from datetime import datetime, timedelta, date
 
 # Imports específicos com fallbacks
 try:
     from flask_login import current_user
-    from flask_sqlalchemy import db
+    from app import db
     from sqlalchemy import func, and_, or_, text
     FLASK_AVAILABLE = True
 except ImportError:
@@ -44,7 +44,10 @@ import asyncio
 import time
 
 # Imports específicos do contexto
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, cast, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Query
 
 # Configuração local
 try:
@@ -188,6 +191,13 @@ Módulos: pedidos, fretes, embarques, monitoramento, separacao, carteira, etc.""
             # Carregar dados específicos do domínio
             dados = {}
             
+            # Carregar entregas
+            if analise.get('dominio') in ['entregas', 'monitoramento', 'geral']:
+                if EntregaMonitorada is None:
+                    dados['entregas'] = []
+                else:
+                    query_entregas = db.session.query(cast(Any, EntregaMonitorada))
+            
             if dominio == "entregas":
                 dados = self._carregar_dados_entregas(analise)
             elif dominio == "fretes":
@@ -259,11 +269,11 @@ Módulos: pedidos, fretes, embarques, monitoramento, separacao, carteira, etc.""
         """Carrega dados específicos de entregas"""
         
         try:
-            if not MODELS_AVAILABLE:
+            if not MODELS_AVAILABLE or EntregaMonitorada is None or db is None:
                 return {}
             
             # Construir query básica
-            query = db.session.query(EntregaMonitorada)
+            query = db.session.query(cast(Any, EntregaMonitorada))
             
             # Filtrar por cliente se especificado
             cliente = analise.get('cliente_especifico')
@@ -292,11 +302,11 @@ Módulos: pedidos, fretes, embarques, monitoramento, separacao, carteira, etc.""
         """Carrega dados específicos de fretes"""
         
         try:
-            if not MODELS_AVAILABLE:
+            if not MODELS_AVAILABLE or Frete is None or db is None:
                 return {}
             
             # Construir query básica
-            query = db.session.query(Frete)
+            query = db.session.query(cast(Any, Frete))
             
             # Filtrar por cliente se especificado
             cliente = analise.get('cliente_especifico')
@@ -325,11 +335,11 @@ Módulos: pedidos, fretes, embarques, monitoramento, separacao, carteira, etc.""
         """Carrega dados específicos de pedidos"""
         
         try:
-            if not MODELS_AVAILABLE:
+            if not MODELS_AVAILABLE or Pedido is None or db is None:
                 return {}
             
             # Construir query básica
-            query = db.session.query(Pedido)
+            query = db.session.query(cast(Any, Pedido))
             
             # Filtrar por cliente se especificado
             cliente = analise.get('cliente_especifico')
@@ -358,11 +368,11 @@ Módulos: pedidos, fretes, embarques, monitoramento, separacao, carteira, etc.""
         """Carrega dados específicos financeiros"""
         
         try:
-            if not MODELS_AVAILABLE:
+            if not MODELS_AVAILABLE or PendenciaFinanceiraNF is None or db is None:
                 return {}
             
             # Construir query básica
-            query = db.session.query(PendenciaFinanceiraNF)
+            query = db.session.query(cast(Any, PendenciaFinanceiraNF))
             
             # Filtrar por cliente se especificado
             cliente = analise.get('cliente_especifico')

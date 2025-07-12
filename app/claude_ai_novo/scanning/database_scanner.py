@@ -16,6 +16,7 @@ import logging
 from typing import Dict, List, Any, Optional
 from sqlalchemy import inspect as sql_inspect, text
 from flask import current_app
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -381,6 +382,58 @@ class DatabaseScanner:
         except Exception as e:
             logger.debug(f"Erro ao obter performance MySQL: {e}")
             return {}
+    
+    def obter_estatisticas_gerais(self) -> Dict[str, Any]:
+        """
+        Obtém estatísticas gerais do banco de dados.
+        
+        Returns:
+            Dict com estatísticas gerais
+        """
+        try:
+            from app import db
+            
+            inspector = sql_inspect(db.engine)
+            table_names = inspector.get_table_names()
+            
+            # Estatísticas básicas
+            estatisticas = {
+                'total_tabelas': len(table_names),
+                'tabelas': table_names,
+                'dialect': str(db.engine.dialect.name),
+                'driver': str(db.engine.driver),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Adicionar estatísticas detalhadas se disponíveis
+            detailed_stats = self._get_table_statistics(db)
+            if detailed_stats and 'error' not in detailed_stats:
+                estatisticas.update(detailed_stats)
+            
+            # Análise de relacionamentos
+            schema = {'tables': {}}
+            for table_name in table_names[:10]:  # Limitar para performance
+                try:
+                    schema['tables'][table_name] = {
+                        'columns': inspector.get_columns(table_name),
+                        'foreign_keys': inspector.get_foreign_keys(table_name)
+                    }
+                except Exception as e:
+                    logger.debug(f"Erro ao inspecionar {table_name}: {e}")
+            
+            relationships = self._analyze_relationships(schema['tables'])
+            estatisticas['relacionamentos'] = relationships
+            
+            logger.info(f"📊 Estatísticas gerais: {estatisticas['total_tabelas']} tabelas")
+            return estatisticas
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao obter estatísticas gerais: {e}")
+            return {
+                'error': str(e),
+                'total_tabelas': 0,
+                'tabelas': []
+            }
 
 
 # Singleton para uso global

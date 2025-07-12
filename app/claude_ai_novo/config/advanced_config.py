@@ -85,7 +85,9 @@ class AdvancedConfig(ClaudeAIConfig):
     
     def create_claude_client(self, api_key: str, mode: str = "balanced"):
         """Factory method usando configurações dinâmicas do SystemConfig"""
+        # Import movido para dentro do método para evitar dependência circular
         from ..integration.external_api_integration import ClaudeAPIClient
+        
         params = self.get_claude_params(mode)
         return ClaudeAPIClient(api_key, params)
     

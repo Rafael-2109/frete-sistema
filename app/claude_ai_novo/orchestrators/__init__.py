@@ -12,6 +12,16 @@ logger = logging.getLogger(__name__)
 # Import seguro dos componentes ESSENCIAIS
 _components = {}
 
+# Import dos tipos compartilhados para facilitar acesso
+from .types import (
+    OrchestrationMode,
+    OrchestratorType,
+    OrchestrationStep,
+    OrchestrationTask,
+    SessionStatus,
+    SessionPriority
+)
+
 # ================================
 # ORQUESTRADORES ESSENCIAIS (4)
 # ================================

@@ -34,7 +34,20 @@ class SemanticValidator:
             orchestrator: Instância do SemanticOrchestrator
         """
         self.orchestrator = orchestrator
+        self._scanning_manager = None
         logger.info("✅ SemanticValidator inicializado")
+    
+    @property
+    def scanning_manager(self):
+        """Lazy loading do ScanningManager"""
+        if self._scanning_manager is None:
+            try:
+                from app.claude_ai_novo.scanning import get_scanning_manager
+                self._scanning_manager = get_scanning_manager()
+            except ImportError:
+                logger.warning("⚠️ ScanningManager não disponível")
+                self._scanning_manager = False
+        return self._scanning_manager if self._scanning_manager is not False else None
     
     def validar_contexto_negocio(self, campo: str, modelo: str, valor: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -207,23 +220,27 @@ class SemanticValidator:
             'campos_nao_documentados_readme': []
         }
         
-        readers = self.orchestrator.obter_readers()
-        readme_reader = readers.get('readme_reader')
-        database_reader = readers.get('database_reader')
+        # Obter scanners diretamente do ScanningManager
+        readme_scanner = None
+        database_scanner = None
         
-        resultado['readme_disponivel'] = readme_reader is not None
-        resultado['banco_disponivel'] = database_reader is not None
+        if self.scanning_manager:
+            readme_scanner = self.scanning_manager.get_readme_scanner()
+            database_scanner = self.scanning_manager.get_database_scanner()
         
-        if not readme_reader or not database_reader:
-            resultado['erro'] = 'Readers não disponíveis para validação'
+        resultado['readme_disponivel'] = readme_scanner is not None
+        resultado['banco_disponivel'] = database_scanner is not None
+        
+        if not readme_scanner or not database_scanner:
+            resultado['erro'] = 'Scanners não disponíveis para validação'
             return resultado
         
         try:
             # Obter modelos do README
-            modelos_readme = readme_reader.listar_modelos_disponiveis()
+            modelos_readme = readme_scanner.listar_modelos_disponiveis()
             
             # Obter tabelas do banco
-            tabelas_banco = database_reader.listar_tabelas()
+            tabelas_banco = database_scanner.listar_tabelas()
             
             for modelo in modelos_readme:
                 # Mapear nome do modelo para nome da tabela
@@ -233,7 +250,7 @@ class SemanticValidator:
                     resultado['modelos_validados'] += 1
                     
                     # Validar campos específicos
-                    inconsistencias = self._validar_campos_modelo_tabela(modelo, nome_tabela, database_reader)
+                    inconsistencias = self._validar_campos_modelo_tabela(modelo, nome_tabela, database_scanner)
                     resultado['inconsistencias'].extend(inconsistencias)
                 else:
                     resultado['campos_nao_encontrados_banco'].append(f"Modelo {modelo} (tabela {nome_tabela})")
@@ -278,14 +295,14 @@ class SemanticValidator:
         
         return mapeamento.get(modelo, modelo.lower())
     
-    def _validar_campos_modelo_tabela(self, modelo: str, tabela: str, database_reader) -> List[str]:
+    def _validar_campos_modelo_tabela(self, modelo: str, tabela: str, database_scanner) -> List[str]:
         """
         Valida campos específicos entre modelo e tabela.
         
         Args:
             modelo: Nome do modelo
             tabela: Nome da tabela
-            database_reader: Reader do banco de dados
+            database_scanner: Scanner do banco de dados
             
         Returns:
             Lista de inconsistências encontradas
@@ -294,7 +311,7 @@ class SemanticValidator:
         
         try:
             # Obter campos da tabela
-            info_tabela = database_reader.obter_campos_tabela(tabela)
+            info_tabela = database_scanner.obter_campos_tabela(tabela)
             campos_banco = list(info_tabela.get('campos', {}).keys())
             
             # Para cada campo mapeado no sistema

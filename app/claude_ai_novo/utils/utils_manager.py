@@ -24,55 +24,23 @@ except ImportError:
     _validation_utils_available = False
     BaseValidationUtils = None
 
-# Flask Context Wrapper - Implementação de fallbacks
-class FlaskContextWrapper:
-    """Wrapper para abstrair contexto Flask"""
-    
-    def __init__(self):
-        self._flask_available = False
-        self._app_config = {}
-        self._db_session = None
-        self._init_flask_context()
-    
-    def _init_flask_context(self):
-        """Inicializa contexto Flask se disponível"""
-        try:
-            from flask import current_app
-            self._flask_available = True
-            self._app_config = current_app.config
-        except:
-            self._flask_available = False
-            self._app_config = {}
-    
-    def _get_app_config(self):
-        """Retorna configuração do app com fallback"""
-        if self._flask_available:
-            try:
-                from flask import current_app
-                return current_app.config
-            except:
-                pass
-        return self._app_config
-    
-    def _get_db_session(self):
-        """Retorna sessão do banco com fallback"""
-        if self._flask_available:
-            try:
-                from flask import current_app
-                with current_app.app_context():
-                    from app import db
-                    return db.session
-            except:
-                pass
-        return None
-    
-    def is_flask_available(self) -> bool:
-        """Verifica se Flask está disponível"""
-        return self._flask_available
+# Import do FlaskContextWrapper
+try:
+    from .flask_context_wrapper import FlaskContextWrapper
+    _flask_context_wrapper_available = True
+except ImportError:
+    _flask_context_wrapper_available = False
+    FlaskContextWrapper = object  # Fallback para herança
 
 logger = logging.getLogger(__name__)
 
-class UtilsManager(FlaskContextWrapper):
+# Definir classe base dinamicamente
+if _flask_context_wrapper_available:
+    UtilsManagerBase = FlaskContextWrapper
+else:
+    UtilsManagerBase = object
+
+class UtilsManager(UtilsManagerBase):
     """
     Organizar utilitários e funções auxiliares
     

@@ -1,15 +1,16 @@
 """
-🔍 SEMANTIC ENRICHER - Enriquecimento com Readers
-================================================
+🔍 SEMANTIC ENRICHER - Enriquecimento com Scanners
+=================================================
 
-Enriquecedor responsável por integrar dados dos readers
-(README e Database) e gerar sugestões de melhoria.
+Enriquecedor responsável por integrar dados dos scanners
+(README e banco de dados) para enriquecer mapeamentos.
 
 Responsabilidades:
-- Enriquecimento via ReadmeReader
-- Enriquecimento via DatabaseReader
-- Geração de sugestões de melhoria
-- Integração de múltiplas fontes
+- Conexão com Claude AI
+- Integração com banco de dados
+- Enriquecimento via ReadmeScanner
+- Enriquecimento via DatabaseScanner
+- Cache de resultados
 """
 
 from typing import Dict, List, Any, Optional
@@ -41,13 +42,26 @@ class SemanticEnricher:
         self.claude_client = claude_client
         self.db_engine = db_engine
         self.db_session = db_session
+        self._scanning_manager = None
         
         logger.info("🔍 SemanticEnricher inicializado")
     
+    @property
+    def scanning_manager(self):
+        """Lazy loading do ScanningManager"""
+        if self._scanning_manager is None:
+            try:
+                from app.claude_ai_novo.scanning import get_scanning_manager
+                self._scanning_manager = get_scanning_manager()
+            except ImportError:
+                logger.warning("⚠️ ScanningManager não disponível")
+                self._scanning_manager = False
+        return self._scanning_manager if self._scanning_manager is not False else None
+    
     @performance_monitor
-    def enriquecer_mapeamento_com_readers(self, campo: str, modelo: Optional[str] = None) -> Dict[str, Any]:
+    def enriquecer_mapeamento_com_scanners(self, campo: str, modelo: Optional[str] = None) -> Dict[str, Any]:
         """
-        Enriquece mapeamento de um campo usando ambos os readers.
+        Enriquece mapeamento de um campo usando ambos os scanners.
         
         Args:
             campo: Nome do campo
@@ -61,32 +75,29 @@ class SemanticEnricher:
             'modelo': modelo,
             'readme_data': {},
             'database_data': {},
-            'mapeamento_atual': {},
-            'sugestoes_melhoria': [],
             'timestamp': datetime.now().isoformat()
         }
         
-        # Obter readers do orquestrador
-        readers = self.orchestrator.obter_readers()
-        readme_reader = readers.get('readme_reader')
-        database_reader = readers.get('database_reader')
+        # Obter scanners diretamente do ScanningManager
+        readme_scanner = None
+        database_scanner = None
         
-        # Buscar no README via ReadmeReader com cache
-        if readme_reader:
+        if self.scanning_manager:
+            readme_scanner = self.scanning_manager.get_readme_scanner()
+            database_scanner = self.scanning_manager.get_database_scanner()
+        
+        # Buscar no README via ReadmeScanner com cache
+        if readme_scanner:
             try:
-                resultado['readme_data'] = self._enriquecer_via_readme(
-                    campo, modelo, readme_reader
-                )
+                resultado['readme_data'] = self._enriquecer_via_readme(campo, readme_scanner, modelo)
             except Exception as e:
                 logger.error(f"❌ Erro ao enriquecer via README: {e}")
                 resultado['readme_data'] = {'erro': str(e)}
         
-        # Buscar no banco via DatabaseReader com cache
-        if database_reader:
+        # Buscar no banco via DatabaseScanner com cache
+        if database_scanner:
             try:
-                resultado['database_data'] = self._enriquecer_via_banco(
-                    campo, database_reader
-                )
+                resultado['database_data'] = self._enriquecer_via_banco(campo, database_scanner)
             except Exception as e:
                 logger.error(f"❌ Erro ao enriquecer via banco: {e}")
                 resultado['database_data'] = {'erro': str(e)}
@@ -99,17 +110,17 @@ class SemanticEnricher:
         
         return resultado
     
-    def _enriquecer_via_readme(self, campo: str, modelo: Optional[str], readme_reader) -> Dict[str, Any]:
+    def _enriquecer_via_readme(self, campo: str, readme_scanner, modelo: Optional[str] = None) -> Dict[str, Any]:
         """
-        Enriquece dados via ReadmeReader com cache otimizado.
+        Enriquece dados via ReadmeScanner com cache otimizado.
         
         Args:
             campo: Nome do campo
-            modelo: Nome do modelo
-            readme_reader: Instância do ReadmeReader
+            readme_scanner: Instância do ReadmeScanner
+            modelo: Nome do modelo (opcional)
             
         Returns:
-            Dict com dados do README
+            Dict com informações do README
         """
         cache_key_termos = f"readme_termos_{campo}_{modelo or 'none'}"
         cache_key_info = f"readme_info_{campo}_{modelo or 'none'}"
@@ -117,14 +128,14 @@ class SemanticEnricher:
         # Buscar termos naturais com cache
         termos_naturais = cached_result(
             cache_key_termos,
-            readme_reader.buscar_termos_naturais,
+            readme_scanner.buscar_termos_naturais,
             campo, modelo
         )
         
         # Buscar informações completas com cache
         informacoes_completas = cached_result(
             cache_key_info,
-            readme_reader.obter_informacoes_campo,
+            readme_scanner.obter_informacoes_campo,
             campo, modelo
         )
         
@@ -135,13 +146,13 @@ class SemanticEnricher:
             'fonte': 'README_MAPEAMENTO_SEMANTICO_COMPLETO.md'
         }
     
-    def _enriquecer_via_banco(self, campo: str, database_reader) -> Dict[str, Any]:
+    def _enriquecer_via_banco(self, campo: str, database_scanner) -> Dict[str, Any]:
         """
-        Enriquece dados via DatabaseReader com cache otimizado.
+        Enriquece dados via DatabaseScanner com cache otimizado.
         
         Args:
             campo: Nome do campo
-            database_reader: Instância do DatabaseReader
+            database_scanner: Instância do DatabaseScanner
             
         Returns:
             Dict com dados do banco
@@ -151,7 +162,7 @@ class SemanticEnricher:
         # Buscar campos similares com cache
         campos_similares = cached_result(
             cache_key_campos,
-            database_reader.buscar_campos_por_nome,
+            database_scanner.buscar_campos_por_nome,
             campo
         )
         
@@ -167,7 +178,7 @@ class SemanticEnricher:
             
             analise = cached_result(
                 cache_key_analise,
-                database_reader.analisar_dados_reais,
+                database_scanner.analisar_dados_reais,
                 campo_info['tabela'], 
                 campo_info['campo'], 
                 50  # limite de registros
@@ -406,7 +417,7 @@ class SemanticEnricher:
         # Processar cada campo
         for campo in campos:
             try:
-                enriquecimento = self.enriquecer_mapeamento_com_readers(campo, modelo)
+                enriquecimento = self.enriquecer_mapeamento_com_scanners(campo, modelo)
                 resultado['enriquecimentos'][campo] = enriquecimento
                 resultado['campos_processados'] += 1
                 

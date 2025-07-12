@@ -10,10 +10,11 @@ import logging
 import asyncio
 from typing import Dict, List, Any, Optional, Union, Callable
 from datetime import datetime, timedelta
-from enum import Enum
-from dataclasses import dataclass, field
 from threading import Lock
 import uuid
+
+# Import dos tipos compartilhados
+from .types import OrchestrationMode, OrchestratorType, OrchestrationTask
 
 # Imports internos robustos com fallbacks
 try:
@@ -33,33 +34,6 @@ except ImportError as e:
         ORCHESTRATORS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
-
-class OrchestrationMode(Enum):
-    """Modos de orquestração disponíveis."""
-    SEQUENTIAL = "sequential"
-    PARALLEL = "parallel"
-    INTELLIGENT = "intelligent"
-    PRIORITY_BASED = "priority_based"
-
-class OrchestratorType(Enum):
-    """Tipos de orquestradores disponíveis."""
-    MAIN = "main"
-    SESSION = "session" 
-    WORKFLOW = "workflow"
-
-@dataclass
-class OrchestrationTask:
-    """Task de orquestração com metadados."""
-    task_id: str
-    orchestrator_type: OrchestratorType
-    operation: str
-    parameters: Dict[str, Any]
-    priority: int = 1
-    timeout: Optional[int] = None
-    created_at: datetime = field(default_factory=datetime.now)
-    status: str = "pending"
-    result: Optional[Any] = None
-    error: Optional[str] = None
 
 class OrchestratorManager:
     """

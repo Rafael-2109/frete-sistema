@@ -23,16 +23,16 @@ class FieldSearcher:
     baseado em diferentes critérios de busca.
     """
     
-    def __init__(self, inspector: Optional[Inspector] = None, metadata_reader=None):
+    def __init__(self, inspector: Optional[Inspector] = None, metadata_scanner=None):
         """
         Inicializa o buscador de campos.
         
         Args:
             inspector: Inspector do SQLAlchemy
-            metadata_reader: MetadataReader para obter informações das tabelas
+            metadata_scanner: MetadataScanner para obter informações das tabelas
         """
         self.inspector = inspector
-        self.metadata_reader = metadata_reader
+        self.metadata_scanner = metadata_scanner
         self.search_cache: Dict[str, List[Dict[str, Any]]] = {}
     
     def set_inspector(self, inspector: Inspector) -> None:
@@ -45,15 +45,15 @@ class FieldSearcher:
         self.inspector = inspector
         self.search_cache.clear()  # Limpar cache ao trocar inspector
     
-    def set_metadata_reader(self, metadata_reader) -> None:
+    def set_metadata_scanner(self, metadata_scanner) -> None:
         """
-        Define o metadata reader a ser usado.
+        Define o metadata scanner a ser usado.
         
         Args:
-            metadata_reader: MetadataReader instance
+            metadata_scanner: MetadataScanner instance
         """
-        self.metadata_reader = metadata_reader
-        self.search_cache.clear()  # Limpar cache ao trocar metadata reader
+        self.metadata_scanner = metadata_scanner
+        self.search_cache.clear()  # Limpar cache ao trocar metadata scanner
     
     def buscar_campos_por_tipo(self, tipo_campo: str, incluir_similares: bool = True) -> List[Dict[str, Any]]:
         """
@@ -66,8 +66,8 @@ class FieldSearcher:
         Returns:
             Lista de campos encontrados
         """
-        if not self.inspector or not self.metadata_reader:
-            logger.error("❌ Inspector ou MetadataReader não disponível")
+        if not self.inspector or not self.metadata_scanner:
+            logger.error("❌ Inspector ou MetadataScanner não disponível")
             return []
         
         cache_key = f"tipo_{tipo_campo}_{incluir_similares}"
@@ -82,7 +82,7 @@ class FieldSearcher:
             tipos_similares = self._obter_tipos_similares(tipo_campo) if incluir_similares else [tipo_campo]
             
             for tabela in tabelas:
-                info_tabela = self.metadata_reader.obter_campos_tabela(tabela)
+                info_tabela = self.metadata_scanner.obter_campos_tabela(tabela)
                 
                 for nome_campo, info_campo in info_tabela.get('campos', {}).items():
                     if info_campo['tipo_python'] in tipos_similares:
@@ -146,8 +146,8 @@ class FieldSearcher:
         Returns:
             Lista de campos encontrados
         """
-        if not self.inspector or not self.metadata_reader:
-            logger.error("❌ Inspector ou MetadataReader não disponível")
+        if not self.inspector or not self.metadata_scanner:
+            logger.error("❌ Inspector ou MetadataScanner não disponível")
             return []
         
         cache_key = f"nome_{nome_padrao}_{match_type}"
@@ -160,7 +160,7 @@ class FieldSearcher:
             nome_padrao_lower = nome_padrao.lower()
             
             for tabela in tabelas:
-                info_tabela = self.metadata_reader.obter_campos_tabela(tabela)
+                info_tabela = self.metadata_scanner.obter_campos_tabela(tabela)
                 
                 for nome_campo, info_campo in info_tabela.get('campos', {}).items():
                     match_score = self._calcular_score_match_nome(nome_campo, nome_padrao, match_type)
@@ -286,8 +286,8 @@ class FieldSearcher:
         Returns:
             Lista de campos encontrados
         """
-        if not self.inspector or not self.metadata_reader:
-            logger.error("❌ Inspector ou MetadataReader não disponível")
+        if not self.inspector or not self.metadata_scanner:
+            logger.error("❌ Inspector ou MetadataScanner não disponível")
             return []
         
         cache_key = f"char_{caracteristica}_{valor}"
@@ -299,7 +299,7 @@ class FieldSearcher:
             tabelas = self.inspector.get_table_names()
             
             for tabela in tabelas:
-                info_tabela = self.metadata_reader.obter_campos_tabela(tabela)
+                info_tabela = self.metadata_scanner.obter_campos_tabela(tabela)
                 
                 for nome_campo, info_campo in info_tabela.get('campos', {}).items():
                     if info_campo.get(caracteristica) == valor:
@@ -335,8 +335,8 @@ class FieldSearcher:
         Returns:
             Lista de campos encontrados
         """
-        if not self.inspector or not self.metadata_reader:
-            logger.error("❌ Inspector ou MetadataReader não disponível")
+        if not self.inspector or not self.metadata_scanner:
+            logger.error("❌ Inspector ou MetadataScanner não disponível")
             return []
         
         try:
@@ -344,7 +344,7 @@ class FieldSearcher:
             tabelas = self.inspector.get_table_names()
             
             for tabela in tabelas:
-                info_tabela = self.metadata_reader.obter_campos_tabela(tabela)
+                info_tabela = self.metadata_scanner.obter_campos_tabela(tabela)
                 
                 for nome_campo, info_campo in info_tabela.get('campos', {}).items():
                     tamanho = info_campo.get('tamanho')
@@ -389,13 +389,13 @@ class FieldSearcher:
         Returns:
             Lista de campos similares
         """
-        if not self.metadata_reader:
-            logger.error("❌ MetadataReader não disponível")
+        if not self.metadata_scanner:
+            logger.error("❌ MetadataScanner não disponível")
             return []
         
         try:
             # Obter informações do campo de referência
-            info_tabela_ref = self.metadata_reader.obter_campos_tabela(tabela_referencia)
+            info_tabela_ref = self.metadata_scanner.obter_campos_tabela(tabela_referencia)
             if campo_referencia not in info_tabela_ref.get('campos', {}):
                 logger.error(f"❌ Campo {campo_referencia} não encontrado em {tabela_referencia}")
                 return []
@@ -406,7 +406,7 @@ class FieldSearcher:
             tabelas = self.inspector.get_table_names()
             
             for tabela in tabelas:
-                info_tabela = self.metadata_reader.obter_campos_tabela(tabela)
+                info_tabela = self.metadata_scanner.obter_campos_tabela(tabela)
                 
                 for nome_campo, info_campo in info_tabela.get('campos', {}).items():
                     # Pular o próprio campo
@@ -531,7 +531,7 @@ class FieldSearcher:
         Returns:
             True se disponível
         """
-        return self.inspector is not None and self.metadata_reader is not None
+        return self.inspector is not None and self.metadata_scanner is not None
 
 
 # Exportações principais
