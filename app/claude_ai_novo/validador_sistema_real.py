@@ -203,8 +203,8 @@ class ValidadorSistemaReal:
             from app.claude_ai_novo.processors.response_processor import ResponseProcessor
             processor = ResponseProcessor()
             
-            # Verificar se consegue inicializar cliente Anthropic
-            if hasattr(processor, 'claude_client') and processor.claude_client is not None:
+            # Verificar se consegue inicializar cliente Anthropic (propriedade correta é 'client')
+            if hasattr(processor, 'client') and processor.client is not None:
                 return True
             else:
                 self.results['production_issues'].append({

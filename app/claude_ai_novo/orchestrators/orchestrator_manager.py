@@ -152,7 +152,7 @@ class OrchestratorManager:
         
         logger.info(f"🎭 OrchestratorManager: {initialized_count} orquestradores inicializados")
     
-    def process_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def process_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Processa uma consulta usando os orquestradores apropriados.
         
@@ -176,7 +176,7 @@ class OrchestratorManager:
             operation_type = self._detect_operation_type(query)
             
             # Orquestrar usando o sistema inteligente
-            result = self.orchestrate_operation(
+            result = await self.orchestrate_operation(
                 operation_type=operation_type,
                 data=data,
                 mode=OrchestrationMode.INTELLIGENT,
@@ -222,7 +222,7 @@ class OrchestratorManager:
         else:
             return 'intelligent_query'
     
-    def orchestrate_operation(self, operation_type: str, 
+    async def orchestrate_operation(self, operation_type: str, 
                             data: Dict[str, Any],
                             target_orchestrator: Optional[OrchestratorType] = None,
                             mode: OrchestrationMode = OrchestrationMode.INTELLIGENT,
@@ -276,7 +276,7 @@ class OrchestratorManager:
                 self.active_tasks[task_id] = task
             
             # Executar operação
-            result = self._execute_orchestration_task(task, mode)
+            result = await self._execute_orchestration_task(task, mode)
             
             # Atualizar task
             task.status = "completed"
@@ -458,7 +458,7 @@ class OrchestratorManager:
         
         raise ValueError("Nenhum orquestrador disponível")
     
-    def _execute_orchestration_task(self, task: OrchestrationTask, mode: OrchestrationMode) -> Any:
+    async def _execute_orchestration_task(self, task: OrchestrationTask, mode: OrchestrationMode) -> Any:
         """
         Executa uma task de orquestração.
         
@@ -480,7 +480,7 @@ class OrchestratorManager:
             return self._execute_workflow_operation(orchestrator, task)
         else:
             # Método genérico
-            return self._execute_generic_operation(orchestrator, task)
+            return await self._execute_generic_operation(orchestrator, task)
     
     def _execute_session_operation(self, orchestrator, task: OrchestrationTask) -> Any:
         """Executa operação de sessão."""
@@ -535,16 +535,16 @@ class OrchestratorManager:
             return method(**task.parameters)
         return f"Workflow operation: {task.operation}"
     
-    def _execute_generic_operation(self, orchestrator, task: OrchestrationTask) -> Any:
+    async def _execute_generic_operation(self, orchestrator, task: OrchestrationTask) -> Any:
         """Executa operação genérica."""
         # Verificar se é uma operação de integração
         if self._is_integration_operation(task.operation):
-            return self._execute_integration_operation(task)
+            return await self._execute_integration_operation(task)
         
         if hasattr(orchestrator, task.operation):
             method = getattr(orchestrator, task.operation)
             if callable(method):
-                return method(**task.parameters)
+                return await method(**task.parameters)
         return f"Generic operation: {task.operation} executed"
     
     def _is_integration_operation(self, operation: str) -> bool:
@@ -552,7 +552,7 @@ class OrchestratorManager:
         integration_keywords = ['integration', 'api', 'external', 'service', 'connect']
         return any(keyword in operation.lower() for keyword in integration_keywords)
     
-    def _execute_integration_operation(self, task: OrchestrationTask) -> Any:
+    async def _execute_integration_operation(self, task: OrchestrationTask) -> Any:
         """Executa operação de integração usando IntegrationManager."""
         try:
             if not self.integration_manager:
@@ -566,7 +566,7 @@ class OrchestratorManager:
             operation_lower = task.operation.lower()
             
             if 'initialize' in operation_lower:
-                return self.integration_manager.initialize_all_modules()
+                return await self.integration_manager.initialize_all_modules()
             elif 'health' in operation_lower:
                 return self.integration_manager.get_system_health()
             elif 'status' in operation_lower:
@@ -574,7 +574,7 @@ class OrchestratorManager:
             elif 'process' in operation_lower:
                 query = task.parameters.get('query')
                 context = task.parameters.get('context', {})
-                return self.integration_manager.process_unified_query(query, context)
+                return await self.integration_manager.process_unified_query(query, context)
             else:
                 # Operação genérica de integração
                 return {
@@ -732,7 +732,7 @@ def get_orchestrator_manager() -> OrchestratorManager:
     
     return _orchestrator_manager
 
-def orchestrate_system_operation(operation_type: str, 
+async def orchestrate_system_operation(operation_type: str, 
                                 data: Dict[str, Any],
                                 target_orchestrator: Optional[str] = None,
                                 mode: str = "intelligent",
@@ -766,7 +766,7 @@ def orchestrate_system_operation(operation_type: str,
         logger.warning(f"⚠️ Modo inválido: {mode}, usando intelligent")
         mode_enum = OrchestrationMode.INTELLIGENT
     
-    return manager.orchestrate_operation(
+    return await manager.orchestrate_operation(
         operation_type=operation_type,
         data=data,
         target_orchestrator=target_enum,

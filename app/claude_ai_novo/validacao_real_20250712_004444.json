@@ -1,0 +1,67 @@
+{
+  "timestamp": "2025-07-12T00:44:25.240079",
+  "validator": "ValidadorSistemaReal v1.0",
+  "environment": "REAL",
+  "tests": {
+    "import_flask_app": {
+      "status": "FAIL",
+      "details": "Import test for flask_app"
+    },
+    "import_anthropic_config": {
+      "status": "PASS",
+      "details": "Import test for anthropic_config"
+    },
+    "import_specialist_agents": {
+      "status": "PASS",
+      "details": "Import test for specialist_agents"
+    },
+    "import_domain_agents": {
+      "status": "PASS",
+      "details": "Import test for domain_agents"
+    },
+    "import_query_processor": {
+      "status": "PASS",
+      "details": "Import test for query_processor"
+    },
+    "import_response_processor": {
+      "status": "FAIL",
+      "details": "Import test for response_processor"
+    },
+    "basic_imports": {
+      "status": "FAIL",
+      "timestamp": "2025-07-12T00:44:43.014137"
+    },
+    "async_issues": {
+      "status": "PASS",
+      "timestamp": "2025-07-12T00:44:43.015139"
+    },
+    "production_health": {
+      "status": "PASS",
+      "timestamp": "2025-07-12T00:44:44.127988"
+    }
+  },
+  "summary": {
+    "total_tests": 3,
+    "total": 3,
+    "passed": 2,
+    "failed": 1,
+    "score": 66.66666666666666,
+    "classification": "⚠️ ACEITÁVEL",
+    "critical_issues": 2,
+    "health_status": "WARNING"
+  },
+  "critical_errors": [],
+  "production_issues": [
+    {
+      "issue": "flask_app_import",
+      "error": "'utf-8' codec can't decode byte 0xe3 in position 82: invalid continuation byte",
+      "impact": "CRITICAL - Sistema não pode inicializar"
+    },
+    {
+      "issue": "response_processor_anthropic",
+      "error": "ResponseProcessor cannot initialize Anthropic client",
+      "impact": "HIGH - Processamento de respostas falha",
+      "log_evidence": "Erro ao inicializar cliente Anthropic"
+    }
+  ]
+}

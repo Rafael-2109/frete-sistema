@@ -4,7 +4,7 @@ Contém apenas os orquestradores essenciais para processos complexos.
 """
 
 import logging
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 # Configuração de logging
 logger = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ def get_workflow_orchestrator() -> Optional[Any]:
 # FUNÇÕES DE CONVENIÊNCIA DO MAESTRO
 # ================================
 
-def orchestrate_operation(operation_type: str, data: dict, **kwargs) -> dict:
+async def orchestrate_operation(operation_type: str, data: dict, **kwargs) -> Dict[str, Any]:
     """
     Função de conveniência para orquestrar operações via OrchestratorManager.
     
@@ -125,11 +125,11 @@ def orchestrate_operation(operation_type: str, data: dict, **kwargs) -> dict:
     """
     try:
         if 'orchestrate_system_operation' in globals():
-            return orchestrate_system_operation(operation_type, data, **kwargs)
+            return await orchestrate_system_operation(operation_type, data, **kwargs)
         else:
             manager = get_orchestrator_manager()
             if manager:
-                return manager.orchestrate_operation(operation_type, data, **kwargs)
+                return await manager.orchestrate_operation(operation_type, data, **kwargs)
             else:
                 return {
                     'success': False,

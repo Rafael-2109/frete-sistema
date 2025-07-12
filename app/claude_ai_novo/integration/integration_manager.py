@@ -167,42 +167,45 @@ class IntegrationManager:
         return validation_results
     
     async def process_unified_query(self, query: Optional[str], context: Optional[Dict] = None) -> Dict[str, Any]:
-        """
-        Processa uma consulta usando o orchestrator.
+        """Processa uma consulta usando o orchestrator."""
         
-        Args:
-            query: Consulta do usuário
-            context: Contexto adicional
-            
-        Returns:
-            Dict com resultado processado
-        """
+        # ✅ LOG PARA DEBUG
+        logger.info(f"🔄 INTEGRATION: Query='{query}' | Orchestrator={self.orchestrator_manager is not None}")
+        
         if not query:
             query = "Como estão as entregas?"
         
-        logger.info(f"🔄 Processando consulta unificada: {query[:50]}...")
-        
         try:
             if self.orchestrator_manager:
-                # Usar o maestro para processar
-                result = self.orchestrator_manager.process_query(query, context)
-                return result
-            else:
-                # Fallback simples
-                return {
-                    "success": True,
-                    "response": "Sistema novo ativo - processando consulta...",
-                    "query": query,
-                    "source": "IntegrationManager"
-                }
+                # ✅ LOG ANTES DA CHAMADA
+                logger.info("📞 INTEGRATION: Chamando orchestrator.process_query")
+                result = await self.orchestrator_manager.process_query(query, context)
                 
+                # ✅ LOG DO RESULTADO
+                logger.info(f"📊 INTEGRATION: Resultado={type(result)} | Conteúdo={str(result)[:200]}...")
+                
+                # ✅ GARANTIR QUE SEMPRE RETORNA DICT VÁLIDO
+                if isinstance(result, dict) and result:
+                    return result
+                else:
+                    logger.warning(f"⚠️ INTEGRATION: Resultado inválido, usando fallback")
+                    
+            # ✅ FALLBACK GARANTIDO
+            logger.info("🔄 INTEGRATION: Usando fallback")
+            return {
+                "success": True,
+                "response": f"Sistema processou: '{query}' | Manager: {self.orchestrator_manager is not None}",
+                "query": query,
+                "source": "integration_fallback"
+            }
+            
         except Exception as e:
-            logger.error(f"❌ Erro ao processar consulta: {e}")
+            logger.error(f"❌ INTEGRATION: Erro: {e}")
             return {
                 "success": False,
                 "error": str(e),
-                "query": query,
-                "source": "IntegrationManager"
+                "response": f"Erro: {str(e)}",
+                "query": query
             }
     
     def get_system_status(self) -> Dict[str, Any]:
