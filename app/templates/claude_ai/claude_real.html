@@ -356,92 +356,170 @@ function verificarStatus() {
 function carregarStatusSistema() {
     const statusDiv = document.getElementById('system-status');
     
-    // 🚀 CARREGAR MÉTRICAS REAIS DO POSTGRESQL
+    // 🚀 CARREGAR MÉTRICAS INTERESSANTES DO CLAUDE AI NOVO
     statusDiv.innerHTML = `
         <div class="row g-2 text-center">
             <div class="col-6">
                 <div class="p-2 bg-success bg-opacity-10 rounded">
                     <div class="spinner-border spinner-border-sm text-success" role="status"></div>
-                    <small class="text-muted d-block">Uptime</small>
+                    <small class="text-muted d-block">Score Sistema</small>
                 </div>
             </div>
             <div class="col-6">
                 <div class="p-2 bg-info bg-opacity-10 rounded">
                     <div class="spinner-border spinner-border-sm text-info" role="status"></div>
-                    <small class="text-muted d-block">Resposta</small>
+                    <small class="text-muted d-block">Latência</small>
                 </div>
             </div>
             <div class="col-6">
                 <div class="p-2 bg-primary bg-opacity-10 rounded">
                     <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                    <small class="text-muted d-block">Consultas hoje</small>
+                    <small class="text-muted d-block">Tokens Hoje</small>
                 </div>
             </div>
             <div class="col-6">
                 <div class="p-2 bg-warning bg-opacity-10 rounded">
                     <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
-                    <small class="text-muted d-block">Satisfação</small>
+                    <small class="text-muted d-block">Taxa Sucesso</small>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="p-2 bg-light rounded">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">🧠 Modelo:</small>
+                        <div class="spinner-border spinner-border-sm" role="status"></div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-1">
+                        <small class="text-muted">🌡️ Temp:</small>
+                        <div class="spinner-border spinner-border-sm" role="status"></div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-1">
+                        <small class="text-muted">🎯 Top-p:</small>
+                        <div class="spinner-border spinner-border-sm" role="status"></div>
+                    </div>
                 </div>
             </div>
         </div>
     `;
     
-    // Buscar métricas reais da API
-    fetch('/claude-ai/api/metricas-reais')
+    // Buscar métricas específicas do Claude AI Novo
+    fetch('/claude-ai/api/claude-ai-novo-metrics')
         .then(response => response.json())
         .then(data => {
-            if (data.success && data.metricas) {
-                const metricas = data.metricas;
+            if (data.success && data.metrics) {
+                const metrics = data.metrics;
                 
-                // Calcular valores para exibição
-                const uptime = metricas.sistema?.uptime_percentual || 0;
-                const tempoResposta = metricas.performance?.tempo_resposta_db || 0;
-                const consultasHoje = metricas.claude_ai?.sessoes_hoje || 0;
-                const satisfacao = metricas.claude_ai?.satisfacao_media || 0;
+                // Métricas técnicas da IA (sem dados de negócio)
+                const aiSystem = metrics.ai_system || {};
+                const aiPerformance = metrics.ai_performance || {};
+                const modelInfo = metrics.model_info || {};
+                const aiCapabilities = metrics.ai_capabilities || {};
                 
-                // Atualizar interface com dados reais
+                // Dados técnicos principais
+                const modulesLoaded = aiSystem.modules_loaded || 0;
+                const orchestratorsActive = aiSystem.orchestrators_active || 0;
+                const successRate = aiPerformance.success_rate || 0;
+                const avgResponseTime = aiPerformance.avg_response_time_ms || 0;
+                
+                // Parâmetros técnicos do modelo
+                const temperature = modelInfo.temperature || 0;
+                const topP = modelInfo.top_p || 0;
+                const topK = modelInfo.top_k || 0;
+                const maxTokens = modelInfo.max_tokens || 0;
+                const contextWindow = modelInfo.context_window || 0;
+                const modelName = modelInfo.name || 'Claude AI';
+                const modelVersion = modelInfo.version || '2025-05-14';
+                
+                // Explicações para tooltips
+                const explanations = modelInfo.explanations || {};
+                
+                // Atualizar interface com métricas TÉCNICAS da IA
                 statusDiv.innerHTML = `
                     <div class="row g-2 text-center">
                         <div class="col-6">
-                            <div class="p-2 bg-success bg-opacity-10 rounded">
-                                <h6 class="mb-0 text-success">${uptime}%</h6>
-                                <small class="text-muted">Uptime</small>
+                            <div class="p-2 bg-success bg-opacity-10 rounded" 
+                                 title="Módulos do sistema Claude AI carregados e funcionando">
+                                <h6 class="mb-0 text-success">${modulesLoaded}</h6>
+                                <small class="text-muted">Módulos IA <i class="fas fa-question-circle" style="cursor: help;"></i></small>
                             </div>
                         </div>
                         <div class="col-6">
-                            <div class="p-2 bg-info bg-opacity-10 rounded">
-                                <h6 class="mb-0 text-info">${tempoResposta}ms</h6>
-                                <small class="text-muted">Resposta</small>
+                            <div class="p-2 bg-info bg-opacity-10 rounded" 
+                                 title="Orquestradores coordenando o processamento de queries">
+                                <h6 class="mb-0 text-info">${orchestratorsActive}</h6>
+                                <small class="text-muted">Orquestradores <i class="fas fa-question-circle" style="cursor: help;"></i></small>
                             </div>
                         </div>
                         <div class="col-6">
-                            <div class="p-2 bg-primary bg-opacity-10 rounded">
-                                <h6 class="mb-0 text-primary">${consultasHoje}</h6>
-                                <small class="text-muted">Consultas hoje</small>
+                            <div class="p-2 bg-warning bg-opacity-10 rounded" 
+                                 title="Percentual de queries processadas com sucesso">
+                                <h6 class="mb-0 text-warning">${successRate}%</h6>
+                                <small class="text-muted">Taxa Sucesso <i class="fas fa-question-circle" style="cursor: help;"></i></small>
                             </div>
                         </div>
                         <div class="col-6">
-                            <div class="p-2 bg-warning bg-opacity-10 rounded">
-                                <h6 class="mb-0 text-warning">${satisfacao.toFixed(1)}/5</h6>
-                                <small class="text-muted">Satisfação</small>
+                            <div class="p-2 bg-primary bg-opacity-10 rounded" 
+                                 title="Tempo médio para processar e responder uma query">
+                                <h6 class="mb-0 text-primary">${avgResponseTime}ms</h6>
+                                <small class="text-muted">Latência <i class="fas fa-question-circle" style="cursor: help;"></i></small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="p-2 bg-light rounded">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">🧠 Modelo:</small>
+                                    <small class="fw-bold">${modelName} ${modelVersion}</small>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-1" 
+                                     title="${explanations.temperature || 'Controla a criatividade das respostas'}">
+                                    <small class="text-muted">🌡️ Temperatura: <i class="fas fa-question-circle" style="cursor: help;"></i></small>
+                                    <small class="fw-bold">${temperature}</small>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-1" 
+                                     title="${explanations.top_p || 'Controla a diversidade de palavras consideradas'}">
+                                    <small class="text-muted">🎯 Top-p: <i class="fas fa-question-circle" style="cursor: help;"></i></small>
+                                    <small class="fw-bold">${topP}</small>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-1" 
+                                     title="${explanations.top_k || 'Limita quantas palavras diferentes podem ser escolhidas'}">
+                                    <small class="text-muted">🔢 Top-k: <i class="fas fa-question-circle" style="cursor: help;"></i></small>
+                                    <small class="fw-bold">${topK}</small>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-1" 
+                                     title="${explanations.max_tokens || 'Número máximo de tokens por consulta'}">
+                                    <small class="text-muted">📝 Max Tokens: <i class="fas fa-question-circle" style="cursor: help;"></i></small>
+                                    <small class="fw-bold">${maxTokens.toLocaleString()}</small>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-1" 
+                                     title="${explanations.context_window || 'Tamanho da memória do modelo'}">
+                                    <small class="text-muted">🧠 Context: <i class="fas fa-question-circle" style="cursor: help;"></i></small>
+                                    <small class="fw-bold">${(contextWindow/1000).toFixed(0)}k</small>
+                                </div>
                             </div>
                         </div>
                     </div>
                 `;
                 
-                console.log('✅ Métricas reais carregadas:', metricas);
+                console.log('✅ Métricas Claude AI Novo carregadas:', metrics);
             } else {
                 throw new Error(data.error || 'Erro ao carregar métricas');
             }
         })
         .catch(error => {
-            console.error('❌ Erro ao carregar métricas reais:', error);
+            console.error('❌ Erro ao carregar métricas Claude AI Novo:', error);
             // Fallback para dados básicos
             statusDiv.innerHTML = `
                 <div class="row g-2 text-center">
                     <div class="col-12">
                         <div class="p-2 bg-warning bg-opacity-10 rounded">
                             <small class="text-muted">⚠️ Métricas indisponíveis</small>
+                            <div class="mt-2">
+                                <small class="text-muted">Claude AI funcionando em modo básico</small>
+                            </div>
                         </div>
                     </div>
                 </div>

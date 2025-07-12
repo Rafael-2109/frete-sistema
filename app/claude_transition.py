@@ -3,256 +3,322 @@ Interface de Transição - Claude AI
 Permite usar tanto o sistema antigo quanto o novo com diagnóstico completo
 """
 
-import os
-import asyncio
-from typing import Dict, Optional, Any
+import time
+from datetime import datetime
+from typing import Optional, Dict, Any
 import logging
+import asyncio
+import os
 
+# Configuração de logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class ClaudeTransition:
-    """Classe de transição entre sistemas antigo e novo com diagnóstico"""
+class ClaudeTransitionManager:
+    """
+    Gerenciador de transição entre sistemas Claude AI
+    Responsável por rotear queries para o sistema apropriado
+    """
     
     def __init__(self):
-        # CONFIGURAÇÃO: Definir qual sistema usar
-        self.usar_sistema_novo = os.getenv('USE_NEW_CLAUDE_SYSTEM', 'false').lower() == 'true'
-        
-        # DIAGNÓSTICO: Tentar inicializar sistema preferido
-        if self.usar_sistema_novo:
-            if not self._inicializar_sistema_novo():
-                logger.warning("⚠️ Sistema novo falhou, usando sistema antigo")
-                self._inicializar_sistema_antigo()
-        else:
-            self._inicializar_sistema_antigo()
+        self._use_new_system = os.getenv('USE_NEW_CLAUDE_SYSTEM', 'false').lower() == 'true'
+        self.claude = None
+        self._initialize_system()
     
-    def _inicializar_sistema_novo(self) -> bool:
-        """Inicializa sistema novo com diagnóstico detalhado"""
-        try:
-            logger.info("🚀 Tentando inicializar sistema Claude AI NOVO...")
-            
-            # Verificar contexto Flask
+    def _initialize_system(self):
+        """Inicializa o sistema Claude ativo"""
+        if self._use_new_system:
             try:
-                from flask import current_app
-                if not current_app:
-                    logger.error("❌ Contexto Flask não disponível")
-                    return False
-            except RuntimeError:
-                logger.error("❌ Não está rodando dentro do contexto Flask")
-                return False
-            
-            # Tentar importar componentes principais
-            from app.claude_ai_novo.integration.external_api_integration import get_claude_integration
-            self.claude = get_claude_integration()
-            
-            # Verificar se está funcionando
-            status = self.claude.get_system_status()
-            if not status.get('system_ready', False):
-                logger.warning("⚠️ Sistema novo não está pronto")
-            
-            self.sistema_ativo = "novo"
-            logger.info("✅ Sistema Claude AI NOVO ativado com sucesso")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao inicializar sistema novo: {e}")
-            return False
-    
-    def _inicializar_sistema_antigo(self):
-        """Inicializa sistema antigo (sempre funciona)"""
-        try:
-            from app.claude_ai.claude_real_integration import processar_com_claude_real
-            self.processar_consulta_real = processar_com_claude_real
-            self.sistema_ativo = "antigo"
-            logger.info("✅ Sistema Claude AI ANTIGO ativado")
-        except Exception as e:
-            logger.error(f"❌ ERRO CRÍTICO: Sistema antigo também falhou: {e}")
-            self.sistema_ativo = "nenhum"
-    
-    def diagnosticar_sistema(self) -> Dict[str, Any]:
-        """Executa diagnóstico completo do sistema ativo"""
-        diagnostico = {
-            'sistema_ativo': self.sistema_ativo,
-            'timestamp': __import__('datetime').datetime.now().isoformat(),
-            'problemas': [],
-            'componentes': {},
-            'recomendacoes': []
-        }
-        
-        if self.sistema_ativo == "novo":
-            diagnostico.update(self._diagnosticar_sistema_novo())
-        elif self.sistema_ativo == "antigo":
-            diagnostico.update(self._diagnosticar_sistema_antigo())
-        else:
-            diagnostico['problemas'].append("CRÍTICO: Nenhum sistema disponível")
-        
-        return diagnostico
-    
-    def _diagnosticar_sistema_novo(self) -> Dict[str, Any]:
-        """Diagnóstico específico do sistema novo"""
-        result = {
-            'componentes': {},
-            'problemas': [],
-            'recomendacoes': []
-        }
-        
-        # Testar componentes principais
-        componentes_teste = [
-            ('Learning Core', 'app.claude_ai_novo.learners.learning_core', 'get_lifelong_learning'),
-            ('Security Guard', 'app.claude_ai_novo.security.security_guard', 'get_security_guard'),
-            ('Orchestrators', 'app.claude_ai_novo.orchestrators.orchestrator_manager', 'get_orchestrator_manager'),
-            ('Analyzers', 'app.claude_ai_novo.analyzers.analyzer_manager', 'get_analyzer_manager'),
-        ]
-        
-        for nome, modulo, funcao in componentes_teste:
-            try:
-                mod = __import__(modulo, fromlist=[funcao])
-                func = getattr(mod, funcao)
-                instance = func()
-                result['componentes'][nome] = f"✅ {type(instance).__name__}"
+                # Inicializar sistema novo
+                from app.claude_ai_novo.orchestrators.orchestrator_manager import OrchestratorManager
+                self.claude = OrchestratorManager()
+                logger.info("✅ Sistema Claude AI Novo inicializado")
             except Exception as e:
-                result['componentes'][nome] = f"❌ {str(e)[:50]}..."
-                result['problemas'].append(f"{nome}: {e}")
+                logger.error(f"❌ Erro ao inicializar sistema novo: {e}")
+                self._use_new_system = False
         
-        # Analisar problemas
-        if result['problemas']:
-            result['recomendacoes'].append("Corrigir imports e dependências")
-            result['recomendacoes'].append("Verificar se todas as tabelas existem no banco")
-        
-        return result
-    
-    def _diagnosticar_sistema_antigo(self) -> Dict[str, Any]:
-        """Diagnóstico específico do sistema antigo"""
-        return {
-            'componentes': {'Sistema Antigo': '✅ Funcional'},
-            'problemas': [],
-            'recomendacoes': ['Sistema antigo está funcionando normalmente']
-        }
+        if not self._use_new_system:
+            try:
+                # Fallback para sistema antigo
+                from app.claude_ai.claude_real_integration import ClaudeRealIntegration
+                self.claude = ClaudeRealIntegration()
+                logger.info("✅ Sistema Claude AI Antigo inicializado (fallback)")
+            except Exception as e:
+                logger.error(f"❌ Erro ao inicializar sistema antigo: {e}")
+                self.claude = None
     
     async def processar_consulta(self, consulta: str, user_context: Optional[Dict] = None) -> str:
-        """Processa consulta usando o sistema ativo (com diagnóstico)"""
+        """Processa consulta usando o sistema ativo (com métricas integradas)"""
         
-        if self.sistema_ativo == "novo":
-            try:
-                # Sistema novo - verificar se é assíncrono
-                if hasattr(self.claude, 'process_query'):
-                    result = await self.claude.process_query(consulta, user_context)
-                    
-                    # CORREÇÃO: Extrair resposta corretamente do resultado complexo
-                    if isinstance(result, dict):
-                        # Tentar extrair a resposta real do resultado
-                        if result.get('success'):
-                            # Verificar diferentes estruturas de resposta
-                            if 'agent_response' in result:
-                                agent_resp = result.get('agent_response')
-                                if isinstance(agent_resp, dict) and 'response' in agent_resp:
-                                    return agent_resp.get('response', '')
-                                elif isinstance(agent_resp, str):
-                                    return agent_resp
-                            elif 'response' in result:
-                                return result.get('response', '')
-                            elif 'result' in result:
-                                nested_result = result.get('result')
-                                if isinstance(nested_result, dict) and 'result' in nested_result:
-                                    return nested_result.get('result', '')
-                                else:
-                                    return str(nested_result)
-                        
-                        # Fallback - tentar extrair qualquer resposta útil
-                        for key in ['response', 'result', 'answer', 'message']:
-                            if result.get(key):
-                                return str(result.get(key))
-                    
-                    # Se chegou até aqui, converter para string mas de forma mais inteligente
-                    return str(result) if result is not None else "Resposta não disponível"
-                else:
-                    # Fallback para método síncrono
-                    result = str(self.claude.get_system_status())
-                
-                return result
-                
-            except Exception as e:
-                logger.error(f"❌ Erro no sistema novo: {e}")
-                # Fallback automático para sistema antigo
-                return await self._processar_com_antigo(consulta, user_context)
-            
-        elif self.sistema_ativo == "antigo":
-            return await self._processar_com_antigo(consulta, user_context)
-        else:
-            return "❌ Nenhum sistema Claude AI disponível"
-    
-    async def _processar_com_antigo(self, consulta: str, user_context: Optional[Dict] = None) -> str:
-        """Processa com sistema antigo (sempre funciona)"""
+        # Registrar início da query
+        start_time = time.time()
+        query_type = self._classify_query_type(consulta)
+        success = False
+        tokens_used = 0
+        
         try:
-            result = self.processar_consulta_real(consulta, user_context)
-            return str(result) if result is not None else "Resposta não disponível"
+            # Registrar métricas - importação dinâmica para evitar problemas de inicialização
+            try:
+                from app.claude_ai_novo.monitoring.real_time_metrics import record_query_metric
+                metrics_available = True
+            except ImportError:
+                metrics_available = False
+            
+            if self._use_new_system:
+                try:
+                    # Sistema novo - verificar se é assíncrono
+                    if hasattr(self.claude, 'process_query'):
+                        result = await self.claude.process_query(consulta, user_context)
+                        
+                        # CORREÇÃO: Extrair resposta corretamente do resultado complexo
+                        if isinstance(result, dict):
+                            # Tentar extrair a resposta real do resultado
+                            if result.get('success'):
+                                # Usar o novo método de extração recursiva
+                                response_text = self._extract_response_from_nested(result)
+                                
+                                if response_text:
+                                    success = True
+                                    tokens_used = self._estimate_tokens(response_text)
+                                    
+                                    # Registrar métricas se disponível
+                                    if metrics_available:
+                                        response_time = time.time() - start_time
+                                        record_query_metric(query_type, response_time, success, tokens_used)
+                                    
+                                    return response_text
+                                else:
+                                    # Se não conseguiu extrair, tentar retornar estrutura como JSON
+                                    logger.warning(f"⚠️ Não foi possível extrair resposta de: {type(result)}")
+                                    
+                                    # Registrar métricas de erro parcial
+                                    if metrics_available:
+                                        response_time = time.time() - start_time
+                                        record_query_metric(query_type, response_time, False, 0)
+                                    
+                                    # Retornar resultado como JSON string se possível
+                                    try:
+                                        import json
+                                        return json.dumps(result, ensure_ascii=False, indent=2)
+                                    except:
+                                        return str(result)
+                            
+                            # Se não conseguir extrair, tentar outras estruturas
+                            if 'error' in result:
+                                error_msg = result['error']
+                                logger.error(f"❌ Erro no sistema novo: {error_msg}")
+                                
+                                # Registrar métricas de erro
+                                if metrics_available:
+                                    response_time = time.time() - start_time
+                                    record_query_metric(query_type, response_time, False, 0)
+                                
+                                return f"Erro no processamento: {error_msg}"
+                        
+                        # Se chegou aqui, algo deu errado na extração
+                        logger.warning(f"⚠️ Resposta não extraída corretamente: {type(result)}")
+                        
+                        # Registrar métricas de erro
+                        if metrics_available:
+                            response_time = time.time() - start_time
+                            record_query_metric(query_type, response_time, False, 0)
+                        
+                        return str(result) if result is not None else "Resposta não disponível"
+                    
+                    else:
+                        logger.error("❌ Sistema novo não possui método process_query")
+                        
+                        # Registrar métricas de erro
+                        if metrics_available:
+                            response_time = time.time() - start_time
+                            record_query_metric(query_type, response_time, False, 0)
+                        
+                        return "Sistema novo não configurado corretamente"
+                        
+                except Exception as e:
+                    logger.error(f"❌ Erro no sistema novo: {e}")
+                    
+                    # Registrar métricas de erro
+                    if metrics_available:
+                        response_time = time.time() - start_time
+                        record_query_metric(query_type, response_time, False, 0)
+                    
+                    return f"Erro no sistema novo: {str(e)}"
+            
+            else:
+                # Sistema antigo
+                try:
+                    if hasattr(self.claude, 'process_query'):
+                        result = await self.claude.process_query(consulta, user_context)
+                        
+                        if result:
+                            success = True
+                            tokens_used = self._estimate_tokens(str(result))
+                            
+                            # Registrar métricas se disponível
+                            if metrics_available:
+                                response_time = time.time() - start_time
+                                record_query_metric(query_type, response_time, success, tokens_used)
+                            
+                            return str(result)
+                        else:
+                            # Registrar métricas de erro
+                            if metrics_available:
+                                response_time = time.time() - start_time
+                                record_query_metric(query_type, response_time, False, 0)
+                            
+                            return "Resposta não disponível"
+                            
+                    else:
+                        # Registrar métricas de erro
+                        if metrics_available:
+                            response_time = time.time() - start_time
+                            record_query_metric(query_type, response_time, False, 0)
+                        
+                        return "Sistema antigo não configurado corretamente"
+                        
+                except Exception as e:
+                    logger.error(f"❌ Erro no sistema antigo: {e}")
+                    
+                    # Registrar métricas de erro
+                    if metrics_available:
+                        response_time = time.time() - start_time
+                        record_query_metric(query_type, response_time, False, 0)
+                    
+                    return f"Erro no sistema antigo: {str(e)}"
+        
         except Exception as e:
-            logger.error(f"❌ Erro no sistema antigo: {e}")
-            return f"❌ Erro no processamento: {str(e)}"
+            logger.error(f"❌ Erro geral no processamento: {e}")
+            
+            # Registrar métricas de erro
+            try:
+                if metrics_available:
+                    response_time = time.time() - start_time
+                    record_query_metric(query_type, response_time, False, 0)
+            except:
+                pass
+            
+            return f"Erro no processamento: {str(e)}"
     
-    def forcar_sistema_novo(self) -> Dict[str, Any]:
-        """Força uso do sistema novo e retorna diagnóstico"""
-        logger.info("🔄 Forçando ativação do sistema novo...")
+    def _extract_response_from_nested(self, data: Any, depth: int = 0) -> Optional[str]:
+        """
+        Extrai a resposta de texto de uma estrutura aninhada.
         
-        self.usar_sistema_novo = True
-        success = self._inicializar_sistema_novo()
+        Args:
+            data: Dados para extrair resposta
+            depth: Profundidade atual da recursão
+            
+        Returns:
+            Texto da resposta ou None
+        """
+        # Evitar recursão infinita
+        if depth > 10:
+            return None
         
-        diagnostico = self.diagnosticar_sistema()
-        diagnostico['forced_activation'] = success
+        # Se já é uma string válida, retornar
+        if isinstance(data, str) and len(data.strip()) > 10:
+            # Evitar retornar strings que são claramente não-respostas
+            if not any(skip in data for skip in ['task_id', 'success', 'error', 'timestamp']):
+                return data
         
-        return diagnostico
+        # Se é um dicionário, procurar em campos conhecidos
+        if isinstance(data, dict):
+            # Campos prioritários para resposta
+            priority_fields = ['response', 'result', 'answer', 'message', 'text', 'content']
+            
+            for field in priority_fields:
+                if field in data and data[field]:
+                    # Recursão para extrair do campo
+                    extracted = self._extract_response_from_nested(data[field], depth + 1)
+                    if extracted:
+                        return extracted
+            
+            # Se não encontrou nos campos prioritários, tentar todos os campos
+            for key, value in data.items():
+                if value and key not in ['task_id', 'success', 'error', 'timestamp', 'mode', 'orchestrator']:
+                    extracted = self._extract_response_from_nested(value, depth + 1)
+                    if extracted:
+                        return extracted
+        
+        # Se é uma lista, verificar cada item
+        elif isinstance(data, list) and data:
+            for item in data:
+                extracted = self._extract_response_from_nested(item, depth + 1)
+                if extracted:
+                    return extracted
+        
+        return None
     
-    def alternar_sistema(self):
-        """Alterna entre sistema antigo e novo"""
-        if self.sistema_ativo == "novo":
-            self._inicializar_sistema_antigo()
+    def _classify_query_type(self, consulta: str) -> str:
+        """Classifica o tipo da query para métricas"""
+        consulta_lower = consulta.lower()
+        
+        if any(word in consulta_lower for word in ['entrega', 'entregar', 'delivery']):
+            return 'status_entregas'
+        elif any(word in consulta_lower for word in ['frete', 'transporte', 'cotação']):
+            return 'consulta_fretes'
+        elif any(word in consulta_lower for word in ['pedido', 'order']):
+            return 'consulta_pedidos'
+        elif any(word in consulta_lower for word in ['embarque', 'embarcar']):
+            return 'consulta_embarques'
+        elif any(word in consulta_lower for word in ['financeiro', 'pagar', 'pagamento']):
+            return 'consulta_financeiro'
+        elif any(word in consulta_lower for word in ['relatório', 'report', 'análise']):
+            return 'gerar_relatorio'
+        elif any(word in consulta_lower for word in ['status', 'como está']):
+            return 'status_sistema'
         else:
-            self.forcar_sistema_novo()
-        
-        return f"🔄 Sistema alterado para: {self.sistema_ativo}"
+            return 'consulta_geral'
+    
+    def _estimate_tokens(self, text: str) -> int:
+        """Estima o número de tokens baseado no texto"""
+        # Estimativa aproximada: 1 token ≈ 4 caracteres
+        return len(text) // 4
+    
+    @property
+    def sistema_ativo(self) -> str:
+        """Retorna o sistema ativo"""
+        return "novo" if self._use_new_system else "antigo"
 
+# Instância global do gerenciador
+_transition_manager = None
 
-# Instância global
-_claude_transition = None
-
-def get_claude_transition():
-    """Retorna instância de transição"""
-    global _claude_transition
-    if _claude_transition is None:
-        _claude_transition = ClaudeTransition()
-    return _claude_transition
-
-async def processar_consulta_transicao_async(consulta: str, user_context: Optional[Dict] = None) -> str:
-    """Função ASYNC para processar consultas independente do sistema"""
-    transition = get_claude_transition()
-    return await transition.processar_consulta(consulta, user_context)
+def get_transition_manager() -> ClaudeTransitionManager:
+    """Obtém instância do gerenciador de transição"""
+    global _transition_manager
+    if _transition_manager is None:
+        _transition_manager = ClaudeTransitionManager()
+    return _transition_manager
 
 def processar_consulta_transicao(consulta: str, user_context: Optional[Dict] = None) -> str:
-    """Função SÍNCRONA para compatibilidade - executa versão async"""
+    """Função principal para processar consultas com transição"""
+    
     try:
-        # Tentar usar loop existente
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Se loop já está rodando, criar uma task
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, 
-                    processar_consulta_transicao_async(consulta, user_context))
-                return future.result(timeout=30)  # 30 segundos timeout
-        else:
-            # Loop não está rodando, usar run_until_complete
-            return loop.run_until_complete(
-                processar_consulta_transicao_async(consulta, user_context)
-            )
-    except RuntimeError:
-        # Se não há loop, criar um novo
-        return asyncio.run(
-            processar_consulta_transicao_async(consulta, user_context)
-        )
+        # Obter gerenciador
+        manager = get_transition_manager()
+        
+        # Processar consulta de forma assíncrona
+        try:
+            # Verificar se há loop rodando
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Se já há um loop rodando, usar run_in_executor
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        manager.processar_consulta(consulta, user_context)
+                    )
+                    return future.result(timeout=30)  # 30 segundos timeout
+            else:
+                # Se não há loop, usar run_until_complete
+                return loop.run_until_complete(
+                    manager.processar_consulta(consulta, user_context)
+                )
+        except RuntimeError:
+            # Se não há loop, criar um novo
+            return asyncio.run(manager.processar_consulta(consulta, user_context))
+            
     except Exception as e:
         logger.error(f"❌ Erro na transição: {e}")
-        return f"❌ Erro no sistema de transição: {e}"
-
-def diagnosticar_claude_ai() -> Dict[str, Any]:
-    """Função de conveniência para diagnóstico completo"""
-    transition = get_claude_transition()
-    return transition.diagnosticar_sistema()
+        return f"Erro no processamento: {str(e)}"

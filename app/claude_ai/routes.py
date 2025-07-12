@@ -3033,3 +3033,83 @@ def api_diagnostico_rapido():
             'error': str(e),
             'status': 'erro'
         }), 500
+
+@claude_ai_bp.route('/api/claude-ai-novo-metrics')
+@login_required
+def api_claude_ai_novo_metrics():
+    """📊 API para métricas específicas do Claude AI Novo - dados técnicos interessantes"""
+    try:
+        # Importar sistema de métricas
+        from app.claude_ai_novo.monitoring.real_time_metrics import get_claude_metrics
+        
+        # Obter métricas do Claude AI Novo
+        claude_metrics = get_claude_metrics()
+        comprehensive_metrics = claude_metrics.get_comprehensive_metrics()
+        
+        # Preparar dados para interface
+        interface_metrics = {
+            'timestamp': comprehensive_metrics['timestamp'],
+            
+            # 🧠 Dados técnicos do modelo IA - REAIS dos arquivos de config
+            'model_info': {
+                'name': comprehensive_metrics['model_config']['name'],
+                'version': comprehensive_metrics['model_config']['version'],
+                'model_id': comprehensive_metrics['model_config']['model_id'],
+                'temperature': comprehensive_metrics['model_config']['temperature'],
+                'top_p': comprehensive_metrics['model_config']['top_p'],
+                'top_k': comprehensive_metrics['model_config']['top_k'],
+                'max_tokens': comprehensive_metrics['model_config']['max_tokens'],
+                'max_output_tokens': comprehensive_metrics['model_config']['max_output_tokens'],
+                'context_window': comprehensive_metrics['model_config']['context_window'],
+                'provider': comprehensive_metrics['model_config']['provider'],
+                'mode': comprehensive_metrics['model_config']['mode'],
+                'explanations': comprehensive_metrics['model_config']['explanations']
+            },
+            
+            # 🎯 Métricas técnicas do sistema IA
+            'ai_system': {
+                'modules_loaded': comprehensive_metrics.get('ai_technical', {}).get('ai_status', {}).get('total_modules_loaded', 0),
+                'orchestrators_active': comprehensive_metrics['orchestrators']['active_orchestrators'],
+                'orchestrators_total': comprehensive_metrics['orchestrators']['total_orchestrators'],
+                'api_key_configured': comprehensive_metrics.get('ai_technical', {}).get('ai_status', {}).get('api_key_configured', False),
+                'unlimited_mode': comprehensive_metrics.get('ai_technical', {}).get('ai_status', {}).get('unlimited_mode', False),
+                'learning_enabled': comprehensive_metrics.get('ai_technical', {}).get('ai_status', {}).get('learning_enabled', False)
+            },
+            
+            # ⚡ Performance técnica da IA
+            'ai_performance': {
+                'avg_response_time_ms': comprehensive_metrics['performance']['avg_response_time_ms'],
+                'success_rate': comprehensive_metrics['performance']['success_rate'],
+                'cache_hit_rate': comprehensive_metrics['performance']['cache_hit_rate'],
+                'total_queries': comprehensive_metrics['performance']['total_queries'],
+                'queries_per_minute': comprehensive_metrics['performance']['queries_per_minute'],
+                'total_tokens_used': comprehensive_metrics['performance']['total_tokens_used']
+            },
+            
+            # 🔧 Capacidades técnicas ativas
+            'ai_capabilities': comprehensive_metrics.get('ai_technical', {}).get('capabilities', {}),
+            
+            # 📈 Uso da IA
+            'ai_usage': {
+                'uptime_hours': comprehensive_metrics['usage']['uptime_hours'],
+                'avg_tokens_per_query': comprehensive_metrics['usage']['avg_tokens_per_query'],
+                'top_query_types': comprehensive_metrics['usage']['top_query_types'],
+                'total_query_types': comprehensive_metrics['usage']['total_query_types']
+            },
+            
+            # 🔥 Status atual
+            'status': comprehensive_metrics['status']
+        }
+        
+        return jsonify({
+            'success': True,
+            'metrics': interface_metrics,
+            'source': 'claude_ai_novo'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao gerar métricas do Claude AI Novo: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao coletar métricas: {str(e)}'
+        }), 500
