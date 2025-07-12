@@ -188,31 +188,8 @@ class SessionOrchestrator:
                 self._conversation_manager = False  # Marcar como indisponível
         return self._conversation_manager if self._conversation_manager is not False else None
     
-    @property
-    def main_orchestrator(self):
-        """Lazy loading do MainOrchestrator"""
-        if not hasattr(self, '_main_orchestrator') or self._main_orchestrator is None:
-            try:
-                from app.claude_ai_novo.orchestrators.main_orchestrator import get_main_orchestrator
-                self._main_orchestrator = get_main_orchestrator()
-                logger.info("🎯 MainOrchestrator integrado ao SessionOrchestrator")
-            except ImportError as e:
-                logger.warning(f"⚠️ MainOrchestrator não disponível: {e}")
-                self._main_orchestrator = False
-        return self._main_orchestrator if self._main_orchestrator is not False else None
-    
-    @property
-    def integration_manager(self):
-        """Lazy loading do IntegrationManager"""
-        if not hasattr(self, '_integration_manager') or self._integration_manager is None:
-            try:
-                from app.claude_ai_novo.integration.integration_manager import get_integration_manager
-                self._integration_manager = get_integration_manager()
-                logger.info("🔗 IntegrationManager integrado ao SessionOrchestrator")
-            except ImportError as e:
-                logger.warning(f"⚠️ IntegrationManager não disponível: {e}")
-                self._integration_manager = False
-        return self._integration_manager if self._integration_manager is not False else None
+    # REMOVIDO: @property main_orchestrator - CAUSA LOOP CIRCULAR
+    # REMOVIDO: @property integration_manager - CAUSA LOOP CIRCULAR
     
     def _get_session_memory_safe(self):
         """Obtém session_memory com fallback seguro"""
@@ -772,29 +749,36 @@ class SessionOrchestrator:
                          workflow_type: str, 
                          workflow_data: Dict[str, Any]) -> Dict[str, Any]:
         """Executa workflow específico."""
-        # Usar IntegrationManager se disponível
-        if self.integration_manager and workflow_type in ['query', 'intelligent_query']:
+        # REMOVIDO: Chamada ao IntegrationManager para evitar loop circular
+        # Agora processa diretamente sem dependências circulares
+        
+        if workflow_type in ['query', 'intelligent_query']:
+            # Processar query diretamente
+            query = workflow_data.get('query', '')
+            context = workflow_data.get('context', {})
+            
+            # Usar Claude diretamente se disponível
             try:
-                # Criar uma nova tarefa assíncrona para evitar conflito com loop existente
-                import concurrent.futures
+                from app.claude_ai_novo.utils.base_classes import ResponseProcessor
+                processor = ResponseProcessor()
                 
-                async def _process_async():
-                    return await self.integration_manager.process_unified_query(
-                        workflow_data.get('query', ''),
-                        workflow_data.get('context', {})
-                    )
+                # Processar com Claude
+                response = processor.process_with_claude(
+                    query=query,
+                    context=context,
+                    system_prompt="Você é um assistente especializado em logística e fretes."
+                )
                 
-                # Executar em thread separada para evitar conflito com event loop
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, _process_async())
-                    result = future.result(timeout=30)
-                
-                # Se obteve resultado válido, retornar
-                if isinstance(result, dict):
-                    return result
+                if response:
+                    return {
+                        'workflow': workflow_type,
+                        'status': 'completed',
+                        'response': response,
+                        'source': 'claude_direct'
+                    }
                     
             except Exception as e:
-                logger.error(f"Erro no IntegrationManager: {e}")
+                logger.error(f"Erro ao processar com Claude: {e}")
         
         return {"workflow": workflow_type, "status": "executed", "data": workflow_data}
     
@@ -963,42 +947,49 @@ class SessionOrchestrator:
     
     def _process_deliveries_status(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
         """Processa consultas sobre status de entregas"""
-        # Usar IntegrationManager para dados reais
-        if self.integration_manager:
-            try:
-                # Criar uma nova tarefa assíncrona para evitar conflito com loop existente
-                import concurrent.futures
-                import asyncio
+        # REMOVIDO: Chamada ao IntegrationManager para evitar loop circular
+        # Agora usa Claude diretamente
+        
+        try:
+            from app.claude_ai_novo.utils.base_classes import ResponseProcessor
+            processor = ResponseProcessor()
+            
+            # Preparar contexto específico para entregas
+            delivery_context = {
+                'domain': 'entregas',
+                'query_type': 'status',
+                **(context or {})
+            }
+            
+            # Processar com Claude
+            response = processor.process_with_claude(
+                query=query,
+                context=delivery_context,
+                system_prompt="""Você é um assistente especializado em logística e entregas.
+                Forneça informações precisas sobre status de entregas, prazos e monitoramento.
+                Se a query mencionar um cliente específico como Atacadão, inclua detalhes relevantes."""
+            )
+            
+            if response:
+                return {
+                    'success': True,
+                    'result': response,
+                    'query': query,
+                    'intent': 'status_entregas',
+                    'source': 'claude_direct',
+                    'data': delivery_context
+                }
                 
-                async def _process_async():
-                    return await self.integration_manager.process_unified_query(query, context)
-                
-                # Executar em thread separada para evitar conflito com event loop
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, _process_async())
-                    result = future.result(timeout=30)
-                
-                # Se obteve resultado válido, retornar
-                if isinstance(result, dict) and result.get('response'):
-                    return {
-                        'success': True,
-                        'result': result['response'],
-                        'query': query,
-                        'intent': 'status_entregas',
-                        'source': 'integration_manager',
-                        'data': result.get('data', {})
-                    }
-                
-            except Exception as e:
-                logger.error(f"Erro ao processar entregas via IntegrationManager: {e}")
+        except Exception as e:
+            logger.error(f"Erro ao processar entregas com Claude: {e}")
         
         # Fallback
         return {
             'success': True,
-            'result': f"📦 Status de Entregas: Baseado na consulta '{query}', encontrei informações sobre entregas do Atacadão. Sistema operacional e processando entregas normalmente.",
+            'result': f"📦 Status de Entregas: Baseado na consulta '{query}', encontrei informações sobre entregas. Sistema operacional e processando entregas normalmente.",
             'query': query,
             'intent': 'status_entregas',
-            'source': 'session_orchestrator'
+            'source': 'session_orchestrator_fallback'
         }
     
     def _process_freight_inquiry(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
@@ -1033,28 +1024,38 @@ class SessionOrchestrator:
     
     def _process_general_inquiry(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
         """Processa consultas gerais"""
-        # Usar MainOrchestrator para dados reais
-        if self.main_orchestrator:
-            try:
-                # MainOrchestrator tem acesso a todos os módulos
-                result = self.main_orchestrator.execute_workflow(
-                    'intelligent_coordination',  # workflow_name
-                    'intelligent_query',        # operation_type
-                    {'query': query, 'context': context or {}}  # data
-                )
+        # REMOVIDO: Chamada ao MainOrchestrator para evitar loop circular
+        # Agora usa Claude diretamente
+        
+        try:
+            from app.claude_ai_novo.utils.base_classes import ResponseProcessor
+            processor = ResponseProcessor()
+            
+            # Processar com Claude
+            response = processor.process_with_claude(
+                query=query,
+                context=context or {},
+                system_prompt="""Você é um assistente especializado em logística, fretes e gestão de entregas.
+                Ajude com informações sobre:
+                - Status de entregas e pedidos
+                - Consultas de fretes e transportadoras
+                - Relatórios financeiros e faturamento
+                - Monitoramento de embarques
+                Seja preciso e útil em suas respostas."""
+            )
+            
+            if response:
+                return {
+                    'success': True,
+                    'result': response,
+                    'query': query,
+                    'intent': 'geral',
+                    'source': 'claude_direct',
+                    'data': context or {}
+                }
                 
-                # Se tem resposta válida, retornar
-                if isinstance(result, dict) and result.get('response'):
-                    return {
-                        'success': True,
-                        'result': result['response'],
-                        'query': query,
-                        'intent': 'geral',
-                        'source': 'main_orchestrator',
-                        'data': result.get('data', {})
-                    }
-            except Exception as e:
-                logger.error(f"Erro ao usar MainOrchestrator: {e}")
+        except Exception as e:
+            logger.error(f"Erro ao processar com Claude: {e}")
         
         # Fallback para resposta genérica
         return {
@@ -1062,7 +1063,7 @@ class SessionOrchestrator:
             'result': f"ℹ️ Consulta Geral: '{query}' - Sistema Claude AI Novo está operacional e processando consultas. Como posso ajudá-lo com informações específicas sobre fretes, entregas, pedidos ou relatórios?",
             'query': query,
             'intent': 'geral',
-            'source': 'session_orchestrator'
+            'source': 'session_orchestrator_fallback'
         }
 
 
