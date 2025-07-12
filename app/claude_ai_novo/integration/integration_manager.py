@@ -20,6 +20,7 @@ import asyncio
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 import time
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,10 @@ class IntegrationManager:
         Returns:
             Dict com status detalhado
         """
+        # Verificar recursos reais disponíveis
+        data_provider_available = bool(os.environ.get('DATABASE_URL'))
+        claude_integration_available = bool(os.environ.get('ANTHROPIC_API_KEY'))
+        
         return {
             "orchestrator_manager": self.orchestrator_manager is not None,
             "orchestrator_loaded": self.system_metrics['orchestrator_loaded'],
@@ -224,7 +229,10 @@ class IntegrationManager:
             "modules_available": 21,  # Todos via orchestrator
             "modules_active": 21 if self.orchestrator_manager else 0,
             "integration_score": 1.0 if self.orchestrator_manager else 0.0,
-            "ready_for_operation": self.orchestrator_manager is not None
+            "ready_for_operation": self.orchestrator_manager is not None,
+            # Flags para recursos reais
+            "data_provider_available": data_provider_available,
+            "claude_integration_available": claude_integration_available
         }
     
     def get_integration_status(self) -> Dict[str, Any]:
