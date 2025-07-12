@@ -256,6 +256,17 @@ class IntegrationManager:
             # Adicionar métricas do sistema
             status.update(self.system_metrics)
             
+            # Verificar disponibilidade de recursos
+            status['data_provider_available'] = self.db_engine is not None or os.getenv('DATABASE_URL') is not None
+            status['claude_integration_available'] = self.claude_client is not None or os.getenv('ANTHROPIC_API_KEY') is not None
+            
+            # Adicionar informações sobre variáveis de ambiente
+            status['environment'] = {
+                'DATABASE_URL': 'configured' if os.getenv('DATABASE_URL') else 'not_configured',
+                'ANTHROPIC_API_KEY': 'configured' if os.getenv('ANTHROPIC_API_KEY') else 'not_configured',
+                'REDIS_URL': 'configured' if os.getenv('REDIS_URL') else 'not_configured'
+            }
+            
             # Status detalhado se orchestrator disponível
             if self.orchestrator_manager:
                 status['orchestrator_components'] = {

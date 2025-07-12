@@ -187,6 +187,19 @@ class SessionOrchestrator:
                 self._conversation_manager = False  # Marcar como indisponível
         return self._conversation_manager if self._conversation_manager is not False else None
     
+    @property
+    def integration_manager(self):
+        """Lazy loading do IntegrationManager"""
+        if not hasattr(self, '_integration_manager') or self._integration_manager is None:
+            try:
+                from app.claude_ai_novo.integration.integration_manager import get_integration_manager
+                self._integration_manager = get_integration_manager()
+                logger.info("🔗 IntegrationManager integrado ao SessionOrchestrator")
+            except ImportError as e:
+                logger.warning(f"⚠️ IntegrationManager não disponível: {e}")
+                self._integration_manager = False
+        return self._integration_manager if self._integration_manager is not False else None
+    
     def _get_session_memory_safe(self):
         """Obtém session_memory com fallback seguro"""
         try:
