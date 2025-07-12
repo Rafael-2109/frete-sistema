@@ -192,94 +192,12 @@ class IntegrationManager:
         # Detectar se já estamos em um contexto de orchestrator para evitar loop
         if context and context.get('_from_orchestrator'):
             logger.warning("⚠️ Detectado possível loop - retornando resposta direta")
-            
-            # Analisar a query para fornecer resposta mais útil
-            query_lower = query.lower() if query else ""
-            
-            # Respostas específicas baseadas no tipo de consulta
-            if "entregas" in query_lower and "atacadão" in query_lower:
-                response = """📦 Status das Entregas - Atacadão:
-                
-Para obter informações detalhadas sobre as entregas do Atacadão, você pode:
-1. Acessar o relatório de entregas no menu principal
-2. Filtrar por data, status ou número do pedido
-3. Visualizar o tracking em tempo real
-
-💡 Dica: Use comandos como "listar entregas atacadão hoje" ou "status entrega 12345" para consultas específicas."""
-            
-            elif "entregas" in query_lower:
-                response = """📦 Informações sobre Entregas:
-                
-Para consultar entregas, especifique:
-- Cliente: "entregas do [nome do cliente]"
-- Data: "entregas de hoje/ontem/esta semana"
-- Status: "entregas pendentes/em rota/entregues"
-
-💡 Exemplo: "mostrar entregas pendentes de hoje" """
-            
-            elif "frete" in query_lower or "fretes" in query_lower:
-                response = """🚚 Informações sobre Fretes:
-                
-Comandos disponíveis para fretes:
-- "calcular frete para [destino]"
-- "listar fretes do mês"
-- "status frete [número]"
-- "fretes pendentes"
-
-💡 Use filtros para refinar sua busca!"""
-            
-            elif "pedido" in query_lower or "pedidos" in query_lower:
-                response = """📋 Informações sobre Pedidos:
-                
-Para consultar pedidos:
-- "pedidos de hoje"
-- "pedido número [12345]"
-- "pedidos pendentes"
-- "pedidos do cliente [nome]"
-
-💡 Você também pode exportar relatórios!"""
-            
-            elif "relatorio" in query_lower or "relatório" in query_lower:
-                response = """📊 Geração de Relatórios:
-                
-Relatórios disponíveis:
-- Relatório de entregas
-- Relatório de faturamento
-- Relatório de performance
-- Relatório customizado
-
-💡 Especifique o período: "relatório de entregas desta semana" """
-            
-            elif "ajuda" in query_lower or "help" in query_lower or "comando" in query_lower:
-                response = """❓ Central de Ajuda - Comandos Disponíveis:
-                
-📦 Entregas: "listar entregas", "status entrega [id]"
-🚚 Fretes: "calcular frete", "fretes pendentes"
-📋 Pedidos: "pedidos hoje", "pedido [número]"
-📊 Relatórios: "relatório entregas", "exportar dados"
-👥 Clientes: "dados cliente [nome]", "histórico [cliente]"
-
-💡 Seja específico para melhores resultados!"""
-            
-            else:
-                response = f"""🤖 Processando: '{query}'
-                
-Não consegui identificar exatamente o que você precisa. Tente ser mais específico:
-
-📦 Para entregas: "listar entregas de hoje"
-🚚 Para fretes: "calcular frete para São Paulo"
-📋 Para pedidos: "mostrar pedido 12345"
-📊 Para relatórios: "relatório de faturamento"
-
-💡 Digite "ajuda" para ver todos os comandos disponíveis."""
-            
             return {
                 "success": True,
-                "response": response,
+                "response": f"Processamento direto: {query}",
                 "query": query,
-                "source": "integration_antiloop",
-                "loop_prevented": True,
-                "response_type": "intelligent_fallback"
+                "source": "integration_direct",
+                "loop_prevented": True
             }
         
         # ✅ LOG PARA DEBUG
