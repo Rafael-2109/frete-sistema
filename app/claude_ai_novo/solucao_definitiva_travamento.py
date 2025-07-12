@@ -131,7 +131,7 @@ def aplicar_solucao():
     print("Se o problema persistir, use imports diretos ao invés de")
     print("importar via __init__.py:")
     print("   # Ao invés de:")
-    from app.claude_ai_novo.integration.integration_manager import get_integration_manager
+    print("   from app.claude_ai_novo.integration import get_integration_manager")
     print("   # Use:")
     print("   from app.claude_ai_novo.integration.integration_manager import get_integration_manager")
 

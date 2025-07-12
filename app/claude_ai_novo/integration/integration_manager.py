@@ -188,6 +188,18 @@ class IntegrationManager:
         # Garantir que orchestrator está carregado
         self._ensure_orchestrator_loaded()
         
+        # ✅ VERIFICAÇÃO ANTI-LOOP
+        # Detectar se já estamos em um contexto de orchestrator para evitar loop
+        if context and context.get('_from_orchestrator'):
+            logger.warning("⚠️ Detectado possível loop - retornando resposta direta")
+            return {
+                "success": True,
+                "response": f"Processamento direto: {query}",
+                "query": query,
+                "source": "integration_direct",
+                "loop_prevented": True
+            }
+        
         # ✅ LOG PARA DEBUG
         logger.info(f"🔄 INTEGRATION: Query='{query}' | Orchestrator={self.orchestrator_manager is not None}")
         
@@ -198,7 +210,10 @@ class IntegrationManager:
             if self.orchestrator_manager:
                 # ✅ LOG ANTES DA CHAMADA
                 logger.info("📞 INTEGRATION: Chamando orchestrator.process_query")
-                result = await self.orchestrator_manager.process_query(query, context)
+                # Adicionar flag para prevenir loops
+                context_with_flag = (context or {}).copy()
+                context_with_flag['_from_integration'] = True
+                result = await self.orchestrator_manager.process_query(query, context_with_flag)
                 
                 # ✅ LOG DO RESULTADO
                 logger.info(f"📊 INTEGRATION: Resultado={type(result)} | Conteúdo={str(result)[:200]}...")

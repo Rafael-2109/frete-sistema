@@ -113,9 +113,15 @@ class OrchestratorManager:
     @property
     def integration_manager(self):
         """Lazy loading do IntegrationManager"""
-        # REMOVIDO: Import circular - IntegrationManager não deve ser carregado aqui
-        # para evitar loop infinito entre Integration e Orchestrator
-        return None
+        if self._integration_manager is None:
+            try:
+# from app.claude_ai_novo.integration.integration_manager import get_integration_manager # REMOVIDO: Import circular
+                self._integration_manager = get_integration_manager()
+                logger.info("🔗 IntegrationManager integrado ao MAESTRO")
+            except ImportError as e:
+                logger.warning(f"⚠️ IntegrationManager não disponível: {e}")
+                self._integration_manager = False  # Marcar como indisponível
+        return self._integration_manager if self._integration_manager is not False else None
     
     def _initialize_orchestrators(self):
         """Inicializa todos os orquestradores disponíveis."""
@@ -157,13 +163,6 @@ class OrchestratorManager:
         Returns:
             Resultado do processamento
         """
-        # Verificar se veio do IntegrationManager para evitar loop
-        if context and context.get("_from_integration"):
-            logger.debug("📍 Chamada do IntegrationManager detectada")
-            # Adicionar flag para evitar loop de volta
-            context = (context or {}).copy()
-            context["_from_orchestrator"] = True
-        
         try:
             # Preparar dados para orquestração
             data = {
@@ -578,39 +577,15 @@ class OrchestratorManager:
             operation_lower = task.operation.lower()
             
             if 'initialize' in operation_lower:
-                # CORRIGIDO: integration_manager sempre retorna None agora
-                return {
-                    "status": "integration_initialization_skipped",
-                    "message": "Inicialização do IntegrationManager ignorada para evitar loop",
-                    "operation": task.operation
-                }
+                return await self.integration_manager.initialize_all_modules()
             elif 'health' in operation_lower:
-                # CORRIGIDO: integration_manager sempre retorna None agora
-                return {
-                    "status": "integration_health_unavailable",
-                    "message": "Health check do IntegrationManager não disponível",
-                    "operation": task.operation
-                }
+                return self.integration_manager.get_system_health()
             elif 'status' in operation_lower:
-                # CORRIGIDO: integration_manager sempre retorna None agora
-                return {
-                    "status": "integration_status_unavailable",
-                    "message": "Status do IntegrationManager não disponível",
-                    "operation": task.operation
-                }
+                return self.integration_manager.get_integration_status()
             elif 'process' in operation_lower:
                 query = task.parameters.get('query')
                 context = task.parameters.get('context', {})
-                # CORRIGIDO: Removida chamada recursiva que causava loop infinito
-                # Em vez de chamar integration_manager, retornar resultado direto
-                return {
-                    "status": "integration_operation_direct",
-                    "operation": task.operation,
-                    "query": task.parameters.get('query'),
-                    "context": task.parameters.get('context', {}),
-                    "message": "Operação de integração processada diretamente",
-                    "timestamp": datetime.now().isoformat()
-                }
+                return await self.integration_manager.process_unified_query(query, context)
             else:
                 # Operação genérica de integração
                 return {
