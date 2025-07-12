@@ -74,16 +74,31 @@ class SmartBaseAgent(BaseSpecialistAgent):
                 self.tem_dados_reais = status.get('data_provider_available', False)
                 self.tem_claude_real = status.get('claude_integration_available', False)
                 
-                logger.info(f"✅ {self.agent_type.value}: Conectado ao IntegrationManager")
-                logger.info(f"   📊 Dados reais: {self.tem_dados_reais}")
-                logger.info(f"   🤖 Claude real: {self.tem_claude_real}")
+                # Usar logging seguro - só acessa agent_type se já foi definido
+                agent_name = getattr(self, 'agent_type', None)
+                if agent_name and hasattr(agent_name, 'value'):
+                    logger.info(f"✅ {agent_name.value}: Conectado ao IntegrationManager")
+                    logger.info(f"   📊 Dados reais: {self.tem_dados_reais}")
+                    logger.info(f"   🤖 Claude real: {self.tem_claude_real}")
+                else:
+                    logger.info("✅ SmartBaseAgent: Conectado ao IntegrationManager")
+                    logger.info(f"   📊 Dados reais: {self.tem_dados_reais}")
+                    logger.info(f"   🤖 Claude real: {self.tem_claude_real}")
             else:
-                logger.warning(f"⚠️ {self.agent_type.value}: IntegrationManager não disponível")
+                agent_name = getattr(self, 'agent_type', None)
+                if agent_name and hasattr(agent_name, 'value'):
+                    logger.warning(f"⚠️ {agent_name.value}: IntegrationManager não disponível")
+                else:
+                    logger.warning("⚠️ SmartBaseAgent: IntegrationManager não disponível")
                 
         except Exception as e:
             self.integration_manager = None
             self.tem_integration_manager = False
-            logger.warning(f"⚠️ {self.agent_type.value}: Erro ao conectar IntegrationManager: {e}")
+            agent_name = getattr(self, 'agent_type', None)
+            if agent_name and hasattr(agent_name, 'value'):
+                logger.warning(f"⚠️ {agent_name.value}: Erro ao conectar IntegrationManager: {e}")
+            else:
+                logger.warning(f"⚠️ SmartBaseAgent: Erro ao conectar IntegrationManager: {e}")
 
     def _load_specialist_prompt(self) -> str:
         """System prompt genérico - cada agente especializado deve sobrescrever"""
