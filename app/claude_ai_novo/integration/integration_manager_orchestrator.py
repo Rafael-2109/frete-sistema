@@ -184,8 +184,8 @@ class IntegrationManagerOrchestrator:
         
         try:
             if self.orchestrator_manager:
-                # Usar o maestro para processar (removendo await - process_query não é async)
-                result = self.orchestrator_manager.process_query(query, context)
+                # Usar o maestro para processar (CORRIGIDO: process_query é async)
+                result = await self.orchestrator_manager.process_query(query, context)
                 return result
             else:
                 # Fallback simples

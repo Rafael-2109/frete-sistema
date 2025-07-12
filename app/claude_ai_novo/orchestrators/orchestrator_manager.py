@@ -475,14 +475,14 @@ class OrchestratorManager:
         
         # Tentar diferentes métodos de execução baseados no tipo
         if task.orchestrator_type == OrchestratorType.SESSION:
-            return self._execute_session_operation(orchestrator, task)
+            return await self._execute_session_operation(orchestrator, task)
         elif task.orchestrator_type == OrchestratorType.WORKFLOW:
             return self._execute_workflow_operation(orchestrator, task)
         else:
             # Método genérico
             return await self._execute_generic_operation(orchestrator, task)
     
-    def _execute_session_operation(self, orchestrator, task: OrchestrationTask) -> Any:
+    async def _execute_session_operation(self, orchestrator, task: OrchestrationTask) -> Any:
         """Executa operação de sessão."""
         operation = task.operation.lower()
         params = task.parameters
@@ -523,6 +523,17 @@ class OrchestratorManager:
                 params.get('workflow_type'),
                 params.get('workflow_data', {})
             )
+        elif 'query' in operation or 'intelligent' in operation:
+            # CORREÇÃO: Usar await adequadamente para métodos async
+            query = params.get('query', '')
+            context = params.get('context', {})
+            
+            # Chama o método process_query que acabei de adicionar
+            if hasattr(orchestrator, 'process_query'):
+                # CORRIGIDO: Usar await em vez de criar novo loop
+                return await orchestrator.process_query(query, context)
+            else:
+                return {"error": "SessionOrchestrator não tem método process_query"}
         else:
             # Operação genérica
             return getattr(orchestrator, operation, lambda: "Operação não encontrada")()
