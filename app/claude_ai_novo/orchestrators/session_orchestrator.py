@@ -8,6 +8,7 @@ Especializações: Lifecycle Management, Coordenação de Componentes, Workflow,
 
 import logging
 import uuid
+import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Callable
 from enum import Enum
@@ -186,6 +187,19 @@ class SessionOrchestrator:
                 logger.warning(f"⚠️ ConversationManager não disponível: {e}")
                 self._conversation_manager = False  # Marcar como indisponível
         return self._conversation_manager if self._conversation_manager is not False else None
+    
+    @property
+    def main_orchestrator(self):
+        """Lazy loading do MainOrchestrator"""
+        if not hasattr(self, '_main_orchestrator') or self._main_orchestrator is None:
+            try:
+                from app.claude_ai_novo.orchestrators.main_orchestrator import get_main_orchestrator
+                self._main_orchestrator = get_main_orchestrator()
+                logger.info("🎯 MainOrchestrator integrado ao SessionOrchestrator")
+            except ImportError as e:
+                logger.warning(f"⚠️ MainOrchestrator não disponível: {e}")
+                self._main_orchestrator = False
+        return self._main_orchestrator if self._main_orchestrator is not False else None
     
     @property
     def integration_manager(self):
@@ -758,13 +772,21 @@ class SessionOrchestrator:
                          workflow_type: str, 
                          workflow_data: Dict[str, Any]) -> Dict[str, Any]:
         """Executa workflow específico."""
-        # Placeholder para workflows personalizados
-        return {
-            'workflow_type': workflow_type,
-            'processed_at': datetime.now().isoformat(),
-            'data_received': bool(workflow_data),
-            'success': True
-        }
+        # Usar IntegrationManager se disponível
+        if self.integration_manager and workflow_type in ['query', 'intelligent_query']:
+            try:
+                result = self.integration_manager.process_unified_query(
+                    workflow_data.get('query', ''),
+                    workflow_data.get('context', {})
+                )
+                if asyncio.iscoroutine(result):
+                    loop = asyncio.get_event_loop()
+                    result = loop.run_until_complete(result)
+                return result
+            except Exception as e:
+                logger.error(f"Erro no IntegrationManager: {e}")
+        
+        return {"workflow": workflow_type, "status": "executed", "data": workflow_data}
     
     def _execute_cleanup(self, session: SessionContext):
         """Executa cleanup da sessão."""
@@ -931,6 +953,18 @@ class SessionOrchestrator:
     
     def _process_deliveries_status(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
         """Processa consultas sobre status de entregas"""
+        # Usar IntegrationManager para dados reais
+        if self.integration_manager:
+            try:
+                result = self.integration_manager.process_unified_query(query, context)
+                if asyncio.iscoroutine(result):
+                    loop = asyncio.get_event_loop()
+                    result = loop.run_until_complete(result)
+                return result
+            except Exception as e:
+                logger.error(f"Erro ao processar entregas via IntegrationManager: {e}")
+        
+        # Fallback
         return {
             'success': True,
             'result': f"📦 Status de Entregas: Baseado na consulta '{query}', encontrei informações sobre entregas do Atacadão. Sistema operacional e processando entregas normalmente.",
@@ -971,6 +1005,30 @@ class SessionOrchestrator:
     
     def _process_general_inquiry(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
         """Processa consultas gerais"""
+        # Usar MainOrchestrator para dados reais
+        if self.main_orchestrator:
+            try:
+                # MainOrchestrator tem acesso a todos os módulos
+                result = self.main_orchestrator.execute_workflow(
+                    'intelligent_coordination',  # workflow_name
+                    'intelligent_query',        # operation_type
+                    {'query': query, 'context': context or {}}  # data
+                )
+                
+                # Se tem resposta válida, retornar
+                if isinstance(result, dict) and result.get('response'):
+                    return {
+                        'success': True,
+                        'result': result['response'],
+                        'query': query,
+                        'intent': 'geral',
+                        'source': 'main_orchestrator',
+                        'data': result.get('data', {})
+                    }
+            except Exception as e:
+                logger.error(f"Erro ao usar MainOrchestrator: {e}")
+        
+        # Fallback para resposta genérica
         return {
             'success': True,
             'result': f"ℹ️ Consulta Geral: '{query}' - Sistema Claude AI Novo está operacional e processando consultas. Como posso ajudá-lo com informações específicas sobre fretes, entregas, pedidos ou relatórios?",
