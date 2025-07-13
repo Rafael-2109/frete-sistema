@@ -272,6 +272,41 @@ class ProcessorManager(ProcessorBase):
             self.logger.error(f"❌ Erro ao configurar Memory Manager: {e}")
             return False
 
+    def set_enricher(self, enricher):
+        """
+        Configura enricher para enriquecer dados e contexto.
+        
+        Args:
+            enricher: Instância do EnricherManager
+        """
+        try:
+            self.enricher = enricher
+            self.logger.info("✅ Enricher configurado no ProcessorManager")
+            
+            # Propagar para DataProcessor se disponível
+            data_processor = self.registry.get_processor('data')
+            if data_processor and hasattr(data_processor, 'set_enricher'):
+                data_processor.set_enricher(enricher)
+                self.logger.info("✅ Enricher propagado para DataProcessor")
+                
+            # Propagar para ContextProcessor se disponível
+            context_processor = self.registry.get_processor('context')
+            if context_processor and hasattr(context_processor, 'set_enricher'):
+                context_processor.set_enricher(enricher)
+                self.logger.info("✅ Enricher propagado para ContextProcessor")
+                
+            # Propagar para IntelligenceProcessor se disponível
+            intelligence_processor = self.registry.get_processor('intelligence')
+            if intelligence_processor and hasattr(intelligence_processor, 'set_enricher'):
+                intelligence_processor.set_enricher(enricher)
+                self.logger.info("✅ Enricher propagado para IntelligenceProcessor")
+                
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao configurar Enricher: {e}")
+            return False
+
 # =====================================
 # INSTÂNCIAS GLOBAIS E CONVENIÊNCIA
 # ====================================

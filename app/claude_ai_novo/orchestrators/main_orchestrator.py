@@ -1048,6 +1048,12 @@ class MainOrchestrator:
                     self.components[component_name] = self.components['memorizers']
                 else:
                     self.components[component_name] = MockComponent("memorizers")
+            elif component_name == "conversers":
+                # NOVO: Carregar ConversationManager
+                if hasattr(self, 'components') and 'conversers' in self.components:
+                    self.components[component_name] = self.components['conversers']
+                else:
+                    self.components[component_name] = MockComponent("conversers")
             # Adicionar outros componentes conforme necessário
             
             logger.info(f"Componente carregado dinamicamente: {component_name}")
@@ -1171,6 +1177,13 @@ class MainOrchestrator:
             logger.debug("⚠️ LearningManager mock")
         
         # Conversers
+        try:
+            from app.claude_ai_novo.conversers import get_conversation_manager
+            self.components["conversers"] = get_conversation_manager()
+            logger.debug("✅ Conversers carregado")
+        except ImportError:
+            self.components["conversers"] = MockComponent("conversers")
+            logger.debug("⚠️ Conversers mock")
         
         # NOVO: Pré-carregar módulos de alto valor
         # CoordinatorManager
@@ -1269,12 +1282,25 @@ class MainOrchestrator:
                 loader = self.components['loaders']
                 provider = self.components['providers']
                 
-                if hasattr(provider, 'set_loader'):
+                # Verificar se é ProviderManager e acessar DataProvider interno
+                if hasattr(provider, 'data_provider'):
+                    # ProviderManager tem data_provider interno
+                    data_provider = provider.data_provider
+                    if hasattr(data_provider, 'set_loader'):
+                        try:
+                            data_provider.set_loader(loader)
+                            logger.info("✅ Loader → Provider conectados (via ProviderManager.data_provider)")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Erro ao conectar Loader → Provider: {e}")
+                elif hasattr(provider, 'set_loader'):
+                    # Fallback: tentar direto no provider
                     try:
                         provider.set_loader(loader)
-                        logger.info("✅ Loader → Provider conectados")
+                        logger.info("✅ Loader → Provider conectados (direto)")
                     except Exception as e:
                         logger.warning(f"⚠️ Erro ao conectar Loader → Provider: {e}")
+                else:
+                    logger.warning("⚠️ Provider não tem método set_loader nem data_provider")
             
             # 4. Memorizer → Processor (contexto histórico)
             if 'memorizers' in self.components and 'processors' in self.components:

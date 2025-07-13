@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """
 🧪 TESTE DE INTEGRAÇÃO COMPLETA - ORCHESTRATOR
-==============================================
+============================================
 
-Script para testar todas as conexões entre módulos
-estabelecidas pelo MainOrchestrator.
+Testa todas as conexões entre módulos estabelecidas pelo MainOrchestrator.
 """
 
-import logging
 import sys
-from typing import Dict, Any, Tuple
+import os
+
+# Adicionar o diretório raiz ao path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+import logging
+from typing import Tuple, Dict, Any
 from datetime import datetime
 
 # Configurar logging
@@ -92,21 +96,34 @@ def test_loader_provider_connection(orchestrator) -> Tuple[bool, str]:
         loader = orchestrator.components['loaders']
         provider = orchestrator.components['providers']
         
-        if not hasattr(provider, 'set_loader'):
-            return False, "Provider não tem método set_loader"
+        # Verificar se é ProviderManager
+        if hasattr(provider, 'data_provider'):
+            data_provider = provider.data_provider
+            
+            if not hasattr(data_provider, 'set_loader'):
+                return False, "DataProvider não tem método set_loader"
+            
+            if hasattr(data_provider, 'loader') and data_provider.loader is not None:
+                # Testar funcionalidade
+                try:
+                    data = data_provider.get_data_by_domain('entregas', {})
+                    if data and 'source' in data and data['source'] == 'loader_manager':
+                        return True, "Conexão funcional - DataProvider usando LoaderManager"
+                except Exception as e:
+                    logger.debug(f"Erro ao testar funcionalidade: {e}")
+                    
+                return True, "Conexão estabelecida via ProviderManager.data_provider"
+            else:
+                return False, "DataProvider não tem referência ao Loader"
         
-        if hasattr(provider, 'loader') and provider.loader is not None:
-            # Testar funcionalidade
-            try:
-                data = provider.get_data_by_domain('entregas', {})
-                if data and 'source' in data and data['source'] == 'loader_manager':
-                    return True, "Conexão funcional - Provider usando LoaderManager"
-            except Exception as e:
-                logger.debug(f"Erro ao testar funcionalidade: {e}")
-                
-            return True, "Conexão estabelecida"
+        # Fallback: verificar provider direto
+        elif hasattr(provider, 'set_loader'):
+            if hasattr(provider, 'loader') and provider.loader is not None:
+                return True, "Conexão estabelecida (provider direto)"
+            else:
+                return False, "Provider não tem referência ao Loader"
         else:
-            return False, "Provider não tem referência ao Loader"
+            return False, "Provider não tem método set_loader nem data_provider"
             
     except Exception as e:
         return False, f"Erro ao testar: {str(e)}"
