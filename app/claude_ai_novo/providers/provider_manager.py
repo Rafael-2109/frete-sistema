@@ -62,9 +62,10 @@ class ProviderManager:
             logger.warning(f"⚠️ ContextProvider não disponível: {e}")
             
         try:
-            from .data_provider import DataProvider
-            self.data_provider = DataProvider()
-            logger.info("✅ DataProvider inicializado no manager")
+            from .data_provider import get_data_provider
+            # Usar get_data_provider que agora tenta obter LoaderManager automaticamente
+            self.data_provider = get_data_provider()
+            logger.info("✅ DataProvider inicializado no manager (com LoaderManager se disponível)")
         except ImportError as e:
             logger.warning(f"⚠️ DataProvider não disponível: {e}")
     

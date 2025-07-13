@@ -93,20 +93,34 @@ class DataProvider:
             Dict com dados do domínio
         """
         try:
-            # Tentar usar LoaderManager primeiro (preferencial)
+            # SEMPRE usar LoaderManager quando disponível (arquitetura correta)
             if self.loader:
                 self.logger.info(f"📊 DataProvider: Delegando para LoaderManager - domínio: {domain}")
-                result = self.loader.load_data_by_domain(domain, filters or {})
                 
-                # Adicionar metadados
-                if result and 'data' in result:
+                # Garantir que filters não seja None
+                if filters is None:
+                    filters = {}
+                    
+                # Adicionar filtros do contexto se necessário
+                if 'cliente' in filters and 'cliente_especifico' not in filters:
+                    filters['cliente_especifico'] = filters['cliente']
+                
+                result = self.loader.load_data_by_domain(domain, filters)
+                
+                # Se LoaderManager retornou dados válidos, usar
+                if result and not result.get('erro'):
+                    # Adicionar metadados
                     result['source'] = 'loader_manager'
                     result['optimized'] = True
-                    
-                return result
+                    self.logger.info(f"✅ LoaderManager retornou {result.get('total_registros', 0)} registros")
+                    return result
+                else:
+                    self.logger.warning(f"⚠️ LoaderManager retornou erro ou sem dados: {result}")
+            else:
+                self.logger.warning("⚠️ LoaderManager não disponível no DataProvider")
             
-            # Fallback para implementação direta
-            self.logger.info(f"📊 DataProvider: Usando implementação direta - domínio: {domain}")
+            # Fallback APENAS se LoaderManager não disponível ou falhou
+            self.logger.info(f"📊 DataProvider: Usando fallback para domínio: {domain}")
             
             if domain == "entregas":
                 return self._get_entregas_data(filters)
@@ -364,9 +378,26 @@ class DataProvider:
 # Instância global para DataProvider
 _data_provider = None
 
-def get_data_provider():
-    """Retorna instância do DataProvider"""
+def get_data_provider(loader=None):
+    """
+    Retorna instância do DataProvider.
+    
+    Args:
+        loader: LoaderManager opcional para injetar
+        
+    Returns:
+        Instância do DataProvider
+    """
     global _data_provider
     if _data_provider is None:
-        _data_provider = DataProvider()
+        # Tentar obter LoaderManager se não fornecido
+        if loader is None:
+            try:
+                from app.claude_ai_novo.loaders import get_loader_manager
+                loader = get_loader_manager()
+                logger.info("✅ LoaderManager obtido automaticamente para DataProvider")
+            except ImportError:
+                logger.warning("⚠️ LoaderManager não disponível para DataProvider")
+        
+        _data_provider = DataProvider(loader=loader)
     return _data_provider 
