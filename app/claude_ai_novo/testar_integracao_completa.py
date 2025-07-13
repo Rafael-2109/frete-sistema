@@ -206,13 +206,19 @@ def test_converser_memorizer_connection(orchestrator) -> Tuple[bool, str]:
         converser = orchestrator.components['conversers']
         memorizer = orchestrator.components['memorizers']
         
-        if hasattr(converser, 'memory_manager') and converser.memory_manager is not None:
-            return True, "Conexão estabelecida"
+        # Verificar se tem o método set_memorizer
+        if not hasattr(converser, 'set_memorizer'):
+            return False, "Converser não tem método set_memorizer"
+        
+        # Verificar se memorizer foi configurado
+        if hasattr(converser, 'context_memory') and converser.context_memory is not None:
+            return True, "Conexão estabelecida (context_memory conectado)"
+        elif hasattr(converser, 'conversation_memory') and converser.conversation_memory is not None:
+            return True, "Conexão estabelecida (conversation_memory conectado)"
         else:
-            return False, "Converser não tem referência ao Memorizer (normal se não implementado)"
-            
+            return False, "Converser não tem referência ao Memorizer"
     except Exception as e:
-        return False, f"Erro ao testar: {str(e)}"
+        return False, f"Erro no teste: {str(e)}"
 
 def test_query_workflow(orchestrator) -> Tuple[bool, str]:
     """Testa um workflow completo de query"""

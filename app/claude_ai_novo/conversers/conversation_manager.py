@@ -44,6 +44,33 @@ class ConversationManager:
         
         self.logger.info("💬 ConversationManager inicializado")
     
+    def set_memorizer(self, memorizer):
+        """
+        Configura memorizer para gestão de memória.
+        Implementa conexão Converser → Memorizer.
+        
+        Args:
+            memorizer: Instância do MemoryManager
+        """
+        try:
+            if hasattr(memorizer, 'context_memory'):
+                self.context_memory = memorizer.context_memory
+                self.logger.info("✅ Context Memory conectado via Memorizer")
+            
+            if hasattr(memorizer, 'conversation_memory'):
+                self.conversation_memory = memorizer.conversation_memory
+                self.logger.info("✅ Conversation Memory conectado via Memorizer")
+            
+            # Fallback se memorizer não tem as propriedades esperadas
+            if not hasattr(memorizer, 'context_memory') and not hasattr(memorizer, 'conversation_memory'):
+                self.logger.warning("⚠️ Memorizer não tem context_memory ou conversation_memory, mantendo configuração padrão")
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao configurar memorizer: {e}")
+            return False
+    
     def start_conversation(self, user_id: str, initial_message: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         Inicia uma nova conversa.

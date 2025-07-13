@@ -1338,18 +1338,22 @@ class MainOrchestrator:
                     except Exception as e:
                         logger.warning(f"⚠️ Erro ao conectar Enricher → Processor: {e}")
             
-            # 7. Converser → Memorizer (histórico de conversas)
+            # 7. Converser → Memorizer (gerenciamento de conversas com memória)
             if 'conversers' in self.components and 'memorizers' in self.components:
                 converser = self.components['conversers']
                 memorizer = self.components['memorizers']
                 
-                if hasattr(converser, 'set_memory_manager'):
+                if hasattr(converser, 'set_memorizer'):
                     try:
-                        converser.set_memory_manager(memorizer)
+                        converser.set_memorizer(memorizer)
                         logger.info("✅ Converser → Memorizer conectados")
                     except Exception as e:
-                        logger.warning(f"⚠️ Erro ao conectar Converser → Memorizer: {e}")
-                    
+                        logger.error(f"❌ Erro ao conectar Converser → Memorizer: {e}")
+                else:
+                    logger.warning("⚠️ Converser não tem método set_memorizer")
+            else:
+                logger.debug("⚠️ Converser ou Memorizer não disponíveis para conexão")
+            
             logger.info("✅ Processo de conexão de módulos concluído!")
             
         except Exception as e:
