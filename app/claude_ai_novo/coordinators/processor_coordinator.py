@@ -97,12 +97,43 @@ class ProcessorCoordinator(BaseProcessor):
             if hasattr(processor, method_name):
                 method = getattr(processor, method_name)
                 
-                if asyncio.iscoroutinefunction(method):
-                    # Método assíncrono
-                    result = asyncio.run(method(*args, **step_params))
+                # NOVO: Tratamento especial para métodos conhecidos que precisam de argumentos separados
+                if method_name == 'carregar_contexto_inteligente' and isinstance(input_data, dict):
+                    # Desempacotar argumentos para ContextProcessor
+                    consulta = input_data.get('consulta', '')
+                    analise = input_data.get('analise', {})
+                    if asyncio.iscoroutinefunction(method):
+                        result = asyncio.run(method(consulta, analise))
+                    else:
+                        result = method(consulta, analise)
+                        
+                elif method_name == 'process_query' and isinstance(input_data, dict):
+                    # Desempacotar argumentos para QueryProcessor
+                    consulta = input_data.get('consulta', '')
+                    user_context = input_data.get('user_context', input_data.get('context', {}))
+                    if asyncio.iscoroutinefunction(method):
+                        result = asyncio.run(method(consulta, user_context))
+                    else:
+                        result = method(consulta, user_context)
+                        
+                elif method_name == 'gerar_resposta_otimizada' and isinstance(input_data, dict):
+                    # Desempacotar argumentos para ResponseProcessor
+                    consulta = input_data.get('consulta', '')
+                    analise = input_data.get('analise', {})
+                    user_context = input_data.get('user_context', input_data.get('context', {}))
+                    if asyncio.iscoroutinefunction(method):
+                        result = asyncio.run(method(consulta, analise, user_context))
+                    else:
+                        result = method(consulta, analise, user_context)
+                        
                 else:
-                    # Método síncrono
-                    result = method(*args, **step_params)
+                    # Comportamento padrão para outros métodos
+                    if asyncio.iscoroutinefunction(method):
+                        # Método assíncrono
+                        result = asyncio.run(method(*args, **step_params))
+                    else:
+                        # Método síncrono
+                        result = method(*args, **step_params)
                 
                 return {
                     'step_index': step_idx,

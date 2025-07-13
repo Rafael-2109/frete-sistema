@@ -190,14 +190,19 @@ def run_complete_flow():
             }
             
             try:
-                response = processor.process(response_context)
-                print(f"✅ Resposta processada: {type(response)}")
+                # Usar método correto do ProcessorManager
+                chain_result = processor.execute_processing_chain(
+                    consulta=user_query,
+                    analise=analysis if 'analysis' in locals() else {},
+                    chain_type="standard"
+                )
+                print(f"✅ Cadeia de processamento executada: {chain_result.get('status', 'unknown')}")
                 
                 results['steps']['processing'] = {
                     'success': True,
                     'memory_connected': has_memory,
                     'enricher_connected': has_enricher,
-                    'response_type': type(response).__name__
+                    'chain_status': chain_result.get('status', 'completed')
                 }
             except Exception as e:
                 print(f"⚠️ Erro no processamento: {e}")
