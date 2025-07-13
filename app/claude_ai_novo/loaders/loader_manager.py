@@ -29,9 +29,15 @@ class LoaderManager:
     mais adequado para cada tipo de dados.
     """
     
-    def __init__(self):
-        """Inicializa o manager com lazy loading dos loaders"""
+    def __init__(self, scanner=None, mapper=None):
+        """Inicializa o manager com lazy loading dos loaders e dependências opcionais"""
         self.logger = logging.getLogger(f"{__name__}.LoaderManager")
+        
+        # Dependências injetadas pelo Orchestrator
+        self.scanner = scanner
+        self.mapper = mapper
+        
+        # Configuração básica
         self._loaders = {}
         self._loader_mapping = {
             'pedidos': 'pedidos_loader',
@@ -42,6 +48,16 @@ class LoaderManager:
             'agendamentos': 'agendamentos_loader'
         }
         self.initialized = False
+        self.db_info = {'tables': {}, 'indexes': {}, 'relationships': {}}
+        
+        # Se scanner disponível, obter info do banco
+        if self.scanner and hasattr(self.scanner, 'get_database_info'):
+            try:
+                self.db_info = self.scanner.get_database_info()
+                logger.info('✅ LoaderManager: Informações do banco obtidas do Scanner')
+            except Exception as e:
+                logger.warning(f'⚠️ LoaderManager: Erro ao obter info do Scanner: {e}')
+        
         self._initialize_loaders()
     
     def _initialize_loaders(self):
@@ -71,6 +87,21 @@ class LoaderManager:
         except Exception as e:
             self.logger.error(f"❌ Erro ao inicializar LoaderManager: {e}")
             self.initialized = False
+    
+    def configure_with_scanner(self, scanner):
+        """Configura scanner após inicialização"""
+        self.scanner = scanner
+        if scanner and hasattr(scanner, 'get_database_info'):
+            try:
+                self.db_info = scanner.get_database_info()
+                logger.info('✅ Scanner configurado no LoaderManager')
+            except Exception as e:
+                logger.warning(f'⚠️ Erro ao configurar Scanner: {e}')
+                
+    def configure_with_mapper(self, mapper):
+        """Configura mapper após inicialização"""
+        self.mapper = mapper
+        logger.info('✅ Mapper configurado no LoaderManager')
     
     def _get_loader(self, loader_type: str):
         """Obtém loader com lazy loading"""

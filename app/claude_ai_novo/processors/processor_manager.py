@@ -269,6 +269,21 @@ def get_manager() -> ProcessorManager:
 # =====================================
 # TESTE E VALIDAÇÃO
 # =====================================
+    
+    def set_memory(self, memory_manager):
+        """Configura o MemoryManager para processamento integrado"""
+        try:
+            self.memory_manager = memory_manager
+            
+            # Propagar para processadores que precisam
+            for name, processor in self.processors.items():
+                if hasattr(processor, 'set_memory'):
+                    processor.set_memory(memory_manager)
+                    
+            logger.info("✅ MemoryManager configurado no ProcessorManager")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao configurar memory: {e}")
 
 if __name__ == "__main__":
     # Teste básico da arquitetura modular

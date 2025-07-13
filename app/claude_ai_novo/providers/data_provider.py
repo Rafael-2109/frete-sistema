@@ -62,10 +62,24 @@ class DataProvider:
     pelos diversos módulos do sistema.
     """
     
-    def __init__(self):
-        """Inicializa o provedor de dados"""
+    def __init__(self, loader=None):
+        """Inicializa o provedor de dados com LoaderManager opcional"""
         self.cache_timeout = 300  # 5 minutos
         self.logger = logging.getLogger(__name__)
+        
+        # LoaderManager injetado pelo Orchestrator
+        self.loader = loader
+        
+        self.logger.info(f"{self.__class__.__name__} inicializado")
+        if self.loader:
+            self.logger.info('✅ DataProvider: LoaderManager disponível')
+        else:
+            self.logger.warning('⚠️ DataProvider: Sem LoaderManager, usando implementação direta')
+    
+    def set_loader(self, loader):
+        """Configura LoaderManager após inicialização"""
+        self.loader = loader
+        self.logger.info('✅ LoaderManager configurado no DataProvider')
         
     def get_data_by_domain(self, domain: str, filters: Optional[Dict] = None) -> Dict[str, Any]:
         """
@@ -79,6 +93,21 @@ class DataProvider:
             Dict com dados do domínio
         """
         try:
+            # Tentar usar LoaderManager primeiro (preferencial)
+            if self.loader:
+                self.logger.info(f"📊 DataProvider: Delegando para LoaderManager - domínio: {domain}")
+                result = self.loader.load_data_by_domain(domain, filters or {})
+                
+                # Adicionar metadados
+                if result and 'data' in result:
+                    result['source'] = 'loader_manager'
+                    result['optimized'] = True
+                    
+                return result
+            
+            # Fallback para implementação direta
+            self.logger.info(f"📊 DataProvider: Usando implementação direta - domínio: {domain}")
+            
             if domain == "entregas":
                 return self._get_entregas_data(filters)
             elif domain == "pedidos":
@@ -96,7 +125,7 @@ class DataProvider:
                 
         except Exception as e:
             self.logger.error(f"Erro ao obter dados do domínio {domain}: {e}")
-            return {"error": str(e)}
+            return {"error": str(e), "domain": domain}
     
     def _get_entregas_data(self, filters: Optional[Dict] = None) -> Dict[str, Any]:
         """Obtém dados de entregas"""
@@ -260,12 +289,18 @@ class DataProvider:
             "id": entrega.id,
             "cliente": entrega.cliente,
             "numero_nf": entrega.numero_nf,
-            "destino": entrega.destino,
+            "municipio": entrega.municipio,
+            "uf": entrega.uf,
+            "destino": f"{entrega.municipio}/{entrega.uf}" if entrega.municipio and entrega.uf else None,
             "status": entrega.status_finalizacao,
             "data_embarque": entrega.data_embarque.isoformat() if entrega.data_embarque else None,
             "data_prevista": entrega.data_entrega_prevista.isoformat() if entrega.data_entrega_prevista else None,
             "data_realizada": entrega.data_hora_entrega_realizada.isoformat() if entrega.data_hora_entrega_realizada else None,
-            "vendedor": entrega.vendedor
+            "vendedor": entrega.vendedor,
+            "transportadora": entrega.transportadora,
+            "valor_nf": entrega.valor_nf,
+            "entregue": entrega.entregue,
+            "cnpj_cliente": entrega.cnpj_cliente
         }
     
     def _serialize_pedido(self, pedido) -> Dict[str, Any]:

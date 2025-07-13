@@ -315,8 +315,31 @@ class AnalyzerManager(BaseContextManager):
         intention_analysis = current_results.get('intention_analysis', {})
         if intention_analysis.get('complexity') == 'high':
             return True
+            
+        return False
+    
+    def set_learner(self, learner):
+        """Configura o sistema de aprendizado para os analisadores"""
+        self.learner = learner
+        
+        # Propagar para analisadores que usam aprendizado
+        if 'intention' in self.components and self.components['intention'] and hasattr(self.components['intention'], 'set_learner'):
+            self.components['intention'].set_learner(learner)
+            
+        if 'semantic' in self.components and self.components['semantic'] and hasattr(self.components['semantic'], 'set_learner'):
+            self.components['semantic'].set_learner(learner)
+            
+        logger.info("✅ Learner configurado no AnalyzerManager")
+    
+    def _should_use_advanced_analysis(self, query: str, current_results: Dict[str, Any]) -> bool:
+        """Verifica se deve usar análise avançada"""
+        # Verificar complexidade
+        intention_analysis = current_results.get('intention_analysis', {})
+        if intention_analysis.get('complexity') == 'high':
+            return True
         
         # Verificar se contém múltiplas entidades
+        semantic_analysis = current_results.get('semantic_analysis', {})
         entities = semantic_analysis.get('entities', {})
         if len(entities) > 3:
             return True

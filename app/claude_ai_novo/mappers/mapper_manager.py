@@ -256,6 +256,44 @@ class MapperManager:
         }
         
         return estatisticas
+    
+    def initialize_with_schema(self, db_info: Dict[str, Any]):
+        """Inicializa mappers com informações do schema do banco"""
+        try:
+            if not db_info or 'tables' not in db_info:
+                logger.warning("⚠️ Schema vazio ou inválido")
+                return
+                
+            # Atualizar informações de schema em todos os mappers
+            self.db_schema = db_info
+            
+            # Propagar para mappers específicos
+            for domain, mapper in self._mappers.items():
+                if hasattr(mapper, 'set_schema_info'):
+                    mapper.set_schema_info(db_info)
+                    
+            # Otimizar mapeamentos com base nos índices
+            if 'tables' in db_info:
+                self._optimize_mappings_with_indexes(db_info['tables'])
+                
+            logger.info(f"✅ Schema inicializado com {len(db_info.get('tables', {}))} tabelas")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao inicializar schema: {e}")
+    
+    def _optimize_mappings_with_indexes(self, tables_info: Dict[str, Any]):
+        """Otimiza mapeamentos usando informações de índices"""
+        # Identificar campos indexados para queries mais eficientes
+        self.indexed_fields = {}
+        
+        for table_name, table_info in tables_info.items():
+            if 'indexes' in table_info:
+                self.indexed_fields[table_name] = [
+                    idx.get('column') for idx in table_info['indexes']
+                    if idx.get('column')
+                ]
+        
+        logger.debug(f"📊 Campos indexados identificados: {len(self.indexed_fields)} tabelas")
 
 # Instância global
 _mapper_manager = None
@@ -292,4 +330,4 @@ __all__ = [
     'get_semantic_mapper',  # Compatibilidade
     'MapeamentoSemantico',
     'get_mapeamento_semantico'
-] 
+]

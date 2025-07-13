@@ -377,6 +377,43 @@ class DatabaseManager:
             logger.error(f"❌ Erro ao recarregar conexão: {e}")
             return False
     
+    def scan_database_structure(self) -> Dict[str, Any]:
+        """Escaneia a estrutura completa do banco de dados"""
+        try:
+            # Obter todas as tabelas
+            tabelas = self.listar_tabelas()
+            
+            estrutura = {
+                'tables': {},
+                'total_tables': len(tabelas),
+                'relationships': {},
+                'statistics': {}
+            }
+            
+            # Escanear cada tabela
+            for tabela in tabelas:
+                try:
+                    # Obter informações da tabela
+                    info_tabela = self.analisar_tabela_completa(tabela)
+                    estrutura['tables'][tabela] = info_tabela
+                    
+                    # Obter relacionamentos
+                    relacionamentos = self.obter_relacionamentos(tabela)
+                    if relacionamentos:
+                        estrutura['relationships'][tabela] = relacionamentos
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro ao escanear tabela {tabela}: {e}")
+                    
+            # Adicionar estatísticas gerais
+            estrutura['statistics'] = self.obter_estatisticas_gerais()
+            
+            return estrutura
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao escanear estrutura do banco: {e}")
+            return {}
+    
     def obter_info_modulos(self) -> Dict[str, Any]:
         """
         Obtém informações sobre todos os módulos.

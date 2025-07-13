@@ -21,6 +21,7 @@ from app.claude_ai_novo.scanning.project_scanner import ProjectScanner, get_proj
 from app.claude_ai_novo.scanning.structure_scanner import StructureScanner, get_structure_scanner
 from app.claude_ai_novo.scanning.code_scanner import CodeScanner, get_code_scanner
 from app.claude_ai_novo.scanning.file_scanner import FileScanner, get_file_scanner
+from app.claude_ai_novo.scanning.database_manager import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -350,6 +351,33 @@ class ScanningManager:
         """Método de compatibilidade - delega para project_scanner"""
         return self.project_scanner._generate_scan_summary()
     
+    
+    def get_database_info(self) -> Dict[str, Any]:
+        """Obtém informações completas do banco de dados"""
+        try:
+            if not self.database_manager:
+                self.database_manager = DatabaseManager()
+                
+            # Escanear estrutura do banco
+            db_info = self.database_manager.scan_database_structure()
+            
+            # Adicionar metadados úteis
+            if db_info and 'tables' in db_info:
+                for table_name, table_info in db_info['tables'].items():
+                    # Adicionar informações de índices
+                    if 'indexes' not in table_info:
+                        table_info['indexes'] = []
+                    
+                    # Adicionar informações de relacionamentos
+                    if 'relationships' not in table_info:
+                        table_info['relationships'] = []
+                        
+            logger.info(f"✅ Informações do banco obtidas: {len(db_info.get('tables', {}))} tabelas")
+            return db_info
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao obter informações do banco: {e}")
+            return {}
     def __str__(self) -> str:
         """Representação string do scanner"""
         return f"<ScanningManager[MODULAR] app_path={self.app_path} modulos=4>"

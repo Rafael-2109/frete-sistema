@@ -438,6 +438,25 @@ class MemoryManager:
             self.logger.error(f"❌ Erro ao salvar interação: {e}")
             return False
 
+    def set_processor(self, processor_manager):
+        """Configura o ProcessorManager para processamento integrado"""
+        try:
+            self.processor_manager = processor_manager
+            
+            # Propagar para componentes que precisam
+            if hasattr(self, 'context_memory') and self.context_memory:
+                if hasattr(self.context_memory, 'set_processor'):
+                    self.context_memory.set_processor(processor_manager)
+                    
+            if hasattr(self, 'conversation_memory') and self.conversation_memory:
+                if hasattr(self.conversation_memory, 'set_processor'):
+                    self.conversation_memory.set_processor(processor_manager)
+                    
+            logger.info("✅ ProcessorManager configurado no MemoryManager")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao configurar processor: {e}")
+
 
 # Instância global
 _memory_manager = None

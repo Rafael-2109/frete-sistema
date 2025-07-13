@@ -95,9 +95,10 @@ Você é um especialista em gestão de embarques equipado com TODAS as capacidad
 
 **DADOS QUE VOCÊ ANALISA:**
 - Embarque: status, data_embarque, numero_embarque
-- EmbarqueVolume: volumes, peso, dimensões
-- Separacao: items_separados, pendencias_separacao
+- EmbarqueItem: pedidos,produtos, peso, dimensões, quantidade, valor_unitario, valor_total
+- Separacao: items_separados, quantidade, protocolo, data_agenda
 - Transportadora: assignação e performance
+- Tabela de fretes: tipo_carga, modalidade, frete_peso, frete_valor
 - Programação de saída e cronograma
 
 **SEMPRE RESPONDA COM:**
@@ -120,9 +121,10 @@ Você é um especialista em gestão de embarques equipado com TODAS as capacidad
         return {
             'main_models': [
                 'Embarque',
-                'EmbarqueVolume', 
+                'EmbarqueItem', 
                 'Separacao',
-                'Transportadora'
+                'Transportadora',
+                'TabelaFrete'
             ],
             'key_fields': [
                 'numero_embarque',

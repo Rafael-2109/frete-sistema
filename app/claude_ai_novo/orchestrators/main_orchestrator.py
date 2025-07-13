@@ -149,6 +149,9 @@ class MainOrchestrator:
         # Pré-carregar componentes essenciais
         self._preload_essential_components()
         
+        # Conectar módulos via injeção de dependência
+        self._connect_modules()
+        
         # Workflow de análise de consulta
         self.add_workflow("analyze_query", [
             OrchestrationStep(
@@ -297,8 +300,8 @@ class MainOrchestrator:
             ),
             OrchestrationStep(
                 name="load_data",
-                component="providers",
-                method="get_data_by_domain",
+                component="loaders",  # Usar LoaderManager ao invés de providers!
+                method="load_data_by_domain",
                 parameters={"domain": "{analyze_query_result.dominio}", "filters": "{analyze_query_result.filters}"},
                 dependencies=["analyze_query"]
             ),
@@ -1140,14 +1143,34 @@ class MainOrchestrator:
                 self.components["enrichers"] = MockComponent("enrichers")
                 logger.debug("⚠️ Enrichers mock")
         
-        # Loaders - Não tem manager único, usar data_manager
+        # Loaders - USAR O LOADER MANAGER QUE FUNCIONA!
         try:
-            from app.claude_ai_novo.utils import get_data_manager
-            self.components["loaders"] = get_data_manager()
-            logger.debug("✅ Loaders (data_manager) carregado")
+            from app.claude_ai_novo.loaders import get_loader_manager
+            self.components['loaders'] = get_loader_manager()
+            logger.info("✅ LoaderManager carregado com loaders por domínio")
         except ImportError:
-            self.components["loaders"] = MockComponent("loaders")
-            logger.debug("⚠️ Loaders mock")
+            self.components['loaders'] = MockComponent('loaders')
+            logger.debug("⚠️ LoaderManager mock")
+        
+        # Scanners - Para descobrir estrutura do banco
+        try:
+            from app.claude_ai_novo.scanning import get_scanning_manager
+            self.components['scanners'] = get_scanning_manager()
+            logger.info("✅ ScanningManager carregado")
+        except ImportError:
+            self.components['scanners'] = MockComponent('scanners')
+            logger.debug("⚠️ ScanningManager mock")
+        
+        # Learners - Para aprendizado contínuo
+        try:
+            from app.claude_ai_novo.learners import get_learning_core
+            self.components['learners'] = get_learning_core()
+            logger.info("✅ LearningManager carregado")
+        except ImportError:
+            self.components['learners'] = MockComponent('learners')
+            logger.debug("⚠️ LearningManager mock")
+        
+        # Conversers
         
         # NOVO: Pré-carregar módulos de alto valor
         # CoordinatorManager
@@ -1205,6 +1228,77 @@ class MainOrchestrator:
         else:
             self.components["response_processor"] = MockComponent("response_processor")
             logger.debug("⚠️ ResponseProcessor mock")
+    
+    def _connect_modules(self):
+        """Conecta todos os módulos via injeção de dependência"""
+        logger.info("🔗 Conectando módulos via Orchestrator...")
+        
+        try:
+            # 1. Scanner descobre estrutura do banco
+            if 'scanners' in self.components:
+                scanner = self.components['scanners']
+                db_info = None
+                
+                if hasattr(scanner, 'get_database_info'):
+                    try:
+                        db_info = scanner.get_database_info()
+                        logger.info("✅ Informações do banco obtidas do Scanner")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao obter info do Scanner: {e}")
+                
+                # 2. Configurar Loader com Scanner
+                if 'loaders' in self.components and hasattr(self.components['loaders'], 'configure_with_scanner'):
+                    self.components['loaders'].configure_with_scanner(scanner)
+                    logger.info("✅ Scanner → Loader conectados")
+                
+                # 3. Configurar Mapper com informações do banco
+                if db_info and 'mappers' in self.components:
+                    mapper = self.components['mappers']
+                    if hasattr(mapper, 'initialize_with_schema'):
+                        mapper.initialize_with_schema(db_info)
+                        logger.info("✅ Mapper inicializado com schema do banco")
+                    
+                    # 4. Configurar Loader com Mapper
+                    if 'loaders' in self.components and hasattr(self.components['loaders'], 'configure_with_mapper'):
+                        self.components['loaders'].configure_with_mapper(mapper)
+                        logger.info("✅ Mapper → Loader conectados")
+            
+            # Conectar Loader → Provider
+            if data_provider and loader_manager:
+                data_provider.set_loader(loader_manager)
+                logger.info("✅ Loader → Provider conectados")
+            
+            # 5. Configurar Provider com Loader
+            if 'loaders' in self.components and 'providers' in self.components:
+                provider = self.components['providers']
+                if hasattr(provider, 'set_loader'):
+                    provider.set_loader(self.components['loaders'])
+                    logger.info("✅ Loader → Provider conectados")
+            
+            # 6. Configurar Processor com Memorizer
+            if 'memorizers' in self.components and 'processors' in self.components:
+                processor = self.components['processors']
+                if hasattr(processor, 'set_memory_manager'):
+                    processor.set_memory_manager(self.components['memorizers'])
+                    logger.info("✅ Memorizer → Processor conectados")
+            
+            # 7. Configurar Analyzer com Learner
+            if 'learners' in self.components and 'analyzers' in self.components:
+                analyzer = self.components['analyzers']
+                if hasattr(analyzer, 'set_learner'):
+                    analyzer.set_learner(self.components['learners'])
+                    logger.info("✅ Learner → Analyzer conectados")
+                    
+            logger.info("✅ Todos os módulos conectados com sucesso!")
+            
+            # Conectar Memorizer → Processor  
+            if memory_manager and processor_manager:
+                memory_manager.set_processor(processor_manager)
+                logger.info("✅ Conectado: Memorizer → Processor")
+        except Exception as e:
+            logger.error(f"❌ Erro ao conectar módulos: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _resolve_parameters(self, parameters: Dict[str, Any], context: Dict[str, Any], 
                            results: Dict[str, Any]) -> Dict[str, Any]:
