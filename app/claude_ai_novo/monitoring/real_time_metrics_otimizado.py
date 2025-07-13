@@ -22,7 +22,7 @@ import threading
 # Configurar logger
 logger = logging.getLogger(__name__)
 
-class ClaudeAIMetrics:
+class ClaudeAIMetricsOptimized:
     """Sistema otimizado de métricas em tempo real do Claude AI Novo"""
     
     # Singleton
@@ -39,7 +39,7 @@ class ClaudeAIMetrics:
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
-                    cls._instance = super(ClaudeAIMetrics, cls).__new__(cls)
+                    cls._instance = super(ClaudeAIMetricsOptimized, cls).__new__(cls)
         return cls._instance
     
     def __init__(self):
@@ -305,10 +305,13 @@ class ClaudeAIMetrics:
         
         logger.info("📊 Métricas resetadas (cache limpo)")
 
-# Instância singleton otimizada
-claude_metrics = ClaudeAIMetrics()
+# Alias para compatibilidade
+ClaudeAIMetrics = ClaudeAIMetricsOptimized
 
-def get_claude_metrics() -> ClaudeAIMetrics:
+# Instância singleton otimizada
+claude_metrics = ClaudeAIMetricsOptimized()
+
+def get_claude_metrics() -> ClaudeAIMetricsOptimized:
     """Obtém instância otimizada das métricas"""
     return claude_metrics
 

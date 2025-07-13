@@ -366,3 +366,5 @@ __all__ = [
     'processar_consulta_modular',
     'get_nlp_analyzer'
 ]
+
+logger.info("✅ Sistema Claude AI Novo v1.0 - Totalmente Integrado")

@@ -34,6 +34,7 @@ class DataAnalyzer:
         """
         self.db_engine = db_engine
         self.analysis_cache: Dict[str, Dict[str, Any]] = {}
+        self._field_types_cache: Dict[str, str] = {}
     
     def set_engine(self, db_engine: Engine) -> None:
         """
@@ -44,6 +45,7 @@ class DataAnalyzer:
         """
         self.db_engine = db_engine
         self.analysis_cache.clear()  # Limpar cache ao trocar engine
+        self._field_types_cache.clear()  # Limpar cache de tipos
     
     def analisar_dados_reais(self, nome_tabela: str, nome_campo: str, limite: int = 100) -> Dict[str, Any]:
         """
@@ -98,6 +100,54 @@ class DataAnalyzer:
             logger.error(f"❌ Erro ao analisar dados de {nome_tabela}.{nome_campo}: {e}")
             return {}
     
+    def _get_field_type(self, nome_tabela: str, nome_campo: str) -> str:
+        """
+        Obtém o tipo de um campo específico.
+        
+        Args:
+            nome_tabela: Nome da tabela
+            nome_campo: Nome do campo
+            
+        Returns:
+            Tipo do campo
+        """
+        cache_key = f"{nome_tabela}.{nome_campo}"
+        if cache_key in self._field_types_cache:
+            return self._field_types_cache[cache_key]
+        
+        try:
+            query = text("""
+                SELECT data_type 
+                FROM information_schema.columns 
+                WHERE table_name = :tabela 
+                AND column_name = :campo
+            """)
+            
+            with self.db_engine.connect() as conn:
+                result = conn.execute(query, {'tabela': nome_tabela, 'campo': nome_campo}).fetchone()
+                if result:
+                    tipo = result[0]
+                    self._field_types_cache[cache_key] = tipo
+                    return tipo
+                    
+        except Exception as e:
+            logger.error(f"Erro ao obter tipo do campo {nome_tabela}.{nome_campo}: {e}")
+        
+        return 'unknown'
+    
+    def _is_json_type(self, tipo_campo: str) -> bool:
+        """
+        Verifica se o campo é do tipo JSON/JSONB.
+        
+        Args:
+            tipo_campo: Tipo do campo
+            
+        Returns:
+            True se for JSON/JSONB
+        """
+        tipo_lower = str(tipo_campo).lower()
+        return 'json' in tipo_lower or 'jsonb' in tipo_lower
+    
     def _analisar_estatisticas_basicas(self, nome_tabela: str, nome_campo: str) -> Dict[str, Any]:
         """
         Analisa estatísticas básicas de um campo.
@@ -110,35 +160,70 @@ class DataAnalyzer:
             Dict com estatísticas básicas
         """
         try:
-            query = text(f"""
-                SELECT 
-                    COUNT(*) as total_registros,
-                    COUNT(DISTINCT {nome_campo}) as valores_unicos,
-                    COUNT({nome_campo}) as valores_nao_nulos,
-                    COUNT(*) - COUNT({nome_campo}) as valores_nulos
-                FROM {nome_tabela}
-            """)
+            # Verificar se é campo JSON
+            tipo_campo = self._get_field_type(nome_tabela, nome_campo)
             
-            with self.db_engine.connect() as conn:
-                resultado = conn.execute(query).fetchone()
+            if self._is_json_type(tipo_campo):
+                # Para campos JSON, usar query específica sem COUNT DISTINCT
+                query = text(f"""
+                    SELECT 
+                        COUNT(*) as total_registros,
+                        COUNT({nome_campo}) as valores_nao_nulos,
+                        COUNT(*) - COUNT({nome_campo}) as valores_nulos
+                    FROM {nome_tabela}
+                """)
                 
-                if not resultado:
-                    return {}
+                with self.db_engine.connect() as conn:
+                    resultado = conn.execute(query).fetchone()
+                    
+                    if not resultado:
+                        return {}
+                    
+                    total_registros = resultado[0]
+                    valores_nao_nulos = resultado[1]
+                    valores_nulos = resultado[2]
+                    
+                    return {
+                        'total_registros': total_registros,
+                        'valores_unicos': -1,  # Não calculável para JSON
+                        'valores_nao_nulos': valores_nao_nulos,
+                        'valores_nulos': valores_nulos,
+                        'percentual_preenchimento': (valores_nao_nulos / total_registros * 100) if total_registros > 0 else 0,
+                        'percentual_unicidade': -1,  # Não calculável para JSON
+                        'tem_valores_duplicados': None,  # Não determinável para JSON
+                        'tipo_campo': 'json'
+                    }
+            else:
+                # Para campos não-JSON, usar query original
+                query = text(f"""
+                    SELECT 
+                        COUNT(*) as total_registros,
+                        COUNT(DISTINCT {nome_campo}) as valores_unicos,
+                        COUNT({nome_campo}) as valores_nao_nulos,
+                        COUNT(*) - COUNT({nome_campo}) as valores_nulos
+                    FROM {nome_tabela}
+                """)
                 
-                total_registros = resultado[0]
-                valores_unicos = resultado[1]
-                valores_nao_nulos = resultado[2]
-                valores_nulos = resultado[3]
-                
-                return {
-                    'total_registros': total_registros,
-                    'valores_unicos': valores_unicos,
-                    'valores_nao_nulos': valores_nao_nulos,
-                    'valores_nulos': valores_nulos,
-                    'percentual_preenchimento': (valores_nao_nulos / total_registros * 100) if total_registros > 0 else 0,
-                    'percentual_unicidade': (valores_unicos / valores_nao_nulos * 100) if valores_nao_nulos > 0 else 0,
-                    'tem_valores_duplicados': valores_unicos < valores_nao_nulos
-                }
+                with self.db_engine.connect() as conn:
+                    resultado = conn.execute(query).fetchone()
+                    
+                    if not resultado:
+                        return {}
+                    
+                    total_registros = resultado[0]
+                    valores_unicos = resultado[1]
+                    valores_nao_nulos = resultado[2]
+                    valores_nulos = resultado[3]
+                    
+                    return {
+                        'total_registros': total_registros,
+                        'valores_unicos': valores_unicos,
+                        'valores_nao_nulos': valores_nao_nulos,
+                        'valores_nulos': valores_nulos,
+                        'percentual_preenchimento': (valores_nao_nulos / total_registros * 100) if total_registros > 0 else 0,
+                        'percentual_unicidade': (valores_unicos / valores_nao_nulos * 100) if valores_nao_nulos > 0 else 0,
+                        'tem_valores_duplicados': valores_unicos < valores_nao_nulos
+                    }
                 
         except Exception as e:
             logger.error(f"❌ Erro nas estatísticas básicas de {nome_tabela}.{nome_campo}: {e}")
@@ -157,13 +242,26 @@ class DataAnalyzer:
             Lista de exemplos
         """
         try:
-            query = text(f"""
-                SELECT DISTINCT {nome_campo} 
-                FROM {nome_tabela} 
-                WHERE {nome_campo} IS NOT NULL 
-                ORDER BY {nome_campo} 
-                LIMIT {limite}
-            """)
+            # Verificar se é campo JSON
+            tipo_campo = self._get_field_type(nome_tabela, nome_campo)
+            
+            if self._is_json_type(tipo_campo):
+                # Para campos JSON, converter para texto e não usar ORDER BY direto
+                query = text(f"""
+                    SELECT DISTINCT {nome_campo}::text 
+                    FROM {nome_tabela} 
+                    WHERE {nome_campo} IS NOT NULL 
+                    LIMIT {limite}
+                """)
+            else:
+                # Para campos não-JSON, usar query original
+                query = text(f"""
+                    SELECT DISTINCT {nome_campo} 
+                    FROM {nome_tabela} 
+                    WHERE {nome_campo} IS NOT NULL 
+                    ORDER BY {nome_campo} 
+                    LIMIT {limite}
+                """)
             
             with self.db_engine.connect() as conn:
                 resultados = conn.execute(query).fetchall()
@@ -187,31 +285,43 @@ class DataAnalyzer:
             Dict com análise de distribuição
         """
         try:
-            # Valores mais frequentes
-            query_frequencia = text(f"""
-                SELECT {nome_campo}, COUNT(*) as frequencia
-                FROM {nome_tabela}
-                WHERE {nome_campo} IS NOT NULL
-                GROUP BY {nome_campo}
-                ORDER BY frequencia DESC
-                LIMIT 10
-            """)
+            # Verificar se é campo JSON
+            tipo_campo = self._get_field_type(nome_tabela, nome_campo)
             
-            with self.db_engine.connect() as conn:
-                resultados = conn.execute(query_frequencia).fetchall()
-                
-                valores_frequentes = [
-                    {'valor': str(resultado[0]), 'frequencia': resultado[1]}
-                    for resultado in resultados
-                ]
-                
-                # Análise de comprimento (para strings)
-                analise_comprimento = self._analisar_comprimento_valores(nome_tabela, nome_campo)
-                
+            if self._is_json_type(tipo_campo):
+                # Para campos JSON, análise simplificada
                 return {
-                    'valores_mais_frequentes': valores_frequentes,
-                    'comprimento': analise_comprimento
+                    'valores_mais_frequentes': [],
+                    'comprimento': {},
+                    'tipo_campo': 'json',
+                    'nota': 'Análise de distribuição não disponível para campos JSON'
                 }
+            else:
+                # Para campos não-JSON, usar query com alias para evitar ambiguidade
+                query_frequencia = text(f"""
+                    SELECT {nome_campo} as valor_campo, COUNT(*) as freq_count
+                    FROM {nome_tabela}
+                    WHERE {nome_campo} IS NOT NULL
+                    GROUP BY {nome_campo}
+                    ORDER BY freq_count DESC
+                    LIMIT 10
+                """)
+                
+                with self.db_engine.connect() as conn:
+                    resultados = conn.execute(query_frequencia).fetchall()
+                    
+                    valores_frequentes = [
+                        {'valor': str(resultado[0]), 'frequencia': resultado[1]}
+                        for resultado in resultados
+                    ]
+                    
+                    # Análise de comprimento (para strings)
+                    analise_comprimento = self._analisar_comprimento_valores(nome_tabela, nome_campo)
+                    
+                    return {
+                        'valores_mais_frequentes': valores_frequentes,
+                        'comprimento': analise_comprimento
+                    }
                 
         except Exception as e:
             logger.error(f"❌ Erro na análise de distribuição de {nome_tabela}.{nome_campo}: {e}")
