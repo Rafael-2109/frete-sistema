@@ -242,10 +242,39 @@ class ProcessorManager(ProcessorBase):
     
     def __repr__(self) -> str:
         return f"ProcessorManager(initialized={self.initialized}, architecture=modular)"
+    
+    def set_memory_manager(self, memory_manager):
+        """
+        Configura memory manager para enriquecer respostas.
+        
+        Args:
+            memory_manager: Instância do MemoryManager
+        """
+        try:
+            self.memory_manager = memory_manager
+            self.logger.info("✅ Memory Manager configurado no ProcessorManager")
+            
+            # Propagar para ResponseProcessor se disponível
+            response_processor = self.registry.get_processor('response')
+            if response_processor and hasattr(response_processor, 'set_memory_manager'):
+                response_processor.set_memory_manager(memory_manager)
+                self.logger.info("✅ Memory Manager propagado para ResponseProcessor")
+                
+            # Propagar para ContextProcessor se disponível
+            context_processor = self.registry.get_processor('context')
+            if context_processor and hasattr(context_processor, 'set_memory_manager'):
+                context_processor.set_memory_manager(memory_manager)
+                self.logger.info("✅ Memory Manager propagado para ContextProcessor")
+                
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao configurar Memory Manager: {e}")
+            return False
 
 # =====================================
 # INSTÂNCIAS GLOBAIS E CONVENIÊNCIA
-# =====================================
+# ====================================
 
 # Instância global do manager
 _processor_manager = None
