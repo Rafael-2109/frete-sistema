@@ -488,10 +488,43 @@ def create_app(config_name=None):
         # Verificar se deve pular criação de tabelas (para evitar erro UTF-8)
         if not os.getenv('SKIP_DB_CREATE'):
             try:
-                db.create_all()
+                # ✅ CORREÇÃO: Configurar encoding para PostgreSQL no Render
+                database_url = os.getenv('DATABASE_URL', '')
+                if database_url and 'postgres' in database_url:
+                    # Configurar encoding UTF-8 na conexão PostgreSQL
+                    import sqlalchemy
+                    from sqlalchemy import create_engine
+                    
+                    # Corrigir URL do PostgreSQL para usar UTF-8
+                    if database_url.startswith('postgres://'):
+                        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+                    
+                    # Adicionar parâmetros de encoding
+                    if '?' in database_url:
+                        database_url += '&client_encoding=utf8'
+                    else:
+                        database_url += '?client_encoding=utf8'
+                    
+                    # Configurar engine com encoding correto
+                    engine = create_engine(database_url, 
+                                         connect_args={"client_encoding": "utf8"})
+                    
+                    # Atualizar configuração do app
+                    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+                    db.init_app(app)
+                    
+                    # Tentar criar tabelas com encoding correto
+                    with engine.connect() as conn:
+                        db.metadata.create_all(conn)
+                        print("✅ Tabelas criadas com encoding UTF-8")
+                else:
+                    # Para bancos locais (SQLite)
+                    db.create_all()
+                    
             except UnicodeDecodeError as e:
                 print(f"⚠️ Erro UTF-8 na criação de tabelas: {e}")
-                print("💡 Tabelas serão criadas manualmente quando necessário")
+                print("💡 Configurando variável SKIP_DB_CREATE=true no Render")
+                print("💡 Tabelas serão criadas via migração manual")
             except Exception as e:
                 print(f"⚠️ Erro na criação de tabelas: {e}")
                 print("💡 Continuando sem criação automática de tabelas")

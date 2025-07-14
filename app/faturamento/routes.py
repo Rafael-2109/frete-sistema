@@ -12,6 +12,7 @@ from app.embarques.models import EmbarqueItem, Embarque
 from app.fretes.routes import validar_cnpj_embarque_faturamento
 from app.monitoramento.models import EntregaMonitorada
 from datetime import datetime
+from sqlalchemy.orm import sessionmaker
 
 # 🌐 Importar sistema de arquivos S3
 from app.utils.file_storage import get_file_storage
@@ -414,22 +415,43 @@ def sincronizar_nfs_pendentes_embarques(nfs_importadas):
     try:
         print(f"[DEBUG] 🔍 Buscando NFs de embarques que precisam ser sincronizadas...")
         
-        # Busca TODAS as NFs que estão em embarques ativos
-        nfs_em_embarques = db.session.query(EmbarqueItem.nota_fiscal).filter(
-            EmbarqueItem.nota_fiscal.isnot(None),
-            EmbarqueItem.nota_fiscal != '',
-            EmbarqueItem.status == 'ativo'
-        ).join(Embarque).filter(
-            Embarque.status == 'ativo'
-        ).distinct().all()
+        # ✅ CORREÇÃO: Tratamento robusto de transação para evitar InFailedSqlTransaction
+        try:
+            # Busca TODAS as NFs que estão em embarques ativos
+            nfs_em_embarques = db.session.query(EmbarqueItem.nota_fiscal).filter(
+                EmbarqueItem.nota_fiscal.isnot(None),
+                EmbarqueItem.nota_fiscal != '',
+                EmbarqueItem.status == 'ativo'
+            ).join(Embarque).filter(
+                Embarque.status == 'ativo'
+            ).distinct().all()
+            
+            nfs_em_embarques_set = {nf[0] for nf in nfs_em_embarques}
+            print(f"[DEBUG] 📦 Total de NFs únicas em embarques ativos: {len(nfs_em_embarques_set)}")
+            
+        except Exception as e:
+            print(f"[DEBUG] ❌ Erro ao buscar NFs em embarques: {e}")
+            # Força rollback se houver erro na consulta
+            try:
+                db.session.rollback()
+            except:
+                pass
+            return 0
         
-        nfs_em_embarques_set = {nf[0] for nf in nfs_em_embarques}
-        print(f"[DEBUG] 📦 Total de NFs únicas em embarques ativos: {len(nfs_em_embarques_set)}")
-        
-        # Busca NFs que JÁ estão no monitoramento
-        nfs_no_monitoramento = db.session.query(EntregaMonitorada.numero_nf).distinct().all()
-        nfs_no_monitoramento_set = {nf[0] for nf in nfs_no_monitoramento}
-        print(f"[DEBUG] 📊 Total de NFs no monitoramento: {len(nfs_no_monitoramento_set)}")
+        try:
+            # Busca NFs que JÁ estão no monitoramento
+            nfs_no_monitoramento = db.session.query(EntregaMonitorada.numero_nf).distinct().all()
+            nfs_no_monitoramento_set = {nf[0] for nf in nfs_no_monitoramento}
+            print(f"[DEBUG] 📊 Total de NFs no monitoramento: {len(nfs_no_monitoramento_set)}")
+            
+        except Exception as e:
+            print(f"[DEBUG] ❌ Erro ao buscar NFs no monitoramento: {e}")
+            # Força rollback se houver erro na consulta
+            try:
+                db.session.rollback()
+            except:
+                pass
+            return 0
         
         # Calcula NFs que estão em embarques MAS NÃO estão no monitoramento
         nfs_pendentes_sincronizacao = nfs_em_embarques_set - nfs_no_monitoramento_set
@@ -442,9 +464,18 @@ def sincronizar_nfs_pendentes_embarques(nfs_importadas):
         # Filtra apenas as NFs que TÊM faturamento (importadas)
         nfs_faturadas_pendentes = []
         for nf in nfs_pendentes_sincronizacao:
-            fat = RelatorioFaturamentoImportado.query.filter_by(numero_nf=nf).first()
-            if fat:
-                nfs_faturadas_pendentes.append(nf)
+            try:
+                fat = RelatorioFaturamentoImportado.query.filter_by(numero_nf=nf).first()
+                if fat:
+                    nfs_faturadas_pendentes.append(nf)
+            except Exception as e:
+                print(f"[DEBUG] ❌ Erro ao buscar faturamento para NF {nf}: {e}")
+                # Força rollback se houver erro
+                try:
+                    db.session.rollback()
+                except:
+                    pass
+                continue
         
         print(f"[DEBUG] 🎯 NFs em embarques COM faturamento que precisam sincronizar: {len(nfs_faturadas_pendentes)}")
         
@@ -457,12 +488,22 @@ def sincronizar_nfs_pendentes_embarques(nfs_importadas):
                 contador_sincronizadas += 1
             except Exception as e:
                 print(f"[DEBUG] ❌ Erro ao sincronizar NF {nf}: {e}")
+                # Força rollback se houver erro
+                try:
+                    db.session.rollback()
+                except:
+                    pass
         
         print(f"[DEBUG] ✅ Total de NFs de embarques sincronizadas: {contador_sincronizadas}")
         return contador_sincronizadas
         
     except Exception as e:
         print(f"[DEBUG] ❌ Erro geral na sincronização de NFs pendentes: {e}")
+        # Força rollback da sessão principal se houver erro
+        try:
+            db.session.rollback()
+        except:
+            pass
         return 0
 
 @faturamento_bp.route('/inativar-nfs', methods=['POST'])

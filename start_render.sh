@@ -1,37 +1,54 @@
 #!/bin/bash
-echo "=== INICIANDO DEPLOY NO RENDER ==="
 
-# Criar diretórios necessários
-echo "📁 Criando diretórios..."
-mkdir -p instance/claude_ai/backups/generated
-mkdir -p instance/claude_ai/backups/projects
-mkdir -p app/claude_ai/logs
+# Script de início para o Render com correções UTF-8
 
-# Executar correções Python
-echo "🐍 Executando correções..."
-python fix_all_render_issues.py 2>/dev/null || echo "⚠️  Correções aplicadas"
+echo "🔧 Configurando ambiente do Render..."
 
-# Instalar modelo spaCy (permitir falha)
-echo "📦 Tentando instalar modelo spaCy..."
-python -m spacy download pt_core_news_sm 2>/dev/null || echo "⚠️  Modelo spaCy não instalado"
+# Configurar encoding UTF-8
+export PYTHONIOENCODING=utf-8
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
 
-# NOVO: Limpar TODAS as migrações fantasmas ANTES de inicializar
-echo "🔧 Corrigindo TODAS as migrações fantasmas..."
-python fix_all_migrations.py 2>/dev/null || echo "⚠️  Correção de migrações aplicada"
+# Configurar PostgreSQL
+if [[ -n "$DATABASE_URL" ]]; then
+    echo "🐘 Configurando PostgreSQL com UTF-8..."
+    
+    # Corrigir URL do PostgreSQL
+    if [[ $DATABASE_URL == postgres://* ]]; then
+        DATABASE_URL=${DATABASE_URL/postgres:\/\//postgresql:\/\/}
+    fi
+    
+    # Adicionar parâmetros de encoding se não existirem
+    if [[ $DATABASE_URL != *"client_encoding"* ]]; then
+        if [[ $DATABASE_URL == *"?"* ]]; then
+            DATABASE_URL="${DATABASE_URL}&client_encoding=utf8"
+        else
+            DATABASE_URL="${DATABASE_URL}?client_encoding=utf8"
+        fi
+    fi
+    
+    export DATABASE_URL
+    echo "✅ DATABASE_URL configurada"
+fi
 
-# Inicializar banco
-echo "🗄️  Inicializando banco de dados..."
-python init_db.py || echo "⚠️  Banco inicializado com avisos"
+# Configurar Flask para pular criação automática de tabelas
+export SKIP_DB_CREATE=true
 
-# Aplicar migrações
-echo "🔄 Aplicando migrações..."
-flask db upgrade || echo "⚠️  Migrações aplicadas com avisos"
+# Configurar logs sem emojis
+export NO_EMOJI_LOGS=true
 
-# NOVO: Configurar variáveis de ambiente para melhor performance
-export PYTHONUNBUFFERED=1
-export FLASK_ENV=production
+# Executar migrações se necessário
+echo "🔄 Executando migrações..."
+python -m flask db upgrade || echo " Migrações não executadas (pode ser normal)"
 
 # Iniciar aplicação
 echo "🚀 Iniciando aplicação..."
-# TEMPORÁRIO: Reduzir para 1 worker para diagnóstico
-exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class sync --timeout 600 --max-requests 1000 --max-requests-jitter 100 --keep-alive 10 --preload --worker-tmp-dir /dev/shm run:app
+exec gunicorn --bind 0.0.0.0:$PORT \
+    --worker-class sync \
+    --timeout 300 \
+    --workers 1 \
+    --max-requests 1000 \
+    --max-requests-jitter 100 \
+    --keep-alive 10 \
+    --preload \
+    run:app

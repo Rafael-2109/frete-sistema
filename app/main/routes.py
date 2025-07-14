@@ -378,7 +378,7 @@ def api_embarques_internos():
         return jsonify({
             'success': False,
             'error': str(e)
-        }), 500
+       }), 500
 
 # ==========================================
 # 🔗 INTEGRAÇÃO ODOO

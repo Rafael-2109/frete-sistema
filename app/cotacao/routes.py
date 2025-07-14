@@ -663,7 +663,7 @@ def tela_cotacao():
                         Embarque.transportadora_id == transportadora_id,
                         Embarque.modalidade == modalidade,
                         Embarque.data_embarque.is_(None)  # ✅ Sem data de embarque
-                    ).limit(50)  # ✅ Limita para performance
+                    ).limit(200)  # ✅ Aumentado de 50 para 200 embarques
                     
                     for embarque in embarques_query:
                         if embarque.itens_ativos:
@@ -711,7 +711,7 @@ def tela_cotacao():
         transportadoras_fracionada = set()
         for cnpj, pedidos_cnpj in pedidos_por_cnpj.items():
             if pedidos_cnpj and cnpj in opcoes_por_cnpj:
-                for opcao in opcoes_por_cnpj[cnpj][:3]:  # ✅ Limita para performance
+                for opcao in opcoes_por_cnpj[cnpj][:10]:  # ✅ Aumentado de 3 para 10 opções por CNPJ
                     transportadoras_fracionada.add(opcao.get('transportadora_id'))
         
         if transportadoras_fracionada:
@@ -723,7 +723,7 @@ def tela_cotacao():
                 Embarque.tipo_carga == 'FRACIONADA',
                 Embarque.transportadora_id.in_(list(transportadoras_fracionada)),
                 Embarque.data_embarque.is_(None)  # ✅ Sem data de embarque
-            ).limit(20)  # ✅ Limita para performance
+            ).limit(100)  # ✅ Aumentado de 20 para 100 embarques
             
             for embarque in embarques_frac_query:
                 if embarque.itens_ativos:

@@ -117,7 +117,7 @@ class OdooClient:
             raise OdooAuthenticationError(f"Falha na autenticação: {e}")
     
     @retry_on_failure(max_retries=3)
-    def execute_kw(self, model: str, method: str, args: List = None, kwargs: Dict = None) -> Any:
+    def execute_kw(self, model: str, method: str, args: Optional[List] = None, kwargs: Optional[Dict] = None) -> Any:
         """Executar método no Odoo"""
         if args is None:
             args = []
@@ -138,7 +138,7 @@ class OdooClient:
             logger.error(f"❌ Erro ao executar {model}.{method}: {e}")
             raise OdooDataError(f"Erro ao executar {model}.{method}: {e}")
     
-    def search(self, model: str, domain: List = None, offset: int = 0, limit: int = None, order: str = None) -> List[int]:
+    def search(self, model: str, domain: Optional[List] = None, offset: int = 0, limit: Optional[int] = None, order: Optional[str] = None) -> List[int]:
         """Buscar registros"""
         if domain is None:
             domain = []
@@ -151,7 +151,7 @@ class OdooClient:
             
         return self.execute_kw(model, 'search', [domain], kwargs)
     
-    def read(self, model: str, ids: List[int], fields: List[str] = None) -> List[Dict]:
+    def read(self, model: str, ids: List[int], fields: Optional[List[str]] = None) -> List[Dict]:
         """Ler registros"""
         kwargs = {}
         if fields:
@@ -159,8 +159,8 @@ class OdooClient:
             
         return self.execute_kw(model, 'read', [ids], kwargs)
     
-    def search_read(self, model: str, domain: List = None, fields: List[str] = None, 
-                   offset: int = 0, limit: int = None, order: str = None) -> List[Dict]:
+    def search_read(self, model: str, domain: Optional[List] = None, fields: Optional[List[str]] = None, 
+                   offset: int = 0, limit: Optional[int] = None, order: Optional[str] = None) -> List[Dict]:
         """Buscar e ler registros"""
         if domain is None:
             domain = []
@@ -194,7 +194,7 @@ class OdooPartnerSync:
         self.client = client
         self.model = 'res.partner'
     
-    def get_customers(self, limit: int = None, active_only: bool = True) -> List[Dict]:
+    def get_customers(self, limit: Optional[int] = None, active_only: bool = True) -> List[Dict]:
         """Buscar clientes"""
         domain = [['is_company', '=', True]]
         if active_only:
@@ -234,7 +234,7 @@ class OdooProductSync:
         self.client = client
         self.model = 'product.product'
     
-    def get_products(self, limit: int = None, active_only: bool = True) -> List[Dict]:
+    def get_products(self, limit: Optional[int] = None, active_only: bool = True) -> List[Dict]:
         """Buscar produtos"""
         domain = [['sale_ok', '=', True]]
         if active_only:
@@ -265,8 +265,8 @@ class OdooSaleOrderSync:
         self.client = client
         self.model = 'sale.order'
     
-    def get_orders(self, limit: int = None, state: str = None, 
-                   date_from: datetime = None, date_to: datetime = None) -> List[Dict]:
+    def get_orders(self, limit: Optional[int] = None, state: Optional[str] = None, 
+                   date_from: Optional[datetime] = None, date_to: Optional[datetime] = None) -> List[Dict]:
         """Buscar pedidos de venda"""
         domain = []
         
@@ -345,7 +345,7 @@ class OdooIntegration:
                 'message': str(e)
             }
     
-    def sync_customers_to_system(self, limit: int = None) -> Dict[str, Any]:
+    def sync_customers_to_system(self, limit: Optional[int] = None) -> Dict[str, Any]:
         """Sincronizar clientes do Odoo para o sistema"""
         try:
             customers = self.partners.get_customers(limit=limit)
@@ -366,7 +366,7 @@ class OdooIntegration:
                 'message': str(e)
             }
     
-    def sync_products_to_system(self, limit: int = None) -> Dict[str, Any]:
+    def sync_products_to_system(self, limit: Optional[int] = None) -> Dict[str, Any]:
         """Sincronizar produtos do Odoo para o sistema"""
         try:
             products = self.products.get_products(limit=limit)
@@ -387,7 +387,7 @@ class OdooIntegration:
                 'message': str(e)
             }
     
-    def sync_orders_to_system(self, limit: int = None, days_back: int = 30) -> Dict[str, Any]:
+    def sync_orders_to_system(self, limit: Ont = None, days_back: int = 30) -> Dict[str, Any]:
         """Sincronizar pedidos do Odoo para o sistema"""
         try:
             date_from = datetime.now() - timedelta(days=days_back)
