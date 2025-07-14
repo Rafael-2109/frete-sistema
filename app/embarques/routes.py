@@ -1,31 +1,17 @@
 from flask import request, flash, url_for, redirect, render_template, Blueprint, jsonify, session
-
 from sqlalchemy import or_, cast, String
-
 from flask_login import login_required, current_user
-
 from app import db
-
-# 🔒 Importar decoradores de permissão
-from app.utils.auth_decorators import require_embarques, allow_vendedor_own_data, get_vendedor_filter_query, require_admin
-
+from app.utils.auth_decorators import require_embarques
 from app.embarques.forms import EmbarqueForm, EmbarqueItemForm
-
 from app.transportadoras.models import Transportadora
-
 from app.embarques.models import Embarque, EmbarqueItem
-
 from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf, sincronizar_nova_entrega_por_nf
 from app.monitoramento.models import EntregaMonitorada
-
 from app.localidades.models import Cidade
-
 from datetime import datetime
-
 from app.pedidos.models import Pedido
-
 from app.cotacao.models import Cotacao
-
 embarques_bp = Blueprint('embarques', __name__,url_prefix='/embarques')
 
 # Importa a função centralizada
@@ -1231,6 +1217,10 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
             
             if not pedido and item.pedido:
                 pedido = Pedido.query.filter_by(num_pedido=item.pedido).first()
+
+            if pedido.nf_cd == True:
+                pedido.nf_cd = False
+
             
             if not pedido:
                 erros.append(f"Pedido {item.pedido} não encontrado")
@@ -1340,79 +1330,6 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
         db.session.rollback()
         error_msg = f"Erro na sincronização: {str(e)}"
         print(f"[SYNC] ❌ {error_msg}")
-        return False, error_msg
-
-def sincronizar_nf_embarque_pedido(embarque_id):
-    """
-    ✅ FUNÇÃO CORRIGIDA: Sincroniza as NFs do embarque com os pedidos correspondentes
-    
-    Para cada item do embarque:
-    1. Se tem NF preenchida E separacao_lote_id, busca o pedido correspondente
-    2. Usa separacao_lote_id para garantir precisão (evita problemas com embarques parciais)
-    3. Atualiza o campo 'nf' do pedido
-    4. Atualiza o status do pedido automaticamente (via trigger)
-    
-    Esta função resolve o problema de pedidos ficarem "EMBARCADO" 
-    quando deveriam estar "FATURADO" após preenchimento da NF.
-    """
-    try:
-        embarque = Embarque.query.get(embarque_id)
-        if not embarque:
-            return False, "Embarque não encontrado"
-        
-        itens_sincronizados = 0
-        itens_sem_lote = 0
-        erros = []
-        
-        for item in embarque.itens:
-            # Se o item tem NF preenchida, sincroniza com o pedido
-            if item.nota_fiscal and item.nota_fiscal.strip():
-                
-                # ✅ CORREÇÃO: Usar separacao_lote_id para busca precisa
-                if item.separacao_lote_id:
-                    # Busca o pedido pelo lote de separação (mais seguro)
-                    pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
-                    
-                    if pedido:
-                        # Atualiza a NF no pedido
-                        pedido.nf = item.nota_fiscal
-                        # O status será atualizado automaticamente pelo trigger
-                        itens_sincronizados += 1
-                        print(f"[DEBUG] 🔄 Pedido {pedido.num_pedido} (Lote: {item.separacao_lote_id}): NF atualizada para {item.nota_fiscal}")
-                    else:
-                        erros.append(f"Pedido com lote {item.separacao_lote_id} não encontrado na base de dados")
-                else:
-                    # Fallback: Se não tem lote, tenta buscar por num_pedido (menos seguro)
-                    itens_sem_lote += 1
-                    pedido = Pedido.query.filter_by(num_pedido=item.pedido).first()
-                    
-                    if pedido:
-                        pedido.nf = item.nota_fiscal
-                        itens_sincronizados += 1
-                        print(f"[DEBUG] ⚠️ Pedido {pedido.num_pedido} (SEM LOTE): NF atualizada para {item.nota_fiscal}")
-                    else:
-                        erros.append(f"Pedido {item.pedido} não encontrado na base de dados")
-        
-        db.session.commit()
-        
-        resultado_msg = f"✅ {itens_sincronizados} pedido(s) sincronizado(s) com suas NFs"
-        
-        if itens_sem_lote > 0:
-            resultado_msg += f" ({itens_sem_lote} sem lote de separação - menos seguro)"
-        
-        if erros:
-            resultado_msg += f" | ⚠️ {len(erros)} erro(s): {'; '.join(erros[:2])}"
-        
-        if itens_sincronizados > 0:
-            print(f"[DEBUG] ✅ {itens_sincronizados} pedidos sincronizados com NFs")
-            return True, resultado_msg
-        else:
-            return True, "Nenhuma NF para sincronizar"
-            
-    except Exception as e:
-        db.session.rollback()
-        error_msg = f"Erro ao sincronizar NFs com pedidos: {str(e)}"
-        print(f"[DEBUG] ❌ {error_msg}")
         return False, error_msg
 
 def atualizar_status_pedido_nf_cd(numero_pedido, separacao_lote_id=None):
