@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% block title %}Integração Odoo{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-sync-alt"></i> Integração com Odoo
+                    </h3>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Status da Conexão -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card card-outline card-info">
+                                <div class="card-header">
+                                    <h5 class="card-title">Status da Conexão</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="connection-status" class="text-center">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="sr-only">Carregando...</span>
+                                        </div>
+                                        <p class="mt-2">Testando conexão...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card card-outline card-secondary">
+                                <div class="card-header">
+                                    <h5 class="card-title">Configurações</h5>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <td><strong>URL:</strong></td>
+                                            <td>https://odoo.nacomgoya.com.br</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Database:</strong></td>
+                                            <td>odoo-17-ee-nacomgoya-prd</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Usuário:</strong></td>
+                                            <td>rafael@conservascampobelo.com.br</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Versão:</strong></td>
+                                            <td id="odoo-version">-</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sincronização de Dados -->
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card card-outline card-success">
+                                <div class="card-header">
+                                    <h5 class="card-title">
+                                        <i class="fas fa-users"></i> Clientes
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted">Sincronizar clientes do Odoo para o sistema de fretes</p>
+                                    
+                                    <div class="form-group">
+                                        <label>Limite de registros:</label>
+                                        <input type="number" id="customers-limit" class="form-control" value="10" min="1" max="100">
+                                    </div>
+                                    
+                                    <button onclick="syncCustomers()" class="btn btn-success btn-block">
+                                        <i class="fas fa-sync"></i> Sincronizar Clientes
+                                    </button>
+                                    
+                                    <div id="customers-status" class="mt-3"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card card-outline card-warning">
+                                <div class="card-header">
+                                    <h5 class="card-title">
+                                        <i class="fas fa-box"></i> Produtos
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted">Sincronizar produtos do Odoo para o sistema de fretes</p>
+                                    
+                                    <div class="form-group">
+                                        <label>Limite de registros:</label>
+                                        <input type="number" id="products-limit" class="form-control" value="10" min="1" max="100">
+                                    </div>
+                                    
+                                    <button onclick="syncProducts()" class="btn btn-warning btn-block">
+                                        <i class="fas fa-sync"></i> Sincronizar Produtos
+                                    </button>
+                                    
+                                    <div id="products-status" class="mt-3"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card card-outline card-primary">
+                                <div class="card-header">
+                                    <h5 class="card-title">
+                                        <i class="fas fa-file-invoice"></i> Pedidos
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted">Sincronizar pedidos do Odoo para o sistema de fretes</p>
+                                    
+                                    <div class="form-group">
+                                        <label>Limite de registros:</label>
+                                        <input type="number" id="orders-limit" class="form-control" value="10" min="1" max="100">
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label>Dias para trás:</label>
+                                        <input type="number" id="orders-days" class="form-control" value="7" min="1" max="90">
+                                    </div>
+                                    
+                                    <button onclick="syncOrders()" class="btn btn-primary btn-block">
+                                        <i class="fas fa-sync"></i> Sincronizar Pedidos
+                                    </button>
+                                    
+                                    <div id="orders-status" class="mt-3"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Log de Atividades -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="card card-outline card-info">
+                                <div class="card-header">
+                                    <h5 class="card-title">
+                                        <i class="fas fa-list"></i> Log de Atividades
+                                    </h5>
+                                    <div class="card-tools">
+                                        <button onclick="clearLog()" class="btn btn-tool">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="activity-log" style="height: 200px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 5px;">
+                                        <p class="text-muted">Nenhuma atividade registrada ainda.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Função para adicionar logs
+function addLog(message, type = 'info') {
+    const logDiv = document.getElementById('activity-log');
+    const now = new Date().toLocaleString();
+    const typeClass = type === 'error' ? 'text-danger' : type === 'success' ? 'text-success' : 'text-info';
+    
+    const logEntry = `<div class="${typeClass}"><strong>${now}:</strong> ${message}</div>`;
+    logDiv.innerHTML = logEntry + logDiv.innerHTML;
+}
+
+// Função para limpar logs
+function clearLog() {
+    document.getElementById('activity-log').innerHTML = '<p class="text-muted">Nenhuma atividade registrada ainda.</p>';
+}
+
+// Testar conexão ao carregar a página
+document.addEventListener('DOMContentLoaded', function() {
+    testConnection();
+});
+
+// Função para testar conexão
+function testConnection() {
+    addLog('Testando conexão com Odoo...');
+    
+    fetch('/api/odoo/test')
+        .then(response => response.json())
+        .then(data => {
+            const statusDiv = document.getElementById('connection-status');
+            
+            if (data.status === 'success') {
+                statusDiv.innerHTML = `
+                    <div class="text-success">
+                        <i class="fas fa-check-circle fa-2x"></i>
+                        <h5 class="mt-2">Conexão OK</h5>
+                        <p>Usuário: ${data.user.name}</p>
+                        <p>Empresa: ${data.user.company_id[1]}</p>
+                        <small>
+                            Clientes: ${data.counts.customers} | 
+                            Produtos: ${data.counts.products} | 
+                            Pedidos: ${data.counts.orders}
+                        </small>
+                    </div>
+                `;
+                
+                document.getElementById('odoo-version').textContent = data.server_info.server_version;
+                addLog('Conexão estabelecida com sucesso!', 'success');
+            } else {
+                statusDiv.innerHTML = `
+                    <div class="text-danger">
+                        <i class="fas fa-times-circle fa-2x"></i>
+                        <h5 class="mt-2">Erro na Conexão</h5>
+                        <p>${data.message}</p>
+                    </div>
+                `;
+                addLog(`Erro na conexão: ${data.message}`, 'error');
+            }
+        })
+        .catch(error => {
+            addLog(`Erro de rede: ${error}`, 'error');
+        });
+}
+
+// Função para sincronizar clientes
+function syncCustomers() {
+    const limit = document.getElementById('customers-limit').value;
+    const statusDiv = document.getElementById('customers-status');
+    
+    statusDiv.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div> Sincronizando...';
+    addLog(`Iniciando sincronização de ${limit} clientes...`);
+    
+    fetch('/api/odoo/sync-customers', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ limit: parseInt(limit) })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            statusDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+            addLog(data.message, 'success');
+        } else {
+            statusDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+            addLog(`Erro na sincronização de clientes: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        statusDiv.innerHTML = `<div class="alert alert-danger">Erro de rede: ${error}</div>`;
+        addLog(`Erro de rede na sincronização de clientes: ${error}`, 'error');
+    });
+}
+
+// Função para sincronizar produtos
+function syncProducts() {
+    const limit = document.getElementById('products-limit').value;
+    const statusDiv = document.getElementById('products-status');
+    
+    statusDiv.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div> Sincronizando...';
+    addLog(`Iniciando sincronização de ${limit} produtos...`);
+    
+    fetch('/api/odoo/sync-products', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ limit: parseInt(limit) })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            statusDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+            addLog(data.message, 'success');
+        } else {
+            statusDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+            addLog(`Erro na sincronização de produtos: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        statusDiv.innerHTML = `<div class="alert alert-danger">Erro de rede: ${error}</div>`;
+        addLog(`Erro de rede na sincronização de produtos: ${error}`, 'error');
+    });
+}
+
+// Função para sincronizar pedidos
+function syncOrders() {
+    const limit = document.getElementById('orders-limit').value;
+    const daysBack = document.getElementById('orders-days').value;
+    const statusDiv = document.getElementById('orders-status');
+    
+    statusDiv.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div> Sincronizando...';
+    addLog(`Iniciando sincronização de ${limit} pedidos (${daysBack} dias)...`);
+    
+    fetch('/api/odoo/sync-orders', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+            limit: parseInt(limit),
+            days_back: parseInt(daysBack)
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            statusDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+            addLog(data.message, 'success');
+        } else {
+            statusDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+            addLog(`Erro na sincronização de pedidos: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        statusDiv.innerHTML = `<div class="alert alert-danger">Erro de rede: ${error}</div>`;
+        addLog(`Erro de rede na sincronização de pedidos: ${error}`, 'error');
+    });
+}
+</script>
+{% endblock %} 

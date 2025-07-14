@@ -379,3 +379,97 @@ def api_embarques_internos():
             'success': False,
             'error': str(e)
         }), 500
+
+# ==========================================
+# 🔗 INTEGRAÇÃO ODOO
+# ==========================================
+
+@main_bp.route('/odoo-integration')
+@login_required
+def odoo_integration():
+    """Página de integração com Odoo"""
+    return render_template('main/odoo_integration.html')
+
+@main_bp.route('/api/odoo/test', methods=['GET'])
+@login_required
+def test_odoo_connection():
+    """Testar conexão com Odoo"""
+    try:
+        from app.utils.odoo_integration import get_odoo_integration
+        
+        integration = get_odoo_integration()
+        result = integration.test_connection()
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"❌ Erro ao testar conexão Odoo: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Erro ao conectar com Odoo: {str(e)}'
+        }), 500
+
+@main_bp.route('/api/odoo/sync-customers', methods=['POST'])
+@login_required
+def sync_customers():
+    """Sincronizar clientes do Odoo"""
+    try:
+        from app.utils.odoo_integration import get_odoo_integration
+        
+        limit = request.json.get('limit', 10) if request.json else 10
+        
+        integration = get_odoo_integration()
+        result = integration.sync_customers_to_system(limit=limit)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"❌ Erro ao sincronizar clientes: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Erro na sincronização: {str(e)}'
+        }), 500
+
+@main_bp.route('/api/odoo/sync-products', methods=['POST'])
+@login_required
+def sync_products():
+    """Sincronizar produtos do Odoo"""
+    try:
+        from app.utils.odoo_integration import get_odoo_integration
+        
+        limit = request.json.get('limit', 10) if request.json else 10
+        
+        integration = get_odoo_integration()
+        result = integration.sync_products_to_system(limit=limit)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"❌ Erro ao sincronizar produtos: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Erro na sincronização: {str(e)}'
+        }), 500
+
+@main_bp.route('/api/odoo/sync-orders', methods=['POST'])
+@login_required
+def sync_orders():
+    """Sincronizar pedidos do Odoo"""
+    try:
+        from app.utils.odoo_integration import get_odoo_integration
+        
+        data = request.json if request.json else {}
+        limit = data.get('limit', 10)
+        days_back = data.get('days_back', 7)
+        
+        integration = get_odoo_integration()
+        result = integration.sync_orders_to_system(limit=limit, days_back=days_back)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"❌ Erro ao sincronizar pedidos: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Erro na sincronização: {str(e)}'
+        }), 500
