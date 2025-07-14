@@ -87,3 +87,4 @@ spacy==3.7.4               # Engine principal de NLP
 structlog>=23.1.0
 # Logging colorido
 colorlog>=6.7.0
+PyJWT==2.8.0
