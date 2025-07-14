@@ -20,12 +20,10 @@ import time
 # Imports com fallback seguro
 try:
     from flask_login import current_user
-    from app import db
     from sqlalchemy import func, and_, or_, text
     FLASK_AVAILABLE = True
 except ImportError:
     current_user = None
-    db = None
     func = and_ = or_ = text = None
     FLASK_AVAILABLE = False
 
@@ -88,7 +86,6 @@ except ImportError:
 
 # Models
 try:
-    from app.fretes.models import Frete
     MODELS_AVAILABLE = True
 except ImportError:
     MODELS_AVAILABLE = False

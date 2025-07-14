@@ -7,7 +7,6 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy import func, and_, or_
 from flask import current_app
-from app import db
 from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
 # from app.[a-z]+.models import .*Frete - Usando flask_fallback, DespesaExtra
 # from app.[a-z]+.models import .*Transportadora - Usando flask_fallback
@@ -49,7 +48,7 @@ class FretesLoader:
             self.logger.info(f"💸 Carregando fretes com filtros: {filters}")
             
             # Garantir contexto Flask
-            if not hasattr(db.session, 'is_active') or not db.session.is_active:
+            if not hasattr(self.db.session, 'is_active') or not self.db.session.is_active:
                 self.logger.warning("⚠️ Sem contexto Flask ativo, tentando com app context...")
                 with current_app.app_context():
                     return self._load_with_context(filters)
@@ -93,7 +92,7 @@ class FretesLoader:
         # from app.[a-z]+.models import .*Frete - Usando flask_fallback
         # from app.[a-z]+.models import .*Transportadora - Usando flask_fallback
         
-        query = db.session.query(Frete).join(
+        query = self.db.session.query(Frete).join(
             Transportadora,
             Frete.transportadora_id == Transportadora.id,
             isouter=True

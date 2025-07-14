@@ -11,7 +11,6 @@ from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
 # from app.[a-z]+.models import .*RelatorioFaturamentoImportado - Usando flask_fallback
 from app.utils.grupo_empresarial import detectar_grupo_empresarial
 from app.faturamento.models import RelatorioFaturamentoImportado
-from app import db
 import logging
 
 logger = logging.getLogger(__name__)
@@ -45,7 +44,7 @@ class FaturamentoLoader:
             self.logger.info(f"💰 Carregando faturamento com filtros: {filters}")
             
             # Garantir contexto Flask
-            if not hasattr(db.session, 'is_active') or not db.session.is_active:
+            if not hasattr(self.db.session, 'is_active') or not self.db.session.is_active:
                 self.logger.warning("⚠️ Sem contexto Flask ativo, tentando com app context...")
                 with current_app.app_context():
                     return self._load_with_context(filters)
@@ -85,7 +84,7 @@ class FaturamentoLoader:
         from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
         # from app.[a-z]+.models import .*RelatorioFaturamentoImportado - Usando flask_fallback
         
-        query = db.session.query(RelatorioFaturamentoImportado)
+        query = self.db.session.query(RelatorioFaturamentoImportado)
         
         if filters:
             # Aplicar filtros...
