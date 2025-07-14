@@ -10,36 +10,36 @@ class Embarque(db.Model):
     data_embarque = db.Column(db.Date, nullable=True)
     transportadora_id = db.Column(db.Integer, db.ForeignKey('transportadoras.id'), nullable=True)
     observacoes = db.Column(db.Text)
-    placa_veiculo = db.Column(db.String(10))
-    paletizado = db.Column(db.Boolean, default=False)
-    laudo_anexado = db.Column(db.Boolean, default=False)
-    embalagem_aprovada = db.Column(db.Boolean, default=False)
-    transporte_aprovado = db.Column(db.Boolean, default=False)
-    horario_carregamento = db.Column(db.String(5))
-    responsavel_carregamento = db.Column(db.String(100))
+    placa_veiculo = db.Column(db.String(10)) #Não utilizado
+    paletizado = db.Column(db.Boolean, default=False) #Não utilizado
+    laudo_anexado = db.Column(db.Boolean, default=False) #Não utilizado
+    embalagem_aprovada = db.Column(db.Boolean, default=False) #Não utilizado
+    transporte_aprovado = db.Column(db.Boolean, default=False) #Não utilizado
+    horario_carregamento = db.Column(db.String(5)) #Não utilizado
+    responsavel_carregamento = db.Column(db.String(100)) #Não utilizado
     status = db.Column(db.String(20), default='draft')  # 'draft', 'ativo', 'cancelado'
     motivo_cancelamento = db.Column(db.Text, nullable=True)  # Motivo do cancelamento
     cancelado_em = db.Column(db.DateTime, nullable=True)  # Data/hora do cancelamento
     cancelado_por = db.Column(db.String(100), nullable=True)  # Usuário que cancelou
     tipo_cotacao = db.Column(db.String(20), default='Automatica')  # 'Automatica' ou 'Manual'
-    valor_total = db.Column(db.Float)
-    pallet_total = db.Column(db.Float)
-    peso_total = db.Column(db.Float)
+    valor_total = db.Column(db.Float) #Somatória do valor dos itens do embarque
+    pallet_total = db.Column(db.Float) #Somatória do número de pallets dos itens do embarque
+    peso_total = db.Column(db.Float) #Somatória do peso dos itens do embarque
     tipo_carga = db.Column(db.String(20))  # 'FRACIONADA' ou 'DIRETA'
 
     criado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     criado_por = db.Column(db.String(100), nullable=False, default='Administrador')
 
     # Campos do motorista
-    nome_motorista = db.Column(db.String(100))
-    cpf_motorista = db.Column(db.String(20))
-    qtd_pallets = db.Column(db.Integer)
+    nome_motorista = db.Column(db.String(100)) #Não utilizado
+    cpf_motorista = db.Column(db.String(20)) #Não utilizado
+    qtd_pallets = db.Column(db.Integer) #Não utilizado
     data_embarque_str = db.Column(db.String(10))  # formato DD/MM/AAAA
 
     # Campos específicos para carga DIRETA
     # Uma cotação direta está vinculada ao embarque principal
     cotacao_id = db.Column(db.Integer, db.ForeignKey('cotacoes.id', name='fk_embarque_cotacao'), nullable=True)
-    modalidade = db.Column(db.String(50))  # VALOR, PESO, VAN, etc.
+    modalidade = db.Column(db.String(50))  # TIPO DE VEICULO CONTRATADO (MODELOS EM "app/veiculos/models/veiculos.nome")
     
     # Parâmetros da tabela para carga DIRETA
     tabela_nome_tabela = db.Column(db.String(100))
@@ -68,23 +68,23 @@ class Embarque(db.Model):
     cotacao = db.relationship('Cotacao', backref='embarque_direto', foreign_keys=[cotacao_id])
 
     def total_notas(self):
-        return len([i for i in self.itens if i.status == 'ativo'])
+        return len([i for i in self.embarque.itens if i.status == 'ativo'])
 
     def total_volumes(self):
-        return sum(i.volumes or 0 for i in self.itens if i.status == 'ativo')
+        return sum(i.volumes or 0 for i in self.embarque.itens if i.status == 'ativo')
 
     def total_peso_pedidos(self):
         """Retorna o peso total dos pedidos contidos no embarque"""
-        return sum(i.peso or 0 for i in self.itens if i.status == 'ativo')
+        return sum(i.peso or 0 for i in self.embarque.itens if i.status == 'ativo')
 
     def total_valor_pedidos(self):
         """Retorna o valor total dos pedidos contidos no embarque"""
-        return sum(i.valor or 0 for i in self.itens if i.status == 'ativo')
+        return sum(i.valor or 0 for i in self.embarque.itens if i.status == 'ativo')
 
     def total_pallet_pedidos(self):
         """Retorna o total de pallets dos pedidos contidos no embarque"""
         # Soma os pallets reais dos itens ativos
-        total_pallets = sum(i.pallets or 0 for i in self.itens if i.status == 'ativo')
+        total_pallets = sum(i.pallets or 0 for i in self.embarque.itens if i.status == 'ativo')
         
         # Se não há pallets informados, calcula baseado no peso (fallback)
         if total_pallets == 0:
@@ -97,7 +97,7 @@ class Embarque(db.Model):
     @property
     def itens_ativos(self):
         """Retorna apenas os itens ativos do embarque"""
-        return [item for item in self.itens if item.status == 'ativo']
+        return [item for item in self.embarque.itens if item.status == 'ativo']
 
     @property
     def status_nfs(self):
@@ -107,7 +107,7 @@ class Embarque(db.Model):
         - 'Pendente Import.' - Caso as NFs estejam preenchidas, porém tenha NF ainda não importada
         - 'NFs Lançadas' - Todas as NFs estão lançadas e validadas pelo faturamento
         """
-        itens_ativos = [item for item in self.itens if item.status == 'ativo']
+        itens_ativos = [item for item in self.embarque.itens if item.status == 'ativo']
         
         if not itens_ativos:
             return 'NFs pendentes'

@@ -6,19 +6,123 @@ Micro-loader especializado para carregamento de dados de embarques
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy import func, and_, or_
-from app import db
+from flask import current_app
+from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
 from app.embarques.models import Embarque, EmbarqueItem
+from app.transportadoras.models import Transportadora
+# from app.[a-z]+.models import .*Embarque - Usando flask_fallbackItem
 from app.utils.grupo_empresarial import detectar_grupo_empresarial
 import logging
 
 logger = logging.getLogger(__name__)
 
 class EmbarquesLoader:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """Micro-loader especializado para dados de embarques"""
     
     def __init__(self):
         self.model = Embarque
         self.item_model = EmbarqueItem
+        self.logger = logger
+        
+    def load_data(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Carrega dados de embarques do banco
+        
+        Args:
+            filters: Filtros opcionais de consulta
+            
+        Returns:
+            Lista de dicionários com dados de embarques
+        """
+        try:
+            self.logger.info(f"📦 Carregando embarques com filtros: {filters}")
+            
+            # Garantir contexto Flask
+            if not hasattr(self.db.session, 'is_active') or not self.db.session.is_active:
+                self.logger.warning("⚠️ Sem contexto Flask ativo, tentando com app context...")
+                with current_app.app_context():
+                    return self._load_with_context(filters)
+            
+            # Converter filtros para formato esperado
+            embarques_filters = self._convert_filters(filters or {})
+            
+            # Usar método existente
+            result = self.load_embarques_data(embarques_filters)
+            
+            # Retornar apenas os dados JSON
+            return result.get('dados_json', [])
+            
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao carregar embarques: {str(e)}")
+            return []
+    
+    def _convert_filters(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        """Converte filtros para formato do load_embarques_data"""
+        embarques_filters = {}
+        
+        if 'cliente' in filters:
+            embarques_filters['cliente_especifico'] = filters['cliente']
+        
+        if 'periodo' in filters:
+            embarques_filters['periodo_dias'] = filters['periodo']
+        else:
+            embarques_filters['periodo_dias'] = 30  # padrão
+            
+        if 'status' in filters:
+            embarques_filters['status_embarque'] = filters['status']
+            
+        if 'transportadora' in filters:
+            embarques_filters['transportadora_especifica'] = filters['transportadora']
+            
+        return embarques_filters
+    
+    def _load_with_context(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Carrega dados garantindo contexto Flask"""
+        from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
+        # from app.[a-z]+.models import .*Embarque - Usando flask_fallback
+        
+        query = self.db.session.query(Embarque)
+        
+        if filters:
+            # Aplicar filtros...
+            if 'transportadora' in filters:
+                # Precisa fazer join com transportadora
+                # from app.[a-z]+.models import .*Transportadora - Usando flask_fallback
+                query = query.join(
+                    Transportadora,
+                    Embarque.transportadora_id == Transportadora.id
+                ).filter(
+                    Transportadora.razao_social.ilike(f"%{filters['transportadora']}%")
+                )
+        
+        embarques = query.limit(100).all()
+        
+        self.logger.info(f"✅ Embarques carregados: {len(embarques)} registros")
+        
+        return [
+            {
+                'id': e.id,
+                'numero_embarque': e.numero_embarque,
+                'data_embarque': e.data_embarque.isoformat() if e.data_embarque else None,
+                'transportadora_id': e.transportadora_id,
+                'transportadora': e.transportadora.razao_social if hasattr(e, 'transportadora') and e.transportadora else None,
+                'status': e.status,
+                'total_peso': float(e.total_peso_pedidos() if hasattr(e, 'total_peso_pedidos') else 0),
+                'total_valor': float(e.total_valor_pedidos() if hasattr(e, 'total_valor_pedidos') else 0),
+                'tipo_carga': e.tipo_carga,
+                'placa_veiculo': e.placa_veiculo,
+                'criado_em': e.criado_em.isoformat() if e.criado_em else None
+            }
+            for e in embarques
+        ]
         
     def load_embarques_data(self, filters: Dict[str, Any]) -> Dict[str, Any]:
         """

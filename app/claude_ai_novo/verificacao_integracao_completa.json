@@ -1,0 +1,57 @@
+{
+  "timestamp": "2025-07-13T20:35:29.103616",
+  "scanner": {
+    "disponivel": false,
+    "database_manager": false,
+    "auto_mapper": false,
+    "get_database_info": false,
+    "metodos_descoberta": []
+  },
+  "mapper": {
+    "disponivel": false,
+    "mappers_dominio": [],
+    "initialize_with_schema": false,
+    "apply_auto_suggestions": false,
+    "metodos_mapeamento": []
+  },
+  "loader": {
+    "disponivel": false,
+    "loaders_dominio": [],
+    "configure_with_scanner": false,
+    "configure_with_mapper": false,
+    "scanner_configurado": false,
+    "mapper_configurado": false,
+    "metodos_carregamento": []
+  },
+  "orchestrator": {
+    "disponivel": false,
+    "_connect_modules": false,
+    "componentes_registrados": [],
+    "conexoes_verificadas": []
+  },
+  "testes_funcionais": {
+    "scanner_loader": false,
+    "mapper_loader": false,
+    "auto_mapper_mapper": false,
+    "fluxo_completo": false
+  },
+  "analise": {
+    "problemas_encontrados": [
+      "AutoMapper não está acessível via DatabaseManager",
+      "ScanningManager não tem método get_database_info()",
+      "MapperManager não pode receber sugestões do AutoMapper",
+      "LoaderManager não tem Scanner configurado",
+      "LoaderManager não tem Mapper configurado",
+      "MainOrchestrator não tem método _connect_modules()"
+    ],
+    "recomendacoes": [
+      "Verificar se DatabaseManager expõe auto_mapper como propriedade pública",
+      "Implementar get_database_info() no ScanningManager",
+      "Implementar apply_auto_suggestions() no MapperManager",
+      "Garantir que Orchestrator chame loader.configure_with_scanner()",
+      "Garantir que Orchestrator chame loader.configure_with_mapper()",
+      "Implementar _connect_modules() no MainOrchestrator"
+    ],
+    "integracao_completa": false
+  }
+}

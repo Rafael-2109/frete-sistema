@@ -18,10 +18,19 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from sqlalchemy import inspect as sql_inspect
+from app.claude_ai_novo.utils.flask_fallback import get_db
 
 logger = logging.getLogger(__name__)
 
 class StructureScanner:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """
     Especialista em descoberta de estrutura e modelos.
     
@@ -101,9 +110,8 @@ class StructureScanner:
         models = {}
         
         try:
-            from app import db
             
-            inspector = sql_inspect(db.engine)
+            inspector = sql_inspect(self.db.engine)
             table_names = inspector.get_table_names()
             
             for table_name in table_names:

@@ -18,9 +18,20 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 from flask import current_app
 
+# Local imports - Flask fallback
+from app.claude_ai_novo.utils.flask_fallback import get_db
+
 logger = logging.getLogger(__name__)
 
 class LearningCore:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """
     Núcleo central do sistema de aprendizado vitalício.
     
@@ -263,7 +274,7 @@ class LearningCore:
         """
         try:
             with current_app.app_context():
-                from app import db
+                from app.claude_ai_novo.utils.flask_fallback import get_db
                 
                 # Calcular satisfação baseada no feedback
                 satisfacao = 1.0  # Default: satisfeito
@@ -275,7 +286,7 @@ class LearningCore:
                 
                 # Salvar métrica
                 from sqlalchemy import text
-                db.session.execute(
+                self.db.session.execute(
                     text("""
                         INSERT INTO ai_learning_metrics
                         (metrica_tipo, metrica_valor, contexto, periodo_inicio, periodo_fim)
@@ -287,14 +298,13 @@ class LearningCore:
                     }
                 )
                 
-                db.session.commit()
+                self.db.session.commit()
                 return True
                 
         except Exception as e:
             logger.error(f"Erro ao atualizar métricas: {e}")
             try:
-                from app import db
-                db.session.rollback()
+                self.db.session.rollback()
             except:
                 pass
             return False
@@ -310,10 +320,9 @@ class LearningCore:
         """
         try:
             with current_app.app_context():
-                from app import db
                 from sqlalchemy import text
                 
-                db.session.execute(
+                self.db.session.execute(
                     text("""
                         INSERT INTO ai_learning_history
                         (consulta_original, interpretacao_inicial, resposta_inicial,
@@ -329,14 +338,13 @@ class LearningCore:
                         "user_id": usuario_id
                     }
                 )
-                db.session.commit()
+                self.db.session.commit()
                 return True
                 
         except Exception as e:
             logger.error(f"Erro ao salvar histórico: {e}")
             try:
-                from app import db
-                db.session.rollback()
+                self.db.session.rollback()
             except:
                 pass
             return False

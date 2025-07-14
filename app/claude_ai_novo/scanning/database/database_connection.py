@@ -80,21 +80,17 @@ class DatabaseConnection:
             True se conexão foi estabelecida
         """
         try:
-            # Tentar importar Flask app
-            from app import create_app, db
+            # Usar flask_fallback para obter db
+            from app.claude_ai_novo.utils.flask_fallback import get_db
             
-            # Criar app se não existir
-            app = create_app()
-            
-            with app.app_context():
-                if hasattr(db, 'engine') and hasattr(db, 'session'):
-                    self.db_engine = db.engine
-                    self.db_session = db.session
-                else:
-                    return False
-                
-            logger.info("✅ Conexão Flask estabelecida")
-            return True
+            db_obj = get_db()
+            if db_obj and hasattr(db_obj, 'engine') and hasattr(db_obj, 'session'):
+                self.db_engine = db_obj.engine
+                self.db_session = db_obj.session
+                logger.info("✅ Conexão Flask estabelecida")
+                return True
+            else:
+                return False
             
         except Exception as e:
             logger.debug(f"🔄 Conexão Flask falhou: {e}")

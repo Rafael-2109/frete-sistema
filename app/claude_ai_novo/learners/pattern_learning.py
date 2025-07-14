@@ -17,10 +17,19 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from flask import current_app
+from app.claude_ai_novo.utils.flask_fallback import get_db
 
 logger = logging.getLogger(__name__)
 
 class PatternLearner:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """
     Especialista em aprendizado de padrões comportamentais e linguísticos.
     
@@ -258,71 +267,61 @@ class PatternLearner:
         """
         try:
             with current_app.app_context():
-                from app import db
+                from app.claude_ai_novo.utils.flask_fallback import get_db
                 from sqlalchemy import text
                 
                 # Verificar se já existe
-                existe = db.session.execute(
+                existe = self.db.session.execute(
                     text("""
                         SELECT id, confidence, usage_count, success_rate
                         FROM ai_knowledge_patterns
                         WHERE pattern_type = :tipo AND pattern_text = :texto
                     """),
                     {"tipo": padrao["tipo"], "texto": padrao["texto"]}
-                ).first()
+                ).fetchone()
                 
                 if existe:
-                    # Atualizar padrão existente
-                    nova_confianca = min(1.0, existe.confidence + self.learning_rate)
-                    novo_uso = existe.usage_count + 1
-                    
-                    db.session.execute(
+                    # Atualizar existente
+                    self.db.session.execute(
                         text("""
                             UPDATE ai_knowledge_patterns
-                            SET confidence = :conf,
-                                usage_count = :uso,
+                            SET confidence = :conf, usage_count = usage_count + 1,
                                 updated_at = CURRENT_TIMESTAMP
                             WHERE id = :id
                         """),
-                        {"conf": nova_confianca, "uso": novo_uso, "id": existe.id}
+                        {"conf": padrao["confidence"], "id": existe[0]}
                     )
-                    
-                    padrao["id"] = existe.id
-                    padrao["confidence"] = nova_confianca
-                    padrao["action"] = "updated"
                 else:
-                    # Criar novo padrão
-                    result = db.session.execute(
+                    # Inserir novo
+                    result = self.db.session.execute(
                         text("""
-                            INSERT INTO ai_knowledge_patterns 
-                            (pattern_type, pattern_text, interpretation, created_by, confidence)
-                            VALUES (:tipo, :texto, :interp, 'pattern_learner', :conf)
-                            RETURNING id, pattern_type, pattern_text, confidence
+                            INSERT INTO ai_knowledge_patterns
+                            (pattern_type, pattern_text, confidence, usage_count, 
+                             success_rate, metadata)
+                            VALUES (:tipo, :texto, :conf, 1, 0.7, :meta)
+                            RETURNING id
                         """),
                         {
                             "tipo": padrao["tipo"],
                             "texto": padrao["texto"],
-                            "interp": self._safe_json_dumps(padrao["interpretacao"]),
-                            "conf": padrao.get("confianca", 0.5)
+                            "conf": padrao["confidence"],
+                            "meta": self._safe_json_dumps(padrao.get("metadata", {}))
                         }
                     )
-                    padrao_novo = result.first()
-                    if padrao_novo:
-                        padrao["id"] = padrao_novo.id
-                        padrao["confidence"] = padrao_novo.confidence
-                        padrao["action"] = "created"
+                    row = result.fetchone()
+                    if row:
+                        padrao["id"] = row[0]
                 
-                db.session.commit()
+                self.db.session.commit()
                 return padrao
                 
         except Exception as e:
-            logger.error(f"❌ Erro ao salvar padrão: {e}")
+            logger.error(f"Erro ao salvar padrão: {e}")
             try:
-                from app import db
-                db.session.rollback()
+                from app.claude_ai_novo.utils.flask_fallback import get_db
+                self.db.session.rollback()
             except:
                 pass
-            return None
     
     def buscar_padroes_aplicaveis(self, consulta: str, threshold: float = 0.5) -> List[Dict]:
         """
@@ -337,10 +336,10 @@ class PatternLearner:
         """
         try:
             with current_app.app_context():
-                from app import db
+                from app.claude_ai_novo.utils.flask_fallback import get_db
                 from sqlalchemy import text
                 
-                padroes = db.session.execute(
+                padroes = self.db.session.execute(
                     text("""
                         SELECT pattern_type, pattern_text, interpretation, confidence, usage_count
                         FROM ai_knowledge_patterns

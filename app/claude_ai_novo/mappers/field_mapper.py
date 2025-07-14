@@ -10,7 +10,7 @@ Data: 2025-01-07
 """
 
 import logging
-from typing import Dict, List, Any, Optional, Union, Tuple
+from typing import Dict, List, Any, Optional, Union, Tuple, Callable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -35,8 +35,8 @@ class FieldMapping:
     field_type: FieldType
     required: bool = False
     default_value: Any = None
-    transform_function: Optional[callable] = None
-    validation_function: Optional[callable] = None
+    transform_function: Optional[Callable] = None
+    validation_function: Optional[Callable] = None
 
 class FieldMapper:
     """
@@ -48,8 +48,8 @@ class FieldMapper:
     
     def __init__(self):
         self.mappings: Dict[str, List[FieldMapping]] = {}
-        self.transformers: Dict[str, callable] = {}
-        self.validators: Dict[str, callable] = {}
+        self.transformers: Dict[str, Callable] = {}
+        self.validators: Dict[str, Callable] = {}
         self._setup_default_transformers()
         self._setup_default_validators()
     

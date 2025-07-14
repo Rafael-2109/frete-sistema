@@ -6,7 +6,7 @@ Versão otimizada integrada com BaseCommand
 
 from app.claude_ai_novo.commands.base_command import (
     BaseCommand, format_response_advanced, create_excel_summary,
-    logging, datetime, db, current_user
+    logging, datetime, current_user
 )
 from pathlib import Path
 from typing import cast, Any, TYPE_CHECKING
@@ -37,7 +37,15 @@ func = and_ = or_ = None
 logger = logging.getLogger(__name__)
 
 class ExcelPedidos(BaseCommand):
-    """Gerador de Excel especializado em pedidos e cotações"""
+    """Gerador de relatórios Excel para pedidos"""
+    
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            from app.claude_ai_novo.utils.flask_fallback import get_db
+            self._db = get_db()
+        return self._db
     
     def __init__(self):
         super().__init__()
@@ -121,7 +129,7 @@ class ExcelPedidos(BaseCommand):
         if not SISTEMA_AVAILABLE or Pedido is None or ContatoAgendamento is None:
             return []
             
-        query = db.session.query(cast(Any, Pedido)).join(cast(Any, ContatoAgendamento), isouter=True)
+        query = self.db.session.query(cast(Any, Pedido)).join(cast(Any, ContatoAgendamento), isouter=True)
         
         # Aplicar filtros
         if filtros.get('cliente'):

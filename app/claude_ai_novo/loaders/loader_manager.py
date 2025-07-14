@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Singleton instance
+_loader_manager_instance = None
+
 class LoaderManager:
     """
     Coordenador de micro-loaders especializados.
@@ -29,8 +32,22 @@ class LoaderManager:
     mais adequado para cada tipo de dados.
     """
     
+    _is_initialized = False
+    
+    def __new__(cls, *args, **kwargs):
+        """Implementação do padrão Singleton"""
+        global _loader_manager_instance
+        if _loader_manager_instance is None:
+            _loader_manager_instance = super().__new__(cls)
+        return _loader_manager_instance
+    
     def __init__(self, scanner=None, mapper=None):
         """Inicializa o manager com lazy loading dos loaders e dependências opcionais"""
+        # Evitar reinicialização
+        if LoaderManager._is_initialized:
+            return
+        LoaderManager._is_initialized = True
+        
         self.logger = logging.getLogger(f"{__name__}.LoaderManager")
         
         # Dependências injetadas pelo Orchestrator
@@ -150,7 +167,24 @@ class LoaderManager:
             # Executar carregamento específico
             self.logger.debug(f"🎯 Carregando {domain} com {loader_type}")
             
-            if domain_normalized == 'pedidos':
+            # Usar método padronizado load_data se disponível
+            if hasattr(loader, 'load_data'):
+                self.logger.info(f"✅ Usando método padronizado load_data para {domain}")
+                data_list = loader.load_data(filters)
+                
+                # Retornar no formato esperado
+                return {
+                    'tipo_dados': domain_normalized,
+                    'total_registros': len(data_list),
+                    'dados_json': data_list,
+                    'dados': data_list,  # Compatibilidade
+                    'timestamp': datetime.now().isoformat(),
+                    'source': 'loader_manager',
+                    'optimized': True
+                }
+            
+            # Fallback para métodos específicos (compatibilidade)
+            elif domain_normalized == 'pedidos':
                 return loader.load_pedidos_data(filters)
             elif domain_normalized == 'entregas':
                 return loader.load_entregas_data(filters)
@@ -328,9 +362,6 @@ class LoaderManager:
     def __repr__(self) -> str:
         return f"LoaderManager(initialized={self.initialized})"
 
-# Instância global singleton
-_loader_manager = None
-
 def get_loader_manager() -> LoaderManager:
     """
     Retorna instância singleton do LoaderManager.
@@ -338,10 +369,10 @@ def get_loader_manager() -> LoaderManager:
     Returns:
         LoaderManager: Instância do manager
     """
-    global _loader_manager
-    if _loader_manager is None:
-        _loader_manager = LoaderManager()
-    return _loader_manager
+    global _loader_manager_instance
+    if _loader_manager_instance is None:
+        _loader_manager_instance = LoaderManager()
+    return _loader_manager_instance
 
 # Funções de conveniência
 def load_domain_data(domain: str, filters: Dict[str, Any]) -> Dict[str, Any]:

@@ -6,7 +6,11 @@ Micro-loader especializado para carregamento de dados de fretes
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy import func, and_, or_
+from flask import current_app
 from app import db
+from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
+# from app.[a-z]+.models import .*Frete - Usando flask_fallback, DespesaExtra
+# from app.[a-z]+.models import .*Transportadora - Usando flask_fallback
 from app.fretes.models import Frete, DespesaExtra
 from app.transportadoras.models import Transportadora
 from app.utils.grupo_empresarial import detectar_grupo_empresarial
@@ -15,12 +19,114 @@ import logging
 logger = logging.getLogger(__name__)
 
 class FretesLoader:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """Micro-loader especializado para dados de fretes"""
     
     def __init__(self):
         self.model = Frete
         self.despesa_model = DespesaExtra
         self.transportadora_model = Transportadora
+        self.logger = logger
+        
+    def load_data(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Carrega dados de fretes do banco
+        
+        Args:
+            filters: Filtros opcionais de consulta
+            
+        Returns:
+            Lista de dicionários com dados de fretes
+        """
+        try:
+            self.logger.info(f"💸 Carregando fretes com filtros: {filters}")
+            
+            # Garantir contexto Flask
+            if not hasattr(db.session, 'is_active') or not db.session.is_active:
+                self.logger.warning("⚠️ Sem contexto Flask ativo, tentando com app context...")
+                with current_app.app_context():
+                    return self._load_with_context(filters)
+            
+            # Converter filtros para formato esperado
+            fretes_filters = self._convert_filters(filters or {})
+            
+            # Usar método existente
+            result = self.load_fretes_data(fretes_filters)
+            
+            # Retornar apenas os dados JSON
+            return result.get('dados_json', [])
+            
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao carregar fretes: {str(e)}")
+            return []
+    
+    def _convert_filters(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        """Converte filtros para formato do load_fretes_data"""
+        fretes_filters = {}
+        
+        if 'cliente' in filters:
+            fretes_filters['cliente_especifico'] = filters['cliente']
+        
+        if 'periodo' in filters:
+            fretes_filters['periodo_dias'] = filters['periodo']
+        else:
+            fretes_filters['periodo_dias'] = 30  # padrão
+            
+        if 'status' in filters:
+            fretes_filters['status_frete'] = filters['status']
+            
+        if 'transportadora' in filters:
+            fretes_filters['transportadora_especifica'] = filters['transportadora']
+            
+        return fretes_filters
+    
+    def _load_with_context(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Carrega dados garantindo contexto Flask"""
+        from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
+        # from app.[a-z]+.models import .*Frete - Usando flask_fallback
+        # from app.[a-z]+.models import .*Transportadora - Usando flask_fallback
+        
+        query = db.session.query(Frete).join(
+            Transportadora,
+            Frete.transportadora_id == Transportadora.id,
+            isouter=True
+        )
+        
+        if filters:
+            # Aplicar filtros...
+            if 'cliente' in filters:
+                query = query.filter(
+                    Frete.nome_cliente.ilike(f"%{filters['cliente']}%")
+                )
+        
+        fretes = query.limit(100).all()
+        
+        self.logger.info(f"✅ Fretes carregados: {len(fretes)} registros")
+        
+        return [
+            {
+                'id': f.id,
+                'numero_cte': f.numero_cte,
+                'nome_cliente': f.nome_cliente,
+                'cnpj_cliente': f.cnpj_cliente,
+                'transportadora': f.transportadora.razao_social if f.transportadora else None,
+                'status': f.status,
+                'valor_cotado': float(f.valor_cotado or 0),
+                'valor_cte': float(f.valor_cte or 0),
+                'valor_considerado': float(f.valor_considerado or 0),
+                'valor_pago': float(f.valor_pago or 0),
+                'vencimento': f.vencimento.isoformat() if f.vencimento else None,
+                'criado_em': f.criado_em.isoformat() if f.criado_em else None
+            }
+            for f in fretes
+        ]
         
     def load_fretes_data(self, filters: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -64,15 +170,15 @@ class FretesLoader:
             data_limite = datetime.now() - timedelta(days=filters['periodo_dias'])
             query = query.filter(
                 or_(
-                    self.model.data_criacao >= data_limite,
-                    self.model.data_embarque >= data_limite
+                    self.model.criado_em >= data_limite,
+                    self.model.data_emissao_cte >= data_limite
                 )
             )
         
         # Filtro por cliente específico
         if filters.get('cliente_especifico'):
             cliente = filters['cliente_especifico']
-            query = query.filter(self.model.cliente.ilike(f'%{cliente}%'))
+            query = query.filter(self.model.nome_cliente.ilike(f'%{cliente}%'))
         
         # Filtro por status
         if filters.get('status_frete'):

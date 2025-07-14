@@ -17,10 +17,19 @@ from typing import Dict, List, Any, Optional
 from sqlalchemy import inspect as sql_inspect, text
 from flask import current_app
 from datetime import datetime
+from app.claude_ai_novo.utils.flask_fallback import get_db
 
 logger = logging.getLogger(__name__)
 
 class DatabaseScanner:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """
     Especialista em escaneamento de banco de dados.
     
@@ -42,15 +51,13 @@ class DatabaseScanner:
         schema = {}
         
         try:
-            from app import db
-            
-            inspector = sql_inspect(db.engine)
+            inspector = sql_inspect(self.db.engine)
             
             # Informações gerais do banco
             schema['database_info'] = {
-                'dialect': str(db.engine.dialect.name),
-                'driver': str(db.engine.driver),
-                'server_version': self._get_database_version(db)
+                'dialect': str(self.db.engine.dialect.name),
+                'driver': str(self.db.engine.driver),
+                'server_version': self._get_database_version()
             }
             
             # Todas as tabelas
@@ -72,13 +79,13 @@ class DatabaseScanner:
                     schema['tables'][table_name] = {'error': str(e)}
             
             # Estatísticas de tabelas
-            schema['table_statistics'] = self._get_table_statistics(db)
+            schema['table_statistics'] = self._get_table_statistics()
             
             # Análise de relacionamentos
             schema['relationships_analysis'] = self._analyze_relationships(schema['tables'])
             
             # Informações de performance
-            schema['performance_info'] = self._get_performance_info(db)
+            schema['performance_info'] = self._get_performance_info()
             
             logger.info(f"🗄️ Esquema do banco descoberto: {len(schema['tables'])} tabelas")
             return schema
@@ -94,19 +101,19 @@ class DatabaseScanner:
                 'performance_info': {}
             }
     
-    def _get_database_version(self, db) -> str:
+    def _get_database_version(self) -> str:
         """Obtém versão do banco de dados"""
         try:
-            dialect_name = str(db.engine.dialect.name).lower()
+            dialect_name = str(self.db.engine.dialect.name).lower()
             
             if 'postgresql' in dialect_name:
-                result = db.session.execute(text("SELECT version();")).fetchone()
+                result = self.db.session.execute(text("SELECT version();")).fetchone()
                 return result[0] if result else "PostgreSQL - versão desconhecida"
             elif 'mysql' in dialect_name:
-                result = db.session.execute(text("SELECT version();")).fetchone()
+                result = self.db.session.execute(text("SELECT version();")).fetchone()
                 return result[0] if result else "MySQL - versão desconhecida"
             elif 'sqlite' in dialect_name:
-                result = db.session.execute(text("SELECT sqlite_version();")).fetchone()
+                result = self.db.session.execute(text("SELECT sqlite_version();")).fetchone()
                 return f"SQLite {result[0]}" if result else "SQLite - versão desconhecida"
             else:
                 return f"{dialect_name} - versão desconhecida"
@@ -124,17 +131,17 @@ class DatabaseScanner:
             logger.debug(f"Erro ao obter check constraints: {e}")
         return []
     
-    def _get_table_statistics(self, db) -> Dict[str, Any]:
+    def _get_table_statistics(self) -> Dict[str, Any]:
         """Obtém estatísticas das tabelas"""
         try:
-            dialect_name = str(db.engine.dialect.name).lower()
+            dialect_name = str(self.db.engine.dialect.name).lower()
             
             if 'postgresql' in dialect_name:
-                return self._get_postgresql_statistics(db)
+                return self._get_postgresql_statistics()
             elif 'mysql' in dialect_name:
-                return self._get_mysql_statistics(db)
+                return self._get_mysql_statistics()
             elif 'sqlite' in dialect_name:
-                return self._get_sqlite_statistics(db)
+                return self._get_sqlite_statistics()
             else:
                 return {'message': 'Estatísticas não disponíveis para este banco'}
                 
@@ -142,11 +149,11 @@ class DatabaseScanner:
             logger.warning(f"⚠️ Erro ao obter estatísticas: {e}")
             return {'error': str(e)}
     
-    def _get_postgresql_statistics(self, db) -> Dict[str, Any]:
+    def _get_postgresql_statistics(self) -> Dict[str, Any]:
         """Obtém estatísticas específicas do PostgreSQL"""
         try:
             # Tamanho das tabelas
-            result = db.session.execute(text("""
+            result = self.db.session.execute(text("""
                 SELECT 
                     tablename,
                     pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size,
@@ -167,7 +174,7 @@ class DatabaseScanner:
             ]
             
             # Estatísticas de índices
-            index_stats = db.session.execute(text("""
+            index_stats = self.db.session.execute(text("""
                 SELECT 
                     schemaname,
                     tablename,
@@ -201,11 +208,11 @@ class DatabaseScanner:
             logger.warning(f"⚠️ Erro ao obter estatísticas PostgreSQL: {e}")
             return {'error': str(e)}
     
-    def _get_mysql_statistics(self, db) -> Dict[str, Any]:
+    def _get_mysql_statistics(self) -> Dict[str, Any]:
         """Obtém estatísticas específicas do MySQL"""
         try:
             # Tamanho das tabelas
-            result = db.session.execute(text("""
+            result = self.db.session.execute(text("""
                 SELECT 
                     table_name,
                     ROUND(((data_length + index_length) / 1024 / 1024), 2) as size_mb,
@@ -235,11 +242,11 @@ class DatabaseScanner:
             logger.warning(f"⚠️ Erro ao obter estatísticas MySQL: {e}")
             return {'error': str(e)}
     
-    def _get_sqlite_statistics(self, db) -> Dict[str, Any]:
+    def _get_sqlite_statistics(self) -> Dict[str, Any]:
         """Obtém estatísticas específicas do SQLite"""
         try:
             # Informações das tabelas
-            result = db.session.execute(text("""
+            result = self.db.session.execute(text("""
                 SELECT 
                     name,
                     sql
@@ -322,24 +329,24 @@ class DatabaseScanner:
         
         return analysis
     
-    def _get_performance_info(self, db) -> Dict[str, Any]:
+    def _get_performance_info(self) -> Dict[str, Any]:
         """Obtém informações de performance do banco"""
         try:
-            dialect_name = str(db.engine.dialect.name).lower()
+            dialect_name = str(self.db.engine.dialect.name).lower()
             
             performance_info = {
                 'dialect': dialect_name,
-                'connection_pool_size': getattr(db.engine.pool, 'size', 'unknown'),
-                'connection_pool_checked_out': getattr(db.engine.pool, 'checked_out', 'unknown'),
-                'connection_pool_overflow': getattr(db.engine.pool, 'overflow', 'unknown'),
-                'connection_pool_checked_in': getattr(db.engine.pool, 'checked_in', 'unknown')
+                'connection_pool_size': getattr(self.db.engine.pool, 'size', 'unknown'),
+                'connection_pool_checked_out': getattr(self.db.engine.pool, 'checked_out', 'unknown'),
+                'connection_pool_overflow': getattr(self.db.engine.pool, 'overflow', 'unknown'),
+                'connection_pool_checked_in': getattr(self.db.engine.pool, 'checked_in', 'unknown')
             }
             
             # Informações específicas por dialect
             if 'postgresql' in dialect_name:
-                performance_info.update(self._get_postgresql_performance(db))
+                performance_info.update(self._get_postgresql_performance())
             elif 'mysql' in dialect_name:
-                performance_info.update(self._get_mysql_performance(db))
+                performance_info.update(self._get_mysql_performance())
             
             return performance_info
             
@@ -347,11 +354,11 @@ class DatabaseScanner:
             logger.warning(f"⚠️ Erro ao obter informações de performance: {e}")
             return {'error': str(e)}
     
-    def _get_postgresql_performance(self, db) -> Dict[str, Any]:
+    def _get_postgresql_performance(self) -> Dict[str, Any]:
         """Obtém informações de performance do PostgreSQL"""
         try:
             # Conexões ativas
-            result = db.session.execute(text("""
+            result = self.db.session.execute(text("""
                 SELECT 
                     count(*) as total_connections,
                     count(*) FILTER (WHERE state = 'active') as active_connections,
@@ -369,11 +376,11 @@ class DatabaseScanner:
             logger.debug(f"Erro ao obter performance PostgreSQL: {e}")
             return {}
     
-    def _get_mysql_performance(self, db) -> Dict[str, Any]:
+    def _get_mysql_performance(self) -> Dict[str, Any]:
         """Obtém informações de performance do MySQL"""
         try:
             # Conexões ativas
-            result = db.session.execute(text("SHOW STATUS LIKE 'Threads_connected'")).fetchone()
+            result = self.db.session.execute(text("SHOW STATUS LIKE 'Threads_connected'")).fetchone()
             
             return {
                 'threads_connected': result[1] if result else 0
@@ -391,22 +398,20 @@ class DatabaseScanner:
             Dict com estatísticas gerais
         """
         try:
-            from app import db
-            
-            inspector = sql_inspect(db.engine)
+            inspector = sql_inspect(self.db.engine)
             table_names = inspector.get_table_names()
             
             # Estatísticas básicas
             estatisticas = {
                 'total_tabelas': len(table_names),
                 'tabelas': table_names,
-                'dialect': str(db.engine.dialect.name),
-                'driver': str(db.engine.driver),
+                'dialect': str(self.db.engine.dialect.name),
+                'driver': str(self.db.engine.driver),
                 'timestamp': datetime.now().isoformat()
             }
             
             # Adicionar estatísticas detalhadas se disponíveis
-            detailed_stats = self._get_table_statistics(db)
+            detailed_stats = self._get_table_statistics()
             if detailed_stats and 'error' not in detailed_stats:
                 estatisticas.update(detailed_stats)
             

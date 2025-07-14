@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, date
 # Imports específicos com fallbacks
 try:
     from flask_login import current_user
-    from app import db
+    from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
     from sqlalchemy import func, and_, or_, text
     FLASK_AVAILABLE = True
 except ImportError:
@@ -22,14 +22,14 @@ except ImportError:
 
 # Models com fallbacks
 try:
-    from app.fretes.models import Frete
-    from app.embarques.models import Embarque, EmbarqueItem
-    from app.transportadoras.models import Transportadora
-    from app.pedidos.models import Pedido
-    from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
-    from app.faturamento.models import RelatorioFaturamentoImportado
-    from app.financeiro.models import PendenciaFinanceiraNF
-    from app.fretes.models import DespesaExtra
+    # from app.[a-z]+.models import .*Frete - Usando flask_fallback
+    # from app.[a-z]+.models import .*Embarque - Usando flask_fallbackItem
+    # from app.[a-z]+.models import .*Transportadora - Usando flask_fallback
+    # from app.[a-z]+.models import .*Pedido - Usando flask_fallback
+    # from app.[a-z]+.models import .*EntregaMonitorada - Usando flask_fallback, AgendamentoEntrega
+    # from app.[a-z]+.models import .*RelatorioFaturamentoImportado - Usando flask_fallback
+    # from app.[a-z]+.models import .*PendenciaFinanceiraNF - Usando flask_fallback
+    # from app.[a-z]+.models import .*DespesaExtra - Usando flask_fallback
     MODELS_AVAILABLE = True
 except ImportError:
     # Fallbacks para quando modelos não estão disponíveis
@@ -57,6 +57,14 @@ except ImportError:
     CONFIG_LOCAL_AVAILABLE = False
 
 class ContextProcessor(ProcessorBase):
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """Classe para processamento especializado de contexto"""
     
     def __init__(self):
@@ -288,8 +296,12 @@ Módulos: pedidos, fretes, embarques, monitoramento, separacao, carteira, etc.""
             # Limitar resultados
             registros = query.limit(100).all()
             
+            # Garantir que registros é uma lista
+            if not registros:
+                registros = []
+            
             return {
-                'registros': [self._serialize_entrega(r) for r in registros],
+                'registros': [self._serialize_entrega(r) for r in registros],  # type: ignore
                 'total': query.count(),
                 'dominio': 'entregas'
             }
@@ -321,8 +333,12 @@ Módulos: pedidos, fretes, embarques, monitoramento, separacao, carteira, etc.""
             # Limitar resultados
             registros = query.limit(100).all()
             
+            # Garantir que registros é uma lista
+            if not registros:
+                registros = []
+            
             return {
-                'registros': [self._serialize_frete(r) for r in registros],
+                'registros': [self._serialize_frete(r) for r in registros],  # type: ignore
                 'total': query.count(),
                 'dominio': 'fretes'
             }
@@ -354,8 +370,12 @@ Módulos: pedidos, fretes, embarques, monitoramento, separacao, carteira, etc.""
             # Limitar resultados
             registros = query.limit(100).all()
             
+            # Garantir que registros é uma lista
+            if not registros:
+                registros = []
+            
             return {
-                'registros': [self._serialize_pedido(r) for r in registros],
+                'registros': [self._serialize_pedido(r) for r in registros],  # type: ignore
                 'total': query.count(),
                 'dominio': 'pedidos'
             }
@@ -382,8 +402,12 @@ Módulos: pedidos, fretes, embarques, monitoramento, separacao, carteira, etc.""
             # Limitar resultados
             registros = query.limit(100).all()
             
+            # Garantir que registros é uma lista
+            if not registros:
+                registros = []
+            
             return {
-                'registros': [self._serialize_pendencia(r) for r in registros],
+                'registros': [self._serialize_pendencia(r) for r in registros],  # type: ignore
                 'total': query.count(),
                 'dominio': 'financeiro'
             }

@@ -27,6 +27,11 @@ python init_db.py || echo "⚠️  Banco inicializado com avisos"
 echo "🔄 Aplicando migrações..."
 flask db upgrade || echo "⚠️  Migrações aplicadas com avisos"
 
+# NOVO: Configurar variáveis de ambiente para melhor performance
+export PYTHONUNBUFFERED=1
+export FLASK_ENV=production
+
 # Iniciar aplicação
 echo "🚀 Iniciando aplicação..."
-exec gunicorn --bind 0.0.0.0:$PORT --workers 2 --worker-class sync --timeout 600 --max-requests 1000 --max-requests-jitter 100 --keep-alive 10 --preload --worker-tmp-dir /dev/shm run:app
+# TEMPORÁRIO: Reduzir para 1 worker para diagnóstico
+exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class sync --timeout 600 --max-requests 1000 --max-requests-jitter 100 --keep-alive 10 --preload --worker-tmp-dir /dev/shm run:app

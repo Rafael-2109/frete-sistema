@@ -40,9 +40,13 @@ class PerformanceAnalyzer:
     - Monitorar tendências temporais
     """
     
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        return get_db()
+    
     def __init__(self):
         """Inicializa o analisador de performance."""
-        self.db = get_db()
         self.session_table = "ai_advanced_sessions"
         self._ensure_table_exists()
         logger.info("📊 PerformanceAnalyzer inicializado")

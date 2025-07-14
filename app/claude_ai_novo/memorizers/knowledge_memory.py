@@ -17,10 +17,19 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from flask import current_app
+from app.claude_ai_novo.utils.flask_fallback import get_db
 
 logger = logging.getLogger(__name__)
 
 class KnowledgeMemory:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """
     Especialista em gestão de conhecimento e descoberta de padrões.
     
@@ -45,7 +54,6 @@ class KnowledgeMemory:
         """
         try:
             with current_app.app_context():
-                from app import db
                 from sqlalchemy import text
                 
                 # Extrair termos usados para o cliente
@@ -54,7 +62,7 @@ class KnowledgeMemory:
                 
                 for termo in termos:
                     # Verificar se já existe
-                    existe = db.session.execute(
+                    existe = self.db.session.execute(
                         text("""
                             SELECT id, frequencia
                             FROM ai_semantic_mappings
@@ -67,7 +75,7 @@ class KnowledgeMemory:
                     
                     if existe:
                         # Incrementar frequência
-                        db.session.execute(
+                        self.db.session.execute(
                             text("""
                                 UPDATE ai_semantic_mappings
                                 SET frequencia = frequencia + 1,
@@ -79,7 +87,7 @@ class KnowledgeMemory:
                         mapeamentos_criados.append({"termo": termo, "acao": "atualizado"})
                     else:
                         # Criar novo mapeamento
-                        db.session.execute(
+                        self.db.session.execute(
                             text("""
                                 INSERT INTO ai_semantic_mappings
                                 (termo_usuario, campo_sistema, modelo, contexto, frequencia)
@@ -93,7 +101,7 @@ class KnowledgeMemory:
                         )
                         mapeamentos_criados.append({"termo": termo, "acao": "criado"})
                 
-                db.session.commit()
+                self.db.session.commit()
                 
                 return {
                     "cliente": cliente,
@@ -105,8 +113,8 @@ class KnowledgeMemory:
         except Exception as e:
             logger.error(f"❌ Erro ao aprender mapeamento: {e}")
             try:
-                from app import db
-                db.session.rollback()
+                from app.claude_ai_novo.utils.flask_fallback import get_db
+                self.db.session.rollback()
             except:
                 pass
             return None
@@ -131,18 +139,18 @@ class KnowledgeMemory:
                 return None
             
             with current_app.app_context():
-                from app import db
+                from app.claude_ai_novo.utils.flask_fallback import get_db
                 from sqlalchemy import text
                 
                 # Verificar se já existe
-                existe = db.session.execute(
+                existe = self.db.session.execute(
                     text("SELECT id FROM ai_grupos_empresariais WHERE nome_grupo = :nome"),
                     {"nome": nome_grupo}
                 ).first()
                 
                 if not existe:
                     # Salvar novo grupo descoberto
-                    result = db.session.execute(
+                    result = self.db.session.execute(
                         text("""
                             INSERT INTO ai_grupos_empresariais
                             (nome_grupo, tipo_negocio, cnpj_prefixos, palavras_chave, 
@@ -162,7 +170,7 @@ class KnowledgeMemory:
                     )
                     
                     novo_id = result.scalar()
-                    db.session.commit()
+                    self.db.session.commit()
                     
                     logger.info(f"🏢 Novo grupo empresarial descoberto: {nome_grupo}")
                     
@@ -179,8 +187,8 @@ class KnowledgeMemory:
         except Exception as e:
             logger.error(f"❌ Erro ao descobrir grupo: {e}")
             try:
-                from app import db
-                db.session.rollback()
+                from app.claude_ai_novo.utils.flask_fallback import get_db
+                self.db.session.rollback()
             except:
                 pass
             return None
@@ -197,10 +205,10 @@ class KnowledgeMemory:
         """
         try:
             with current_app.app_context():
-                from app import db
+                from app.claude_ai_novo.utils.flask_fallback import get_db
                 from sqlalchemy import text
                 
-                grupos = db.session.execute(
+                grupos = self.db.session.execute(
                     text("""
                         SELECT nome_grupo, tipo_negocio, filtro_sql, 
                                array_to_string(cnpj_prefixos, ',') as cnpjs_str,
@@ -252,10 +260,10 @@ class KnowledgeMemory:
         """
         try:
             with current_app.app_context():
-                from app import db
+                from app.claude_ai_novo.utils.flask_fallback import get_db
                 from sqlalchemy import text
                 
-                mapeamentos = db.session.execute(
+                mapeamentos = self.db.session.execute(
                     text("""
                         SELECT DISTINCT campo_sistema, modelo, MAX(frequencia) as frequencia,
                                array_agg(DISTINCT termo_usuario) as termos
@@ -293,43 +301,43 @@ class KnowledgeMemory:
         """
         try:
             with current_app.app_context():
-                from app import db
+                from app.claude_ai_novo.utils.flask_fallback import get_db
                 from sqlalchemy import text
                 
                 stats = {}
                 
                 # Total de padrões aprendidos
-                total_padroes = db.session.execute(
+                total_padroes = self.db.session.execute(
                     text("SELECT COUNT(*) as total FROM ai_knowledge_patterns")
                 ).scalar() or 0
                 
                 # Padrões de alta confiança
-                padroes_confiaveis = db.session.execute(
+                padroes_confiaveis = self.db.session.execute(
                     text("SELECT COUNT(*) as total FROM ai_knowledge_patterns WHERE confidence > 0.8")
                 ).scalar() or 0
                 
                 # Grupos empresariais
-                total_grupos = db.session.execute(
+                total_grupos = self.db.session.execute(
                     text("SELECT COUNT(*) as total FROM ai_grupos_empresariais WHERE ativo = TRUE")
                 ).scalar() or 0
                 
                 # Grupos descobertos automaticamente
-                grupos_auto = db.session.execute(
+                grupos_auto = self.db.session.execute(
                     text("SELECT COUNT(*) as total FROM ai_grupos_empresariais WHERE aprendido_automaticamente = TRUE")
                 ).scalar() or 0
                 
                 # Mapeamentos semânticos
-                total_mapeamentos = db.session.execute(
+                total_mapeamentos = self.db.session.execute(
                     text("SELECT COUNT(*) as total FROM ai_semantic_mappings")
                 ).scalar() or 0
                 
                 # Mapeamentos ativos (frequência > 1)
-                mapeamentos_ativos = db.session.execute(
+                mapeamentos_ativos = self.db.session.execute(
                     text("SELECT COUNT(*) as total FROM ai_semantic_mappings WHERE frequencia > 1")
                 ).scalar() or 0
                 
                 # Taxa de aprendizado (últimos 7 dias)
-                aprendizado_recente = db.session.execute(
+                aprendizado_recente = self.db.session.execute(
                     text("""
                         SELECT COUNT(*) as total 
                         FROM ai_learning_history 
@@ -338,7 +346,7 @@ class KnowledgeMemory:
                 ).scalar() or 0
                 
                 # Feedback recente (últimos 7 dias)
-                feedback_recente = db.session.execute(
+                feedback_recente = self.db.session.execute(
                     text("""
                         SELECT COUNT(*) as total 
                         FROM ai_feedback_history 
@@ -546,11 +554,11 @@ class KnowledgeMemory:
         try:
             from flask import current_app
             with current_app.app_context():
-                from app import db
+                from app.claude_ai_novo.utils.flask_fallback import get_db
                 from sqlalchemy import text
                 
                 # Teste simples de conexão
-                result = db.session.execute(text("SELECT 1")).scalar()
+                result = self.db.session.execute(text("SELECT 1")).scalar()
                 return result == 1
                 
         except Exception as e:

@@ -6,13 +6,22 @@ Versão otimizada integrada com BaseCommand
 
 from app.claude_ai_novo.commands.base_command import (
     BaseCommand, format_response_advanced, create_excel_summary,
-    logging, datetime, db, current_user, ClaudeAIConfig, AdvancedConfig
+    logging, datetime, current_user, ClaudeAIConfig, AdvancedConfig
 )
+from app.claude_ai_novo.utils.flask_fallback import get_db
 import anthropic
 
 logger = logging.getLogger(__name__)
 
 class DevCommands(BaseCommand):
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """Classe para comandos especializados de desenvolvimento"""
     
     def __init__(self, claude_client=None):
@@ -166,7 +175,7 @@ bp = Blueprint('modulo', __name__)
 from app.modulo import routes
 
 # models.py
-from app import db
+from app.claude_ai_novo.utils.flask_fallback import get_db
 class Model(db.Model):
     __tablename__ = 'tabela'
     id = db.Column(db.Integer, primary_key=True)
@@ -194,7 +203,7 @@ class Form(FlaskForm):
             'modelo': """
 PADRÃO PARA MODELOS:
 ```python
-from app import db
+from app.claude_ai_novo.utils.flask_fallback import get_db
 from datetime import datetime
 
 class NovoModelo(db.Model):
@@ -345,7 +354,7 @@ bp = Blueprint('{nome_modulo}', __name__)
 from app.{nome_modulo} import routes
 
 # app/{nome_modulo}/models.py
-from app import db
+from app.claude_ai_novo.utils.flask_fallback import get_db
 from datetime import datetime
 
 class {nome_modulo.title()}(db.Model):
@@ -389,7 +398,7 @@ class {nome_modulo.title()}Form(FlaskForm):
         return """💻 **MODELO SQLAlchemy GERADO**
 
 ```python
-from app import db
+from app.claude_ai_novo.utils.flask_fallback import get_db
 from datetime import datetime
 
 class NovoModelo(db.Model):

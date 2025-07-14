@@ -22,7 +22,7 @@ from flask_login import current_user
 from sqlalchemy import func, and_, or_, text
 
 # Local imports
-from app import db
+from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
 from app.claude_ai_novo.config import ClaudeAIConfig, AdvancedConfig
 
 # Utils imports
@@ -33,16 +33,24 @@ from app.utils.api_helper import get_system_alerts
 from app.utils.ai_logging import ai_logger, AILogger
 
 # Models imports
-from app.fretes.models import Frete, DespesaExtra
-from app.embarques.models import Embarque, EmbarqueItem
-from app.transportadoras.models import Transportadora
-from app.pedidos.models import Pedido
-from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
-from app.faturamento.models import RelatorioFaturamentoImportado
+# from app.[a-z]+.models import .*Frete - Usando flask_fallback, DespesaExtra
+# from app.[a-z]+.models import .*Embarque - Usando flask_fallbackItem
+# from app.[a-z]+.models import .*Transportadora - Usando flask_fallback
+# from app.[a-z]+.models import .*Pedido - Usando flask_fallback
+# from app.[a-z]+.models import .*EntregaMonitorada - Usando flask_fallback, AgendamentoEntrega
+# from app.[a-z]+.models import .*RelatorioFaturamentoImportado - Usando flask_fallback
 
 logger = logging.getLogger(__name__)
 
 class BaseCommand:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """Classe base avançada para todos os commands"""
     
     def __init__(self, claude_client=None):
@@ -426,7 +434,6 @@ __all__ = [
     # Utils
     'logging',
     'datetime',
-    'db',
     'current_user',
     
     # Config

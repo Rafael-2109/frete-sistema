@@ -5,7 +5,7 @@ Gerado automaticamente pelo ImplementadorManagersAusentes
 """
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Type, Optional
 from pathlib import Path
 import asyncio
 
@@ -24,23 +24,25 @@ except ImportError:
     _validation_utils_available = False
     BaseValidationUtils = None
 
-# Import do FlaskContextWrapper
+# Classe base vazia como fallback
+class EmptyBase:
+    """Classe base vazia para quando FlaskContextWrapper não estiver disponível"""
+    pass
+
+# Importações de base
+UtilsManagerBase: Type[Any]
 try:
-    from .flask_context_wrapper import FlaskContextWrapper
-    _flask_context_wrapper_available = True
+    from app.claude_ai_novo.utils.flask_context_wrapper import FlaskContextWrapper
+    UtilsManagerBase = FlaskContextWrapper
 except ImportError:
-    _flask_context_wrapper_available = False
-    FlaskContextWrapper = object  # Fallback para herança
+    UtilsManagerBase = EmptyBase
 
 logger = logging.getLogger(__name__)
 
 # Definir classe base dinamicamente
-if _flask_context_wrapper_available:
-    UtilsManagerBase = FlaskContextWrapper
-else:
-    UtilsManagerBase = object
+# UtilsManagerBase = FlaskContextWrapper # This line is removed as per the new_code
 
-class UtilsManager(UtilsManagerBase):
+class UtilsManager(UtilsManagerBase):  # type: ignore
     """
     Organizar utilitários e funções auxiliares
     

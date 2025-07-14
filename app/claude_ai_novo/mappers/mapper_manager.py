@@ -23,6 +23,9 @@ from app.claude_ai_novo.mappers.domain.transportadoras_mapper import Transportad
 
 logger = logging.getLogger(__name__)
 
+# Singleton instance
+_mapper_manager_instance = None
+
 class MapperManager:
     """
     Manager principal que coordena todos os mappers específicos.
@@ -30,6 +33,13 @@ class MapperManager:
     NÃO duplica mapeamentos, mas coordena os mappers existentes para
     fornecer análise semântica integrada do sistema.
     """
+    
+    def __new__(cls):
+        """Implementação do padrão Singleton"""
+        global _mapper_manager_instance
+        if _mapper_manager_instance is None:
+            _mapper_manager_instance = super().__new__(cls)
+        return _mapper_manager_instance
     
     def __init__(self):
         """Inicializa o orquestrador com todos os mappers específicos"""
@@ -258,28 +268,126 @@ class MapperManager:
         return estatisticas
     
     def initialize_with_schema(self, db_info: Dict[str, Any]):
-        """Inicializa mappers com informações do schema do banco"""
-        try:
-            if not db_info or 'tables' not in db_info:
-                logger.warning("⚠️ Schema vazio ou inválido")
-                return
-                
-            # Atualizar informações de schema em todos os mappers
-            self.db_schema = db_info
+        """
+        Inicializa mappers com informações do schema do banco.
+        
+        Args:
+            db_info: Informações do banco de dados
+        """
+        logger.info(f"🗺️ Inicializando mappers com schema do banco")
+        
+        if not db_info:
+            logger.warning("Schema vazio fornecido")
+            return
+        
+        # Se tem tabelas indexadas, otimizar
+        if 'indexed_tables' in db_info:
+            self._optimize_mappings_with_indexes(db_info['indexed_tables'])
             
-            # Propagar para mappers específicos
-            for domain, mapper in self._mappers.items():
-                if hasattr(mapper, 'set_schema_info'):
-                    mapper.set_schema_info(db_info)
-                    
-            # Otimizar mapeamentos com base nos índices
-            if 'tables' in db_info:
-                self._optimize_mappings_with_indexes(db_info['tables'])
-                
-            logger.info(f"✅ Schema inicializado com {len(db_info.get('tables', {}))} tabelas")
+        # Se tem informações de relacionamentos, usar
+        if 'relationships' in db_info:
+            logger.info(f"📊 Usando {len(db_info['relationships'])} relacionamentos do banco")
             
-        except Exception as e:
-            logger.error(f"❌ Erro ao inicializar schema: {e}")
+    def apply_auto_suggestions(self, scanning_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Aplica sugestões automáticas do scanner aos mappers.
+        
+        Args:
+            scanning_info: Informações do scanner com sugestões automáticas
+            
+        Returns:
+            Dict com estatísticas de aplicação
+        """
+        logger.info("🤖 Aplicando sugestões automáticas aos mappers")
+        
+        if not scanning_info:
+            # Tenta obter do scanner se disponível
+            try:
+                from app.claude_ai_novo.scanning import get_database_manager
+                scanner = get_database_manager()
+                if scanner and scanner.esta_disponivel():
+                    scanning_info = scanner.scan_database_structure()
+            except Exception as e:
+                logger.warning(f"Não foi possível obter scanner: {e}")
+                return {'status': 'skipped', 'reason': 'scanner_unavailable'}
+        
+        if not scanning_info or 'tables' not in scanning_info:
+            return {'status': 'skipped', 'reason': 'no_data'}
+        
+        estatisticas = {
+            'tabelas_processadas': 0,
+            'sugestoes_aplicadas': 0,
+            'campos_melhorados': 0,
+            'mappers_atualizados': set()
+        }
+        
+        # Para cada tabela com sugestões
+        for tabela, info in scanning_info.get('tables', {}).items():
+            if 'auto_mapping' not in info:
+                continue
+                
+            estatisticas['tabelas_processadas'] += 1
+            
+            # Identifica o mapper correto para esta tabela
+            mapper_nome = self._identify_mapper_for_table(tabela)
+            if not mapper_nome or mapper_nome not in self.mappers:
+                continue
+            
+            mapper = self.mappers[mapper_nome]
+            auto_mappings = info['auto_mapping']
+            
+            # Aplica sugestões campo por campo
+            for campo, sugestoes in auto_mappings.items():
+                if 'termos_sugeridos' in sugestoes:
+                    # Adiciona termos sugeridos ao mapper
+                    try:
+                        if hasattr(mapper, 'adicionar_mapeamento'):
+                            mapper.adicionar_mapeamento(
+                                campo, 
+                                sugestoes['termos_sugeridos']
+                            )
+                            estatisticas['sugestoes_aplicadas'] += 1
+                            estatisticas['campos_melhorados'] += 1
+                            estatisticas['mappers_atualizados'].add(mapper_nome)
+                    except Exception as e:
+                        logger.warning(f"Erro ao aplicar sugestão para {campo}: {e}")
+        
+        estatisticas['mappers_atualizados'] = list(estatisticas['mappers_atualizados'])
+        
+        logger.info(f"✅ Sugestões aplicadas: {estatisticas['sugestoes_aplicadas']} " +
+                   f"em {len(estatisticas['mappers_atualizados'])} mappers")
+        
+        return estatisticas
+    
+    def _identify_mapper_for_table(self, table_name: str) -> Optional[str]:
+        """
+        Identifica qual mapper é responsável por uma tabela.
+        
+        Args:
+            table_name: Nome da tabela
+            
+        Returns:
+            Nome do mapper ou None
+        """
+        # Mapeamento simples baseado em padrões de nome
+        mappings = {
+            'pedidos': 'pedidos',
+            'embarques': 'embarques',
+            'entregas_monitoradas': 'monitoramento',
+            'relatorio_faturamento_importado': 'faturamento',
+            'transportadoras': 'transportadoras'
+        }
+        
+        # Busca exata
+        if table_name in mappings:
+            return mappings[table_name]
+        
+        # Busca por prefixo
+        for prefix, mapper in mappings.items():
+            if table_name.startswith(prefix):
+                return mapper
+        
+        return None
     
     def _optimize_mappings_with_indexes(self, tables_info: Dict[str, Any]):
         """Otimiza mapeamentos usando informações de índices"""
@@ -295,9 +403,6 @@ class MapperManager:
         
         logger.debug(f"📊 Campos indexados identificados: {len(self.indexed_fields)} tabelas")
 
-# Instância global
-_mapper_manager = None
-
 def get_mapper_manager() -> MapperManager:
     """
     Retorna instância global do MapperManager.
@@ -305,10 +410,10 @@ def get_mapper_manager() -> MapperManager:
     Returns:
         MapperManager: Instância do manager de mappers
     """
-    global _mapper_manager
-    if _mapper_manager is None:
-        _mapper_manager = MapperManager()
-    return _mapper_manager
+    global _mapper_manager_instance
+    if _mapper_manager_instance is None:
+        _mapper_manager_instance = MapperManager()
+    return _mapper_manager_instance
 
 # Aliases para compatibilidade
 SemanticMapper = MapperManager  # Backward compatibility

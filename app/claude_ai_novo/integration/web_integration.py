@@ -21,6 +21,9 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify, render_template
 from flask_login import login_required, current_user
 
+# Local imports - Flask fallback
+from ..utils.flask_fallback import get_db
+
 logger = logging.getLogger(__name__)
 
 # Imports das funções superiores para substituir duplicatas
@@ -33,6 +36,14 @@ except ImportError:
     logger.warning("⚠️ Funções avançadas não disponíveis - usando fallbacks básicos")
 
 class WebIntegrationAdapter:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """
     Adapter para integração com interfaces web, especialmente Flask.
     
@@ -59,11 +70,11 @@ class WebIntegrationAdapter:
                 
                 # Tentar obter dependencies do Flask
                 try:
-                    from app import db
+                    db_obj = self.db
                     self._integration_manager = IntegrationManager(
                         claude_client=None,  # Será configurado via external API
-                        db_engine=db.engine,
-                        db_session=db.session
+                        db_engine=db_obj.engine,
+                        db_session=db_obj.session
                     )
                 except ImportError:
                     # Fallback sem Flask

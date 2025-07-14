@@ -31,7 +31,7 @@ class QueryMapping:
     target_type: QueryType
     pattern: str
     template: str
-    parameters: Dict[str, Any] = None
+    parameters: Optional[Dict[str, Any]] = None
 
 class QueryMapper:
     """

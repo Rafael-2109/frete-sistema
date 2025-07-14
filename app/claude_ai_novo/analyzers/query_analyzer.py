@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta, date
 from flask_login import current_user
 from sqlalchemy import func, and_, or_, text
-from app import db
+from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
 import json
 from app.utils.redis_cache import redis_cache, cache_aside, cached_query
 from app.utils.grupo_empresarial import GrupoEmpresarialDetector, detectar_grupo_empresarial
@@ -23,26 +23,34 @@ from app.utils.redis_cache import intelligent_cache
 import time
 import asyncio
 from app.utils.grupo_empresarial import GrupoEmpresarialDetector
-from app.fretes.models import Frete
-from app.embarques.models import Embarque
-from app.transportadoras.models import Transportadora
-from app.pedidos.models import Pedido
-from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
-from app.faturamento.models import RelatorioFaturamentoImportado
-from app.monitoramento.models import EntregaMonitorada
-from app.fretes.models import Frete, DespesaExtra
-from app.monitoramento.models import AgendamentoEntrega
+# from app.[a-z]+.models import .*Frete - Usando flask_fallback
+# from app.[a-z]+.models import .*Embarque - Usando flask_fallback
+# from app.[a-z]+.models import .*Transportadora - Usando flask_fallback
+# from app.[a-z]+.models import .*Pedido - Usando flask_fallback
+# from app.[a-z]+.models import .*EntregaMonitorada - Usando flask_fallback, AgendamentoEntrega
+# from app.[a-z]+.models import .*RelatorioFaturamentoImportado - Usando flask_fallback
+# from app.[a-z]+.models import .*EntregaMonitorada - Usando flask_fallback
+# from app.[a-z]+.models import .*Frete - Usando flask_fallback, DespesaExtra
+# from app.[a-z]+.models import .*AgendamentoEntrega - Usando flask_fallback
 from app.utils.grupo_empresarial import detectar_grupo_empresarial
-from app.embarques.models import Embarque, EmbarqueItem
+# from app.[a-z]+.models import .*Embarque - Usando flask_fallbackItem
 from datetime import date
-from app.faturamento.models import RelatorioFaturamentoImportado as RelatorioImportado
-from app.fretes.models import DespesaExtra
-from app.financeiro.models import PendenciaFinanceiraNF
+# from app.[a-z]+.models import .*RelatorioFaturamentoImportado - Usando flask_fallback as RelatorioImportado
+# from app.[a-z]+.models import .*DespesaExtra - Usando flask_fallback
+# from app.[a-z]+.models import .*PendenciaFinanceiraNF - Usando flask_fallback
 
 # Configurar logger
 logger = logging.getLogger(__name__)
 
 class QueryAnalyzer:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """Analisador de consultas avançado"""
     
     def __init__(self):

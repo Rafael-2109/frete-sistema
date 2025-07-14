@@ -6,18 +6,117 @@ Micro-loader especializado para carregamento de dados de entregas
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy import func, and_, or_
-from app import db
+from flask import current_app
+from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
 from app.monitoramento.models import EntregaMonitorada
+# from app.[a-z]+.models import .*EntregaMonitorada - Usando flask_fallback
 from app.utils.grupo_empresarial import detectar_grupo_empresarial
 import logging
 
 logger = logging.getLogger(__name__)
 
 class EntregasLoader:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """Micro-loader especializado para dados de entregas"""
     
     def __init__(self):
         self.model = EntregaMonitorada
+        self.logger = logger
+        
+    def load_data(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Carrega dados de entregas do banco
+        
+        Args:
+            filters: Filtros opcionais de consulta
+            
+        Returns:
+            Lista de dicionários com dados de entregas
+        """
+        try:
+            self.logger.info(f"🚚 Carregando entregas com filtros: {filters}")
+            
+            # Garantir contexto Flask
+            if not hasattr(self.db.session, 'is_active') or not self.db.session.is_active:
+                self.logger.warning("⚠️ Sem contexto Flask ativo, tentando com app context...")
+                with current_app.app_context():
+                    return self._load_with_context(filters)
+            
+            # Converter filtros para formato esperado
+            entregas_filters = self._convert_filters(filters or {})
+            
+            # Usar método existente
+            result = self.load_entregas_data(entregas_filters)
+            
+            # Retornar apenas os dados JSON
+            return result.get('dados_json', [])
+            
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao carregar entregas: {str(e)}")
+            return []
+    
+    def _convert_filters(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        """Converte filtros para formato do load_entregas_data"""
+        entregas_filters = {}
+        
+        if 'cliente' in filters:
+            entregas_filters['cliente_especifico'] = filters['cliente']
+        
+        if 'periodo' in filters:
+            entregas_filters['periodo_dias'] = filters['periodo']
+        else:
+            entregas_filters['periodo_dias'] = 30  # padrão
+            
+        if 'status' in filters:
+            entregas_filters['status_entrega'] = filters['status']
+            
+        return entregas_filters
+    
+    def _load_with_context(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Carrega dados garantindo contexto Flask"""
+        from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
+        # from app.[a-z]+.models import .*EntregaMonitorada - Usando flask_fallback
+        
+        query = self.db.session.query(EntregaMonitorada)
+        
+        if filters:
+            # Aplicar filtros...
+            if 'cliente' in filters:
+                # Tentar ambos os campos possíveis
+                if hasattr(EntregaMonitorada, 'nome_cliente'):
+                    query = query.filter(
+                        EntregaMonitorada.nome_cliente.ilike(f"%{filters['cliente']}%")
+                    )
+                else:
+                    query = query.filter(
+                        EntregaMonitorada.cliente.ilike(f"%{filters['cliente']}%")
+                    )
+        
+        entregas = query.limit(100).all()
+        
+        self.logger.info(f"✅ Entregas carregadas: {len(entregas)} registros")
+        
+        return [
+            {
+                'id': e.id,
+                'numero_nf': e.numero_nf,
+                'nome_cliente': getattr(e, 'nome_cliente', None) or getattr(e, 'cliente', None),
+                'destino': e.destino,
+                'status': 'entregue' if e.entregue else 'pendente',
+                'data_entrega': e.data_entrega_realizada.isoformat() if e.data_entrega_realizada else None,
+                'data_embarque': e.data_embarque.isoformat() if e.data_embarque else None,
+                'valor_nf': float(e.valor_nf or 0),
+                'peso_total': float(e.peso_total or 0)
+            }
+            for e in entregas
+        ]
         
     def load_entregas_data(self, filters: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -65,7 +164,11 @@ class EntregasLoader:
         # Filtro por cliente específico
         if filters.get('cliente_especifico'):
             cliente = filters['cliente_especifico']
-            query = query.filter(self.model.cliente.ilike(f'%{cliente}%'))
+            # Tentar ambos os campos possíveis
+            if hasattr(self.model, 'nome_cliente'):
+                query = query.filter(self.model.nome_cliente.ilike(f'%{cliente}%'))
+            else:
+                query = query.filter(self.model.cliente.ilike(f'%{cliente}%'))
         
         # Filtro por status de entrega
         if filters.get('status_entrega'):
@@ -106,18 +209,44 @@ class EntregasLoader:
         entregas_atrasadas = sum(1 for r in results 
                                if not r.entregue and r.data_entrega_prevista and r.data_entrega_prevista < hoje)
         
-        # Dados por cliente
+        # Dados por cliente (considerando grupos empresariais)
         clientes_stats = {}
+        grupos_empresariais = {}
+        
         for r in results:
-            cliente = r.cliente or 'Cliente não informado'
+            cliente_original = getattr(r, 'nome_cliente', None) or getattr(r, 'cliente', None) or 'Cliente não informado'
+            cnpj = getattr(r, 'cnpj_cliente', None) or getattr(r, 'cnpj', None)
+            
+            # Detectar grupo empresarial (tenta por CNPJ primeiro, depois por nome)
+            grupo_info = None
+            if cnpj:
+                grupo_info = detectar_grupo_empresarial(cnpj)
+            if not grupo_info or not grupo_info.get('grupo_empresarial'):
+                grupo_info = detectar_grupo_empresarial(cliente_original)
+            
+            cliente = grupo_info.get('grupo_empresarial') if grupo_info else cliente_original
+            
+            # Registrar mapeamento de grupos
+            if grupo_info and grupo_info.get('grupo_empresarial') and grupo_info['grupo_empresarial'] != cliente_original:
+                grupo = grupo_info['grupo_empresarial']
+                if grupo not in grupos_empresariais:
+                    grupos_empresariais[grupo] = []
+                if cliente_original not in grupos_empresariais[grupo]:
+                    grupos_empresariais[grupo].append(cliente_original)
+            
             if cliente not in clientes_stats:
                 clientes_stats[cliente] = {
                     'total_entregas': 0,
                     'entregas_concluidas': 0,
                     'entregas_pendentes': 0,
-                    'entregas_atrasadas': 0
+                    'entregas_atrasadas': 0,
+                    'cnpjs': set()  # Para rastrear CNPJs do grupo
                 }
+            
             clientes_stats[cliente]['total_entregas'] += 1
+            if cnpj:
+                clientes_stats[cliente]['cnpjs'].add(cnpj)
+                
             if r.entregue:
                 clientes_stats[cliente]['entregas_concluidas'] += 1
             else:
@@ -130,7 +259,7 @@ class EntregasLoader:
         for r in results[:200]:  # Limitar para performance
             dados_json.append({
                 'numero_nf': r.numero_nf,
-                'cliente': r.cliente,
+                'cliente': getattr(r, 'nome_cliente', None) or getattr(r, 'cliente', None),
                 'destino': r.destino,
                 'data_embarque': r.data_embarque.strftime('%Y-%m-%d') if r.data_embarque else None,
                 'data_entrega_prevista': r.data_entrega_prevista.strftime('%Y-%m-%d') if r.data_entrega_prevista else None,
@@ -143,6 +272,11 @@ class EntregasLoader:
                 'numero_embarque': r.numero_embarque,
                 'transportadora': r.transportadora if hasattr(r, 'transportadora') else None
             })
+        
+        # Converter sets para listas para JSON
+        for cliente_data in clientes_stats.values():
+            if 'cnpjs' in cliente_data and isinstance(cliente_data['cnpjs'], set):
+                cliente_data['cnpjs'] = list(cliente_data['cnpjs'])
         
         return {
             'tipo_dados': 'entregas',
@@ -158,7 +292,8 @@ class EntregasLoader:
                 'entregas_pendentes': entregas_pendentes,
                 'entregas_atrasadas': entregas_atrasadas,
                 'percentual_sucesso': (entregas_concluidas / total_entregas * 100) if total_entregas > 0 else 0,
-                'clientes_stats': clientes_stats
+                'clientes_stats': clientes_stats,
+                'grupos_empresariais': grupos_empresariais
             },
             'dados_json': dados_json,
             'timestamp': datetime.now().isoformat()

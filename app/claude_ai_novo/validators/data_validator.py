@@ -8,6 +8,7 @@ import anthropic
 import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta, date
+from sqlalchemy import or_
 # Flask fallback para execução standalone
 try:
     from app.claude_ai_novo.utils.flask_fallback import get_model, get_db, get_current_user
@@ -20,16 +21,7 @@ try:
     from app.utils.redis_cache import intelligent_cache
     from app.financeiro.models import PendenciaFinanceiraNF
     
-    # Modelos Flask
-    db = get_db()
-    current_user = get_current_user()
-    Pedido = get_model("Pedido")
-    Embarque = get_model("Embarque")
-    EmbarqueItem = get_model("EmbarqueItem")
-    EntregaMonitorada = get_model("EntregaMonitorada")
-    RelatorioFaturamentoImportado = get_model("RelatorioFaturamentoImportado")
-    Transportadora = get_model("Transportadora")
-    Frete = get_model("Frete")
+
     
 except ImportError:
     # Fallback se dependências não disponíveis
@@ -54,6 +46,43 @@ logger = logging.getLogger(__name__)
 
 class ValidationUtils:
     """Classe para utilitários especializados"""
+    
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        return get_db()
+    
+    @property
+    def current_user(self):
+        return get_current_user()
+    
+    @property
+    def Pedido(self):
+        return get_model("Pedido")
+    
+    @property
+    def Embarque(self):
+        return get_model("Embarque")
+    
+    @property
+    def EmbarqueItem(self):
+        return get_model("EmbarqueItem")
+    
+    @property
+    def EntregaMonitorada(self):
+        return get_model("EntregaMonitorada")
+    
+    @property
+    def RelatorioFaturamentoImportado(self):
+        return get_model("RelatorioFaturamentoImportado")
+    
+    @property
+    def Transportadora(self):
+        return get_model("Transportadora")
+    
+    @property
+    def Frete(self):
+        return get_model("Frete")
     
     def __init__(self):
         pass
@@ -129,10 +158,10 @@ class ValidationUtils:
             data_limite = datetime.now() - timedelta(days=analise.get("periodo_dias", 30))
             
             # Base query para entregas - ✅ CORREÇÃO: Incluir NULL data_embarque
-            query_base = db.session.query(EntregaMonitorada).filter(
+            query_base = self.db.session.query(self.EntregaMonitorada).filter(
                 or_(
-                    EntregaMonitorada.data_embarque >= data_limite,
-                    EntregaMonitorada.data_embarque.is_(None)
+                    self.EntregaMonitorada.data_embarque >= data_limite,
+                    self.EntregaMonitorada.data_embarque.is_(None)
                 )
             )
             
@@ -144,27 +173,27 @@ class ValidationUtils:
                     filtro_sql = analise["filtro_sql"]
                     logger.info(f"🏢 ESTATÍSTICAS - Aplicando filtro SQL do grupo: {filtro_sql}")
                     query_base = query_base.filter(
-                        EntregaMonitorada.cliente.ilike(filtro_sql)
+                        self.EntregaMonitorada.cliente.ilike(filtro_sql)
                     )
                 elif analise["cliente_especifico"] == "GRUPO_CLIENTES":
                     # Filtro genérico para grupos de clientes
                     query_base = query_base.filter(
                         or_(
-                            EntregaMonitorada.cliente.ilike('%atacado%'),
-                            EntregaMonitorada.cliente.ilike('%supermercado%'),
-                            EntregaMonitorada.cliente.ilike('%varejo%')
+                            self.EntregaMonitorada.cliente.ilike('%atacado%'),
+                            self.EntregaMonitorada.cliente.ilike('%supermercado%'),
+                            self.EntregaMonitorada.cliente.ilike('%varejo%')
                         )
                     )
                 else:
                     # Cliente específico sem grupo
-                    query_base = query_base.filter(EntregaMonitorada.cliente.ilike(f'%{analise["cliente_especifico"]}%'))
+                    query_base = query_base.filter(self.EntregaMonitorada.cliente.ilike(f'%{analise["cliente_especifico"]}%'))
             
             if filtros_usuario.get("vendedor_restricao"):
-                query_base = query_base.filter(EntregaMonitorada.vendedor == filtros_usuario["vendedor"])
+                query_base = query_base.filter(self.EntregaMonitorada.vendedor == filtros_usuario["vendedor"])
             
             total_entregas = query_base.count()
-            entregas_entregues = query_base.filter(EntregaMonitorada.status_finalizacao == 'Entregue').count()
-            entregas_pendentes = query_base.filter(EntregaMonitorada.status_finalizacao.in_(['Pendente', 'Em trânsito'])).count()
+            entregas_entregues = query_base.filter(self.EntregaMonitorada.status_finalizacao == 'Entregue').count()
+            entregas_pendentes = query_base.filter(self.EntregaMonitorada.status_finalizacao.in_(['Pendente', 'Em trânsito'])).count()
             
             return {
                 "periodo_analisado": f"{analise.get('periodo_dias', 30)} dias",

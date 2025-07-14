@@ -29,10 +29,18 @@ class ClaudeTransitionManager:
         """Inicializa o sistema Claude ativo"""
         if self._use_new_system:
             try:
-                # Inicializar sistema novo
-                from app.claude_ai_novo.orchestrators.orchestrator_manager import OrchestratorManager
-                self.claude = OrchestratorManager()
-                logger.info("✅ Sistema Claude AI Novo inicializado")
+                # SOLUÇÃO: Criar app context para o sistema novo
+                from app import create_app
+                app = create_app()
+                
+                with app.app_context():
+                    # Inicializar sistema novo com Flask context
+                    from app.claude_ai_novo.orchestrators.orchestrator_manager import OrchestratorManager
+                    self.claude = OrchestratorManager()
+                    # Guardar referência do app para usar depois
+                    self._app = app
+                    
+                logger.info("✅ Sistema Claude AI Novo inicializado com Flask context")
             except Exception as e:
                 logger.error(f"❌ Erro ao inicializar sistema novo: {e}")
                 self._use_new_system = False
@@ -68,7 +76,12 @@ class ClaudeTransitionManager:
                 try:
                     # Sistema novo - verificar se é assíncrono
                     if hasattr(self.claude, 'process_query'):
-                        result = await self.claude.process_query(consulta, user_context)
+                        # CORREÇÃO: Executar com Flask context se disponível
+                        if hasattr(self, '_app'):
+                            with self._app.app_context():
+                                result = await self.claude.process_query(consulta, user_context)
+                        else:
+                            result = await self.claude.process_query(consulta, user_context)
                         
                         # CORREÇÃO: Extrair resposta corretamente do resultado complexo
                         if isinstance(result, dict):

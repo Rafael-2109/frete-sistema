@@ -127,8 +127,9 @@ Você é um especialista em gestão de embarques equipado com TODAS as capacidad
                 'TabelaFrete'
             ],
             'key_fields': [
-                'numero_embarque',
+                'numero',
                 'status',
+                'data_prevista_embarque',
                 'data_embarque',
                 'peso_total',
                 'volumes_total',

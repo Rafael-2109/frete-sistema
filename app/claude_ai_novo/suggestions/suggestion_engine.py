@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 import json
 import random
+from app.claude_ai_novo.utils.flask_fallback import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -435,9 +436,9 @@ class SuggestionsEngine:
             from app.claude_ai_novo.scanning.database.data_analyzer import DataAnalyzer
             
             # Tentar obter engine do banco
-            from app import db
-            if hasattr(db, 'engine') and db.engine:
-                analyzer = DataAnalyzer(db.engine)
+            db_obj = get_db()
+            if db_obj and hasattr(db_obj, 'engine') and db_obj.engine:
+                analyzer = DataAnalyzer(db_obj.engine)
                 return analyzer
             else:
                 logger.warning("⚠️ Engine do banco não disponível para DataAnalyzer")

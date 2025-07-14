@@ -23,7 +23,7 @@ import json
 from sqlalchemy import text
 
 # Imports internos
-from ..utils.flask_fallback import get_db
+from app.claude_ai_novo.utils.flask_fallback import get_db
 from ..config.advanced_config import get_advanced_config_instance
 from ..analyzers.performance_analyzer import classify_api_performance
 from ..processors.response_processor import generate_api_fallback_response
@@ -180,18 +180,22 @@ class ClaudeAPIClient(ExternalAPIClient):
 
 class ExternalAPIIntegration:
     """
-    Integração completa com APIs externas usando arquitetura modular.
+    Integração principal com APIs externas, especialmente Claude.
     
     Responsabilidades:
-    - Coordenar múltiplas APIs externas
-    - Integrar com sistema modular interno
-    - Prover fallbacks inteligentes
-    - Gerenciar cache de respostas
+    - Gerenciar conexões com APIs externas
+    - Coordenar sistema completo quando disponível
+    - Prover fallback para Claude direto
     """
     
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        return get_db()
+    
     def __init__(self):
-        """Inicializa integração completa com APIs externas."""
-        # Claude API
+        """Inicializa a integração com APIs externas."""
+        # Configuração Claude
         self.claude_client = None
         self.claude_connected = False
         
@@ -199,8 +203,7 @@ class ExternalAPIIntegration:
         self.integration_manager = None
         self.system_ready = False
         
-        # Cache e persistência
-        self.db = get_db()
+        # Cache e persistência já não precisa mais
         
         # Inicialização
         self._initialize_clients()

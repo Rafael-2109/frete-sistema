@@ -6,7 +6,7 @@ Versão otimizada integrada com BaseCommand
 
 from app.claude_ai_novo.commands.base_command import (
     BaseCommand, format_response_advanced, create_excel_summary,
-    logging, datetime, db, current_user
+    logging, datetime, current_user
 )
 from pathlib import Path
 
@@ -31,7 +31,15 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class ExcelEntregas(BaseCommand):
-    """Gerador de Excel especializado em entregas e monitoramento"""
+    """Gerador de relatórios Excel para entregas"""
+    
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            from app.claude_ai_novo.utils.flask_fallback import get_db
+            self._db = get_db()
+        return self._db
     
     def __init__(self):
         super().__init__()
@@ -111,7 +119,7 @@ class ExcelEntregas(BaseCommand):
     def _buscar_dados_entregas(self, filtros: dict) -> list:
         """Busca dados de entregas com filtros avançados"""
         
-        query = db.session.query(EntregaMonitorada).join(Pedido, isouter=True)
+        query = self.db.session.query(EntregaMonitorada).join(Pedido, isouter=True)
         
         # Aplicar filtros
         if filtros.get('cliente'):

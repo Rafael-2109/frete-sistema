@@ -22,6 +22,24 @@ ARQUITETURA:
 import logging
 from typing import Dict, List, Any, Optional
 import asyncio
+import sys
+import os
+import time
+
+# Configurar logger do módulo
+logger = logging.getLogger(__name__)
+
+# DEBUG: Log de inicialização
+_init_time = time.time()
+logger.info(f"🚀 INICIALIZAÇÃO CLAUDE AI NOVO - PID: {os.getpid()} - Time: {_init_time}")
+
+# Verificar se já foi inicializado
+_already_initialized = False
+if hasattr(sys.modules[__name__], '_initialized'):
+    _already_initialized = sys.modules[__name__]._initialized
+    logger.warning(f"⚠️ REINICIALIZAÇÃO DETECTADA - PID: {os.getpid()}")
+
+sys.modules[__name__]._initialized = True
 
 # Imports de compatibilidade (comentado para evitar imports circulares)
 # from .claude_ai_modular import processar_consulta_modular, get_nlp_analyzer

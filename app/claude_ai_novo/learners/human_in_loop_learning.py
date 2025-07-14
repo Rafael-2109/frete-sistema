@@ -12,12 +12,20 @@ import json
 from dataclasses import dataclass
 from flask_login import current_user
 from flask import current_app
-from app import db
+from app.claude_ai_novo.utils.flask_fallback import get_db
 
 
 logger = logging.getLogger(__name__)
 
 class FeedbackType(Enum):
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """Tipos de feedback do usuário"""
     POSITIVE = "positive"
     NEGATIVE = "negative"

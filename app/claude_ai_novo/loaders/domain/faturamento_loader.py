@@ -6,18 +6,118 @@ Micro-loader especializado para carregamento de dados de faturamento
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy import func, and_, or_
-from app import db
-from app.faturamento.models import RelatorioFaturamentoImportado
+from flask import current_app
+from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
+# from app.[a-z]+.models import .*RelatorioFaturamentoImportado - Usando flask_fallback
 from app.utils.grupo_empresarial import detectar_grupo_empresarial
+from app.faturamento.models import RelatorioFaturamentoImportado
+from app import db
 import logging
 
 logger = logging.getLogger(__name__)
 
 class FaturamentoLoader:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """Micro-loader especializado para dados de faturamento"""
     
     def __init__(self):
         self.model = RelatorioFaturamentoImportado
+        self.logger = logger
+        
+    def load_data(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Carrega dados de faturamento do banco
+        
+        Args:
+            filters: Filtros opcionais de consulta
+            
+        Returns:
+            Lista de dicionários com dados de faturamento
+        """
+        try:
+            self.logger.info(f"💰 Carregando faturamento com filtros: {filters}")
+            
+            # Garantir contexto Flask
+            if not hasattr(db.session, 'is_active') or not db.session.is_active:
+                self.logger.warning("⚠️ Sem contexto Flask ativo, tentando com app context...")
+                with current_app.app_context():
+                    return self._load_with_context(filters)
+            
+            # Converter filtros para formato esperado
+            faturamento_filters = self._convert_filters(filters or {})
+            
+            # Usar método existente
+            result = self.load_faturamento_data(faturamento_filters)
+            
+            # Retornar apenas os dados JSON
+            return result.get('dados_json', [])
+            
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao carregar faturamento: {str(e)}")
+            return []
+    
+    def _convert_filters(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        """Converte filtros para formato do load_faturamento_data"""
+        faturamento_filters = {}
+        
+        if 'cliente' in filters:
+            faturamento_filters['cliente_especifico'] = filters['cliente']
+        
+        if 'periodo' in filters:
+            faturamento_filters['periodo_dias'] = filters['periodo']
+        else:
+            faturamento_filters['periodo_dias'] = 30  # padrão
+            
+        if 'cnpj' in filters:
+            faturamento_filters['cnpj_especifico'] = filters['cnpj']
+            
+        return faturamento_filters
+    
+    def _load_with_context(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Carrega dados garantindo contexto Flask"""
+        from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
+        # from app.[a-z]+.models import .*RelatorioFaturamentoImportado - Usando flask_fallback
+        
+        query = db.session.query(RelatorioFaturamentoImportado)
+        
+        if filters:
+            # Aplicar filtros...
+            if 'cliente' in filters:
+                query = query.filter(
+                    RelatorioFaturamentoImportado.nome_cliente.ilike(f"%{filters['cliente']}%")
+                )
+            if 'cnpj' in filters:
+                query = query.filter(
+                    RelatorioFaturamentoImportado.cnpj_cliente == filters['cnpj']
+                )
+        
+        faturas = query.limit(100).all()
+        
+        self.logger.info(f"✅ Faturas carregadas: {len(faturas)} registros")
+        
+        return [
+            {
+                'id': f.id,
+                'numero_nf': f.numero_nf,
+                'nome_cliente': f.nome_cliente,
+                'cnpj_cliente': f.cnpj_cliente,
+                'origem': f.origem,  # Número do pedido (relacionamento importante!)
+                'destino': f.destino,
+                'data_fatura': f.data_fatura.isoformat() if f.data_fatura else None,
+                'valor_total': float(f.valor_total or 0),
+                'peso_total': float(f.peso_total or 0),
+                'status': f.status,
+                'incoterm': f.incoterm
+            }
+            for f in faturas
+        ]
         
     def load_faturamento_data(self, filters: Dict[str, Any]) -> Dict[str, Any]:
         """

@@ -6,18 +6,124 @@ Micro-loader especializado para carregamento de dados de agendamentos
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy import func, and_, or_
-from app import db
-from app.monitoramento.models import AgendamentoEntrega
+from flask import current_app
+from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
+from app.monitoramento.models import AgendamentoEntrega, EntregaMonitorada
+# from app.[a-z]+.models import .*AgendamentoEntrega - Usando flask_fallback
 from app.utils.grupo_empresarial import detectar_grupo_empresarial
 import logging
 
 logger = logging.getLogger(__name__)
 
 class AgendamentosLoader:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     """Micro-loader especializado para dados de agendamentos"""
     
     def __init__(self):
         self.model = AgendamentoEntrega
+        self.logger = logger
+        
+    def load_data(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Carrega dados de agendamentos do banco
+        
+        Args:
+            filters: Filtros opcionais de consulta
+            
+        Returns:
+            Lista de dicionários com dados de agendamentos
+        """
+        try:
+            self.logger.info(f"📅 Carregando agendamentos com filtros: {filters}")
+            
+            # Garantir contexto Flask
+            if not hasattr(self.db.session, 'is_active') or not self.db.session.is_active:
+                self.logger.warning("⚠️ Sem contexto Flask ativo, tentando com app context...")
+                with current_app.app_context():
+                    return self._load_with_context(filters)
+            
+            # Converter filtros para formato esperado
+            agendamentos_filters = self._convert_filters(filters or {})
+            
+            # Usar método existente
+            result = self.load_agendamentos_data(agendamentos_filters)
+            
+            # Retornar apenas os dados JSON
+            return result.get('dados_json', [])
+            
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao carregar agendamentos: {str(e)}")
+            return []
+    
+    def _convert_filters(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        """Converte filtros para formato do load_agendamentos_data"""
+        agendamentos_filters = {}
+        
+        if 'cliente' in filters:
+            agendamentos_filters['cliente_especifico'] = filters['cliente']
+        
+        if 'periodo' in filters:
+            agendamentos_filters['periodo_dias'] = filters['periodo']
+        else:
+            agendamentos_filters['periodo_dias'] = 30  # padrão
+            
+        if 'status' in filters:
+            agendamentos_filters['status_agendamento'] = filters['status']
+            
+        return agendamentos_filters
+    
+    def _load_with_context(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Carrega dados garantindo contexto Flask"""
+        from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
+        # from app.[a-z]+.models import .*AgendamentoEntrega - Usando flask_fallback, EntregaMonitorada
+        
+        # Query com join para pegar dados da entrega
+        query = self.db.session.query(AgendamentoEntrega).join(
+            EntregaMonitorada,
+            AgendamentoEntrega.entrega_id == EntregaMonitorada.id
+        )
+        
+        if filters:
+            # Aplicar filtros...
+            if 'cliente' in filters:
+                query = query.filter(
+                    EntregaMonitorada.nome_cliente.ilike(f"%{filters['cliente']}%")
+                )
+            if 'status' in filters:
+                query = query.filter(
+                    AgendamentoEntrega.status == filters['status']
+                )
+        
+        agendamentos = query.limit(100).all()
+        
+        self.logger.info(f"✅ Agendamentos carregados: {len(agendamentos)} registros")
+        
+        return [
+            {
+                'id': a.id,
+                'entrega_id': a.entrega_id,
+                'data_agendada': a.data_agendada.isoformat() if a.data_agendada else None,
+                'periodo': a.periodo,
+                'status': a.status,
+                'confirmado_por': a.confirmado_por,
+                'confirmado_em': a.confirmado_em.isoformat() if a.confirmado_em else None,
+                'observacoes': a.observacoes,
+                'observacoes_confirmacao': a.observacoes_confirmacao,
+                'criado_em': a.criado_em.isoformat() if a.criado_em else None,
+                'criado_por': a.criado_por,
+                # Dados da entrega relacionada
+                'cliente': a.entrega.nome_cliente if hasattr(a, 'entrega') else None,
+                'numero_nf': a.entrega.numero_nf if hasattr(a, 'entrega') else None
+            }
+            for a in agendamentos
+        ]
         
     def load_agendamentos_data(self, filters: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -64,7 +170,7 @@ class AgendamentosLoader:
         
         # Filtro por cliente específico via join com EntregaMonitorada
         if filters.get('cliente_especifico'):
-            from app.monitoramento.models import EntregaMonitorada
+            # from app.[a-z]+.models import .*EntregaMonitorada - Usando flask_fallback
             cliente = filters['cliente_especifico']
             query = query.join(EntregaMonitorada).filter(
                 EntregaMonitorada.cliente.ilike(f'%{cliente}%')

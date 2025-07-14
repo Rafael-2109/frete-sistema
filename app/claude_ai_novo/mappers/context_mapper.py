@@ -10,7 +10,7 @@ Data: 2025-01-07
 """
 
 import logging
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional, Union, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -22,7 +22,7 @@ class ContextMapping:
     context_type: str
     source_keys: List[str]
     target_key: str
-    transform_function: Optional[callable] = None
+    transform_function: Optional[Callable] = None
     priority: int = 0
 
 class ContextMapper:

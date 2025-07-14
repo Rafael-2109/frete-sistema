@@ -22,17 +22,6 @@ try:
     from app.utils.redis_cache import intelligent_cache
     from app.financeiro.models import PendenciaFinanceiraNF
     
-    # Modelos Flask
-    db = get_db()
-    current_user = get_current_user()
-    Pedido = get_model("Pedido")
-    Embarque = get_model("Embarque")
-    EmbarqueItem = get_model("EmbarqueItem")
-    EntregaMonitorada = get_model("EntregaMonitorada")
-    RelatorioFaturamentoImportado = get_model("RelatorioFaturamentoImportado")
-    Transportadora = get_model("Transportadora")
-    Frete = get_model("Frete")
-    
 except ImportError:
     # Fallback se dependências não disponíveis
     from unittest.mock import Mock
@@ -61,6 +50,39 @@ class DataProvider:
     Responsável por fornecer dados estruturados para análise e processamento
     pelos diversos módulos do sistema.
     """
+    
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        return get_db()
+    
+    @property
+    def Pedido(self):
+        return get_model("Pedido")
+    
+    @property
+    def Embarque(self):
+        return get_model("Embarque")
+    
+    @property
+    def EmbarqueItem(self):
+        return get_model("EmbarqueItem")
+    
+    @property
+    def EntregaMonitorada(self):
+        return get_model("EntregaMonitorada")
+    
+    @property
+    def RelatorioFaturamentoImportado(self):
+        return get_model("RelatorioFaturamentoImportado")
+    
+    @property
+    def Transportadora(self):
+        return get_model("Transportadora")
+    
+    @property
+    def Frete(self):
+        return get_model("Frete")
     
     def __init__(self, loader=None):
         """Inicializa o provedor de dados com LoaderManager opcional"""
@@ -144,7 +166,7 @@ class DataProvider:
     def _get_entregas_data(self, filters: Optional[Dict] = None) -> Dict[str, Any]:
         """Obtém dados de entregas"""
         try:
-            query = db.session.query(EntregaMonitorada)
+            query = self.db.session.query(self.EntregaMonitorada)
             
             if filters:
                 if filters.get("cliente"):
@@ -171,7 +193,7 @@ class DataProvider:
     def _get_pedidos_data(self, filters: Optional[Dict] = None) -> Dict[str, Any]:
         """Obtém dados de pedidos"""
         try:
-            query = db.session.query(Pedido)
+            query = self.db.session.query(self.Pedido)
             
             if filters:
                 if filters.get("cliente"):
@@ -198,7 +220,7 @@ class DataProvider:
     def _get_embarques_data(self, filters: Optional[Dict] = None) -> Dict[str, Any]:
         """Obtém dados de embarques"""
         try:
-            query = db.session.query(Embarque)
+            query = self.db.session.query(self.Embarque)
             
             if filters:
                 if filters.get("status"):
@@ -223,7 +245,7 @@ class DataProvider:
     def _get_faturamento_data(self, filters: Optional[Dict] = None) -> Dict[str, Any]:
         """Obtém dados de faturamento"""
         try:
-            query = db.session.query(RelatorioFaturamentoImportado)
+            query = self.db.session.query(self.RelatorioFaturamentoImportado)
             
             if filters:
                 if filters.get("cliente"):
@@ -248,7 +270,7 @@ class DataProvider:
     def _get_transportadoras_data(self, filters: Optional[Dict] = None) -> Dict[str, Any]:
         """Obtém dados de transportadoras"""
         try:
-            query = db.session.query(Transportadora)
+            query = self.db.session.query(self.Transportadora)
             
             if filters:
                 if filters.get("nome"):
@@ -273,7 +295,7 @@ class DataProvider:
     def _get_fretes_data(self, filters: Optional[Dict] = None) -> Dict[str, Any]:
         """Obtém dados de fretes"""
         try:
-            query = db.session.query(Frete)
+            query = self.db.session.query(self.Frete)
             
             if filters:
                 if filters.get("transportadora"):

@@ -14,17 +14,7 @@ from sqlalchemy import text, func
 from sqlalchemy.exc import SQLAlchemyError
 
 # Imports internos com fallbacks robustos
-try:
-    from ..utils.flask_fallback import get_db
-except ImportError:
-    # Fallback para execução standalone
-    try:
-        from utils.flask_fallback import get_db
-    except ImportError:
-        # Fallback final para quando Flask não disponível
-        def get_db():
-            logger.warning("⚠️ get_db() não disponível - modo limitado")
-            return None
+from app.claude_ai_novo.utils.flask_fallback import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +29,14 @@ class SessionMemory:
     - Prover analytics básicas de sessões
     """
     
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        return get_db()
+    
     def __init__(self):
         """Inicializa o memorizador de sessões."""
         self.table_name = "ai_advanced_sessions"
-        self.db = get_db()
         self._ensure_table_exists()
         logger.info("💾 SessionMemory inicializado")
     

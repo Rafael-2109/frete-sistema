@@ -14,8 +14,13 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta, date
 from flask_login import current_user
 from sqlalchemy import func, and_, or_, text
+from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
+from app.monitoramento.models import EntregaMonitorada
+from app.pedidos.models import Pedido
+from app.fretes.models import Frete, DespesaExtra
+from app.transportadoras.models import Transportadora
+from app.faturamento.models import RelatorioFaturamentoImportado
 
-from app import db
 from app.claude_ai_novo.config import ClaudeAIConfig, AdvancedConfig
 from app.utils.redis_cache import redis_cache, cache_aside, cached_query, intelligent_cache, REDIS_DISPONIVEL
 from app.utils.grupo_empresarial import GrupoEmpresarialDetector, detectar_grupo_empresarial
@@ -25,6 +30,14 @@ from app.utils.ai_logging import ai_logger, AILogger, log_info as logger_info, l
 
 # Criar logger compatível
 class Logger:
+
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+
     def info(self, msg):
         logger_info(msg)
     def error(self, msg):
@@ -145,9 +158,53 @@ def _carregar_dados_financeiro(analise, filtros_usuario, data_limite):
         return {"registros_carregados": 0, "erro": str(e)}
 
 class ContextLoader:
-    """Classe para carregamento de dados"""
+    """Carregador de contexto específico para análise de consultas"""
+    
+    @property
+    def db(self):
+        """Obtém db com fallback"""
+        if not hasattr(self, "_db"):
+            self._db = get_db()
+        return self._db
+    
+    @property
+    def EntregaMonitorada(self):
+        return get_model('EntregaMonitorada')
+    
+    @property
+    def Frete(self):
+        return get_model('Frete')
+    
+    @property
+    def Transportadora(self):
+        return get_model('Transportadora')
+    
+    @property
+    def Embarque(self):
+        return get_model('Embarque')
+    
+    @property
+    def EmbarqueItem(self):
+        return get_model('EmbarqueItem')
+    
+    @property
+    def AgendamentoEntrega(self):
+        return get_model('AgendamentoEntrega')
+    
+    @property
+    def DespesaExtra(self):
+        return get_model('DespesaExtra')
+    
+    @property
+    def RelatorioFaturamentoImportado(self):
+        return get_model('RelatorioFaturamentoImportado')
+    
+    @property
+    def Pedido(self):
+        return get_model('Pedido')
     
     def __init__(self):
+        self.logger = logging.getLogger(__name__)
         self._cache = {}
         self._cache_timeout = 300  # 5 minutos
         
@@ -178,20 +235,20 @@ class ContextLoader:
     def _carregar_entregas_banco(self, analise: Dict[str, Any], filtros_usuario: Dict[str, Any], data_limite: datetime) -> Dict[str, Any]:
         """Carrega entregas do banco de dados"""
         try:
-            from app.monitoramento.models import EntregaMonitorada
+            # from app.[a-z]+.models import .*EntregaMonitorada - Usando flask_fallback
             
-            query = db.session.query(EntregaMonitorada)
+            query = self.db.session.query(self.EntregaMonitorada)
             
             # Aplicar filtros de data
-            query = query.filter(EntregaMonitorada.data_embarque >= data_limite)
+            query = query.filter(self.EntregaMonitorada.data_embarque >= data_limite)
             
             # Filtro de cliente se especificado
             if analise.get("cliente_especifico") and not analise.get("correcao_usuario"):
                 query = query.filter(
-                    EntregaMonitorada.cliente.ilike(f'%{analise["cliente_especifico"]}%')
+                    self.EntregaMonitorada.cliente.ilike(f'%{analise["cliente_especifico"]}%')
                 )
             
-            entregas = query.order_by(EntregaMonitorada.data_embarque.desc()).limit(500).all()
+            entregas = query.order_by(self.EntregaMonitorada.data_embarque.desc()).limit(500).all()
             
             return {
                 'total_registros': len(entregas),
@@ -464,14 +521,14 @@ class ContextLoader:
         CRÍTICO: Para perguntas sobre "quantos clientes", "todos clientes", etc.
         """
         try:
-            from app.faturamento.models import RelatorioFaturamentoImportado
-            from app.monitoramento.models import EntregaMonitorada
-            from app.pedidos.models import Pedido
+            # from app.[a-z]+.models import .*RelatorioFaturamentoImportado - Usando flask_fallback
+            # from app.[a-z]+.models import .*EntregaMonitorada - Usando flask_fallback
+            # from app.[a-z]+.models import .*Pedido - Usando flask_fallback
             
             logger.info("🌐 CARREGANDO TODOS OS CLIENTES DO SISTEMA...")
             
             # 1. Clientes de faturamento (fonte mais completa)
-            clientes_faturamento = db.session.query(
+            clientes_faturamento = self.db.session.query(
                 RelatorioFaturamentoImportado.nome_cliente,
                 RelatorioFaturamentoImportado.cnpj_cliente
             ).filter(
@@ -480,7 +537,7 @@ class ContextLoader:
             ).distinct().all()
             
             # 2. Clientes de entregas monitoradas (todas, sem filtro de data)
-            clientes_entregas = db.session.query(
+            clientes_entregas = self.db.session.query(
                 EntregaMonitorada.cliente
             ).filter(
                 EntregaMonitorada.cliente != None,
@@ -488,7 +545,7 @@ class ContextLoader:
             ).distinct().all()
             
             # 3. Clientes de pedidos
-            clientes_pedidos = db.session.query(
+            clientes_pedidos = self.db.session.query(
                 Pedido.raz_social_red
             ).filter(
                 Pedido.raz_social_red != None,
@@ -541,7 +598,7 @@ class ContextLoader:
             
             # Contar clientes com entregas nos últimos 30 dias
             data_limite = datetime.now() - timedelta(days=30)
-            clientes_ativos_30d = db.session.query(
+            clientes_ativos_30d = self.db.session.query(
                 EntregaMonitorada.cliente
             ).filter(
                 EntregaMonitorada.data_embarque >= data_limite,
