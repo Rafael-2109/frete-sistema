@@ -383,6 +383,11 @@ def create_app(config_name=None):
             'sigla': 'BRST' if verao else 'BRT'
         }
 
+    @app.template_global()
+    def abs(valor):
+        """Função global para valor absoluto em templates"""
+        return __builtins__['abs'](valor)
+
     @login_manager.user_loader
     def load_user(user_id):
         from app.auth.models import Usuario

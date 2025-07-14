@@ -112,13 +112,60 @@ class DatabaseConnection:
             if database_url.startswith('postgres://'):
                 database_url = database_url.replace('postgres://', 'postgresql://', 1)
             
-            # Adicionar parâmetros de encoding UTF-8 para PostgreSQL
-            if 'postgresql://' in database_url:
-                # Se já tem parâmetros
-                if '?' in database_url:
-                    database_url += '&client_encoding=utf8'
+            # Parse e encode a URL corretamente para evitar problemas de UTF-8
+            try:
+                from urllib.parse import urlparse, urlunparse, quote
+                
+                parsed = urlparse(database_url)
+                
+                # Encode username e password se existirem
+                if parsed.username:
+                    username = quote(parsed.username, safe='')
                 else:
-                    database_url += '?client_encoding=utf8'
+                    username = parsed.username
+                    
+                if parsed.password:
+                    password = quote(parsed.password, safe='')
+                else:
+                    password = parsed.password
+                
+                # Reconstruir netloc
+                hostname = parsed.hostname or 'localhost'  # Fallback para localhost se hostname for None
+                
+                if username and password:
+                    netloc = f"{username}:{password}@{hostname}"
+                elif username:
+                    netloc = f"{username}@{hostname}"
+                else:
+                    netloc = hostname
+                
+                if parsed.port:
+                    netloc += f":{parsed.port}"
+                
+                # Adicionar parâmetros de encoding
+                if parsed.query:
+                    query = parsed.query + '&client_encoding=utf8'
+                else:
+                    query = 'client_encoding=utf8'
+                
+                # Reconstruir URL
+                database_url = urlunparse((
+                    parsed.scheme,
+                    netloc,
+                    parsed.path,
+                    parsed.params,
+                    query,
+                    parsed.fragment
+                ))
+                
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao processar URL: {e}")
+                # Tentar adicionar encoding simples
+                if 'postgresql://' in database_url:
+                    if '?' in database_url:
+                        database_url += '&client_encoding=utf8'
+                    else:
+                        database_url += '?client_encoding=utf8'
             
             # Criar engine com configurações adicionais para evitar problemas de encoding
             self.db_engine = create_engine(
@@ -129,7 +176,9 @@ class DatabaseConnection:
                 },
                 pool_pre_ping=True,  # Verificar conexão antes de usar
                 pool_size=5,
-                max_overflow=10
+                max_overflow=10,
+                # Adicionar echo para debug temporário
+                echo=False
             )
             
             # Criar session maker
