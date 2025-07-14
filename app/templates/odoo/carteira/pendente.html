@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}Carteira Pendente - Odoo{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header">
+                <h1>
+                    <i class="fas fa-shopping-cart"></i>
+                    Carteira Pendente
+                    <small class="text-muted">Odoo ERP</small>
+                </h1>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário de Filtros -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-filter"></i> Filtros</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('odoo.carteira_odoo.pendente') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label for="data_inicio" class="form-label">Data Início</label>
+                                <input type="date" class="form-control" id="data_inicio" name="data_inicio" 
+                                       value="{{ request.form.get('data_inicio', '') }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="data_fim" class="form-label">Data Fim</label>
+                                <input type="date" class="form-control" id="data_fim" name="data_fim" 
+                                       value="{{ request.form.get('data_fim', '') }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="pedidos_especificos" class="form-label">Pedidos Específicos</label>
+                                <input type="text" class="form-control" id="pedidos_especificos" name="pedidos_especificos" 
+                                       placeholder="Ex: SO001, SO002, SO003" 
+                                       value="{{ request.form.get('pedidos_especificos', '') }}">
+                                <small class="form-text text-muted">Separe múltiplos pedidos por vírgula</small>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search"></i> Consultar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    {% if resultado and resultado.sucesso %}
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-list"></i> Total de Itens
+                    </h5>
+                    <h3>{{ resultado.estatisticas.total_itens }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-file-alt"></i> Total de Pedidos
+                    </h5>
+                    <h3>{{ resultado.estatisticas.total_pedidos }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-dollar-sign"></i> Valor Total
+                    </h5>
+                    <h3>R$ {{ "{:,.2f}".format(resultado.estatisticas.valor_total) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-balance-scale"></i> Saldo Total
+                    </h5>
+                    <h3>{{ "{:,.2f}".format(resultado.estatisticas.saldo_total) }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tabela de Resultados -->
+    {% if resultado and resultado.sucesso and resultado.dados %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>
+                        <i class="fas fa-table"></i> 
+                        Carteira Pendente ({{ resultado.total_registros }} registros)
+                    </h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary" onclick="exportarExcel()">
+                            <i class="fas fa-file-excel"></i> Exportar Excel
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="tabelaCarteira">
+                            <thead>
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>Data Pedido</th>
+                                    <th>Cliente</th>
+                                    <th>Produto</th>
+                                    <th>Qtd</th>
+                                    <th>Saldo</th>
+                                    <th>Preço Unit.</th>
+                                    <th>Valor Item</th>
+                                    <th>Vendedor</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in resultado.dados %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ item.referencia_pedido }}</strong>
+                                        {% if item.pedido_compra_cliente %}
+                                            <br><small class="text-muted">{{ item.pedido_compra_cliente }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.data_pedido }}</td>
+                                    <td>
+                                        <strong>{{ item.nome_cliente }}</strong>
+                                        {% if item.cnpj_cliente %}
+                                            <br><small class="text-muted">{{ item.cnpj_cliente }}</small>
+                                        {% endif %}
+                                        {% if item.municipio_cliente %}
+                                            <br><small class="text-muted">{{ item.municipio_cliente }}/{{ item.estado_cliente }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <strong>{{ item.codigo_produto }}</strong>
+                                        {% if item.nome_produto %}
+                                            <br><small class="text-muted">{{ item.nome_produto }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ "{:,.2f}".format(item.quantidade) }}</td>
+                                    <td>
+                                        <span class="badge bg-warning">
+                                            {{ "{:,.2f}".format(item.saldo) }}
+                                        </span>
+                                    </td>
+                                    <td>R$ {{ "{:,.2f}".format(item.preco_unitario) }}</td>
+                                    <td>R$ {{ "{:,.2f}".format(item.valor_item_pedido) }}</td>
+                                    <td>{{ item.vendedor }}</td>
+                                    <td>
+                                        {% if item.status == 'draft' %}
+                                            <span class="badge bg-secondary">Rascunho</span>
+                                        {% elif item.status == 'sent' %}
+                                            <span class="badge bg-info">Enviado</span>
+                                        {% elif item.status == 'sale' %}
+                                            <span class="badge bg-success">Confirmado</span>
+                                        {% elif item.status == 'done' %}
+                                            <span class="badge bg-primary">Concluído</span>
+                                        {% else %}
+                                            <span class="badge bg-light text-dark">{{ item.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-sm btn-outline-info" 
+                                                    onclick="verDetalhes('{{ item.referencia_pedido }}')">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Detalhes -->
+    <div class="modal fade" id="modalDetalhes" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Detalhes do Pedido</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="conteudoDetalhes">
+                    <!-- Conteúdo carregado via AJAX -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% elif resultado and not resultado.sucesso %}
+    <!-- Mensagem de Erro -->
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i>
+                Erro ao obter carteira pendente: {{ resultado.mensagem }}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Inicializar DataTable
+$(document).ready(function() {
+    $('#tabelaCarteira').DataTable({
+        pageLength: 25,
+        order: [[0, 'desc']],
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.10.24/i18n/Portuguese-Brasil.json'
+        },
+        columnDefs: [
+            { targets: [4, 5, 6, 7], className: 'text-end' },
+            { targets: [10], orderable: false }
+        ]
+    });
+});
+
+function verDetalhes(pedido) {
+    // Implementar visualização de detalhes
+    $('#conteudoDetalhes').html('<p>Carregando detalhes do pedido ' + pedido + '...</p>');
+    $('#modalDetalhes').modal('show');
+}
+
+function exportarExcel() {
+    // Implementar exportação para Excel
+    window.location.href = '{{ url_for("odoo.carteira_odoo.api_pendente") }}?format=excel';
+}
+</script>
+{% endblock %} 

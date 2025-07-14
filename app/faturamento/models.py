@@ -59,7 +59,8 @@ class FaturamentoProduto(db.Model):
     qtd_produto_faturado = db.Column(db.Numeric(15, 3), nullable=False, default=0)
     preco_produto_faturado = db.Column(db.Numeric(15, 4), nullable=False, default=0)
     valor_produto_faturado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
-    peso_total = db.Column(db.Numeric(15, 3), nullable=True, default=0)
+    peso_unitario_produto = db.Column(db.Numeric(15, 3), nullable=True, default=0)  # ⚡ NOVO CAMPO
+    peso_total = db.Column(db.Numeric(15, 3), nullable=True, default=0)  # peso_unitario * qtd
     
     # Dados de origem (número do pedido)
     origem = db.Column(db.String(20), nullable=True, index=True)
