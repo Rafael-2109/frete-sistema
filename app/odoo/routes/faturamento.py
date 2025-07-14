@@ -44,7 +44,9 @@ def dashboard():
     except Exception as e:
         logger.error(f"Erro no dashboard: {e}")
         flash(f"Erro ao carregar dashboard: {str(e)}", 'error')
-        return redirect(url_for('main.index'))
+        # Renderizar página de erro ao invés de redirect
+        return render_template('odoo/faturamento/dashboard.html', 
+                             resultado={'error': str(e), 'success': False})
 
 @faturamento_bp.route('/produtos', methods=['GET', 'POST'])
 @login_required

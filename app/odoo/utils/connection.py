@@ -15,6 +15,7 @@ import logging
 from typing import Optional, Dict, Any
 from functools import wraps
 import time
+import socket
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +45,14 @@ class OdooConnection:
         """Obtém conexão common do Odoo"""
         if self._common is None:
             try:
+                # Configurar timeout global para socket
+                socket.setdefaulttimeout(self.timeout)
+                
                 self._common = xmlrpc.client.ServerProxy(
                     f'{self.url}/xmlrpc/2/common',
-                    context=self.ssl_context,
-                    timeout=self.timeout
+                    context=self.ssl_context
                 )
+                logger.info("✅ Conexão common estabelecida com Odoo")
             except Exception as e:
                 logger.error(f"Erro ao conectar no common: {e}")
                 raise
@@ -58,11 +62,14 @@ class OdooConnection:
         """Obtém conexão models do Odoo"""
         if self._models is None:
             try:
+                # Configurar timeout global para socket
+                socket.setdefaulttimeout(self.timeout)
+                
                 self._models = xmlrpc.client.ServerProxy(
                     f'{self.url}/xmlrpc/2/object',
-                    context=self.ssl_context,
-                    timeout=self.timeout
+                    context=self.ssl_context
                 )
+                logger.info("✅ Conexão models estabelecida com Odoo")
             except Exception as e:
                 logger.error(f"Erro ao conectar no models: {e}")
                 raise
@@ -73,25 +80,32 @@ class OdooConnection:
         try:
             common = self._get_common()
             
-            # Verificar versão do Odoo
-            version = common.version()
-            logger.info(f"Conectando ao Odoo versão: {version}")
+            # Autenticação com retry
+            for attempt in range(self.retry_attempts):
+                try:
+                    self._uid = common.authenticate(
+                        self.database,
+                        self.username,
+                        self.api_key,
+                        {}
+                    )
+                    
+                    if self._uid:
+                        logger.info(f"✅ Autenticado no Odoo com UID: {self._uid}")
+                        return True
+                    else:
+                        logger.warning(f"Falha na autenticação - tentativa {attempt + 1}/{self.retry_attempts}")
+                        
+                except Exception as e:
+                    logger.error(f"Erro na autenticação (tentativa {attempt + 1}): {e}")
+                    if attempt < self.retry_attempts - 1:
+                        time.sleep(2 ** attempt)  # Backoff exponencial
+                    else:
+                        raise
             
-            # Autenticar
-            self._uid = common.authenticate(
-                self.database,
-                self.username,
-                self.api_key,
-                {}
-            )
+            logger.error("❌ Falha na autenticação após todas as tentativas")
+            return False
             
-            if self._uid:
-                logger.info(f"Autenticação bem-sucedida. UID: {self._uid}")
-                return True
-            else:
-                logger.error("Falha na autenticação")
-                return False
-                
         except Exception as e:
             logger.error(f"Erro na autenticação: {e}")
             return False
@@ -102,11 +116,11 @@ class OdooConnection:
             if not self.authenticate():
                 raise Exception("Falha na autenticação com Odoo")
         
+        models = self._get_models()
         kwargs = kwargs or {}
         
         for attempt in range(self.retry_attempts):
             try:
-                models = self._get_models()
                 result = models.execute_kw(
                     self.database,
                     self._uid,
@@ -119,109 +133,94 @@ class OdooConnection:
                 return result
                 
             except Exception as e:
-                logger.warning(f"Tentativa {attempt + 1} falhou: {e}")
-                
+                logger.error(f"Erro na execução (tentativa {attempt + 1}): {e}")
                 if attempt < self.retry_attempts - 1:
                     time.sleep(2 ** attempt)  # Backoff exponencial
-                    # Resetar conexões para tentar novamente
-                    self._common = None
-                    self._models = None
+                    # Tentar reautenticar
                     self._uid = None
+                    if not self.authenticate():
+                        raise Exception("Falha na reautenticação")
                 else:
                     raise
     
-    def search_read(self, model: str, domain: Optional[list] = None, fields: Optional[list] = None, limit: Optional[int] = None) -> list:
-        """Busca e lê registros do Odoo"""
-        domain = domain or []
-        fields = fields or []
-        
+    def search_read(self, model: str, domain: list, fields: Optional[list] = None, limit: Optional[int] = None) -> list:
+        """Busca registros no Odoo"""
         kwargs = {}
         if fields:
             kwargs['fields'] = fields
         if limit:
             kwargs['limit'] = limit
-            
+        
         return self.execute_kw(model, 'search_read', [domain], kwargs)
     
-    def search(self, model: str, domain: Optional[list] = None, limit: Optional[int] = None, offset: Optional[int] = None) -> list:
+    def search(self, model: str, domain: list, limit: Optional[int] = None) -> list:
         """Busca IDs de registros no Odoo"""
-        domain = domain or []
-        
         kwargs = {}
         if limit:
             kwargs['limit'] = limit
-        if offset:
-            kwargs['offset'] = offset
-            
+        
         return self.execute_kw(model, 'search', [domain], kwargs)
     
     def read(self, model: str, ids: list, fields: Optional[list] = None) -> list:
-        """Lê registros específicos do Odoo"""
-        fields = fields or []
-        
+        """Lê registros do Odoo por IDs"""
         kwargs = {}
         if fields:
             kwargs['fields'] = fields
-            
+        
         return self.execute_kw(model, 'read', [ids], kwargs)
     
-    def fields_get(self, model: str, fields: Optional[list] = None) -> dict:
-        """Obtém definição de campos do modelo"""
-        fields = fields or []
-        
-        kwargs = {}
-        if fields:
-            kwargs['fields'] = fields
-            
-        return self.execute_kw(model, 'fields_get', [], kwargs)
-
-# Instância global da conexão
-_connection = None
-
-def get_odoo_connection(config: Optional[Dict[str, Any]] = None) -> OdooConnection:
-    """Obtém instância da conexão com Odoo (singleton)"""
-    global _connection
-    
-    if _connection is None:
-        if config is None:
-            # Usar configuração padrão se não fornecida
-            from app.odoo.config.odoo_config import ODOO_CONFIG
-            config = ODOO_CONFIG
-        
-        _connection = OdooConnection(config)
-    
-    return _connection
-
-def with_odoo_connection(func):
-    """Decorator para garantir conexão com Odoo"""
-    @wraps(func)
-    def wrapper(*args, **kwargs):
+    def test_connection(self) -> Dict[str, Any]:
+        """Testa conexão com Odoo"""
         try:
-            connection = get_odoo_connection()
-            return func(connection, *args, **kwargs)
+            # Testar conexão common
+            common = self._get_common()
+            version = common.version()
+            
+            # Testar autenticação
+            if not self.authenticate():
+                return {
+                    'success': False,
+                    'message': 'Falha na autenticação',
+                    'error': 'Credenciais inválidas'
+                }
+            
+            # Testar busca simples
+            models = self._get_models()
+            test_result = models.execute_kw(
+                self.database,
+                self._uid,
+                self.api_key,
+                'res.users',
+                'search_read',
+                [[['id', '=', self._uid]]],
+                {'fields': ['name', 'login'], 'limit': 1}
+            )
+            
+            user_data = None
+            if test_result and isinstance(test_result, list) and len(test_result) > 0:
+                user_data = test_result[0]
+            
+            return {
+                'success': True,
+                'message': 'Conexão estabelecida com sucesso',
+                'data': {
+                    'version': version,
+                    'database': self.database,
+                    'user': user_data,
+                    'uid': self._uid
+                }
+            }
+            
         except Exception as e:
-            logger.error(f"Erro na conexão com Odoo: {e}")
-            raise
-    
-    return wrapper
+            logger.error(f"Erro no teste de conexão: {e}")
+            return {
+                'success': False,
+                'message': 'Erro na conexão',
+                'error': str(e)
+            }
 
-# Funções de conveniência
-def test_connection(config: Optional[Dict[str, Any]] = None) -> bool:
-    """Testa conexão com Odoo"""
-    try:
-        connection = get_odoo_connection(config)
-        return connection.authenticate()
-    except Exception as e:
-        logger.error(f"Erro no teste de conexão: {e}")
-        return False
 
-def get_odoo_version(config: Optional[Dict[str, Any]] = None) -> str:
-    """Obtém versão do Odoo"""
-    try:
-        connection = get_odoo_connection(config)
-        common = connection._get_common()
-        version = common.version()
-        return version.get('server_version', 'Desconhecida')
-    except Exception as e:
-        logger.error(f"Erro ao obter versão: {e}")
-        return 'Erro' 
+def get_odoo_connection():
+    """Retorna instância de conexão com Odoo"""
+    from ..config.odoo_config import ODOO_CONFIG
+    return OdooConnection(ODOO_CONFIG) 
