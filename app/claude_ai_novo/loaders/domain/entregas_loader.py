@@ -9,7 +9,6 @@ from sqlalchemy import func, and_, or_
 from flask import current_app
 from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
 from app.monitoramento.models import EntregaMonitorada
-# from app.[a-z]+.models import .*EntregaMonitorada - Usando flask_fallback
 from app.utils.grupo_empresarial import detectar_grupo_empresarial
 import logging
 
@@ -67,7 +66,23 @@ class EntregasLoader:
         entregas_filters = {}
         
         if 'cliente' in filters:
-            entregas_filters['cliente_especifico'] = filters['cliente']
+            # 🎯 USAR INTELIGÊNCIA DO SISTEMA!
+            cliente_original = filters['cliente']
+            
+            # Detectar grupo empresarial
+            grupo_info = detectar_grupo_empresarial(cliente_original)
+            
+            if grupo_info and grupo_info.get('grupo'):
+                self.logger.info(f"✅ Grupo detectado: {grupo_info['grupo']}")
+                self.logger.info(f"   CNPJs: {grupo_info.get('cnpjs', [])}")
+                self.logger.info(f"   Variações: {grupo_info.get('variacoes_nome', [])}")
+                
+                # Passar todas as informações do grupo
+                entregas_filters['grupo_info'] = grupo_info
+                entregas_filters['cliente_especifico'] = cliente_original
+            else:
+                # Cliente individual
+                entregas_filters['cliente_especifico'] = cliente_original
         
         if 'periodo' in filters:
             entregas_filters['periodo_dias'] = filters['periodo']
@@ -161,10 +176,35 @@ class EntregasLoader:
                 )
             )
         
-        # Filtro por cliente específico
-        if filters.get('cliente_especifico'):
+        # 🎯 FILTRO INTELIGENTE POR CLIENTE/GRUPO
+        if filters.get('grupo_info'):
+            # Usar inteligência do grupo empresarial
+            grupo_info = filters['grupo_info']
+            condicoes = []
+            
+            # Buscar por todas as variações de nome
+            if grupo_info.get('variacoes_nome'):
+                for variacao in grupo_info['variacoes_nome']:
+                    if hasattr(self.model, 'nome_cliente'):
+                        condicoes.append(self.model.nome_cliente.ilike(f'%{variacao}%'))
+                    else:
+                        condicoes.append(self.model.cliente.ilike(f'%{variacao}%'))
+            
+            # Buscar por CNPJs do grupo
+            if grupo_info.get('cnpjs') and hasattr(self.model, 'cnpj_cliente'):
+                for cnpj_prefix in grupo_info['cnpjs']:
+                    # Remover formatação do CNPJ
+                    cnpj_limpo = cnpj_prefix.replace('.', '').replace('/', '').replace('-', '')
+                    condicoes.append(self.model.cnpj_cliente.like(f'{cnpj_limpo}%'))
+            
+            # Aplicar todas as condições com OR
+            if condicoes:
+                query = query.filter(or_(*condicoes))
+                self.logger.info(f"✅ Aplicadas {len(condicoes)} condições de busca para grupo {grupo_info.get('grupo')}")
+                
+        elif filters.get('cliente_especifico'):
+            # Cliente individual (não é grupo)
             cliente = filters['cliente_especifico']
-            # Tentar ambos os campos possíveis
             if hasattr(self.model, 'nome_cliente'):
                 query = query.filter(self.model.nome_cliente.ilike(f'%{cliente}%'))
             else:

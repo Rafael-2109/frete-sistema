@@ -343,6 +343,98 @@ class MainOrchestrator:
             )
         ])
     
+    def process_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        🎯 MÉTODO PRINCIPAL: Processa uma query usando TODA a inteligência do sistema
+        
+        Args:
+            query: Query do usuário
+            context: Contexto adicional
+            
+        Returns:
+            Resposta processada com dados reais
+        """
+        logger.info(f"🎯 MainOrchestrator.process_query: '{query[:50]}...'")
+        
+        # Preparar dados para o workflow
+        data = {
+            'query': query,
+            'context': context or {},
+            'timestamp': datetime.now().isoformat(),
+            '_from_main': True  # Evitar loops
+        }
+        
+        # Detectar se veio do SessionOrchestrator
+        if context and context.get('_from_session'):
+            logger.debug("📍 Query veio do SessionOrchestrator")
+        
+        try:
+            # Executar workflow principal com TODA inteligência
+            # Usar response_processing que já tem todos os steps necessários
+            result = self.execute_workflow(
+                workflow_name="response_processing",
+                operation_type="intelligent_query",
+                data=data
+            )
+            
+            # Garantir formato de resposta
+            if result.get('success'):
+                response_text = None
+                
+                # Tentar extrair resposta de diferentes locais
+                if 'response' in result:
+                    response_text = result['response']
+                elif 'steps_results' in result:
+                    # Procurar resposta nos resultados dos steps
+                    for step_name, step_result in result['steps_results'].items():
+                        if isinstance(step_result, dict):
+                            if 'response' in step_result:
+                                response_text = step_result['response']
+                                break
+                            elif 'result' in step_result:
+                                response_text = step_result['result']
+                                break
+                        elif isinstance(step_result, str):
+                            response_text = step_result
+                            break
+                
+                if not response_text:
+                    # Gerar resposta baseada nos dados carregados
+                    if 'load_data' in result.get('steps_results', {}):
+                        data_loaded = result['steps_results']['load_data']
+                        if isinstance(data_loaded, dict) and data_loaded.get('data'):
+                            records = data_loaded['data']
+                            response_text = f"Encontrei {len(records)} registros relacionados à sua consulta."
+                        else:
+                            response_text = "Processamento concluído, mas não encontrei dados específicos."
+                    else:
+                        response_text = "Sistema processou a consulta mas não gerou resposta específica."
+                
+                return {
+                    'success': True,
+                    'response': response_text,
+                    'data': result.get('steps_results', {}),
+                    'source': 'main_orchestrator',
+                    'query': query
+                }
+            else:
+                # Erro no processamento
+                return {
+                    'success': False,
+                    'response': f"Erro ao processar: {result.get('error', 'Erro desconhecido')}",
+                    'query': query,
+                    'source': 'main_orchestrator_error'
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Erro no MainOrchestrator.process_query: {e}")
+            return {
+                'success': False,
+                'response': f"Erro ao processar consulta: {str(e)}",
+                'query': query,
+                'source': 'main_orchestrator_exception'
+            }
+    
     def register_component(self, name: str, component: Any):
         """
         Registra um componente para orquestração.

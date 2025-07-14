@@ -926,48 +926,43 @@ class SessionOrchestrator:
     
     def _process_deliveries_status(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
         """Processa consultas sobre status de entregas"""
-        # REMOVIDO: Chamada ao IntegrationManager para evitar loop circular
-        # Agora usa Claude diretamente
+        # 🎯 USAR MAIN ORCHESTRATOR PARA FLUXO COMPLETO!
         
         try:
-            from app.claude_ai_novo.processors.response_processor import ResponseProcessor
-            processor = ResponseProcessor()
+            from app.claude_ai_novo.orchestrators.main_orchestrator import get_main_orchestrator
+            orchestrator = get_main_orchestrator()
             
             # Preparar contexto específico para entregas
             delivery_context = {
                 'domain': 'entregas',
                 'query_type': 'status',
+                '_from_session': True,  # Evitar loops
                 **(context or {})
             }
             
-            # Processar com Claude
-            response = processor.gerar_resposta_otimizada(
-                consulta=query,
-                analise={
-                    'dominio': 'entregas',
-                    'query_type': 'status',
-                    'cliente_especifico': 'Atacadão' if 'atacadão' in query.lower() else None
-                },
-                user_context=delivery_context
-            )
+            # Processar com MainOrchestrator (usa TODA a inteligência)
+            logger.info("🎯 Delegando para MainOrchestrator com fluxo completo")
             
-            if response:
+            # MainOrchestrator é síncrono
+            result = orchestrator.process_query(query, delivery_context)
+            
+            if result and result.get('response'):
                 return {
                     'success': True,
-                    'result': response,
+                    'result': result['response'],
                     'query': query,
                     'intent': 'status_entregas',
-                    'source': 'claude_direct',
-                    'data': delivery_context
+                    'source': 'main_orchestrator',
+                    'data': result.get('data', delivery_context)
                 }
                 
         except Exception as e:
-            logger.error(f"Erro ao processar entregas com Claude: {e}")
+            logger.error(f"❌ Erro ao processar com MainOrchestrator: {e}")
         
-        # Fallback
+        # Fallback apenas se MainOrchestrator falhar
         return {
             'success': True,
-            'result': f"📦 Status de Entregas: Baseado na consulta '{query}', encontrei informações sobre entregas. Sistema operacional e processando entregas normalmente.",
+            'result': f"📦 Status de Entregas: Sistema processando query '{query}'. Verificando dados...",
             'query': query,
             'intent': 'status_entregas',
             'source': 'session_orchestrator_fallback'
@@ -1005,41 +1000,41 @@ class SessionOrchestrator:
     
     def _process_general_inquiry(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
         """Processa consultas gerais"""
-        # REMOVIDO: Chamada ao MainOrchestrator para evitar loop circular
-        # Agora usa Claude diretamente
+        # 🎯 USAR MAIN ORCHESTRATOR PARA TODAS AS CONSULTAS!
         
         try:
-            from app.claude_ai_novo.processors.response_processor import ResponseProcessor
-            processor = ResponseProcessor()
+            from app.claude_ai_novo.orchestrators.main_orchestrator import get_main_orchestrator
+            orchestrator = get_main_orchestrator()
             
-            # Processar com Claude
-            response = processor.gerar_resposta_otimizada(
-                consulta=query,
-                analise={
-                    'dominio': 'geral',
-                    'query_type': 'informacao',
-                    'tipo_consulta': 'geral'
-                },
-                user_context=context or {}
-            )
+            # Preparar contexto geral
+            general_context = {
+                'domain': 'geral',
+                'query_type': 'informacao',
+                '_from_session': True,  # Evitar loops
+                **(context or {})
+            }
             
-            if response:
+            # Processar com MainOrchestrator (usa TODA a inteligência)
+            logger.info("🎯 Processando consulta geral via MainOrchestrator")
+            result = orchestrator.process_query(query, general_context)
+            
+            if result and result.get('response'):
                 return {
                     'success': True,
-                    'result': response,
+                    'result': result['response'],
                     'query': query,
                     'intent': 'geral',
-                    'source': 'claude_direct',
-                    'data': context or {}
+                    'source': 'main_orchestrator',
+                    'data': result.get('data', general_context)
                 }
                 
         except Exception as e:
-            logger.error(f"Erro ao processar com Claude: {e}")
+            logger.error(f"❌ Erro ao processar com MainOrchestrator: {e}")
         
-        # Fallback para resposta genérica
+        # Fallback apenas se MainOrchestrator falhar
         return {
             'success': True,
-            'result': f"ℹ️ Consulta Geral: '{query}' - Sistema Claude AI Novo está operacional e processando consultas. Como posso ajudá-lo com informações específicas sobre fretes, entregas, pedidos ou relatórios?",
+            'result': f"ℹ️ Sistema processando consulta: '{query}'",
             'query': query,
             'intent': 'geral',
             'source': 'session_orchestrator_fallback'
