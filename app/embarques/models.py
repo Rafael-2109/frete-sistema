@@ -67,24 +67,25 @@ class Embarque(db.Model):
     # Para carga DIRETA: Uma cotação -> Um embarque
     cotacao = db.relationship('Cotacao', backref='embarque_direto', foreign_keys=[cotacao_id])
 
+    
     def total_notas(self):
-        return len([i for i in self.embarque.itens if i.status == 'ativo'])
+        return len([i for i in self.itens if i.status == 'ativo'])
 
     def total_volumes(self):
-        return sum(i.volumes or 0 for i in self.embarque.itens if i.status == 'ativo')
+        return sum(i.volumes or 0 for i in self.itens if i.status == 'ativo')
 
     def total_peso_pedidos(self):
         """Retorna o peso total dos pedidos contidos no embarque"""
-        return sum(i.peso or 0 for i in self.embarque.itens if i.status == 'ativo')
+        return sum(i.peso or 0 for i in self.itens if i.status == 'ativo')
 
     def total_valor_pedidos(self):
         """Retorna o valor total dos pedidos contidos no embarque"""
-        return sum(i.valor or 0 for i in self.embarque.itens if i.status == 'ativo')
+        return sum(i.valor or 0 for i in self.itens if i.status == 'ativo')
 
     def total_pallet_pedidos(self):
         """Retorna o total de pallets dos pedidos contidos no embarque"""
         # Soma os pallets reais dos itens ativos
-        total_pallets = sum(i.pallets or 0 for i in self.embarque.itens if i.status == 'ativo')
+        total_pallets = sum(i.pallets or 0 for i in self.itens if i.status == 'ativo')
         
         # Se não há pallets informados, calcula baseado no peso (fallback)
         if total_pallets == 0:
@@ -97,7 +98,7 @@ class Embarque(db.Model):
     @property
     def itens_ativos(self):
         """Retorna apenas os itens ativos do embarque"""
-        return [item for item in self.embarque.itens if item.status == 'ativo']
+        return [item for item in self.itens if item.status == 'ativo']
 
     @property
     def status_nfs(self):
@@ -107,7 +108,7 @@ class Embarque(db.Model):
         - 'Pendente Import.' - Caso as NFs estejam preenchidas, porém tenha NF ainda não importada
         - 'NFs Lançadas' - Todas as NFs estão lançadas e validadas pelo faturamento
         """
-        itens_ativos = [item for item in self.embarque.itens if item.status == 'ativo']
+        itens_ativos = [item for item in self.itens if item.status == 'ativo']
         
         if not itens_ativos:
             return 'NFs pendentes'
