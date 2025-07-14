@@ -49,6 +49,74 @@ class SmartBaseAgent(BaseSpecialistAgent):
         
         logger.info(f"✅ {self.agent_type.value}: SmartBaseAgent inicializado (modo especialista)")
 
+    def process_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Processa uma consulta - compatibilidade com CoordinatorManager
+        
+        Este método é síncrono e fornece análise especializada do domínio
+        """
+        try:
+            # Garantir que temos um contexto
+            if context is None:
+                context = {}
+            
+            # Log estruturado
+            self.logger_estruturado.info(f"📊 Processando query: {query[:50]}...")
+            
+            # Análise de relevância
+            relevance = self._calculate_relevance(query)
+            
+            # Se não for relevante para este domínio
+            if relevance < 0.3:
+                return {
+                    'agent': self.agent_type.value,
+                    'relevance': relevance,
+                    'response': None,
+                    'reasoning': f'Consulta não relevante para domínio {self.agent_type.value}'
+                }
+            
+            # Processar dados reais se disponíveis no contexto
+            response_text = f"Análise especializada em {self.agent_type.value}:\n\n"
+            
+            if 'dados_reais' in context and context['dados_reais']:
+                resumo = self._resumir_dados_reais(context['dados_reais'])
+                
+                if resumo.get('dados_encontrados'):
+                    response_text += f"📊 Dados encontrados:\n"
+                    for key, value in resumo.items():
+                        if key not in ['timestamp', 'dominio', 'dados_encontrados', 'erro']:
+                            response_text += f"- {key}: {value}\n"
+                else:
+                    response_text += "Nenhum dado específico encontrado para esta consulta.\n"
+            else:
+                response_text += "Aguardando dados do sistema...\n"
+            
+            # Adicionar conhecimento do domínio
+            domain_knowledge = self._load_domain_knowledge()
+            if domain_knowledge.get('kpis'):
+                response_text += f"\n📈 KPIs relevantes: {', '.join(domain_knowledge['kpis'][:3])}"
+            
+            return {
+                'agent': self.agent_type.value,
+                'relevance': relevance,
+                'response': response_text,
+                'confidence': 0.8 if relevance > 0.7 else 0.6,
+                'timestamp': datetime.now().isoformat(),
+                'reasoning': f'Análise especializada em {self.agent_type.value}',
+                'success': True
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao processar query no {self.agent_type.value}: {e}")
+            # Retornar resposta de erro estruturada
+            return {
+                'agent': self.agent_type.value,
+                'error': str(e),
+                'response': f"Erro ao processar consulta: {str(e)}",
+                'success': False,
+                'timestamp': datetime.now().isoformat()
+            }
+
     def _inicializar_capacidades_basicas(self):
         """Inicializa apenas capacidades básicas para especialização"""
         

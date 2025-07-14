@@ -46,6 +46,11 @@ class BaseSpecialistAgent(ABC):
         """Retorna palavras-chave específicas do domínio (deve ser implementado)"""
         pass
     
+    @abstractmethod
+    def _resumir_dados_reais(self, dados_reais: Dict[str, Any]) -> Dict[str, Any]:
+        """Resume dados reais específicos do domínio (deve ser implementado)"""
+        pass
+
     async def analyze(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Analisa consulta específica do domínio
