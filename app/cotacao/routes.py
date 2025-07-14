@@ -92,7 +92,7 @@ def formatar_data_brasileira(data):
         if data is not None and hasattr(data, 'strftime'):
             return data.strftime('%d/%m/%Y')
         
-                    # Se for string, tenta converter
+        else          # Se for string, tenta converter
             if isinstance(data, str):
                 data = data.strip()
                 if not data or data.lower() in ['none', 'null', '']:
@@ -2958,16 +2958,17 @@ def incluir_em_embarque():
         pedidos_nao_incluidos = []
         
         for pedido in pedidos:
-            # Verificar se o pedido já não está em outro embarque ativo
-            item_existente = EmbarqueItem.query.join(Embarque).filter(
-                EmbarqueItem.pedido == pedido.num_pedido,
-                EmbarqueItem.status == 'ativo',
-                Embarque.status == 'ativo'
-            ).first()
-            
-            if item_existente:
-                flash(f'⚠️ Pedido {pedido.num_pedido} já está no embarque #{item_existente.embarque.numero}', 'warning')
-                continue
+            # ✅ CORREÇÃO: PERMITIR MÚLTIPLOS EMBARQUES PARA O MESMO PEDIDO
+            # Comentado: Verificação que impedia múltiplos embarques
+            # item_existente = EmbarqueItem.query.join(Embarque).filter(
+            #     EmbarqueItem.pedido == pedido.num_pedido,
+            #     EmbarqueItem.status == 'ativo',
+            #     Embarque.status == 'ativo'
+            # ).first()
+            # 
+            # if item_existente:
+            #     flash(f'⚠️ Pedido {pedido.num_pedido} já está no embarque #{item_existente.embarque.numero}', 'warning')
+            #     continue
             
             # ✅ CORREÇÃO: Busca cidade normalizada para consistência
             cidade_obj = LocalizacaoService.buscar_cidade_unificada(

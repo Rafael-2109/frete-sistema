@@ -31,6 +31,46 @@ embarques_bp = Blueprint('embarques', __name__,url_prefix='/embarques')
 # Importa a função centralizada
 from app.utils.embarque_numero import obter_proximo_numero_embarque
 
+def apagar_fretes_sem_cte_embarque(embarque_id):
+    """
+    🔧 NOVA FUNÇÃO: Apaga fretes existentes do embarque que não possuem CTe preenchido
+    
+    Esta função resolve o problema de sincronização entre embarques e fretes:
+    - Busca todos os fretes do embarque
+    - Remove apenas os fretes que NÃO têm CTe preenchido
+    - Preserva fretes que já têm CTe (para não perder dados já processados)
+    - Retorna informações sobre a operação
+    """
+    try:
+        from app.fretes.models import Frete
+        
+        # Busca fretes do embarque sem CTe preenchido
+        fretes_sem_cte = Frete.query.filter(
+            Frete.embarque_id == embarque_id,
+            Frete.status != 'CANCELADO',
+            db.or_(
+                Frete.numero_cte.is_(None),
+                Frete.numero_cte == '',
+                Frete.valor_cte.is_(None)
+            )
+        ).all()
+        
+        if not fretes_sem_cte:
+            return True, "Nenhum frete sem CTe encontrado"
+        
+        # Remove os fretes sem CTe
+        fretes_removidos = []
+        for frete in fretes_sem_cte:
+            fretes_removidos.append(f"Frete #{frete.id} (CNPJ: {frete.cnpj_cliente})")
+            db.session.delete(frete)
+        
+        # Não faz commit aqui - será feito junto com o salvamento do embarque
+        
+        return True, f"✅ {len(fretes_removidos)} frete(s) sem CTe removido(s) antes do salvamento"
+        
+    except Exception as e:
+        return False, f"Erro ao apagar fretes sem CTe: {str(e)}"
+
 @embarques_bp.route('/<int:id>', methods=['GET', 'POST'])
 @login_required
 @require_embarques()  # 🔒 VENDEDORES: Apenas com dados próprios
@@ -69,23 +109,22 @@ def visualizar_embarque(id):
                 item_form.cidade_destino.choices = [('', '--Selecione--')]
 
         action = request.form.get('action')
-
-        if action == 'add_line':
-            # Não validamos, só adicionamos 1 item em branco
-            form.itens.append_entry({})
-            dados_portaria = obter_dados_portaria_embarque(embarque.id)
-            return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria)
-
-        elif action and action.startswith('remove_line_'):
-            # Excluir a linha i
-            line_idx = int(action.split('_')[-1])
-            if line_idx < len(form.itens.entries):
-                del form.itens.entries[line_idx]
+        
+        if action == 'add_item':
+            # Código para adicionar item
             dados_portaria = obter_dados_portaria_embarque(embarque.id)
             return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria)
 
         elif action == 'save':
-
+            # 🔧 NOVA LÓGICA: Antes de salvar, remove fretes sem CTe
+            try:
+                sucesso_limpeza, resultado_limpeza = apagar_fretes_sem_cte_embarque(embarque.id)
+                if sucesso_limpeza:
+                    flash(f"🔄 {resultado_limpeza}", "info")
+                else:
+                    flash(f"⚠️ {resultado_limpeza}", "warning")
+            except Exception as e:
+                flash(f"⚠️ Erro na limpeza de fretes: {str(e)}", "warning")
             
             # Agora sim, validar
             if form.validate_on_submit():
