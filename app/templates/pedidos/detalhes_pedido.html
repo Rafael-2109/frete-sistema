@@ -14,7 +14,7 @@
                     <a href="{{ url_for('pedidos.lista_pedidos') }}" class="btn btn-secondary">
                         <i class="fas fa-arrow-left"></i> Voltar à Lista
                     </a>
-                    {% if pedido.status_calculado == 'ABERTO' %}
+                    {% if not pedido.status_calculado == 'FATURADO' %}
                     <a href="{{ url_for('pedidos.editar_pedido', pedido_id=pedido.id) }}" class="btn btn-primary">
                         <i class="fas fa-edit"></i> Editar
                     </a>
@@ -367,7 +367,7 @@
                 <a href="{{ url_for('pedidos.lista_pedidos') }}" class="btn btn-secondary">
                     <i class="fas fa-arrow-left"></i> Voltar à Lista
                 </a>
-                {% if pedido.status_calculado == 'ABERTO' %}
+                {% if not pedido.status_calculado == 'FATURADO' %}
                 <a href="{{ url_for('pedidos.editar_pedido', pedido_id=pedido.id) }}" class="btn btn-primary">
                     <i class="fas fa-edit"></i> Editar Pedido
                 </a>
