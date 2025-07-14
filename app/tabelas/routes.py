@@ -632,7 +632,16 @@ def listar_todas_tabelas():
 @tabelas_bp.route('/editar_tabela_frete/<int:tabela_id>', methods=['GET', 'POST'])
 @login_required
 def editar_tabela_frete(tabela_id):
-    tabela = TabelaFrete.query.get_or_404(tabela_id)
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        tabela = TabelaFrete.query.get_or_404(tabela_id)
+        logger.info(f"🔍 Editando tabela ID: {tabela_id} - {tabela.nome_tabela}")
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar tabela {tabela_id}: {str(e)}")
+        flash(f'Erro ao buscar tabela: {str(e)}', 'error')
+        return redirect(url_for('tabelas.listar_todas_tabelas'))
 
     if request.method == 'POST':
         form = TabelaFreteForm()
@@ -644,34 +653,85 @@ def editar_tabela_frete(tabela_id):
     form.uf_destino.choices = UF_LIST
 
     if form.validate_on_submit():
-        tabela.transportadora_id = form.transportadora.data
-        tabela.uf_origem = form.uf_origem.data
-        tabela.uf_destino = form.uf_destino.data
-        tabela.nome_tabela = form.nome_tabela.data
-        tabela.tipo_carga = form.tipo_carga.data
-        tabela.modalidade = form.modalidade.data
+        try:
+            logger.info(f"📝 Iniciando atualização da tabela {tabela_id}")
+            
+            # Função para sanitizar strings e evitar problemas de encoding
+            def sanitize_string(value):
+                if value is None:
+                    return None
+                try:
+                    # Converte para string e remove caracteres problemáticos
+                    str_value = str(value).encode('utf-8', errors='ignore').decode('utf-8')
+                    return str_value.strip()
+                except (UnicodeDecodeError, UnicodeEncodeError) as e:
+                    logger.warning(f"⚠️ Problema de encoding corrigido em: {value}")
+                    return str(value).encode('ascii', errors='ignore').decode('ascii')
+            
+            # Função para conversão segura de float
+            def safe_float(value):
+                if not value or value == '':
+                    return 0.0
+                try:
+                    return float(str(value).replace(',', '.'))
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"⚠️ Valor numérico inválido: {value}, usando 0.0")
+                    return 0.0
+            
+            # Atualizar campos com sanitização
+            tabela.transportadora_id = form.transportadora.data
+            tabela.uf_origem = sanitize_string(form.uf_origem.data)
+            tabela.uf_destino = sanitize_string(form.uf_destino.data)
+            tabela.nome_tabela = sanitize_string(form.nome_tabela.data)
+            tabela.tipo_carga = sanitize_string(form.tipo_carga.data)
+            tabela.modalidade = sanitize_string(form.modalidade.data)
 
-        tabela.valor_kg = float(form.valor_kg.data) if form.valor_kg.data else 0.0
-        tabela.frete_minimo_peso = float(form.frete_minimo_peso.data) if form.frete_minimo_peso.data else 0.0
-        tabela.percentual_valor = float(form.percentual_valor.data) if form.percentual_valor.data else 0.0
-        tabela.frete_minimo_valor = float(form.frete_minimo_valor.data) if form.frete_minimo_valor.data else 0.0
-        tabela.percentual_gris = float(form.percentual_gris.data) if form.percentual_gris.data else 0.0
-        tabela.percentual_adv = float(form.percentual_adv.data) if form.percentual_adv.data else 0.0
-        tabela.percentual_rca = float(form.percentual_rca.data) if form.percentual_rca.data else 0.0
-        tabela.pedagio_por_100kg = float(form.pedagio_por_100kg.data) if form.pedagio_por_100kg.data else 0.0
-        tabela.valor_despacho = float(form.valor_despacho.data) if form.valor_despacho.data else 0.0
-        tabela.valor_cte = float(form.valor_cte.data) if form.valor_cte.data else 0.0
-        tabela.valor_tas = float(form.valor_tas.data) if form.valor_tas.data else 0.0
+            # Atualizar campos numéricos com validação
+            tabela.valor_kg = safe_float(form.valor_kg.data)
+            tabela.frete_minimo_peso = safe_float(form.frete_minimo_peso.data)
+            tabela.percentual_valor = safe_float(form.percentual_valor.data)
+            tabela.frete_minimo_valor = safe_float(form.frete_minimo_valor.data)
+            tabela.percentual_gris = safe_float(form.percentual_gris.data)
+            tabela.percentual_adv = safe_float(form.percentual_adv.data)
+            tabela.percentual_rca = safe_float(form.percentual_rca.data)
+            tabela.pedagio_por_100kg = safe_float(form.pedagio_por_100kg.data)
+            tabela.valor_despacho = safe_float(form.valor_despacho.data)
+            tabela.valor_cte = safe_float(form.valor_cte.data)
+            tabela.valor_tas = safe_float(form.valor_tas.data)
 
-        tabela.icms_incluso = form.icms_incluso.data
-        tabela.criado_por = current_user.nome
+            tabela.icms_incluso = form.icms_incluso.data
+            tabela.criado_por = sanitize_string(current_user.nome)
 
-        db.session.commit()
-        flash('Tabela atualizada com sucesso!', 'success')
-        return redirect(url_for('tabelas.listar_todas_tabelas'))
+            logger.info(f"💾 Salvando alterações da tabela {tabela_id}")
+            db.session.commit()
+            
+            logger.info(f"✅ Tabela {tabela_id} atualizada com sucesso")
+            flash('Tabela atualizada com sucesso!', 'success')
+            return redirect(url_for('tabelas.listar_todas_tabelas'))
+            
+        except UnicodeDecodeError as e:
+            logger.error(f"❌ Erro de encoding UTF-8 na tabela {tabela_id}: {str(e)}")
+            db.session.rollback()
+            flash(f'Erro de codificação: Verifique se não há caracteres especiais nos dados. Detalhes: {str(e)}', 'error')
+            
+        except ValueError as e:
+            logger.error(f"❌ Erro de valor na tabela {tabela_id}: {str(e)}")
+            db.session.rollback()
+            flash(f'Erro nos valores numéricos: {str(e)}', 'error')
+            
+        except Exception as e:
+            logger.error(f"❌ Erro inesperado na atualização da tabela {tabela_id}: {str(e)}")
+            db.session.rollback()
+            flash(f'Erro inesperado ao atualizar tabela: {str(e)}', 'error')
 
     form.transportadora.data = tabela.transportadora_id
-    tabelas = TabelaFrete.query.all()
+    
+    try:
+        tabelas = TabelaFrete.query.all()
+    except Exception as e:
+        logger.error(f"❌ Erro ao listar tabelas: {str(e)}")
+        tabelas = []
+        flash(f'Aviso: Não foi possível carregar a lista de tabelas: {str(e)}', 'warning')
 
     return render_template('tabelas/tabelas_frete.html', form=form, tabela=tabela, tabelas=tabelas)
 

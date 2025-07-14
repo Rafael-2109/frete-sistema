@@ -427,6 +427,7 @@ def create_app(config_name=None):
     from app.cotacao.routes import cotacao_bp
     from app.portaria.routes import portaria_bp
     from app.api.routes import api_bp
+    from app.api.odoo import odoo_bp  # ✅ Novo blueprint da API Odoo
     from app.claude_ai import claude_ai_bp
     
     # 📦 Importando blueprints dos módulos de carteira (seguindo padrão existente)
@@ -455,6 +456,9 @@ def create_app(config_name=None):
     
     # 🆕 API REST para funcionalidades MCP
     app.register_blueprint(api_bp)
+    
+    # 🔗 API Odoo Integration
+    app.register_blueprint(odoo_bp)  # ✅ Novo blueprint da API Odoo
     
     # 🤖 Claude AI Integration
     app.register_blueprint(claude_ai_bp)

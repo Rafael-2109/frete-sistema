@@ -387,7 +387,7 @@ class OdooIntegration:
                 'message': str(e)
             }
     
-    def sync_orders_to_system(self, limit: Ont = None, days_back: int = 30) -> Dict[str, Any]:
+    def sync_orders_to_system(self, limit: Optional[int] = None, days_back: int = 30) -> Dict[str, Any]:
         """Sincronizar pedidos do Odoo para o sistema"""
         try:
             date_from = datetime.now() - timedelta(days=days_back)
