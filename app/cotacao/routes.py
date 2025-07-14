@@ -92,7 +92,7 @@ def formatar_data_brasileira(data):
         if data is not None and hasattr(data, 'strftime'):
             return data.strftime('%d/%m/%Y')
         
-        else          # Se for string, tenta converter
+        else:          
             if isinstance(data, str):
                 data = data.strip()
                 if not data or data.lower() in ['none', 'null', '']:
