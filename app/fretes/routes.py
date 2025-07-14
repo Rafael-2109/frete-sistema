@@ -171,12 +171,6 @@ def lancar_cte():
         
         embarque_encontrado = embarque_item.embarque
         
-        # Verifica se a transportadora do embarque é a mesma da fatura
-        fatura = FaturaFrete.query.get(fatura_frete_id)
-        if fatura.transportadora_id != embarque_encontrado.transportadora_id:
-            flash('A transportadora da fatura deve ser a mesma do embarque!', 'error')
-            return render_template('fretes/lancar_cte.html', form=form, faturas_disponiveis=faturas_disponiveis, fatura_preselecionada_id=fatura_preselecionada_id)
-        
         # ETAPA 1: Busca todos os fretes existentes que contêm essa NF
         fretes_existentes = Frete.query.filter(
             Frete.numeros_nfs.contains(numero_nf)

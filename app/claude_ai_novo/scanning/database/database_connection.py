@@ -112,7 +112,25 @@ class DatabaseConnection:
             if database_url.startswith('postgres://'):
                 database_url = database_url.replace('postgres://', 'postgresql://', 1)
             
-            self.db_engine = create_engine(database_url)
+            # Adicionar parâmetros de encoding UTF-8 para PostgreSQL
+            if 'postgresql://' in database_url:
+                # Se já tem parâmetros
+                if '?' in database_url:
+                    database_url += '&client_encoding=utf8'
+                else:
+                    database_url += '?client_encoding=utf8'
+            
+            # Criar engine com configurações adicionais para evitar problemas de encoding
+            self.db_engine = create_engine(
+                database_url,
+                connect_args={
+                    'client_encoding': 'utf8',
+                    'connect_timeout': 10
+                },
+                pool_pre_ping=True,  # Verificar conexão antes de usar
+                pool_size=5,
+                max_overflow=10
+            )
             
             # Criar session maker
             session_maker = sessionmaker(bind=self.db_engine)
@@ -143,10 +161,20 @@ class DatabaseConnection:
             if not db_password:
                 return False
             
-            # Construir URL de conexão
-            database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+            # Construir URL de conexão com encoding UTF-8
+            database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?client_encoding=utf8"
             
-            self.db_engine = create_engine(database_url)
+            # Criar engine com configurações adicionais
+            self.db_engine = create_engine(
+                database_url,
+                connect_args={
+                    'client_encoding': 'utf8',
+                    'connect_timeout': 10
+                },
+                pool_pre_ping=True,
+                pool_size=5,
+                max_overflow=10
+            )
             
             # Criar session maker
             session_maker = sessionmaker(bind=self.db_engine)

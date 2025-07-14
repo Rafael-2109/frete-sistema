@@ -294,7 +294,7 @@ class MainOrchestrator:
             OrchestrationStep(
                 name="analyze_query",
                 component="analyzers",
-                method="analyze_intention",
+                method="analyze_query",  # Mudando para analyze_query que é mais completo
                 parameters={"query": "{query}", "context": "{load_memory_result}"},
                 dependencies=["load_memory"]
             ),
@@ -302,7 +302,8 @@ class MainOrchestrator:
                 name="load_data",
                 component="loaders",  # Usar LoaderManager ao invés de providers!
                 method="load_data_by_domain",
-                parameters={"domain": "{analyze_query_result.dominio}", "filters": "{analyze_query_result.filters}"},
+                # Correção: analyze_query retorna 'domains' (lista), pegar o primeiro
+                parameters={"domain": "{analyze_query_result.domains[0]}", "filters": "{analyze_query_result.filters}"},
                 dependencies=["analyze_query"]
             ),
             OrchestrationStep(
@@ -312,7 +313,7 @@ class MainOrchestrator:
                 parameters={
                     "data": "{load_data_result}",
                     "query": "{query}",
-                    "domain": "{analyze_query_result.dominio}"
+                    "domain": "{analyze_query_result.domains[0]}"  # Mesma correção aqui
                 },
                 dependencies=["load_data"]
             ),
@@ -343,6 +344,11 @@ class MainOrchestrator:
             )
         ])
     
+    def _generate_session_id(self) -> str:
+        """Gera um ID único para a sessão"""
+        import uuid
+        return f"session_{uuid.uuid4().hex[:12]}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    
     def process_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         🎯 MÉTODO PRINCIPAL: Processa uma query usando TODA a inteligência do sistema
@@ -356,11 +362,17 @@ class MainOrchestrator:
         """
         logger.info(f"🎯 MainOrchestrator.process_query: '{query[:50]}...'")
         
+        # Garantir que temos um session_id
+        context = context or {}
+        if 'session_id' not in context:
+            context['session_id'] = self._generate_session_id()
+        
         # Preparar dados para o workflow
         data = {
             'query': query,
-            'context': context or {},
+            'context': context,
             'timestamp': datetime.now().isoformat(),
+            'session_id': context['session_id'],  # Passar session_id explicitamente
             '_from_main': True  # Evitar loops
         }
         

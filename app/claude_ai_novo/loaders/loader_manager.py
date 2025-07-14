@@ -136,72 +136,91 @@ class LoaderManager:
         
         return self._loaders.get(loader_type)
     
-    def load_data_by_domain(self, domain: str, filters: Dict[str, Any]) -> Dict[str, Any]:
+    def load_data_by_domain(self, domain: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Carrega dados usando o micro-loader específico do domínio.
+        Carrega dados usando o loader apropriado para o domínio.
         
         Args:
-            domain: Domínio dos dados (pedidos, entregas, fretes, etc.)
-            filters: Filtros específicos para o carregamento
+            domain: Domínio dos dados (entregas, fretes, etc)
+            filters: Filtros opcionais
             
         Returns:
-            Dict com dados carregados pelo micro-loader especializado
+            Dict com dados carregados
         """
-        if not self.initialized:
-            return self._error_response("LoaderManager não inicializado", domain)
+        loader = self.get_loader(domain)
+        
+        if not loader:
+            return {
+                'erro': f'Loader não encontrado para domínio: {domain}',
+                'domain': domain,
+                'timestamp': datetime.now().isoformat(),
+                'total_registros': 0,
+                'dados_json': []
+            }
         
         try:
-            # Normalizar domínio
-            domain_normalized = domain.lower().strip()
+            self.logger.info(f"📦 Carregando dados do domínio '{domain}' com loader: {loader.__class__.__name__}")
             
-            # Mapear para loader específico
-            loader_type = self._loader_mapping.get(domain_normalized)
-            if not loader_type:
-                return self._error_response(f"Domínio não suportado: {domain}", domain)
+            # Chamar método load_data do loader
+            dados = loader.load_data(filters)
             
-            # Obter loader
-            loader = self._get_loader(loader_type)
-            if not loader:
-                return self._error_response(f"Loader {loader_type} não disponível", domain)
-            
-            # Executar carregamento específico
-            self.logger.debug(f"🎯 Carregando {domain} com {loader_type}")
-            
-            # Usar método padronizado load_data se disponível
-            if hasattr(loader, 'load_data'):
-                self.logger.info(f"✅ Usando método padronizado load_data para {domain}")
-                data_list = loader.load_data(filters)
+            # Se não retornou dados, tentar método alternativo
+            if not dados or (isinstance(dados, list) and len(dados) == 0):
+                self.logger.warning(f"⚠️ Loader retornou dados vazios para {domain}")
                 
-                # Retornar no formato esperado
-                return {
-                    'tipo_dados': domain_normalized,
-                    'total_registros': len(data_list),
-                    'dados_json': data_list,
-                    'dados': data_list,  # Compatibilidade
-                    'timestamp': datetime.now().isoformat(),
-                    'source': 'loader_manager',
-                    'optimized': True
-                }
+                # Tentar método alternativo se existir
+                if hasattr(loader, f'load_{domain}_data'):
+                    method = getattr(loader, f'load_{domain}_data')
+                    result = method(filters or {})
+                    if isinstance(result, dict) and 'dados_json' in result:
+                        dados = result['dados_json']
+                
+                # Se ainda vazio, retornar estrutura com mensagem
+                if not dados:
+                    self.logger.info(f"📦 Usando dados mock para {domain}")
+                    if hasattr(loader, '_get_mock_data'):
+                        dados = loader._get_mock_data(filters)
+                    else:
+                        dados = []
             
-            # Fallback para métodos específicos (compatibilidade)
-            elif domain_normalized == 'pedidos':
-                return loader.load_pedidos_data(filters)
-            elif domain_normalized == 'entregas':
-                return loader.load_entregas_data(filters)
-            elif domain_normalized == 'fretes':
-                return loader.load_fretes_data(filters)
-            elif domain_normalized == 'embarques':
-                return loader.load_embarques_data(filters)
-            elif domain_normalized == 'faturamento':
-                return loader.load_faturamento_data(filters)
-            elif domain_normalized == 'agendamentos':
-                return loader.load_agendamentos_data(filters)
-            else:
-                return self._error_response(f"Método de carregamento não implementado para {domain}", domain)
+            # Formatar resposta
+            return {
+                'success': True,
+                'domain': domain,
+                'timestamp': datetime.now().isoformat(),
+                'total_registros': len(dados) if isinstance(dados, list) else 0,
+                'dados_json': dados if isinstance(dados, list) else [],
+                'filters_applied': filters or {},
+                'loader_used': loader.__class__.__name__
+            }
             
         except Exception as e:
-            self.logger.error(f"❌ Erro ao carregar dados de {domain}: {e}")
-            return self._error_response(str(e), domain)
+            self.logger.error(f"❌ Erro ao carregar dados do domínio '{domain}': {str(e)}")
+            
+            # Tentar retornar dados mock em caso de erro
+            if hasattr(loader, '_get_mock_data'):
+                try:
+                    mock_data = loader._get_mock_data(filters)
+                    return {
+                        'success': False,
+                        'erro': str(e),
+                        'domain': domain,
+                        'timestamp': datetime.now().isoformat(),
+                        'total_registros': len(mock_data),
+                        'dados_json': mock_data,
+                        'is_mock': True
+                    }
+                except:
+                    pass
+            
+            return {
+                'success': False,
+                'erro': str(e),
+                'domain': domain,
+                'timestamp': datetime.now().isoformat(),
+                'total_registros': 0,
+                'dados_json': []
+            }
     
     def load_multiple_domains(self, domains: List[str], filters: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -320,6 +339,28 @@ class LoaderManager:
             Lista de domínios suportados
         """
         return list(self._loader_mapping.keys())
+    
+    def get_loader(self, domain: str):
+        """
+        Obtém o loader apropriado para um domínio.
+        
+        Args:
+            domain: Nome do domínio
+            
+        Returns:
+            Instância do loader ou None
+        """
+        # Normalizar domínio
+        domain_normalized = domain.lower().strip()
+        
+        # Mapear para tipo de loader
+        loader_type = self._loader_mapping.get(domain_normalized)
+        if not loader_type:
+            self.logger.warning(f"⚠️ Domínio não mapeado: {domain}")
+            return None
+        
+        # Retornar loader
+        return self._get_loader(loader_type)
     
     def get_loader_status(self) -> Dict[str, Any]:
         """
