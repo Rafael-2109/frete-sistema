@@ -174,7 +174,7 @@ if AUTO_DISCOVERY_CONFIG['enabled']:
 try:
     from app.claude_ai_novo.commands.base_command import (
         BaseCommand, format_response_advanced, create_excel_summary, 
-        detect_command_type, logging, datetime, db, current_user
+        detect_command_type
     )
     BASE_AVAILABLE = True
     logger.info("✅ Base commands carregados")

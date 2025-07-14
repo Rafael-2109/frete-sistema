@@ -4,9 +4,11 @@ Excel Orchestrator - Orquestrador otimizado dos mini esqueletos Excel
 Versão avançada integrada com BaseCommand e patterns inteligentes
 """
 
+import logging
+from datetime import datetime
+
 from app.claude_ai_novo.commands.base_command import (
-    BaseCommand, format_response_advanced, create_excel_summary, detect_command_type,
-    logging, datetime, db, current_user
+    BaseCommand, format_response_advanced, create_excel_summary, detect_command_type
 )
 
 # Imports condicionais dos mini esqueletos da pasta excel/

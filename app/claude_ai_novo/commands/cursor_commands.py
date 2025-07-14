@@ -4,9 +4,11 @@ CursorCommands - Comandos especializados para Cursor Mode
 Versão otimizada integrada com BaseCommand
 """
 
+import logging
+from datetime import datetime
+
 from app.claude_ai_novo.commands.base_command import (
-    BaseCommand, format_response_advanced, detect_command_type,
-    logging, datetime, db, current_user
+    BaseCommand, format_response_advanced, detect_command_type
 )
 
 logger = logging.getLogger(__name__)
