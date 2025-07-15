@@ -55,7 +55,18 @@ def dashboard():
             else:
                 resultado['performance_status'] = 'aceitavel'
         
-        return render_template('odoo/carteira/dashboard.html', resultado=resultado)
+        # Limpar dados sensíveis antes de renderizar
+        dados_template = {
+            'sucesso': resultado.get('sucesso'),
+            'total_registros': resultado.get('total_registros', 0),
+            'tempo_consulta': resultado.get('tempo_consulta'),
+            'performance_info': resultado.get('performance_info'),
+            'performance_status': resultado.get('performance_status'),
+            'mensagem': resultado.get('mensagem'),
+            'erro': resultado.get('erro')
+        }
+        
+        return render_template('odoo/carteira/dashboard.html', resultado=dados_template)
         
     except Exception as e:
         logger.error(f"Erro no dashboard otimizado: {e}")
@@ -64,8 +75,9 @@ def dashboard():
         # Fallback emergency
         resultado_fallback = {
             'sucesso': False,
-            'error': str(e),
-            'mensagem': 'Dashboard temporariamente indisponível'
+            'erro': str(e),
+            'mensagem': 'Dashboard temporariamente indisponível',
+            'total_registros': 0
         }
         return render_template('odoo/carteira/dashboard.html', resultado=resultado_fallback)
 

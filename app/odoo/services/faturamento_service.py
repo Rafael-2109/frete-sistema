@@ -328,10 +328,10 @@ class FaturamentoService:
             start_time = time.time()
             logger.info("🚀 SINCRONIZAÇÃO INCREMENTAL + INTEGRAÇÃO COMPLETA")
             
-            # ⚡ Buscar dados do Odoo com filtro obrigatório
+            # ⚡ Buscar dados do Odoo com filtro obrigatório e limite para performance
             resultado = self.obter_faturamento_otimizado(
                 usar_filtro_postado=True,
-                limite=0  # Sem limite para sincronização completa
+                limite=0  # Usará limite interno de 2000 registros para evitar timeout
             )
             
             if not resultado['sucesso']:
@@ -612,17 +612,25 @@ class FaturamentoService:
             
             logger.info("📋 Buscando linhas de faturamento...")
             
-            # 🚀 SISTEMA DE LOTES para grandes volumes
+            # 🚀 SISTEMA DE LOTES INTELIGENTE para evitar timeouts
             if limite and limite > 0:
                 # Dashboard/consulta rápida - limite baixo
                 dados_odoo_brutos = self.connection.search_read(
                     'account.move.line', domain, campos_basicos, limit=limite*2
                 )
             else:
-                # Sincronização completa - sem limite
+                # ⚡ SINCRONIZAÇÃO LIMITADA para evitar timeouts
+                logger.info("🔄 Usando sincronização limitada...")
+                max_records = 2000  # Máximo 2000 registros para evitar timeout
+                
                 dados_odoo_brutos = self.connection.search_read(
-                    'account.move.line', domain, campos_basicos
+                    'account.move.line', 
+                    domain, 
+                    campos_basicos, 
+                    limit=max_records
                 )
+                
+                logger.info(f"📊 Total carregado: {len(dados_odoo_brutos)} registros (limitado para performance)")
             
             if not dados_odoo_brutos:
                 return {

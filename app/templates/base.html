@@ -12,9 +12,8 @@
     <style>
         /* Força altura fixa do navbar */
         .navbar {
-            height: 56px !important; /* Altura padrão do Bootstrap navbar */
+            height: auto !important; /* Permite altura dinâmica */
             min-height: 56px !important;
-            max-height: 56px !important;
             overflow: visible; /* Permite dropdowns saírem do navbar */
         }
         
@@ -87,6 +86,30 @@
                 width: 100%;
                 margin-bottom: 15px;
             }
+            
+            .navbar-collapse {
+                max-height: none !important;
+            }
+            
+            .navbar-nav {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .nav-item {
+                width: 100%;
+            }
+        }
+        
+        /* Correções para texto dos dropdowns */
+        .dropdown-item {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .dropdown-header {
+            white-space: nowrap;
         }
     </style>
 </head>

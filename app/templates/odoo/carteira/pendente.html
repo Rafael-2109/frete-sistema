@@ -177,8 +177,8 @@
                                     <td>R$ {{ "{:,.2f}".format((item.preco_produto_pedido or 0) * (item.qtd_saldo_produto_pedido or 0)) }}</td>
                                     <td>{{ item.vendedor or 'N/A' }}</td>
                                     <td>
-                                            <span class="badge bg-light text-dark">{{ item.status_pedido or 'N/A' }}</span>
-                                        {% endif %}
+                                        <span class="badge bg-light text-dark">{{ item.status_pedido or 'N/A' }}</span>
+                                    </td>
                                     <td>
                                         <div class="btn-group" role="group">
                                             <button type="button" class="btn btn-sm btn-outline-info" 

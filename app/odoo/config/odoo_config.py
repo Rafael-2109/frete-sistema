@@ -14,6 +14,6 @@ ODOO_CONFIG = {
     'database': 'odoo-17-ee-nacomgoya-prd',
     'username': 'rafael@conservascampobelo.com.br',
     'api_key': '67705b0986ff5c052e657f1c0ffd96ceb191af69',
-    'timeout': 30,
+    'timeout': 120,  # 🔧 Aumentado para 120s para evitar timeouts
     'retry_attempts': 3
 } 

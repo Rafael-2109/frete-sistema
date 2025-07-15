@@ -165,10 +165,10 @@ def consolidado():
             resultado['dados_consolidados'] = dados_consolidados
             resultado['total_consolidados'] = len(dados_consolidados)
             
-            flash(f"✅ {resultado['mensagem']}", 'success')
+            flash(f"✅ {resultado.get('mensagem', 'Dados consolidados com sucesso')}", 'success')
             flash(f"📋 Registros consolidados: {len(dados_consolidados)}", 'info')
         else:
-            flash(f"❌ Erro: {resultado['mensagem']}", 'error')
+            flash(f"❌ Erro: {resultado.get('mensagem', resultado.get('erro', 'Erro desconhecido'))}", 'error')
         
         return render_template('odoo/faturamento/consolidado.html', resultado=resultado)
         

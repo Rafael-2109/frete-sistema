@@ -243,4 +243,31 @@ class OdooConnection:
 def get_odoo_connection():
     """Retorna instância de conexão com Odoo"""
     from ..config.odoo_config import ODOO_CONFIG
-    return OdooConnection(ODOO_CONFIG) 
+    return OdooConnection(ODOO_CONFIG)
+
+
+def test_connection():
+    """Função de conveniência para testar conexão"""
+    try:
+        connection = get_odoo_connection()
+        result = connection.test_connection()
+        return result.get('success', False)
+    except Exception as e:
+        logger.error(f"Erro no teste de conexão: {e}")
+        return False
+
+
+def get_odoo_version():
+    """Função de conveniência para obter versão do Odoo"""
+    try:
+        connection = get_odoo_connection()
+        result = connection.test_connection()
+        if result.get('success'):
+            version_info = result.get('data', {}).get('version', {})
+            if isinstance(version_info, dict):
+                return version_info.get('server_version', 'Desconhecida')
+            return str(version_info)
+        return 'Desconhecida'
+    except Exception as e:
+        logger.error(f"Erro ao obter versão: {e}")
+        return 'Erro' 

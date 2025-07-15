@@ -165,9 +165,11 @@ class CarteiraService:
                     'endereco_ent': item.get('endereco_ent', ''),
                     'telefone_endereco_ent': item.get('telefone_endereco_ent', ''),
                     
-                    # Dados gerados automaticamente (timestamp, usuário)
-                    'data_importacao': datetime.now(),
-                    'usuario_importacao': 'Sistema Odoo'
+                    # 🛡️ AUDITORIA (campos corretos do modelo)
+                    'created_at': datetime.now(),
+                    'updated_at': datetime.now(),
+                    'created_by': 'Sistema Odoo',
+                    'updated_by': 'Sistema Odoo'
                 }
                 
                 dados_processados.append(item_processado)
@@ -430,9 +432,11 @@ class CarteiraService:
                 'endereco_ent': endereco.get('l10n_br_endereco_numero', ''),
                 'telefone_endereco_ent': endereco.get('phone', ''),
                 
-                # Metadados
-                'data_importacao': datetime.now(),
-                'usuario_importacao': 'Sistema Odoo REALMENTE Otimizado'
+                # 🛡️ AUDITORIA (campos corretos do modelo)
+                'created_at': datetime.now(),
+                'updated_at': datetime.now(), 
+                'created_by': 'Sistema Odoo REALMENTE Otimizado',
+                'updated_by': 'Sistema Odoo REALMENTE Otimizado'
             }
             
         except Exception as e:

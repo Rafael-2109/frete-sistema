@@ -93,10 +93,10 @@
                                     </div>
                                     {% endif %}
                                     
-                                    {% if resultado %}
+                                    {% if resultado and resultado.mensagem and not resultado.dados %}
                                     <div class="alert alert-info">
                                         <i class="fas fa-info-circle"></i> 
-                                        <strong>Status:</strong> {{ resultado }}
+                                        <strong>Status:</strong> {{ resultado.mensagem }}
                                     </div>
                                     {% endif %}
                                     
