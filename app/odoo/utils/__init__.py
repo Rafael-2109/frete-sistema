@@ -8,10 +8,10 @@ Inclui conexão, mapeamento de campos e validadores.
 Autor: Sistema de Fretes
 Data: 2025-07-14
 """
-
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.utils.carteira_mapper import CarteiraMapper
 from app.odoo.utils.faturamento_mapper import FaturamentoMapper
+
 
 # Funções de conveniência para manter compatibilidade
 def get_carteira_mapper():
@@ -33,5 +33,5 @@ __all__ = [
     'get_faturamento_mapper', 
     'get_faturamento_produto_mapper',
     'FaturamentoMapper',
-    'CarteiraMapper'
+    'CarteiraMapper',
 ] 

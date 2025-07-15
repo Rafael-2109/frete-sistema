@@ -69,7 +69,7 @@ class CarteiraService:
             domain = [('qty_saldo', '>', 0)]  # Carteira pendente
             campos_basicos = ['id', 'order_id', 'product_id', 'product_uom_qty', 'qty_saldo', 'qty_cancelado', 'price_unit']
             
-            dados_odoo_brutos = self.connection.search_read('sale.order.line', domain, campos_basicos, limit=100)
+            dados_odoo_brutos = self.connection.search_read('sale.order.line', domain, campos_basicos)
             
             if dados_odoo_brutos:
                 logger.info(f"✅ SUCESSO: {len(dados_odoo_brutos)} registros encontrados")
@@ -237,7 +237,7 @@ class CarteiraService:
                 'id', 'name', 'l10n_br_cnpj', 'l10n_br_razao_social',
                 'l10n_br_municipio_id', 'state_id', 'zip',
                 'l10n_br_endereco_bairro', 'l10n_br_endereco_numero',
-                'street', 'phone', 'country_id', 'agendamento'
+                'street', 'phone', 'agendamento'
             ]
             
             logger.info(f"🔍 Query 2/5: Buscando {len(all_partner_ids)} partners...")
@@ -429,7 +429,6 @@ class CarteiraService:
                 'rua_endereco_ent': endereco.get('street', ''),
                 'endereco_ent': endereco.get('l10n_br_endereco_numero', ''),
                 'telefone_endereco_ent': endereco.get('phone', ''),
-                'pais_endereco_ent': extrair_relacao(endereco.get('country_id'), 1),
                 
                 # Metadados
                 'data_importacao': datetime.now(),

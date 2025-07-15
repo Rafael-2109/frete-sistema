@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, make_response
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app import db

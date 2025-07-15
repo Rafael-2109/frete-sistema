@@ -119,7 +119,7 @@ def produtos():
     except Exception as e:
         logger.error(f"Erro ao obter faturamento por produto: {e}")
         flash(f"❌ Erro: {str(e)}", 'error')
-        return redirect(url_for('faturamento_odoo.produtos'))
+        return redirect(url_for('odoo.faturamento_odoo.produtos'))
 
 @faturamento_bp.route('/consolidado', methods=['GET', 'POST'])
 @login_required
@@ -157,15 +157,16 @@ def consolidado():
             nfs_especificas=nfs_lista
         )
         
-        # Consolidar dados
+        # Consolidar dados (usando dados diretos do resultado)
         if resultado['sucesso'] and resultado['dados']:
-            dados_consolidados = faturamento_service.consolidar_para_relatorio(resultado['dados'])
+            # Usar os dados já processados pelo service
+            dados_consolidados = resultado['dados']
             
             resultado['dados_consolidados'] = dados_consolidados
             resultado['total_consolidados'] = len(dados_consolidados)
             
             flash(f"✅ {resultado['mensagem']}", 'success')
-            flash(f"📋 NFs consolidadas: {len(dados_consolidados)}", 'info')
+            flash(f"📋 Registros consolidados: {len(dados_consolidados)}", 'info')
         else:
             flash(f"❌ Erro: {resultado['mensagem']}", 'error')
         
@@ -174,7 +175,7 @@ def consolidado():
     except Exception as e:
         logger.error(f"Erro na consolidação: {e}")
         flash(f"❌ Erro: {str(e)}", 'error')
-        return redirect(url_for('faturamento_odoo.consolidado'))
+        return redirect(url_for('odoo.faturamento_odoo.consolidado'))
 
 # === APIs REST ===
 
@@ -247,9 +248,10 @@ def api_consolidado():
             nfs_especificas=nfs_lista
         )
         
-        # Consolidar dados
+        # Consolidar dados (usando dados diretos do resultado)
         if resultado['sucesso'] and resultado['dados']:
-            dados_consolidados = faturamento_service.consolidar_para_relatorio(resultado['dados'])
+            # Usar os dados já processados pelo service
+            dados_consolidados = resultado['dados']
             
             resultado['dados_consolidados'] = dados_consolidados
             resultado['total_consolidados'] = len(dados_consolidados)
@@ -282,19 +284,19 @@ def teste_conexao():
         else:
             flash("❌ Falha na conexão com Odoo", 'error')
         
-        return redirect(url_for('faturamento_odoo.dashboard'))
+        return redirect(url_for('odoo.faturamento_odoo.dashboard'))
         
     except Exception as e:
         logger.error(f"Erro no teste de conexão: {e}")
         flash(f"❌ Erro no teste: {str(e)}", 'error')
-        return redirect(url_for('faturamento_odoo.dashboard'))
+        return redirect(url_for('odoo.faturamento_odoo.dashboard'))
 
 @faturamento_bp.route('/api/teste-conexao')
 @login_required
 def api_teste_conexao():
     """API para testar conexão com Odoo"""
     try:
-        from ..utils.connection import test_connection, get_odoo_version
+        from app.odoo.utils.connection import test_connection, get_odoo_version
         
         # Testar conexão
         conexao_ok = test_connection()
@@ -326,37 +328,84 @@ def sincronizar_faturamento_get():
 @login_required
 def sincronizar_faturamento():
     """
-    Sincroniza faturamento do Odoo para FaturamentoProduto e RelatorioFaturamentoImportado
+    🚀 SINCRONIZAÇÃO OTIMIZADA - Método incremental sugerido pelo usuário
+    
+    Estratégia inteligente:
+    - NF não existe → INSERT
+    - NF já existe → UPDATE apenas status
     """
     try:
-        from app.odoo.services.faturamento_service import sincronizar_faturamento_odoo
+        from app.odoo.services.faturamento_service import FaturamentoService
         
-        # Pegar parâmetro do checkbox
-        usar_filtro = request.form.get('usar_filtro_venda_bonificacao') == 'on'
+        # Obter tipo de sincronização do formulário
+        tipo_sinc = request.form.get('tipo_sincronizacao', 'incremental')
         
-        # Executar sincronização
-        resultado = sincronizar_faturamento_odoo(usar_filtro_venda_bonificacao=usar_filtro)
+        logger.info(f"🚀 Iniciando sincronização {tipo_sinc} de faturamento")
+        
+        # Executar sincronização baseada no tipo
+        service = FaturamentoService()
+        
+        if tipo_sinc == 'incremental':
+            # ⚡ MÉTODO INCREMENTAL (Recomendado pelo usuário)
+            resultado = service.sincronizar_faturamento_incremental()
+        else:
+            # 🐌 MÉTODO COMPLETO (Antigo - substituição total)
+            resultado = service.sincronizar_faturamento_completo()
         
         if resultado['sucesso']:
-            # Mensagem de sucesso
-            mensagem = f"✅ Sincronização concluída! "
-            mensagem += f"Produtos: {resultado['produtos_importados']} importados, {resultado['produtos_atualizados']} atualizados. "
-            mensagem += f"NFs consolidadas: {resultado['nfs_consolidadas']}"
+            # 📊 Mensagem personalizada por tipo
+            if tipo_sinc == 'incremental':
+                mensagem = f"🚀 Sincronização incremental concluída! "
+                mensagem += f"➕ {resultado.get('registros_novos', 0)} novos, "
+                mensagem += f"✏️ {resultado.get('registros_atualizados', 0)} atualizados "
+                mensagem += f"em {resultado.get('tempo_execucao', 0):.1f}s"
+            else:
+                mensagem = f"✅ Sincronização completa concluída! "
+                mensagem += f"📊 {resultado.get('registros_importados', 0)} registros processados"
             
             flash(mensagem, 'success')
             
-            # Mostrar erros se houver
+            # 📈 Mostrar estatísticas detalhadas
+            stats = resultado.get('estatisticas', {})
+            if stats:
+                if tipo_sinc == 'incremental':
+                    flash(f"📈 Performance: {stats.get('registros_por_segundo', '0')} reg/s, "
+                          f"Taxa novos: {stats.get('taxa_novos', '0%')}, "
+                          f"Taxa atualizados: {stats.get('taxa_atualizados', '0%')}", 'info')
+                    
+                    # 🆕 MOSTRAR ESTATÍSTICAS DAS SINCRONIZAÇÕES INTEGRADAS
+                    sync_stats = stats.get('sincronizacoes', {})
+                    if sync_stats:
+                        entregas = sync_stats.get('entregas_sincronizadas', 0)
+                        embarques = sync_stats.get('embarques_revalidados', 0)
+                        nfs_embarques = sync_stats.get('nfs_embarques_sincronizadas', 0)
+                        fretes = sync_stats.get('fretes_lancados', 0)
+                        
+                        flash(f"🔄 Sincronizações: {entregas} entregas, {embarques} embarques re-validados, "
+                              f"{nfs_embarques} NFs de embarques, {fretes} fretes lançados", 'info')
+                        
+                        erros_sync = sync_stats.get('erros_sincronizacao', [])
+                        if erros_sync:
+                            flash(f"⚠️ {len(erros_sync)} erro(s) de sincronização (detalhes nos logs)", 'warning')
+                else:
+                    flash(f"📊 Estatísticas: {stats.get('taxa_sucesso', '0%')} sucesso, "
+                          f"{stats.get('queries_executadas', 0)} queries executadas", 'info')
+            
+            # ⚠️ Mostrar erros se houver
             if resultado.get('erros'):
-                for erro in resultado['erros']:
+                for erro in resultado['erros'][:5]:  # Máximo 5 erros para não sobrecarregar
                     flash(f"⚠️ {erro}", 'warning')
+                
+                if len(resultado['erros']) > 5:
+                    flash(f"⚠️ E mais {len(resultado['erros']) - 5} erros...", 'warning')
         else:
             flash(f"❌ Erro na sincronização: {resultado['erro']}", 'error')
         
-        return redirect(url_for('faturamento_odoo.dashboard'))
+        return redirect(url_for('odoo.faturamento_odoo.dashboard'))
         
     except Exception as e:
         flash(f"❌ Erro durante sincronização: {str(e)}", 'error')
-        return redirect(url_for('faturamento_odoo.dashboard'))
+        return redirect(url_for('odoo.faturamento_odoo.dashboard'))
 
 @faturamento_bp.route('/produtos/sincronizar', methods=['POST'])
 @login_required
@@ -387,8 +436,8 @@ def sincronizar_produtos():
         else:
             flash(f"❌ Erro na sincronização: {resultado['erro']}", 'error')
         
-        return redirect(url_for('faturamento_odoo.produtos'))
+        return redirect(url_for('odoo.faturamento_odoo.produtos'))
         
     except Exception as e:
         flash(f"❌ Erro durante sincronização: {str(e)}", 'error')
-        return redirect(url_for('faturamento_odoo.produtos')) 
+        return redirect(url_for('odoo.faturamento_odoo.produtos')) 

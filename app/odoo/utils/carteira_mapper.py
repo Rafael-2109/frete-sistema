@@ -72,7 +72,6 @@ class CarteiraMapper:
             'rua_endereco_ent': 'order_id/partner_shipping_id/street',
             'endereco_ent': 'order_id/partner_shipping_id/l10n_br_endereco_numero',  # CORRETO do CSV
             'telefone_endereco_ent': 'order_id/partner_shipping_id/phone',
-            'pais_endereco_ent': 'order_id/partner_shipping_id/country_id/name'
         }
         
         logger.info(f"Mapeamento hardcoded carregado: {len(self.mapeamento_carteira)} campos")
@@ -93,7 +92,6 @@ class CarteiraMapper:
                 'partner_shipping_id' in campo_odoo or
                 'state_id' in campo_odoo or
                 'municipio_id' in campo_odoo or
-                'country_id' in campo_odoo or
                 'categ_id/parent_id' in campo_odoo):
                 
                 multiplas_queries[campo_odoo] = self._gerar_queries_para_campo(campo_odoo)
@@ -120,8 +118,6 @@ class CarteiraMapper:
                 queries.append(("res.partner", partes[i]))
             elif partes[i-1] == 'state_id':
                 queries.append(("res.country.state", partes[i]))
-            elif partes[i-1] == 'country_id':
-                queries.append(("res.country", partes[i]))
             elif partes[i-1] == 'l10n_br_municipio_id':
                 queries.append(("l10n_br_ciel_it_account.res.municipio", partes[i]))
             elif partes[i-1] == 'categ_id':

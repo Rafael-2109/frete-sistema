@@ -13,9 +13,9 @@ from flask import Blueprint, request, jsonify, render_template, flash, redirect,
 from flask_login import login_required, current_user
 from datetime import datetime, date
 import logging
-
 from app.utils.auth_decorators import require_admin
 from app.odoo.services.carteira_service import CarteiraService
+
 
 logger = logging.getLogger(__name__)
 
@@ -110,11 +110,20 @@ def pendente():
             flash(f"✅ {resultado['mensagem']}", 'success')
             flash(f"📊 Total de registros: {resultado['total_registros']}", 'info')
             
-            # Mostrar estatísticas
-            stats = resultado['estatisticas']
-            flash(f"📈 Estatísticas: {stats['total_pedidos']} pedidos, "
-                  f"R$ {stats['valor_total']:,.2f}, "
-                  f"Saldo: {stats['saldo_total']:,.2f}", 'info')
+            # Mostrar estatísticas se disponíveis
+            if 'estatisticas' in resultado and resultado['estatisticas']:
+                stats = resultado['estatisticas']
+                flash(f"📈 Estatísticas: {stats.get('total_pedidos', 0)} pedidos, "
+                      f"R$ {stats.get('valor_total', 0):,.2f}, "
+                      f"Saldo: {stats.get('saldo_total', 0):,.2f}", 'info')
+            else:
+                # Estatísticas básicas dos dados
+                dados = resultado.get('dados', [])
+                if dados:
+                    total_valor = sum(item.get('preco_produto_pedido', 0) * item.get('qtd_saldo_produto_pedido', 0) for item in dados)
+                    pedidos_unicos = len(set(item.get('num_pedido', '') for item in dados if item.get('num_pedido')))
+                    flash(f"📈 Estatísticas: {pedidos_unicos} pedidos únicos, "
+                          f"R$ {total_valor:,.2f} em saldo", 'info')
         else:
             flash(f"❌ Erro: {resultado['mensagem']}", 'error')
         

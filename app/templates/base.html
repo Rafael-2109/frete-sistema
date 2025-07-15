@@ -8,12 +8,44 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     
-    <!-- CSS customizado para mega-menu -->
+    <!-- CSS customizado para navbar e mega-menu -->
     <style>
+        /* Força altura fixa do navbar */
+        .navbar {
+            height: 56px !important; /* Altura padrão do Bootstrap navbar */
+            min-height: 56px !important;
+            max-height: 56px !important;
+            overflow: visible; /* Permite dropdowns saírem do navbar */
+        }
+        
+        .navbar-nav {
+            height: 100%;
+            align-items: center;
+        }
+        
+        .nav-item {
+            height: 100%;
+            display: flex;
+            align-items: center;
+        }
+        
+        /* Garante que dropdowns não afetem o navbar */
+        .dropdown-menu {
+            position: absolute !important;
+            top: 100% !important;
+            z-index: 1050 !important;
+            margin-top: 0 !important;
+        }
+        
+        /* Mega-menu específico */
         .mega-menu {
-            position: static !important;
+            position: absolute !important;
+            top: 100% !important;
+            left: 0 !important;
             width: auto !important;
             max-width: 800px !important;
+            z-index: 1050 !important;
+            margin-top: 0 !important;
         }
         
         .mega-menu .dropdown-item {
@@ -47,6 +79,8 @@
             .mega-menu {
                 width: 100% !important;
                 max-width: none !important;
+                left: 0 !important;
+                right: 0 !important;
             }
             
             .mega-menu .col-md-4 {

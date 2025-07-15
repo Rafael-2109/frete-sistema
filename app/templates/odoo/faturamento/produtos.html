@@ -22,7 +22,7 @@
                                     <h6 class="mb-0"><i class="fas fa-sync"></i> Sincronizar Produtos</h6>
                                 </div>
                                 <div class="card-body">
-                                    <form method="POST" action="{{ url_for('faturamento_odoo.sincronizar_produtos') }}" class="d-inline">
+                                    <form method="POST" action="{{ url_for('odoo.faturamento_odoo.sincronizar_produtos') }}" class="d-inline">
                                         <div class="form-check mb-3">
                                             <input class="form-check-input" type="checkbox" name="usar_filtro_venda_bonificacao" 
                                                    id="filtro_venda_bonificacao_produtos" checked>
@@ -49,7 +49,7 @@
                     </div>
                     
                     <!-- Formulário de Consulta -->
-                    <form method="POST" action="{{ url_for('faturamento_odoo.produtos') }}">
+                    <form method="POST" action="{{ url_for('odoo.faturamento_odoo.produtos') }}">
                         <div class="row mb-3">
                             <div class="col-md-3">
                                 <label for="nome_cliente" class="form-label">Cliente</label>
@@ -105,7 +105,7 @@
                         </div>
                     </div>
                     
-                    <form id="formConsulta" method="POST" action="{{ url_for('faturamento_odoo.produtos') }}" style="display: none;">
+                    <form id="formConsulta" method="POST" action="{{ url_for('odoo.faturamento_odoo.produtos') }}" style="display: none;">
                         <input type="hidden" name="nome_cliente" value="{{ request.form.get('nome_cliente', '') }}">
                         <input type="hidden" name="cod_produto" value="{{ request.form.get('cod_produto', '') }}">
                         <input type="hidden" name="vendedor" value="{{ request.form.get('vendedor', '') }}">

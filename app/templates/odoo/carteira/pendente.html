@@ -58,6 +58,12 @@
 
     <!-- Estatísticas -->
     {% if resultado and resultado.sucesso %}
+    {% set dados = resultado.dados or [] %}
+    {% set total_itens = dados|length %}
+    {% set pedidos_unicos = dados|map(attribute='num_pedido')|unique|list|length %}
+    {% set valor_total = dados|sum(attribute='preco_produto_pedido') or 0 %}
+    {% set saldo_total = dados|sum(attribute='qtd_saldo_produto_pedido') or 0 %}
+    
     <div class="row mb-4">
         <div class="col-md-3">
             <div class="card bg-primary text-white">
@@ -65,7 +71,7 @@
                     <h5 class="card-title">
                         <i class="fas fa-list"></i> Total de Itens
                     </h5>
-                    <h3>{{ resultado.estatisticas.total_itens }}</h3>
+                    <h3>{{ total_itens }}</h3>
                 </div>
             </div>
         </div>
@@ -75,7 +81,7 @@
                     <h5 class="card-title">
                         <i class="fas fa-file-alt"></i> Total de Pedidos
                     </h5>
-                    <h3>{{ resultado.estatisticas.total_pedidos }}</h3>
+                    <h3>{{ pedidos_unicos }}</h3>
                 </div>
             </div>
         </div>
@@ -85,7 +91,7 @@
                     <h5 class="card-title">
                         <i class="fas fa-dollar-sign"></i> Valor Total
                     </h5>
-                    <h3>R$ {{ "{:,.2f}".format(resultado.estatisticas.valor_total) }}</h3>
+                    <h3>R$ {{ "{:,.2f}".format(valor_total) }}</h3>
                 </div>
             </div>
         </div>
@@ -95,7 +101,7 @@
                     <h5 class="card-title">
                         <i class="fas fa-balance-scale"></i> Saldo Total
                     </h5>
-                    <h3>{{ "{:,.2f}".format(resultado.estatisticas.saldo_total) }}</h3>
+                    <h3>{{ "{:,.2f}".format(saldo_total) }}</h3>
                 </div>
             </div>
         </div>
@@ -140,49 +146,39 @@
                                 {% for item in resultado.dados %}
                                 <tr>
                                     <td>
-                                        <strong>{{ item.referencia_pedido }}</strong>
-                                        {% if item.pedido_compra_cliente %}
-                                            <br><small class="text-muted">{{ item.pedido_compra_cliente }}</small>
+                                        <strong>{{ item.num_pedido or 'N/A' }}</strong>
+                                        {% if item.pedido_cliente %}
+                                            <br><small class="text-muted">{{ item.pedido_cliente }}</small>
                                         {% endif %}
                                     </td>
-                                    <td>{{ item.data_pedido }}</td>
+                                    <td>{{ item.data_pedido or 'N/A' }}</td>
                                     <td>
-                                        <strong>{{ item.nome_cliente }}</strong>
-                                        {% if item.cnpj_cliente %}
-                                            <br><small class="text-muted">{{ item.cnpj_cliente }}</small>
+                                        <strong>{{ item.raz_social_red or item.raz_social or 'N/A' }}</strong>
+                                        {% if item.cnpj_cpf %}
+                                            <br><small class="text-muted">{{ item.cnpj_cpf }}</small>
                                         {% endif %}
-                                        {% if item.municipio_cliente %}
-                                            <br><small class="text-muted">{{ item.municipio_cliente }}/{{ item.estado_cliente }}</small>
+                                        {% if item.municipio %}
+                                            <br><small class="text-muted">{{ item.municipio }}/{{ item.estado }}</small>
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <strong>{{ item.codigo_produto }}</strong>
+                                        <strong>{{ item.cod_produto or 'N/A' }}</strong>
                                         {% if item.nome_produto %}
                                             <br><small class="text-muted">{{ item.nome_produto }}</small>
                                         {% endif %}
                                     </td>
-                                    <td>{{ "{:,.2f}".format(item.quantidade) }}</td>
+                                    <td>{{ "{:,.2f}".format(item.qtd_produto_pedido or 0) }}</td>
                                     <td>
                                         <span class="badge bg-warning">
-                                            {{ "{:,.2f}".format(item.saldo) }}
+                                            {{ "{:,.2f}".format(item.qtd_saldo_produto_pedido or 0) }}
                                         </span>
                                     </td>
-                                    <td>R$ {{ "{:,.2f}".format(item.preco_unitario) }}</td>
-                                    <td>R$ {{ "{:,.2f}".format(item.valor_item_pedido) }}</td>
-                                    <td>{{ item.vendedor }}</td>
+                                    <td>R$ {{ "{:,.2f}".format(item.preco_produto_pedido or 0) }}</td>
+                                    <td>R$ {{ "{:,.2f}".format((item.preco_produto_pedido or 0) * (item.qtd_saldo_produto_pedido or 0)) }}</td>
+                                    <td>{{ item.vendedor or 'N/A' }}</td>
                                     <td>
-                                        {% if item.status == 'draft' %}
-                                            <span class="badge bg-secondary">Rascunho</span>
-                                        {% elif item.status == 'sent' %}
-                                            <span class="badge bg-info">Enviado</span>
-                                        {% elif item.status == 'sale' %}
-                                            <span class="badge bg-success">Confirmado</span>
-                                        {% elif item.status == 'done' %}
-                                            <span class="badge bg-primary">Concluído</span>
-                                        {% else %}
-                                            <span class="badge bg-light text-dark">{{ item.status }}</span>
+                                            <span class="badge bg-light text-dark">{{ item.status_pedido or 'N/A' }}</span>
                                         {% endif %}
-                                    </td>
                                     <td>
                                         <div class="btn-group" role="group">
                                             <button type="button" class="btn btn-sm btn-outline-info" 
