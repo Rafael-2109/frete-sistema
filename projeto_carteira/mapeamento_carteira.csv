@@ -1,0 +1,39 @@
+﻿CarteiraPrincipal;Nome campo relatorio excel;"Campo em relatório ""para atualizar os dados de volta""";Significado do campo
+num_pedido;Referência do pedido/Referência do pedido;order_id/name;# Chave principal
+cod_produto;Produto/Referência interna;product_id/default_code;# Chave produto
+pedido_cliente;Referência do pedido/Pedido de Compra do Cliente;order_id/l10n_br_pedido_compra;# Pedido de Compra do Cliente
+data_pedido;Referência do pedido/Data de criação;order_id/create_date;# Data de criação
+data_atual_pedido;Referência do pedido/Data do pedido;order_id/date_order;# Data da última alteração
+status_pedido;Referência do pedido/Status;order_id/state;# Cancelado, Pedido de venda, Cotação
+cnpj_cpf;Referência do pedido/Cliente/CNPJ;order_id/partner_id/l10n_br_cnpj;# CNPJ do cliente
+raz_social;Referência do pedido/Cliente/Razão Social;order_id/partner_id/l10n_br_razao_social;# Razão Social
+raz_social_red;Referência do pedido/Cliente/Nome;order_id/partner_id/name;# Nome reduzido
+municipio;Referência do pedido/Cliente/Município/Nome do Município;order_id/partner_id/l10n_br_municipio_id/name;# Cidade do cliente
+estado;Referência do pedido/Cliente/Estado/Código do estado;order_id/partner_id/state_id/code;# UF do cliente
+vendedor;Referência do pedido/Vendedor;order_id/user_id;# Vendedor responsável
+equipe_vendas;Referência do pedido/Equipe de vendas;order_id/team_id;# Equipe de vendas
+nome_produto;Produto/Nome;product_id/name;# Descrição do produto
+unid_medida_produto;Produto/Unidade de medida;product_id/uom_id;# Unidade de medida
+embalagem_produto;Produto/Categoria de produtos/Nome;product_id/categ_id/name;# Categoria
+materia_prima_produto;Produto/Categoria de produtos/Categoria primária/Nome;product_id/categ_id/parent_id/name;# Sub categoria  
+categoria_produto;Produto/Categoria de produtos/Categoria primária/Categoria primária/Nome;product_id/categ_id/parent_id/parent_id/name;# Sub sub categoria
+qtd_produto_pedido;Quantidade;product_uom_qty;# Quantidade original
+qtd_saldo_produto_pedido;Saldo;qty_saldo;# Saldo a faturar
+qtd_cancelada_produto_pedido;Cancelado;qty_cancelado;# Quantidade cancelada
+preco_produto_pedido;Preço unitário;price_unit;# Preço unitário
+cond_pgto_pedido;Referência do pedido/Condições de pagamento;order_id/payment_term_id;# Condições de pagamento
+forma_pgto_pedido;Referência do pedido/Forma de Pagamento;order_id/payment_provider_id;# Forma de pagamento
+incoterm;Referência do pedido/Incoterm;order_id/incoterm;# Incoterm
+metodo_entrega_pedido;Referência do pedido/Método de entrega;order_id/carrier_id;# Método de entrega
+data_entrega_pedido;Referência do pedido/Data de entrega;order_id/commitment_date;# Data de entrega
+cliente_nec_agendamento;Referência do pedido/Cliente/Agendamento;order_id/partner_id/agendamento;# Sim/Não
+observ_ped_1;Referência do pedido/Notas para Expedição;order_id/picking_note;# Observações
+cnpj_endereco_ent;Referência do pedido/Endereço de entrega/CNPJ;order_id/partner_shipping_id/l10n_br_cnpj;# CNPJ entrega
+empresa_endereco_ent;Referência do pedido/Endereço de entrega/O próprio;order_id/partner_shipping_id/self;# Nome local entrega
+cep_endereco_ent;Referência do pedido/Endereço de entrega/CEP;order_id/partner_shipping_id/zip;# CEP
+nome_cidade;Referência do pedido/Endereço de entrega/Município;order_id/partner_shipping_id/l10n_br_municipio_id;# Cidade extraída ***Tratamento especial
+cod_uf;Referência do pedido/Endereço de entrega/Município;order_id/partner_shipping_id/l10n_br_municipio_id;# UF extraída  ***Tratamento especial
+bairro_endereco_ent;Referência do pedido/Endereço de entrega/Bairro;order_id/partner_shipping_id/l10n_br_endereco_bairro;# Bairro
+rua_endereco_ent;Referência do pedido/Endereço de entrega/Endereço;order_id/partner_shipping_id/street;# Rua
+endereco_ent;Referência do pedido/Endereço de entrega/Número;order_id/partner_shipping_id/l10n_br_endereco_numero;# Número
+telefone_endereco_ent;Referência do pedido/Endereço de entrega/Telefone;order_id/partner_shipping_id/phone;# Telefone

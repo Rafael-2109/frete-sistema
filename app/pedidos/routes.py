@@ -459,8 +459,9 @@ def lista_pedidos():
             else:
                 params[chave] = valor  # Define/atualiza parâmetro
         
+        
         return url_for('pedidos.lista_pedidos') + '?' + urlencode(params)
-
+       
     return render_template(
         'pedidos/lista_pedidos.html',
         filtro_form=filtro_form,

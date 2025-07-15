@@ -3,7 +3,9 @@ Serviço de Carteira Odoo
 ========================
 
 Serviço responsável por gerenciar a importação de dados de carteira de pedidos
-do Odoo ERP. Foca apenas na consulta e filtro 'Carteira Pendente'.
+do Odoo ERP usando o mapeamento CORRETO.
+
+ATUALIZADO: Usa CampoMapper com múltiplas consultas ao invés de campos com "/"
 
 Funcionalidades:
 - Importação de carteira pendente
@@ -20,14 +22,16 @@ from datetime import datetime, date
 from decimal import Decimal
 
 from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.campo_mapper import CampoMapper
 
 logger = logging.getLogger(__name__)
 
 class CarteiraService:
-    """Serviço para gerenciar carteira de pedidos do Odoo"""
+    """Serviço para gerenciar carteira de pedidos do Odoo usando mapeamento correto"""
     
     def __init__(self):
         self.connection = get_odoo_connection()
+        self.mapper = CampoMapper()  # Usar novo CampoMapper
     
     def obter_carteira_pendente(self, data_inicio=None, data_fim=None, pedidos_especificos=None):
         """
@@ -36,171 +40,140 @@ class CarteiraService:
         logger.info("Buscando carteira pendente do Odoo...")
         
         try:
-            # Domínio para carteira pendente
-            domain = [['qty_saldo', '>', 0]]  # Apenas pedidos com saldo pendente
+            # Conectar ao Odoo
+            if not self.connection:
+                return {
+                    'sucesso': False,
+                    'erro': 'Conexão com Odoo não disponível',
+                    'dados': []
+                }
             
-            # CAMPOS CORRETOS baseados nos testes
-            fields = [
-                'order_id/l10n_br_pedido_compra',  # Pedido de Compra do Cliente
-                'order_id/name',  # Referência do pedido
-                'order_id/create_date',  # Data de criação
-                'order_id/date_order',  # Data do pedido
-                'order_id/partner_id/l10n_br_cnpj',  # CNPJ Cliente
-                'order_id/partner_id/l10n_br_razao_social',  # Razão Social
-                'order_id/partner_id/name',  # Nome Cliente
-                'order_id/partner_id/l10n_br_municipio_id/name',  # Município
-                'order_id/partner_id/state_id/code',  # Estado
-                'order_id/user_id',  # Vendedor
-                'order_id/team_id',  # Equipe de vendas
-                'product_id/default_code',  # Referência interna produto
-                'product_id/name',  # Nome produto
-                'product_id/uom_id',  # Unidade de medida
-                'product_uom_qty',  # Quantidade
-                'qty_to_invoice',  # Quantidade a faturar
-                'qty_saldo',  # Saldo
-                'qty_cancelado',  # Cancelado
-                'qty_invoiced',  # Quantidade faturada
-                'price_unit',  # Preço unitário
-                'l10n_br_prod_valor',  # Valor do Produto
-                'l10n_br_total_nfe',  # Valor do Item do Pedido
-                'order_id/state',  # Status
-                'product_id/categ_id/name',  # Categoria produto
-                'product_id/categ_id/parent_id/name',  # Categoria primária
-                'product_id/categ_id/parent_id/parent_id/name',  # Categoria primária/primária
-                'order_id/payment_term_id',  # Condições de pagamento
-                'order_id/payment_provider_id',  # Forma de Pagamento
-                'order_id/picking_note',  # Notas para Expedição
-                'order_id/incoterm',  # Incoterm
-                'order_id/carrier_id',  # Método de entrega
-                'order_id/commitment_date',  # Data de entrega
-                'order_id/partner_id/agendamento',  # Agendamento
-                'qty_delivered',  # Quantidade entregue
-                'order_id/partner_shipping_id/l10n_br_cnpj',  # CNPJ Endereço entrega
-                'order_id/partner_shipping_id/self',  # O próprio
-                'order_id/partner_shipping_id/zip',  # CEP
-                'order_id/partner_shipping_id/state_id',  # Estado entrega
-                'order_id/partner_shipping_id/l10n_br_municipio_id',  # Município entrega
-                'order_id/partner_shipping_id/l10n_br_endereco_bairro',  # Bairro
-                'order_id/partner_shipping_id/street',  # Endereço
-                'order_id/partner_shipping_id/l10n_br_endereco_numero',  # Número
-                'order_id/partner_shipping_id/phone'  # Telefone
-            ]
-            
-            logger.info(f"🔍 Buscando campos: {fields}")
-            
-            # Buscar dados do Odoo
-            odoo_data = self.connection.search_read(
-                model='sale.order.line',
-                domain=domain,
-                fields=fields,
-                limit=5000
-            )
-            
-            logger.info(f"✅ SUCESSO: {len(odoo_data)} registros encontrados")
-            
-            # Mostrar estrutura dos dados
-            for i, record in enumerate(odoo_data):
-                logger.info(f"📋 REGISTRO {i+1}: {record}")
-                
-                # Analisar campos relacionados
-                if 'order_id' in record:
-                    logger.info(f"🎯 ORDER_ID: {record['order_id']}")
-                if 'product_id' in record:
-                    logger.info(f"🎯 PRODUCT_ID: {record['product_id']}")
-                if 'order_partner_id' in record:
-                    logger.info(f"🎯 ORDER_PARTNER_ID: {record['order_partner_id']}")
-            
-            return {
-                'sucesso': True,
-                'dados': odoo_data,
-                'total_registros': len(odoo_data),
-                'mensagem': f'✅ {len(odoo_data)} registros encontrados com campos corretos'
+            # Usar filtros para carteira pendente
+            filtros_carteira = {
+                'modelo': 'carteira',
+                'carteira_pendente': True
             }
+            
+            # Adicionar filtros opcionais
+            if data_inicio:
+                filtros_carteira['data_inicio'] = data_inicio
+            if data_fim:
+                filtros_carteira['data_fim'] = data_fim
+            if pedidos_especificos:
+                filtros_carteira['pedidos_especificos'] = pedidos_especificos
+            
+            # Usar novo método do CampoMapper
+            logger.info("Usando buscar_carteira_odoo com múltiplas consultas...")
+            dados_carteira = self.mapper.buscar_carteira_odoo(self.connection, filtros_carteira)
+            
+            if dados_carteira:
+                logger.info(f"✅ SUCESSO: {len(dados_carteira)} registros encontrados")
+                
+                # Processar dados para formato esperado
+                dados_processados = self._processar_dados_carteira(dados_carteira)
+                
+                return {
+                    'sucesso': True,
+                    'dados': dados_processados,
+                    'total_registros': len(dados_processados),
+                    'mensagem': f'✅ {len(dados_processados)} registros processados com campos corretos'
+                }
+            else:
+                logger.warning("Nenhum dado de carteira pendente encontrado")
+                return {
+                    'sucesso': True,
+                    'dados': [],
+                    'total_registros': 0,
+                    'mensagem': 'Nenhuma carteira pendente encontrada'
+                }
             
         except Exception as e:
             logger.error(f"❌ ERRO: {e}")
             return {
                 'sucesso': False,
                 'erro': str(e),
+                'dados': [],
                 'mensagem': 'Erro ao buscar carteira pendente'
             }
     
-    def _build_carteira_domain(self, data_inicio: Optional[date] = None, data_fim: Optional[date] = None, 
-                              pedidos_especificos: Optional[List[str]] = None) -> List:
-        """Constrói domínio de busca para carteira pendente"""
-        # Filtro principal: Carteira Pendente (saldo > 0 e não cancelado)
-        domain = [
-            '&',
-            ('qty_saldo', '>', 0),  # Saldo > 0
-            ('order_id.state', '!=', 'cancel')  # Pedido não cancelado
-        ]
-        
-        if data_inicio:
-            domain.append(('order_id.date_order', '>=', data_inicio.strftime('%Y-%m-%d')))
-        
-        if data_fim:
-            domain.append(('order_id.date_order', '<=', data_fim.strftime('%Y-%m-%d')))
-        
-        if pedidos_especificos:
-            domain.append(('order_id.name', 'in', pedidos_especificos))
-        
-        return domain
-    
-    def _processar_dados_carteira(self, odoo_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Processa dados de carteira do Odoo"""
+    def _processar_dados_carteira(self, dados_carteira: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Processa dados de carteira
+        """
         dados_processados = []
         
-        for item in odoo_data:
+        for item in dados_carteira:
             try:
-                # Processar cada item da carteira
+                # Processar cada item da carteira com campos corretos
                 item_processado = {
-                    'pedido_compra_cliente': self._extract_value(item, 'order_id/l10n_br_pedido_compra'),
-                    'referencia_pedido': self._extract_value(item, 'order_id/name'),
-                    'data_criacao': self._format_date(item.get('order_id/create_date')),
-                    'data_pedido': self._format_date(item.get('order_id/date_order')),
-                    'cnpj_cliente': self._extract_value(item, 'order_id/partner_id/l10n_br_cnpj'),
-                    'razao_social': self._extract_value(item, 'order_id/partner_id/l10n_br_razao_social'),
-                    'nome_cliente': self._extract_value(item, 'order_id/partner_id/name'),
-                    'municipio_cliente': self._extract_value(item, 'order_id/partner_id/l10n_br_municipio_id/name'),
-                    'estado_cliente': self._extract_value(item, 'order_id/partner_id/state_id/code'),
-                    'vendedor': self._extract_relational_field(item, 'order_id/user_id'),
-                    'equipe_vendas': self._extract_relational_field(item, 'order_id/team_id'),
-                    'codigo_produto': self._extract_value(item, 'product_id/default_code'),
-                    'nome_produto': self._extract_value(item, 'product_id/name'),
-                    'unidade_medida': self._extract_relational_field(item, 'product_id/uom_id'),
-                    'quantidade': self._format_decimal(item.get('product_uom_qty')),
-                    'quantidade_a_faturar': self._format_decimal(item.get('qty_to_invoice')),
-                    'saldo': self._format_decimal(item.get('qty_saldo')),
-                    'cancelado': self._format_decimal(item.get('qty_cancelado')),
-                    'quantidade_faturada': self._format_decimal(item.get('qty_invoiced')),
-                    'preco_unitario': self._format_decimal(item.get('price_unit')),
-                    'valor_produto': self._format_decimal(item.get('l10n_br_prod_valor')),
-                    'valor_item_pedido': self._format_decimal(item.get('l10n_br_total_nfe')),
-                    'status': self._extract_value(item, 'order_id/state'),
-                    'categoria_produto': self._extract_value(item, 'product_id/categ_id/name'),
-                    'categoria_primaria': self._extract_value(item, 'product_id/categ_id/parent_id/name'),
-                    'categoria_primaria_pai': self._extract_value(item, 'product_id/categ_id/parent_id/parent_id/name'),
-                    'condicoes_pagamento': self._extract_relational_field(item, 'order_id/payment_term_id'),
-                    'forma_pagamento': self._extract_relational_field(item, 'order_id/payment_provider_id'),
-                    'notas_expedicao': self._extract_value(item, 'order_id/picking_note'),
-                    'incoterm': self._extract_relational_field(item, 'order_id/incoterm'),
-                    'metodo_entrega': self._extract_relational_field(item, 'order_id/carrier_id'),
-                    'data_entrega': self._format_date(item.get('order_id/commitment_date')),
-                    'agendamento_cliente': self._extract_value(item, 'order_id/partner_id/agendamento'),
-                    'quantidade_entregue': self._format_decimal(item.get('qty_delivered')),
-                    'cnpj_endereco_entrega': self._extract_value(item, 'order_id/partner_shipping_id/l10n_br_cnpj'),
-                    'proprio_endereco': self._extract_value(item, 'order_id/partner_shipping_id/self'),
-                    'cep_entrega': self._extract_value(item, 'order_id/partner_shipping_id/zip'),
-                    'estado_entrega': self._extract_relational_field(item, 'order_id/partner_shipping_id/state_id'),
-                    'municipio_entrega': self._extract_relational_field(item, 'order_id/partner_shipping_id/l10n_br_municipio_id'),
-                    'bairro_entrega': self._extract_value(item, 'order_id/partner_shipping_id/l10n_br_endereco_bairro'),
-                    'endereco_entrega': self._extract_value(item, 'order_id/partner_shipping_id/street'),
-                    'numero_entrega': self._extract_value(item, 'order_id/partner_shipping_id/l10n_br_endereco_numero'),
-                    'telefone_entrega': self._extract_value(item, 'order_id/partner_shipping_id/phone')
+                    # Campos principais (mapeamento correto)
+                    'pedido_compra_cliente': item.get('pedido_compra_cliente'),
+                    'referencia_pedido': item.get('referencia_pedido'),
+                    'data_criacao': self._format_date(item.get('data_criacao')),
+                    'data_pedido': self._format_date(item.get('data_pedido')),
+                    
+                    # Cliente (campos brasileiros corretos)
+                    'cnpj_cliente': item.get('cnpj_cliente'),
+                    'razao_social': item.get('razao_social'),
+                    'nome_cliente': item.get('nome_cliente'),
+                    'municipio_cliente': item.get('municipio_cliente'),
+                    'estado_cliente': item.get('estado_cliente'),
+                    
+                    # Vendedor e Equipe
+                    'vendedor': item.get('vendedor'),
+                    'equipe_vendas': item.get('equipe_vendas'),
+                    
+                    # Produto
+                    'codigo_produto': item.get('referencia_interna'),
+                    'nome_produto': item.get('nome_produto'),
+                    'unidade_medida': item.get('unidade_medida'),
+                    
+                    # Quantidades (campos corretos)
+                    'quantidade': self._format_decimal(item.get('quantidade')),
+                    'quantidade_a_faturar': self._format_decimal(item.get('quantidade_a_faturar')),
+                    'saldo': self._format_decimal(item.get('saldo')),
+                    'cancelado': self._format_decimal(item.get('cancelado')),
+                    'quantidade_faturada': self._format_decimal(item.get('quantidade_faturada')),
+                    'quantidade_entregue': self._format_decimal(item.get('quantidade_entregue')),
+                    
+                    # Valores
+                    'preco_unitario': self._format_decimal(item.get('preco_unitario')),
+                    'valor_produto': self._format_decimal(item.get('valor_produto')),
+                    'valor_item_pedido': self._format_decimal(item.get('valor_item_pedido')),
+                    
+                    # Status
+                    'status': item.get('status_pedido'),
+                    
+                    # Categoria do produto
+                    'categoria_produto': item.get('categoria_produto'),
+                    'categoria_primaria': item.get('categoria_primaria'),
+                    'categoria_primaria_pai': item.get('categoria_primaria_pai'),
+                    
+                    # Pagamento e Entrega
+                    'condicoes_pagamento': item.get('condicoes_pagamento'),
+                    'forma_pagamento': item.get('forma_pagamento'),
+                    'notas_expedicao': item.get('notas_expedicao'),
+                    'incoterm': item.get('incoterm'),
+                    'metodo_entrega': item.get('metodo_entrega'),
+                    'data_entrega': self._format_date(item.get('data_entrega')),
+                    'agendamento_cliente': item.get('agendamento_cliente'),
+                    
+                    # Endereço de entrega (todos os campos brasileiros)
+                    'cnpj_endereco_entrega': item.get('cnpj_endereco_entrega'),
+                    'proprio_endereco': item.get('proprio_endereco'),
+                    'cep_entrega': item.get('cep_entrega'),
+                    'estado_entrega': item.get('estado_entrega'),
+                    'municipio_entrega': item.get('municipio_entrega'),
+                    'bairro_entrega': item.get('bairro_entrega'),
+                    'endereco_entrega': item.get('endereco_entrega'),
+                    'numero_entrega': item.get('numero_entrega'),
+                    'telefone_entrega': item.get('telefone_entrega')
                 }
                 
-                # Adicionar apenas se tem dados válidos
-                if item_processado['referencia_pedido'] and item_processado['saldo'] > 0:
+                # Adicionar apenas se tem dados válidos e saldo > 0
+                if (item_processado['referencia_pedido'] and 
+                    item_processado['saldo'] and 
+                    item_processado['saldo'] > 0):
                     dados_processados.append(item_processado)
                     
             except Exception as e:
@@ -208,20 +181,6 @@ class CarteiraService:
                 continue
         
         return dados_processados
-    
-    def _extract_value(self, data: Dict[str, Any], field: str) -> str:
-        """Extrai valor simples de um campo"""
-        value = data.get(field)
-        if value is None:
-            return ''
-        return str(value)
-    
-    def _extract_relational_field(self, data: Dict[str, Any], field: str) -> str:
-        """Extrai valor de campo relacional [id, name]"""
-        value = data.get(field)
-        if isinstance(value, list) and len(value) >= 2:
-            return str(value[1])  # Retorna o nome
-        return str(value) if value else ''
     
     def _format_date(self, date_value) -> str:
         """Formata data para string"""
@@ -262,10 +221,10 @@ class CarteiraService:
         
         # Calcular estatísticas
         total_itens = len(dados)
-        pedidos_unicos = len(set(item['referencia_pedido'] for item in dados))
-        valor_total = sum(item['valor_item_pedido'] for item in dados)
-        quantidade_total = sum(item['quantidade'] for item in dados)
-        saldo_total = sum(item['saldo'] for item in dados)
+        pedidos_unicos = len(set(item['referencia_pedido'] for item in dados if item['referencia_pedido']))
+        valor_total = sum(item['valor_item_pedido'] for item in dados if item['valor_item_pedido'])
+        quantidade_total = sum(item['quantidade'] for item in dados if item['quantidade'])
+        saldo_total = sum(item['saldo'] for item in dados if item['saldo'])
         
         return {
             'total_itens': total_itens,
@@ -273,11 +232,12 @@ class CarteiraService:
             'valor_total': valor_total,
             'quantidade_total': quantidade_total,
             'saldo_total': saldo_total
-        } 
+        }
 
 def sincronizar_carteira_odoo(usar_filtro_pendente=True):
     """
     Sincroniza carteira do Odoo por substituição completa da CarteiraPrincipal
+    ATUALIZADO: Usa novo CampoMapper
     
     Args:
         usar_filtro_pendente (bool): Se deve usar filtro 'Carteira Pendente' (qty_saldo > 0)
@@ -294,16 +254,26 @@ def sincronizar_carteira_odoo(usar_filtro_pendente=True):
         
         logger = logging.getLogger(__name__)
         
-        # Criar instância do serviço para chamar método
+        # Criar instância do serviço ATUALIZADO
         service = CarteiraService()
         
-        # Buscar dados do Odoo
-        dados_odoo = service.obter_carteira_pendente()
+        # Buscar dados do Odoo usando método correto
+        resultado_busca = service.obter_carteira_pendente()
+        
+        if not resultado_busca['sucesso']:
+            return {
+                'sucesso': False,
+                'erro': resultado_busca.get('erro', 'Nenhum dado encontrado no Odoo'),
+                'registros_importados': 0,
+                'registros_removidos': 0
+            }
+        
+        dados_odoo = resultado_busca['dados']
         
         if not dados_odoo:
             return {
                 'sucesso': False,
-                'erro': 'Nenhum dado encontrado no Odoo',
+                'erro': 'Nenhum dado de carteira encontrado',
                 'registros_importados': 0,
                 'registros_removidos': 0
             }
@@ -312,7 +282,7 @@ def sincronizar_carteira_odoo(usar_filtro_pendente=True):
         if usar_filtro_pendente:
             dados_filtrados = [
                 item for item in dados_odoo
-                if item.get('qty_saldo', 0) > 0
+                if item.get('saldo', 0) > 0
             ]
         else:
             dados_filtrados = dados_odoo
@@ -328,67 +298,57 @@ def sincronizar_carteira_odoo(usar_filtro_pendente=True):
         for item in dados_filtrados:
             try:
                 # Validar campos obrigatórios
-                pedido_id = item.get('pedido_id')
-                cod_produto = item.get('cod_produto')
+                referencia_pedido = item.get('referencia_pedido')
+                codigo_produto = item.get('codigo_produto')
                 
-                if not pedido_id or not cod_produto:
+                if not referencia_pedido or not codigo_produto:
                     continue
                 
-                # Processar data
+                # Processar datas
                 data_pedido = None
                 if item.get('data_pedido'):
                     try:
-                        data_pedido_value = item.get('data_pedido')
-                        if isinstance(data_pedido_value, str):
-                            data_pedido = datetime.strptime(data_pedido_value, '%Y-%m-%d').date()
-                        else:
-                            data_pedido = data_pedido_value
-                    except:
-                        pass
-                
-                # Processar data prevista
-                data_prevista = None
-                if item.get('data_prevista'):
-                    try:
-                        data_prevista_value = item.get('data_prevista')
-                        if isinstance(data_prevista_value, str):
-                            data_prevista = datetime.strptime(data_prevista_value, '%Y-%m-%d').date()
-                        else:
-                            data_prevista = data_prevista_value
-                    except:
-                        pass
+                        data_pedido_str = item.get('data_pedido')
+                        if isinstance(data_pedido_str, str) and data_pedido_str:
+                            # Converter formato DD/MM/YYYY para date
+                            if '/' in data_pedido_str:
+                                data_pedido = datetime.strptime(data_pedido_str, '%d/%m/%Y').date()
+                            else:
+                                data_pedido = datetime.strptime(data_pedido_str, '%Y-%m-%d').date()
+                    except Exception as e:
+                        logger.warning(f"Erro ao processar data_pedido: {e}")
                 
                 # Processar valores
-                qtd_pedido = float(item.get('qtd_pedido', 0)) or 0
-                qtd_faturado = float(item.get('qtd_faturado', 0)) or 0
-                qtd_saldo = float(item.get('qty_saldo', 0)) or 0
-                valor_unitario = float(item.get('valor_unitario', 0)) or 0
-                valor_total = float(item.get('valor_total', 0)) or 0
+                quantidade = float(item.get('quantidade', 0)) or 0
+                quantidade_faturada = float(item.get('quantidade_faturada', 0)) or 0
+                saldo = float(item.get('saldo', 0)) or 0
+                preco_unitario = float(item.get('preco_unitario', 0)) or 0
+                valor_item_pedido = float(item.get('valor_item_pedido', 0)) or 0
                 
                 # Criar novo registro na CarteiraPrincipal
                 novo_registro = CarteiraPrincipal()
-                novo_registro.pedido_id = str(pedido_id)
+                novo_registro.pedido_id = str(referencia_pedido)
                 novo_registro.data_pedido = data_pedido
-                novo_registro.data_prevista = data_prevista
+                novo_registro.data_prevista = data_pedido  # Usar mesma data se não houver data_entrega
                 novo_registro.cnpj_cliente = str(item.get('cnpj_cliente', '')).strip()
                 novo_registro.nome_cliente = str(item.get('nome_cliente', '')).strip()
-                novo_registro.cod_produto = str(cod_produto).strip()
+                novo_registro.cod_produto = str(codigo_produto).strip()
                 novo_registro.nome_produto = str(item.get('nome_produto', '')).strip()
-                novo_registro.qtd_pedido = qtd_pedido
-                novo_registro.qtd_faturado = qtd_faturado
-                novo_registro.qtd_saldo = qtd_saldo
-                novo_registro.valor_unitario = valor_unitario
-                novo_registro.valor_total = valor_total
+                novo_registro.qtd_pedido = quantidade
+                novo_registro.qtd_faturado = quantidade_faturada
+                novo_registro.qtd_saldo = saldo
+                novo_registro.valor_unitario = preco_unitario
+                novo_registro.valor_total = valor_item_pedido
                 novo_registro.vendedor = str(item.get('vendedor', '')).strip()
                 novo_registro.incoterm = str(item.get('incoterm', '')).strip()
-                novo_registro.municipio = str(item.get('municipio', '')).strip()
-                novo_registro.estado = str(item.get('estado', '')).strip()
+                novo_registro.municipio = str(item.get('municipio_cliente', '')).strip()
+                novo_registro.estado = str(item.get('estado_cliente', '')).strip()
                 novo_registro.endereco_entrega = str(item.get('endereco_entrega', '')).strip()
                 novo_registro.bairro_entrega = str(item.get('bairro_entrega', '')).strip()
                 novo_registro.cep_entrega = str(item.get('cep_entrega', '')).strip()
                 novo_registro.municipio_entrega = str(item.get('municipio_entrega', '')).strip()
                 novo_registro.estado_entrega = str(item.get('estado_entrega', '')).strip()
-                novo_registro.observacoes = str(item.get('observacoes', '')).strip()
+                novo_registro.observacoes = str(item.get('notas_expedicao', '')).strip()
                 novo_registro.peso_bruto = float(item.get('peso_bruto', 0)) or 0
                 novo_registro.peso_liquido = float(item.get('peso_liquido', 0)) or 0
                 novo_registro.volume = float(item.get('volume', 0)) or 0
@@ -398,7 +358,7 @@ def sincronizar_carteira_odoo(usar_filtro_pendente=True):
                 registros_importados += 1
                 
             except Exception as e:
-                erros.append(f"Erro ao processar pedido {pedido_id}: {str(e)}")
+                erros.append(f"Erro ao processar pedido {referencia_pedido}: {str(e)}")
                 logger.error(f"Erro sincronização carteira: {e}")
                 continue
         

@@ -32,7 +32,7 @@ class FaturamentoService:
     
     def importar_faturamento_odoo(self, filtros: Optional[Dict] = None) -> Dict[str, Any]:
         """
-        Importa dados de faturamento do Odoo usando a abordagem correta
+        Importa dados de faturamento do Odoo usando a abordagem CORRETA
         
         Args:
             filtros: Filtros para aplicar na consulta
@@ -48,16 +48,15 @@ class FaturamentoService:
             if not connection:
                 raise Exception("Não foi possível conectar ao Odoo")
             
-            # Aplicar filtros padrão se não fornecidos
+            # Aplicar filtros para faturamento específico
             if filtros is None:
-                filtros = {
-                    'state': 'sale',  # Apenas pedidos confirmados
-                    'data_inicio': datetime.now().strftime('%Y-%m-01'),  # Primeiro dia do mês atual
-                }
+                filtros = {'modelo': 'faturamento'}
+            else:
+                filtros['modelo'] = 'faturamento'  # Forçar uso do modelo correto
             
-            # Buscar dados do Odoo
+            # Buscar dados do Odoo usando método CORRETO
             self.logger.info(f"Buscando dados do Odoo com filtros: {filtros}")
-            dados_odoo = self.mapper.buscar_dados_completos(connection, filtros)
+            dados_odoo = self.mapper.buscar_faturamento_odoo(connection, filtros)
             
             if not dados_odoo:
                 return {
@@ -67,9 +66,9 @@ class FaturamentoService:
                     'total_processado': 0
                 }
             
-            # Mapear para formato de faturamento
-            self.logger.info("Mapeando dados para formato de faturamento")
-            dados_faturamento = self.mapper.mapear_para_faturamento(dados_odoo)
+            # Dados já vêm no formato correto do buscar_faturamento_odoo
+            self.logger.info("Dados de faturamento já mapeados corretamente")
+            dados_faturamento = dados_odoo  # Não precisa mapear novamente
             
             # Processar dados
             resultado_processamento = self._processar_dados_faturamento(dados_faturamento)
@@ -103,7 +102,7 @@ class FaturamentoService:
     
     def _processar_dados_faturamento(self, dados_faturamento: List[Dict]) -> Dict[str, Any]:
         """
-        Processa dados de faturamento e salva na tabela FaturamentoProduto
+        Processa dados de faturamento usando campos CORRETOS
         """
         try:
             self.logger.info(f"Processando {len(dados_faturamento)} registros de faturamento")
@@ -114,70 +113,70 @@ class FaturamentoService:
             for dado in dados_faturamento:
                 try:
                     # Verificar se já existe para evitar duplicatas
+                    numero_nf = dado.get('numero_nf')
+                    codigo_produto = dado.get('codigo_produto')
+                    
                     existe = db.session.query(FaturamentoProduto).filter_by(
-                        numero_nf=dado.get('nome_pedido'),
-                        cod_produto=dado.get('codigo_produto')
+                        numero_nf=numero_nf,
+                        cod_produto=codigo_produto
                     ).first()
                     
                     if not existe:
                         # Criar novo registro de FaturamentoProduto
                         faturamento_produto = FaturamentoProduto()
                         
-                        # Dados da NF
-                        faturamento_produto.numero_nf = dado.get('nome_pedido')
-                        data_pedido = self._parse_date(dado.get('data_pedido'))
-                        faturamento_produto.data_fatura = data_pedido.date() if data_pedido else None
+                        # Dados da NF (campos corretos)
+                        faturamento_produto.numero_nf = numero_nf
+                        data_fatura = self._parse_date(dado.get('data_fatura'))
+                        faturamento_produto.data_fatura = data_fatura.date() if data_fatura else None
                         
-                        # Dados do cliente
+                        # Dados do cliente (campos brasileiros corretos)
                         faturamento_produto.cnpj_cliente = dado.get('cnpj_cliente')
                         faturamento_produto.nome_cliente = dado.get('nome_cliente')
-                        faturamento_produto.municipio = dado.get('municipio_cliente')
-                        faturamento_produto.estado = dado.get('estado_cliente')
+                        faturamento_produto.municipio = dado.get('municipio')
                         
                         # Dados do vendedor
                         faturamento_produto.vendedor = dado.get('vendedor')
                         faturamento_produto.incoterm = dado.get('incoterm')
                         
-                        # Dados do produto
-                        faturamento_produto.cod_produto = dado.get('codigo_produto')
+                        # Dados do produto (campos corretos)
+                        faturamento_produto.cod_produto = codigo_produto
                         faturamento_produto.nome_produto = dado.get('nome_produto')
-                        faturamento_produto.qtd_produto_faturado = dado.get('quantidade_produto')
-                        faturamento_produto.preco_produto_faturado = dado.get('preco_unitario')
-                        faturamento_produto.valor_produto_faturado = dado.get('total_nfe_br')
-                        faturamento_produto.peso_unitario_produto = dado.get('peso_produto')
-                        faturamento_produto.peso_total = (dado.get('peso_produto') or 0) * (dado.get('quantidade_produto') or 0)
+                        faturamento_produto.qtd_produto_faturado = dado.get('quantidade')
+                        faturamento_produto.preco_produto_faturado = dado.get('preco_unitario')  # Corrigido
+                        faturamento_produto.valor_produto_faturado = dado.get('valor_total_item_nf')
+                        faturamento_produto.peso_unitario_produto = dado.get('peso_bruto')
+                        faturamento_produto.peso_total = (dado.get('peso_bruto') or 0) * (dado.get('quantidade') or 0)
                         
                         # Origem
-                        faturamento_produto.origem = dado.get('pedido_compra')
+                        faturamento_produto.origem = dado.get('origem')
                         
                         # Status
-                        faturamento_produto.status_nf = self._mapear_status(dado.get('status_pedido'))
+                        faturamento_produto.status_nf = self._mapear_status(dado.get('status'))
                         
                         # Auditoria
-                        faturamento_produto.created_by = 'odoo_integracao_correta'
+                        faturamento_produto.created_by = 'odoo_integracao'
                         
                         db.session.add(faturamento_produto)
                         total_faturamento_produto += 1
                     else:
                         # Atualizar registro existente
-                        data_pedido = self._parse_date(dado.get('data_pedido'))
-                        existe.data_fatura = data_pedido.date() if data_pedido else None
+                        data_fatura = self._parse_date(dado.get('data_fatura'))
+                        existe.data_fatura = data_fatura.date() if data_fatura else None
                         existe.cnpj_cliente = dado.get('cnpj_cliente')
                         existe.nome_cliente = dado.get('nome_cliente')
-                        existe.municipio = dado.get('municipio_cliente')
-                        existe.estado = dado.get('estado_cliente')
+                        existe.municipio = dado.get('municipio')
                         existe.vendedor = dado.get('vendedor')
                         existe.incoterm = dado.get('incoterm')
                         existe.nome_produto = dado.get('nome_produto')
-                        existe.qtd_produto_faturado = dado.get('quantidade_produto')
-                        existe.preco_produto_faturado = dado.get('preco_unitario')
-                        existe.valor_produto_faturado = dado.get('total_nfe_br')
-                        existe.peso_unitario_produto = dado.get('peso_produto')
-                        existe.peso_total = (dado.get('peso_produto') or 0) * (dado.get('quantidade_produto') or 0)
-                        existe.origem = dado.get('pedido_compra')
-                        existe.status_nf = self._mapear_status(dado.get('status_pedido'))
-                        existe.updated_by = 'odoo_integracao_correta'
-                    
+                        existe.qtd_produto_faturado = dado.get('quantidade')
+                        existe.preco_produto_faturado = dado.get('preco_unitario')  # Corrigido
+                        existe.valor_produto_faturado = dado.get('valor_total_item_nf')
+                        existe.peso_unitario_produto = dado.get('peso_bruto')
+                        existe.peso_total = (dado.get('peso_bruto') or 0) * (dado.get('quantidade') or 0)
+                        existe.origem = dado.get('origem')
+                        existe.status_nf = self._mapear_status(dado.get('status'))
+                        existe.updated_by = 'odoo_integracao'
                     total_processado += 1
                     
                     # Commit a cada 100 registros para otimizar performance
@@ -186,7 +185,7 @@ class FaturamentoService:
                         self.logger.info(f"Processados {total_processado} registros")
                 
                 except Exception as e:
-                    self.logger.error(f"Erro ao processar registro {dado.get('nome_pedido', 'desconhecido')}: {e}")
+                    self.logger.error(f"Erro ao processar registro {numero_nf}: {e}")
                     db.session.rollback()
                     continue
             
@@ -255,80 +254,81 @@ class FaturamentoService:
             total_consolidado = 0
             total_relatorio_importado = 0
             
-            # Agrupar por pedido para consolidação
-            pedidos_consolidados = {}
+            # Agrupar por NF para consolidação
+            nfs_consolidadas = {}
             
             for dado in dados_faturamento:
-                pedido_key = f"{dado.get('id_pedido')}_{dado.get('nome_pedido')}"
+                numero_nf = dado.get('numero_nf')
+                if not numero_nf:
+                    continue
+                    
+                nf_key = f"{numero_nf}_{dado.get('cnpj_cliente', '')}"
                 
-                if pedido_key not in pedidos_consolidados:
-                    pedidos_consolidados[pedido_key] = {
-                        'id_pedido_odoo': dado.get('id_pedido'),
-                        'nome_pedido': dado.get('nome_pedido'),
-                        'pedido_compra': dado.get('pedido_compra'),
+                if nf_key not in nfs_consolidadas:
+                    nfs_consolidadas[nf_key] = {
+                        'numero_nf': numero_nf,
                         'nome_cliente': dado.get('nome_cliente'),
                         'cnpj_cliente': dado.get('cnpj_cliente'),
-                        'data_fatura': dado.get('data_pedido'),
+                        'data_fatura': dado.get('data_fatura'),
                         'valor_total': 0,
-                        'origem': dado.get('pedido_compra'),  # Campo origem = número do pedido
+                        'origem': dado.get('origem'),
                         'incoterm': dado.get('incoterm'),
-                        'status_pedido': dado.get('status_pedido'),
                         'vendedor': dado.get('vendedor'),
-                        'time_vendas': dado.get('time_vendas'),
-                        'municipio_cliente': dado.get('municipio_cliente'),
-                        'estado_cliente': dado.get('estado_cliente'),
-                        'data_criacao': dado.get('data_criacao'),
+                        'municipio': dado.get('municipio'),
+                        'status': dado.get('status'),
                         'itens': []
                     }
                 
                 # Adicionar valor do item ao total
-                pedidos_consolidados[pedido_key]['valor_total'] += (dado.get('total') or 0)
+                valor_item = dado.get('valor_total_item_nf') or 0
+                nfs_consolidadas[nf_key]['valor_total'] += valor_item
                 
                 # Adicionar item
-                pedidos_consolidados[pedido_key]['itens'].append({
+                nfs_consolidadas[nf_key]['itens'].append({
                     'codigo_produto': dado.get('codigo_produto'),
                     'nome_produto': dado.get('nome_produto'),
-                    'quantidade': dado.get('quantidade_produto'),
-                    'preco_unitario': dado.get('preco_unitario'),
-                    'valor_total': dado.get('total')
+                    'quantidade': dado.get('quantidade'),
+                    'valor_total': valor_item
                 })
                 
                 total_consolidado += 1
             
             # Salvar dados consolidados
-            for pedido_key, dados_pedido in pedidos_consolidados.items():
+            for nf_key, dados_nf in nfs_consolidadas.items():
                 try:
                     # Verificar se já existe
                     existe = db.session.query(RelatorioFaturamentoImportado).filter_by(
-                        origem=dados_pedido['origem'],
-                        nome_cliente=dados_pedido['nome_cliente']
+                        numero_nf=dados_nf['numero_nf'],
+                        cnpj_cliente=dados_nf['cnpj_cliente']
                     ).first()
                     
                     if not existe:
                         relatorio = RelatorioFaturamentoImportado()
-                        relatorio.nome_cliente = dados_pedido['nome_cliente']
-                        relatorio.cnpj_cliente = dados_pedido['cnpj_cliente']
-                        relatorio.numero_nf = dados_pedido['nome_pedido']
-                        data_fatura = self._parse_date(dados_pedido['data_fatura'])
+                        relatorio.numero_nf = dados_nf['numero_nf']
+                        relatorio.nome_cliente = dados_nf['nome_cliente']
+                        relatorio.cnpj_cliente = dados_nf['cnpj_cliente']
+                        data_fatura = self._parse_date(dados_nf['data_fatura'])
                         relatorio.data_fatura = data_fatura.date() if data_fatura else None
-                        relatorio.valor_total = dados_pedido['valor_total']
-                        relatorio.origem = dados_pedido['origem']
-                        relatorio.incoterm = dados_pedido['incoterm']
-                        relatorio.vendedor = dados_pedido['vendedor']
-                        relatorio.municipio = dados_pedido['municipio_cliente']
-                        relatorio.estado = dados_pedido['estado_cliente']
+                        relatorio.valor_total = dados_nf['valor_total']
+                        relatorio.origem = dados_nf['origem']
+                        relatorio.incoterm = dados_nf['incoterm']
+                        relatorio.vendedor = dados_nf['vendedor']
+                        relatorio.municipio = dados_nf['municipio']
+                        relatorio.status_faturamento = dados_nf['status']
+                        relatorio.data_importacao = datetime.now()
+                        relatorio.origem_importacao = 'odoo_integracao'
                         
                         db.session.add(relatorio)
                         total_relatorio_importado += 1
                     else:
                         # Atualizar registro existente
-                        existe.valor_total = dados_pedido['valor_total']
-                        existe.status_faturamento = dados_pedido['status_pedido']
+                        existe.valor_total = dados_nf['valor_total']
+                        existe.status_faturamento = dados_nf['status']
                         existe.data_importacao = datetime.now()
-                        existe.origem_importacao = 'odoo_integracao_correta'
+                        existe.origem_importacao = 'odoo_integracao'
                 
                 except Exception as e:
-                    self.logger.error(f"Erro ao consolidar pedido {pedido_key}: {e}")
+                    self.logger.error(f"Erro ao consolidar NF {nf_key}: {e}")
                     continue
             
             # Commit final
