@@ -29,20 +29,45 @@ carteira_service = CarteiraService()
 @login_required
 @require_admin()
 def dashboard():
-    """Dashboard principal da carteira Odoo"""
+    """Dashboard principal da carteira Odoo - OTIMIZADO"""
     try:
-        # Obter dados básicos da carteira
-        resultado = carteira_service.obter_carteira_pendente()
+        import time
         
-        return render_template('odoo/carteira/dashboard.html', 
-                             resultado=resultado)
+        # ⚡ USAR MÉTODO OTIMIZADO com limite baixo para dashboard rápido
+        start_time = time.time()
+        
+        resultado = carteira_service.obter_carteira_otimizada(
+            usar_filtro_pendente=True,
+            limite=20  # Máximo 20 registros para dashboard rápido
+        )
+        
+        elapsed = time.time() - start_time
+        
+        # Adicionar informações de performance
+        if resultado.get('sucesso'):
+            resultado['tempo_consulta'] = elapsed
+            resultado['performance_info'] = f"⚡ Consulta executada em {elapsed:.2f}s com método otimizado"
+            
+            if elapsed < 2:
+                resultado['performance_status'] = 'excelente'
+            elif elapsed < 5:
+                resultado['performance_status'] = 'boa'
+            else:
+                resultado['performance_status'] = 'aceitavel'
+        
+        return render_template('odoo/carteira/dashboard.html', resultado=resultado)
         
     except Exception as e:
-        logger.error(f"Erro no dashboard: {e}")
+        logger.error(f"Erro no dashboard otimizado: {e}")
         flash(f"Erro ao carregar dashboard: {str(e)}", 'error')
-        # Renderizar página de erro ao invés de redirect
-        return render_template('odoo/carteira/dashboard.html', 
-                             resultado={'error': str(e), 'success': False})
+        
+        # Fallback emergency
+        resultado_fallback = {
+            'sucesso': False,
+            'error': str(e),
+            'mensagem': 'Dashboard temporariamente indisponível'
+        }
+        return render_template('odoo/carteira/dashboard.html', resultado=resultado_fallback)
 
 @carteira_bp.route('/pendente', methods=['GET', 'POST'])
 @login_required
@@ -207,32 +232,46 @@ def sincronizar_carteira_get():
 def sincronizar_carteira():
     """
     Sincroniza carteira do Odoo por substituição completa da CarteiraPrincipal
+    CORRIGIDO: Usa método da classe ao invés de wrapper
     """
     try:
-        from app.odoo.services.carteira_service import sincronizar_carteira_odoo
-        
         # Pegar parâmetro do checkbox
         usar_filtro = request.form.get('usar_filtro_pendente') == 'on'
         
-        # Executar sincronização
-        resultado = sincronizar_carteira_odoo(usar_filtro_pendente=usar_filtro)
+        # Executar sincronização usando método da classe (correto)
+        resultado = carteira_service.sincronizar_carteira_odoo(usar_filtro_pendente=usar_filtro)
         
         if resultado['sucesso']:
             # Mensagem de sucesso
+            registros_importados = resultado.get('registros_importados', 0)
+            registros_removidos = resultado.get('registros_removidos', 0)
+            stats = resultado.get('estatisticas', {})
+            
             mensagem = f"✅ Sincronização da carteira concluída! "
-            mensagem += f"Registros: {resultado['registros_importados']} importados, {resultado['registros_removidos']} removidos."
+            mensagem += f"📊 {registros_importados} registros importados, {registros_removidos} removidos."
+            
+            if stats.get('queries_executadas'):
+                mensagem += f" ⚡ {stats['queries_executadas']} queries executadas."
             
             flash(mensagem, 'success')
             
+            # Estatísticas adicionais
+            if stats.get('valor_total'):
+                flash(f"💰 Valor total da carteira: R$ {stats['valor_total']:,.2f}", 'info')
+            
             # Mostrar erros se houver
             if resultado.get('erros'):
-                for erro in resultado['erros']:
+                for erro in resultado['erros'][:3]:  # Máximo 3 erros para não poluir
                     flash(f"⚠️ {erro}", 'warning')
+                
+                if len(resultado['erros']) > 3:
+                    flash(f"⚠️ ... e mais {len(resultado['erros'])-3} erros de processamento", 'warning')
         else:
             flash(f"❌ Erro na sincronização: {resultado['erro']}", 'error')
         
-        return redirect(url_for('carteira_odoo.dashboard'))
+        return redirect(url_for('odoo.carteira_odoo.dashboard'))
         
     except Exception as e:
+        logger.error(f"Erro durante sincronização: {e}")
         flash(f"❌ Erro durante sincronização: {str(e)}", 'error')
-        return redirect(url_for('carteira_odoo.dashboard')) 
+        return redirect(url_for('odoo.carteira_odoo.dashboard')) 

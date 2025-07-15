@@ -62,15 +62,15 @@ class CarteiraMapper:
             'cliente_nec_agendamento': 'order_id/partner_id/agendamento',
             'observ_ped_1': 'order_id/picking_note',
             
-            # 🏠 ENDEREÇO DE ENTREGA COMPLETO
+            # 🏠 ENDEREÇO DE ENTREGA COMPLETO (EXATAMENTE COMO USUÁRIO ESPECIFICOU)
             'cnpj_endereco_ent': 'order_id/partner_shipping_id/l10n_br_cnpj',
-            'empresa_endereco_ent': 'order_id/partner_shipping_id/self',
+            'empresa_endereco_ent': 'order_id/partner_shipping_id/name',
             'cep_endereco_ent': 'order_id/partner_shipping_id/zip',
             'nome_cidade': 'order_id/partner_shipping_id/l10n_br_municipio_id/name',
             'cod_uf': 'order_id/partner_shipping_id/l10n_br_municipio_id',
-            'bairro_endereco_ent': 'order_id/partner_shipping_id/l10n_br_district',
+            'bairro_endereco_ent': 'order_id/partner_shipping_id/l10n_br_endereco_bairro',  # CORRETO do CSV
             'rua_endereco_ent': 'order_id/partner_shipping_id/street',
-            'endereco_ent': 'order_id/partner_shipping_id/street2',
+            'endereco_ent': 'order_id/partner_shipping_id/l10n_br_endereco_numero',  # CORRETO do CSV
             'telefone_endereco_ent': 'order_id/partner_shipping_id/phone',
             'pais_endereco_ent': 'order_id/partner_shipping_id/country_id/name'
         }

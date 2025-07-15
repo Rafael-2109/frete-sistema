@@ -29,14 +29,31 @@ faturamento_service = FaturamentoService()
 @login_required
 @require_admin()
 def dashboard():
-    """Dashboard principal do faturamento Odoo"""
+    """Dashboard principal do faturamento Odoo - OTIMIZADO"""
     try:
-        # Obter dados básicos do faturamento
-        resultado = faturamento_service.obter_faturamento_produtos(
-            data_inicio=None, 
-            data_fim=None, 
-            nfs_especificas=None
+        import time
+        
+        # ⚡ USAR MÉTODO OTIMIZADO com limite baixo para dashboard rápido
+        start_time = time.time()
+        
+        resultado = faturamento_service.obter_faturamento_otimizado(
+            usar_filtro_postado=True,
+            limite=20  # Máximo 20 registros para dashboard rápido
         )
+        
+        elapsed = time.time() - start_time
+        
+        # Adicionar informações de performance
+        if resultado.get('sucesso'):
+            resultado['tempo_consulta'] = elapsed
+            resultado['performance_info'] = f"⚡ Consulta executada em {elapsed:.2f}s com método otimizado"
+            
+            if elapsed < 2:
+                resultado['performance_status'] = 'excelente'
+            elif elapsed < 5:
+                resultado['performance_status'] = 'boa'
+            else:
+                resultado['performance_status'] = 'aceitavel'
         
         return render_template('odoo/faturamento/dashboard.html', 
                              resultado=resultado)
