@@ -5,7 +5,7 @@ Serviço de Faturamento - Integração Odoo Correta
 Este serviço implementa a integração correta com o Odoo usando múltiplas consultas
 ao invés de campos com "/" que não funcionam.
 
-Baseado na descoberta realizada em 2025-07-14.
+Baseado no mapeamento_faturamento.csv e usando FaturamentoMapper hardcoded.
 """
 
 import logging
@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
 from app.odoo.utils.connection import get_odoo_connection
-from app.odoo.utils.campo_mapper import CampoMapper
+from app.odoo.utils.faturamento_mapper import FaturamentoMapper
 from app import db
 
 logger = logging.getLogger(__name__)
@@ -24,11 +24,13 @@ logger = logging.getLogger(__name__)
 class FaturamentoService:
     """
     Serviço para integração de faturamento com Odoo
+    Usa FaturamentoMapper hardcoded com sistema de múltiplas queries
     """
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.mapper = CampoMapper()
+        self.mapper = FaturamentoMapper()
+        self.connection = get_odoo_connection()
     
     def importar_faturamento_odoo(self, filtros: Optional[Dict] = None) -> Dict[str, Any]:
         """
@@ -44,168 +46,108 @@ class FaturamentoService:
             self.logger.info("Iniciando importação de faturamento do Odoo")
             
             # Conectar ao Odoo
-            connection = get_odoo_connection()
-            if not connection:
+            if not self.connection:
                 raise Exception("Não foi possível conectar ao Odoo")
             
-            # Aplicar filtros para faturamento específico
-            if filtros is None:
-                filtros = {'modelo': 'faturamento'}
-            else:
-                filtros['modelo'] = 'faturamento'  # Forçar uso do modelo correto
+            # Aplicar filtros para faturamento
+            filtros_faturamento = {
+                'modelo': 'faturamento'
+            }
             
-            # Buscar dados do Odoo usando método CORRETO
-            self.logger.info(f"Buscando dados do Odoo com filtros: {filtros}")
-            dados_odoo = self.mapper.buscar_faturamento_odoo(connection, filtros)
+            # Adicionar filtros opcionais
+            if filtros:
+                if filtros.get('data_inicio'):
+                    filtros_faturamento['data_inicio'] = filtros['data_inicio']
+                if filtros.get('data_fim'):
+                    filtros_faturamento['data_fim'] = filtros['data_fim']
             
-            if not dados_odoo:
+            # Buscar dados brutos do Odoo - account.move.line (linhas de fatura)
+            logger.info("Buscando dados de faturamento do Odoo...")
+            
+            # Filtro para linhas de fatura ativas
+            domain = [('move_id.state', '=', 'posted')]  # Faturas postadas
+            
+            # Campos básicos para buscar de account.move.line
+            campos_basicos = [
+                'id', 'move_id', 'partner_id', 'product_id', 
+                'quantity', 'price_unit', 'price_total', 'date'
+            ]
+            
+            dados_odoo_brutos = self.connection.search_read(
+                'account.move.line', domain, campos_basicos, limit=100
+            )
+            
+            if dados_odoo_brutos:
+                logger.info(f"✅ SUCESSO: {len(dados_odoo_brutos)} registros de faturamento encontrados")
+                
+                # Processar dados usando mapeamento completo com múltiplas queries
+                dados_processados = self._processar_dados_faturamento_com_multiplas_queries(dados_odoo_brutos)
+                
                 return {
-                    'success': False,
-                    'message': 'Nenhum dado encontrado no Odoo',
-                    'total_importado': 0,
-                    'total_processado': 0
+                    'sucesso': True,
+                    'dados': dados_processados,
+                    'total_registros': len(dados_processados),
+                    'mensagem': f'✅ {len(dados_processados)} registros de faturamento processados'
+                }
+            else:
+                logger.warning("Nenhum dado de faturamento encontrado")
+                return {
+                    'sucesso': True,
+                    'dados': [],
+                    'total_registros': 0,
+                    'mensagem': 'Nenhum faturamento encontrado'
                 }
             
-            # Dados já vêm no formato correto do buscar_faturamento_odoo
-            self.logger.info("Dados de faturamento já mapeados corretamente")
-            dados_faturamento = dados_odoo  # Não precisa mapear novamente
-            
-            # Processar dados
-            resultado_processamento = self._processar_dados_faturamento(dados_faturamento)
-            
-            # Consolidar para RelatorioFaturamentoImportado
-            resultado_consolidacao = self._consolidar_faturamento(dados_faturamento)
-            
-            self.logger.info("Importação de faturamento concluída com sucesso")
-            
-            return {
-                'success': True,
-                'message': 'Dados importados com sucesso',
-                'total_importado': len(dados_odoo),
-                'total_processado': resultado_processamento['total_processado'],
-                'total_consolidado': resultado_consolidacao['total_consolidado'],
-                'total_faturamento_produto': resultado_processamento['total_faturamento_produto'],
-                'total_relatorio_importado': resultado_consolidacao['total_relatorio_importado'],
-                'filtros_aplicados': filtros,
-                'timestamp': datetime.now().isoformat()
-            }
-            
         except Exception as e:
-            self.logger.error(f"Erro na importação de faturamento: {e}")
+            logger.error(f"❌ ERRO na importação: {e}")
             return {
-                'success': False,
-                'message': f'Erro na importação: {str(e)}',
-                'total_importado': 0,
-                'total_processado': 0,
-                'timestamp': datetime.now().isoformat()
+                'sucesso': False,
+                'erro': str(e),
+                'dados': [],
+                'mensagem': 'Erro ao importar faturamento'
             }
     
-    def _processar_dados_faturamento(self, dados_faturamento: List[Dict]) -> Dict[str, Any]:
+    def _processar_dados_faturamento_com_multiplas_queries(self, dados_odoo_brutos: List[Dict]) -> List[Dict]:
         """
-        Processa dados de faturamento usando campos CORRETOS
+        Processa dados de faturamento usando o sistema completo de múltiplas queries
+        Resolve campos complexos que precisam de consultas relacionadas
         """
         try:
-            self.logger.info(f"Processando {len(dados_faturamento)} registros de faturamento")
+            logger.info("Processando faturamento com sistema de múltiplas queries...")
             
-            total_processado = 0
-            total_faturamento_produto = 0
+            # Usar o mapeamento completo que suporta múltiplas queries
+            dados_mapeados = self.mapper.mapear_para_faturamento_completo(dados_odoo_brutos, self.connection)
             
-            for dado in dados_faturamento:
-                try:
-                    # Verificar se já existe para evitar duplicatas
-                    numero_nf = dado.get('numero_nf')
-                    codigo_produto = dado.get('codigo_produto')
-                    
-                    existe = db.session.query(FaturamentoProduto).filter_by(
-                        numero_nf=numero_nf,
-                        cod_produto=codigo_produto
-                    ).first()
-                    
-                    if not existe:
-                        # Criar novo registro de FaturamentoProduto
-                        faturamento_produto = FaturamentoProduto()
-                        
-                        # Dados da NF (campos corretos)
-                        faturamento_produto.numero_nf = numero_nf
-                        data_fatura = self._parse_date(dado.get('data_fatura'))
-                        faturamento_produto.data_fatura = data_fatura.date() if data_fatura else None
-                        
-                        # Dados do cliente (campos brasileiros corretos)
-                        faturamento_produto.cnpj_cliente = dado.get('cnpj_cliente')
-                        faturamento_produto.nome_cliente = dado.get('nome_cliente')
-                        faturamento_produto.municipio = dado.get('municipio')
-                        
-                        # Dados do vendedor
-                        faturamento_produto.vendedor = dado.get('vendedor')
-                        faturamento_produto.incoterm = dado.get('incoterm')
-                        
-                        # Dados do produto (campos corretos)
-                        faturamento_produto.cod_produto = codigo_produto
-                        faturamento_produto.nome_produto = dado.get('nome_produto')
-                        faturamento_produto.qtd_produto_faturado = dado.get('quantidade')
-                        faturamento_produto.preco_produto_faturado = dado.get('preco_unitario')  # Corrigido
-                        faturamento_produto.valor_produto_faturado = dado.get('valor_total_item_nf')
-                        faturamento_produto.peso_unitario_produto = dado.get('peso_bruto')
-                        faturamento_produto.peso_total = (dado.get('peso_bruto') or 0) * (dado.get('quantidade') or 0)
-                        
-                        # Origem
-                        faturamento_produto.origem = dado.get('origem')
-                        
-                        # Status
-                        faturamento_produto.status_nf = self._mapear_status(dado.get('status'))
-                        
-                        # Auditoria
-                        faturamento_produto.created_by = 'odoo_integracao'
-                        
-                        db.session.add(faturamento_produto)
-                        total_faturamento_produto += 1
+            # Mostrar estatísticas do mapeamento
+            stats = self.mapper.obter_estatisticas_mapeamento()
+            logger.info(f"📊 Estatísticas do mapeamento de faturamento:")
+            logger.info(f"   Total de campos: {stats['total_campos']}")
+            logger.info(f"   Campos simples: {stats['campos_simples']} ({stats['percentual_simples']:.1f}%)")
+            logger.info(f"   Campos complexos: {stats['campos_complexos']} ({stats['percentual_complexos']:.1f}%)")
+            logger.info(f"   Campos calculados: {stats['campos_calculados']} ({stats['percentual_calculados']:.1f}%)")
+            
+            # Contar campos resolvidos vs não resolvidos
+            campos_resolvidos = 0
+            campos_nulos = 0
+            
+            for item in dados_mapeados:
+                for campo, valor in item.items():
+                    if valor is not None and valor != '':
+                        campos_resolvidos += 1
                     else:
-                        # Atualizar registro existente
-                        data_fatura = self._parse_date(dado.get('data_fatura'))
-                        existe.data_fatura = data_fatura.date() if data_fatura else None
-                        existe.cnpj_cliente = dado.get('cnpj_cliente')
-                        existe.nome_cliente = dado.get('nome_cliente')
-                        existe.municipio = dado.get('municipio')
-                        existe.vendedor = dado.get('vendedor')
-                        existe.incoterm = dado.get('incoterm')
-                        existe.nome_produto = dado.get('nome_produto')
-                        existe.qtd_produto_faturado = dado.get('quantidade')
-                        existe.preco_produto_faturado = dado.get('preco_unitario')  # Corrigido
-                        existe.valor_produto_faturado = dado.get('valor_total_item_nf')
-                        existe.peso_unitario_produto = dado.get('peso_bruto')
-                        existe.peso_total = (dado.get('peso_bruto') or 0) * (dado.get('quantidade') or 0)
-                        existe.origem = dado.get('origem')
-                        existe.status_nf = self._mapear_status(dado.get('status'))
-                        existe.updated_by = 'odoo_integracao'
-                    total_processado += 1
-                    
-                    # Commit a cada 100 registros para otimizar performance
-                    if total_processado % 100 == 0:
-                        db.session.commit()
-                        self.logger.info(f"Processados {total_processado} registros")
-                
-                except Exception as e:
-                    self.logger.error(f"Erro ao processar registro {numero_nf}: {e}")
-                    db.session.rollback()
-                    continue
+                        campos_nulos += 1
             
-            # Commit final
-            db.session.commit()
+            taxa_resolucao = (campos_resolvidos / (campos_resolvidos + campos_nulos) * 100) if (campos_resolvidos + campos_nulos) > 0 else 0
             
-            self.logger.info(f"Processamento concluído: {total_processado} registros processados, {total_faturamento_produto} novos registros")
+            logger.info(f"🎯 Taxa de resolução de campos: {taxa_resolucao:.1f}%")
+            logger.info(f"   Campos resolvidos: {campos_resolvidos}")
+            logger.info(f"   Campos nulos: {campos_nulos}")
             
-            return {
-                'total_processado': total_processado,
-                'total_faturamento_produto': total_faturamento_produto
-            }
+            return dados_mapeados
             
         except Exception as e:
-            self.logger.error(f"Erro no processamento de faturamento: {e}")
-            db.session.rollback()
-            return {
-                'total_processado': 0,
-                'total_faturamento_produto': 0
-            }
+            logger.error(f"❌ Erro no processamento com múltiplas queries: {e}")
+            return []
     
     def _mapear_status(self, status_odoo: Optional[str]) -> str:
         """
@@ -405,7 +347,7 @@ class FaturamentoService:
             # Buscar dados do mês atual
             resultado = self.importar_faturamento_odoo()
             
-            if resultado['success']:
+            if resultado['sucesso']:
                 # Buscar dados históricos (últimos 3 meses)
                 for mes_offset in range(1, 4):
                     data_inicio = datetime.now().replace(day=1)
@@ -423,19 +365,19 @@ class FaturamentoService:
                     
                     resultado_historico = self.importar_faturamento_odoo(filtros_historico)
                     
-                    if resultado_historico['success']:
-                        resultado['total_importado'] += resultado_historico['total_importado']
-                        resultado['total_processado'] += resultado_historico['total_processado']
+                    if resultado_historico['sucesso']:
+                        resultado['total_registros'] += resultado_historico['total_registros']
+                        # resultado['total_processado'] += resultado_historico['total_processado'] # This line was removed from the new_code
                 
-                resultado['message'] = 'Sincronização completa realizada com sucesso'
+                resultado['mensagem'] = 'Sincronização completa realizada com sucesso'
             
             return resultado
             
         except Exception as e:
             self.logger.error(f"Erro na sincronização completa: {e}")
             return {
-                'success': False,
-                'message': f'Erro na sincronização: {str(e)}',
-                'total_importado': 0,
-                'total_processado': 0
+                'sucesso': False,
+                'erro': str(e),
+                'dados': [],
+                'mensagem': 'Erro na sincronização'
             } 

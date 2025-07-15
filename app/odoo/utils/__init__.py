@@ -13,12 +13,16 @@ from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.utils.mappers import (
     get_carteira_mapper,
     get_faturamento_mapper,
-    get_faturamento_produto_mapper
+    get_faturamento_produto_mapper,
+    FaturamentoMapper,
+    CarteiraMapper
 )
 
 __all__ = [
     'get_odoo_connection',
     'get_carteira_mapper',
     'get_faturamento_mapper',
-    'get_faturamento_produto_mapper'
+    'get_faturamento_produto_mapper',
+    'FaturamentoMapper',
+    'CarteiraMapper'
 ] 

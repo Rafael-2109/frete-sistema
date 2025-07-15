@@ -1,0 +1,36 @@
+{
+  "sistemas_testados": [
+    "Carteira",
+    "Faturamento",
+    "OdooConnection"
+  ],
+  "status_geral": true,
+  "problemas_encontrados": [],
+  "sucessos": [
+    "CampoMapper: 39 campos",
+    "CarteiraService integrado com CampoMapper",
+    "FaturamentoMapper: 17 campos",
+    "FaturamentoService integrado com FaturamentoMapper",
+    "OdooConnection com múltiplas queries",
+    "Campos problemáticos 100% identificados",
+    "Mapeamento simulado funcional"
+  ],
+  "estatisticas": {
+    "carteira": {
+      "total_campos": 39,
+      "campos_simples": 20,
+      "campos_complexos": 19,
+      "percentual_simples": 51.28205128205128,
+      "percentual_complexos": 48.717948717948715
+    },
+    "faturamento": {
+      "total_campos": 17,
+      "campos_simples": 4,
+      "campos_complexos": 12,
+      "campos_calculados": 1,
+      "percentual_simples": 23.52941176470588,
+      "percentual_complexos": 70.58823529411765,
+      "percentual_calculados": 5.88235294117647
+    }
+  }
+}

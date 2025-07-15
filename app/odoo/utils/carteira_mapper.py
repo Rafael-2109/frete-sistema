@@ -8,19 +8,19 @@ from typing import Dict, List, Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-class CampoMapper:
+class CarteiraMapper:
     def __init__(self):
-        self.mapeamento_usuario = {}
+        self.mapeamento_carteira = {}
         self.campos_multiplas_queries = {}
-        self._carregar_mapeamento_usuario()
+        self._carregar_mapeamento_carteira()
         self._definir_campos_multiplas_queries()
     
-    def _carregar_mapeamento_usuario(self):
+    def _carregar_mapeamento_carteira(self):
         """Define EXATAMENTE o mapeamento fornecido pelo usuário - hardcoded no código"""
         
         # Mapeamento completo baseado no CSV do usuário
         # CarteiraPrincipal -> Campo Odoo
-        self.mapeamento_usuario = {
+        self.mapeamento_carteira = {
             # 🆔 CHAVES PRIMÁRIAS DE NEGÓCIO
             'num_pedido': 'order_id/name',
             'cod_produto': 'product_id/default_code',
@@ -75,7 +75,7 @@ class CampoMapper:
             'pais_endereco_ent': 'order_id/partner_shipping_id/country_id/name'
         }
         
-        logger.info(f"Mapeamento hardcoded carregado: {len(self.mapeamento_usuario)} campos")
+        logger.info(f"Mapeamento hardcoded carregado: {len(self.mapeamento_carteira)} campos")
      
     def _definir_campos_multiplas_queries(self):
         """Define quais campos do mapeamento hardcoded precisam de múltiplas queries"""
@@ -84,7 +84,7 @@ class CampoMapper:
         # ou que acessam campos de múltiplos modelos
         multiplas_queries = {}
         
-        for campo_carteira, campo_odoo in self.mapeamento_usuario.items():
+        for campo_carteira, campo_odoo in self.mapeamento_carteira.items():
             partes = campo_odoo.split('/')
             
             # Critério: campos com 3+ níveis OU campos específicos que sabemos que precisam
@@ -148,7 +148,7 @@ class CampoMapper:
             for linha_odoo in dados_odoo:
                 item_carteira = {}
                 
-                for campo_carteira, campo_odoo in self.mapeamento_usuario.items():
+                for campo_carteira, campo_odoo in self.mapeamento_carteira.items():
                     try:
                         # Verificar se é um campo que precisa de múltiplas queries
                         if campo_odoo in self.campos_multiplas_queries:
@@ -265,7 +265,7 @@ class CampoMapper:
             for linha_odoo in dados_odoo:
                 item_carteira = {}
                 
-                for campo_carteira, campo_odoo in self.mapeamento_usuario.items():
+                for campo_carteira, campo_odoo in self.mapeamento_carteira.items():
                     try:
                         if self.eh_campo_multiplas_queries(campo_odoo) and odoo_connection:
                             # Campo que precisa de múltiplas queries
@@ -291,7 +291,7 @@ class CampoMapper:
     
     def obter_estatisticas_mapeamento(self) -> Dict[str, Any]:
         """Retorna estatísticas do mapeamento"""
-        total_campos = len(self.mapeamento_usuario)
+        total_campos = len(self.mapeamento_carteira)
         campos_simples = total_campos - len(self.campos_multiplas_queries)
         campos_complexos = len(self.campos_multiplas_queries)
         

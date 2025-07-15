@@ -5,7 +5,7 @@ Serviço de Carteira Odoo
 Serviço responsável por gerenciar a importação de dados de carteira de pedidos
 do Odoo ERP usando o mapeamento CORRETO.
 
-ATUALIZADO: Usa CampoMapper com múltiplas consultas ao invés de campos com "/"
+ATUALIZADO: Usa CarteiraMapper com múltiplas consultas ao invés de campos com "/"
 
 Funcionalidades:
 - Importação de carteira pendente
@@ -22,7 +22,7 @@ from datetime import datetime, date
 from decimal import Decimal
 
 from app.odoo.utils.connection import get_odoo_connection
-from app.odoo.utils.campo_mapper import CampoMapper
+from app.odoo.utils.carteira_mapper import CarteiraMapper
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class CarteiraService:
     
     def __init__(self):
         self.connection = get_odoo_connection()
-        self.mapper = CampoMapper()  # Usar novo CampoMapper
+        self.mapper = CarteiraMapper()  # Usar novo CarteiraMapper
     
     def obter_carteira_pendente(self, data_inicio=None, data_fim=None, pedidos_especificos=None):
         """
@@ -62,7 +62,7 @@ class CarteiraService:
             if pedidos_especificos:
                 filtros_carteira['pedidos_especificos'] = pedidos_especificos
             
-            # Usar novo método do CampoMapper com múltiplas queries
+            # Usar novo método do CarteiraMapper com múltiplas queries
             logger.info("Usando sistema de múltiplas queries para carteira...")
             
             # Primeiro buscar dados brutos do Odoo
@@ -273,7 +273,7 @@ class CarteiraService:
     def sincronizar_carteira_odoo(self, usar_filtro_pendente=True):
         """
         Sincroniza carteira do Odoo por substituição completa da CarteiraPrincipal
-        ATUALIZADO: Usa novo CampoMapper com campos EXATOS
+        ATUALIZADO: Usa novo CarteiraMapper com campos EXATOS
         
         Args:
             usar_filtro_pendente (bool): Se deve usar filtro 'Carteira Pendente' (qty_saldo > 0)

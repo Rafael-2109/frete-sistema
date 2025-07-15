@@ -66,7 +66,7 @@ class FaturamentoProduto(db.Model):
     origem = db.Column(db.String(20), nullable=True, index=True)
         
     # Status
-    status_nf = db.Column(db.String(20), nullable=False, default='ATIVO')  # ATIVO, CANCELADO
+    status_nf = db.Column(db.String(20), nullable=False, default='Provisório')  # Lançado, Cancelado, Provisório
     
     # Auditoria
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
