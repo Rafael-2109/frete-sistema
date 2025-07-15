@@ -31,7 +31,7 @@ odoo_bp.register_blueprint(faturamento_bp)
 
 # Importar utilitários principais
 from app.odoo.utils.connection import get_odoo_connection
-from app.odoo.utils.mappers import (
+from app.odoo.utils import (
     get_carteira_mapper,
     get_faturamento_mapper,
     get_faturamento_produto_mapper

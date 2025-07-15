@@ -41,9 +41,9 @@ def verificar_sistema_completo_odoo():
         
         # 1.1 CampoMapper
         print("🔧 1.1 Verificando CampoMapper...")
-        from app.odoo.utils.campo_mapper import CampoMapper
+        from app.odoo.utils.carteira_mapper import CarteiraMapper
         
-        carteira_mapper = CampoMapper()
+        carteira_mapper = CarteiraMapper()
         carteira_stats = carteira_mapper.obter_estatisticas_mapeamento()
         
         print(f"   📊 Carteira - Total: {carteira_stats['total_campos']} campos")
@@ -63,7 +63,7 @@ def verificar_sistema_completo_odoo():
         from app.odoo.services.carteira_service import CarteiraService
         
         carteira_service = CarteiraService()
-        if hasattr(carteira_service, 'mapper') and isinstance(carteira_service.mapper, CampoMapper):
+        if hasattr(carteira_service, 'mapper') and isinstance(carteira_service.mapper, CarteiraMapper):
             print("   ✅ CarteiraService: INTEGRADO")
             resultados["sucessos"].append("CarteiraService integrado com CampoMapper")
         else:
