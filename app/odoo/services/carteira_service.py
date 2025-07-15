@@ -29,24 +29,17 @@ class CarteiraService:
     def __init__(self):
         self.connection = get_odoo_connection()
     
-    def obter_carteira_pendente(self, data_inicio: Optional[date] = None, data_fim: Optional[date] = None, 
-                               pedidos_especificos: Optional[List[str]] = None) -> Dict[str, Any]:
+    def obter_carteira_pendente(self, data_inicio=None, data_fim=None, pedidos_especificos=None):
         """
-        Obtém carteira pendente do Odoo baseada nos campos definidos em campos_carteira.md
+        Obter carteira pendente do Odoo com campos corretos
+        """
+        logger.info("Buscando carteira pendente do Odoo...")
         
-        Args:
-            data_inicio: Data início do período
-            data_fim: Data fim do período
-            pedidos_especificos: Lista de pedidos específicos
-            
-        Returns:
-            Dict com dados da carteira pendente
-        """
         try:
-            # Construir domínio de busca para carteira pendente
-            domain = self._build_carteira_domain(data_inicio, data_fim, pedidos_especificos)
+            # Domínio para carteira pendente
+            domain = [['qty_saldo', '>', 0]]  # Apenas pedidos com saldo pendente
             
-            # Campos baseados em campos_carteira.md
+            # CAMPOS CORRETOS baseados nos testes
             fields = [
                 'order_id/l10n_br_pedido_compra',  # Pedido de Compra do Cliente
                 'order_id/name',  # Referência do pedido
@@ -93,40 +86,44 @@ class CarteiraService:
                 'order_id/partner_shipping_id/phone'  # Telefone
             ]
             
+            logger.info(f"🔍 Buscando campos: {fields}")
+            
             # Buscar dados do Odoo
-            logger.info(f"Buscando carteira pendente do Odoo...")
             odoo_data = self.connection.search_read(
-                'sale.order.line',
+                model='sale.order.line',
                 domain=domain,
                 fields=fields,
                 limit=5000
             )
             
-            logger.info(f"Encontrados {len(odoo_data)} registros de carteira no Odoo")
+            logger.info(f"✅ SUCESSO: {len(odoo_data)} registros encontrados")
             
-            if not odoo_data:
-                return {
-                    'sucesso': True,
-                    'mensagem': 'Nenhuma carteira pendente encontrada no período especificado',
-                    'dados': [],
-                    'total_registros': 0,
-                    'estatisticas': self._calcular_estatisticas([])
-                }
-            
-            # Processar dados
-            dados_processados = self._processar_dados_carteira(odoo_data)
+            # Mostrar estrutura dos dados
+            for i, record in enumerate(odoo_data):
+                logger.info(f"📋 REGISTRO {i+1}: {record}")
+                
+                # Analisar campos relacionados
+                if 'order_id' in record:
+                    logger.info(f"🎯 ORDER_ID: {record['order_id']}")
+                if 'product_id' in record:
+                    logger.info(f"🎯 PRODUCT_ID: {record['product_id']}")
+                if 'order_partner_id' in record:
+                    logger.info(f"🎯 ORDER_PARTNER_ID: {record['order_partner_id']}")
             
             return {
                 'sucesso': True,
-                'mensagem': f'Carteira pendente obtida com sucesso',
-                'dados': dados_processados,
-                'total_registros': len(dados_processados),
-                'estatisticas': self._calcular_estatisticas(dados_processados)
+                'dados': odoo_data,
+                'total_registros': len(odoo_data),
+                'mensagem': f'✅ {len(odoo_data)} registros encontrados com campos corretos'
             }
             
         except Exception as e:
-            logger.error(f"Erro ao obter carteira pendente: {e}")
-            raise
+            logger.error(f"❌ ERRO: {e}")
+            return {
+                'sucesso': False,
+                'erro': str(e),
+                'mensagem': 'Erro ao buscar carteira pendente'
+            }
     
     def _build_carteira_domain(self, data_inicio: Optional[date] = None, data_fim: Optional[date] = None, 
                               pedidos_especificos: Optional[List[str]] = None) -> List:
@@ -341,10 +338,11 @@ def sincronizar_carteira_odoo(usar_filtro_pendente=True):
                 data_pedido = None
                 if item.get('data_pedido'):
                     try:
-                        if isinstance(item['data_pedido'], str):
-                            data_pedido = datetime.strptime(item['data_pedido'], '%Y-%m-%d').date()
+                        data_pedido_value = item.get('data_pedido')
+                        if isinstance(data_pedido_value, str):
+                            data_pedido = datetime.strptime(data_pedido_value, '%Y-%m-%d').date()
                         else:
-                            data_pedido = item['data_pedido']
+                            data_pedido = data_pedido_value
                     except:
                         pass
                 
@@ -352,10 +350,11 @@ def sincronizar_carteira_odoo(usar_filtro_pendente=True):
                 data_prevista = None
                 if item.get('data_prevista'):
                     try:
-                        if isinstance(item['data_prevista'], str):
-                            data_prevista = datetime.strptime(item['data_prevista'], '%Y-%m-%d').date()
+                        data_prevista_value = item.get('data_prevista')
+                        if isinstance(data_prevista_value, str):
+                            data_prevista = datetime.strptime(data_prevista_value, '%Y-%m-%d').date()
                         else:
-                            data_prevista = item['data_prevista']
+                            data_prevista = data_prevista_value
                     except:
                         pass
                 

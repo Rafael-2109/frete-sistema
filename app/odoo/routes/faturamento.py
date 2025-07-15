@@ -296,6 +296,15 @@ def api_teste_conexao():
             'erro': str(e)
         }), 500 
 
+@faturamento_bp.route('/sincronizar', methods=['GET'])
+@login_required
+def sincronizar_faturamento_get():
+    """
+    Rota GET para sincronização - redireciona para dashboard com mensagem
+    """
+    flash('⚠️ A sincronização deve ser executada via formulário no dashboard.', 'warning')
+    return redirect(url_for('odoo.faturamento_odoo.dashboard'))
+
 @faturamento_bp.route('/sincronizar', methods=['POST'])
 @login_required
 def sincronizar_faturamento():

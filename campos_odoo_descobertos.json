@@ -1,0 +1,712 @@
+{
+  "sale.order.line": {
+    "campos_disponiveis": {},
+    "estrutura_real": {
+      "id": {
+        "value": "144065",
+        "type": "int"
+      },
+      "analytic_precision": {
+        "value": "2",
+        "type": "int"
+      },
+      "distribution_analytic_account_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "order_id": {
+        "value": "[23039, 'VCD2520494']",
+        "type": "list"
+      },
+      "sequence": {
+        "value": "10",
+        "type": "int"
+      },
+      "company_id": {
+        "value": "[4, 'NACOM GOYA - CD']",
+        "type": "list"
+      },
+      "currency_id": {
+        "value": "[6, 'BRL']",
+        "type": "list"
+      },
+      "order_partner_id": {
+        "value": "[207774, 'DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - PAULÍNIA']",
+        "type": "list"
+      },
+      "salesman_id": {
+        "value": "[1216, '198 GIAN E GIULIO MIRANTE TREINAMENTOS']",
+        "type": "list"
+      },
+      "state": {
+        "value": "sale",
+        "type": "str"
+      },
+      "tax_country_id": {
+        "value": "[31, 'Brazil']",
+        "type": "list"
+      },
+      "product_id": {
+        "value": "[36087, '[4629556] PEPINO SWEET RELISH - BAG 6X1,01KG - BY GEMEOS\\xa0']",
+        "type": "list"
+      },
+      "product_template_id": {
+        "value": "[50718, '[4629556] PEPINO SWEET RELISH - BAG 6X1,01KG - BY GEMEOS\\xa0']",
+        "type": "list"
+      },
+      "product_uom_category_id": {
+        "value": "[1, 'Unit']",
+        "type": "list"
+      },
+      "product_custom_attribute_value_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "product_no_variant_attribute_value_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "name": {
+        "value": "[4629556] RELISH DE PEPINO - BAG 6X1,01KG - BY GEMEOS",
+        "type": "str"
+      },
+      "product_uom_qty": {
+        "value": "10.0",
+        "type": "float"
+      },
+      "product_uom": {
+        "value": "[160, 'CAIXAS']",
+        "type": "list"
+      },
+      "tax_id": {
+        "value": "[1699181, 1699182, 1699184]",
+        "type": "list"
+      },
+      "price_unit": {
+        "value": "179.87",
+        "type": "float"
+      },
+      "price_subtotal": {
+        "value": "1436.44",
+        "type": "float"
+      },
+      "price_tax": {
+        "value": "362.26",
+        "type": "float"
+      },
+      "price_total": {
+        "value": "1798.7",
+        "type": "float"
+      },
+      "price_reduce_taxexcl": {
+        "value": "143.64",
+        "type": "float"
+      },
+      "price_reduce_taxinc": {
+        "value": "179.87",
+        "type": "float"
+      },
+      "qty_delivered_method": {
+        "value": "stock_move",
+        "type": "str"
+      },
+      "analytic_line_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "invoice_lines": {
+        "value": "[]",
+        "type": "list"
+      },
+      "invoice_status": {
+        "value": "no",
+        "type": "str"
+      },
+      "untaxed_amount_to_invoice": {
+        "value": "-362.26",
+        "type": "float"
+      },
+      "product_type": {
+        "value": "product",
+        "type": "str"
+      },
+      "product_uom_readonly": {
+        "value": "True",
+        "type": "bool"
+      },
+      "tax_calculation_rounding_method": {
+        "value": "round_per_line",
+        "type": "str"
+      },
+      "display_name": {
+        "value": "VCD2520494 - [4629556] RELISH DE PEPINO - BAG 6X1,01KG - BY GEMEOS (DISTRIBUIDORA E IMPORTADORA IRMA",
+        "type": "str"
+      },
+      "create_uid": {
+        "value": "[83, 'Halana Gana Lopes de Oliveira']",
+        "type": "list"
+      },
+      "create_date": {
+        "value": "2025-07-10 18:07:14",
+        "type": "str"
+      },
+      "write_uid": {
+        "value": "[83, 'Halana Gana Lopes de Oliveira']",
+        "type": "list"
+      },
+      "write_date": {
+        "value": "2025-07-14 20:19:52",
+        "type": "str"
+      },
+      "product_qty": {
+        "value": "10.0",
+        "type": "float"
+      },
+      "sale_order_option_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "product_template_attribute_value_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "purchase_line_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "move_ids": {
+        "value": "[745439]",
+        "type": "list"
+      },
+      "scheduled_date": {
+        "value": "2025-07-14 20:19:52",
+        "type": "str"
+      },
+      "free_qty_today": {
+        "value": "-10.0",
+        "type": "float"
+      },
+      "warehouse_id": {
+        "value": "[3, 'CD']",
+        "type": "list"
+      },
+      "qty_to_deliver": {
+        "value": "10.0",
+        "type": "float"
+      },
+      "display_qty_widget": {
+        "value": "True",
+        "type": "bool"
+      },
+      "l10n_br_operacao_id": {
+        "value": "[2767, 'Venda Interna com base reduzida CD - PRODUTOS ACIMA DE 1KG']",
+        "type": "list"
+      },
+      "l10n_br_cfop_id": {
+        "value": "[287, '5101 - Venda de produção do estabelecimento']",
+        "type": "list"
+      },
+      "l10n_br_cfop_codigo": {
+        "value": "5101",
+        "type": "str"
+      },
+      "l10n_br_prod_valor": {
+        "value": "1798.7",
+        "type": "float"
+      },
+      "l10n_br_unit_nfe": {
+        "value": "179.87",
+        "type": "float"
+      },
+      "l10n_br_total_nfe": {
+        "value": "1798.7",
+        "type": "float"
+      },
+      "l10n_br_total_tributos": {
+        "value": "362.26",
+        "type": "float"
+      },
+      "l10n_br_pedido_compra": {
+        "value": "146001",
+        "type": "str"
+      },
+      "l10n_br_compra_indcom": {
+        "value": "com",
+        "type": "str"
+      },
+      "l10n_br_mensagem_fiscal_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "l10n_br_informacao_adicional_produto_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "l10n_br_ncm_id": {
+        "value": "[28725, '20011000 - PEPINO NACIONAL - SUPERIOR A 1 KG (1709001)']",
+        "type": "list"
+      },
+      "l10n_br_origem": {
+        "value": "3",
+        "type": "str"
+      },
+      "l10n_br_imposto_auto": {
+        "value": "True",
+        "type": "bool"
+      },
+      "l10n_br_icms_modalidade_base": {
+        "value": "3",
+        "type": "str"
+      },
+      "l10n_br_icms_reducao_base": {
+        "value": "33.3333",
+        "type": "float"
+      },
+      "l10n_br_icms_cst": {
+        "value": "20",
+        "type": "str"
+      },
+      "l10n_br_icms_base": {
+        "value": "1199.13",
+        "type": "float"
+      },
+      "l10n_br_icms_aliquota": {
+        "value": "18.0",
+        "type": "float"
+      },
+      "l10n_br_icms_valor": {
+        "value": "215.84",
+        "type": "float"
+      },
+      "l10n_br_ipi_cst": {
+        "value": "53",
+        "type": "str"
+      },
+      "l10n_br_ipi_enq": {
+        "value": "999",
+        "type": "str"
+      },
+      "l10n_br_pis_cst": {
+        "value": "01",
+        "type": "str"
+      },
+      "l10n_br_pis_base": {
+        "value": "1582.8600000000001",
+        "type": "float"
+      },
+      "l10n_br_pis_aliquota": {
+        "value": "1.65",
+        "type": "float"
+      },
+      "l10n_br_pis_valor": {
+        "value": "26.12",
+        "type": "float"
+      },
+      "l10n_br_cofins_cst": {
+        "value": "01",
+        "type": "str"
+      },
+      "l10n_br_cofins_base": {
+        "value": "1582.8600000000001",
+        "type": "float"
+      },
+      "l10n_br_cofins_aliquota": {
+        "value": "7.6",
+        "type": "float"
+      },
+      "l10n_br_cofins_valor": {
+        "value": "120.3",
+        "type": "float"
+      },
+      "virtual_available": {
+        "value": "-40.0",
+        "type": "float"
+      },
+      "reached_milestones_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "qty_saldo": {
+        "value": "10.0",
+        "type": "float"
+      },
+      "timesheet_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "x_studio_categ_id": {
+        "value": "[165, 'TODOS / PRODUTO ACABADO / CONSERVAS / PEPINO / VD 160 A 205 G']",
+        "type": "list"
+      },
+      "x_studio_order_date": {
+        "value": "2025-07-14 20:19:52",
+        "type": "str"
+      },
+      "x_studio_order_state": {
+        "value": "sale",
+        "type": "str"
+      }
+    }
+  },
+  "sale.order": {
+    "campos_disponiveis": {},
+    "estrutura_real": {
+      "id": {
+        "value": "23039",
+        "type": "int"
+      },
+      "activity_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "message_follower_ids": {
+        "value": "[1853807, 1864305, 1869361, 1869363]",
+        "type": "list"
+      },
+      "message_partner_ids": {
+        "value": "[98750, 77208, 207774, 207775]",
+        "type": "list"
+      },
+      "message_ids": {
+        "value": "[9352636, 9352635, 9322064, 9277933]",
+        "type": "list"
+      },
+      "has_message": {
+        "value": "True",
+        "type": "bool"
+      },
+      "rating_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "website_message_ids": {
+        "value": "[9322064]",
+        "type": "list"
+      },
+      "access_url": {
+        "value": "/my/orders/23039",
+        "type": "str"
+      },
+      "access_warning": {
+        "value": "",
+        "type": "str"
+      },
+      "name": {
+        "value": "VCD2520494",
+        "type": "str"
+      },
+      "company_id": {
+        "value": "[4, 'NACOM GOYA - CD']",
+        "type": "list"
+      },
+      "partner_id": {
+        "value": "[207774, 'DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - PAULÍNIA']",
+        "type": "list"
+      },
+      "state": {
+        "value": "sale",
+        "type": "str"
+      },
+      "create_date": {
+        "value": "2025-07-10 18:07:14",
+        "type": "str"
+      },
+      "date_order": {
+        "value": "2025-07-14 20:19:52",
+        "type": "str"
+      },
+      "require_signature": {
+        "value": "True",
+        "type": "bool"
+      },
+      "prepayment_percent": {
+        "value": "1.0",
+        "type": "float"
+      },
+      "note": {
+        "value": "<p>Termos e condições: <a href=\"https://odoo.nacomgoya.com.br/terms\" target=\"_blank\" rel=\"noreferrer",
+        "type": "str"
+      },
+      "partner_invoice_id": {
+        "value": "[207774, 'DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - PAULÍNIA']",
+        "type": "list"
+      },
+      "partner_shipping_id": {
+        "value": "[207774, 'DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - PAULÍNIA']",
+        "type": "list"
+      },
+      "fiscal_position_id": {
+        "value": "[49, 'SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS']",
+        "type": "list"
+      },
+      "payment_term_id": {
+        "value": "[2755, '35 DDL']",
+        "type": "list"
+      },
+      "pricelist_id": {
+        "value": "[11, 'TABELA PADRÃO (BRL)']",
+        "type": "list"
+      },
+      "currency_id": {
+        "value": "[6, 'BRL']",
+        "type": "list"
+      },
+      "currency_rate": {
+        "value": "1.0",
+        "type": "float"
+      },
+      "user_id": {
+        "value": "[1216, '198 GIAN E GIULIO MIRANTE TREINAMENTOS']",
+        "type": "list"
+      },
+      "team_id": {
+        "value": "[10, 'VENDA EXTERNA FERNANDO']",
+        "type": "list"
+      },
+      "order_line": {
+        "value": "[144065, 144066, 144067]",
+        "type": "list"
+      },
+      "amount_untaxed": {
+        "value": "6116.32",
+        "type": "float"
+      },
+      "amount_tax": {
+        "value": "1542.49",
+        "type": "float"
+      },
+      "amount_total": {
+        "value": "7658.81",
+        "type": "float"
+      },
+      "amount_to_invoice": {
+        "value": "7658.81",
+        "type": "float"
+      },
+      "invoice_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "invoice_status": {
+        "value": "no",
+        "type": "str"
+      },
+      "transaction_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "authorized_transaction_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "tag_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "amount_undiscounted": {
+        "value": "6116.32",
+        "type": "float"
+      },
+      "country_code": {
+        "value": "BR",
+        "type": "str"
+      },
+      "expected_date": {
+        "value": "2025-07-14 20:19:52",
+        "type": "str"
+      },
+      "partner_credit_warning": {
+        "value": "",
+        "type": "str"
+      },
+      "tax_calculation_rounding_method": {
+        "value": "round_per_line",
+        "type": "str"
+      },
+      "tax_country_id": {
+        "value": "[31, 'Brazil']",
+        "type": "list"
+      },
+      "tax_totals": {
+        "value": "{'amount_untaxed': 6116.32, 'amount_total': 7658.81, 'formatted_amount_total': 'R$\\xa07.658,81', 'fo",
+        "type": "dict"
+      },
+      "terms_type": {
+        "value": "html",
+        "type": "str"
+      },
+      "type_name": {
+        "value": "Pedido de venda",
+        "type": "str"
+      },
+      "has_active_pricelist": {
+        "value": "True",
+        "type": "bool"
+      },
+      "display_name": {
+        "value": "VCD2520494",
+        "type": "str"
+      },
+      "create_uid": {
+        "value": "[83, 'Halana Gana Lopes de Oliveira']",
+        "type": "list"
+      },
+      "write_uid": {
+        "value": "[83, 'Halana Gana Lopes de Oliveira']",
+        "type": "list"
+      },
+      "write_date": {
+        "value": "2025-07-14 20:19:53",
+        "type": "str"
+      },
+      "shipping_weight": {
+        "value": "64.0",
+        "type": "float"
+      },
+      "sale_order_option_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "incoterm": {
+        "value": "[6, '[CIF] COST, INSURANCE AND FREIGHT']",
+        "type": "list"
+      },
+      "picking_policy": {
+        "value": "one",
+        "type": "str"
+      },
+      "warehouse_id": {
+        "value": "[3, 'CD']",
+        "type": "list"
+      },
+      "picking_ids": {
+        "value": "[261121]",
+        "type": "list"
+      },
+      "delivery_count": {
+        "value": "1",
+        "type": "int"
+      },
+      "delivery_status": {
+        "value": "pending",
+        "type": "str"
+      },
+      "procurement_group_id": {
+        "value": "[36827, 'VCD2520494']",
+        "type": "list"
+      },
+      "json_popover": {
+        "value": "{\"popoverTemplate\": \"sale_stock.DelayAlertWidget\", \"late_elements\": []}",
+        "type": "str"
+      },
+      "mrp_production_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "partner_contact_id": {
+        "value": "[207775, 'DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - PAULÍNIA, REPRESENTANTE']",
+        "type": "list"
+      },
+      "l10n_br_operacao_id": {
+        "value": "[2767, 'Venda Interna com base reduzida CD - PRODUTOS ACIMA DE 1KG']",
+        "type": "list"
+      },
+      "l10n_br_tipo_pedido": {
+        "value": "venda",
+        "type": "str"
+      },
+      "l10n_br_operacao_consumidor": {
+        "value": "0",
+        "type": "str"
+      },
+      "l10n_br_indicador_presenca": {
+        "value": "0",
+        "type": "str"
+      },
+      "l10n_br_compra_indcom": {
+        "value": "com",
+        "type": "str"
+      },
+      "payment_provider_id": {
+        "value": "[40, 'Boleto Grafeno']",
+        "type": "list"
+      },
+      "l10n_br_cfop_id": {
+        "value": "[287, '5101 - Venda de produção do estabelecimento']",
+        "type": "list"
+      },
+      "l10n_br_pedido_compra": {
+        "value": "146001",
+        "type": "str"
+      },
+      "l10n_br_imposto_auto": {
+        "value": "True",
+        "type": "bool"
+      },
+      "l10n_br_rateio_frete_auto": {
+        "value": "True",
+        "type": "bool"
+      },
+      "l10n_br_icms_base": {
+        "value": "5105.870000000001",
+        "type": "float"
+      },
+      "l10n_br_icms_valor": {
+        "value": "919.05",
+        "type": "float"
+      },
+      "l10n_br_prod_valor": {
+        "value": "7658.81",
+        "type": "float"
+      },
+      "l10n_br_pis_valor": {
+        "value": "111.21000000000001",
+        "type": "float"
+      },
+      "l10n_br_cofins_valor": {
+        "value": "512.23",
+        "type": "float"
+      },
+      "l10n_br_total_nfe": {
+        "value": "7658.81",
+        "type": "float"
+      },
+      "l10n_br_total_tributos": {
+        "value": "1542.49",
+        "type": "float"
+      },
+      "l10n_br_cnpj": {
+        "value": "02.814.340/0005-05",
+        "type": "str"
+      },
+      "picking_note": {
+        "value": "Cliente novo",
+        "type": "str"
+      },
+      "adv_payment_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "l10n_br_peso_total": {
+        "value": "64.0",
+        "type": "float"
+      },
+      "tasks_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "project_ids": {
+        "value": "[]",
+        "type": "list"
+      },
+      "tag_str": {
+        "value": "",
+        "type": "str"
+      },
+      "timesheet_encode_uom_id": {
+        "value": "[4, 'Hours']",
+        "type": "list"
+      }
+    }
+  }
+}

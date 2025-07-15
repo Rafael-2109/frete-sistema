@@ -39,6 +39,7 @@ from app.financeiro.models import PendenciaFinanceiraNF
 from app.cadastros_agendamento.models import ContatoAgendamento
 
 from app.utils.sincronizar_todas_entregas import sincronizar_todas_entregas
+from app.utils.sincronizar_entregas import adicionar_dias_uteis
 from app.pedidos.models import Pedido  # ✅ ADICIONADO: Para controle de status NF no CD
 
 # 🌐 Importar sistema de arquivos S3
@@ -97,6 +98,17 @@ def processar_nf_cd_pedido(entrega_id):
         # ✅ NOVO: Marca como NF no CD sem apagar a NF (preserva histórico)
         pedido.nf_cd = True
         pedido.data_embarque = None
+
+        if entrega.data_agendada:
+            pedido.agendamento = entrega.data_agendada
+            pedido.protocolo = entrega.protocolo_agendamento
+            if entrega.data_agendada == entrega.data_agendada - 1 + adicionar_dias_uteis(entrega.data_agendada, 1):
+                pedido.expedicao = entrega.data_agendada - 1
+            elif entrega.data_agendada == entrega.data_agendada -2 + adicionar_dias_uteis(entrega.data_agendada, 1):
+                pedido.expedicao = entrega.data_agendada - 2
+            else:
+                pedido.expedicao = entrega.data_agendada -3
+
         # NF é preservada para manter histórico
         # Status será recalculado automaticamente pelo trigger como "NF no CD"
         

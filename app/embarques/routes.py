@@ -1214,13 +1214,11 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
             
             if item.separacao_lote_id:
                 pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+                if pedido and pedido.nf_cd == True:
+                    pedido.nf_cd = False                   
             
             if not pedido and item.pedido:
                 pedido = Pedido.query.filter_by(num_pedido=item.pedido).first()
-
-            if pedido.nf_cd == True:
-                pedido.nf_cd = False
-
             
             if not pedido:
                 erros.append(f"Pedido {item.pedido} não encontrado")

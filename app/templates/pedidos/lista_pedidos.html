@@ -707,7 +707,6 @@
                 
                 <!-- ✅ NOVA COLUNA: Ações -->
                 <td class="text-center">
-                  {% if not p.status_calculado == 'FATURADO' %}
                     <!-- Botões para pedidos com status ABERTO -->
                     <div class="btn-group-vertical btn-group-sm" role="group">
                       <button type="button" 
@@ -727,8 +726,7 @@
                         <i class="fas fa-trash"></i>
                       </button>
                     </div>
-                    {% endif %}
-                  {% else %}
+                    {% else %}
                     <!-- Pedidos processados: verificar se podem ser desvinculados -->
                     <div class="btn-group-vertical btn-group-sm" role="group">
                       <!-- Botão Ver -->
@@ -737,9 +735,9 @@
                          title="Visualizar pedido">
                         <i class="fas fa-eye"></i>
                       </a>
-                      
+                      {% endif %}
                       <!-- 🛠️ Botão Desvinculação (apenas para admins) -->
-                      {% if current_user.perfil == 'admin' and p.status_calculado in ['EMBARCADO', 'COTADO', 'ABERTO'] %}
+                      {% if current_user.perfil == 'administrador' and p.status_calculado in ['EMBARCADO', 'COTADO', 'ABERTO'] %}
                       <button type="button" 
                               class="btn btn-outline-warning btn-sm" 
                               title="Desvincular de embarque cancelado (remove vínculos órfãos)"

@@ -490,14 +490,6 @@ def editar_pedido(pedido_id):
     
     pedido = Pedido.query.get_or_404(pedido_id)
     
-    # ✅ VALIDAÇÃO: Só permite editar pedidos com status ABERTO
-    if pedido.status_calculado != 'FATURADO':
-        if request.args.get('ajax'):
-            return jsonify({
-                'success': False, 
-                'message': f"Não é possível editar o pedido {pedido.num_pedido} por estar faturado."})
-        flash(f"Não é possível editar o pedido {pedido.num_pedido}. Apenas pedidos com status 'ABERTO' podem ser editados. Status atual: {pedido.status_calculado}", "error")
-        return redirect(url_for('pedidos.lista_pedidos'))
     
     # ✅ NOVO: Busca contato de agendamento para este CNPJ
     contato_agendamento = None

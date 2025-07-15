@@ -18,30 +18,30 @@
                         <div class="col-md-6">
                             <div class="card border-success">
                                 <div class="card-header bg-success text-white">
-                                    <h6 class="mb-0"><i class="fas fa-sync"></i> Sincronizar Carteira</h6>
+                                    <h6 class="mb-0"><i class="fas fa-sync"></i> Sincronizar Dados</h6>
                                 </div>
                                 <div class="card-body">
-                                    <form method="POST" action="{{ url_for('carteira_odoo.sincronizar_carteira') }}">
+                                    <form method="POST" action="{{ url_for('odoo.carteira_odoo.sincronizar_carteira') }}">
                                         <div class="form-check mb-3">
-                                            <input class="form-check-input" type="checkbox" name="usar_filtro_pendente" 
-                                                   id="filtro_pendente" checked>
-                                            <label class="form-check-label" for="filtro_pendente">
+                                            <input class="form-check-input" type="checkbox" name="usar_filtro_carteira_pendente" 
+                                                   id="filtro_carteira_pendente" checked>
+                                            <label class="form-check-label" for="filtro_carteira_pendente">
                                                 <strong>Aplicar filtro Carteira Pendente</strong>
                                                 <small class="text-muted d-block">
-                                                    Sincronizar apenas pedidos com saldo pendente (qty_saldo > 0)
+                                                    Sincronizar apenas pedidos não entregues
                                                 </small>
                                             </label>
                                         </div>
                                         <button type="submit" class="btn btn-success btn-sm">
-                                            <i class="fas fa-sync"></i> Sincronizar Carteira (Substituição)
+                                            <i class="fas fa-sync"></i> Sincronizar Carteira Completa
                                         </button>
                                     </form>
                                     <hr>
-                                    <div class="alert alert-warning small mb-0">
-                                        <i class="fas fa-exclamation-triangle"></i> 
-                                        <strong>Atenção:</strong> A sincronização substitui COMPLETAMENTE a CarteiraPrincipal.
-                                        Todos os registros existentes serão removidos e substituídos pelos dados do Odoo.
-                                    </div>
+                                    <p class="text-muted small mb-0">
+                                        <i class="fas fa-info-circle"></i> 
+                                        <strong>Funcionalidade:</strong> Substitui completamente a CarteiraPrincipal 
+                                        com dados atualizados do Odoo
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -49,13 +49,14 @@
                         <div class="col-md-6">
                             <div class="card border-info">
                                 <div class="card-header bg-info text-white">
-                                    <h6 class="mb-0"><i class="fas fa-plug"></i> Teste de Conexão</h6>
+                                    <h6 class="mb-0"><i class="fas fa-vial"></i> Testar Conexão</h6>
                                 </div>
                                 <div class="card-body">
                                     <p class="text-muted small mb-3">
-                                        Verificar conectividade com servidor Odoo
+                                        <i class="fas fa-info-circle"></i> 
+                                        Testar conectividade com o servidor Odoo
                                     </p>
-                                    <a href="{{ url_for('carteira_odoo.teste_conexao') }}" class="btn btn-info btn-sm">
+                                    <a href="{{ url_for('odoo.carteira_odoo.teste_conexao') }}" class="btn btn-info btn-sm">
                                         <i class="fas fa-plug"></i> Testar Conexão
                                     </a>
                                 </div>
@@ -63,52 +64,72 @@
                         </div>
                     </div>
                     
-                    <!-- Links para Funcionalidades -->
+                    <!-- Visualização de Dados -->
                     <div class="row">
-                        <div class="col-md-6">
-                            <div class="card border-primary">
-                                <div class="card-header bg-primary text-white">
-                                    <h6 class="mb-0"><i class="fas fa-list"></i> Carteira Pendente</h6>
-                                </div>
-                                <div class="card-body">
-                                    <p class="text-muted small mb-3">
-                                        Consultar carteira pendente de pedidos
-                                    </p>
-                                    <a href="{{ url_for('carteira_odoo.pendente') }}" class="btn btn-primary btn-sm">
-                                        <i class="fas fa-search"></i> Consultar Pendente
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="card border-secondary">
-                                <div class="card-header bg-secondary text-white">
-                                    <h6 class="mb-0"><i class="fas fa-cog"></i> Configurações</h6>
-                                </div>
-                                <div class="card-body">
-                                    <p class="text-muted small mb-3">
-                                        Configurar parâmetros de integração
-                                    </p>
-                                    <button class="btn btn-secondary btn-sm" disabled>
-                                        <i class="fas fa-cog"></i> Em Desenvolvimento
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Informações Importantes -->
-                    <div class="row mt-4">
                         <div class="col-12">
-                            <div class="alert alert-info">
-                                <h6><i class="fas fa-info-circle"></i> Informações Importantes</h6>
-                                <ul class="mb-0">
-                                    <li><strong>Sincronização por Substituição:</strong> Remove todos os registros existentes e importa novos</li>
-                                    <li><strong>Filtro Pendente:</strong> Importa apenas pedidos com <code>qty_saldo > 0</code></li>
-                                    <li><strong>42 Campos Mapeados:</strong> Todos os campos especificados em <code>campos_carteira.md</code></li>
-                                    <li><strong>Segurança:</strong> Operação restrita a administradores</li>
-                                </ul>
+                            <div class="card">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0"><i class="fas fa-table"></i> Dados da Carteira</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <a href="{{ url_for('odoo.carteira_odoo.pendente') }}" class="btn btn-primary btn-sm">
+                                                <i class="fas fa-clock"></i> Ver Carteira Pendente
+                                            </a>
+                                        </div>
+                                        <div class="col-md-6 text-right">
+                                            <small class="text-muted">
+                                                <i class="fas fa-info-circle"></i> 
+                                                Última sincronização: {{ ultima_sincronizacao if ultima_sincronizacao else 'Nunca' }}
+                                            </small>
+                                        </div>
+                                    </div>
+                                    
+                                    {% if erro %}
+                                    <div class="alert alert-danger">
+                                        <i class="fas fa-exclamation-triangle"></i> 
+                                        <strong>Erro:</strong> {{ erro }}
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if resultado %}
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle"></i> 
+                                        <strong>Status:</strong> {{ resultado }}
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <!-- Estatísticas -->
+                                    {% if estatisticas %}
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="card border-primary">
+                                                <div class="card-body text-center">
+                                                    <h5 class="card-title text-primary">{{ estatisticas.total_pedidos }}</h5>
+                                                    <p class="card-text">Total de Pedidos</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="card border-warning">
+                                                <div class="card-body text-center">
+                                                    <h5 class="card-title text-warning">{{ estatisticas.total_produtos }}</h5>
+                                                    <p class="card-text">Total de Produtos</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="card border-success">
+                                                <div class="card-body text-center">
+                                                    <h5 class="card-title text-success">R$ {{ "%.2f"|format(estatisticas.valor_total) }}</h5>
+                                                    <p class="card-text">Valor Total</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                     </div>

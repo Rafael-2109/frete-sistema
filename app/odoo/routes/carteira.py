@@ -191,6 +191,16 @@ def api_teste_conexao():
             'erro': str(e)
         }), 500 
 
+@carteira_bp.route('/sincronizar', methods=['GET'])
+@login_required
+@require_admin()
+def sincronizar_carteira_get():
+    """
+    Rota GET para sincronização - redireciona para dashboard com mensagem
+    """
+    flash('⚠️ A sincronização deve ser executada via formulário no dashboard.', 'warning')
+    return redirect(url_for('odoo.carteira_odoo.dashboard'))
+
 @carteira_bp.route('/sincronizar', methods=['POST'])
 @login_required
 @require_admin()

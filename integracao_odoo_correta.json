@@ -1,0 +1,819 @@
+{
+  "timestamp": "2025-07-14T22:51:17.277932",
+  "total_registros": 10,
+  "dados": [
+    {
+      "linha_id": 144065,
+      "linha_sequence": 10,
+      "linha_name": "[4629556] RELISH DE PEPINO - BAG 6X1,01KG - BY GEMEOS",
+      "linha_state": "sale",
+      "product_uom_qty": 10.0,
+      "qty_to_invoice": 0.0,
+      "qty_saldo": 10.0,
+      "qty_cancelado": 0.0,
+      "qty_invoiced": 0.0,
+      "price_unit": 179.87,
+      "l10n_br_prod_valor": 1798.7,
+      "l10n_br_total_nfe": 1798.7,
+      "qty_delivered": 0.0,
+      "pedido_id": 23039,
+      "pedido_name": "VCD2520494",
+      "pedido_compra": "146001",
+      "pedido_create_date": "2025-07-10 18:07:14",
+      "pedido_date_order": "2025-07-14 20:19:52",
+      "pedido_state": "sale",
+      "pedido_user_id": [
+        1216,
+        "198 GIAN E GIULIO MIRANTE TREINAMENTOS"
+      ],
+      "pedido_team_id": [
+        10,
+        "VENDA EXTERNA FERNANDO"
+      ],
+      "pedido_payment_term": [
+        2755,
+        "35 DDL"
+      ],
+      "pedido_incoterm": [
+        6,
+        "[CIF] COST, INSURANCE AND FREIGHT"
+      ],
+      "pedido_carrier": false,
+      "pedido_commitment_date": false,
+      "pedido_picking_note": "Cliente novo",
+      "cliente_id": 207774,
+      "cliente_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - PAULÍNIA",
+      "cliente_cnpj": "02.814.340/0005-05",
+      "cliente_razao_social": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO S.A.",
+      "cliente_municipio": [
+        3678,
+        "Paulínia (SP)"
+      ],
+      "cliente_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "cliente_endereco": "R JOAQUIM ARICO",
+      "cliente_cep": "13148153",
+      "cliente_phone": "1141467000",
+      "cliente_email": "financeiro@iavelino.com.br",
+      "entrega_id": 207774,
+      "entrega_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - PAULÍNIA",
+      "entrega_cnpj": "02.814.340/0005-05",
+      "entrega_endereco": "R JOAQUIM ARICO",
+      "entrega_numero": "275",
+      "entrega_bairro": "BETEL",
+      "entrega_cep": "13148153",
+      "entrega_municipio": [
+        3678,
+        "Paulínia (SP)"
+      ],
+      "entrega_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "entrega_phone": "1141467000",
+      "produto_id": 36087,
+      "produto_name": null,
+      "produto_codigo": null,
+      "produto_uom": null,
+      "produto_categoria": null,
+      "produto_template": null,
+      "produto_barcode": null,
+      "produto_peso": null,
+      "produto_volume": null
+    },
+    {
+      "linha_id": 144066,
+      "linha_sequence": 11,
+      "linha_name": "[4739556] RELISH DE JALAPENO - BAG 6X1,01KG - BY GEMEOS",
+      "linha_state": "sale",
+      "product_uom_qty": 10.0,
+      "qty_to_invoice": 0.0,
+      "qty_saldo": 10.0,
+      "qty_cancelado": 0.0,
+      "qty_invoiced": 0.0,
+      "price_unit": 179.87,
+      "l10n_br_prod_valor": 1798.7,
+      "l10n_br_total_nfe": 1798.7,
+      "qty_delivered": 0.0,
+      "pedido_id": 23039,
+      "pedido_name": "VCD2520494",
+      "pedido_compra": "146001",
+      "pedido_create_date": "2025-07-10 18:07:14",
+      "pedido_date_order": "2025-07-14 20:19:52",
+      "pedido_state": "sale",
+      "pedido_user_id": [
+        1216,
+        "198 GIAN E GIULIO MIRANTE TREINAMENTOS"
+      ],
+      "pedido_team_id": [
+        10,
+        "VENDA EXTERNA FERNANDO"
+      ],
+      "pedido_payment_term": [
+        2755,
+        "35 DDL"
+      ],
+      "pedido_incoterm": [
+        6,
+        "[CIF] COST, INSURANCE AND FREIGHT"
+      ],
+      "pedido_carrier": false,
+      "pedido_commitment_date": false,
+      "pedido_picking_note": "Cliente novo",
+      "cliente_id": 207774,
+      "cliente_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - PAULÍNIA",
+      "cliente_cnpj": "02.814.340/0005-05",
+      "cliente_razao_social": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO S.A.",
+      "cliente_municipio": [
+        3678,
+        "Paulínia (SP)"
+      ],
+      "cliente_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "cliente_endereco": "R JOAQUIM ARICO",
+      "cliente_cep": "13148153",
+      "cliente_phone": "1141467000",
+      "cliente_email": "financeiro@iavelino.com.br",
+      "entrega_id": 207774,
+      "entrega_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - PAULÍNIA",
+      "entrega_cnpj": "02.814.340/0005-05",
+      "entrega_endereco": "R JOAQUIM ARICO",
+      "entrega_numero": "275",
+      "entrega_bairro": "BETEL",
+      "entrega_cep": "13148153",
+      "entrega_municipio": [
+        3678,
+        "Paulínia (SP)"
+      ],
+      "entrega_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "entrega_phone": "1141467000",
+      "produto_id": 36088,
+      "produto_name": null,
+      "produto_codigo": null,
+      "produto_uom": null,
+      "produto_categoria": null,
+      "produto_template": null,
+      "produto_barcode": null,
+      "produto_peso": null,
+      "produto_volume": null
+    },
+    {
+      "linha_id": 144067,
+      "linha_sequence": 12,
+      "linha_name": "[4639556] PEPINO FATIADO SWEET PICKLES BAG 6X1,010KG - BY GEMEOS",
+      "linha_state": "sale",
+      "product_uom_qty": 20.0,
+      "qty_to_invoice": 0.0,
+      "qty_saldo": 20.0,
+      "qty_cancelado": 0.0,
+      "qty_invoiced": 0.0,
+      "price_unit": 203.0706,
+      "l10n_br_prod_valor": 4061.4100000000003,
+      "l10n_br_total_nfe": 4061.4100000000003,
+      "qty_delivered": 0.0,
+      "pedido_id": 23039,
+      "pedido_name": "VCD2520494",
+      "pedido_compra": "146001",
+      "pedido_create_date": "2025-07-10 18:07:14",
+      "pedido_date_order": "2025-07-14 20:19:52",
+      "pedido_state": "sale",
+      "pedido_user_id": [
+        1216,
+        "198 GIAN E GIULIO MIRANTE TREINAMENTOS"
+      ],
+      "pedido_team_id": [
+        10,
+        "VENDA EXTERNA FERNANDO"
+      ],
+      "pedido_payment_term": [
+        2755,
+        "35 DDL"
+      ],
+      "pedido_incoterm": [
+        6,
+        "[CIF] COST, INSURANCE AND FREIGHT"
+      ],
+      "pedido_carrier": false,
+      "pedido_commitment_date": false,
+      "pedido_picking_note": "Cliente novo",
+      "cliente_id": 207774,
+      "cliente_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - PAULÍNIA",
+      "cliente_cnpj": "02.814.340/0005-05",
+      "cliente_razao_social": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO S.A.",
+      "cliente_municipio": [
+        3678,
+        "Paulínia (SP)"
+      ],
+      "cliente_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "cliente_endereco": "R JOAQUIM ARICO",
+      "cliente_cep": "13148153",
+      "cliente_phone": "1141467000",
+      "cliente_email": "financeiro@iavelino.com.br",
+      "entrega_id": 207774,
+      "entrega_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - PAULÍNIA",
+      "entrega_cnpj": "02.814.340/0005-05",
+      "entrega_endereco": "R JOAQUIM ARICO",
+      "entrega_numero": "275",
+      "entrega_bairro": "BETEL",
+      "entrega_cep": "13148153",
+      "entrega_municipio": [
+        3678,
+        "Paulínia (SP)"
+      ],
+      "entrega_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "entrega_phone": "1141467000",
+      "produto_id": 36086,
+      "produto_name": null,
+      "produto_codigo": null,
+      "produto_uom": null,
+      "produto_categoria": null,
+      "produto_template": null,
+      "produto_barcode": null,
+      "produto_peso": null,
+      "produto_volume": null
+    },
+    {
+      "linha_id": 144062,
+      "linha_sequence": 10,
+      "linha_name": "[4739556] RELISH DE JALAPENO - BAG 6X1,01KG - BY GEMEOS",
+      "linha_state": "sale",
+      "product_uom_qty": 10.0,
+      "qty_to_invoice": 0.0,
+      "qty_saldo": 10.0,
+      "qty_cancelado": 0.0,
+      "qty_invoiced": 0.0,
+      "price_unit": 179.87,
+      "l10n_br_prod_valor": 1798.7,
+      "l10n_br_total_nfe": 1798.7,
+      "qty_delivered": 0.0,
+      "pedido_id": 23038,
+      "pedido_name": "VCD2520493",
+      "pedido_compra": "146005",
+      "pedido_create_date": "2025-07-10 18:05:39",
+      "pedido_date_order": "2025-07-14 20:09:44",
+      "pedido_state": "sale",
+      "pedido_user_id": [
+        1216,
+        "198 GIAN E GIULIO MIRANTE TREINAMENTOS"
+      ],
+      "pedido_team_id": [
+        10,
+        "VENDA EXTERNA FERNANDO"
+      ],
+      "pedido_payment_term": [
+        2755,
+        "35 DDL"
+      ],
+      "pedido_incoterm": [
+        6,
+        "[CIF] COST, INSURANCE AND FREIGHT"
+      ],
+      "pedido_carrier": false,
+      "pedido_commitment_date": false,
+      "pedido_picking_note": "Cliente novo",
+      "cliente_id": 207772,
+      "cliente_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - SÃO PAULO",
+      "cliente_cnpj": "02.814.340/0008-58",
+      "cliente_razao_social": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO S.A.",
+      "cliente_municipio": [
+        3830,
+        "São Paulo (SP)"
+      ],
+      "cliente_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "cliente_endereco": "R JACOFER",
+      "cliente_cep": "02712070",
+      "cliente_phone": "1141467000",
+      "cliente_email": "financeiro@iavelino.com.br",
+      "entrega_id": 207772,
+      "entrega_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - SÃO PAULO",
+      "entrega_cnpj": "02.814.340/0008-58",
+      "entrega_endereco": "R JACOFER",
+      "entrega_numero": "255",
+      "entrega_bairro": "JARDIM PEREIRA LEITE",
+      "entrega_cep": "02712070",
+      "entrega_municipio": [
+        3830,
+        "São Paulo (SP)"
+      ],
+      "entrega_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "entrega_phone": "1141467000",
+      "produto_id": 36088,
+      "produto_name": null,
+      "produto_codigo": null,
+      "produto_uom": null,
+      "produto_categoria": null,
+      "produto_template": null,
+      "produto_barcode": null,
+      "produto_peso": null,
+      "produto_volume": null
+    },
+    {
+      "linha_id": 144063,
+      "linha_sequence": 11,
+      "linha_name": "[4639556] PEPINO FATIADO SWEET PICKLES BAG 6X1,010KG - BY GEMEOS",
+      "linha_state": "sale",
+      "product_uom_qty": 20.0,
+      "qty_to_invoice": 0.0,
+      "qty_saldo": 20.0,
+      "qty_cancelado": 0.0,
+      "qty_invoiced": 0.0,
+      "price_unit": 203.0706,
+      "l10n_br_prod_valor": 4061.4100000000003,
+      "l10n_br_total_nfe": 4061.4100000000003,
+      "qty_delivered": 0.0,
+      "pedido_id": 23038,
+      "pedido_name": "VCD2520493",
+      "pedido_compra": "146005",
+      "pedido_create_date": "2025-07-10 18:05:39",
+      "pedido_date_order": "2025-07-14 20:09:44",
+      "pedido_state": "sale",
+      "pedido_user_id": [
+        1216,
+        "198 GIAN E GIULIO MIRANTE TREINAMENTOS"
+      ],
+      "pedido_team_id": [
+        10,
+        "VENDA EXTERNA FERNANDO"
+      ],
+      "pedido_payment_term": [
+        2755,
+        "35 DDL"
+      ],
+      "pedido_incoterm": [
+        6,
+        "[CIF] COST, INSURANCE AND FREIGHT"
+      ],
+      "pedido_carrier": false,
+      "pedido_commitment_date": false,
+      "pedido_picking_note": "Cliente novo",
+      "cliente_id": 207772,
+      "cliente_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - SÃO PAULO",
+      "cliente_cnpj": "02.814.340/0008-58",
+      "cliente_razao_social": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO S.A.",
+      "cliente_municipio": [
+        3830,
+        "São Paulo (SP)"
+      ],
+      "cliente_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "cliente_endereco": "R JACOFER",
+      "cliente_cep": "02712070",
+      "cliente_phone": "1141467000",
+      "cliente_email": "financeiro@iavelino.com.br",
+      "entrega_id": 207772,
+      "entrega_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - SÃO PAULO",
+      "entrega_cnpj": "02.814.340/0008-58",
+      "entrega_endereco": "R JACOFER",
+      "entrega_numero": "255",
+      "entrega_bairro": "JARDIM PEREIRA LEITE",
+      "entrega_cep": "02712070",
+      "entrega_municipio": [
+        3830,
+        "São Paulo (SP)"
+      ],
+      "entrega_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "entrega_phone": "1141467000",
+      "produto_id": 36086,
+      "produto_name": null,
+      "produto_codigo": null,
+      "produto_uom": null,
+      "produto_categoria": null,
+      "produto_template": null,
+      "produto_barcode": null,
+      "produto_peso": null,
+      "produto_volume": null
+    },
+    {
+      "linha_id": 144064,
+      "linha_sequence": 12,
+      "linha_name": "[4629556] RELISH DE PEPINO - BAG 6X1,01KG - BY GEMEOS",
+      "linha_state": "sale",
+      "product_uom_qty": 10.0,
+      "qty_to_invoice": 0.0,
+      "qty_saldo": 10.0,
+      "qty_cancelado": 0.0,
+      "qty_invoiced": 0.0,
+      "price_unit": 179.87,
+      "l10n_br_prod_valor": 1798.7,
+      "l10n_br_total_nfe": 1798.7,
+      "qty_delivered": 0.0,
+      "pedido_id": 23038,
+      "pedido_name": "VCD2520493",
+      "pedido_compra": "146005",
+      "pedido_create_date": "2025-07-10 18:05:39",
+      "pedido_date_order": "2025-07-14 20:09:44",
+      "pedido_state": "sale",
+      "pedido_user_id": [
+        1216,
+        "198 GIAN E GIULIO MIRANTE TREINAMENTOS"
+      ],
+      "pedido_team_id": [
+        10,
+        "VENDA EXTERNA FERNANDO"
+      ],
+      "pedido_payment_term": [
+        2755,
+        "35 DDL"
+      ],
+      "pedido_incoterm": [
+        6,
+        "[CIF] COST, INSURANCE AND FREIGHT"
+      ],
+      "pedido_carrier": false,
+      "pedido_commitment_date": false,
+      "pedido_picking_note": "Cliente novo",
+      "cliente_id": 207772,
+      "cliente_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - SÃO PAULO",
+      "cliente_cnpj": "02.814.340/0008-58",
+      "cliente_razao_social": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO S.A.",
+      "cliente_municipio": [
+        3830,
+        "São Paulo (SP)"
+      ],
+      "cliente_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "cliente_endereco": "R JACOFER",
+      "cliente_cep": "02712070",
+      "cliente_phone": "1141467000",
+      "cliente_email": "financeiro@iavelino.com.br",
+      "entrega_id": 207772,
+      "entrega_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - SÃO PAULO",
+      "entrega_cnpj": "02.814.340/0008-58",
+      "entrega_endereco": "R JACOFER",
+      "entrega_numero": "255",
+      "entrega_bairro": "JARDIM PEREIRA LEITE",
+      "entrega_cep": "02712070",
+      "entrega_municipio": [
+        3830,
+        "São Paulo (SP)"
+      ],
+      "entrega_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "entrega_phone": "1141467000",
+      "produto_id": 36087,
+      "produto_name": null,
+      "produto_codigo": null,
+      "produto_uom": null,
+      "produto_categoria": null,
+      "produto_template": null,
+      "produto_barcode": null,
+      "produto_peso": null,
+      "produto_volume": null
+    },
+    {
+      "linha_id": 144054,
+      "linha_sequence": 10,
+      "linha_name": "[4739556] RELISH DE JALAPENO - BAG 6X1,01KG - BY GEMEOS",
+      "linha_state": "sale",
+      "product_uom_qty": 20.0,
+      "qty_to_invoice": 0.0,
+      "qty_saldo": 20.0,
+      "qty_cancelado": 0.0,
+      "qty_invoiced": 0.0,
+      "price_unit": 179.87,
+      "l10n_br_prod_valor": 3597.4,
+      "l10n_br_total_nfe": 3597.4,
+      "qty_delivered": 0.0,
+      "pedido_id": 23036,
+      "pedido_name": "VCD2520491",
+      "pedido_compra": "146000",
+      "pedido_create_date": "2025-07-10 18:00:51",
+      "pedido_date_order": "2025-07-14 20:05:11",
+      "pedido_state": "sale",
+      "pedido_user_id": [
+        1216,
+        "198 GIAN E GIULIO MIRANTE TREINAMENTOS"
+      ],
+      "pedido_team_id": [
+        10,
+        "VENDA EXTERNA FERNANDO"
+      ],
+      "pedido_payment_term": [
+        2755,
+        "35 DDL"
+      ],
+      "pedido_incoterm": [
+        6,
+        "[CIF] COST, INSURANCE AND FREIGHT"
+      ],
+      "pedido_carrier": false,
+      "pedido_commitment_date": false,
+      "pedido_picking_note": "Cliente novo ",
+      "cliente_id": 207768,
+      "cliente_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - CARAPICUIBA",
+      "cliente_cnpj": "02.814.340/0001-81",
+      "cliente_razao_social": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO S.A.",
+      "cliente_municipio": [
+        3389,
+        "Carapicuíba (SP)"
+      ],
+      "cliente_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "cliente_endereco": "AV M DO RIBEIRAO",
+      "cliente_cep": "06330010",
+      "cliente_phone": "11418630931141863003",
+      "cliente_email": "financeiro@iavelino.com.br",
+      "entrega_id": 207768,
+      "entrega_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - CARAPICUIBA",
+      "entrega_cnpj": "02.814.340/0001-81",
+      "entrega_endereco": "AV M DO RIBEIRAO",
+      "entrega_numero": "4633",
+      "entrega_bairro": "PARQUE JANDAIA",
+      "entrega_cep": "06330010",
+      "entrega_municipio": [
+        3389,
+        "Carapicuíba (SP)"
+      ],
+      "entrega_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "entrega_phone": "11418630931141863003",
+      "produto_id": 36088,
+      "produto_name": null,
+      "produto_codigo": null,
+      "produto_uom": null,
+      "produto_categoria": null,
+      "produto_template": null,
+      "produto_barcode": null,
+      "produto_peso": null,
+      "produto_volume": null
+    },
+    {
+      "linha_id": 144055,
+      "linha_sequence": 11,
+      "linha_name": "[4639556] PEPINO FATIADO SWEET PICKLES BAG 6X1,010KG - BY GEMEOS",
+      "linha_state": "sale",
+      "product_uom_qty": 50.0,
+      "qty_to_invoice": 0.0,
+      "qty_saldo": 50.0,
+      "qty_cancelado": 0.0,
+      "qty_invoiced": 0.0,
+      "price_unit": 203.0706,
+      "l10n_br_prod_valor": 10153.53,
+      "l10n_br_total_nfe": 10153.53,
+      "qty_delivered": 0.0,
+      "pedido_id": 23036,
+      "pedido_name": "VCD2520491",
+      "pedido_compra": "146000",
+      "pedido_create_date": "2025-07-10 18:00:51",
+      "pedido_date_order": "2025-07-14 20:05:11",
+      "pedido_state": "sale",
+      "pedido_user_id": [
+        1216,
+        "198 GIAN E GIULIO MIRANTE TREINAMENTOS"
+      ],
+      "pedido_team_id": [
+        10,
+        "VENDA EXTERNA FERNANDO"
+      ],
+      "pedido_payment_term": [
+        2755,
+        "35 DDL"
+      ],
+      "pedido_incoterm": [
+        6,
+        "[CIF] COST, INSURANCE AND FREIGHT"
+      ],
+      "pedido_carrier": false,
+      "pedido_commitment_date": false,
+      "pedido_picking_note": "Cliente novo ",
+      "cliente_id": 207768,
+      "cliente_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - CARAPICUIBA",
+      "cliente_cnpj": "02.814.340/0001-81",
+      "cliente_razao_social": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO S.A.",
+      "cliente_municipio": [
+        3389,
+        "Carapicuíba (SP)"
+      ],
+      "cliente_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "cliente_endereco": "AV M DO RIBEIRAO",
+      "cliente_cep": "06330010",
+      "cliente_phone": "11418630931141863003",
+      "cliente_email": "financeiro@iavelino.com.br",
+      "entrega_id": 207768,
+      "entrega_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - CARAPICUIBA",
+      "entrega_cnpj": "02.814.340/0001-81",
+      "entrega_endereco": "AV M DO RIBEIRAO",
+      "entrega_numero": "4633",
+      "entrega_bairro": "PARQUE JANDAIA",
+      "entrega_cep": "06330010",
+      "entrega_municipio": [
+        3389,
+        "Carapicuíba (SP)"
+      ],
+      "entrega_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "entrega_phone": "11418630931141863003",
+      "produto_id": 36086,
+      "produto_name": null,
+      "produto_codigo": null,
+      "produto_uom": null,
+      "produto_categoria": null,
+      "produto_template": null,
+      "produto_barcode": null,
+      "produto_peso": null,
+      "produto_volume": null
+    },
+    {
+      "linha_id": 144056,
+      "linha_sequence": 12,
+      "linha_name": "[4629556] RELISH DE PEPINO - BAG 6X1,01KG - BY GEMEOS",
+      "linha_state": "sale",
+      "product_uom_qty": 20.0,
+      "qty_to_invoice": 0.0,
+      "qty_saldo": 20.0,
+      "qty_cancelado": 0.0,
+      "qty_invoiced": 0.0,
+      "price_unit": 179.87,
+      "l10n_br_prod_valor": 3597.4,
+      "l10n_br_total_nfe": 3597.4,
+      "qty_delivered": 0.0,
+      "pedido_id": 23036,
+      "pedido_name": "VCD2520491",
+      "pedido_compra": "146000",
+      "pedido_create_date": "2025-07-10 18:00:51",
+      "pedido_date_order": "2025-07-14 20:05:11",
+      "pedido_state": "sale",
+      "pedido_user_id": [
+        1216,
+        "198 GIAN E GIULIO MIRANTE TREINAMENTOS"
+      ],
+      "pedido_team_id": [
+        10,
+        "VENDA EXTERNA FERNANDO"
+      ],
+      "pedido_payment_term": [
+        2755,
+        "35 DDL"
+      ],
+      "pedido_incoterm": [
+        6,
+        "[CIF] COST, INSURANCE AND FREIGHT"
+      ],
+      "pedido_carrier": false,
+      "pedido_commitment_date": false,
+      "pedido_picking_note": "Cliente novo ",
+      "cliente_id": 207768,
+      "cliente_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - CARAPICUIBA",
+      "cliente_cnpj": "02.814.340/0001-81",
+      "cliente_razao_social": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO S.A.",
+      "cliente_municipio": [
+        3389,
+        "Carapicuíba (SP)"
+      ],
+      "cliente_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "cliente_endereco": "AV M DO RIBEIRAO",
+      "cliente_cep": "06330010",
+      "cliente_phone": "11418630931141863003",
+      "cliente_email": "financeiro@iavelino.com.br",
+      "entrega_id": 207768,
+      "entrega_name": "DISTRIBUIDORA E IMPORTADORA IRMAOS AVELINO - CARAPICUIBA",
+      "entrega_cnpj": "02.814.340/0001-81",
+      "entrega_endereco": "AV M DO RIBEIRAO",
+      "entrega_numero": "4633",
+      "entrega_bairro": "PARQUE JANDAIA",
+      "entrega_cep": "06330010",
+      "entrega_municipio": [
+        3389,
+        "Carapicuíba (SP)"
+      ],
+      "entrega_estado": [
+        95,
+        "São Paulo (BR)"
+      ],
+      "entrega_phone": "11418630931141863003",
+      "produto_id": 36087,
+      "produto_name": null,
+      "produto_codigo": null,
+      "produto_uom": null,
+      "produto_categoria": null,
+      "produto_template": null,
+      "produto_barcode": null,
+      "produto_peso": null,
+      "produto_volume": null
+    },
+    {
+      "linha_id": 144249,
+      "linha_sequence": 11,
+      "linha_name": "[4510162] COGUMELO FATIADO - BD 6X2 KG - CAMPO BELO",
+      "linha_state": "sale",
+      "product_uom_qty": 13.0,
+      "qty_to_invoice": 0.0,
+      "qty_saldo": 0.0,
+      "qty_cancelado": 0.0,
+      "qty_invoiced": 13.0,
+      "price_unit": 279.62,
+      "l10n_br_prod_valor": 3635.06,
+      "l10n_br_total_nfe": 3635.06,
+      "qty_delivered": 13.0,
+      "pedido_id": 23068,
+      "pedido_name": "VCD2520523",
+      "pedido_compra": false,
+      "pedido_create_date": "2025-07-11 18:39:02",
+      "pedido_date_order": "2025-07-14 19:21:47",
+      "pedido_state": "sale",
+      "pedido_user_id": [
+        53,
+        "Camila dos Santos Perpetuo"
+      ],
+      "pedido_team_id": [
+        6,
+        "VENDA INTERNA DENISE"
+      ],
+      "pedido_payment_term": [
+        2812,
+        "28/35/42 DDL"
+      ],
+      "pedido_incoterm": [
+        16,
+        "[RED] REDESPACHO"
+      ],
+      "pedido_carrier": [
+        1023,
+        "(14.834.939/0001-66) WRJ TRANSP E LOG EIRELI ME"
+      ],
+      "pedido_commitment_date": false,
+      "pedido_picking_note": false,
+      "cliente_id": 88166,
+      "cliente_name": "CDG PRODUTOS",
+      "cliente_cnpj": "26.645.410/0001-83",
+      "cliente_razao_social": "CDG COMERCIO DE PRODUTOS LTDA",
+      "cliente_municipio": [
+        3175,
+        "Vitória (ES)"
+      ],
+      "cliente_estado": [
+        78,
+        "Espírito Santo (BR)"
+      ],
+      "cliente_endereco": "AVENIDA JOUBERT DE BARROS",
+      "cliente_cep": "29050720",
+      "cliente_phone": "+55 27 99844-0824",
+      "cliente_email": "financeiro@cdgalimentos.com.br",
+      "entrega_id": 88166,
+      "entrega_name": "CDG PRODUTOS",
+      "entrega_cnpj": "26.645.410/0001-83",
+      "entrega_endereco": "AVENIDA JOUBERT DE BARROS",
+      "entrega_numero": "680",
+      "entrega_bairro": "BENTO FERREIRA",
+      "entrega_cep": "29050720",
+      "entrega_municipio": [
+        3175,
+        "Vitória (ES)"
+      ],
+      "entrega_estado": [
+        78,
+        "Espírito Santo (BR)"
+      ],
+      "entrega_phone": "+55 27 99844-0824",
+      "produto_id": 27800,
+      "produto_name": null,
+      "produto_codigo": null,
+      "produto_uom": null,
+      "produto_categoria": null,
+      "produto_template": null,
+      "produto_barcode": null,
+      "produto_peso": null,
+      "produto_volume": null
+    }
+  ]
+}
