@@ -169,6 +169,26 @@ class OdooConnection:
         
         return self.execute_kw(model, 'read', [ids], kwargs)
     
+    def buscar_registro_por_id(self, model: str, record_id: int, fields: Optional[list] = None) -> Optional[Dict]:
+        """
+        Busca um único registro por ID
+        Necessário para múltiplas queries no sistema de mapeamento
+        """
+        try:
+            if not record_id:
+                return None
+            
+            resultado = self.read(model, [record_id], fields)
+            
+            if resultado and isinstance(resultado, list) and len(resultado) > 0:
+                return resultado[0]
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Erro ao buscar registro {record_id} no modelo {model}: {e}")
+            return None
+    
     def test_connection(self) -> Dict[str, Any]:
         """Testa conexão com Odoo"""
         try:

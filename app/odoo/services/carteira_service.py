@@ -62,15 +62,20 @@ class CarteiraService:
             if pedidos_especificos:
                 filtros_carteira['pedidos_especificos'] = pedidos_especificos
             
-            # Usar novo método do CampoMapper
-            logger.info("Usando buscar_carteira_odoo com múltiplas consultas...")
-            dados_carteira = self.mapper.buscar_carteira_odoo(self.connection, filtros_carteira)
+            # Usar novo método do CampoMapper com múltiplas queries
+            logger.info("Usando sistema de múltiplas queries para carteira...")
             
-            if dados_carteira:
-                logger.info(f"✅ SUCESSO: {len(dados_carteira)} registros encontrados")
+            # Primeiro buscar dados brutos do Odoo
+            domain = [('qty_saldo', '>', 0)]  # Carteira pendente
+            campos_basicos = ['id', 'order_id', 'product_id', 'product_uom_qty', 'qty_saldo', 'qty_cancelado', 'price_unit']
+            
+            dados_odoo_brutos = self.connection.search_read('sale.order.line', domain, campos_basicos, limit=100)
+            
+            if dados_odoo_brutos:
+                logger.info(f"✅ SUCESSO: {len(dados_odoo_brutos)} registros encontrados")
                 
-                # Processar dados para formato esperado
-                dados_processados = self._processar_dados_carteira(dados_carteira)
+                # Processar dados usando mapeamento completo com múltiplas queries
+                dados_processados = self._processar_dados_carteira_com_multiplas_queries(dados_odoo_brutos)
                 
                 return {
                     'sucesso': True,
@@ -98,116 +103,147 @@ class CarteiraService:
     
     def _processar_dados_carteira(self, dados_carteira: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Processa dados de carteira
+        Processa dados de carteira usando campos EXATOS do modelo CarteiraPrincipal
+        
+        Baseado em: projeto_carteira/mapeamento_carteira.csv
         """
         dados_processados = []
         
         for item in dados_carteira:
             try:
-                # Processar cada item da carteira com campos corretos
+                # Processar usando EXATAMENTE os nomes do modelo CarteiraPrincipal
                 item_processado = {
-                    # Campos principais (mapeamento correto)
-                    'pedido_compra_cliente': item.get('pedido_compra_cliente'),
-                    'referencia_pedido': item.get('referencia_pedido'),
-                    'data_criacao': self._format_date(item.get('data_criacao')),
+                    # 🆔 CHAVES PRIMÁRIAS DE NEGÓCIO
+                    'num_pedido': item.get('num_pedido', ''),
+                    'cod_produto': item.get('cod_produto', ''),
+                    
+                    # 📋 DADOS DO PEDIDO
+                    'pedido_cliente': item.get('pedido_cliente', ''),
                     'data_pedido': self._format_date(item.get('data_pedido')),
+                    'data_atual_pedido': self._format_date(item.get('data_atual_pedido')),
+                    'status_pedido': item.get('status_pedido', ''),
                     
-                    # Cliente (campos brasileiros corretos)
-                    'cnpj_cliente': item.get('cnpj_cliente'),
-                    'razao_social': item.get('razao_social'),
-                    'nome_cliente': item.get('nome_cliente'),
-                    'municipio_cliente': item.get('municipio_cliente'),
-                    'estado_cliente': item.get('estado_cliente'),
+                    # 👥 DADOS DO CLIENTE
+                    'cnpj_cpf': item.get('cnpj_cpf', ''),
+                    'raz_social': item.get('raz_social', ''),
+                    'raz_social_red': item.get('raz_social_red', ''),
+                    'municipio': item.get('municipio', ''),
+                    'estado': item.get('estado', ''),
+                    'vendedor': item.get('vendedor', ''),
+                    'equipe_vendas': item.get('equipe_vendas', ''),
                     
-                    # Vendedor e Equipe
-                    'vendedor': item.get('vendedor'),
-                    'equipe_vendas': item.get('equipe_vendas'),
+                    # 📦 DADOS DO PRODUTO
+                    'nome_produto': item.get('nome_produto', ''),
+                    'unid_medida_produto': item.get('unid_medida_produto', ''),
+                    'embalagem_produto': item.get('embalagem_produto', ''),
+                    'materia_prima_produto': item.get('materia_prima_produto', ''),
+                    'categoria_produto': item.get('categoria_produto', ''),
                     
-                    # Produto
-                    'codigo_produto': item.get('referencia_interna'),
-                    'nome_produto': item.get('nome_produto'),
-                    'unidade_medida': item.get('unidade_medida'),
+                    # 📊 QUANTIDADES E VALORES
+                    'qtd_produto_pedido': self._format_decimal(item.get('qtd_produto_pedido', 0)),
+                    'qtd_saldo_produto_pedido': self._format_decimal(item.get('qtd_saldo_produto_pedido', 0)),
+                    'qtd_cancelada_produto_pedido': self._format_decimal(item.get('qtd_cancelada_produto_pedido', 0)),
+                    'preco_produto_pedido': self._format_decimal(item.get('preco_produto_pedido', 0)),
                     
-                    # Quantidades (campos corretos)
-                    'quantidade': self._format_decimal(item.get('quantidade')),
-                    'quantidade_a_faturar': self._format_decimal(item.get('quantidade_a_faturar')),
-                    'saldo': self._format_decimal(item.get('saldo')),
-                    'cancelado': self._format_decimal(item.get('cancelado')),
-                    'quantidade_faturada': self._format_decimal(item.get('quantidade_faturada')),
-                    'quantidade_entregue': self._format_decimal(item.get('quantidade_entregue')),
+                    # 💳 CONDIÇÕES COMERCIAIS
+                    'cond_pgto_pedido': item.get('cond_pgto_pedido', ''),
+                    'forma_pgto_pedido': item.get('forma_pgto_pedido', ''),
+                    'incoterm': item.get('incoterm', ''),
+                    'metodo_entrega_pedido': item.get('metodo_entrega_pedido', ''),
+                    'data_entrega_pedido': self._format_date(item.get('data_entrega_pedido')),
+                    'cliente_nec_agendamento': item.get('cliente_nec_agendamento', ''),
+                    'observ_ped_1': item.get('observ_ped_1', ''),
                     
-                    # Valores
-                    'preco_unitario': self._format_decimal(item.get('preco_unitario')),
-                    'valor_produto': self._format_decimal(item.get('valor_produto')),
-                    'valor_item_pedido': self._format_decimal(item.get('valor_item_pedido')),
+                    # 🏠 ENDEREÇO DE ENTREGA COMPLETO
+                    'cnpj_endereco_ent': item.get('cnpj_endereco_ent', ''),
+                    'empresa_endereco_ent': item.get('empresa_endereco_ent', ''),
+                    'cep_endereco_ent': item.get('cep_endereco_ent', ''),
+                    'nome_cidade': item.get('nome_cidade', ''),
+                    'cod_uf': item.get('cod_uf', ''),
+                    'bairro_endereco_ent': item.get('bairro_endereco_ent', ''),
+                    'rua_endereco_ent': item.get('rua_endereco_ent', ''),
+                    'endereco_ent': item.get('endereco_ent', ''),
+                    'telefone_endereco_ent': item.get('telefone_endereco_ent', ''),
                     
-                    # Status
-                    'status': item.get('status_pedido'),
-                    
-                    # Categoria do produto
-                    'categoria_produto': item.get('categoria_produto'),
-                    'categoria_primaria': item.get('categoria_primaria'),
-                    'categoria_primaria_pai': item.get('categoria_primaria_pai'),
-                    
-                    # Pagamento e Entrega
-                    'condicoes_pagamento': item.get('condicoes_pagamento'),
-                    'forma_pagamento': item.get('forma_pagamento'),
-                    'notas_expedicao': item.get('notas_expedicao'),
-                    'incoterm': item.get('incoterm'),
-                    'metodo_entrega': item.get('metodo_entrega'),
-                    'data_entrega': self._format_date(item.get('data_entrega')),
-                    'agendamento_cliente': item.get('agendamento_cliente'),
-                    
-                    # Endereço de entrega (todos os campos brasileiros)
-                    'cnpj_endereco_entrega': item.get('cnpj_endereco_entrega'),
-                    'proprio_endereco': item.get('proprio_endereco'),
-                    'cep_entrega': item.get('cep_entrega'),
-                    'estado_entrega': item.get('estado_entrega'),
-                    'municipio_entrega': item.get('municipio_entrega'),
-                    'bairro_entrega': item.get('bairro_entrega'),
-                    'endereco_entrega': item.get('endereco_entrega'),
-                    'numero_entrega': item.get('numero_entrega'),
-                    'telefone_entrega': item.get('telefone_entrega')
+                    # Dados gerados automaticamente (timestamp, usuário)
+                    'data_importacao': datetime.now(),
+                    'usuario_importacao': 'Sistema Odoo'
                 }
                 
-                # Adicionar apenas se tem dados válidos e saldo > 0
-                if (item_processado['referencia_pedido'] and 
-                    item_processado['saldo'] and 
-                    item_processado['saldo'] > 0):
-                    dados_processados.append(item_processado)
-                    
+                dados_processados.append(item_processado)
+                
             except Exception as e:
-                logger.error(f"Erro ao processar item da carteira: {e}")
+                self.logger.warning(f"Erro ao processar item da carteira: {e}")
                 continue
         
+        self.logger.info(f"✅ {len(dados_processados)} itens processados com campos exatos")
         return dados_processados
     
-    def _format_date(self, date_value) -> str:
-        """Formata data para string"""
-        if not date_value:
-            return ''
-        
-        if isinstance(date_value, str):
-            try:
-                dt = datetime.strptime(date_value, '%Y-%m-%d %H:%M:%S')
-                return dt.strftime('%d/%m/%Y')
-            except ValueError:
-                try:
-                    dt = datetime.strptime(date_value, '%Y-%m-%d')
-                    return dt.strftime('%d/%m/%Y')
-                except ValueError:
-                    return str(date_value)
-        return str(date_value)
-    
-    def _format_decimal(self, value) -> float:
-        """Formata valor decimal"""
-        if value is None:
-            return 0.0
+    def _processar_dados_carteira_com_multiplas_queries(self, dados_odoo_brutos: List[Dict]) -> List[Dict]:
+        """
+        Processa dados da carteira usando o sistema completo de múltiplas queries
+        Resolve os 11 campos complexos que precisam de consultas relacionadas
+        """
         try:
-            return float(value)
+            logger.info("Processando carteira com sistema de múltiplas queries...")
+            
+            # Usar o mapeamento completo que suporta múltiplas queries
+            dados_mapeados = self.mapper.mapear_para_carteira_completo(dados_odoo_brutos, self.connection)
+            
+            # Mostrar estatísticas do mapeamento
+            stats = self.mapper.obter_estatisticas_mapeamento()
+            logger.info(f"📊 Estatísticas do mapeamento:")
+            logger.info(f"   Total de campos: {stats['total_campos']}")
+            logger.info(f"   Campos simples: {stats['campos_simples']} ({stats['percentual_simples']:.1f}%)")
+            logger.info(f"   Campos complexos: {stats['campos_complexos']} ({stats['percentual_complexos']:.1f}%)")
+            
+            # Contar campos resolvidos vs não resolvidos
+            campos_resolvidos = 0
+            campos_nulos = 0
+            
+            for item in dados_mapeados:
+                for campo, valor in item.items():
+                    if valor is not None and valor != '':
+                        campos_resolvidos += 1
+                    else:
+                        campos_nulos += 1
+            
+            taxa_resolucao = (campos_resolvidos / (campos_resolvidos + campos_nulos) * 100) if (campos_resolvidos + campos_nulos) > 0 else 0
+            
+            logger.info(f"🎯 Taxa de resolução de campos: {taxa_resolucao:.1f}%")
+            logger.info(f"   Campos resolvidos: {campos_resolvidos}")
+            logger.info(f"   Campos nulos: {campos_nulos}")
+            
+            return dados_mapeados
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no processamento com múltiplas queries: {e}")
+            return []
+
+    def _format_date(self, data_str: Any) -> Optional[date]:
+        """Formata string de data para objeto date"""
+        if not data_str:
+            return None
+        try:
+            if isinstance(data_str, str):
+                # Tenta diferentes formatos
+                for formato in ['%Y-%m-%d', '%d/%m/%Y', '%Y-%m-%d %H:%M:%S']:
+                    try:
+                        return datetime.strptime(data_str, formato).date()
+                    except ValueError:
+                        continue
+            return None
+        except Exception as e:
+            self.logger.warning(f"Erro ao formatar data: {data_str} - {e}")
+            return None
+
+    def _format_decimal(self, valor: Any) -> Optional[float]:
+        """Formata valor para decimal"""
+        try:
+            return float(valor) if valor is not None else 0.0
         except (ValueError, TypeError):
             return 0.0
-    
+
     def _calcular_estatisticas(self, dados: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calcula estatísticas básicas da carteira"""
         if not dados:
@@ -234,153 +270,93 @@ class CarteiraService:
             'saldo_total': saldo_total
         }
 
-def sincronizar_carteira_odoo(usar_filtro_pendente=True):
-    """
-    Sincroniza carteira do Odoo por substituição completa da CarteiraPrincipal
-    ATUALIZADO: Usa novo CampoMapper
-    
-    Args:
-        usar_filtro_pendente (bool): Se deve usar filtro 'Carteira Pendente' (qty_saldo > 0)
-    
-    Returns:
-        dict: Estatísticas da sincronização
-    """
-    try:
-        from app.carteira.models import CarteiraPrincipal
-        from app import db
-        from flask_login import current_user
-        from datetime import datetime
-        import logging
+    def sincronizar_carteira_odoo(self, usar_filtro_pendente=True):
+        """
+        Sincroniza carteira do Odoo por substituição completa da CarteiraPrincipal
+        ATUALIZADO: Usa novo CampoMapper com campos EXATOS
         
-        logger = logging.getLogger(__name__)
+        Args:
+            usar_filtro_pendente (bool): Se deve usar filtro 'Carteira Pendente' (qty_saldo > 0)
         
-        # Criar instância do serviço ATUALIZADO
-        service = CarteiraService()
-        
-        # Buscar dados do Odoo usando método correto
-        resultado_busca = service.obter_carteira_pendente()
-        
-        if not resultado_busca['sucesso']:
-            return {
-                'sucesso': False,
-                'erro': resultado_busca.get('erro', 'Nenhum dado encontrado no Odoo'),
-                'registros_importados': 0,
-                'registros_removidos': 0
-            }
-        
-        dados_odoo = resultado_busca['dados']
-        
-        if not dados_odoo:
-            return {
-                'sucesso': False,
-                'erro': 'Nenhum dado de carteira encontrado',
-                'registros_importados': 0,
-                'registros_removidos': 0
-            }
-        
-        # Aplicar filtro pendente se solicitado
-        if usar_filtro_pendente:
-            dados_filtrados = [
-                item for item in dados_odoo
-                if item.get('saldo', 0) > 0
-            ]
-        else:
-            dados_filtrados = dados_odoo
-        
-        # SUBSTITUIÇÃO COMPLETA: Remover todos os registros existentes
-        registros_removidos = CarteiraPrincipal.query.count()
-        CarteiraPrincipal.query.delete()
-        
-        registros_importados = 0
-        erros = []
-        
-        # Processar cada item da carteira
-        for item in dados_filtrados:
-            try:
-                # Validar campos obrigatórios
-                referencia_pedido = item.get('referencia_pedido')
-                codigo_produto = item.get('codigo_produto')
-                
-                if not referencia_pedido or not codigo_produto:
+        Returns:
+            dict: Estatísticas da sincronização
+        """
+        try:
+            from app.carteira.models import CarteiraPrincipal
+            from app import db
+            
+            self.logger.info("Iniciando sincronização completa da carteira com Odoo")
+            
+            # Buscar dados do Odoo usando novo mapper
+            from app.odoo.utils.connection import get_odoo_connection
+            connection = get_odoo_connection()
+            if not connection:
+                return {
+                    'sucesso': False,
+                    'erro': 'Não foi possível conectar ao Odoo',
+                    'estatisticas': {}
+                }
+            
+            dados_carteira = self.mapper.buscar_carteira_odoo(connection)
+            
+            if not dados_carteira:
+                return {
+                    'sucesso': False,
+                    'erro': 'Nenhum dado encontrado no Odoo',
+                    'estatisticas': {}
+                }
+            
+            # Filtrar por saldo pendente se solicitado
+            if usar_filtro_pendente:
+                dados_filtrados = [
+                    item for item in dados_carteira 
+                    if item.get('qtd_saldo_produto_pedido', 0) > 0
+                ]
+            else:
+                dados_filtrados = dados_carteira
+            
+            # Limpar tabela CarteiraPrincipal completamente
+            self.logger.info("🧹 Limpando tabela CarteiraPrincipal...")
+            db.session.query(CarteiraPrincipal).delete()
+            
+            # Inserir novos dados usando campos EXATOS
+            contador_inseridos = 0
+            
+            for item_mapeado in dados_filtrados:
+                try:
+                    # Criar registro usando campos exatos do modelo
+                    novo_registro = CarteiraPrincipal(**item_mapeado)
+                    db.session.add(novo_registro)
+                    contador_inseridos += 1
+                    
+                except Exception as e:
+                    self.logger.error(f"Erro ao inserir item: {e}")
                     continue
-                
-                # Processar datas
-                data_pedido = None
-                if item.get('data_pedido'):
-                    try:
-                        data_pedido_str = item.get('data_pedido')
-                        if isinstance(data_pedido_str, str) and data_pedido_str:
-                            # Converter formato DD/MM/YYYY para date
-                            if '/' in data_pedido_str:
-                                data_pedido = datetime.strptime(data_pedido_str, '%d/%m/%Y').date()
-                            else:
-                                data_pedido = datetime.strptime(data_pedido_str, '%Y-%m-%d').date()
-                    except Exception as e:
-                        logger.warning(f"Erro ao processar data_pedido: {e}")
-                
-                # Processar valores
-                quantidade = float(item.get('quantidade', 0)) or 0
-                quantidade_faturada = float(item.get('quantidade_faturada', 0)) or 0
-                saldo = float(item.get('saldo', 0)) or 0
-                preco_unitario = float(item.get('preco_unitario', 0)) or 0
-                valor_item_pedido = float(item.get('valor_item_pedido', 0)) or 0
-                
-                # Criar novo registro na CarteiraPrincipal
-                novo_registro = CarteiraPrincipal()
-                novo_registro.pedido_id = str(referencia_pedido)
-                novo_registro.data_pedido = data_pedido
-                novo_registro.data_prevista = data_pedido  # Usar mesma data se não houver data_entrega
-                novo_registro.cnpj_cliente = str(item.get('cnpj_cliente', '')).strip()
-                novo_registro.nome_cliente = str(item.get('nome_cliente', '')).strip()
-                novo_registro.cod_produto = str(codigo_produto).strip()
-                novo_registro.nome_produto = str(item.get('nome_produto', '')).strip()
-                novo_registro.qtd_pedido = quantidade
-                novo_registro.qtd_faturado = quantidade_faturada
-                novo_registro.qtd_saldo = saldo
-                novo_registro.valor_unitario = preco_unitario
-                novo_registro.valor_total = valor_item_pedido
-                novo_registro.vendedor = str(item.get('vendedor', '')).strip()
-                novo_registro.incoterm = str(item.get('incoterm', '')).strip()
-                novo_registro.municipio = str(item.get('municipio_cliente', '')).strip()
-                novo_registro.estado = str(item.get('estado_cliente', '')).strip()
-                novo_registro.endereco_entrega = str(item.get('endereco_entrega', '')).strip()
-                novo_registro.bairro_entrega = str(item.get('bairro_entrega', '')).strip()
-                novo_registro.cep_entrega = str(item.get('cep_entrega', '')).strip()
-                novo_registro.municipio_entrega = str(item.get('municipio_entrega', '')).strip()
-                novo_registro.estado_entrega = str(item.get('estado_entrega', '')).strip()
-                novo_registro.observacoes = str(item.get('notas_expedicao', '')).strip()
-                novo_registro.peso_bruto = float(item.get('peso_bruto', 0)) or 0
-                novo_registro.peso_liquido = float(item.get('peso_liquido', 0)) or 0
-                novo_registro.volume = float(item.get('volume', 0)) or 0
-                novo_registro.created_by = current_user.nome if current_user else 'Sistema'
-                
-                db.session.add(novo_registro)
-                registros_importados += 1
-                
-            except Exception as e:
-                erros.append(f"Erro ao processar pedido {referencia_pedido}: {str(e)}")
-                logger.error(f"Erro sincronização carteira: {e}")
-                continue
-        
-        # Commit das alterações
-        db.session.commit()
-        
-        resultado = {
-            'sucesso': True,
-            'registros_importados': registros_importados,
-            'registros_removidos': registros_removidos,
-            'erros': erros[:5]  # Primeiros 5 erros
-        }
-        
-        logger.info(f"Sincronização carteira concluída: {resultado}")
-        return resultado
-        
-    except Exception as e:
-        logger.error(f"Erro na sincronização da carteira: {e}")
-        db.session.rollback()
-        return {
-            'sucesso': False,
-            'erro': str(e),
-            'registros_importados': 0,
-            'registros_removidos': 0
-        } 
+            
+            # Commit das alterações
+            db.session.commit()
+            
+            # Estatísticas finais
+            estatisticas = {
+                'registros_inseridos': contador_inseridos,
+                'total_encontrados': len(dados_carteira),
+                'registros_filtrados': len(dados_filtrados),
+                'taxa_sucesso': f"{(contador_inseridos/len(dados_filtrados)*100):.1f}%" if dados_filtrados else "0%"
+            }
+            
+            self.logger.info(f"✅ SINCRONIZAÇÃO CONCLUÍDA: {estatisticas}")
+            
+            return {
+                'sucesso': True,
+                'estatisticas': estatisticas,
+                'mensagem': f'Carteira sincronizada com {contador_inseridos} registros'
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            self.logger.error(f"❌ ERRO na sincronização: {e}")
+            return {
+                'sucesso': False,
+                'erro': str(e),
+                'estatisticas': {}
+            } 

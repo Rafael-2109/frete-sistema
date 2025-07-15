@@ -1,0 +1,220 @@
+{
+  "campos_multiplas_queries": {
+    "order_id/partner_id/l10n_br_municipio_id/name": {
+      "queries": [
+        [
+          "sale.order.line",
+          "order_id"
+        ],
+        [
+          "sale.order",
+          "partner_id"
+        ],
+        [
+          "res.partner",
+          "l10n_br_municipio_id"
+        ],
+        [
+          "l10n_br_ciel_it_account.res.municipio",
+          "name"
+        ]
+      ],
+      "descricao": "Nome do município do parceiro principal"
+    },
+    "order_id/partner_id/state_id/code": {
+      "queries": [
+        [
+          "sale.order.line",
+          "order_id"
+        ],
+        [
+          "sale.order",
+          "partner_id"
+        ],
+        [
+          "res.partner",
+          "state_id"
+        ],
+        [
+          "res.country.state",
+          "code"
+        ]
+      ],
+      "descricao": "Código do estado do parceiro principal"
+    },
+    "order_id/partner_shipping_id/l10n_br_cnpj": {
+      "queries": [
+        [
+          "sale.order.line",
+          "order_id"
+        ],
+        [
+          "sale.order",
+          "partner_shipping_id"
+        ],
+        [
+          "res.partner",
+          "l10n_br_cnpj"
+        ]
+      ],
+      "descricao": "CNPJ do endereço de entrega"
+    },
+    "order_id/partner_shipping_id/zip": {
+      "queries": [
+        [
+          "sale.order.line",
+          "order_id"
+        ],
+        [
+          "sale.order",
+          "partner_shipping_id"
+        ],
+        [
+          "res.partner",
+          "zip"
+        ]
+      ],
+      "descricao": "CEP do endereço de entrega"
+    },
+    "order_id/partner_shipping_id/street": {
+      "queries": [
+        [
+          "sale.order.line",
+          "order_id"
+        ],
+        [
+          "sale.order",
+          "partner_shipping_id"
+        ],
+        [
+          "res.partner",
+          "street"
+        ]
+      ],
+      "descricao": "Rua do endereço de entrega"
+    },
+    "order_id/partner_shipping_id/street2": {
+      "queries": [
+        [
+          "sale.order.line",
+          "order_id"
+        ],
+        [
+          "sale.order",
+          "partner_shipping_id"
+        ],
+        [
+          "res.partner",
+          "street2"
+        ]
+      ],
+      "descricao": "Complemento do endereço de entrega"
+    },
+    "order_id/partner_shipping_id/l10n_br_district": {
+      "queries": [
+        [
+          "sale.order.line",
+          "order_id"
+        ],
+        [
+          "sale.order",
+          "partner_shipping_id"
+        ],
+        [
+          "res.partner",
+          "l10n_br_district"
+        ]
+      ],
+      "descricao": "Bairro do endereço de entrega"
+    },
+    "order_id/partner_shipping_id/city": {
+      "queries": [
+        [
+          "sale.order.line",
+          "order_id"
+        ],
+        [
+          "sale.order",
+          "partner_shipping_id"
+        ],
+        [
+          "res.partner",
+          "city"
+        ]
+      ],
+      "descricao": "Cidade do endereço de entrega"
+    },
+    "order_id/partner_shipping_id/state_id/code": {
+      "queries": [
+        [
+          "sale.order.line",
+          "order_id"
+        ],
+        [
+          "sale.order",
+          "partner_shipping_id"
+        ],
+        [
+          "res.partner",
+          "state_id"
+        ],
+        [
+          "res.country.state",
+          "code"
+        ]
+      ],
+      "descricao": "Código do estado do endereço de entrega"
+    },
+    "order_id/partner_shipping_id/l10n_br_municipio_id/name": {
+      "queries": [
+        [
+          "sale.order.line",
+          "order_id"
+        ],
+        [
+          "sale.order",
+          "partner_shipping_id"
+        ],
+        [
+          "res.partner",
+          "l10n_br_municipio_id"
+        ],
+        [
+          "l10n_br_ciel_it_account.res.municipio",
+          "name"
+        ]
+      ],
+      "descricao": "Nome do município do endereço de entrega"
+    },
+    "order_id/partner_shipping_id/country_id/name": {
+      "queries": [
+        [
+          "sale.order.line",
+          "order_id"
+        ],
+        [
+          "sale.order",
+          "partner_shipping_id"
+        ],
+        [
+          "res.partner",
+          "country_id"
+        ],
+        [
+          "res.country",
+          "name"
+        ]
+      ],
+      "descricao": "Nome do país do endereço de entrega"
+    }
+  },
+  "campos_simples_confirmados": 7,
+  "modelos_envolvidos": [
+    "sale.order.line",
+    "sale.order",
+    "res.partner",
+    "res.country.state",
+    "res.country",
+    "l10n_br_ciel_it_account.res.municipio"
+  ]
+}

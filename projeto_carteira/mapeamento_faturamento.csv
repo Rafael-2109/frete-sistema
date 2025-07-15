@@ -1,0 +1,17 @@
+﻿    numero_nf = db.Column(db.String(20), nullable=False, index=True);numero_nf;Linhas da fatura/NF-e;invoice_line_ids/x_studio_nf_e;
+    data_fatura = db.Column(db.Date, nullable=False, index=True);data_fatura;Linhas da fatura/Data;invoice_line_ids/date;
+    cnpj_cliente = db.Column(db.String(20), nullable=False, index=True)  # CNPJ do cliente;cnpj_cliente;Linhas da fatura/Parceiro/CNPJ;invoice_line_ids/partner_id/l10n_br_cnpj;
+    nome_cliente = db.Column(db.String(255), nullable=False)  # Razão Social;nome_cliente;Linhas da fatura/Parceiro;invoice_line_ids/partner_id;
+    municipio = db.Column(db.String(100), nullable=True)  # Cidade;municipio;Linhas da fatura/Parceiro/Município;invoice_line_ids/partner_id/l10n_br_municipio_id;"# Realizar tratamento (exemplo de dado no campo ""Fortaleza (CE)"")"
+"    estado = db.Column(db.String(2), nullable=True)  # UF (nome reduzido como ""ES"")";estado;Linhas da fatura/Parceiro/Município;invoice_line_ids/partner_id/l10n_br_municipio_id;"# Realizar tratamento (exemplo de dado no campo ""Fortaleza (CE)"")"
+    vendedor = db.Column(db.String(100), nullable=True)  # Campo do CSV original;vendedor;Vendedor;invoice_user_id;
+    incoterm = db.Column(db.String(20), nullable=True)  # Campo do CSV original;incoterm;Incoterm;invoice_incoterm_id;
+    cod_produto = db.Column(db.String(50), nullable=False, index=True);cod_produto;Linhas da fatura/Produto/Referência;invoice_line_ids/product_id/code;
+    nome_produto = db.Column(db.String(200), nullable=False);nome_produto;Linhas da fatura/Produto/Nome;invoice_line_ids/product_id/name;
+    qtd_produto_faturado = db.Column(db.Numeric(15, 3), nullable=False, default=0);qtd_produto_faturado;Linhas da fatura/Quantidade;invoice_line_ids/quantity;
+    preco_produto_faturado = db.Column(db.Numeric(15, 4), nullable=False, default=0);preco_produto_faturado;#valor_produto_faturado / qtd_produto_faturado;;
+    valor_produto_faturado = db.Column(db.Numeric(15, 2), nullable=False, default=0);valor_produto_faturado;Linhas da fatura/Valor Total do Item da NF;invoice_line_ids/l10n_br_total_nfe;
+    peso_unitario_produto = db.Column(db.Numeric(15, 3), nullable=True, default=0)  # ⚡ NOVO CAMPO;peso_unitario_produto;"Modelo: ""product.template"" Campo: ""gross_weight""";;
+    peso_total = db.Column(db.Numeric(15, 3), nullable=True, default=0)  # peso_unitario * qtd;peso_total;# peso_unitario_produto * qtd_produto_faturado;;
+    origem = db.Column(db.String(20), nullable=True, index=True);origem;Linhas da fatura/Origem;invoice_line_ids/invoice_origin;
+    status_nf = db.Column(db.String(20), nullable=False, default='ATIVO');status_nf;Status;state;
