@@ -362,15 +362,16 @@ class CoordinatorManager:
                 domain = coordinator_name[6:]
                 # Reload específico do domain agent
                 self._load_domain_agents()
+                return f'agent_{domain}' in self.domain_agents
             else:
                 return False
             
-            logger.info(f"🔄 Coordenador '{coordinator_name}' recarregado")
             return True
-            
         except Exception as e:
             logger.error(f"❌ Erro ao recarregar coordenador '{coordinator_name}': {e}")
             return False
+    
+
 
 
 # Instância global para conveniência

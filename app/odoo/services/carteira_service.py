@@ -165,6 +165,10 @@ class CarteiraService:
                     'endereco_ent': item.get('endereco_ent', ''),
                     'telefone_endereco_ent': item.get('telefone_endereco_ent', ''),
                     
+                    # 📈 CAMPOS DE ESTOQUE D0 a D28
+                    'estoque': None,  # Campo base
+                    **{f'estoque_d{i}': None for i in range(29)},  # estoque_d0 até estoque_d28
+                    
                     # 🛡️ AUDITORIA (campos corretos do modelo)
                     'created_at': datetime.now(),
                     'updated_at': datetime.now(),
@@ -419,7 +423,7 @@ class CarteiraService:
                 'metodo_entrega_pedido': extrair_relacao(pedido.get('carrier_id'), 1),
                 'data_entrega_pedido': self._format_date(pedido.get('commitment_date')),
                 'cliente_nec_agendamento': cliente.get('agendamento', ''),
-                'observ_ped_1': pedido.get('picking_note', ''),
+                'observ_ped_1': str(pedido.get('picking_note', '')) if pedido.get('picking_note') not in [None, False] else '',
                 
                 # 🏠 ENDEREÇO DE ENTREGA COMPLETO
                 'cnpj_endereco_ent': endereco.get('l10n_br_cnpj', ''),
@@ -432,6 +436,43 @@ class CarteiraService:
                 'endereco_ent': endereco.get('l10n_br_endereco_numero', ''),
                 'telefone_endereco_ent': endereco.get('phone', ''),
                 
+                # 📅 DADOS OPERACIONAIS (PRESERVADOS na atualização)
+                'expedicao': None,  # Será calculado/preservado
+                'data_entrega': None,  # Será calculado/preservado
+                'agendamento': None,  # Será preservado se existir
+                'protocolo': '',  # Será preservado se existir
+                'roteirizacao': '',  # Será calculado/preservado
+                
+                # 📊 ANÁLISE DE ESTOQUE (CALCULADOS)
+                'menor_estoque_produto_d7': None,
+                'saldo_estoque_pedido': None,
+                'saldo_estoque_pedido_forcado': None,
+                
+                # 🚛 DADOS DE CARGA/LOTE (PRESERVADOS)
+                'lote_separacao_id': None,
+                'qtd_saldo': None,
+                'valor_saldo': None,
+                'pallet': None,
+                'peso': None,
+                
+                # 📈 TOTALIZADORES POR CLIENTE (CALCULADOS)
+                'valor_saldo_total': None,
+                'pallet_total': None,
+                'peso_total': None,
+                'valor_cliente_pedido': None,
+                'pallet_cliente_pedido': None,
+                'peso_cliente_pedido': None,
+                
+                # 📊 TOTALIZADORES POR PRODUTO (CALCULADOS)
+                'qtd_total_produto_carteira': None,
+                
+                # 📈 CAMPOS DE ESTOQUE D0 a D28
+                'estoque': None,  # Campo base
+                **{f'estoque_d{i}': None for i in range(29)},  # estoque_d0 até estoque_d28
+                
+                # 🏳️ CAMPO ATIVO
+                'ativo': True,  # Todos os registros importados são ativos
+                
                 # 🛡️ AUDITORIA (campos corretos do modelo)
                 'created_at': datetime.now(),
                 'updated_at': datetime.now(), 
@@ -442,6 +483,76 @@ class CarteiraService:
         except Exception as e:
             logger.error(f"Erro no mapeamento otimizado do item: {e}")
             return {}
+    
+    def _sanitizar_dados_carteira(self, dados_carteira: List[Dict]) -> List[Dict]:
+        """
+        Sanitiza e corrige tipos de dados antes da inserção no banco
+        Garante que campos de texto não recebam valores boolean
+        """
+        dados_sanitizados = []
+        
+        for item in dados_carteira:
+            item_sanitizado = item.copy()
+            
+            # Campos que DEVEM ser texto (não podem ser boolean)
+            campos_texto = [
+                'observ_ped_1', 'num_pedido', 'cod_produto', 'pedido_cliente',
+                'status_pedido', 'cnpj_cpf', 'raz_social', 'raz_social_red',
+                'municipio', 'estado', 'vendedor', 'equipe_vendas', 'nome_produto',
+                'unid_medida_produto', 'embalagem_produto', 'materia_prima_produto',
+                'categoria_produto', 'cond_pgto_pedido', 'forma_pgto_pedido',
+                'incoterm', 'metodo_entrega_pedido', 'cliente_nec_agendamento',
+                'cnpj_endereco_ent', 'empresa_endereco_ent', 'cep_endereco_ent',
+                'nome_cidade', 'cod_uf', 'bairro_endereco_ent', 'rua_endereco_ent',
+                'endereco_ent', 'telefone_endereco_ent', 'protocolo', 'roteirizacao',
+                'created_by', 'updated_by'
+            ]
+            
+            # Converter campos de texto
+            for campo in campos_texto:
+                if campo in item_sanitizado:
+                    valor = item_sanitizado[campo]
+                    if isinstance(valor, bool):
+                        item_sanitizado[campo] = 'sim' if valor else 'não'
+                    elif valor is None:
+                        item_sanitizado[campo] = ''
+                    else:
+                        item_sanitizado[campo] = str(valor)
+            
+            # Campos numéricos - garantir tipo correto
+            campos_numericos = [
+                'qtd_produto_pedido', 'qtd_saldo_produto_pedido', 
+                'qtd_cancelada_produto_pedido', 'preco_produto_pedido',
+                'menor_estoque_produto_d7', 'saldo_estoque_pedido',
+                'saldo_estoque_pedido_forcado', 'qtd_saldo', 'valor_saldo',
+                'pallet', 'peso', 'valor_saldo_total', 'pallet_total',
+                'peso_total', 'valor_cliente_pedido', 'pallet_cliente_pedido',
+                'peso_cliente_pedido', 'qtd_total_produto_carteira'
+            ]
+            
+            for campo in campos_numericos:
+                if campo in item_sanitizado and item_sanitizado[campo] is not None:
+                    try:
+                        item_sanitizado[campo] = float(item_sanitizado[campo])
+                    except (ValueError, TypeError):
+                        item_sanitizado[campo] = 0.0
+            
+            # Campos de estoque (d0 a d28) - garantir tipo numérico
+            for i in range(29):
+                campo_estoque = f'estoque_d{i}'
+                if campo_estoque in item_sanitizado and item_sanitizado[campo_estoque] is not None:
+                    try:
+                        item_sanitizado[campo_estoque] = float(item_sanitizado[campo_estoque])
+                    except (ValueError, TypeError):
+                        item_sanitizado[campo_estoque] = None
+            
+            # Campo booleano - garantir tipo correto
+            if 'ativo' in item_sanitizado:
+                item_sanitizado['ativo'] = bool(item_sanitizado.get('ativo', True))
+            
+            dados_sanitizados.append(item_sanitizado)
+        
+        return dados_sanitizados
     
     def _format_date(self, data_str: Any) -> Optional[date]:
         """Formata string de data para objeto date"""
@@ -455,43 +566,21 @@ class CarteiraService:
                         return datetime.strptime(data_str, formato).date()
                     except ValueError:
                         continue
+            elif isinstance(data_str, datetime):
+                return data_str.date()
+            elif isinstance(data_str, date):
+                return data_str
             return None
         except Exception as e:
-            self.logger.warning(f"Erro ao formatar data: {data_str} - {e}")
+            logger.warning(f"Erro ao formatar data: {data_str} - {e}")
             return None
-
+    
     def _format_decimal(self, valor: Any) -> Optional[float]:
         """Formata valor para decimal"""
         try:
             return float(valor) if valor is not None else 0.0
         except (ValueError, TypeError):
             return 0.0
-
-    def _calcular_estatisticas(self, dados: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Calcula estatísticas básicas da carteira"""
-        if not dados:
-            return {
-                'total_itens': 0,
-                'total_pedidos': 0,
-                'valor_total': 0.0,
-                'quantidade_total': 0.0,
-                'saldo_total': 0.0
-            }
-        
-        # Calcular estatísticas
-        total_itens = len(dados)
-        pedidos_unicos = len(set(item['referencia_pedido'] for item in dados if item['referencia_pedido']))
-        valor_total = sum(item['valor_item_pedido'] for item in dados if item['valor_item_pedido'])
-        quantidade_total = sum(item['quantidade'] for item in dados if item['quantidade'])
-        saldo_total = sum(item['saldo'] for item in dados if item['saldo'])
-        
-        return {
-            'total_itens': total_itens,
-            'total_pedidos': pedidos_unicos,
-            'valor_total': valor_total,
-            'quantidade_total': quantidade_total,
-            'saldo_total': saldo_total
-        }
 
     def sincronizar_carteira_odoo(self, usar_filtro_pendente=True):
         """
@@ -537,6 +626,10 @@ class CarteiraService:
                 ]
             else:
                 dados_filtrados = dados_carteira
+            
+            # Sanitizar dados antes de inserir
+            logger.info("🧹 Sanitizando dados para garantir tipos corretos...")
+            dados_filtrados = self._sanitizar_dados_carteira(dados_filtrados)
             
             # Limpar tabela CarteiraPrincipal completamente
             logger.info("🧹 Limpando tabela CarteiraPrincipal...")

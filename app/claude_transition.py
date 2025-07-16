@@ -21,7 +21,8 @@ class ClaudeTransitionManager:
     """
     
     def __init__(self):
-        self._use_new_system = os.getenv('USE_NEW_CLAUDE_SYSTEM', 'false').lower() == 'true'
+        # FORÇAR USO DO SISTEMA NOVO - o problema era que estava usando o antigo!
+        self._use_new_system = True  # os.getenv('USE_NEW_CLAUDE_SYSTEM', 'false').lower() == 'true'
         self.claude = None
         self._initialize_system()
     

@@ -118,11 +118,36 @@ class EntregasAgent(SmartBaseAgent):
                     resumo['melhor_transportadora'] = dados_transportadoras.get('melhor_performance', 'N/A')
                     resumo['dados_encontrados'] = True
             
+            # Adicionar resposta formatada
+            resumo['response'] = self._formatar_resposta_simples(resumo)
             return resumo
             
         except Exception as e:
             self.logger_estruturado.error(f"❌ Erro ao resumir dados de entregas: {e}")
             return {'erro': str(e)}
+    
+    def _formatar_resposta_simples(self, dados: Dict[str, Any]) -> str:
+        """Formata resposta de forma simples e direta"""
+        response = "📦 **ANÁLISE DE ENTREGAS**\n\n"
+        
+        if dados.get('total_registros', 0) > 0:
+            response += f"📊 **Encontrei {dados['total_registros']} entregas**\n\n"
+            
+            if dados.get('entregas_atrasadas', 0) > 0:
+                response += f"⚠️ **Atenção:** {dados['entregas_atrasadas']} entregas atrasadas!\n"
+            
+            if dados.get('entregas_pendentes', 0) > 0:
+                response += f"📋 Entregas pendentes: {dados['entregas_pendentes']}\n"
+            
+            if dados.get('entregas_hoje', 0) > 0:
+                response += f"📅 Entregas para hoje: {dados['entregas_hoje']}\n"
+            
+            if 'taxa_pontualidade' in dados and dados['taxa_pontualidade'] > 0:
+                response += f"✅ Taxa de pontualidade: {dados['taxa_pontualidade']:.1f}%\n"
+        else:
+            response += "Não encontrei entregas para os critérios especificados.\n"
+        
+        return response
     
     def _load_specialist_prompt(self) -> str:
         """System prompt especializado em entregas COM TODAS AS CAPACIDADES"""

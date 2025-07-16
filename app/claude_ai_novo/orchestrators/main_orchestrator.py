@@ -1609,6 +1609,7 @@ class MockComponent:
             "filtros": kwargs.get("filtros", {})
         }
     
+
     # Métodos de processamento de respostas para ResponseProcessor mock
     def gerar_resposta_otimizada(self, **kwargs):
         """Mock de geração de resposta otimizada"""
