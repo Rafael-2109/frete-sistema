@@ -36,57 +36,8 @@
             margin-top: 0 !important;
         }
         
-        /* Mega-menu específico */
-        .mega-menu {
-            position: absolute !important;
-            top: 100% !important;
-            left: 0 !important;
-            width: auto !important;
-            max-width: 800px !important;
-            z-index: 1050 !important;
-            margin-top: 0 !important;
-        }
-        
-        .mega-menu .dropdown-item {
-            white-space: normal;
-            padding: 8px 16px;
-            margin-bottom: 2px;
-        }
-        
-        .mega-menu .dropdown-header {
-            color: #495057;
-            font-weight: 600;
-            padding: 8px 16px 4px 16px;
-            margin-bottom: 5px;
-            border-bottom: 1px solid #e9ecef;
-        }
-        
-        .mega-menu .dropdown-divider {
-            margin: 8px 0;
-        }
-        
-        .mega-menu .row {
-            margin: 0;
-        }
-        
-        .mega-menu .col-md-4 {
-            padding: 0 10px;
-        }
-        
-        /* Melhorar responsividade do mega-menu */
+        /* Melhorar responsividade dos dropdowns */
         @media (max-width: 768px) {
-            .mega-menu {
-                width: 100% !important;
-                max-width: none !important;
-                left: 0 !important;
-                right: 0 !important;
-            }
-            
-            .mega-menu .col-md-4 {
-                width: 100%;
-                margin-bottom: 15px;
-            }
-            
             .navbar-collapse {
                 max-height: none !important;
             }
@@ -273,61 +224,56 @@
           <a class="nav-link dropdown-toggle" href="#" id="menuCarteira" role="button" data-bs-toggle="dropdown">
             <i class="fas fa-industry text-success"></i> Carteira & Estoque
           </a>
-          <div class="dropdown-menu mega-menu" style="width: 800px; padding: 20px;">
-            <!-- Layout Horizontal para Dashboards -->
-            <div class="row">
-              <div class="col-md-4">
-                <h6 class="dropdown-header">📊 Dashboards</h6>
-                <a class="dropdown-item" href="{{ url_for('carteira.index') }}">
-                  <i class="fas fa-shopping-cart text-success"></i> Carteira de Pedidos
-                  <span class="badge bg-success ms-2">NOVO</span>
-                </a>
-                <a class="dropdown-item" href="{{ url_for('producao.index') }}">
-                  <i class="fas fa-tachometer-alt text-primary"></i> Dashboard Produção
-                </a>
-                <a class="dropdown-item" href="{{ url_for('estoque.index') }}">
-                  <i class="fas fa-warehouse text-info"></i> Dashboard Estoque
-                </a>
-              </div>
-              
-              <div class="col-md-4">
-                <h6 class="dropdown-header">🏭 Produção</h6>
-                <a class="dropdown-item" href="{{ url_for('producao.listar_programacao') }}">
-                  <i class="fas fa-calendar-check"></i> Programação de Produção
-                </a>
-                <a class="dropdown-item" href="{{ url_for('producao.listar_palletizacao') }}">
-                  <i class="fas fa-cubes"></i> Cadastro de Palletização
-                </a>
-                <hr class="dropdown-divider">
-                <h6 class="dropdown-header">💰 Faturamento</h6>
-                <a class="dropdown-item" href="{{ url_for('faturamento.listar_faturamento_produtos') }}">
-                  <i class="fas fa-receipt"></i> Faturamento por Produto
-                </a>
-              </div>
-              
-              <div class="col-md-4">
-                <h6 class="dropdown-header">📦 Estoque</h6>
-                <a class="dropdown-item" href="{{ url_for('estoque.listar_movimentacoes') }}">
-                  <i class="fas fa-exchange-alt"></i> Movimentações de Estoque
-                </a>
-                <a class="dropdown-item" href="{{ url_for('estoque.saldo_estoque') }}">
-                  <i class="fas fa-chart-line text-success"></i> Saldo de Estoque
-                  <span class="badge bg-primary ms-2">NOVO</span>
-                </a>
-                <a class="dropdown-item" href="{{ url_for('estoque.listar_unificacao_codigos') }}">
-                  <i class="fas fa-link text-warning"></i> Unificação de Códigos
-                </a>
-                <hr class="dropdown-divider">
-                <h6 class="dropdown-header">🗺️ Rotas</h6>
-                <a class="dropdown-item" href="{{ url_for('localidades.listar_rotas') }}">
-                  <i class="fas fa-route"></i> Cadastro de Rotas
-                </a>
-                <a class="dropdown-item" href="{{ url_for('localidades.listar_sub_rotas') }}">
-                  <i class="fas fa-map-marker-alt"></i> Cadastro de Sub-rotas
-                </a>
-              </div>
-            </div>
-          </div>
+          <ul class="dropdown-menu">
+            <li><h6 class="dropdown-header">📊 Dashboards</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('carteira.index') }}">
+              <i class="fas fa-shopping-cart text-success"></i> Carteira de Pedidos
+              <span class="badge bg-success ms-2">NOVO</span>
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('producao.index') }}">
+              <i class="fas fa-tachometer-alt text-primary"></i> Dashboard Produção
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('estoque.index') }}">
+              <i class="fas fa-warehouse text-info"></i> Dashboard Estoque
+            </a></li>
+            
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">🏭 Produção</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('producao.listar_programacao') }}">
+              <i class="fas fa-calendar-check"></i> Programação de Produção
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('producao.listar_palletizacao') }}">
+              <i class="fas fa-cubes"></i> Cadastro de Palletização
+            </a></li>
+            
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">📦 Estoque</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('estoque.listar_movimentacoes') }}">
+              <i class="fas fa-exchange-alt"></i> Movimentações de Estoque
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('estoque.saldo_estoque') }}">
+              <i class="fas fa-chart-line text-success"></i> Saldo de Estoque
+              <span class="badge bg-primary ms-2">NOVO</span>
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('estoque.listar_unificacao_codigos') }}">
+              <i class="fas fa-link text-warning"></i> Unificação de Códigos
+            </a></li>
+            
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">💰 Faturamento</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('faturamento.listar_faturamento_produtos') }}">
+              <i class="fas fa-receipt"></i> Faturamento por Produto
+            </a></li>
+            
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">🗺️ Rotas</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('localidades.listar_rotas') }}">
+              <i class="fas fa-route"></i> Cadastro de Rotas
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('localidades.listar_sub_rotas') }}">
+              <i class="fas fa-map-marker-alt"></i> Cadastro de Sub-rotas
+            </a></li>
+          </ul>
         </li>
 
         <!-- ODOO - Integração com ERP Odoo -->

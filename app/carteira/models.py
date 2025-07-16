@@ -417,7 +417,7 @@ class VinculacaoCarteiraSeparacao(db.Model):
     data_agendamento = db.Column(db.Date, nullable=False, index=True)
     data_expedicao = db.Column(db.Date, nullable=False, index=True)
     
-    # 🔗 IDs DE VINCULAÇÃO
+    # �� IDs DE VINCULAÇÃO
     carteira_item_id = db.Column(db.Integer, nullable=False, index=True)  # FK para CarteiraPrincipal
     separacao_lote_id = db.Column(db.String(50), nullable=False, index=True)  # Lote da separação
     

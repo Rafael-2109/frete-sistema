@@ -66,7 +66,10 @@ class CarteiraService:
             logger.info("Usando sistema de múltiplas queries para carteira...")
             
             # Primeiro buscar dados brutos do Odoo
-            domain = [('qty_saldo', '>', 0)]  # Carteira pendente
+            domain = [
+                ('qty_saldo', '>', 0),  # Carteira pendente
+                ('order_id.state', 'in', ['draft', 'sent', 'sale'])  # ✅ FILTRO DE STATUS: Apenas pedidos válidos
+            ]  
             campos_basicos = ['id', 'order_id', 'product_id', 'product_uom', 'product_uom_qty', 'qty_saldo', 'qty_cancelado', 'price_unit']
             
             dados_odoo_brutos = self.connection.search_read('sale.order.line', domain, campos_basicos)
@@ -458,6 +461,9 @@ class CarteiraService:
                     'data_atual_pedido': self._format_date(pedido.get('date_order')),
                     'data_entrega_pedido': self._format_date(pedido.get('commitment_date')),
                     
+                    # 📊 STATUS (mapeado para português)
+                    'status_pedido': self._mapear_status_pedido(pedido.get('state', '')),
+                    
                     # 💼 INFORMAÇÕES DO CLIENTE
                     'cnpj_cpf': cliente.get('l10n_br_cnpj', ''),
                     'raz_social': cliente.get('l10n_br_razao_social', ''),
@@ -507,7 +513,7 @@ class CarteiraService:
                     'protocolo': '',  # Será preservado se existir
                     'roteirizacao': '',  # Será calculado/preservado
                     
-                    # 📊 ANÁLISE DE ESTOQUE (CALCULADOS)
+                    # 📈 ANÁLISE DE ESTOQUE (CALCULADOS)
                     'menor_estoque_produto_d7': None,
                     'saldo_estoque_pedido': None,
                     'saldo_estoque_pedido_forcado': None,
@@ -565,12 +571,25 @@ class CarteiraService:
     def _sanitizar_dados_carteira(self, dados_carteira: List[Dict]) -> List[Dict]:
         """
         Sanitiza e corrige tipos de dados antes da inserção no banco
-        Garante que campos de texto não recebam valores boolean
+        Garante que campos de texto não recebam valores boolean e não excedam limites
         """
         dados_sanitizados = []
         
         for item in dados_carteira:
             item_sanitizado = item.copy()
+            
+            # ⚠️ CAMPOS COM LIMITE DE 50 CARACTERES (críticos)
+            campos_varchar50 = [
+                'num_pedido', 'cod_produto', 'status_pedido', 'protocolo',
+                'metodo_entrega_pedido'
+            ]
+            
+            for campo in campos_varchar50:
+                if campo in item_sanitizado and item_sanitizado[campo]:
+                    valor = str(item_sanitizado[campo])
+                    if len(valor) > 50:
+                        logger.warning(f"Campo {campo} truncado de {len(valor)} para 50 caracteres: {valor}")
+                        item_sanitizado[campo] = valor[:50]
             
             # Campos que DEVEM ser texto (não podem ser boolean)
             campos_texto = [
@@ -689,6 +708,28 @@ class CarteiraService:
         except (ValueError, TypeError):
             return 0.0
 
+    def _mapear_status_pedido(self, status_odoo: str) -> str:
+        """
+        🎯 MAPEAR STATUS DO ODOO PARA PORTUGUÊS
+        
+        Traduz status técnicos do Odoo para nomes em português
+        que o sistema brasileiro compreende.
+        """
+        if not status_odoo:
+            return 'Rascunho'
+            
+        mapeamento_status = {
+            'draft': 'Cotação',
+            'sent': 'Cotação enviada', 
+            'sale': 'Pedido de venda',
+            'done': 'Concluído',
+            'cancel': 'Cancelado'
+        }
+        
+        status_traduzido = mapeamento_status.get(status_odoo.lower(), status_odoo)
+        logger.debug(f"Status mapeado: {status_odoo} → {status_traduzido}")
+        return status_traduzido
+
     def sincronizar_carteira_odoo(self, usar_filtro_pendente=True):
         """
         Sincroniza carteira do Odoo por substituição completa da CarteiraPrincipal
@@ -729,10 +770,15 @@ class CarteiraService:
             if usar_filtro_pendente:
                 dados_filtrados = [
                     item for item in dados_carteira 
-                    if item.get('qtd_saldo_produto_pedido', 0) > 0
+                    if item.get('qtd_saldo_produto_pedido', 0) > 0 
+                    and item.get('status_pedido', '').lower() in ['draft', 'sent', 'sale', 'cotação', 'cotação enviada', 'pedido de venda']  # ✅ FILTRO ADICIONAL DE STATUS
                 ]
             else:
-                dados_filtrados = dados_carteira
+                # Mesmo sem filtro de saldo, aplicar filtro de status
+                dados_filtrados = [
+                    item for item in dados_carteira 
+                    if item.get('status_pedido', '').lower() in ['draft', 'sent', 'sale', 'cotação', 'cotação enviada', 'pedido de venda']  # ✅ FILTRO DE STATUS SEMPRE
+                ]
             
             # Sanitizar dados antes de inserir
             logger.info("🧹 Sanitizando dados para garantir tipos corretos...")
