@@ -99,15 +99,15 @@ def processar_nf_cd_pedido(entrega_id):
         pedido.nf_cd = True
         pedido.data_embarque = None
 
-        if entrega.data_agendada:
-            pedido.agendamento = entrega.data_agendada
+        if entrega.data_agenda:
+            pedido.agendamento = entrega.data_agenda
             pedido.protocolo = entrega.protocolo_agendamento
-            if entrega.data_agendada == entrega.data_agendada - 1 + adicionar_dias_uteis(entrega.data_agendada, 1):
-                pedido.expedicao = entrega.data_agendada - 1
-            elif entrega.data_agendada == entrega.data_agendada -2 + adicionar_dias_uteis(entrega.data_agendada, 1):
-                pedido.expedicao = entrega.data_agendada - 2
+            if entrega.data_agenda == entrega.data_agenda - 1 + adicionar_dias_uteis(entrega.data_agenda, 1):
+                pedido.expedicao = entrega.data_agenda - 1
+            elif entrega.data_agenda == entrega.data_agenda -2 + adicionar_dias_uteis(entrega.data_agenda, 1):
+                pedido.expedicao = entrega.data_agenda - 2
             else:
-                pedido.expedicao = entrega.data_agendada -3
+                pedido.expedicao = entrega.data_agenda -3
 
         # NF é preservada para manter histórico
         # Status será recalculado automaticamente pelo trigger como "NF no CD"

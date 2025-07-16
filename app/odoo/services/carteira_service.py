@@ -382,107 +382,193 @@ class CarteiraService:
                     return campo[indice]
                 return ''
             
-            # Mapear TODOS os 39 campos
+            # 🏠 ENDEREÇO PRINCIPAL
+            municipio_nome = ''
+            estado_uf = ''
+            
+            if cliente.get('l10n_br_municipio_id'):
+                municipio_info = cliente['l10n_br_municipio_id']
+                if isinstance(municipio_info, list) and len(municipio_info) > 1:
+                    # Formato: [3830, 'São Paulo (SP)']
+                    municipio_completo = municipio_info[1]
+                    if '(' in municipio_completo and ')' in municipio_completo:
+                        # Separar cidade e UF
+                        partes = municipio_completo.split('(')
+                        municipio_nome = partes[0].strip()
+                        # Pegar apenas os 2 caracteres da UF
+                        uf_com_parenteses = partes[1]
+                        estado_uf = uf_com_parenteses.replace(')', '').strip()[:2]
+                    else:
+                        municipio_nome = municipio_completo
+            
+            # Buscar endereço de entrega
+            endereco = {}
+            if pedido.get('partner_shipping_id'):
+                partner_id = pedido['partner_shipping_id'][0] if isinstance(pedido['partner_shipping_id'], list) else pedido['partner_shipping_id']
+                
+                # Buscar detalhes do endereço de entrega  
+                enderecos = self.connection.search_read(
+                    'res.partner',
+                    [('id', '=', partner_id)],
+                    ['street', 'l10n_br_endereco_numero', 'l10n_br_endereco_bairro', 
+                     'l10n_br_cnpj', 'city', 'l10n_br_municipio_id', 'state_id',
+                     'l10n_br_cep', 'phone', 'name']
+                )
+                
+                if enderecos:
+                    endereco = enderecos[0]
+            
+            # Tratar endereço de entrega - mesmo formato "Cidade (UF)"
+            municipio_entrega_nome = ''
+            estado_entrega_uf = ''
+            
+            if endereco.get('l10n_br_municipio_id'):
+                municipio_entrega_info = endereco['l10n_br_municipio_id']
+                if isinstance(municipio_entrega_info, list) and len(municipio_entrega_info) > 1:
+                    # Formato: [3830, 'São Paulo (SP)']
+                    municipio_entrega_completo = municipio_entrega_info[1]
+                    if '(' in municipio_entrega_completo and ')' in municipio_entrega_completo:
+                        # Separar cidade e UF
+                        partes = municipio_entrega_completo.split('(')
+                        municipio_entrega_nome = partes[0].strip()
+                        # Pegar apenas os 2 caracteres da UF
+                        uf_entrega_com_parenteses = partes[1]
+                        estado_entrega_uf = uf_entrega_com_parenteses.replace(')', '').strip()[:2]
+                    else:
+                        municipio_entrega_nome = municipio_entrega_completo
+            
+            # Tratar incoterm - pegar apenas o código entre colchetes
+            incoterm_codigo = ''
+            if pedido.get('incoterm'):
+                incoterm_info = pedido['incoterm']
+                if isinstance(incoterm_info, list) and len(incoterm_info) > 1:
+                    # Formato: [6, '[CIF] COST, INSURANCE AND FREIGHT']
+                    incoterm_texto = incoterm_info[1]
+                    if '[' in incoterm_texto and ']' in incoterm_texto:
+                        # Extrair código entre colchetes
+                        inicio = incoterm_texto.find('[')
+                        fim = incoterm_texto.find(']')
+                        if inicio >= 0 and fim > inicio:
+                            incoterm_codigo = incoterm_texto[inicio+1:fim]
+                    else:
+                        # Usar o texto todo mas truncar se necessário
+                        incoterm_codigo = incoterm_texto[:20]
+            
+            # 📊 MAPEAMENTO COMPLETO
+            try:
+                return {
+                    # 🔍 IDENTIFICAÇÃO
+                    'num_pedido': pedido.get('name', ''),
+                    'cod_produto': extrair_relacao(linha.get('product_id'), 1),
+                    'pedido_cliente': pedido.get('name', ''),
+                    
+                    # 📅 DATAS
+                    'data_pedido': self._format_date(pedido.get('date_order')),
+                    'data_atual_pedido': self._format_date(pedido.get('date_order')),
+                    'data_entrega_pedido': self._format_date(pedido.get('commitment_date')),
+                    
+                    # 💼 INFORMAÇÕES DO CLIENTE
+                    'cnpj_cpf': cliente.get('l10n_br_cnpj', ''),
+                    'raz_social': cliente.get('name', ''),
+                    'raz_social_red': cliente.get('name', '')[:30],  # Versão reduzida
+                    'municipio': municipio_nome,
+                    'estado': estado_uf,
+                    'vendedor': extrair_relacao(pedido.get('user_id'), 1),
+                    'equipe_vendas': extrair_relacao(pedido.get('team_id'), 1),
+                    
+                    # 📦 INFORMAÇÕES DO PRODUTO
+                    'nome_produto': extrair_relacao(linha.get('product_id'), 1),
+                    'unid_medida_produto': extrair_relacao(linha.get('product_uom'), 1),
+                    'embalagem_produto': '',  # Buscar de outro lugar se disponível
+                    'categoria_produto': '',  # Buscar categoria se disponível
+                    
+                    # 📊 QUANTIDADES E VALORES
+                    'qtd_produto_pedido': linha.get('product_uom_qty', 0),
+                    'qtd_saldo_produto_pedido': linha.get('qty_saldo', 0),
+                    'qtd_cancelada_produto_pedido': linha.get('qty_cancelado', 0),
+                    'preco_produto_pedido': linha.get('price_unit', 0),
+                    
+                    # 💳 CONDIÇÕES COMERCIAIS
+                    'cond_pgto_pedido': extrair_relacao(pedido.get('payment_term_id'), 1),
+                    'forma_pgto_pedido': extrair_relacao(pedido.get('payment_provider_id'), 1),
+                    'incoterm': incoterm_codigo,
+                    'metodo_entrega_pedido': extrair_relacao(pedido.get('carrier_id'), 1),
+                    'data_entrega_pedido': self._format_date(pedido.get('commitment_date')),
+                    'cliente_nec_agendamento': cliente.get('agendamento', ''),
+                    'observ_ped_1': str(pedido.get('picking_note', '')) if pedido.get('picking_note') not in [None, False] else '',
+                    
+                    # 🚚 ENDEREÇO DE ENTREGA  
+                    'empresa_endereco_ent': endereco.get('name', ''),
+                    'cnpj_endereco_ent': endereco.get('l10n_br_cnpj', ''),
+                    'nome_cidade': municipio_entrega_nome,
+                    'cod_uf': estado_entrega_uf,
+                    'cep_endereco_ent': endereco.get('l10n_br_cep', ''),
+                    'bairro_endereco_ent': endereco.get('l10n_br_endereco_bairro', ''),
+                    'rua_endereco_ent': endereco.get('street', ''),
+                    'endereco_ent': endereco.get('l10n_br_endereco_numero', ''),
+                    'telefone_endereco_ent': endereco.get('phone', ''),
+                    
+                    # 📅 DADOS OPERACIONAIS (PRESERVADOS na atualização)
+                    'expedicao': None,  # Será calculado/preservado
+                    'data_entrega': None,  # Será calculado/preservado
+                    'agendamento': None,  # Será preservado se existir
+                    'protocolo': '',  # Será preservado se existir
+                    'roteirizacao': '',  # Será calculado/preservado
+                    
+                    # 📊 ANÁLISE DE ESTOQUE (CALCULADOS)
+                    'menor_estoque_produto_d7': None,
+                    'saldo_estoque_pedido': None,
+                    'saldo_estoque_pedido_forcado': None,
+                    
+                    # 🚛 DADOS DE CARGA/LOTE (PRESERVADOS)
+                    'lote_separacao_id': None,
+                    'qtd_saldo': None,
+                    'valor_saldo': None,
+                    'pallet': None,
+                    'peso': None,
+                    
+                    # 📈 TOTALIZADORES POR CLIENTE (CALCULADOS)
+                    'valor_saldo_total': None,
+                    'pallet_total': None,
+                    'peso_total': None,
+                    'valor_cliente_pedido': None,
+                    'pallet_cliente_pedido': None,
+                    'peso_cliente_pedido': None,
+                    
+                    # 📊 TOTALIZADORES POR PRODUTO (CALCULADOS)
+                    'qtd_total_produto_carteira': None,
+                    
+                    # 📈 CAMPOS DE ESTOQUE D0 a D28
+                    'estoque': None,  # Campo base
+                    **{f'estoque_d{i}': None for i in range(29)},  # estoque_d0 até estoque_d28
+                    
+                    # 🏳️ CAMPO ATIVO
+                    'ativo': True,  # Todos os registros importados são ativos
+                    
+                    # 🛡️ AUDITORIA (campos corretos do modelo)
+                    'created_at': datetime.now(),
+                    'updated_at': datetime.now(), 
+                    'created_by': 'Sistema Odoo REALMENTE Otimizado',
+                    'updated_by': 'Sistema Odoo REALMENTE Otimizado'
+                }
+            
+            except Exception as e:
+                logger.error(f"Erro no mapeamento otimizado do item: {e}")
+                return {}
+        
+        except Exception as e:
+            logger.error(f"❌ Erro no mapeamento: {e}")
+            # Retornar dados mínimos em caso de erro
             return {
-                # 🆔 CHAVES PRIMÁRIAS DE NEGÓCIO
-                'num_pedido': pedido.get('name', ''),
-                'cod_produto': produto.get('default_code', ''),
-                
-                # 📋 DADOS DO PEDIDO
-                'pedido_cliente': pedido.get('l10n_br_pedido_compra', ''),
-                'data_pedido': self._format_date(pedido.get('create_date')),
-                'data_atual_pedido': self._format_date(pedido.get('date_order')),
-                'status_pedido': pedido.get('state', ''),
-                
-                # 👥 DADOS DO CLIENTE
-                'cnpj_cpf': cliente.get('l10n_br_cnpj', ''),
-                'raz_social': cliente.get('l10n_br_razao_social', ''),
-                'raz_social_red': cliente.get('name', ''),
-                'municipio': extrair_relacao(cliente.get('l10n_br_municipio_id'), 1),
-                'estado': extrair_relacao(cliente.get('state_id'), 1),
-                'vendedor': extrair_relacao(pedido.get('user_id'), 1),
-                'equipe_vendas': extrair_relacao(pedido.get('team_id'), 1),
-                
-                # 📦 DADOS DO PRODUTO
-                'nome_produto': produto.get('name', ''),
-                'unid_medida_produto': extrair_relacao(produto.get('uom_id'), 1),
-                'embalagem_produto': categoria.get('name', ''),
-                'materia_prima_produto': categoria_parent.get('name', ''),
-                'categoria_produto': categoria_grandparent.get('name', ''),
-                
-                # 📊 QUANTIDADES E VALORES
+                'num_pedido': linha.get('order_id', ['', ''])[1] if linha.get('order_id') else '',
+                'cod_produto': linha.get('product_id', ['', ''])[1] if linha.get('product_id') else '',
                 'qtd_produto_pedido': linha.get('product_uom_qty', 0),
                 'qtd_saldo_produto_pedido': linha.get('qty_saldo', 0),
-                'qtd_cancelada_produto_pedido': linha.get('qty_cancelado', 0),
-                'preco_produto_pedido': linha.get('price_unit', 0),
-                
-                # 💳 CONDIÇÕES COMERCIAIS
-                'cond_pgto_pedido': extrair_relacao(pedido.get('payment_term_id'), 1),
-                'forma_pgto_pedido': extrair_relacao(pedido.get('payment_provider_id'), 1),
-                'incoterm': extrair_relacao(pedido.get('incoterm'), 1),
-                'metodo_entrega_pedido': extrair_relacao(pedido.get('carrier_id'), 1),
-                'data_entrega_pedido': self._format_date(pedido.get('commitment_date')),
-                'cliente_nec_agendamento': cliente.get('agendamento', ''),
-                'observ_ped_1': str(pedido.get('picking_note', '')) if pedido.get('picking_note') not in [None, False] else '',
-                
-                # 🏠 ENDEREÇO DE ENTREGA COMPLETO
-                'cnpj_endereco_ent': endereco.get('l10n_br_cnpj', ''),
-                'empresa_endereco_ent': endereco.get('name', ''),
-                'cep_endereco_ent': endereco.get('zip', ''),
-                'nome_cidade': extrair_relacao(endereco.get('l10n_br_municipio_id'), 1),
-                'cod_uf': extrair_relacao(endereco.get('l10n_br_municipio_id'), 1),  # Pode precisar ajuste
-                'bairro_endereco_ent': endereco.get('l10n_br_endereco_bairro', ''),
-                'rua_endereco_ent': endereco.get('street', ''),
-                'endereco_ent': endereco.get('l10n_br_endereco_numero', ''),
-                'telefone_endereco_ent': endereco.get('phone', ''),
-                
-                # 📅 DADOS OPERACIONAIS (PRESERVADOS na atualização)
-                'expedicao': None,  # Será calculado/preservado
-                'data_entrega': None,  # Será calculado/preservado
-                'agendamento': None,  # Será preservado se existir
-                'protocolo': '',  # Será preservado se existir
-                'roteirizacao': '',  # Será calculado/preservado
-                
-                # 📊 ANÁLISE DE ESTOQUE (CALCULADOS)
-                'menor_estoque_produto_d7': None,
-                'saldo_estoque_pedido': None,
-                'saldo_estoque_pedido_forcado': None,
-                
-                # 🚛 DADOS DE CARGA/LOTE (PRESERVADOS)
-                'lote_separacao_id': None,
-                'qtd_saldo': None,
-                'valor_saldo': None,
-                'pallet': None,
-                'peso': None,
-                
-                # 📈 TOTALIZADORES POR CLIENTE (CALCULADOS)
-                'valor_saldo_total': None,
-                'pallet_total': None,
-                'peso_total': None,
-                'valor_cliente_pedido': None,
-                'pallet_cliente_pedido': None,
-                'peso_cliente_pedido': None,
-                
-                # 📊 TOTALIZADORES POR PRODUTO (CALCULADOS)
-                'qtd_total_produto_carteira': None,
-                
-                # 📈 CAMPOS DE ESTOQUE D0 a D28
-                'estoque': None,  # Campo base
-                **{f'estoque_d{i}': None for i in range(29)},  # estoque_d0 até estoque_d28
-                
-                # 🏳️ CAMPO ATIVO
-                'ativo': True,  # Todos os registros importados são ativos
-                
-                # 🛡️ AUDITORIA (campos corretos do modelo)
                 'created_at': datetime.now(),
-                'updated_at': datetime.now(), 
+                'updated_at': datetime.now(),
                 'created_by': 'Sistema Odoo REALMENTE Otimizado',
                 'updated_by': 'Sistema Odoo REALMENTE Otimizado'
             }
-            
-        except Exception as e:
-            logger.error(f"Erro no mapeamento otimizado do item: {e}")
-            return {}
     
     def _sanitizar_dados_carteira(self, dados_carteira: List[Dict]) -> List[Dict]:
         """
@@ -549,6 +635,35 @@ class CarteiraService:
             # Campo booleano - garantir tipo correto
             if 'ativo' in item_sanitizado:
                 item_sanitizado['ativo'] = bool(item_sanitizado.get('ativo', True))
+            
+            # Tratar municípios com formato "Cidade (UF)"
+            campos_municipio = ['municipio', 'nome_cidade']
+            for campo_mun in campos_municipio:
+                if campo_mun in item_sanitizado and item_sanitizado[campo_mun]:
+                    municipio = str(item_sanitizado[campo_mun])
+                    if '(' in municipio and ')' in municipio:
+                        # Extrair cidade e estado
+                        partes = municipio.split('(')
+                        item_sanitizado[campo_mun] = partes[0].strip()
+                        if len(partes) > 1 and campo_mun == 'municipio':
+                            # Atualizar o campo estado se for o município principal
+                            estado = partes[1].replace(')', '').strip()
+                            if len(estado) > 2:
+                                estado = estado[:2]
+                            item_sanitizado['estado'] = estado
+                        elif len(partes) > 1 and campo_mun == 'nome_cidade':
+                            # Atualizar cod_uf se for cidade de entrega
+                            uf = partes[1].replace(')', '').strip()
+                            if len(uf) > 2:
+                                uf = uf[:2]
+                            item_sanitizado['cod_uf'] = uf
+            
+            # Garantir que estado e cod_uf têm apenas 2 caracteres
+            for campo_uf in ['estado', 'cod_uf']:
+                if campo_uf in item_sanitizado and item_sanitizado[campo_uf]:
+                    valor_uf = str(item_sanitizado[campo_uf])
+                    if len(valor_uf) > 2:
+                        item_sanitizado[campo_uf] = valor_uf[:2]
             
             dados_sanitizados.append(item_sanitizado)
         

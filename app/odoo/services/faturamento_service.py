@@ -77,7 +77,7 @@ class FaturamentoService:
             
             # 3️⃣ BUSCAR TODOS OS CLIENTES (1 query)
             campos_cliente = [
-                'id', 'name', 'l10n_br_cnpj', 'l10n_br_municipio_id'
+                'id', 'name', 'l10n_br_cnpj', 'l10n_br_municipio_id', 'state_id'
             ]
             
             logger.info(f"🔍 Query 2/5: Buscando {len(partner_ids)} clientes...")
@@ -351,6 +351,10 @@ class FaturamentoService:
                 }
             
             logger.info(f"📊 Processando {len(dados_faturamento)} registros do Odoo...")
+            
+            # Sanitizar dados antes de processar
+            logger.info("🧹 Sanitizando dados de faturamento...")
+            dados_faturamento = self._sanitizar_dados_faturamento(dados_faturamento)
             
             # 📊 ESTATÍSTICAS
             contador_novos = 0
@@ -729,13 +733,39 @@ class FaturamentoService:
                     return campo[indice]
                 return ''
             
-            # Extrair estado do município (tratamento especial)
-            estado_nome = ''
-            if municipio.get('state_id'):
-                # Para estado, geralmente o formato é ['SP', 'São Paulo'] 
-                estado_info = municipio['state_id']
-                if isinstance(estado_info, list) and len(estado_info) > 0:
-                    estado_nome = estado_info[0]  # Código do estado (ex: 'SP')
+            # Extrair município e estado do formato "Cidade (UF)"
+            municipio_nome = ''
+            estado_uf = ''
+            
+            if municipio.get('name'):
+                # Município vem como "Fortaleza (CE)" ou "São Paulo (SP)"
+                municipio_completo = municipio['name']
+                if '(' in municipio_completo and ')' in municipio_completo:
+                    # Separar cidade e UF
+                    partes = municipio_completo.split('(')
+                    municipio_nome = partes[0].strip()
+                    # Pegar apenas os 2 caracteres da UF
+                    uf_com_parenteses = partes[1]
+                    estado_uf = uf_com_parenteses.replace(')', '').strip()[:2]
+                else:
+                    municipio_nome = municipio_completo
+            
+            # Tratar incoterm - pegar apenas o código entre colchetes
+            incoterm_codigo = ''
+            if fatura.get('invoice_incoterm_id'):
+                incoterm_info = fatura['invoice_incoterm_id']
+                if isinstance(incoterm_info, list) and len(incoterm_info) > 1:
+                    # Formato: [6, '[CIF] COST, INSURANCE AND FREIGHT']
+                    incoterm_texto = incoterm_info[1]
+                    if '[' in incoterm_texto and ']' in incoterm_texto:
+                        # Extrair código entre colchetes
+                        inicio = incoterm_texto.find('[')
+                        fim = incoterm_texto.find(']')
+                        if inicio >= 0 and fim > inicio:
+                            incoterm_codigo = incoterm_texto[inicio+1:fim]
+                    else:
+                        # Usar o texto todo mas truncar se necessário
+                        incoterm_codigo = incoterm_texto[:20]
             
             # Mapear TODOS os campos de faturamento
             item_mapeado = {
@@ -748,12 +778,12 @@ class FaturamentoService:
                 # 👥 DADOS DO CLIENTE
                 'cnpj_cliente': cliente.get('l10n_br_cnpj', ''),
                 'nome_cliente': cliente.get('name', ''),
-                'municipio': municipio.get('name', ''),
-                'estado': estado_nome,
+                'municipio': municipio_nome,
+                'estado': estado_uf,
                 
                 # 🏢 DADOS COMERCIAIS
                 'vendedor': usuario.get('name', ''),
-                'incoterm': extrair_relacao(fatura.get('invoice_incoterm_id'), 1),
+                'incoterm': incoterm_codigo,
                 
                 # 📦 DADOS DO PRODUTO
                 'cod_produto': produto.get('default_code', ''),
@@ -779,6 +809,66 @@ class FaturamentoService:
         except Exception as e:
             logger.error(f"Erro no mapeamento faturamento otimizado do item: {e}")
             return {}
+    
+    def _sanitizar_dados_faturamento(self, dados_faturamento: List[Dict]) -> List[Dict]:
+        """
+        Sanitiza e corrige dados de faturamento antes da inserção
+        Garante que campos não excedam os limites do banco
+        """
+        dados_sanitizados = []
+        
+        for item in dados_faturamento:
+            item_sanitizado = item.copy()
+            
+            # Campos com limite de 20 caracteres
+            campos_varchar20 = ['numero_nf', 'cnpj_cliente', 'incoterm', 'origem', 'status_nf']
+            for campo in campos_varchar20:
+                if campo in item_sanitizado and item_sanitizado[campo]:
+                    valor = str(item_sanitizado[campo])
+                    if len(valor) > 20:
+                        logger.warning(f"Campo {campo} truncado de {len(valor)} para 20 caracteres: {valor}")
+                        item_sanitizado[campo] = valor[:20]
+            
+            # Tratar município com formato "Cidade (UF)"
+            if 'municipio' in item_sanitizado and item_sanitizado['municipio']:
+                municipio = str(item_sanitizado['municipio'])
+                if '(' in municipio and ')' in municipio:
+                    # Extrair cidade e estado
+                    partes = municipio.split('(')
+                    item_sanitizado['municipio'] = partes[0].strip()
+                    if len(partes) > 1:
+                        estado = partes[1].replace(')', '').strip()
+                        # Garantir que estado tem apenas 2 caracteres
+                        if len(estado) > 2:
+                            estado = estado[:2]
+                        item_sanitizado['estado'] = estado
+            
+            # Garantir que estado é string de 2 caracteres
+            if 'estado' in item_sanitizado:
+                estado_valor = item_sanitizado['estado']
+                if isinstance(estado_valor, (int, float)):
+                    # Se for número, limpar
+                    item_sanitizado['estado'] = ''
+                elif estado_valor and len(str(estado_valor)) > 2:
+                    item_sanitizado['estado'] = str(estado_valor)[:2]
+            
+            # Garantir que incoterm específico cabe no campo
+            if 'incoterm' in item_sanitizado and item_sanitizado['incoterm']:
+                incoterm = str(item_sanitizado['incoterm'])
+                # Remover prefixo [CIF] se necessário para caber
+                if len(incoterm) > 20:
+                    if '[' in incoterm and ']' in incoterm:
+                        # Pegar apenas o código entre colchetes
+                        inicio = incoterm.find('[')
+                        fim = incoterm.find(']')
+                        if inicio >= 0 and fim > inicio:
+                            item_sanitizado['incoterm'] = incoterm[inicio+1:fim]
+                    else:
+                        item_sanitizado['incoterm'] = incoterm[:20]
+            
+            dados_sanitizados.append(item_sanitizado)
+        
+        return dados_sanitizados
     
     def _calcular_peso_total(self, quantidade: float, peso_unitario: float) -> float:
         """

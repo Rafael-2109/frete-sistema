@@ -25,7 +25,7 @@ class EntregaMonitorada(db.Model):
 
     reagendar = db.Column(db.Boolean, default=False)
     motivo_reagendamento = db.Column(db.String(255), nullable=True)
-    data_agenda = db.Column(db.Date, nullable=True)  # <--- AQU
+    data_agenda = db.Column(db.Date, nullable=True)  # <--- AQUI
 
     observacao_operacional = db.Column(db.Text, nullable=True)
     pendencia_financeira = db.Column(db.Boolean, default=False)
