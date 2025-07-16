@@ -1033,4 +1033,6 @@ def exportar_dados_movimentacoes():
     except Exception as e:
         logger.error(f"Erro ao exportar dados: {str(e)}")
         flash(f'Erro ao exportar dados: {str(e)}', 'error')
-        return redirect(url_for('estoque.index')) 
+        return redirect(url_for('estoque.index'))
+
+ 

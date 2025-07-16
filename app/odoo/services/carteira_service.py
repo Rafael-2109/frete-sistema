@@ -453,7 +453,7 @@ class CarteiraService:
                 return {
                     # 🔍 IDENTIFICAÇÃO
                     'num_pedido': pedido.get('name', ''),
-                    'cod_produto': extrair_relacao(linha.get('product_id'), 1),
+                    'cod_produto': produto.get('default_code', ''),  # Código do produto, não nome
                     'pedido_cliente': pedido.get('l10n_br_pedido_compra', ''),
                     
                     # 📅 DATAS
@@ -591,6 +591,19 @@ class CarteiraService:
                         logger.warning(f"Campo {campo} truncado de {len(valor)} para 50 caracteres: {valor}")
                         item_sanitizado[campo] = valor[:50]
             
+            # ⚠️ CAMPOS COM LIMITE DE 20 CARACTERES (críticos)
+            campos_varchar20 = [
+                'unid_medida_produto', 'incoterm', 'cnpj_cpf', 'cnpj_endereco_ent',
+                'endereco_ent', 'telefone_endereco_ent', 'cep_endereco_ent'
+            ]
+            
+            for campo in campos_varchar20:
+                if campo in item_sanitizado and item_sanitizado[campo]:
+                    valor = str(item_sanitizado[campo])
+                    if len(valor) > 20:
+                        logger.warning(f"Campo {campo} truncado de {len(valor)} para 20 caracteres: {valor}")
+                        item_sanitizado[campo] = valor[:20]
+            
             # Campos que DEVEM ser texto (não podem ser boolean)
             campos_texto = [
                 'observ_ped_1', 'num_pedido', 'cod_produto', 'pedido_cliente',
@@ -669,12 +682,40 @@ class CarteiraService:
                                 uf = uf[:2]
                             item_sanitizado['cod_uf'] = uf
             
-            # Garantir que estado e cod_uf têm apenas 2 caracteres
-            for campo_uf in ['estado', 'cod_uf']:
-                if campo_uf in item_sanitizado and item_sanitizado[campo_uf]:
-                    valor_uf = str(item_sanitizado[campo_uf])
+            # ⚠️ CAMPOS COM LIMITE DE 2 CARACTERES (UF)
+            campos_varchar2 = ['estado', 'cod_uf']
+            
+            for campo in campos_varchar2:
+                if campo in item_sanitizado and item_sanitizado[campo]:
+                    valor_uf = str(item_sanitizado[campo])
                     if len(valor_uf) > 2:
-                        item_sanitizado[campo_uf] = valor_uf[:2]
+                        logger.warning(f"Campo {campo} truncado de {len(valor_uf)} para 2 caracteres: {valor_uf}")
+                        item_sanitizado[campo] = valor_uf[:2]
+            
+            # ⚠️ CAMPOS COM LIMITE DE 10 CARACTERES
+            campos_varchar10 = ['cliente_nec_agendamento', 'cep_endereco_ent']
+            
+            for campo in campos_varchar10:
+                if campo in item_sanitizado and item_sanitizado[campo]:
+                    valor = str(item_sanitizado[campo])
+                    if len(valor) > 10:
+                        logger.warning(f"Campo {campo} truncado de {len(valor)} para 10 caracteres: {valor}")
+                        item_sanitizado[campo] = valor[:10]
+            
+            # ⚠️ CAMPOS COM LIMITE DE 100 CARACTERES
+            campos_varchar100 = [
+                'pedido_cliente', 'raz_social_red', 'municipio', 'vendedor', 'equipe_vendas',
+                'embalagem_produto', 'materia_prima_produto', 'categoria_produto',
+                'cond_pgto_pedido', 'forma_pgto_pedido', 'nome_cidade', 'bairro_endereco_ent',
+                'roteirizacao', 'created_by', 'updated_by'
+            ]
+            
+            for campo in campos_varchar100:
+                if campo in item_sanitizado and item_sanitizado[campo]:
+                    valor = str(item_sanitizado[campo])
+                    if len(valor) > 100:
+                        logger.warning(f"Campo {campo} truncado de {len(valor)} para 100 caracteres: {valor}")
+                        item_sanitizado[campo] = valor[:100]
             
             dados_sanitizados.append(item_sanitizado)
         

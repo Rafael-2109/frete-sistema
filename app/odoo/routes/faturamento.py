@@ -380,9 +380,10 @@ def sincronizar_faturamento():
                         embarques = sync_stats.get('embarques_revalidados', 0)
                         nfs_embarques = sync_stats.get('nfs_embarques_sincronizadas', 0)
                         fretes = sync_stats.get('fretes_lancados', 0)
+                        relatorios = sync_stats.get('relatorios_consolidados', 0)
                         
                         flash(f"🔄 Sincronizações: {entregas} entregas, {embarques} embarques re-validados, "
-                              f"{nfs_embarques} NFs de embarques, {fretes} fretes lançados", 'info')
+                              f"{nfs_embarques} NFs de embarques, {fretes} fretes lançados, {relatorios} relatórios consolidados", 'info')
                         
                         erros_sync = sync_stats.get('erros_sincronizacao', [])
                         if erros_sync:

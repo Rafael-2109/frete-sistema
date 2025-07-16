@@ -289,29 +289,27 @@ class FaturamentoService:
                 if nf_key not in nfs_consolidadas:
                     nfs_consolidadas[nf_key] = {
                         'numero_nf': numero_nf,
-                        'nome_cliente': dado.get('nome_cliente'),
-                        'cnpj_cliente': dado.get('cnpj_cliente'),
-                        'data_fatura': dado.get('data_fatura'),
+                        'nome_cliente': dado.get('nome_cliente'),  # Campo correto
+                        'cnpj_cliente': dado.get('cnpj_cliente'),  # Campo correto
+                        'data_fatura': dado.get('data_fatura'),   # Campo correto
                         'valor_total': 0,
-                        'origem': dado.get('origem'),
-                        'incoterm': dado.get('incoterm'),
-                        'vendedor': dado.get('vendedor'),
-                        'municipio': dado.get('municipio'),
-                        'status': dado.get('status'),
-                        'itens': []
+                        'origem': dado.get('origem'),             # Campo correto
+                        'incoterm': dado.get('incoterm'),         # Campo correto
+                        'vendedor': dado.get('vendedor'),         # Campo correto
+                        'municipio': dado.get('municipio'),       # Campo correto
+                        'status': dado.get('status_nf'),          # Campo correto: status_nf
+                        'peso_total': 0
                     }
                 
-                # Adicionar valor do item ao total
-                valor_item = dado.get('valor_total_item_nf') or 0
+                # Adicionar valor do item ao total - usar campo correto
+                valor_item = dado.get('valor_produto_faturado') or 0  # Campo correto
                 nfs_consolidadas[nf_key]['valor_total'] += valor_item
                 
-                # Adicionar item
-                nfs_consolidadas[nf_key]['itens'].append({
-                    'codigo_produto': dado.get('codigo_produto'),
-                    'nome_produto': dado.get('nome_produto'),
-                    'quantidade': dado.get('quantidade'),
-                    'valor_total': valor_item
-                })
+                # Somar peso total da NF
+                peso_item = (dado.get('peso_unitario_produto') or 0) * (dado.get('qtd_produto_faturado') or 0)
+                if 'peso_total' not in nfs_consolidadas[nf_key]:
+                    nfs_consolidadas[nf_key]['peso_total'] = 0
+                nfs_consolidadas[nf_key]['peso_total'] += peso_item
                 
                 total_consolidado += 1
             
@@ -337,6 +335,7 @@ class FaturamentoService:
                         relatorio.vendedor = dados_nf['vendedor']
                         relatorio.municipio = dados_nf['municipio']
                         relatorio.status_faturamento = dados_nf['status']
+                        relatorio.peso_total = dados_nf['peso_total']
                         relatorio.data_importacao = datetime.now()
                         relatorio.origem_importacao = 'odoo_integracao'
                         
@@ -345,6 +344,7 @@ class FaturamentoService:
                     else:
                         # Atualizar registro existente
                         existe.valor_total = dados_nf['valor_total']
+                        existe.peso_total = dados_nf['peso_total']
                         existe.status_faturamento = dados_nf['status']
                         existe.data_importacao = datetime.now()
                         existe.origem_importacao = 'odoo_integracao'
@@ -508,6 +508,21 @@ class FaturamentoService:
             logger.info(f"✅ Sincronização principal concluída: {contador_novos} novos, {contador_atualizados} atualizados")
             
             # ============================================
+            # 🔄 CONSOLIDAÇÃO PARA RELATORIOFATURAMENTOIMPORTADO
+            # ============================================
+            
+            # 📋 CONSOLIDAR dados para RelatorioFaturamentoImportado
+            logger.info("🔄 Iniciando consolidação para RelatorioFaturamentoImportado...")
+            relatorios_consolidados = 0
+            try:
+                resultado_consolidacao = self._consolidar_faturamento(dados_faturamento)
+                relatorios_consolidados = resultado_consolidacao.get('total_relatorio_importado', 0)
+                logger.info(f"✅ Consolidação concluída: {relatorios_consolidados} relatórios processados")
+            except Exception as e:
+                logger.error(f"❌ Erro na consolidação: {e}")
+                erros.append(f"Erro na consolidação RelatorioFaturamentoImportado: {e}")
+            
+            # ============================================
             # 🔄 SINCRONIZAÇÕES INTEGRADAS (4 MÉTODOS)
             # ============================================
             
@@ -517,6 +532,7 @@ class FaturamentoService:
                 'embarques_revalidados': 0,
                 'nfs_embarques_sincronizadas': 0,
                 'fretes_lancados': 0,
+                'relatorios_consolidados': relatorios_consolidados,
                 'erros_sincronizacao': []
             }
             
@@ -613,6 +629,7 @@ class FaturamentoService:
             logger.info(f"✅ SINCRONIZAÇÃO INCREMENTAL COMPLETA CONCLUÍDA:")
             logger.info(f"   ➕ {contador_novos} novos registros inseridos")
             logger.info(f"   ✏️ {contador_atualizados} registros atualizados")
+            logger.info(f"   📋 {stats_sincronizacao['relatorios_consolidados']} relatórios consolidados")
             logger.info(f"   🔄 {stats_sincronizacao['entregas_sincronizadas']} entregas sincronizadas")
             logger.info(f"   📦 {stats_sincronizacao['embarques_revalidados']} embarques re-validados")
             logger.info(f"   🚚 {stats_sincronizacao['nfs_embarques_sincronizadas']} NFs de embarques sincronizadas")
@@ -629,7 +646,7 @@ class FaturamentoService:
                 'tempo_execucao': tempo_execucao,
                 'erros': erros + stats_sincronizacao['erros_sincronizacao'],
                 'sincronizacoes': stats_sincronizacao,
-                'mensagem': f'🚀 Sincronização incremental completa: {contador_novos} novos, {contador_atualizados} atualizados + {stats_sincronizacao["entregas_sincronizadas"]} entregas + {stats_sincronizacao["fretes_lancados"]} fretes em {tempo_execucao:.2f}s'
+                'mensagem': f'🚀 Sincronização incremental completa: {contador_novos} novos, {contador_atualizados} atualizados, {stats_sincronizacao["relatorios_consolidados"]} relatórios consolidados + {stats_sincronizacao["fretes_lancados"]} fretes em {tempo_execucao:.2f}s'
             }
             
         except Exception as e:
@@ -863,10 +880,19 @@ class FaturamentoService:
                 if estado_uf and (len(estado_uf) != 2 or not estado_uf.isalpha()):
                     estado_uf = ''
             
-            # Incoterm - buscar do cache ou relação
+            # Incoterm - buscar do cache ou relação e extrair código entre colchetes
             incoterm_codigo = ''
             if fatura.get('invoice_incoterm_id'):
-                incoterm_codigo = extrair_relacao(fatura.get('invoice_incoterm_id'), 1)
+                incoterm_texto = extrair_relacao(fatura.get('invoice_incoterm_id'), 1)
+                if incoterm_texto and '[' in incoterm_texto and ']' in incoterm_texto:
+                    # Extrair apenas o código entre colchetes: [CIF] → CIF
+                    inicio = incoterm_texto.find('[')
+                    fim = incoterm_texto.find(']')
+                    if inicio >= 0 and fim > inicio:
+                        incoterm_codigo = incoterm_texto[inicio+1:fim]
+                else:
+                    # Se não tem colchetes, usar o texto completo mas truncar
+                    incoterm_codigo = incoterm_texto[:20] if incoterm_texto else ''
             
             # Mapear TODOS os campos de faturamento
             item_mapeado = {
