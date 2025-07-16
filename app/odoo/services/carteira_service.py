@@ -67,7 +67,7 @@ class CarteiraService:
             
             # Primeiro buscar dados brutos do Odoo
             domain = [('qty_saldo', '>', 0)]  # Carteira pendente
-            campos_basicos = ['id', 'order_id', 'product_id', 'product_uom_qty', 'qty_saldo', 'qty_cancelado', 'price_unit']
+            campos_basicos = ['id', 'order_id', 'product_id', 'product_uom', 'product_uom_qty', 'qty_saldo', 'qty_cancelado', 'price_unit']
             
             dados_odoo_brutos = self.connection.search_read('sale.order.line', domain, campos_basicos)
             
@@ -406,17 +406,8 @@ class CarteiraService:
             if pedido.get('partner_shipping_id'):
                 partner_id = pedido['partner_shipping_id'][0] if isinstance(pedido['partner_shipping_id'], list) else pedido['partner_shipping_id']
                 
-                # Buscar detalhes do endereço de entrega  
-                enderecos = self.connection.search_read(
-                    'res.partner',
-                    [('id', '=', partner_id)],
-                    ['street', 'l10n_br_endereco_numero', 'l10n_br_endereco_bairro', 
-                     'l10n_br_cnpj', 'city', 'l10n_br_municipio_id', 'state_id',
-                     'l10n_br_cep', 'phone', 'name']
-                )
-                
-                if enderecos:
-                    endereco = enderecos[0]
+                # Usar o cache de partners já carregado (evita query extra)
+                endereco = cache_partners.get(partner_id, {})
             
             # Tratar endereço de entrega - mesmo formato "Cidade (UF)"
             municipio_entrega_nome = ''
@@ -460,16 +451,16 @@ class CarteiraService:
                     # 🔍 IDENTIFICAÇÃO
                     'num_pedido': pedido.get('name', ''),
                     'cod_produto': extrair_relacao(linha.get('product_id'), 1),
-                    'pedido_cliente': pedido.get('name', ''),
+                    'pedido_cliente': pedido.get('l10n_br_pedido_compra', ''),
                     
                     # 📅 DATAS
-                    'data_pedido': self._format_date(pedido.get('date_order')),
+                    'data_pedido': self._format_date(pedido.get('create_date')),
                     'data_atual_pedido': self._format_date(pedido.get('date_order')),
                     'data_entrega_pedido': self._format_date(pedido.get('commitment_date')),
                     
                     # 💼 INFORMAÇÕES DO CLIENTE
                     'cnpj_cpf': cliente.get('l10n_br_cnpj', ''),
-                    'raz_social': cliente.get('name', ''),
+                    'raz_social': cliente.get('l10n_br_razao_social', ''),
                     'raz_social_red': cliente.get('name', '')[:30],  # Versão reduzida
                     'municipio': municipio_nome,
                     'estado': estado_uf,
@@ -479,8 +470,9 @@ class CarteiraService:
                     # 📦 INFORMAÇÕES DO PRODUTO
                     'nome_produto': extrair_relacao(linha.get('product_id'), 1),
                     'unid_medida_produto': extrair_relacao(linha.get('product_uom'), 1),
-                    'embalagem_produto': '',  # Buscar de outro lugar se disponível
-                    'categoria_produto': '',  # Buscar categoria se disponível
+                    'embalagem_produto': categoria.get('name', ''),  # Categoria do produto
+                    'materia_prima_produto': categoria_parent.get('name', ''),  # Sub categoria
+                    'categoria_produto': categoria_grandparent.get('name', ''),  # Categoria principal
                     
                     # 📊 QUANTIDADES E VALORES
                     'qtd_produto_pedido': linha.get('product_uom_qty', 0),
@@ -502,7 +494,7 @@ class CarteiraService:
                     'cnpj_endereco_ent': endereco.get('l10n_br_cnpj', ''),
                     'nome_cidade': municipio_entrega_nome,
                     'cod_uf': estado_entrega_uf,
-                    'cep_endereco_ent': endereco.get('l10n_br_cep', ''),
+                    'cep_endereco_ent': endereco.get('zip', ''),  # CEP usa campo 'zip'
                     'bairro_endereco_ent': endereco.get('l10n_br_endereco_bairro', ''),
                     'rua_endereco_ent': endereco.get('street', ''),
                     'endereco_ent': endereco.get('l10n_br_endereco_numero', ''),

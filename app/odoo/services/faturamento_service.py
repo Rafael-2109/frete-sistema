@@ -41,6 +41,8 @@ class FaturamentoService:
         1. Coletar todos os IDs necessários
         2. Fazer 5 queries em lote  
         3. JOIN em memória
+        
+        ✅ NOVA VALIDAÇÃO: Filtra linhas vazias automaticamente
         """
         try:
             logger.info("🚀 Processando faturamento com método REALMENTE otimizado...")
@@ -48,12 +50,42 @@ class FaturamentoService:
             if not dados_odoo_brutos:
                 return []
             
+            # 🔍 FILTRAR LINHAS VÁLIDAS PRIMEIRO
+            logger.info(f"📊 Filtrando {len(dados_odoo_brutos)} linhas brutas...")
+            dados_validos = []
+            linhas_descartadas = 0
+            
+            for linha in dados_odoo_brutos:
+                # ✅ VALIDAÇÃO OBRIGATÓRIA: Linha deve ter product_id válido
+                if not linha.get('product_id') or not isinstance(linha.get('product_id'), list):
+                    linhas_descartadas += 1
+                    continue
+                    
+                # ✅ VALIDAÇÃO: Deve ter move_id válido
+                if not linha.get('move_id') or not isinstance(linha.get('move_id'), list):
+                    linhas_descartadas += 1
+                    continue
+                    
+                # ✅ VALIDAÇÃO: Deve ter quantidade maior que 0
+                quantidade = linha.get('quantity', 0)
+                if not quantidade or quantidade <= 0:
+                    linhas_descartadas += 1
+                    continue
+                
+                dados_validos.append(linha)
+            
+            logger.info(f"📈 Resultado filtragem: {len(dados_validos)} válidas, {linhas_descartadas} descartadas")
+            
+            if not dados_validos:
+                logger.warning("⚠️ Nenhuma linha válida encontrada após filtragem")
+                return []
+            
             # 1️⃣ COLETAR TODOS OS IDs NECESSÁRIOS
             move_ids = set()
             partner_ids = set()
             product_ids = set()
             
-            for linha in dados_odoo_brutos:
+            for linha in dados_validos:
                 if linha.get('move_id'):
                     move_ids.add(linha['move_id'][0])
                 if linha.get('partner_id'):
@@ -65,7 +97,8 @@ class FaturamentoService:
             
             # 2️⃣ BUSCAR TODAS AS FATURAS (1 query)
             campos_fatura = [
-                'id', 'name', 'invoice_origin', 'state', 'invoice_user_id', 'invoice_incoterm_id'
+                'id', 'name', 'invoice_origin', 'state', 'invoice_user_id', 'invoice_incoterm_id',
+                'l10n_br_numero_nota_fiscal', 'date', 'l10n_br_cnpj', 'invoice_partner_display_name'
             ]
             
             logger.info("🔍 Query 1/5: Buscando faturas...")
@@ -88,7 +121,7 @@ class FaturamentoService:
             )
             
             # 4️⃣ BUSCAR TODOS OS PRODUTOS (1 query)
-            campos_produto = ['id', 'name', 'default_code', 'weight']
+            campos_produto = ['id', 'name', 'code', 'weight', 'product_tmpl_id']  # Adicionar template_id
             
             logger.info(f"🔍 Query 3/5: Buscando {len(product_ids)} produtos...")
             produtos = self.connection.search_read(
@@ -97,7 +130,24 @@ class FaturamentoService:
                 campos_produto
             )
             
-            # 5️⃣ BUSCAR MUNICÍPIOS DOS CLIENTES (1 query)
+            # 5️⃣ BUSCAR TODOS OS TEMPLATES DOS PRODUTOS (1 query)
+            template_ids = set()
+            for produto in produtos:
+                if produto.get('product_tmpl_id'):
+                    template_ids.add(produto['product_tmpl_id'][0])
+            
+            templates = []
+            if template_ids:
+                campos_template = ['id', 'name', 'default_code', 'gross_weight']
+                
+                logger.info(f"🔍 Query 4/6: Buscando {len(template_ids)} templates...")
+                templates = self.connection.search_read(
+                    'product.template',
+                    [('id', 'in', list(template_ids))],
+                    campos_template
+                )
+            
+            # 6️⃣ BUSCAR MUNICÍPIOS DOS CLIENTES (1 query)
             municipio_ids = set()
             for cliente in clientes:
                 if cliente.get('l10n_br_municipio_id'):
@@ -112,7 +162,7 @@ class FaturamentoService:
                     ['id', 'name', 'state_id']
                 )
             
-            # 6️⃣ BUSCAR USUÁRIOS/VENDEDORES (1 query)
+            # 7️⃣ BUSCAR USUÁRIOS/VENDEDORES (1 query)
             user_ids = set()
             for fatura in faturas:
                 if fatura.get('invoice_user_id'):
@@ -127,31 +177,38 @@ class FaturamentoService:
                     ['id', 'name']
                 )
             
-            # 7️⃣ CRIAR CACHES PARA JOIN EM MEMÓRIA
+            # 8️⃣ CRIAR CACHES PARA JOIN EM MEMÓRIA
             cache_faturas = {f['id']: f for f in faturas}
             cache_clientes = {c['id']: c for c in clientes}
             cache_produtos = {p['id']: p for p in produtos}
+            cache_templates = {t['id']: t for t in templates}
             cache_municipios = {m['id']: m for m in municipios}
             cache_usuarios = {u['id']: u for u in usuarios}
             
             logger.info("🧠 Caches criados, fazendo JOIN em memória...")
             
-            # 8️⃣ PROCESSAR DADOS COM JOIN EM MEMÓRIA
+            # 9️⃣ PROCESSAR DADOS COM JOIN EM MEMÓRIA
             dados_processados = []
             
-            for linha in dados_odoo_brutos:
+            for linha in dados_validos:  # ✅ Usar dados_validos ao invés de dados_odoo_brutos
                 try:
                     item_mapeado = self._mapear_item_faturamento_otimizado(
                         linha, cache_faturas, cache_clientes, cache_produtos,
-                        cache_municipios, cache_usuarios
+                        cache_templates, cache_municipios, cache_usuarios
                     )
+                    
+                    # ✅ VALIDAÇÃO FINAL: Item deve ter campos essenciais
+                    if not item_mapeado.get('cod_produto') or not item_mapeado.get('numero_nf'):
+                        logger.debug(f"Item descartado na validação final: {item_mapeado.get('cod_produto')} / {item_mapeado.get('numero_nf')}")
+                        continue
+                    
                     dados_processados.append(item_mapeado)
                     
                 except Exception as e:
                     logger.warning(f"Erro ao mapear item faturamento {linha.get('id')}: {e}")
                     continue
             
-            total_queries = 5
+            total_queries = 6  # Agora são 6 queries
             logger.info(f"✅ OTIMIZAÇÃO FATURAMENTO COMPLETA:")
             logger.info(f"   📊 {len(dados_processados)} itens processados")
             logger.info(f"   ⚡ {total_queries} queries executadas (vs {len(dados_odoo_brutos)*17} do método antigo)")
@@ -611,7 +668,7 @@ class FaturamentoService:
             
             campos_basicos = [
                 'id', 'move_id', 'partner_id', 'product_id', 
-                'quantity', 'price_unit', 'price_total', 'date'
+                'quantity', 'price_unit', 'price_total', 'date', 'l10n_br_total_nfe'
             ]
             
             logger.info("📋 Buscando linhas de faturamento...")
@@ -656,11 +713,11 @@ class FaturamentoService:
                 'dados': dados_processados,
                 'total_registros': len(dados_processados),
                 'estatisticas': {
-                    'queries_executadas': 5,
+                    'queries_executadas': 6,  # Agora são 6 queries
                     'total_linhas': len(dados_processados),
                     'linhas_brutas': len(dados_odoo_brutos)
                 },
-                'mensagem': f'⚡ {len(dados_processados)} registros faturamento (método realmente otimizado)'
+                'mensagem': f'⚡ {len(dados_processados)} registros faturamento (método realmente otimizado com 6 queries)'
             }
             
         except Exception as e:
@@ -703,7 +760,7 @@ class FaturamentoService:
     # 🛠️ MÉTODOS AUXILIARES E DE PROCESSAMENTO
     # ============================================
     
-    def _mapear_item_faturamento_otimizado(self, linha, cache_faturas, cache_clientes, cache_produtos, cache_municipios, cache_usuarios):
+    def _mapear_item_faturamento_otimizado(self, linha, cache_faturas, cache_clientes, cache_produtos, cache_templates, cache_municipios, cache_usuarios):
         """
         🚀 MAPEAMENTO FATURAMENTO OTIMIZADO - JOIN em memória usando caches
         Mapeia TODOS os campos de faturamento usando dados já carregados
@@ -718,6 +775,10 @@ class FaturamentoService:
             fatura = cache_faturas.get(move_id, {})
             cliente = cache_clientes.get(partner_id, {})
             produto = cache_produtos.get(product_id, {})
+            
+            # Template do produto
+            template_id = produto.get('product_tmpl_id', [None])[0] if produto.get('product_tmpl_id') else None
+            template = cache_templates.get(template_id, {})
             
             # Município do cliente
             municipio_id = cliente.get('l10n_br_municipio_id', [None])[0] if cliente.get('l10n_br_municipio_id') else None
@@ -770,14 +831,14 @@ class FaturamentoService:
             # Mapear TODOS os campos de faturamento
             item_mapeado = {
                 # 📄 DADOS DA NOTA FISCAL
-                'numero_nf': fatura.get('name', ''),
-                'data_fatura': self._parse_date(linha.get('date')),
+                'numero_nf': fatura.get('l10n_br_numero_nota_fiscal'),
+                'data_fatura': self._parse_date(fatura.get('date')),  # Usar date da fatura via cache
                 'origem': fatura.get('invoice_origin', ''),
                 'status_nf': self._mapear_status(fatura.get('state', '')),
                 
                 # 👥 DADOS DO CLIENTE
-                'cnpj_cliente': cliente.get('l10n_br_cnpj', ''),
-                'nome_cliente': cliente.get('name', ''),
+                'cnpj_cliente': fatura.get('l10n_br_cnpj') or cliente.get('l10n_br_cnpj', ''),
+                'nome_cliente': fatura.get('invoice_partner_display_name') or cliente.get('name', ''),
                 'municipio': municipio_nome,
                 'estado': estado_uf,
                 
@@ -786,13 +847,13 @@ class FaturamentoService:
                 'incoterm': incoterm_codigo,
                 
                 # 📦 DADOS DO PRODUTO
-                'cod_produto': produto.get('default_code', ''),
-                'nome_produto': produto.get('name', ''),
-                'peso_unitario_produto': produto.get('weight', 0),
+                'cod_produto': template.get('default_code', ''),  # Do template
+                'nome_produto': template.get('name', ''),  # Do template
+                'peso_unitario_produto': template.get('gross_weight', 0),  # Do template
                 
                 # 📊 QUANTIDADES E VALORES
                 'qtd_produto_faturado': linha.get('quantity', 0),
-                'valor_produto_faturado': linha.get('price_total', 0),
+                'valor_produto_faturado': linha.get('l10n_br_total_nfe') or linha.get('price_total', 0),
                 'preco_produto_faturado': linha.get('price_unit', 0),
                 
                 # 📏 CAMPOS CALCULADOS
