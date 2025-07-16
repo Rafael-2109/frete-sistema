@@ -604,20 +604,25 @@ def listar_faturamento_produtos():
     data_ate = request.args.get('data_ate', '')
     municipio = request.args.get('municipio', '')
     
-    # Paginação
+    # Paginação - CORRIGIDO
     try:
         page = int(request.args.get('page', '1'))
     except (ValueError, TypeError):
         page = 1
-    per_page = 200  # 200 itens por página conforme solicitado
+    per_page = int(request.args.get('per_page', '50'))  # ✅ CONFIGURÁVEL - padrão 50
+    if per_page not in [20, 50, 100, 200]:  # Limitar opções válidas
+        per_page = 50
     
     try:
-        from sqlalchemy import inspect
+        from sqlalchemy import inspect, func
         inspector = inspect(db.engine)
         
         if inspector.has_table('faturamento_produto'):
             # Query base - CORRIGIDO: sem filtro ativo (campo não existe)
             query = FaturamentoProduto.query
+            
+            # ✅ CONTAR TOTAL ANTES DOS FILTROS para baseline
+            total_registros_sistema = query.count()
             
             # Aplicar filtros
             if nome_cliente:
@@ -648,10 +653,19 @@ def listar_faturamento_produtos():
                 except ValueError:
                     pass
             
+            # ✅ CONTAR REGISTROS APÓS FILTROS
+            total_registros_filtrados = query.count()
+            
             # Ordenação e paginação
             faturamentos = query.order_by(FaturamentoProduto.data_fatura.desc()).paginate(
                 page=page, per_page=per_page, error_out=False
             )
+            
+            # ✅ ESTATÍSTICAS CORRETAS baseadas na query filtrada (não apenas na página)
+            total_valor_faturado = query.with_entities(func.sum(FaturamentoProduto.valor_produto_faturado)).scalar() or 0
+            total_quantidade = query.with_entities(func.sum(FaturamentoProduto.qtd_produto_faturado)).scalar() or 0
+            total_peso = query.with_entities(func.sum(FaturamentoProduto.peso_total)).scalar() or 0  # ✅ PESO TOTAL ADICIONADO
+            produtos_unicos = query.with_entities(FaturamentoProduto.cod_produto).distinct().count()
             
             # Buscar opções dos filtros
             opcoes_estados = sorted(set(
@@ -670,42 +684,47 @@ def listar_faturamento_produtos():
             ))
         else:
             faturamentos = None
+            total_registros_sistema = 0
+            total_registros_filtrados = 0
+            total_valor_faturado = 0
+            total_quantidade = 0
+            produtos_unicos = 0
             opcoes_estados = []
             opcoes_incoterms = []
             opcoes_vendedores = []
     except Exception:
         faturamentos = None
+        total_registros_sistema = 0
+        total_registros_filtrados = 0
+        total_valor_faturado = 0
+        total_quantidade = 0
+        produtos_unicos = 0
         opcoes_estados = []
         opcoes_incoterms = []
         opcoes_vendedores = []
     
-    # Calcular estatísticas se há dados
-    total_valor_faturado = 0
-    total_quantidade = 0
-    produtos_unicos = 0
-    
-    if faturamentos and faturamentos.items:
-        total_valor_faturado = sum(p.valor_produto_faturado for p in faturamentos.items)
-        total_quantidade = sum(p.qtd_produto_faturado for p in faturamentos.items)
-        produtos_unicos = len(set(p.cod_produto for p in faturamentos.items))
-    
     return render_template('faturamento/listar_produtos.html',
-                         produtos=faturamentos.items if faturamentos else [],
-                         pagination=faturamentos if faturamentos else None,
-                         nome_cliente=nome_cliente,
-                         cod_produto=cod_produto,
-                         vendedor=vendedor,
-                         estado=estado,
-                         municipio=municipio,
-                         incoterm=incoterm,
-                         data_de=data_de,
-                         data_ate=data_ate,
-                         ufs_disponiveis=opcoes_estados,
-                         vendedores_disponiveis=opcoes_vendedores,
-                         incoterms_disponiveis=opcoes_incoterms,
+                         produtos=faturamentos,
+                         pagination=faturamentos,
+                         total_registros_sistema=total_registros_sistema,
+                         total_registros_filtrados=total_registros_filtrados,
                          total_valor_faturado=total_valor_faturado,
                          total_quantidade=total_quantidade,
-                         produtos_unicos=produtos_unicos)
+                         total_peso=total_peso,  # ✅ PESO TOTAL ADICIONADO
+                         produtos_unicos=produtos_unicos,
+                         filtros={
+                             'nome_cliente': nome_cliente,
+                             'cod_produto': cod_produto,
+                             'vendedor': vendedor,
+                             'estado': estado,
+                             'incoterm': incoterm,
+                             'data_de': data_de,
+                             'data_ate': data_ate,
+                             'municipio': municipio
+                         },
+                         opcoes_estados=opcoes_estados,
+                         opcoes_incoterms=opcoes_incoterms,
+                         opcoes_vendedores=opcoes_vendedores)
 
 @faturamento_bp.route('/produtos/api/estatisticas')
 @login_required

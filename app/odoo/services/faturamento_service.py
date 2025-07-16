@@ -110,7 +110,7 @@ class FaturamentoService:
             
             # 3️⃣ BUSCAR TODOS OS CLIENTES (1 query)
             campos_cliente = [
-                'id', 'name', 'l10n_br_cnpj', 'l10n_br_municipio_id', 'state_id'
+                'id', 'name', 'l10n_br_cnpj', 'l10n_br_municipio_id', 'state_id', 'user_id'
             ]
             
             logger.info(f"🔍 Query 2/5: Buscando {len(partner_ids)} clientes...")
@@ -162,11 +162,19 @@ class FaturamentoService:
                     ['id', 'name', 'state_id']
                 )
             
-            # 7️⃣ BUSCAR USUÁRIOS/VENDEDORES (1 query)
+            # 7️⃣ BUSCAR USUÁRIOS/VENDEDORES MELHORADO (1 query)
             user_ids = set()
+            
+            # Coletar IDs de vendedores de múltiplas fontes
             for fatura in faturas:
+                # Primeira opção: invoice_user_id da fatura
                 if fatura.get('invoice_user_id'):
                     user_ids.add(fatura['invoice_user_id'][0])
+            
+            # Segunda opção: user_id do cliente (res.partner)
+            for cliente in clientes:
+                if cliente.get('user_id'):
+                    user_ids.add(cliente['user_id'][0])
             
             usuarios = []
             if user_ids:
@@ -229,10 +237,11 @@ class FaturamentoService:
         
         status_map = {
             'draft': 'RASCUNHO',
-            'sent': 'ENVIADO',
+            'posted': 'ATIVO',
+            'cancel': 'CANCELADO',
             'sale': 'ATIVO',
             'done': 'ATIVO',
-            'cancel': 'CANCELADO'
+            'sent': 'ATIVO'
         }
         
         return status_map.get(status_odoo.lower(), 'ATIVO')
@@ -682,7 +691,7 @@ class FaturamentoService:
             else:
                 # ⚡ SINCRONIZAÇÃO LIMITADA para evitar timeouts
                 logger.info("🔄 Usando sincronização limitada...")
-                max_records = 2000  # Máximo 2000 registros para evitar timeout
+                max_records = 20000  # Máximo 20000 registros para evitar timeout
                 
                 dados_odoo_brutos = self.connection.search_read(
                     'account.move.line', 
@@ -784,10 +793,6 @@ class FaturamentoService:
             municipio_id = cliente.get('l10n_br_municipio_id', [None])[0] if cliente.get('l10n_br_municipio_id') else None
             municipio = cache_municipios.get(municipio_id, {})
             
-            # Vendedor da fatura
-            user_id = fatura.get('invoice_user_id', [None])[0] if fatura.get('invoice_user_id') else None
-            usuario = cache_usuarios.get(user_id, {})
-            
             # Função auxiliar para extrair valores de relações Many2one
             def extrair_relacao(campo, indice=1):
                 if isinstance(campo, list) and len(campo) > indice:
@@ -798,35 +803,70 @@ class FaturamentoService:
             municipio_nome = ''
             estado_uf = ''
             
-            if municipio.get('name'):
-                # Município vem como "Fortaleza (CE)" ou "São Paulo (SP)"
-                municipio_completo = municipio['name']
-                if '(' in municipio_completo and ')' in municipio_completo:
-                    # Separar cidade e UF
-                    partes = municipio_completo.split('(')
-                    municipio_nome = partes[0].strip()
-                    # Pegar apenas os 2 caracteres da UF
-                    uf_com_parenteses = partes[1]
-                    estado_uf = uf_com_parenteses.replace(')', '').strip()[:2]
-                else:
-                    municipio_nome = municipio_completo
+            # Primeiro tentar do município do Odoo
+            if municipio:
+                nome_municipio = municipio.get('name', '')
+                if nome_municipio:
+                    # Se o município tem formato "Cidade (UF)", extrair
+                    if '(' in nome_municipio and ')' in nome_municipio:
+                        partes = nome_municipio.split('(')
+                        municipio_nome = partes[0].strip()
+                        if len(partes) > 1:
+                            estado_uf = partes[1].replace(')', '').strip()
+                    else:
+                        municipio_nome = nome_municipio
+                        
+                        # Buscar estado via state_id do município
+                        if municipio.get('state_id'):
+                            estado_uf = municipio['state_id'][1][:2] if isinstance(municipio['state_id'], list) else str(municipio['state_id'])[:2]
             
-            # Tratar incoterm - pegar apenas o código entre colchetes
+            # Se ainda não tem município, tentar pegar do cliente diretamente
+            if not municipio_nome and cliente.get('l10n_br_municipio_id'):
+                municipio_nome = extrair_relacao(cliente.get('l10n_br_municipio_id'), 1)
+            
+            # Vendedor - MELHORADO: usar múltiplas fontes
+            vendedor_nome = ''
+            
+            # Primeira opção: buscar no cache de usuários
+            user_id = fatura.get('invoice_user_id', [None])[0] if fatura.get('invoice_user_id') else None
+            if user_id and user_id in cache_usuarios:
+                vendedor_nome = cache_usuarios[user_id].get('name', '')
+            
+            # Segunda opção: user_id do cliente (res.partner)
+            if not vendedor_nome:
+                cliente_user_id = cliente.get('user_id', [None])[0] if cliente.get('user_id') else None
+                if cliente_user_id and cliente_user_id in cache_usuarios:
+                    vendedor_nome = cache_usuarios[cliente_user_id].get('name', '')
+            
+            # Terceira opção: extrair direto da relação se ainda não achou
+            if not vendedor_nome and fatura.get('invoice_user_id'):
+                vendedor_nome = extrair_relacao(fatura.get('invoice_user_id'), 1)
+            
+            # Quarta opção: user_id do cliente como relação
+            if not vendedor_nome and cliente.get('user_id'):
+                vendedor_nome = extrair_relacao(cliente.get('user_id'), 1)
+            
+            # UF - MELHORADO: múltiplas fontes e validação
+            if not estado_uf:
+                # Tentar do state_id do cliente
+                if cliente.get('state_id'):
+                    state_info = cliente['state_id']
+                    if isinstance(state_info, list) and len(state_info) > 1:
+                        estado_nome = state_info[1]  # Nome do estado
+                        # Converter nome para UF
+                        if estado_nome:
+                            estado_uf = self._converter_estado_para_uf(estado_nome)
+                    elif isinstance(state_info, str):
+                        estado_uf = state_info[:2].upper()
+                
+                # Validar se UF é válida (2 caracteres, apenas letras)
+                if estado_uf and (len(estado_uf) != 2 or not estado_uf.isalpha()):
+                    estado_uf = ''
+            
+            # Incoterm - buscar do cache ou relação
             incoterm_codigo = ''
             if fatura.get('invoice_incoterm_id'):
-                incoterm_info = fatura['invoice_incoterm_id']
-                if isinstance(incoterm_info, list) and len(incoterm_info) > 1:
-                    # Formato: [6, '[CIF] COST, INSURANCE AND FREIGHT']
-                    incoterm_texto = incoterm_info[1]
-                    if '[' in incoterm_texto and ']' in incoterm_texto:
-                        # Extrair código entre colchetes
-                        inicio = incoterm_texto.find('[')
-                        fim = incoterm_texto.find(']')
-                        if inicio >= 0 and fim > inicio:
-                            incoterm_codigo = incoterm_texto[inicio+1:fim]
-                    else:
-                        # Usar o texto todo mas truncar se necessário
-                        incoterm_codigo = incoterm_texto[:20]
+                incoterm_codigo = extrair_relacao(fatura.get('invoice_incoterm_id'), 1)
             
             # Mapear TODOS os campos de faturamento
             item_mapeado = {
@@ -843,7 +883,7 @@ class FaturamentoService:
                 'estado': estado_uf,
                 
                 # 🏢 DADOS COMERCIAIS
-                'vendedor': usuario.get('name', ''),
+                'vendedor': vendedor_nome,
                 'incoterm': incoterm_codigo,
                 
                 # 📦 DADOS DO PRODUTO
@@ -939,6 +979,19 @@ class FaturamentoService:
             return float(quantidade) * float(peso_unitario)
         except (ValueError, TypeError):
             return 0.0
+
+    def _converter_estado_para_uf(self, estado_nome: str) -> str:
+        """
+        Converte o nome do estado para a sigla do UF.
+        """
+        estados_brasileiros = {
+            'ACRE': 'AC', 'ALAGOAS': 'AL', 'AMAPA': 'AP', 'AMAZONAS': 'AM', 'BAHIA': 'BA', 'CEARA': 'CE',
+            'DISTRITO FEDERAL': 'DF', 'ESPIRITO SANTO': 'ES', 'GOIAS': 'GO', 'MARANHAO': 'MA', 'MINAS GERAIS': 'MG',
+            'MATO GROSSO DO SUL': 'MS', 'MATO GROSSO': 'MT', 'PARA': 'PA', 'PARAIBA': 'PB', 'PERNAMBUCO': 'PE',
+            'PIAUI': 'PI', 'PARANA': 'PR', 'RIO DE JANEIRO': 'RJ', 'RIO GRANDE DO NORTE': 'RN', 'RIO GRANDE DO SUL': 'RS',
+            'RONDONIA': 'RO', 'RORAIMA': 'RR', 'SANTA CATARINA': 'SC', 'SAO PAULO': 'SP', 'SERGIPE': 'SE', 'TOCANTINS': 'TO'
+        }
+        return estados_brasileiros.get(estado_nome.upper(), '')
 
     def estimar_performance_grandes_volumes(self, total_nfs: int = 5000) -> Dict[str, Any]:
         """

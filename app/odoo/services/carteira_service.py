@@ -720,9 +720,9 @@ class CarteiraService:
             
         mapeamento_status = {
             'draft': 'Cotação',
-            'sent': 'Cotação enviada', 
+            'sent': 'Cotação', 
             'sale': 'Pedido de venda',
-            'done': 'Concluído',
+            'done': 'Pedido de venda',
             'cancel': 'Cancelado'
         }
         

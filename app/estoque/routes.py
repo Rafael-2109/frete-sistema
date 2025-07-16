@@ -927,3 +927,110 @@ def filtrar_saldo_estoque():
     except Exception as e:
         logger.error(f"Erro ao filtrar saldo estoque: {str(e)}")
         return jsonify({'error': str(e)}), 500 
+
+@estoque_bp.route('/movimentacoes/baixar-modelo')
+@login_required
+def baixar_modelo_movimentacoes():
+    """Download do modelo Excel para importação de movimentações"""
+    try:
+        import io
+        import pandas as pd
+        from datetime import datetime
+        
+        # Criar modelo Excel
+        modelo_data = {
+            'data_movimentacao': ['2025-07-16'],
+            'cod_produto': ['EXEMPLO001'],
+            'descricao_produto': ['Produto de exemplo'],
+            'tipo_movimentacao': ['ENTRADA'],  # ENTRADA ou SAIDA
+            'quantidade': [100],
+            'observacoes': ['Observação da movimentação']
+        }
+        
+        df = pd.DataFrame(modelo_data)
+        
+        # Criar Excel em memória
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Movimentações')
+            
+            # Adicionar instruções
+            instrucoes = pd.DataFrame({
+                'INSTRUÇÕES': [
+                    '1. Preencha todos os campos obrigatórios',
+                    '2. Data deve estar no formato YYYY-MM-DD',
+                    '3. Tipo movimentação: ENTRADA ou SAIDA',
+                    '4. Quantidade deve ser numérica',
+                    '5. Salve o arquivo e importe na tela de movimentações'
+                ]
+            })
+            instrucoes.to_excel(writer, index=False, sheet_name='Instruções')
+        
+        output.seek(0)
+        
+        response = make_response(output.read())
+        response.headers['Content-Disposition'] = f'attachment; filename=modelo_movimentacoes_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Erro ao gerar modelo: {str(e)}")
+        flash(f'Erro ao gerar modelo: {str(e)}', 'error')
+        return redirect(url_for('estoque.index'))
+
+@estoque_bp.route('/movimentacoes/exportar-dados')
+@login_required
+def exportar_dados_movimentacoes():
+    """Exporta dados de movimentações para Excel"""
+    try:
+        import io
+        import pandas as pd
+        from datetime import datetime
+        
+        # Buscar movimentações
+        movimentacoes = MovimentacaoEstoque.query.order_by(MovimentacaoEstoque.data_movimentacao.desc()).all()
+        
+        # Converter para dicionário
+        dados = []
+        for mov in movimentacoes:
+            dados.append({
+                'ID': mov.id,
+                'Data': mov.data_movimentacao.strftime('%Y-%m-%d') if mov.data_movimentacao else '',
+                'Código Produto': mov.cod_produto,
+                'Descrição': mov.nome_produto,
+                'Tipo': mov.tipo_movimentacao,
+                'Quantidade': mov.qtd_movimentacao,
+                'Observações': mov.observacao,
+                'Local': mov.local_movimentacao
+            })
+        
+        df = pd.DataFrame(dados)
+        
+        # Criar Excel em memória
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Movimentações')
+            
+            # Adicionar resumo
+            resumo = pd.DataFrame({
+                'Estatísticas': [
+                    f'Total de movimentações: {len(dados)}',
+                    f'Exportado em: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
+                    f'Sistema de Fretes'
+                ]
+            })
+            resumo.to_excel(writer, index=False, sheet_name='Resumo')
+        
+        output.seek(0)
+        
+        response = make_response(output.read())
+        response.headers['Content-Disposition'] = f'attachment; filename=movimentacoes_estoque_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Erro ao exportar dados: {str(e)}")
+        flash(f'Erro ao exportar dados: {str(e)}', 'error')
+        return redirect(url_for('estoque.index')) 
