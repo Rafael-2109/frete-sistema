@@ -14,7 +14,7 @@ class CargoOptimizer:
     
     FUNCIONALIDADES:
     - Formação automática de embarques otimizados
-    - Consideração de lote_separacao_id para vinculação
+    - Consideração de separacao_lote_id para vinculação
     - Tratamento de cancelamentos de NFs
     - Detecção de inconsistências de faturamento
     - Geração de justificativas para cargas parciais
@@ -401,13 +401,13 @@ class CargoOptimizer:
                 return False
             
             # Verificar lote de separação (se já vinculado)
-            lote_separacao = getattr(item, 'lote_separacao_id', None)
+            lote_separacao = getattr(item, 'separacao_lote_id', None)
             if lote_separacao:
                 # Verificar se há conflito com outros lotes na carga
                 lotes_carga = {
-                    getattr(item_incluido['item'], 'lote_separacao_id', None)
+                    getattr(item_incluido['item'], 'separacao_lote_id', None)
                     for item_incluido in carga['itens_incluidos']
-                    if getattr(item_incluido['item'], 'lote_separacao_id', None)
+                    if getattr(item_incluido['item'], 'separacao_lote_id', None)
                 }
                 if lotes_carga and lote_separacao not in lotes_carga:
                     return False
@@ -597,7 +597,7 @@ class CargoOptimizer:
             
             # Justificativa por separação
             lotes_separacao = [
-                getattr(item_data['item'], 'lote_separacao_id', None)
+                getattr(item_data['item'], 'separacao_lote_id', None)
                 for item_data in carga['itens_incluidos']
             ]
             if any(lote is None for lote in lotes_separacao):
@@ -619,9 +619,9 @@ class CargoOptimizer:
         """
         try:
             lotes_separacao = [
-                getattr(item_data['item'], 'lote_separacao_id', None)
+                getattr(item_data['item'], 'separacao_lote_id', None)
                 for item_data in carga['itens_incluidos']
-                if getattr(item_data['item'], 'lote_separacao_id', None)
+                if getattr(item_data['item'], 'separacao_lote_id', None)
             ]
             
             if lotes_separacao:
@@ -658,7 +658,7 @@ class CargoOptimizer:
                 'inconsistencias_detectadas': self._detectar_inconsistencias_item(item_data),
                 'justificativa_carga_parcial': "Carga individual - não foi possível otimizar com outros itens",
                 'data_expedicao_prevista': item_data['analise_estoque'].get('data_expedicao_sugerida'),
-                'lote_separacao_vinculado': getattr(item, 'lote_separacao_id', None),
+                'lote_separacao_vinculado': getattr(item, 'separacao_lote_id', None),
                 'total_pedidos': 1,
                 'total_produtos': 1
             }

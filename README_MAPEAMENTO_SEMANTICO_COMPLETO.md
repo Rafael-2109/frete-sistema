@@ -476,7 +476,7 @@ OBSERVAÇÕES: Há 2 "numeros" no embarque, um que aparece no URL que não é a 
 -    **data_prevista_embarque** (DATE) - Nulo: ✅
 SIGNIFICADO: Data prevista do embarque
 LINGUAGEM_NATURAL: ["data prevista do embarque", "data prevista embarque", "previsao de embarque"]
-CONTEXTO: Data inserida após a criação do embarque como uma previsão de embarque. Serve como gatilho para liberar o botão de "Imprimir completo", que no caso imprime 2 vias do embarque e 1 via de cada separação, que no caso é o pedido contendo todos os itens, qtds, codigo do produto extraidos da separacao e vinculado através do lote_separacao_id
+CONTEXTO: Data inserida após a criação do embarque como uma previsão de embarque. Serve como gatilho para liberar o botão de "Imprimir completo", que no caso imprime 2 vias do embarque e 1 via de cada separação, que no caso é o pedido contendo todos os itens, qtds, codigo do produto extraidos da separacao e vinculado através do separacao_lote_id
 OBSERVAÇÕES: 
 
 -    **data_embarque** (DATE) - Nulo: ✅
@@ -751,7 +751,7 @@ Não sei de onde vem esse log de criação
 -    **nf_cd** (BOOLEAN) - Nulo: ✅
 SIGNIFICADO: Campo gatilho que será a origem de nf_cd em Pedido
 LINGUAGEM_NATURAL: ["NF está no CD", "nota voltou pro cd", "nf no cd"]
-CONTEXTO: preenchido em EventoEntrega.tipo_evento, quando selecionado "NF no CD" dispara o gatilho para tornar "nf_cd"=True, alterando o status e disparando para a tabela de Pedido tornar o nf_cd = True através do lote_separacao_id, alterando o status_calculado para NF no CD e permitindo o usuario a cotar novamente o frete 
+CONTEXTO: preenchido em EventoEntrega.tipo_evento, quando selecionado "NF no CD" dispara o gatilho para tornar "nf_cd"=True, alterando o status e disparando para a tabela de Pedido tornar o nf_cd = True através do separacao_lote_id, alterando o status_calculado para NF no CD e permitindo o usuario a cotar novamente o frete 
 OBSERVAÇÕES: 
 
 -    **finalizado_por** (VARCHAR(100)) - Nulo: ✅

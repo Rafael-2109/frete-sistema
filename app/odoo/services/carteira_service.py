@@ -519,7 +519,7 @@ class CarteiraService:
                     'saldo_estoque_pedido_forcado': None,
                     
                     # 🚛 DADOS DE CARGA/LOTE (PRESERVADOS)
-                    'lote_separacao_id': None,
+                    'separacao_lote_id': None,
                     'qtd_saldo': None,
                     'valor_saldo': None,
                     'pallet': None,

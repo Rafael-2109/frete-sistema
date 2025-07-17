@@ -47,7 +47,7 @@ Dara prevista de entrega;;data_entrega;Data de Entrega;
 Data agendada;agendamento;;Data de agendamento;
 Protocolo de agendamento;protocolo;;Protocolo de agendamento;
 Campo utilizado apenas para leitura no momento da roteirização com comentarios sobre a roteirização;roteirizacao;;Transportadora;
-ID da carga;(como se fosse o lote_separacao_id);;;
+ID da carga;(como se fosse o separacao_lote_id);;;
 Qtd do item na carga;qtd_saldo;;;
 Valor do item na carga;valor_saldo;;;
 Pallet do item na carga;pallet;;;

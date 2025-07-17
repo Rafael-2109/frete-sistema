@@ -102,12 +102,9 @@ def processar_nf_cd_pedido(entrega_id):
         if entrega.data_agenda:
             pedido.agendamento = entrega.data_agenda
             pedido.protocolo = entrega.protocolo_agendamento
-            if entrega.data_agenda == entrega.data_agenda - 1 + adicionar_dias_uteis(entrega.data_agenda, 1):
-                pedido.expedicao = entrega.data_agenda - 1
-            elif entrega.data_agenda == entrega.data_agenda -2 + adicionar_dias_uteis(entrega.data_agenda, 1):
-                pedido.expedicao = entrega.data_agenda - 2
-            else:
-                pedido.expedicao = entrega.data_agenda -3
+        
+        # ✅ LIMPAR expedição - NF voltou para o CD
+        pedido.expedicao = None
 
         # NF é preservada para manter histórico
         # Status será recalculado automaticamente pelo trigger como "NF no CD"
@@ -331,8 +328,17 @@ def adicionar_agendamento(id):
         entrega.data_entrega_prevista = data_agendada
         db.session.commit()
 
+        # ✅ NOVA FUNCIONALIDADE: Sincronizar com pedido se NF está no CD
+        if entrega.nf_cd:
+            sucesso, resultado = sincronizar_agendamento_pedido(entrega)
+            if sucesso:
+                flash(f"✅ Agendamento criado e sincronizado: {resultado}", 'success')
+            else:
+                flash(f"✅ Agendamento criado. Aviso: {resultado}", 'warning')
+        else:
+            flash('✅ Agendamento criado com sucesso!', 'success')
+        
         session['feedback'] = 'agendamento'
-        flash('✅ Agendamento criado com sucesso!', 'success')
     else:
         flash('❌ Erro ao validar agendamento. Verifique os campos obrigatórios.', 'danger')
 
@@ -1446,6 +1452,12 @@ def alterar_data_prevista(id):
         # Atualiza a data na entrega
         entrega.data_entrega_prevista = nova_data
         
+        # ✅ NOVA FUNCIONALIDADE: Sincronizar com pedido se NF está no CD
+        if entrega.nf_cd:
+            sucesso, resultado = sincronizar_agendamento_pedido(entrega)
+            if not sucesso:
+                flash(f"⚠️ Data alterada mas erro na sincronização: {resultado}", 'warning')
+        
         db.session.add(historico)
         db.session.commit()
         
@@ -2145,4 +2157,37 @@ def visualizar_canhoto(id):
         current_app.logger.error(f"Erro ao acessar canhoto: {str(e)}")
         flash('Erro ao acessar o arquivo.', 'danger')
         return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+
+def sincronizar_agendamento_pedido(entrega):
+    """
+    Sincroniza agendamento de entrega com nf_cd=True para o pedido correspondente
+    """
+    try:
+        if not entrega.nf_cd:
+            return True, "Entrega não está marcada como NF no CD"
+        
+        # Buscar pedido pela NF
+        pedido = Pedido.query.filter_by(nf=entrega.numero_nf).first()
+        if not pedido:
+            return False, f"Pedido não encontrado para NF {entrega.numero_nf}"
+        
+        # Buscar último agendamento
+        ultimo_agendamento = AgendamentoEntrega.query.filter_by(entrega_id=entrega.id)\
+            .order_by(AgendamentoEntrega.criado_em.desc()).first()
+        
+        if ultimo_agendamento:
+            # Transferir dados do agendamento para o pedido
+            pedido.agendamento = ultimo_agendamento.data_agendada
+            pedido.protocolo = ultimo_agendamento.protocolo_agendamento
+            
+            # ✅ NÃO limpar expedição aqui - apenas no evento "NF no CD"
+            
+            db.session.commit()
+            return True, f"Pedido {pedido.num_pedido} atualizado com agendamento"
+        else:
+            return True, "Nenhum agendamento encontrado para sincronizar"
+            
+    except Exception as e:
+        db.session.rollback()
+        return False, f"Erro ao sincronizar agendamento: {str(e)}"
 

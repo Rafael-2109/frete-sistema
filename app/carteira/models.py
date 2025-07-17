@@ -86,7 +86,7 @@ class CarteiraPrincipal(db.Model):
     saldo_estoque_pedido_forcado = db.Column(db.Numeric(15, 3), nullable=True)  # Just-in-time
     
     # 🚛 DADOS DE CARGA/LOTE (PRESERVADOS)
-    lote_separacao_id = db.Column(db.Integer, nullable=True, index=True)  # Vínculo separação
+    separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # Vínculo separação
     qtd_saldo = db.Column(db.Numeric(15, 3), nullable=True)  # Qtd no lote
     valor_saldo = db.Column(db.Numeric(15, 2), nullable=True)  # Valor no lote
     pallet = db.Column(db.Numeric(15, 3), nullable=True)  # Pallets no lote
@@ -150,7 +150,7 @@ class CarteiraPrincipal(db.Model):
         Index('idx_carteira_cliente_vendedor', 'cnpj_cpf', 'vendedor'),
         Index('idx_carteira_status_expedicao', 'status_pedido', 'expedicao'),
         Index('idx_carteira_produto_saldo', 'cod_produto', 'qtd_saldo_produto_pedido'),
-        Index('idx_carteira_lote_separacao', 'lote_separacao_id'),
+        Index('idx_carteira_separacao_lote', 'separacao_lote_id'),
     )
 
     def __repr__(self):
@@ -271,7 +271,7 @@ class ControleCruzadoSeparacao(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     
     # 🆔 IDENTIFICAÇÃO
-    lote_separacao_id = db.Column(db.Integer, nullable=False, index=True)
+    separacao_lote_id = db.Column(db.String(50), nullable=False, index=True)
     num_pedido = db.Column(db.String(50), nullable=False, index=True)
     cod_produto = db.Column(db.String(50), nullable=False, index=True)
     
@@ -296,12 +296,12 @@ class ControleCruzadoSeparacao(db.Model):
     
     # 📊 ÍNDICES
     __table_args__ = (
-        Index('idx_controle_lote_pedido', 'lote_separacao_id', 'num_pedido'),
+        Index('idx_controle_separacao_lote_pedido', 'separacao_lote_id', 'num_pedido'),
         Index('idx_controle_status_diferenca', 'status_controle', 'diferenca_detectada'),
     )
 
     def __repr__(self):
-        return f'<ControleCruzado Lote:{self.lote_separacao_id} {self.num_pedido}-{self.cod_produto} Dif:{self.diferenca_detectada}>'
+        return f'<ControleCruzado Lote:{self.separacao_lote_id} {self.num_pedido}-{self.cod_produto} Dif:{self.diferenca_detectada}>'
 
 class InconsistenciaFaturamento(db.Model):
     """

@@ -262,7 +262,7 @@ def gerar_alertas_automaticos():
     # Alerta de agendamentos vencidos
     agendamentos_atrasados = CarteiraPrincipal.query.filter(
         CarteiraPrincipal.agendamento < date.today(),
-        CarteiraPrincipal.lote_separacao_id.is_(None)
+        CarteiraPrincipal.separacao_lote_id.is_(None)
     ).all()
     
     # Alerta de cargas com baixa ocupação

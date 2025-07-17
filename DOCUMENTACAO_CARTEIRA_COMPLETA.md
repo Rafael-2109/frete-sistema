@@ -84,7 +84,7 @@ agendamento = DateTime         # Data/hora de agendamento
 protocolo_agendamento = String(100) # Protocolo do agendamento
 
 # Integração com Separação
-lote_separacao_id = String(50) # ID do lote de separação vinculado
+separacao_lote_id = String(50) # ID do lote de separação vinculado
 
 # Controle
 ativo = Boolean                # Item ativo (exclusão lógica)

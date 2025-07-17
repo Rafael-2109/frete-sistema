@@ -196,7 +196,7 @@ class ClassificationEngine:
                 caracteristicas.append('PRODUTO_ESPECIAL')
             
             # Já tem separação vinculada
-            lote_separacao = getattr(item, 'lote_separacao_id', None)
+            lote_separacao = getattr(item, 'separacao_lote_id', None)
             if lote_separacao:
                 caracteristicas.append('COM_SEPARACAO')
             

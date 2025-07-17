@@ -67,15 +67,15 @@
                 {% for separacao in separacoes %}
                 <div class="form-check mb-3 p-3 border rounded {% if separacao.compativel_faturamento %}border-success bg-light{% else %}border-danger bg-light{% endif %}">
                     <input class="form-check-input" type="radio" name="lote_separacao_escolhido" 
-                           id="lote_{{ separacao.lote_separacao_id }}" 
-                           value="{{ separacao.lote_separacao_id }}"
+                           id="lote_{{ separacao.separacao_lote_id }}" 
+                           value="{{ separacao.separacao_lote_id }}"
                            {% if not separacao.compativel_faturamento %}disabled{% endif %}
                            required>
-                    <label class="form-check-label w-100" for="lote_{{ separacao.lote_separacao_id }}">
+                    <label class="form-check-label w-100" for="lote_{{ separacao.separacao_lote_id }}">
                         <div class="row">
                             <div class="col-md-3">
                                 <strong>🎯 Lote de Separação:</strong><br>
-                                <span class="badge badge-primary">{{ separacao.lote_separacao_id }}</span>
+                                <span class="badge badge-primary">{{ separacao.separacao_lote_id }}</span>
                             </div>
                             <div class="col-md-2">
                                 <strong>📊 Total Separado:</strong><br>

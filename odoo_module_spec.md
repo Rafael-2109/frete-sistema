@@ -291,7 +291,7 @@ X-API-Key: <api_key>
 ### **Carteira de Pedidos:**
 1. **Chave Única:** `num_pedido` + `cod_produto`
 2. **Validação:** `qtd_saldo_produto_pedido` ≤ `qtd_produto_pedido`
-3. **Preservação:** Campos operacionais (expedicao, agendamento, protocolo, lote_separacao_id) são preservados
+3. **Preservação:** Campos operacionais (expedicao, agendamento, protocolo, separacao_lote_id) são preservados
 4. **Atualização Inteligente:** Detecta alterações importantes e notifica sistemas dependentes
 
 ### **Faturamento:**

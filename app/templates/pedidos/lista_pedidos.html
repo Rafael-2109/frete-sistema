@@ -275,6 +275,31 @@
                                     </a>
                                 </div>
                                 
+                                <!-- ✅ NOVO: BOTÃO SEM DATA -->
+                                <div class="d-flex flex-column align-items-center filtro-pair">
+                                    <!-- SEM DATA -->
+                                    <a href="{{ filtro_url(status='sem_data') }}"
+                                    class="btn btn-sm filtro-data
+                                        {% if filtro_status_ativo == 'sem_data' %}
+                                        btn-secondary
+                                        {% elif contadores_status.sem_data > 0 %}
+                                        btn-outline-secondary
+                                        {% else %}btn-outline-light{% endif %}">
+                                    <i class="fas fa-calendar-times"></i>
+                                    Sem data
+                                    <span class="badge bg-light text-dark">{{ contadores_status.sem_data }}</span>
+                                    </a>
+                                    <!-- ABERTO -->
+                                    <a href="{{ filtro_url(status='sem_data', sub_status='abertos') }}"
+                                    class="btn btn-sm filtro-aberto mt-1
+                                        {% if filtro_status_ativo == 'sem_data' and filtro_sub_status == 'abertos' %}
+                                        btn-warning
+                                        {% else %}btn-outline-warning{% endif %}">
+                                    <i class="fas fa-clock"></i> Aberto
+                                    <span class="badge bg-light text-dark">{{ contadores_status.sem_data }}</span>
+                                    </a>
+                                </div>
+                                
                                 <!-- BOTÕES DE DATA -->
                                 {% for key, dados in contadores_data.items() %}
                                 <div class="d-flex flex-column align-items-center filtro-pair">

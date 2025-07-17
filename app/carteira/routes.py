@@ -706,7 +706,7 @@ def api_item_detalhes(id):
             'cliente_nec_agendamento': item.cliente_nec_agendamento,
             'data_entrega_pedido': item.data_entrega_pedido.strftime('%d/%m/%Y') if item.data_entrega_pedido else None,
             'valor_total': float((item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0)),
-            'lote_separacao_id': item.lote_separacao_id
+            'separacao_lote_id': item.separacao_lote_id
         }
         
         # 📦 INFORMAÇÕES DE ESTOQUE
@@ -766,9 +766,9 @@ def api_item_detalhes(id):
         # 📦 INFORMAÇÕES DE SEPARAÇÃO VINCULADA
         try:
             from app.separacao.models import Separacao
-            if item.lote_separacao_id:
+            if item.separacao_lote_id:
                 separacoes = Separacao.query.filter_by(
-                    separacao_lote_id=item.lote_separacao_id,
+                    separacao_lote_id=item.separacao_lote_id,
                     num_pedido=item.num_pedido,
                     cod_produto=item.cod_produto
                 ).all()
@@ -780,7 +780,7 @@ def api_item_detalhes(id):
                     
                     dados['separacao_info'] = {
                         'tem_separacao': True,
-                        'lote_id': item.lote_separacao_id,
+                        'lote_id': item.separacao_lote_id,
                         'qtd_separada': total_qtd_separada,
                         'peso_separado': total_peso_separado,
                         'pallet_separado': total_pallet_separado,
@@ -790,7 +790,7 @@ def api_item_detalhes(id):
                 else:
                     dados['separacao_info'] = {
                         'tem_separacao': False,
-                        'lote_id': item.lote_separacao_id,
+                        'lote_id': item.separacao_lote_id,
                         'qtd_separada': 0,
                         'peso_separado': 0,
                         'pallet_separado': 0,
@@ -1020,7 +1020,7 @@ def baixar_modelo():
                     'Aceita YYYY-MM-DD HH:MM:SS (2025-03-15 08:30:00)',
                     'Aceita vírgula como separador decimal (1.234,56)',
                     'Atualiza se existe, cria se novo (chave: num_pedido + cod_produto)',
-                    'Roteirização, lote_separacao_id, peso, pallet preservados',
+                    'Roteirização, separacao_lote_id, peso, pallet preservados',
                     'Campos obrigatórios validados automaticamente'
                 ]
             }
@@ -1082,14 +1082,14 @@ def relatorio_vinculacoes():
         # 📊 ESTATÍSTICAS DE VINCULAÇÃO
         total_carteira = CarteiraPrincipal.query.filter_by(ativo=True).count()
         itens_vinculados = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.lote_separacao_id.isnot(None),
+            CarteiraPrincipal.separacao_lote_id.isnot(None),
             CarteiraPrincipal.ativo == True
         ).count()
         itens_nao_vinculados = total_carteira - itens_vinculados
         
         # 📋 DETALHES DOS ITENS NÃO VINCULADOS
         itens_sem_vinculacao = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.lote_separacao_id.is_(None),
+            CarteiraPrincipal.separacao_lote_id.is_(None),
             CarteiraPrincipal.ativo == True
         ).limit(50).all()  # Limitar para não sobrecarregar
         
@@ -1382,10 +1382,10 @@ def api_vincular_item():
             }), 400
         
         # 🔄 Verificar se já está vinculado
-        if item_carteira.lote_separacao_id:
+        if item_carteira.separacao_lote_id:
             return jsonify({
                 'success': False,
-                'error': f'Item já vinculado à separação {item_carteira.lote_separacao_id}'
+                'error': f'Item já vinculado à separação {item_carteira.separacao_lote_id}'
             }), 400
         
         # 📊 Calcular quantidade a ser vinculada
@@ -1479,11 +1479,11 @@ def api_vincular_multiplos():
                     continue
                 
                 # 🔄 Verificar se já vinculado
-                if item_carteira.lote_separacao_id:
+                if item_carteira.separacao_lote_id:
                     falhas.append({
                         'item_id': item_id,
                         'separacao_id': separacao_id,
-                        'erro': f'Item já vinculado à separação {item_carteira.lote_separacao_id}'
+                        'erro': f'Item já vinculado à separação {item_carteira.separacao_lote_id}'
                     })
                     continue
                 
@@ -1558,7 +1558,7 @@ def api_vinculacao_automatica():
         
         # 🔍 Buscar itens da carteira sem vinculação
         itens_sem_vinculacao = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.lote_separacao_id.is_(None),
+            CarteiraPrincipal.separacao_lote_id.is_(None),
             CarteiraPrincipal.ativo == True
         ).all()
         
@@ -1696,17 +1696,17 @@ def api_desvincular_item():
             }), 404
         
         # ✅ Verificar se está vinculado
-        if not item_carteira.lote_separacao_id:
+        if not item_carteira.separacao_lote_id:
             return jsonify({
                 'success': False,
                 'error': 'Item não está vinculado a nenhuma separação'
             }), 400
         
         # 📊 Guardar informações para log
-        separacao_id_anterior = item_carteira.lote_separacao_id
+        separacao_id_anterior = item_carteira.separacao_lote_id
         
         # 🔓 Remover vinculação
-        item_carteira.lote_separacao_id = None
+        item_carteira.separacao_lote_id = None
         
         # 📝 Criar log de evento
         try:
@@ -1719,7 +1719,7 @@ def api_desvincular_item():
                     carteira_item_id=item_carteira.id,
                     tipo_evento='DESVINCULACAO',
                     qtd_impactada=0,
-                    campo_alterado='lote_separacao_id',
+                    campo_alterado='separacao_lote_id',
                     valor_anterior=str(separacao_id_anterior),
                     valor_novo='NULL',
                     criado_por=current_user.nome
@@ -1763,26 +1763,26 @@ def api_relatorio_vinculacoes_detalhado():
         # 📊 ESTATÍSTICAS BÁSICAS
         total_carteira = CarteiraPrincipal.query.filter_by(ativo=True).count()
         itens_vinculados = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.lote_separacao_id.isnot(None),
+            CarteiraPrincipal.separacao_lote_id.isnot(None),
             CarteiraPrincipal.ativo == True
         ).count()
         
         # 📊 SEPARAÇÕES SEM CARTEIRA
         separacoes_orfas = Separacao.query.filter(
             ~db.session.query(literal(True)).filter(
-                CarteiraPrincipal.lote_separacao_id == Separacao.id
+                CarteiraPrincipal.separacao_lote_id == Separacao.id
             ).exists()
         ).count()
         
         # 📊 VINCULAÇÕES PARCIAIS (detectar discrepâncias)
         vinculacoes_parciais = []
         itens_com_vinculacao = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.lote_separacao_id.isnot(None),
+            CarteiraPrincipal.separacao_lote_id.isnot(None),
             CarteiraPrincipal.ativo == True
         ).limit(100).all()  # Amostra para performance
         
         for item in itens_com_vinculacao:
-            separacao = Separacao.query.filter_by(id=item.lote_separacao_id).first()
+            separacao = Separacao.query.filter_by(id=item.separacao_lote_id).first()
             if separacao:
                 qtd_carteira = float(item.qtd_saldo_produto_pedido or 0)
                 qtd_separacao = float(separacao.qtd_saldo or 0)
@@ -1803,7 +1803,7 @@ def api_relatorio_vinculacoes_detalhado():
             func.count(CarteiraPrincipal.id).label('total'),
             func.sum(
                 func.case(
-                    (CarteiraPrincipal.lote_separacao_id.isnot(None), 1),
+                    (CarteiraPrincipal.separacao_lote_id.isnot(None), 1),
                     else_=0
                 )
             ).label('vinculados')
@@ -1816,7 +1816,7 @@ def api_relatorio_vinculacoes_detalhado():
             func.count(CarteiraPrincipal.id).label('total_itens'),
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_total')
         ).filter(
-            CarteiraPrincipal.lote_separacao_id.is_(None),
+            CarteiraPrincipal.separacao_lote_id.is_(None),
             CarteiraPrincipal.ativo == True
         ).group_by(
             CarteiraPrincipal.cod_produto,
@@ -1873,7 +1873,7 @@ def _criar_vinculacao_carteira_separacao(item_carteira, separacao, qtd_vinculada
     
     FUNCIONALIDADE:
     - Vincula item da carteira com separação específica
-    - Atualiza lote_separacao_id na carteira
+    - Atualiza separacao_lote_id na carteira
     - Cria log de auditoria
     - Retorna resultado da operação
     """
@@ -1892,8 +1892,8 @@ def _criar_vinculacao_carteira_separacao(item_carteira, separacao, qtd_vinculada
             }
         
         # 🔗 Atualizar campo de vinculação na carteira
-        lote_anterior = item_carteira.lote_separacao_id
-        item_carteira.lote_separacao_id = separacao.id
+        lote_anterior = item_carteira.separacao_lote_id
+        item_carteira.separacao_lote_id = separacao.id
         
         # 📝 Criar log de vinculação (se tabela existir)
         try:
@@ -1905,7 +1905,7 @@ def _criar_vinculacao_carteira_separacao(item_carteira, separacao, qtd_vinculada
                     carteira_item_id=item_carteira.id,
                     tipo_evento='VINCULACAO',
                     qtd_impactada=qtd_vinculada,
-                    campo_alterado='lote_separacao_id',
+                    campo_alterado='separacao_lote_id',
                     valor_anterior=str(lote_anterior) if lote_anterior else 'NULL',
                     valor_novo=str(separacao.id),
                     criado_por=usuario
@@ -1922,7 +1922,7 @@ def _criar_vinculacao_carteira_separacao(item_carteira, separacao, qtd_vinculada
         return {
             'sucesso': True,
             'message': f'Item vinculado à separação {separacao.id} com quantidade {qtd_vinculada}',
-            'lote_separacao_id': separacao.id,
+            'separacao_lote_id': separacao.id,
             'qtd_vinculada': qtd_vinculada
         }
         
@@ -2075,7 +2075,7 @@ FUNCIONALIDADES IMPLEMENTADAS:
    - agendamento: Data de agendamento com cliente  
    - protocolo: Protocolo de agendamento
    - roteirizacao: Transportadora sugerida/contratada
-   - lote_separacao_id: Vínculo com separação já gerada
+   - separacao_lote_id: Vínculo com separação já gerada
    - qtd_saldo, valor_saldo, pallet, peso: Dados do lote
 
 3. SISTEMA DE RESTRIÇÕES POR COTAÇÃO:
@@ -2213,7 +2213,7 @@ def _atualizar_item_inteligente(item, row, usuario):
             'expedicao': getattr(item, 'expedicao', None),
             'agendamento': getattr(item, 'agendamento', None),
             'protocolo': getattr(item, 'protocolo', None),
-            'lote_separacao_id': getattr(item, 'lote_separacao_id', None),
+            'separacao_lote_id': getattr(item, 'separacao_lote_id', None),
             'roteirizacao': getattr(item, 'roteirizacao', None)
         }
         
@@ -2247,7 +2247,7 @@ def _atualizar_item_inteligente(item, row, usuario):
             logger.warning(f"🚨 ALTERAÇÃO AFETA SEPARAÇÃO EXISTENTE: {item.num_pedido}")
             
             # Gerar evento para notificação
-            if hasattr(item, 'lote_separacao_id') and item.lote_separacao_id:
+            if hasattr(item, 'separacao_lote_id') and item.separacao_lote_id:
                 evento = EventoCarteira(
                     num_pedido=item.num_pedido,
                     cod_produto=item.cod_produto,
@@ -2497,8 +2497,8 @@ def _processar_geracao_separacao(itens_selecionados, usuario, observacao):
                 db.session.add(separacao)
                 
                 # 🔗 ATUALIZAR CARTEIRA COM VÍNCULO (SOMENTE SE CAMPOS EXISTEM)
-                if hasattr(item, 'lote_separacao_id'):
-                    item.lote_separacao_id = separacao.id
+                if hasattr(item, 'separacao_lote_id'):
+                    item.separacao_lote_id = separacao.id
                 if hasattr(item, 'qtd_saldo'):
                     item.qtd_saldo = float(getattr(item, 'qtd_saldo_produto_pedido', 0) or 0)
                 if hasattr(item, 'valor_saldo'):
@@ -2987,7 +2987,7 @@ def _processar_justificativa_faturamento_parcial(data, usuario):
             
             if item_carteira:
                 # Limpar dados operacionais
-                item_carteira.lote_separacao_id = None
+                item_carteira.separacao_lote_id = None
                 item_carteira.expedicao = None
                 item_carteira.agendamento = None
                 item_carteira.protocolo = None
@@ -3207,7 +3207,7 @@ def _buscar_faturamentos_parciais_pendentes():
                         'data_deteccao': inconsistencia.detectada_em.strftime('%d/%m/%Y %H:%M'),
                         'antiguidade_dias': (agora_brasil() - inconsistencia.detectada_em).days,
                         'tipo_inconsistencia': inconsistencia.tipo,
-                        'lote_separacao_id': item_carteira.lote_separacao_id
+                        'separacao_lote_id': item_carteira.separacao_lote_id
                     }
                     pendentes.append(pendente)
                     
@@ -3320,7 +3320,7 @@ def _sincronizar_carteira_copia(usuario):
                     # 🔄 CRIAR CONTROLE DE DIVERGÊNCIA
                     if inspector.has_table('controle_cruzado_separacao'):
                         controle = ControleCruzadoSeparacao(
-                            lote_separacao_id=item_principal.lote_separacao_id or 0,
+                            separacao_lote_id=item_principal.separacao_lote_id or 0,
                             num_pedido=item_principal.num_pedido,
                             cod_produto=item_principal.cod_produto,
                             qtd_separada_original=item_principal.qtd_produto_pedido,
@@ -3376,7 +3376,7 @@ def _processar_vinculacao_automatica(usuario):
         
         # 📋 BUSCAR ITENS DA CARTEIRA SEM VINCULAÇÃO
         itens_sem_vinculacao = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.lote_separacao_id.is_(None),
+            CarteiraPrincipal.separacao_lote_id.is_(None),
             CarteiraPrincipal.ativo == True
         ).all()
         
@@ -3391,7 +3391,7 @@ def _processar_vinculacao_automatica(usuario):
                 # ✅ VINCULAÇÃO ENCONTRADA
                 if separacao.quantidade <= item.qtd_saldo_produto_pedido:
                     # 🔗 VINCULAR (QUANTIDADE DA SEPARAÇÃO ≤ CARTEIRA)
-                    item.lote_separacao_id = separacao.id
+                    item.separacao_lote_id = separacao.id
                     item.qtd_saldo = separacao.quantidade
                     item.updated_by = usuario
                     
@@ -3770,7 +3770,7 @@ def _detectar_alteracoes_importantes(item_antes, item_depois):
     
     # Verificar se afeta separação
     afeta_separacao = bool(
-        getattr(item_antes, 'lote_separacao_id', None) and 
+        getattr(item_antes, 'separacao_lote_id', None) and 
         'qtd_produto_pedido' in alteracoes_importantes
     )
     
@@ -3931,7 +3931,7 @@ def _processar_separacao_escolhida(numero_nf, cod_produto, qtd_faturada, lote_es
         # 🔍 1. BUSCAR ITENS DA SEPARAÇÃO ESCOLHIDA
         itens_lote_escolhido = CarteiraPrincipal.query.filter(
             CarteiraPrincipal.cod_produto == cod_produto,
-            CarteiraPrincipal.lote_separacao_id == lote_escolhido,
+            CarteiraPrincipal.separacao_lote_id == lote_escolhido,
             CarteiraPrincipal.ativo == True
         ).all()
         
@@ -4032,10 +4032,10 @@ def _abater_carteira_original(numero_nf, num_pedido, cod_produto, qtd_faturada, 
         logger.info(f"🎯 Verificando separações para: {num_pedido}-{cod_produto} Qtd faturada: {qtd_faturada}")
         
         # 🔍 1. BUSCAR TODAS AS SEPARAÇÕES DO MESMO PRODUTO
-        # Buscar todos os itens ativos com mesmo cod_produto que tenham lote_separacao_id
+        # Buscar todos os itens ativos com mesmo cod_produto que tenham separacao_lote_id
         itens_com_separacao = CarteiraPrincipal.query.filter(
             CarteiraPrincipal.cod_produto == cod_produto,
-            CarteiraPrincipal.lote_separacao_id.isnot(None),
+            CarteiraPrincipal.separacao_lote_id.isnot(None),
             CarteiraPrincipal.ativo == True
         ).all()
         
@@ -4053,7 +4053,7 @@ def _abater_carteira_original(numero_nf, num_pedido, cod_produto, qtd_faturada, 
         # 🔍 2. AGRUPAR POR LOTE DE SEPARAÇÃO
         separacoes_disponiveis = {}
         for item in itens_com_separacao:
-            lote_id = item.lote_separacao_id
+            lote_id = item.separacao_lote_id
             if lote_id not in separacoes_disponiveis:
                 separacoes_disponiveis[lote_id] = []
             separacoes_disponiveis[lote_id].append({
@@ -4074,7 +4074,7 @@ def _abater_carteira_original(numero_nf, num_pedido, cod_produto, qtd_faturada, 
             for lote_id, itens_lote in separacoes_disponiveis.items():
                 total_separado_lote = sum(item['qtd_separada'] for item in itens_lote)
                 opcoes_separacao.append({
-                    'lote_separacao_id': lote_id,
+                    'separacao_lote_id': lote_id,
                     'total_separado': total_separado_lote,
                     'qtd_pedidos': len(itens_lote),
                     'itens': itens_lote,
@@ -4104,7 +4104,7 @@ def _abater_carteira_original(numero_nf, num_pedido, cod_produto, qtd_faturada, 
         
         # 🎯 6. ABATER DA CARTEIRA PRINCIPAL (PROPORCIONALMENTE SE MÚLTIPLOS PEDIDOS)
         for item in itens_com_separacao:
-            if item.lote_separacao_id == lote_unico:
+            if item.separacao_lote_id == lote_unico:
                 # Calcular proporção do abate para este pedido
                 proporcao = float(item.qtd_produto_pedido or 0) / qtd_total_separada
                 qtd_abate_pedido = qtd_faturada * proporcao
@@ -4127,7 +4127,7 @@ def _abater_carteira_original(numero_nf, num_pedido, cod_produto, qtd_faturada, 
             'sucesso': True,
             'multiplas_separacoes': False,
             'necessita_escolha': False,
-            'lote_separacao_id': lote_unico,
+            'separacao_lote_id': lote_unico,
             'qtd_total_separada': qtd_total_separada,
             'qtd_faturada': qtd_faturada,
             'diferenca_nao_faturada': diferenca_nao_faturada,
@@ -4283,7 +4283,7 @@ def escolher_separacao(inconsistencia_id):
         
         if request.method == 'POST':
             # 🎯 3. PROCESSAR ESCOLHA DO USUÁRIO
-            lote_escolhido = request.form.get('lote_separacao_escolhido')
+            lote_escolhido = request.form.get('separacao_lote_escolhido')
             observacao_escolha = request.form.get('observacao_escolha', '')
             
             if not lote_escolhido:
@@ -4318,7 +4318,7 @@ def escolher_separacao(inconsistencia_id):
                     return redirect(url_for('carteira.justificar_faturamento_parcial', 
                                           numero_nf=inconsistencia.numero_nf,
                                           cod_produto=inconsistencia.cod_produto,
-                                          lote_separacao_id=lote_escolhido))
+                                          separacao_lote_id=lote_escolhido))
                 else:
                     flash('Separação processada com sucesso! Faturamento completo.', 'success')
                     return redirect(url_for('carteira.listar_inconsistencias'))
@@ -4347,7 +4347,7 @@ def _aplicar_automacao_carteira_completa(usuario):
     1. Classificação automática por urgência e tipo de cliente
     2. Análise de estoque D0-D28 com detecção de rupturas  
     3. Otimização de agendamentos com geração de protocolos
-    4. Formação inteligente de cargas considerando lote_separacao_id
+    4. Formação inteligente de cargas considerando separacao_lote_id
     5. Detecção de inconsistências e justificativas para cargas parciais
     """
     try:
@@ -4515,13 +4515,13 @@ def vinculos_problematicos():
         
         # 🔍 1. VÍNCULOS COM QUANTIDADES DIVERGENTES
         itens_vinculados = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.lote_separacao_id.isnot(None),
+            CarteiraPrincipal.separacao_lote_id.isnot(None),
             CarteiraPrincipal.ativo == True
         ).limit(50).all()  # Amostra para performance
         
         for item in itens_vinculados:
             try:
-                separacao = Separacao.query.get(item.lote_separacao_id)
+                separacao = Separacao.query.get(item.separacao_lote_id)
                 if separacao:
                     qtd_carteira = float(item.qtd_saldo_produto_pedido or 0)
                     qtd_separacao = float(separacao.qtd_saldo or 0)
@@ -4541,7 +4541,7 @@ def vinculos_problematicos():
                     # Vínculo quebrado - separação não existe
                     problemas['vinculos_quebrados'].append({
                         'item': item,
-                        'lote_separacao_id_invalido': item.lote_separacao_id
+                        'separacao_lote_id_invalido': item.separacao_lote_id
                     })
             except Exception as e:
                 logger.error(f"Erro ao analisar item {item.id}: {str(e)}")
@@ -4551,7 +4551,7 @@ def vinculos_problematicos():
         for separacao in separacoes_todas:
             if separacao.id:
                 vinculo_existe = CarteiraPrincipal.query.filter_by(
-                    lote_separacao_id=separacao.id,
+                    separacao_lote_id=separacao.id,
                     ativo=True
                 ).first()
                 
@@ -4560,7 +4560,7 @@ def vinculos_problematicos():
                     item_compativel = CarteiraPrincipal.query.filter_by(
                         num_pedido=separacao.num_pedido,
                         cod_produto=separacao.cod_produto,
-                        lote_separacao_id=None,  # Sem vínculo atual
+                        separacao_lote_id=None,  # Sem vínculo atual
                         ativo=True
                     ).first()
                     
@@ -4572,7 +4572,7 @@ def vinculos_problematicos():
         
         # 🔍 3. ITENS DA CARTEIRA SEM SEPARAÇÃO CORRESPONDENTE
         itens_sem_vinculo = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.lote_separacao_id.is_(None),
+            CarteiraPrincipal.separacao_lote_id.is_(None),
             CarteiraPrincipal.ativo == True
         ).limit(30).all()
         
@@ -4583,7 +4583,7 @@ def vinculos_problematicos():
                 cod_produto=item.cod_produto
             ).filter(
                 ~db.session.query(literal(True)).filter(
-                    CarteiraPrincipal.lote_separacao_id == Separacao.id
+                    CarteiraPrincipal.separacao_lote_id == Separacao.id
                 ).exists()
             ).first()
             
@@ -4650,8 +4650,8 @@ def api_corrigir_vinculo_problema():
         if tipo_problema == 'vinculo_quebrado' and acao == 'desvincular':
             item = CarteiraPrincipal.query.get(item_id)
             if item:
-                lote_anterior = item.lote_separacao_id
-                item.lote_separacao_id = None
+                lote_anterior = item.separacao_lote_id
+                item.separacao_lote_id = None
                 db.session.commit()
                 
                 resultado = {
@@ -4767,16 +4767,16 @@ def api_corrigir_lote_problemas():
         # 🔧 CORRIGIR VÍNCULOS QUEBRADOS
         if 'vinculos_quebrados' in tipos_correcao:
             itens_com_vinculo_quebrado = CarteiraPrincipal.query.filter(
-                CarteiraPrincipal.lote_separacao_id.isnot(None),
+                CarteiraPrincipal.separacao_lote_id.isnot(None),
                 CarteiraPrincipal.ativo == True
             ).all()
             
             for item in itens_com_vinculo_quebrado:
                 try:
-                    separacao_existe = Separacao.query.get(item.lote_separacao_id)
+                    separacao_existe = Separacao.query.get(item.separacao_lote_id)
                     if not separacao_existe:
                         # Vínculo quebrado - remover
-                        item.lote_separacao_id = None
+                        item.separacao_lote_id = None
                         resultados['vinculos_quebrados_corrigidos'] += 1
                         logger.info(f"🔧 Vínculo quebrado removido: Item {item.id}")
                 except Exception as e:
@@ -4794,7 +4794,7 @@ def api_corrigir_lote_problemas():
                     if separacao.id:
                         # Verificar se já está vinculada
                         vinculo_existe = CarteiraPrincipal.query.filter_by(
-                            lote_separacao_id=separacao.id,
+                            separacao_lote_id=separacao.id,
                             ativo=True
                         ).first()
                         
@@ -4803,7 +4803,7 @@ def api_corrigir_lote_problemas():
                             item_compativel = CarteiraPrincipal.query.filter_by(
                                 num_pedido=separacao.num_pedido,
                                 cod_produto=separacao.cod_produto,
-                                lote_separacao_id=None,
+                                separacao_lote_id=None,
                                 ativo=True
                             ).first()
                             
@@ -4880,7 +4880,7 @@ def gerar_separacao_avancada():
                 itens_disponiveis = CarteiraPrincipal.query.filter(
                     CarteiraPrincipal.ativo == True,
                     or_(
-                        CarteiraPrincipal.lote_separacao_id.is_(None),
+                        CarteiraPrincipal.separacao_lote_id.is_(None),
                         CarteiraPrincipal.qtd_saldo_produto_pedido > 0
                     )
                 ).order_by(
@@ -5059,7 +5059,7 @@ def _processar_geracao_separacao_avancada(itens_selecionados, data_expedicao, da
         logger.info(f"🚀 Processando separação avançada por {usuario}")
         
         # 🆔 GERAR LOTE ID ÚNICO
-        lote_separacao_id = _gerar_novo_lote_id()
+        separacao_lote_id = _gerar_novo_lote_id()
         
         # 📊 CONTADORES E TOTAIS
         itens_processados = 0
@@ -5084,7 +5084,7 @@ def _processar_geracao_separacao_avancada(itens_selecionados, data_expedicao, da
                 valor_item = qtd_separacao * float(item.preco_produto_pedido or 0)
                 
                 # 🔄 ATUALIZAR CARTEIRA COM DADOS OPERACIONAIS
-                item.lote_separacao_id = lote_separacao_id
+                item.separacao_lote_id = separacao_lote_id
                 item.expedicao = data_expedicao
                 item.agendamento = data_agendamento
                 item.data_entrega_pedido = data_entrega
@@ -5094,7 +5094,7 @@ def _processar_geracao_separacao_avancada(itens_selecionados, data_expedicao, da
                 
                 # 📦 CRIAR REGISTRO NA TABELA SEPARACAO
                 separacao = Separacao(
-                    separacao_lote_id=lote_separacao_id,
+                    separacao_lote_id=separacao_lote_id,
                     num_pedido=item.num_pedido,
                     data_pedido=item.data_pedido,
                     cnpj_cpf=item.cnpj_cpf,
@@ -5133,11 +5133,11 @@ def _processar_geracao_separacao_avancada(itens_selecionados, data_expedicao, da
         if itens_processados > 0:
             db.session.commit()
             
-            logger.info(f"✅ Separação {lote_separacao_id} criada: {itens_processados} itens, {peso_total:.2f}kg, {pallet_total:.2f}pl, R${valor_total:.2f}")
+            logger.info(f"✅ Separação {separacao_lote_id} criada: {itens_processados} itens, {peso_total:.2f}kg, {pallet_total:.2f}pl, R${valor_total:.2f}")
             
             return {
                 'sucesso': True,
-                'lote_id': lote_separacao_id,
+                'lote_id': separacao_lote_id,
                 'itens_processados': itens_processados,
                 'peso_total': peso_total,
                 'pallet_total': pallet_total,

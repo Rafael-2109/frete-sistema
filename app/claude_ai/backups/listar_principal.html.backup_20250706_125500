@@ -165,9 +165,9 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                {% if item.lote_separacao_id %}
-                                <span class="badge badge-success" title="Vinculado ao lote {{ item.lote_separacao_id }}">
-                                    <i class="fas fa-link"></i> #{{ item.lote_separacao_id }}
+                                {% if item.separacao_lote_id %}
+                                <span class="badge badge-success" title="Vinculado ao lote {{ item.separacao_lote_id }}">
+                                    <i class="fas fa-link"></i> #{{ item.separacao_lote_id }}
                                 </span>
                                 {% else %}
                                 <span class="badge badge-secondary">

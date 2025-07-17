@@ -17,7 +17,6 @@ from datetime import datetime
 
 
 
-pedidos_bp = Blueprint('pedidos', __name__, url_prefix='/pedidos')
 
 # routes.py
 pedidos_bp = Blueprint('pedidos', __name__, url_prefix='/pedidos')
@@ -109,6 +108,13 @@ def lista_pedidos():
             (Pedido.nf.is_(None)) | (Pedido.nf == ""),
             Pedido.nf_cd == False,
             Pedido.expedicao < hoje
+        ).count(),
+        # ✅ NOVO: Contador de pedidos sem data de expedição
+        'sem_data': Pedido.query.filter(
+            Pedido.expedicao.is_(None),
+            Pedido.nf_cd == False,
+            (Pedido.nf.is_(None)) | (Pedido.nf == ""),
+            Pedido.data_embarque.is_(None)
         ).count()
     }
     
@@ -191,6 +197,14 @@ def lista_pedidos():
             else:
                 # Se não há CNPJs válidos, retorna query vazia
                 query = query.filter(Pedido.id == -1)
+        elif filtro_status == 'sem_data':
+            # ✅ NOVO: Filtro para pedidos sem data de expedição
+            query = query.filter(
+                Pedido.expedicao.is_(None),
+                Pedido.nf_cd == False,
+                (Pedido.nf.is_(None)) | (Pedido.nf == ""),
+                Pedido.data_embarque.is_(None)
+            )
         # 'todos' não aplica filtro
     
     if filtro_data:

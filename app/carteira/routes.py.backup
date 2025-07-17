@@ -538,7 +538,7 @@ def baixar_modelo():
                     'Aceita YYYY-MM-DD HH:MM:SS (2025-03-15 08:30:00)',
                     'Aceita vírgula como separador decimal (1.234,56)',
                     'Atualiza se existe, cria se novo (chave: num_pedido + cod_produto)',
-                    'Roteirização, lote_separacao_id, peso, pallet preservados',
+                    'Roteirização, separacao_lote_id, peso, pallet preservados',
                     'Campos obrigatórios validados automaticamente'
                 ]
             }
@@ -600,14 +600,14 @@ def relatorio_vinculacoes():
         # 📊 ESTATÍSTICAS DE VINCULAÇÃO
         total_carteira = CarteiraPrincipal.query.filter_by(ativo=True).count()
         itens_vinculados = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.lote_separacao_id.isnot(None),
+            CarteiraPrincipal.separacao_lote_id.isnot(None),
             CarteiraPrincipal.ativo == True
         ).count()
         itens_nao_vinculados = total_carteira - itens_vinculados
         
         # 📋 DETALHES DOS ITENS NÃO VINCULADOS
         itens_sem_vinculacao = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.lote_separacao_id.is_(None),
+            CarteiraPrincipal.separacao_lote_id.is_(None),
             CarteiraPrincipal.ativo == True
         ).limit(50).all()  # Limitar para não sobrecarregar
         
@@ -993,7 +993,7 @@ FUNCIONALIDADES IMPLEMENTADAS:
    - agendamento: Data de agendamento com cliente  
    - protocolo: Protocolo de agendamento
    - roteirizacao: Transportadora sugerida/contratada
-   - lote_separacao_id: Vínculo com separação já gerada
+   - separacao_lote_id: Vínculo com separação já gerada
    - qtd_saldo, valor_saldo, pallet, peso: Dados do lote
 
 3. SISTEMA DE RESTRIÇÕES POR COTAÇÃO:
@@ -1106,7 +1106,7 @@ def _atualizar_item_inteligente(item, row, usuario):
             'expedicao': getattr(item, 'expedicao', None),
             'agendamento': getattr(item, 'agendamento', None),
             'protocolo': getattr(item, 'protocolo', None),
-            'lote_separacao_id': getattr(item, 'lote_separacao_id', None),
+            'separacao_lote_id': getattr(item, 'separacao_lote_id', None),
             'roteirizacao': getattr(item, 'roteirizacao', None)
         }
         
@@ -1140,7 +1140,7 @@ def _atualizar_item_inteligente(item, row, usuario):
             logger.warning(f"🚨 ALTERAÇÃO AFETA SEPARAÇÃO EXISTENTE: {item.num_pedido}")
             
             # Gerar evento para notificação
-            if hasattr(item, 'lote_separacao_id') and item.lote_separacao_id:
+            if hasattr(item, 'separacao_lote_id') and item.separacao_lote_id:
                 evento = EventoCarteira(
                     num_pedido=item.num_pedido,
                     cod_produto=item.cod_produto,
@@ -1379,8 +1379,8 @@ def _processar_geracao_separacao(itens_selecionados, usuario, observacao):
                 db.session.add(separacao)
                 
                 # 🔗 ATUALIZAR CARTEIRA COM VÍNCULO (SOMENTE SE CAMPOS EXISTEM)
-                if hasattr(item, 'lote_separacao_id'):
-                    item.lote_separacao_id = separacao.id
+                if hasattr(item, 'separacao_lote_id'):
+                    item.separacao_lote_id = separacao.id
                 if hasattr(item, 'qtd_saldo'):
                     item.qtd_saldo = float(getattr(item, 'qtd_saldo_produto_pedido', 0) or 0)
                 if hasattr(item, 'valor_saldo'):
@@ -2035,7 +2035,7 @@ FUNCIONALIDADES IMPLEMENTADAS:
    - agendamento: Data de agendamento com cliente  
    - protocolo: Protocolo de agendamento
    - roteirizacao: Transportadora sugerida/contratada
-   - lote_separacao_id: Vínculo com separação já gerada
+   - separacao_lote_id: Vínculo com separação já gerada
    - qtd_saldo, valor_saldo, pallet, peso: Dados do lote
 
 3. SISTEMA DE RESTRIÇÕES POR COTAÇÃO:
@@ -2148,7 +2148,7 @@ def _atualizar_item_inteligente(item, row, usuario):
             'expedicao': getattr(item, 'expedicao', None),
             'agendamento': getattr(item, 'agendamento', None),
             'protocolo': getattr(item, 'protocolo', None),
-            'lote_separacao_id': getattr(item, 'lote_separacao_id', None),
+            'separacao_lote_id': getattr(item, 'separacao_lote_id', None),
             'roteirizacao': getattr(item, 'roteirizacao', None)
         }
         
@@ -2182,7 +2182,7 @@ def _atualizar_item_inteligente(item, row, usuario):
             logger.warning(f"🚨 ALTERAÇÃO AFETA SEPARAÇÃO EXISTENTE: {item.num_pedido}")
             
             # Gerar evento para notificação
-            if hasattr(item, 'lote_separacao_id') and item.lote_separacao_id:
+            if hasattr(item, 'separacao_lote_id') and item.separacao_lote_id:
                 evento = EventoCarteira(
                     num_pedido=item.num_pedido,
                     cod_produto=item.cod_produto,
@@ -2421,8 +2421,8 @@ def _processar_geracao_separacao(itens_selecionados, usuario, observacao):
                 db.session.add(separacao)
                 
                 # 🔗 ATUALIZAR CARTEIRA COM VÍNCULO (SOMENTE SE CAMPOS EXISTEM)
-                if hasattr(item, 'lote_separacao_id'):
-                    item.lote_separacao_id = separacao.id
+                if hasattr(item, 'separacao_lote_id'):
+                    item.separacao_lote_id = separacao.id
                 if hasattr(item, 'qtd_saldo'):
                     item.qtd_saldo = float(getattr(item, 'qtd_saldo_produto_pedido', 0) or 0)
                 if hasattr(item, 'valor_saldo'):
@@ -2578,7 +2578,7 @@ def _processar_justificativa_faturamento_parcial(data, usuario):
             
             if item_carteira:
                 # Limpar dados operacionais
-                item_carteira.lote_separacao_id = None
+                item_carteira.separacao_lote_id = None
                 item_carteira.expedicao = None
                 item_carteira.agendamento = None
                 item_carteira.protocolo = None
@@ -2798,7 +2798,7 @@ def _buscar_faturamentos_parciais_pendentes():
                         'data_deteccao': inconsistencia.detectada_em.strftime('%d/%m/%Y %H:%M'),
                         'antiguidade_dias': (agora_brasil() - inconsistencia.detectada_em).days,
                         'tipo_inconsistencia': inconsistencia.tipo,
-                        'lote_separacao_id': item_carteira.lote_separacao_id
+                        'separacao_lote_id': item_carteira.separacao_lote_id
                     }
                     pendentes.append(pendente)
                     
@@ -2911,7 +2911,7 @@ def _sincronizar_carteira_copia(usuario):
                     # 🔄 CRIAR CONTROLE DE DIVERGÊNCIA
                     if inspector.has_table('controle_cruzado_separacao'):
                         controle = ControleCruzadoSeparacao(
-                            lote_separacao_id=item_principal.lote_separacao_id or 0,
+                            separacao_lote_id=item_principal.separacao_lote_id or 0,
                             num_pedido=item_principal.num_pedido,
                             cod_produto=item_principal.cod_produto,
                             qtd_separada_original=item_principal.qtd_produto_pedido,
@@ -2967,7 +2967,7 @@ def _processar_vinculacao_automatica(usuario):
         
         # 📋 BUSCAR ITENS DA CARTEIRA SEM VINCULAÇÃO
         itens_sem_vinculacao = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.lote_separacao_id.is_(None),
+            CarteiraPrincipal.separacao_lote_id.is_(None),
             CarteiraPrincipal.ativo == True
         ).all()
         
@@ -2982,7 +2982,7 @@ def _processar_vinculacao_automatica(usuario):
                 # ✅ VINCULAÇÃO ENCONTRADA
                 if separacao.quantidade <= item.qtd_saldo_produto_pedido:
                     # 🔗 VINCULAR (QUANTIDADE DA SEPARAÇÃO ≤ CARTEIRA)
-                    item.lote_separacao_id = separacao.id
+                    item.separacao_lote_id = separacao.id
                     item.qtd_saldo = separacao.quantidade
                     item.updated_by = usuario
                     
@@ -3361,7 +3361,7 @@ def _detectar_alteracoes_importantes(item_antes, item_depois):
     
     # Verificar se afeta separação
     afeta_separacao = bool(
-        getattr(item_antes, 'lote_separacao_id', None) and 
+        getattr(item_antes, 'separacao_lote_id', None) and 
         'qtd_produto_pedido' in alteracoes_importantes
     )
     
