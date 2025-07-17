@@ -78,6 +78,7 @@ class CarteiraPrincipal(db.Model):
     agendamento = db.Column(db.Date, nullable=True)  # Data agendamento
     hora_agendamento = db.Column(db.Time, nullable=True)  # Hora agendamento
     protocolo = db.Column(db.String(50), nullable=True)  # Protocolo agendamento
+    agendamento_confirmado = db.Column(db.Boolean, nullable=True, default=False)  # Agendamento confirmado
     roteirizacao = db.Column(db.String(100), nullable=True)  # Transportadora sugerida
     
     # 📊 ANÁLISE DE ESTOQUE (CALCULADOS)

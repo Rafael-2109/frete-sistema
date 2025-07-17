@@ -170,21 +170,53 @@ def listar_principal():
                 CarteiraPrincipal.raz_social_red.ilike(f'%{cliente}%')
             ))
         
-        # 📈 ORDENAÇÃO E PAGINAÇÃO
-        itens = query.order_by(
-            CarteiraPrincipal.expedicao.asc().nullslast(),
-            CarteiraPrincipal.num_pedido.asc()
-        ).paginate(
+        # 📊 ORDENAÇÃO INTELIGENTE
+        sort_field = request.args.get('sort', '')
+        sort_order = request.args.get('order', 'asc')
+        
+        # Mapear campos para ordenação
+        sort_mapping = {
+            'vendedor': CarteiraPrincipal.vendedor,
+            'num_pedido': CarteiraPrincipal.num_pedido,
+            'data_pedido': CarteiraPrincipal.data_pedido,
+            'raz_social': CarteiraPrincipal.raz_social,
+            'cod_uf': CarteiraPrincipal.cod_uf,
+            'cod_produto': CarteiraPrincipal.cod_produto,
+            'qtd_saldo_produto_pedido': CarteiraPrincipal.qtd_saldo_produto_pedido,
+            'preco_produto_pedido': CarteiraPrincipal.preco_produto_pedido,
+            'expedicao': CarteiraPrincipal.expedicao,
+            'agendamento': CarteiraPrincipal.agendamento
+        }
+        
+        # Aplicar ordenação se especificada e válida
+        if sort_field and sort_field in sort_mapping:
+            sort_column = sort_mapping[sort_field]
+            if sort_order.lower() == 'desc':
+                query = query.order_by(sort_column.desc().nullslast())
+            else:
+                query = query.order_by(sort_column.asc().nullslast())
+        else:
+            # Ordenação padrão
+            query = query.order_by(
+                CarteiraPrincipal.expedicao.asc().nullslast(),
+                CarteiraPrincipal.num_pedido.asc()
+            )
+        
+        # 📈 PAGINAÇÃO
+        itens = query.paginate(
             page=page, per_page=per_page, error_out=False
         )
         
         # 📞 BUSCAR CONTATOS DE AGENDAMENTO para exibir botão "Agendar"
         from app.cadastros_agendamento.models import ContatoAgendamento
+        from app.producao.models import CadastroPalletizacao
         
         # Obter CNPJs únicos dos itens
         cnpjs_unicos = set()
+        produtos_unicos = set()
         if itens.items:
             cnpjs_unicos = {item.cnpj_cpf for item in itens.items if item.cnpj_cpf}
+            produtos_unicos = {item.cod_produto for item in itens.items if item.cod_produto}
         
         # Buscar contatos de agendamento
         contatos_agendamento = {}
@@ -193,6 +225,29 @@ def listar_principal():
                 ContatoAgendamento.cnpj.in_(cnpjs_unicos)
             ).all()
             contatos_agendamento = {contato.cnpj: contato for contato in contatos}
+        
+        # 🏭 BUSCAR DADOS DE PALLETIZAÇÃO para calcular peso e pallet
+        dados_palletizacao = {}
+        if produtos_unicos:
+            palletizacoes = CadastroPalletizacao.query.filter(
+                CadastroPalletizacao.cod_produto.in_(produtos_unicos),
+                CadastroPalletizacao.ativo == True
+            ).all()
+            dados_palletizacao = {p.cod_produto: p for p in palletizacoes}
+        
+        # 📊 CALCULAR PESO E PALLET DINAMICAMENTE para cada item
+        if itens.items:
+            for item in itens.items:
+                palletizacao = dados_palletizacao.get(item.cod_produto)
+                if palletizacao and item.qtd_saldo_produto_pedido:
+                    # Calcular peso: QTD x peso_bruto
+                    item.peso_calculado = float(item.qtd_saldo_produto_pedido) * palletizacao.peso_bruto
+                    # Calcular pallet: QTD / palletizacao
+                    item.pallet_calculado = float(item.qtd_saldo_produto_pedido) / palletizacao.palletizacao
+                else:
+                    # Fallback para campos existentes no banco
+                    item.peso_calculado = float(item.peso) if item.peso else 0
+                    item.pallet_calculado = float(item.pallet) if item.pallet else 0
         
         return render_template('carteira/listar_principal.html',
                              itens=itens,
@@ -269,6 +324,7 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
                 'agendamento': item.agendamento.strftime('%Y-%m-%d') if item.agendamento else None,
                 'hora_agendamento': item.hora_agendamento.strftime('%H:%M') if item.hora_agendamento else None,
                 'protocolo': item.protocolo,
+                'agendamento_confirmado': item.agendamento_confirmado if item.agendamento_confirmado is not None else False,
                 'contato_agendamento': {
                     'forma': contato.forma,
                     'contato': contato.contato,
@@ -284,7 +340,20 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
             
             dados = request.get_json()
             
-            # Validar data obrigatória
+            # Se apenas confirmando agendamento existente
+            if dados.get('agenda_confirmada') and not dados.get('data_agendamento'):
+                if not item.agendamento:
+                    return jsonify({'error': 'Não é possível confirmar agendamento que não existe'}), 400
+                
+                item.agendamento_confirmado = True
+                db.session.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Agendamento confirmado com sucesso'
+                })
+            
+            # Validar data obrigatória para novos agendamentos
             if not dados.get('data_agendamento'):
                 return jsonify({'error': 'Data do agendamento é obrigatória'}), 400
             
@@ -293,6 +362,11 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
                 data_agendamento = datetime.strptime(dados['data_agendamento'], '%Y-%m-%d').date()
                 item.agendamento = data_agendamento
                 
+                # Data de entrega (novo campo)
+                if dados.get('data_entrega'):
+                    data_entrega = datetime.strptime(dados['data_entrega'], '%Y-%m-%d').date()
+                    item.data_entrega_pedido = data_entrega
+                
                 if dados.get('hora_agendamento'):
                     hora_agendamento = datetime.strptime(dados['hora_agendamento'], '%H:%M').time()
                     item.hora_agendamento = hora_agendamento
@@ -300,14 +374,37 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
                 if dados.get('protocolo'):
                     item.protocolo = dados['protocolo']
                 
-                # Se agenda confirmada, aqui você pode adicionar lógica adicional
-                # Por enquanto apenas salvamos os dados básicos
+                # Processar confirmação do agendamento
+                item.agendamento_confirmado = dados.get('agenda_confirmada', False)
+                
+                # Se checkbox "Aplicar a todos os itens do pedido" foi marcado
+                if dados.get('aplicar_todos'):
+                    # Buscar todos os itens do mesmo pedido
+                    itens_mesmo_pedido = CarteiraPrincipal.query.filter_by(
+                        num_pedido=item.num_pedido,
+                        ativo=True
+                    ).all()
+                    
+                    # Aplicar o agendamento a todos os itens
+                    for item_pedido in itens_mesmo_pedido:
+                        item_pedido.agendamento = data_agendamento
+                        if dados.get('data_entrega'):
+                            item_pedido.data_entrega_pedido = data_entrega
+                        if dados.get('hora_agendamento'):
+                            item_pedido.hora_agendamento = hora_agendamento
+                        if dados.get('protocolo'):
+                            item_pedido.protocolo = dados['protocolo']
+                        item_pedido.agendamento_confirmado = dados.get('agenda_confirmada', False)
+                    
+                    message = f'Agendamento aplicado a {len(itens_mesmo_pedido)} itens do pedido {item.num_pedido}'
+                else:
+                    message = 'Agendamento salvo com sucesso'
                 
                 db.session.commit()
                 
                 return jsonify({
                     'success': True,
-                    'message': 'Agendamento salvo com sucesso'
+                    'message': message
                 })
                 
             except ValueError as e:

@@ -28,7 +28,7 @@
         </div>
         <div class="card-body">
             <form method="GET" id="form-filtros">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div class="row">
                     <div class="col-md-2 mb-3">
                         <label for="num_pedido" class="form-label">Número Pedido</label>
@@ -86,18 +86,57 @@
                 <table class="table table-hover table-sm">
                     <thead class="thead-light">
                         <tr>
-                            <th>Vendedor</th>
-                            <th>Pedido</th>
-                            <th>Status</th>
-                            <th>Cliente</th>
-                            <th>UF/Município</th>
-                            <th>Produto</th>
-                            <th class="text-right">Saldo</th>
-                            <th class="text-right">Valor</th>
+                            <th>
+                                <a href="javascript:void(0)" onclick="ordenarPor('vendedor')" class="text-decoration-none text-dark">
+                                    Vendedor <i class="fas fa-sort"></i>
+                                </a>
+                            </th>
+                            <th>
+                                <a href="javascript:void(0)" onclick="ordenarPor('num_pedido')" class="text-decoration-none text-dark">
+                                    Pedido <i class="fas fa-sort"></i>
+                                </a>
+                            </th>
+                            <th>
+                                <a href="javascript:void(0)" onclick="ordenarPor('data_pedido')" class="text-decoration-none text-dark">
+                                    Pdd / Ent <i class="fas fa-sort"></i>
+                                </a>
+                            </th>
+                            <th>
+                                <a href="javascript:void(0)" onclick="ordenarPor('raz_social')" class="text-decoration-none text-dark">
+                                    Cliente <i class="fas fa-sort"></i>
+                                </a>
+                            </th>
+                            <th>
+                                <a href="javascript:void(0)" onclick="ordenarPor('cod_uf')" class="text-decoration-none text-dark">
+                                    UF/Município <i class="fas fa-sort"></i>
+                                </a>
+                            </th>
+                            <th>
+                                <a href="javascript:void(0)" onclick="ordenarPor('cod_produto')" class="text-decoration-none text-dark">
+                                    Produto <i class="fas fa-sort"></i>
+                                </a>
+                            </th>
+                            <th class="text-right">
+                                <a href="javascript:void(0)" onclick="ordenarPor('qtd_saldo_produto_pedido')" class="text-decoration-none text-dark">
+                                    Saldo <i class="fas fa-sort"></i>
+                                </a>
+                            </th>
+                            <th class="text-right">
+                                <a href="javascript:void(0)" onclick="ordenarPor('preco_produto_pedido')" class="text-decoration-none text-dark">
+                                    Valor <i class="fas fa-sort"></i>
+                                </a>
+                            </th>
                             <th class="text-center">Peso/Pallet</th>
-                            <th class="text-center">Pdd / Ent</th>
-                            <th class="text-center">Expedição</th>
-                            <th class="text-center">Agendamento</th>
+                            <th class="text-center">
+                                <a href="javascript:void(0)" onclick="ordenarPor('expedicao')" class="text-decoration-none text-dark">
+                                    Expedição <i class="fas fa-sort"></i>
+                                </a>
+                            </th>
+                            <th class="text-center">
+                                <a href="javascript:void(0)" onclick="ordenarPor('agendamento')" class="text-decoration-none text-dark">
+                                    Agendamento <i class="fas fa-sort"></i>
+                                </a>
+                            </th>
                             <th class="text-center">Separação</th>
                             <th class="text-center">Ações</th>
                         </tr>
@@ -116,22 +155,32 @@
                                 {% if item.protocolo %}
                                 <br><small class="text-muted">{{ item.protocolo|formatar_protocolo }}</small>
                                 {% endif %}
-                            </td>
-                            <td>
+                                <!-- Status como badge embaixo do pedido -->
+                                <br>
                                 {% if item.status_pedido %}
                                     {% if item.status_pedido == 'Cotação' %}
                                     <span class="badge badge-primary" style="background-color: #007bff; color: white;">{{ item.status_pedido }}</span>
                                     {% elif item.status_pedido == 'Pedido de venda' %}
                                     <span class="badge badge-success" style="background-color: #28a745; color: white;">{{ item.status_pedido }}</span>
                                     {% else %}
-                                    <span class="badge badge-secondary">{{ item.status_pedido }}</span>
+                                    <span class="badge" style="background-color: #6c757d; color: white;">{{ item.status_pedido }}</span>
                                     {% endif %}
                                 {% else %}
-                                <span class="badge badge-secondary">Sem Status</span>
+                                <span class="badge" style="background-color: #6c757d; color: white;">Sem Status</span>
                                 {% endif %}
                             </td>
                             <td>
-                                <div class="text-truncate" style="max-width: 200px;" title="{{ item.raz_social }}">
+                                {% if item.data_pedido %}
+                                <span class="badge" style="background-color: #6c757d; color: white;">{{ item.data_pedido|formatar_data_brasil }}</span>
+                                {% else %}
+                                <span class="badge badge-light">-</span>
+                                {% endif %}
+                                {% if item.data_entrega_pedido %}
+                                <br><span class="badge badge-primary">{{ item.data_entrega_pedido|formatar_data_brasil }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="text-truncate" style="max-width: 250px;" title="{{ item.raz_social }}">
                                     {{ item.raz_social_red or item.raz_social }}
                                     <br><small class="text-muted">{{ item.cnpj_cpf }}</small>
                                 </div>
@@ -145,7 +194,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <div class="text-truncate" style="max-width: 250px;" title="{{ item.nome_produto }}">
+                                <div class="text-truncate" style="max-width: 300px;" title="{{ item.nome_produto }}">
                                     <strong>{{ item.cod_produto }}</strong><br>
                                     <small class="text-muted">{{ item.nome_produto }}</small>
                                 </div>
@@ -162,46 +211,53 @@
                                 <br><small class="text-muted">{{ item.preco_produto_pedido|valor_br if item.preco_produto_pedido else '-' }}/un</small>
                             </td>
                             <td class="text-center">
-                                {% if item.peso or item.pallet %}
-                                <span class="badge badge-secondary">
-                                    {% if item.peso %}{{ item.peso|numero_br }}kg{% endif %}
-                                    {% if item.peso and item.pallet %} | {% endif %}
-                                    {% if item.pallet %}{{ item.pallet|numero_br }}pl{% endif %}
+                                {% if item.peso_calculado or item.pallet_calculado %}
+                                <span class="badge" style="background-color: #6c757d; color: white;">
+                                    {% if item.peso_calculado %}{{ "%.2f"|format(item.peso_calculado) }}kg{% endif %}
+                                    {% if item.peso_calculado and item.pallet_calculado %} | {% endif %}
+                                    {% if item.pallet_calculado %}{{ "%.2f"|format(item.pallet_calculado) }}pl{% endif %}
                                 </span>
                                 {% else %}
                                 <span class="badge badge-light">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                {% if item.data_pedido %}
-                                <span class="badge badge-secondary">{{ item.data_pedido|formatar_data_brasil }}</span>
-                                {% else %}
-                                <span class="badge badge-light">-</span>
-                                {% endif %}
-                                {% if item.data_entrega_pedido %}
-                                <br><span class="badge badge-primary">{{ item.data_entrega_pedido|formatar_data_brasil }}</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
                                 {% if item.expedicao %}
-                                <span class="badge badge-warning">{{ item.expedicao|formatar_data_brasil }}</span>
+                                <span class="badge badge-warning" style="background-color: #ffc107; color: black;">{{ item.expedicao|formatar_data_brasil }}</span>
                                 {% else %}
                                 <span class="badge badge-light">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                <!-- Implementação igual ao monitoramento -->
+                                <!-- Implementação com cores baseadas na confirmação -->
                                 {% set precisa_agendamento = item.cliente_nec_agendamento == 'Sim' or (contatos_agendamento.get(item.cnpj_cpf) and contatos_agendamento.get(item.cnpj_cpf).forma and contatos_agendamento.get(item.cnpj_cpf).forma != 'SEM AGENDAMENTO') %}
                                 
                                 {% if item.agendamento %}
-                                    <!-- Tem agendamento - mostrar como botão clicável -->
-                                    <button class="btn btn-sm btn-primary w-100 text-white" onclick="abrirModalAgendamento('{{ item.id }}', '{{ item.num_pedido }}')">
-                                        📅 {{ item.agendamento|formatar_data_brasil }}
-                                        {% if item.protocolo %}
-                                        <br><small>📋 {{ item.protocolo }}</small>
-                                        {% endif %}
-                                        <br><small>✅ Agendado</small>
-                                    </button>
+                                    <!-- Tem agendamento - cor baseada na confirmação -->
+                                    {% if item.agendamento_confirmado %}
+                                        <!-- Agendamento confirmado - azul -->
+                                        <button class="btn btn-sm btn-primary w-100 text-white" onclick="abrirModalAgendamento('{{ item.id }}', '{{ item.num_pedido }}')">
+                                            📅 {{ item.agendamento|formatar_data_brasil }}
+                                            {% if item.protocolo %}
+                                            <br><small>📋 {{ item.protocolo }}</small>
+                                            {% endif %}
+                                            <br><small>✅ Confirmado</small>
+                                        </button>
+                                    {% else %}
+                                        <!-- Agendamento não confirmado - amarelo com check verde -->
+                                        <div class="d-flex align-items-center justify-content-center">
+                                            <button class="btn btn-sm btn-warning text-dark flex-grow-1 me-1" onclick="abrirModalAgendamento('{{ item.id }}', '{{ item.num_pedido }}')">
+                                                📅 {{ item.agendamento|formatar_data_brasil }}
+                                                {% if item.protocolo %}
+                                                <br><small>📋 {{ item.protocolo }}</small>
+                                                {% endif %}
+                                                <br><small>⏳ Aguardando</small>
+                                            </button>
+                                            <button class="btn btn-sm btn-success" onclick="confirmarAgendamento('{{ item.id }}')" title="Confirmar agendamento">
+                                                ✅
+                                            </button>
+                                        </div>
+                                    {% endif %}
                                 {% elif precisa_agendamento %}
                                     <!-- Precisa agendamento mas não tem - mostrar botão Agendar -->
                                     <button class="btn btn-sm btn-warning w-100" onclick="abrirModalAgendamento('{{ item.id }}', '{{ item.num_pedido }}')">
@@ -218,7 +274,7 @@
                                     <i class="fas fa-link"></i> #{{ item.separacao_lote_id }}
                                 </span>
                                 {% else %}
-                                <span class="badge badge-secondary">
+                                <span class="badge" style="background-color: #6c757d; color: white;">
                                     <i class="fas fa-unlink"></i> Sem separação
                                 </span>
                                 {% endif %}
@@ -241,7 +297,7 @@
                 <ul class="pagination justify-content-center">
                     {% if itens.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carteira.listar_principal', page=itens.prev_num, **request.args) }}">
+                        <a class="page-link" href="javascript:void(0)" onclick="irParaPagina({{ itens.prev_num }})">
                             <i class="fas fa-angle-left"></i>
                         </a>
                     </li>
@@ -251,7 +307,7 @@
                         {% if page_num %}
                             {% if page_num != itens.page %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('carteira.listar_principal', page=page_num, **request.args) }}">
+                                <a class="page-link" href="javascript:void(0)" onclick="irParaPagina({{ page_num }})">
                                     {{ page_num }}
                                 </a>
                             </li>
@@ -269,7 +325,7 @@
 
                     {% if itens.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carteira.listar_principal', page=itens.next_num, **request.args) }}">
+                        <a class="page-link" href="javascript:void(0)" onclick="irParaPagina({{ itens.next_num }})">
                             <i class="fas fa-angle-right"></i>
                         </a>
                     </li>
@@ -328,7 +384,200 @@
     </div>
 </div>
 
+<!-- Modal para Detalhes do Endereço -->
+<div class="modal fade" id="modalEndereco" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-map-marker-alt"></i> Detalhes do Endereço</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-user"></i> Cliente</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>UF:</strong> <span id="modal_cliente_uf"></span></li>
+                            <li><strong>Município:</strong> <span id="modal_cliente_municipio"></span></li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-shipping-fast"></i> Endereço de Entrega</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>CNPJ:</strong> <span id="modal_cnpj_endereco"></span></li>
+                            <li><strong>Empresa:</strong> <span id="modal_empresa_endereco"></span></li>
+                            <li><strong>UF:</strong> <span id="modal_uf_endereco"></span></li>
+                            <li><strong>Município:</strong> <span id="modal_municipio_endereco"></span></li>
+                            <li><strong>Bairro:</strong> <span id="modal_bairro_endereco"></span></li>
+                            <li><strong>CEP:</strong> <span id="modal_cep_endereco"></span></li>
+                            <li><strong>Rua:</strong> <span id="modal_rua_endereco"></span></li>
+                            <li><strong>Telefone:</strong> <span id="modal_telefone_endereco"></span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Agendamento -->
+<div class="modal fade" id="modalAgendamento" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-calendar-alt"></i> Agendamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formAgendamento">
+                    <!-- Informações do Pedido -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Pedido:</strong> <span id="modal_pedido"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Cliente:</strong> <span id="modal_cliente_nome"></span>
+                        </div>
+                    </div>
+
+                    <!-- Necessidade de Agendamento -->
+                    <div class="mb-3">
+                        <h6><i class="fas fa-info-circle"></i> Necessidade Agendamento:</h6>
+                        <div id="badges_necessidade"></div>
+                    </div>
+
+                    <!-- Dados do Contato de Agendamento -->
+                    <div class="mb-3" id="dados_contato" style="display: none;">
+                        <h6><i class="fas fa-phone"></i> Contato Agendamento:</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <strong>Forma:</strong> <span id="contato_forma"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Contato:</strong> <span id="contato_info"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Observação:</strong> <span id="contato_obs"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Campos de Agendamento -->
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="data_agendamento" class="form-label">Data do Agendamento</label>
+                            <input type="date" class="form-control" id="data_agendamento" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="data_entrega" class="form-label">Data de Entrega</label>
+                            <input type="date" class="form-control" id="data_entrega">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="hora_agendamento" class="form-label">Hora do Agendamento</label>
+                            <input type="time" class="form-control" id="hora_agendamento">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="protocolo_agendamento" class="form-label">Protocolo</label>
+                            <input type="text" class="form-control" id="protocolo_agendamento" placeholder="Protocolo...">
+                        </div>
+                    </div>
+
+                    <!-- Checkbox Agenda Confirmada -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="agenda_confirmada">
+                            <label class="form-check-label" for="agenda_confirmada">
+                                Agenda Confirmada
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Checkbox Aplicar a Todos -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="aplicar_todos_itens">
+                            <label class="form-check-label" for="aplicar_todos_itens">
+                                <strong>Aplicar a todos os itens do pedido</strong>
+                                <br><small class="text-muted">Aplicará o agendamento a todos os itens deste pedido na carteira</small>
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarAgendamento()">
+                    <i class="fas fa-save"></i> Salvar Agendamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+// 📊 PARÂMETROS GLOBAIS PARA ORDENAÇÃO E PAGINAÇÃO
+let currentSort = null;
+let currentOrder = 'asc';
+
+// 🔄 FUNÇÃO PARA ORDENAÇÃO INTELIGENTE
+function ordenarPor(campo) {
+    // Alternar ordem se clicou no mesmo campo
+    if (currentSort === campo) {
+        currentOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSort = campo;
+        currentOrder = 'asc';
+    }
+    
+    // Submeter formulário com parâmetros de ordenação
+    const form = document.getElementById('form-filtros');
+    
+    // Remover campos de ordenação existentes
+    const existingSort = form.querySelector('input[name="sort"]');
+    const existingOrder = form.querySelector('input[name="order"]');
+    if (existingSort) existingSort.remove();
+    if (existingOrder) existingOrder.remove();
+    
+    // Adicionar novos campos de ordenação
+    const sortInput = document.createElement('input');
+    sortInput.type = 'hidden';
+    sortInput.name = 'sort';
+    sortInput.value = campo;
+    form.appendChild(sortInput);
+    
+    const orderInput = document.createElement('input');
+    orderInput.type = 'hidden';
+    orderInput.name = 'order';
+    orderInput.value = currentOrder;
+    form.appendChild(orderInput);
+    
+    // Submeter formulário
+    form.submit();
+}
+
+// 📄 FUNÇÃO PARA PAGINAÇÃO INTELIGENTE
+function irParaPagina(pagina) {
+    const form = document.getElementById('form-filtros');
+    
+    // Remover campo de página existente
+    const existingPage = form.querySelector('input[name="page"]');
+    if (existingPage) existingPage.remove();
+    
+    // Adicionar novo campo de página
+    const pageInput = document.createElement('input');
+    pageInput.type = 'hidden';
+    pageInput.name = 'page';
+    pageInput.value = pagina;
+    form.appendChild(pageInput);
+    
+    // Submeter formulário
+    form.submit();
+}
+
 function verDetalhes(itemId) {
     const modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
     const conteudo = document.getElementById('conteudo-detalhes');
@@ -345,7 +594,7 @@ function verDetalhes(itemId) {
     modal.show();
     
     // Buscar detalhes via API
-    fetch(`{{ url_for('carteira.api_item_detalhes', id=0) }}`.replace('0', itemId))
+    fetch(`/carteira/api/item/${itemId}`)
         .then(response => response.json())
         .then(data => {
             if (data.error) {
@@ -491,6 +740,194 @@ function verDetalhes(itemId) {
                 </div>
             `;
         });
+
+                
+
+}
+
+// 🔄 FUNÇÃO PARA CONFIRMAR AGENDAMENTO DIRETAMENTE
+function confirmarAgendamento(itemId) {
+    if (!confirm('Confirmar este agendamento?')) {
+        return;
+    }
+    
+    const dados = {
+        agenda_confirmada: true
+    };
+    
+    fetch('/carteira/item/' + itemId + '/agendamento', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dados)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Agendamento confirmado com sucesso!');
+            location.reload(); // Recarregar página para mostrar mudanças
+        } else {
+            alert('Erro ao confirmar agendamento: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao confirmar agendamento:', error);
+        alert('Erro ao confirmar agendamento');
+    });
+}
+
+function abrirModalAgendamento(itemId, numPedido) {
+    // Buscar dados do item via AJAX
+    fetch('/carteira/item/' + itemId + '/agendamento')
+        .then(response => response.json())
+        .then(data => {
+            // Preencher informações básicas
+            document.getElementById('modal_pedido').textContent = numPedido;
+            document.getElementById('modal_cliente_nome').textContent = data.raz_social_red || data.raz_social || '-';
+            
+            // Determinar necessidade de agendamento e badges
+            let badgesHtml = '';
+            let temContato = false;
+            
+            // A.1 - Odoo (cliente_nec_agendamento = "Sim")
+            if (data.cliente_nec_agendamento === 'Sim') {
+                badgesHtml += '<span class="badge badge-primary me-2" style="background-color: #007bff; color: white;">Odoo</span>';
+            }
+            
+            // A.2 - Sistema (ContatoAgendamento existe e forma != "SEM AGENDAMENTO")
+            if (data.contato_agendamento && data.contato_agendamento.forma && data.contato_agendamento.forma !== 'SEM AGENDAMENTO') {
+                badgesHtml += '<span class="badge badge-success me-2" style="background-color: #28a745; color: white;">Sistema</span>';
+                temContato = true;
+            }
+            
+            document.getElementById('badges_necessidade').innerHTML = badgesHtml || '<span class="badge" style="background-color: #6c757d; color: white;">Sem necessidade</span>';
+            
+            // B - Dados do contato se existir
+            if (temContato) {
+                document.getElementById('contato_forma').textContent = data.contato_agendamento.forma || '-';
+                document.getElementById('contato_info').textContent = data.contato_agendamento.contato || '-';
+                document.getElementById('contato_obs').textContent = data.contato_agendamento.observacao || '-';
+                document.getElementById('dados_contato').style.display = 'block';
+            } else {
+                document.getElementById('dados_contato').style.display = 'none';
+            }
+            
+            // C - Preencher campos se já tem agendamento
+            if (data.agendamento) {
+                document.getElementById('data_agendamento').value = data.agendamento;
+            }
+            if (data.data_entrega_pedido) {
+                document.getElementById('data_entrega').value = data.data_entrega_pedido;
+            }
+            if (data.hora_agendamento) {
+                document.getElementById('hora_agendamento').value = data.hora_agendamento;
+            }
+            if (data.protocolo) {
+                document.getElementById('protocolo_agendamento').value = data.protocolo;
+            }
+            if (data.agendamento_confirmado) {
+                document.getElementById('agenda_confirmada').checked = data.agendamento_confirmado;
+            }
+            
+            // Guardar ID do item para salvar
+            document.getElementById('formAgendamento').setAttribute('data-item-id', itemId);
+            
+            // Mostrar modal
+            const modal = new bootstrap.Modal(document.getElementById('modalAgendamento'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Erro ao buscar dados do agendamento:', error);
+            alert('Erro ao carregar dados do agendamento');
+        });
+}
+
+function salvarAgendamento() {
+    const itemId = document.getElementById('formAgendamento').getAttribute('data-item-id');
+    const dataAgendamento = document.getElementById('data_agendamento').value;
+    const dataEntrega = document.getElementById('data_entrega').value;
+    const horaAgendamento = document.getElementById('hora_agendamento').value;
+    const protocoloAgendamento = document.getElementById('protocolo_agendamento').value;
+    const agendaConfirmada = document.getElementById('agenda_confirmada').checked;
+    const aplicarTodos = document.getElementById('aplicar_todos_itens').checked;
+    
+    if (!dataAgendamento) {
+        alert('Data do agendamento é obrigatória');
+        return;
+    }
+    
+    const dados = {
+        data_agendamento: dataAgendamento,
+        data_entrega: dataEntrega,
+        hora_agendamento: horaAgendamento,
+        protocolo: protocoloAgendamento,
+        agenda_confirmada: agendaConfirmada,
+        aplicar_todos: aplicarTodos
+    };
+    
+    fetch('/carteira/item/' + itemId + '/agendamento', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dados)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message || 'Agendamento salvo com sucesso!');
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalAgendamento'));
+            modal.hide();
+            location.reload(); // Recarregar página para mostrar mudanças
+        } else {
+            alert('Erro ao salvar agendamento: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao salvar agendamento:', error);
+        alert('Erro ao salvar agendamento');
+    });
+}
+
+function abrirModalEndereco(itemId) {
+    // Buscar dados do item via AJAX
+    fetch('/carteira/item/' + itemId + '/endereco')
+        .then(response => response.json())
+        .then(data => {
+            // Preencher dados do cliente
+            document.getElementById('modal_cliente_uf').textContent = data.estado || '-';
+            document.getElementById('modal_cliente_municipio').textContent = data.municipio || '-';
+            
+            // Preencher dados do endereço de entrega
+            document.getElementById('modal_cnpj_endereco').textContent = data.cnpj_endereco_ent || '-';
+            document.getElementById('modal_empresa_endereco').textContent = data.empresa_endereco_ent || '-';
+            document.getElementById('modal_uf_endereco').textContent = data.cod_uf || '-';
+            document.getElementById('modal_municipio_endereco').textContent = data.nome_cidade || '-';
+            document.getElementById('modal_bairro_endereco').textContent = data.bairro_endereco_ent || '-';
+            document.getElementById('modal_cep_endereco').textContent = data.cep_endereco_ent || '-';
+            
+            // Combinar rua e endereço
+            let ruaCompleta = '';
+            if (data.rua_endereco_ent && data.endereco_ent) {
+                ruaCompleta = data.rua_endereco_ent + ' / ' + data.endereco_ent;
+            } else if (data.rua_endereco_ent) {
+                ruaCompleta = data.rua_endereco_ent;
+            } else if (data.endereco_ent) {
+                ruaCompleta = data.endereco_ent;
+            }
+            document.getElementById('modal_rua_endereco').textContent = ruaCompleta || '-';
+            
+            document.getElementById('modal_telefone_endereco').textContent = data.telefone_endereco_ent || '-';
+            
+            // Mostrar modal
+            const modal = new bootstrap.Modal(document.getElementById('modalEndereco'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Erro ao buscar dados do endereço:', error);
+            alert('Erro ao carregar dados do endereço');
+        });
 }
 </script>
 
@@ -555,276 +992,12 @@ small.text-muted {
 .modal-body .card {
     margin-bottom: 0;
 }
+
+/* Corrigir badges secondary com fundo branco */
+.badge[style*="background-color: #6c757d"] {
+    background-color: #6c757d !important;
+    color: white !important;
+}
 </style>
-
-<!-- Modal para Detalhes do Endereço -->
-<div class="modal fade" id="modalEndereco" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-map-marker-alt"></i> Detalhes do Endereço</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6><i class="fas fa-user"></i> Cliente</h6>
-                        <ul class="list-unstyled">
-                            <li><strong>UF:</strong> <span id="modal_cliente_uf"></span></li>
-                            <li><strong>Município:</strong> <span id="modal_cliente_municipio"></span></li>
-                        </ul>
-                    </div>
-                    <div class="col-md-6">
-                        <h6><i class="fas fa-shipping-fast"></i> Endereço de Entrega</h6>
-                        <ul class="list-unstyled">
-                            <li><strong>CNPJ:</strong> <span id="modal_cnpj_endereco"></span></li>
-                            <li><strong>Empresa:</strong> <span id="modal_empresa_endereco"></span></li>
-                            <li><strong>UF:</strong> <span id="modal_uf_endereco"></span></li>
-                            <li><strong>Município:</strong> <span id="modal_municipio_endereco"></span></li>
-                            <li><strong>Bairro:</strong> <span id="modal_bairro_endereco"></span></li>
-                            <li><strong>CEP:</strong> <span id="modal_cep_endereco"></span></li>
-                            <li><strong>Rua:</strong> <span id="modal_rua_endereco"></span></li>
-                            <li><strong>Telefone:</strong> <span id="modal_telefone_endereco"></span></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal para Agendamento -->
-<div class="modal fade" id="modalAgendamento" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-calendar-alt"></i> Agendamento</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <form id="formAgendamento">
-                    <!-- Informações do Pedido -->
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <strong>Pedido:</strong> <span id="modal_pedido"></span>
-                        </div>
-                        <div class="col-md-6">
-                            <strong>Cliente:</strong> <span id="modal_cliente_nome"></span>
-                        </div>
-                    </div>
-
-                    <!-- Necessidade de Agendamento -->
-                    <div class="mb-3">
-                        <h6><i class="fas fa-info-circle"></i> Necessidade Agendamento:</h6>
-                        <div id="badges_necessidade"></div>
-                    </div>
-
-                    <!-- Dados do Contato de Agendamento -->
-                    <div class="mb-3" id="dados_contato" style="display: none;">
-                        <h6><i class="fas fa-phone"></i> Contato Agendamento:</h6>
-                        <div class="row">
-                            <div class="col-md-4">
-                                <strong>Forma:</strong> <span id="contato_forma"></span>
-                            </div>
-                            <div class="col-md-4">
-                                <strong>Contato:</strong> <span id="contato_info"></span>
-                            </div>
-                            <div class="col-md-4">
-                                <strong>Observação:</strong> <span id="contato_obs"></span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Campos de Agendamento -->
-                    <hr>
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <label for="data_agendamento" class="form-label">Data do Agendamento</label>
-                            <input type="date" class="form-control" id="data_agendamento" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="hora_agendamento" class="form-label">Hora do Agendamento</label>
-                            <input type="time" class="form-control" id="hora_agendamento">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="protocolo_agendamento" class="form-label">Protocolo</label>
-                            <input type="text" class="form-control" id="protocolo_agendamento" placeholder="Protocolo...">
-                        </div>
-                    </div>
-
-                    <!-- Checkbox Agenda Confirmada -->
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="agenda_confirmada">
-                            <label class="form-check-label" for="agenda_confirmada">
-                                Agenda Confirmada
-                            </label>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="salvarAgendamento()">
-                    <i class="fas fa-save"></i> Salvar Agendamento
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-function verDetalhes(itemId) {
-    // Implementar modal ou redirecionamento para detalhes
-    alert('Ver detalhes do item ' + itemId);
-}
-
-function abrirModalAgendamento(itemId, numPedido) {
-    // Buscar dados do item via AJAX
-    fetch('/carteira/item/' + itemId + '/agendamento')
-        .then(response => response.json())
-        .then(data => {
-            // Preencher informações básicas
-            document.getElementById('modal_pedido').textContent = numPedido;
-            document.getElementById('modal_cliente_nome').textContent = data.raz_social_red || data.raz_social || '-';
-            
-            // Determinar necessidade de agendamento e badges
-            let badgesHtml = '';
-            let temContato = false;
-            
-            // A.1 - Odoo (cliente_nec_agendamento = "Sim")
-            if (data.cliente_nec_agendamento === 'Sim') {
-                badgesHtml += '<span class="badge badge-primary me-2">Odoo</span>';
-            }
-            
-            // A.2 - Sistema (ContatoAgendamento existe e forma != "SEM AGENDAMENTO")
-            if (data.contato_agendamento && data.contato_agendamento.forma && data.contato_agendamento.forma !== 'SEM AGENDAMENTO') {
-                badgesHtml += '<span class="badge badge-success me-2">Sistema</span>';
-                temContato = true;
-            }
-            
-            document.getElementById('badges_necessidade').innerHTML = badgesHtml || '<span class="badge badge-secondary">Sem necessidade</span>';
-            
-            // B - Dados do contato se existir
-            if (temContato) {
-                document.getElementById('contato_forma').textContent = data.contato_agendamento.forma || '-';
-                document.getElementById('contato_info').textContent = data.contato_agendamento.contato || '-';
-                document.getElementById('contato_obs').textContent = data.contato_agendamento.observacao || '-';
-                document.getElementById('dados_contato').style.display = 'block';
-            } else {
-                document.getElementById('dados_contato').style.display = 'none';
-            }
-            
-            // C - Preencher campos se já tem agendamento
-            if (data.agendamento) {
-                document.getElementById('data_agendamento').value = data.agendamento;
-            }
-            if (data.hora_agendamento) {
-                document.getElementById('hora_agendamento').value = data.hora_agendamento;
-            }
-            if (data.protocolo) {
-                document.getElementById('protocolo_agendamento').value = data.protocolo;
-            }
-            
-            // Guardar ID do item para salvar
-            document.getElementById('formAgendamento').setAttribute('data-item-id', itemId);
-            
-            // Mostrar modal
-            $('#modalAgendamento').modal('show');
-        })
-        .catch(error => {
-            console.error('Erro ao buscar dados do agendamento:', error);
-            alert('Erro ao carregar dados do agendamento');
-        });
-}
-
-function salvarAgendamento() {
-    const itemId = document.getElementById('formAgendamento').getAttribute('data-item-id');
-    const dataAgendamento = document.getElementById('data_agendamento').value;
-    const horaAgendamento = document.getElementById('hora_agendamento').value;
-    const protocoloAgendamento = document.getElementById('protocolo_agendamento').value;
-    const agendaConfirmada = document.getElementById('agenda_confirmada').checked;
-    
-    if (!dataAgendamento) {
-        alert('Data do agendamento é obrigatória');
-        return;
-    }
-    
-    const dados = {
-        data_agendamento: dataAgendamento,
-        hora_agendamento: horaAgendamento,
-        protocolo: protocoloAgendamento,
-        agenda_confirmada: agendaConfirmada
-    };
-    
-    fetch('/carteira/item/' + itemId + '/agendamento', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(dados)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Agendamento salvo com sucesso!');
-            $('#modalAgendamento').modal('hide');
-            location.reload(); // Recarregar página para mostrar mudanças
-        } else {
-            alert('Erro ao salvar agendamento: ' + (data.error || 'Erro desconhecido'));
-        }
-    })
-    .catch(error => {
-        console.error('Erro ao salvar agendamento:', error);
-        alert('Erro ao salvar agendamento');
-    });
-}
-
-function abrirModalEndereco(itemId) {
-    // Buscar dados do item via AJAX
-    fetch('/carteira/item/' + itemId + '/endereco')
-        .then(response => response.json())
-        .then(data => {
-            // Preencher dados do cliente
-            document.getElementById('modal_cliente_uf').textContent = data.estado || '-';
-            document.getElementById('modal_cliente_municipio').textContent = data.municipio || '-';
-            
-            // Preencher dados do endereço de entrega
-            document.getElementById('modal_cnpj_endereco').textContent = data.cnpj_endereco_ent || '-';
-            document.getElementById('modal_empresa_endereco').textContent = data.empresa_endereco_ent || '-';
-            document.getElementById('modal_uf_endereco').textContent = data.cod_uf || '-';
-            document.getElementById('modal_municipio_endereco').textContent = data.nome_cidade || '-';
-            document.getElementById('modal_bairro_endereco').textContent = data.bairro_endereco_ent || '-';
-            document.getElementById('modal_cep_endereco').textContent = data.cep_endereco_ent || '-';
-            
-            // Combinar rua e endereço
-            let ruaCompleta = '';
-            if (data.rua_endereco_ent && data.endereco_ent) {
-                ruaCompleta = data.rua_endereco_ent + ' / ' + data.endereco_ent;
-            } else if (data.rua_endereco_ent) {
-                ruaCompleta = data.rua_endereco_ent;
-            } else if (data.endereco_ent) {
-                ruaCompleta = data.endereco_ent;
-            }
-            document.getElementById('modal_rua_endereco').textContent = ruaCompleta || '-';
-            
-            document.getElementById('modal_telefone_endereco').textContent = data.telefone_endereco_ent || '-';
-            
-            // Mostrar modal
-            $('#modalEndereco').modal('show');
-        })
-        .catch(error => {
-            console.error('Erro ao buscar dados do endereço:', error);
-            alert('Erro ao carregar dados do endereço');
-        });
-}
-</script>
 
 {% endblock %} 
