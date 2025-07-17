@@ -222,6 +222,13 @@ def sincronizar_entrega_por_nf(numero_nf):
             data_final = adicionar_dias_uteis(embarque.data_embarque, assoc.lead_time)
 
     entrega.data_entrega_prevista = data_final
+    
+    # ✅ NOVA FUNCIONALIDADE: Preencher separacao_lote_id se vazio
+    if not entrega.separacao_lote_id:
+        pedido = Pedido.query.filter_by(nf=numero_nf).first()
+        if pedido and pedido.separacao_lote_id:
+            entrega.separacao_lote_id = pedido.separacao_lote_id
+            print(f"[SYNC] ✅ separacao_lote_id preenchido: {pedido.separacao_lote_id}")
 
     db.session.commit()
 

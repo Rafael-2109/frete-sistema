@@ -433,6 +433,9 @@ def finalizar_entrega(id):
             nova_entrega = EntregaMonitorada.query.filter_by(numero_nf=nova_nf).first()
             if nova_entrega:
                 nova_entrega.substituida_por_nf = entrega
+                
+                # ✅ NOVA FUNCIONALIDADE: Transferir separacao_lote_id
+                nova_entrega.separacao_lote_id = entrega.separacao_lote_id
 
                 if entrega.agendamentos:
                     ag = max(entrega.agendamentos, key=lambda a: a.criado_em)

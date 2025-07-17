@@ -1227,11 +1227,10 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
             # PROCESSAMENTO POR TIPO DE OPERAÇÃO
             
             if item.status == 'cancelado':
-                # ✅ ITEM CANCELADO: Verificar se deve resetar pedido
+                # ✅ ITEM CANCELADO: Aplicar lógica consolidada
                 print(f"[SYNC] 🔄 Item cancelado - Pedido {pedido.num_pedido} (Lote: {item.separacao_lote_id})")
-                print(f"[SYNC]    NF atual do pedido: '{pedido.nf}'")
-                print(f"[SYNC]    Status atual do pedido: '{pedido.status_calculado}'")
                 
+                # ✅ VERIFICAR OUTROS EMBARQUES ATIVOS
                 outros_embarques_ativos = EmbarqueItem.query.join(Embarque).filter(
                     EmbarqueItem.separacao_lote_id == item.separacao_lote_id,
                     EmbarqueItem.status == 'ativo',
@@ -1239,26 +1238,51 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                     EmbarqueItem.id != item.id
                 ).first()
                 
+                # ✅ VERIFICAR ENTREGAS MONITORADAS VINCULADAS
+                from app.monitoramento.models import EntregaMonitorada
+                entregas_vinculadas = EntregaMonitorada.query.filter_by(
+                    separacao_lote_id=item.separacao_lote_id
+                ).all()
+                
+                tem_entrega_no_cd = any(e.nf_cd for e in entregas_vinculadas)
+                
+                # ✅ LOGS DETALHADOS PARA AUDITORIA
+                print(f"[SYNC] 📊 Análise cancelamento:")
+                print(f"[SYNC]    Separação: {item.separacao_lote_id}")
+                print(f"[SYNC]    Outros embarques ativos: {bool(outros_embarques_ativos)}")
+                print(f"[SYNC]    Entregas vinculadas: {len(entregas_vinculadas)}")
+                print(f"[SYNC]    Alguma entrega no CD: {tem_entrega_no_cd}")
+                
+                # ✅ LÓGICA CONSOLIDADA
                 if not outros_embarques_ativos:
-                    # Pedido não está em outros embarques - resetar para "Aberto"
-                    nf_anterior = pedido.nf
-                    print(f"[SYNC] ✅ Não há outros embarques ativos - resetando pedido para 'Aberto'")
-                    print(f"[SYNC]    Removendo NF: '{nf_anterior}' → None")
+                    # NÃO HÁ OUTROS EMBARQUES ATIVOS
                     
-                    pedido.nf = None
-                    pedido.data_embarque = None
-                    pedido.cotacao_id = None
-                    pedido.transportadora = None
-                    pedido.nf_cd = False
-                    
-                    print(f"[SYNC] ✅ Pedido {pedido.num_pedido} resetado:")
-                    print(f"[SYNC]    nf: {pedido.nf}")
-                    print(f"[SYNC]    data_embarque: {pedido.data_embarque}")
-                    print(f"[SYNC]    cotacao_id: {pedido.cotacao_id}")
-                    print(f"[SYNC]    transportadora: {pedido.transportadora}")
-                    print(f"[SYNC]    nf_cd: {pedido.nf_cd}")
+                    if entregas_vinculadas:
+                        # ✅ HÁ ENTREGAS VINCULADAS → NF voltou para CD
+                        pedido.nf_cd = True
+                        # MANTÉM pedido.nf (não apaga)
+                        print(f"[SYNC] 📦 NF {pedido.nf} voltou para o CD (nf_cd=True)")
+                        
+                    else:
+                        # ✅ NÃO HÁ ENTREGAS VINCULADAS → Reset completo
+                        pedido.nf = None
+                        pedido.data_embarque = None
+                        pedido.cotacao_id = None
+                        pedido.transportadora = None
+                        pedido.nf_cd = False
+                        print(f"[SYNC] 🔄 Pedido {pedido.num_pedido} resetado para 'Aberto'")
+                        
                 else:
-                    print(f"[SYNC] ⚠️ Pedido mantido - está em outro embarque ativo: {outros_embarques_ativos.embarque.numero}")
+                    # HÁ OUTROS EMBARQUES ATIVOS
+                    
+                    if entregas_vinculadas:
+                        # ✅ SINCRONIZAR ESTADO COM ENTREGAS MONITORADAS
+                        pedido.nf_cd = tem_entrega_no_cd
+                        print(f"[SYNC] 🔗 Estado sincronizado: nf_cd={tem_entrega_no_cd}")
+                        
+                    else:
+                        # ✅ NÃO MEXE NO PEDIDO
+                        print(f"[SYNC] 🤷 Outros embarques ativos - mantendo status do pedido")
                 
                 itens_cancelados += 1
                 
@@ -1374,7 +1398,6 @@ def cancelar_item_embarque(item_id):
     """
     Cancela um item do embarque (exclusão lógica)
     """
-    from app.pedidos.models import Pedido
     
     item = EmbarqueItem.query.get_or_404(item_id)
     embarque = item.embarque
