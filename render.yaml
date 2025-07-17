@@ -2,28 +2,21 @@ services:
   - type: web
     name: sistema-fretes
     env: python
-    buildCommand: "./build.sh"
-    startCommand: "./start_render.sh"
-    plan: free
-    region: oregon
-    branch: main
+    plan: starter
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: ./start_render.sh
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
+      - key: ENVIRONMENT
+        value: production
       - key: FLASK_ENV
         value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: sistema-fretes-db
-          property: connectionString
-      - key: SECRET_KEY
-        generateValue: true
-      - key: WTF_CSRF_SECRET_KEY
-        generateValue: true
-
-databases:
-  - name: sistema-fretes-db
-    databaseName: sistema_fretes
-    user: sistema_user
-    plan: free
-    region: oregon
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: WEB_CONCURRENCY
+        value: 1
+    autoDeploy: true
+    
+  # Configuração adicional de banco se necessário
+  databases:
+    - name: sistema-fretes-db
+      plan: starter

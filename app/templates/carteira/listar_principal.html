@@ -86,15 +86,18 @@
                 <table class="table table-hover table-sm">
                     <thead class="thead-light">
                         <tr>
-                            <th>Pedido</th>
-                            <th>Produto</th>
-                            <th>Cliente</th>
                             <th>Vendedor</th>
+                            <th>Pedido</th>
                             <th>Status</th>
+                            <th>Cliente</th>
+                            <th>UF/Município</th>
+                            <th>Produto</th>
                             <th class="text-right">Saldo</th>
                             <th class="text-right">Valor</th>
                             <th class="text-center">Peso/Pallet</th>
+                            <th class="text-center">Pdd / Ent</th>
                             <th class="text-center">Expedição</th>
+                            <th class="text-center">Agendamento</th>
                             <th class="text-center">Separação</th>
                             <th class="text-center">Ações</th>
                         </tr>
@@ -102,6 +105,12 @@
                     <tbody>
                         {% for item in itens.items %}
                         <tr>
+                            <td style="max-width: 150px;">
+                                {{ item.vendedor or '-' }}
+                                {% if item.equipe_vendas %}
+                                <br><small class="text-muted">{{ item.equipe_vendas }}</small>
+                                {% endif %}
+                            </td>
                             <td>
                                 <strong>{{ item.num_pedido }}</strong>
                                 {% if item.protocolo %}
@@ -109,37 +118,45 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <div class="text-truncate" style="max-width: 200px;" title="{{ item.nome_produto }}">
+                                {% if item.status_pedido %}
+                                    {% if item.status_pedido == 'Cotação' %}
+                                    <span class="badge badge-primary" style="background-color: #007bff; color: white;">{{ item.status_pedido }}</span>
+                                    {% elif item.status_pedido == 'Pedido de venda' %}
+                                    <span class="badge badge-success" style="background-color: #28a745; color: white;">{{ item.status_pedido }}</span>
+                                    {% else %}
+                                    <span class="badge badge-secondary">{{ item.status_pedido }}</span>
+                                    {% endif %}
+                                {% else %}
+                                <span class="badge badge-secondary">Sem Status</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="text-truncate" style="max-width: 200px;" title="{{ item.raz_social }}">
+                                    {{ item.raz_social_red or item.raz_social }}
+                                    <br><small class="text-muted">{{ item.cnpj_cpf }}</small>
+                                </div>
+                            </td>
+                            <td>
+                                <strong>{{ item.cod_uf or '-' }}/{{ item.incoterm or '-' }}</strong>
+                                {% if item.nome_cidade %}
+                                <br><span class="badge badge-info" style="cursor: pointer;" onclick="abrirModalEndereco('{{ item.id }}')">
+                                    {{ item.nome_cidade }}
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="text-truncate" style="max-width: 250px;" title="{{ item.nome_produto }}">
                                     <strong>{{ item.cod_produto }}</strong><br>
                                     <small class="text-muted">{{ item.nome_produto }}</small>
                                 </div>
                             </td>
-                            <td>
-                                <div class="text-truncate" style="max-width: 150px;" title="{{ item.raz_social }}">
-                                    {{ item.raz_social_red or item.raz_social }}
-                                    {% if item.municipio %}
-                                    <br><small class="text-muted">{{ item.municipio }}/{{ item.estado }}</small>
-                                    {% endif %}
-                                </div>
-                            </td>
-                            <td>{{ item.vendedor or '-' }}</td>
-                            <td>
-                                {% if item.status_pedido %}
-                                <span class="badge badge-primary">{{ item.status_pedido }}</span>
-                                {% else %}
-                                <span class="badge badge-secondary">Sem Status</span>
-                                {% endif %}
-                                {% if item.cliente_nec_agendamento == 'Sim' %}
-                                <br><small class="badge badge-info">Agendamento</small>
-                                {% endif %}
-                            </td>
-                            <td class="text-right">
+                            <td class="text-center">
                                 <strong>{{ item.qtd_saldo_produto_pedido|numero_br }}</strong>
                                 {% if item.qtd_cancelada_produto_pedido and item.qtd_cancelada_produto_pedido > 0 %}
                                 <br><small class="text-muted">Cancel: {{ item.qtd_cancelada_produto_pedido|numero_br }}</small>
                                 {% endif %}
                             </td>
-                            <td class="text-right">
+                            <td class="text-center">
                                 {% set valor_total = (item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0) %}
                                 <strong>{{ valor_total|valor_br }}</strong>
                                 <br><small class="text-muted">{{ item.preco_produto_pedido|valor_br if item.preco_produto_pedido else '-' }}/un</small>
@@ -156,13 +173,43 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
+                                {% if item.data_pedido %}
+                                <span class="badge badge-secondary">{{ item.data_pedido|formatar_data_brasil }}</span>
+                                {% else %}
+                                <span class="badge badge-light">-</span>
+                                {% endif %}
+                                {% if item.data_entrega_pedido %}
+                                <br><span class="badge badge-primary">{{ item.data_entrega_pedido|formatar_data_brasil }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
                                 {% if item.expedicao %}
                                 <span class="badge badge-warning">{{ item.expedicao|formatar_data_brasil }}</span>
                                 {% else %}
                                 <span class="badge badge-light">-</span>
                                 {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <!-- Implementação igual ao monitoramento -->
+                                {% set precisa_agendamento = item.cliente_nec_agendamento == 'Sim' or (contatos_agendamento.get(item.cnpj_cpf) and contatos_agendamento.get(item.cnpj_cpf).forma and contatos_agendamento.get(item.cnpj_cpf).forma != 'SEM AGENDAMENTO') %}
+                                
                                 {% if item.agendamento %}
-                                <br><small class="badge badge-info">{{ item.agendamento|formatar_data_brasil }}</small>
+                                    <!-- Tem agendamento - mostrar como botão clicável -->
+                                    <button class="btn btn-sm btn-primary w-100 text-white" onclick="abrirModalAgendamento('{{ item.id }}', '{{ item.num_pedido }}')">
+                                        📅 {{ item.agendamento|formatar_data_brasil }}
+                                        {% if item.protocolo %}
+                                        <br><small>📋 {{ item.protocolo }}</small>
+                                        {% endif %}
+                                        <br><small>✅ Agendado</small>
+                                    </button>
+                                {% elif precisa_agendamento %}
+                                    <!-- Precisa agendamento mas não tem - mostrar botão Agendar -->
+                                    <button class="btn btn-sm btn-warning w-100" onclick="abrirModalAgendamento('{{ item.id }}', '{{ item.num_pedido }}')">
+                                        ➕ Agendar
+                                    </button>
+                                {% else %}
+                                    <!-- Não precisa agendamento -->
+                                    <span class="badge badge-light">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
@@ -509,4 +556,275 @@ small.text-muted {
     margin-bottom: 0;
 }
 </style>
+
+<!-- Modal para Detalhes do Endereço -->
+<div class="modal fade" id="modalEndereco" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-map-marker-alt"></i> Detalhes do Endereço</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-user"></i> Cliente</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>UF:</strong> <span id="modal_cliente_uf"></span></li>
+                            <li><strong>Município:</strong> <span id="modal_cliente_municipio"></span></li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-shipping-fast"></i> Endereço de Entrega</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>CNPJ:</strong> <span id="modal_cnpj_endereco"></span></li>
+                            <li><strong>Empresa:</strong> <span id="modal_empresa_endereco"></span></li>
+                            <li><strong>UF:</strong> <span id="modal_uf_endereco"></span></li>
+                            <li><strong>Município:</strong> <span id="modal_municipio_endereco"></span></li>
+                            <li><strong>Bairro:</strong> <span id="modal_bairro_endereco"></span></li>
+                            <li><strong>CEP:</strong> <span id="modal_cep_endereco"></span></li>
+                            <li><strong>Rua:</strong> <span id="modal_rua_endereco"></span></li>
+                            <li><strong>Telefone:</strong> <span id="modal_telefone_endereco"></span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Agendamento -->
+<div class="modal fade" id="modalAgendamento" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-calendar-alt"></i> Agendamento</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="formAgendamento">
+                    <!-- Informações do Pedido -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Pedido:</strong> <span id="modal_pedido"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Cliente:</strong> <span id="modal_cliente_nome"></span>
+                        </div>
+                    </div>
+
+                    <!-- Necessidade de Agendamento -->
+                    <div class="mb-3">
+                        <h6><i class="fas fa-info-circle"></i> Necessidade Agendamento:</h6>
+                        <div id="badges_necessidade"></div>
+                    </div>
+
+                    <!-- Dados do Contato de Agendamento -->
+                    <div class="mb-3" id="dados_contato" style="display: none;">
+                        <h6><i class="fas fa-phone"></i> Contato Agendamento:</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <strong>Forma:</strong> <span id="contato_forma"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Contato:</strong> <span id="contato_info"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Observação:</strong> <span id="contato_obs"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Campos de Agendamento -->
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="data_agendamento" class="form-label">Data do Agendamento</label>
+                            <input type="date" class="form-control" id="data_agendamento" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="hora_agendamento" class="form-label">Hora do Agendamento</label>
+                            <input type="time" class="form-control" id="hora_agendamento">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="protocolo_agendamento" class="form-label">Protocolo</label>
+                            <input type="text" class="form-control" id="protocolo_agendamento" placeholder="Protocolo...">
+                        </div>
+                    </div>
+
+                    <!-- Checkbox Agenda Confirmada -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="agenda_confirmada">
+                            <label class="form-check-label" for="agenda_confirmada">
+                                Agenda Confirmada
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarAgendamento()">
+                    <i class="fas fa-save"></i> Salvar Agendamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function verDetalhes(itemId) {
+    // Implementar modal ou redirecionamento para detalhes
+    alert('Ver detalhes do item ' + itemId);
+}
+
+function abrirModalAgendamento(itemId, numPedido) {
+    // Buscar dados do item via AJAX
+    fetch('/carteira/item/' + itemId + '/agendamento')
+        .then(response => response.json())
+        .then(data => {
+            // Preencher informações básicas
+            document.getElementById('modal_pedido').textContent = numPedido;
+            document.getElementById('modal_cliente_nome').textContent = data.raz_social_red || data.raz_social || '-';
+            
+            // Determinar necessidade de agendamento e badges
+            let badgesHtml = '';
+            let temContato = false;
+            
+            // A.1 - Odoo (cliente_nec_agendamento = "Sim")
+            if (data.cliente_nec_agendamento === 'Sim') {
+                badgesHtml += '<span class="badge badge-primary me-2">Odoo</span>';
+            }
+            
+            // A.2 - Sistema (ContatoAgendamento existe e forma != "SEM AGENDAMENTO")
+            if (data.contato_agendamento && data.contato_agendamento.forma && data.contato_agendamento.forma !== 'SEM AGENDAMENTO') {
+                badgesHtml += '<span class="badge badge-success me-2">Sistema</span>';
+                temContato = true;
+            }
+            
+            document.getElementById('badges_necessidade').innerHTML = badgesHtml || '<span class="badge badge-secondary">Sem necessidade</span>';
+            
+            // B - Dados do contato se existir
+            if (temContato) {
+                document.getElementById('contato_forma').textContent = data.contato_agendamento.forma || '-';
+                document.getElementById('contato_info').textContent = data.contato_agendamento.contato || '-';
+                document.getElementById('contato_obs').textContent = data.contato_agendamento.observacao || '-';
+                document.getElementById('dados_contato').style.display = 'block';
+            } else {
+                document.getElementById('dados_contato').style.display = 'none';
+            }
+            
+            // C - Preencher campos se já tem agendamento
+            if (data.agendamento) {
+                document.getElementById('data_agendamento').value = data.agendamento;
+            }
+            if (data.hora_agendamento) {
+                document.getElementById('hora_agendamento').value = data.hora_agendamento;
+            }
+            if (data.protocolo) {
+                document.getElementById('protocolo_agendamento').value = data.protocolo;
+            }
+            
+            // Guardar ID do item para salvar
+            document.getElementById('formAgendamento').setAttribute('data-item-id', itemId);
+            
+            // Mostrar modal
+            $('#modalAgendamento').modal('show');
+        })
+        .catch(error => {
+            console.error('Erro ao buscar dados do agendamento:', error);
+            alert('Erro ao carregar dados do agendamento');
+        });
+}
+
+function salvarAgendamento() {
+    const itemId = document.getElementById('formAgendamento').getAttribute('data-item-id');
+    const dataAgendamento = document.getElementById('data_agendamento').value;
+    const horaAgendamento = document.getElementById('hora_agendamento').value;
+    const protocoloAgendamento = document.getElementById('protocolo_agendamento').value;
+    const agendaConfirmada = document.getElementById('agenda_confirmada').checked;
+    
+    if (!dataAgendamento) {
+        alert('Data do agendamento é obrigatória');
+        return;
+    }
+    
+    const dados = {
+        data_agendamento: dataAgendamento,
+        hora_agendamento: horaAgendamento,
+        protocolo: protocoloAgendamento,
+        agenda_confirmada: agendaConfirmada
+    };
+    
+    fetch('/carteira/item/' + itemId + '/agendamento', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dados)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Agendamento salvo com sucesso!');
+            $('#modalAgendamento').modal('hide');
+            location.reload(); // Recarregar página para mostrar mudanças
+        } else {
+            alert('Erro ao salvar agendamento: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao salvar agendamento:', error);
+        alert('Erro ao salvar agendamento');
+    });
+}
+
+function abrirModalEndereco(itemId) {
+    // Buscar dados do item via AJAX
+    fetch('/carteira/item/' + itemId + '/endereco')
+        .then(response => response.json())
+        .then(data => {
+            // Preencher dados do cliente
+            document.getElementById('modal_cliente_uf').textContent = data.estado || '-';
+            document.getElementById('modal_cliente_municipio').textContent = data.municipio || '-';
+            
+            // Preencher dados do endereço de entrega
+            document.getElementById('modal_cnpj_endereco').textContent = data.cnpj_endereco_ent || '-';
+            document.getElementById('modal_empresa_endereco').textContent = data.empresa_endereco_ent || '-';
+            document.getElementById('modal_uf_endereco').textContent = data.cod_uf || '-';
+            document.getElementById('modal_municipio_endereco').textContent = data.nome_cidade || '-';
+            document.getElementById('modal_bairro_endereco').textContent = data.bairro_endereco_ent || '-';
+            document.getElementById('modal_cep_endereco').textContent = data.cep_endereco_ent || '-';
+            
+            // Combinar rua e endereço
+            let ruaCompleta = '';
+            if (data.rua_endereco_ent && data.endereco_ent) {
+                ruaCompleta = data.rua_endereco_ent + ' / ' + data.endereco_ent;
+            } else if (data.rua_endereco_ent) {
+                ruaCompleta = data.rua_endereco_ent;
+            } else if (data.endereco_ent) {
+                ruaCompleta = data.endereco_ent;
+            }
+            document.getElementById('modal_rua_endereco').textContent = ruaCompleta || '-';
+            
+            document.getElementById('modal_telefone_endereco').textContent = data.telefone_endereco_ent || '-';
+            
+            // Mostrar modal
+            $('#modalEndereco').modal('show');
+        })
+        .catch(error => {
+            console.error('Erro ao buscar dados do endereço:', error);
+            alert('Erro ao carregar dados do endereço');
+        });
+}
+</script>
+
 {% endblock %} 

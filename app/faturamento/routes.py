@@ -609,8 +609,12 @@ def listar_faturamento_produtos():
         page = int(request.args.get('page', '1'))
     except (ValueError, TypeError):
         page = 1
-    per_page = int(request.args.get('per_page', '50'))  # ✅ CONFIGURÁVEL - padrão 50
-    if per_page not in [20, 50, 100, 200]:  # Limitar opções válidas
+    
+    try:
+        per_page = int(request.args.get('per_page', '50'))  # ✅ CONFIGURÁVEL - padrão 50
+        if per_page not in [20, 50, 100, 200]:  # Limitar opções válidas
+            per_page = 50
+    except (ValueError, TypeError):
         per_page = 50
     
     try:
@@ -624,19 +628,36 @@ def listar_faturamento_produtos():
             # ✅ CONTAR TOTAL ANTES DOS FILTROS para baseline
             total_registros_sistema = query.count()
             
-            # Aplicar filtros
-            if nome_cliente:
-                query = query.filter(FaturamentoProduto.nome_cliente.ilike(f'%{nome_cliente}%'))
-            if cod_produto:
-                query = query.filter(FaturamentoProduto.cod_produto.ilike(f'%{cod_produto}%'))
-            if vendedor:
-                query = query.filter(FaturamentoProduto.vendedor.ilike(f'%{vendedor}%'))
-            if estado:
-                query = query.filter(FaturamentoProduto.estado == estado)
-            if incoterm:
-                query = query.filter(FaturamentoProduto.incoterm.ilike(f'%{incoterm}%'))
-            if municipio:
-                query = query.filter(FaturamentoProduto.municipio.ilike(f'%{municipio}%'))
+            # Aplicar filtros com logs para debug
+            filtros_aplicados = []
+            
+            if nome_cliente and nome_cliente.strip():
+                query = query.filter(FaturamentoProduto.nome_cliente.ilike(f'%{nome_cliente.strip()}%'))
+                filtros_aplicados.append(f"Cliente: {nome_cliente}")
+                
+            if cod_produto and cod_produto.strip():
+                query = query.filter(FaturamentoProduto.cod_produto.ilike(f'%{cod_produto.strip()}%'))
+                filtros_aplicados.append(f"Produto: {cod_produto}")
+                
+            if vendedor and vendedor.strip():
+                query = query.filter(FaturamentoProduto.vendedor.ilike(f'%{vendedor.strip()}%'))
+                filtros_aplicados.append(f"Vendedor: {vendedor}")
+                
+            if estado and estado.strip():
+                query = query.filter(FaturamentoProduto.estado.ilike(f'%{estado.strip()}%'))
+                filtros_aplicados.append(f"Estado: {estado}")
+                
+            if incoterm and incoterm.strip():
+                query = query.filter(FaturamentoProduto.incoterm.ilike(f'%{incoterm.strip()}%'))
+                filtros_aplicados.append(f"Incoterm: {incoterm}")
+                
+            if municipio and municipio.strip():
+                query = query.filter(FaturamentoProduto.municipio.ilike(f'%{municipio.strip()}%'))
+                filtros_aplicados.append(f"Município: {municipio}")
+            
+            # Log dos filtros aplicados
+            if filtros_aplicados:
+                print(f"DEBUG: Filtros aplicados: {', '.join(filtros_aplicados)}")
 
             # Filtros de data
             if data_de:
@@ -661,11 +682,18 @@ def listar_faturamento_produtos():
                 page=page, per_page=per_page, error_out=False
             )
             
-            # ✅ ESTATÍSTICAS CORRETAS baseadas na query filtrada (não apenas na página)
-            total_valor_faturado = query.with_entities(func.sum(FaturamentoProduto.valor_produto_faturado)).scalar() or 0
-            total_quantidade = query.with_entities(func.sum(FaturamentoProduto.qtd_produto_faturado)).scalar() or 0
-            total_peso = query.with_entities(func.sum(FaturamentoProduto.peso_total)).scalar() or 0  # ✅ PESO TOTAL ADICIONADO
-            produtos_unicos = query.with_entities(FaturamentoProduto.cod_produto).distinct().count()
+            # ✅ ESTATÍSTICAS DO MÊS CORRENTE (não baseadas nos filtros)
+            from datetime import date
+            mes_atual = date.today().replace(day=1)  # Primeiro dia do mês atual
+            
+            query_mes_atual = FaturamentoProduto.query.filter(
+                FaturamentoProduto.data_fatura >= mes_atual
+            )
+            
+            total_valor_faturado = query_mes_atual.with_entities(func.sum(FaturamentoProduto.valor_produto_faturado)).scalar() or 0
+            total_quantidade = query_mes_atual.with_entities(func.sum(FaturamentoProduto.qtd_produto_faturado)).scalar() or 0
+            total_peso = query_mes_atual.with_entities(func.sum(FaturamentoProduto.peso_total)).scalar() or 0
+            produtos_unicos = query_mes_atual.with_entities(FaturamentoProduto.cod_produto).distinct().count()
             
             # Buscar opções dos filtros
             opcoes_estados = sorted(set(
@@ -712,6 +740,7 @@ def listar_faturamento_produtos():
                          total_quantidade=total_quantidade,
                          total_peso=total_peso,  # ✅ PESO TOTAL ADICIONADO
                          produtos_unicos=produtos_unicos,
+                         mes_atual=mes_atual.strftime('%m/%Y'),  # ✅ ADICIONAR MÊS
                          filtros={
                              'nome_cliente': nome_cliente,
                              'cod_produto': cod_produto,

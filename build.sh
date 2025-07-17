@@ -29,7 +29,12 @@ else
     echo "✅ Banco já está atualizado"
 fi
 
-# 4. Inicializar banco se necessário
+# 4. Verificar e aplicar migração hora_agendamento
+echo "⏰ Verificando campo hora_agendamento..."
+mkdir -p scripts
+python scripts/deploy_render.py || echo "⚠️ Script de verificação falhou, continuando..."
+
+# 5. Inicializar banco se necessário
 echo "🗄️ Inicializando banco..."
 python init_db.py
 

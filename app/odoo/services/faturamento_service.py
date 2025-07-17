@@ -246,25 +246,36 @@ class FaturamentoService:
         
         return status_map.get(status_odoo.lower(), 'ATIVO')
     
-    def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:
+    def _parse_date(self, date_input) -> Optional[datetime]:
         """
-        Converte string de data para datetime
+        Converte string de data ou datetime para datetime
+        Trata ambos os casos: string e datetime já processado
         """
-        if not date_str:
+        if not date_input:
             return None
         
-        try:
-            # Formato do Odoo: 2025-07-14 20:19:52
-            dt = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
-            return dt  # Retorna datetime para compatibilidade
-        except ValueError:
+        # Se já é datetime, retornar diretamente
+        if isinstance(date_input, datetime):
+            return date_input
+        
+        # Se é string, processar
+        if isinstance(date_input, str):
             try:
-                # Formato de data apenas: 2025-07-14
-                dt = datetime.strptime(date_str, '%Y-%m-%d')
-                return dt  # Retorna datetime para compatibilidade
+                # Formato do Odoo: 2025-07-14 20:19:52
+                dt = datetime.strptime(date_input, '%Y-%m-%d %H:%M:%S')
+                return dt
             except ValueError:
-                self.logger.warning(f"Formato de data inválido: {date_str}")
-                return None
+                try:
+                    # Formato de data apenas: 2025-07-14
+                    dt = datetime.strptime(date_input, '%Y-%m-%d')
+                    return dt
+                except ValueError:
+                    self.logger.warning(f"Formato de data inválido: {date_input}")
+                    return None
+        
+        # Tipo inesperado
+        self.logger.warning(f"Tipo de data inesperado: {type(date_input)} - {date_input}")
+        return None
     
     def _consolidar_faturamento(self, dados_faturamento: List[Dict]) -> Dict[str, Any]:
         """
@@ -297,6 +308,7 @@ class FaturamentoService:
                         'incoterm': dado.get('incoterm'),         # Campo correto
                         'vendedor': dado.get('vendedor'),         # Campo correto
                         'municipio': dado.get('municipio'),       # Campo correto
+                        'estado': dado.get('estado'),             # ✅ ADICIONAR ESTADO
                         'status': dado.get('status_nf'),          # Campo correto: status_nf
                         'peso_total': 0
                     }
@@ -334,6 +346,7 @@ class FaturamentoService:
                         relatorio.incoterm = dados_nf['incoterm']
                         relatorio.vendedor = dados_nf['vendedor']
                         relatorio.municipio = dados_nf['municipio']
+                        relatorio.estado = dados_nf['estado']      # ✅ ADICIONAR ESTADO
                         relatorio.status_faturamento = dados_nf['status']
                         relatorio.peso_total = dados_nf['peso_total']
                         relatorio.data_importacao = datetime.now()
@@ -835,7 +848,9 @@ class FaturamentoService:
                         
                         # Buscar estado via state_id do município
                         if municipio.get('state_id'):
-                            estado_uf = municipio['state_id'][1][:2] if isinstance(municipio['state_id'], list) else str(municipio['state_id'])[:2]
+                            state_name = municipio['state_id'][1] if isinstance(municipio['state_id'], list) else str(municipio['state_id'])
+                            # Mapear nome do estado para sigla
+                            estado_uf = self._extrair_sigla_estado(state_name)
             
             # Se ainda não tem município, tentar pegar do cliente diretamente
             if not municipio_nome and cliente.get('l10n_br_municipio_id'):
@@ -1005,6 +1020,69 @@ class FaturamentoService:
             return float(quantidade) * float(peso_unitario)
         except (ValueError, TypeError):
             return 0.0
+    
+    def _extrair_sigla_estado(self, nome_estado: str) -> str:
+        """
+        Extrai sigla do estado a partir do nome completo
+        """
+        if not nome_estado:
+            return ''
+        
+        # Mapeamento de estados brasileiros
+        estados_map = {
+            'São Paulo': 'SP',
+            'Rio de Janeiro': 'RJ',
+            'Minas Gerais': 'MG',
+            'Espírito Santo': 'ES',
+            'Bahia': 'BA',
+            'Paraná': 'PR',
+            'Santa Catarina': 'SC',
+            'Rio Grande do Sul': 'RS',
+            'Goiás': 'GO',
+            'Mato Grosso': 'MT',
+            'Mato Grosso do Sul': 'MS',
+            'Distrito Federal': 'DF',
+            'Ceará': 'CE',
+            'Pernambuco': 'PE',
+            'Alagoas': 'AL',
+            'Sergipe': 'SE',
+            'Paraíba': 'PB',
+            'Rio Grande do Norte': 'RN',
+            'Piauí': 'PI',
+            'Maranhão': 'MA',
+            'Pará': 'PA',
+            'Amapá': 'AP',
+            'Amazonas': 'AM',
+            'Roraima': 'RR',
+            'Acre': 'AC',
+            'Rondônia': 'RO',
+            'Tocantins': 'TO'
+        }
+        
+        # Buscar no mapeamento
+        estado_limpo = nome_estado.strip()
+        
+        # Se já é uma sigla de 2 caracteres, retornar
+        if len(estado_limpo) == 2 and estado_limpo.isupper():
+            return estado_limpo
+        
+        # Buscar no mapeamento
+        for nome, sigla in estados_map.items():
+            if nome.lower() in estado_limpo.lower():
+                return sigla
+        
+        # Casos específicos conhecidos do Odoo
+        casos_especiais = {
+            'Sã': 'SP',  # São Paulo truncado
+            'RJ': 'RJ',  # Rio de Janeiro já correto
+            'MG': 'MG',  # Minas Gerais já correto
+        }
+        
+        if estado_limpo in casos_especiais:
+            return casos_especiais[estado_limpo]
+        
+        # Se não encontrou, tentar pegar as primeiras 2 letras maiúsculas
+        return estado_limpo[:2].upper() if estado_limpo else ''
 
     def _converter_estado_para_uf(self, estado_nome: str) -> str:
         """

@@ -76,6 +76,7 @@ class CarteiraPrincipal(db.Model):
     expedicao = db.Column(db.Date, nullable=True)  # Data prevista expedição  
     data_entrega = db.Column(db.Date, nullable=True)  # Data prevista entrega
     agendamento = db.Column(db.Date, nullable=True)  # Data agendamento
+    hora_agendamento = db.Column(db.Time, nullable=True)  # Hora agendamento
     protocolo = db.Column(db.String(50), nullable=True)  # Protocolo agendamento
     roteirizacao = db.Column(db.String(100), nullable=True)  # Transportadora sugerida
     

@@ -1,5 +1,6 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, send_file
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, send_file, Response
 from flask_login import login_required, current_user
+from typing import Union, Tuple
 from app import db
 from app.carteira.models import (
     CarteiraPrincipal, CarteiraCopia, ControleCruzadoSeparacao,
@@ -177,18 +178,147 @@ def listar_principal():
             page=page, per_page=per_page, error_out=False
         )
         
+        # 📞 BUSCAR CONTATOS DE AGENDAMENTO para exibir botão "Agendar"
+        from app.cadastros_agendamento.models import ContatoAgendamento
+        
+        # Obter CNPJs únicos dos itens
+        cnpjs_unicos = set()
+        if itens.items:
+            cnpjs_unicos = {item.cnpj_cpf for item in itens.items if item.cnpj_cpf}
+        
+        # Buscar contatos de agendamento
+        contatos_agendamento = {}
+        if cnpjs_unicos:
+            contatos = ContatoAgendamento.query.filter(
+                ContatoAgendamento.cnpj.in_(cnpjs_unicos)
+            ).all()
+            contatos_agendamento = {contato.cnpj: contato for contato in contatos}
+        
         return render_template('carteira/listar_principal.html',
                              itens=itens,
                              num_pedido=num_pedido,
                              cod_produto=cod_produto,
                              vendedor=vendedor,
                              status=status,
-                             cliente=cliente)
+                             cliente=cliente,
+                             contatos_agendamento=contatos_agendamento)
         
     except Exception as e:
         logger.error(f"Erro ao listar carteira principal: {str(e)}")
         flash('Erro ao carregar carteira principal', 'error')
         return redirect(url_for('carteira.index'))
+
+@carteira_bp.route('/item/<int:item_id>/endereco')
+@login_required
+def buscar_endereco_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
+    """API para buscar dados de endereço de um item da carteira"""
+    try:
+        inspector = inspect(db.engine)
+        if not inspector.has_table('carteira_principal'):
+            return jsonify({'error': 'Sistema não inicializado'}), 400
+            
+        item = CarteiraPrincipal.query.get_or_404(item_id)
+        
+        # Retornar dados do endereço em formato JSON
+        dados_endereco = {
+            'id': item.id,
+            'estado': item.estado,
+            'municipio': item.municipio,
+            'cnpj_endereco_ent': item.cnpj_endereco_ent,
+            'empresa_endereco_ent': item.empresa_endereco_ent,
+            'cod_uf': item.cod_uf,
+            'nome_cidade': item.nome_cidade,
+            'bairro_endereco_ent': item.bairro_endereco_ent,
+            'cep_endereco_ent': item.cep_endereco_ent,
+            'rua_endereco_ent': item.rua_endereco_ent,
+            'endereco_ent': item.endereco_ent,
+            'telefone_endereco_ent': item.telefone_endereco_ent
+        }
+        
+        return jsonify(dados_endereco)
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar endereço do item {item_id}: {str(e)}")
+        return jsonify({'error': 'Erro interno do servidor'}), 500
+
+@carteira_bp.route('/item/<int:item_id>/agendamento', methods=['GET', 'POST'])
+@login_required
+def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
+    """API para buscar e salvar dados de agendamento de um item da carteira"""
+    try:
+        inspector = inspect(db.engine)
+        if not inspector.has_table('carteira_principal'):
+            return jsonify({'error': 'Sistema não inicializado'}), 400
+            
+        item = CarteiraPrincipal.query.get_or_404(item_id)
+        
+        if request.method == 'GET':
+            # Buscar dados de agendamento
+            from app.cadastros_agendamento.models import ContatoAgendamento
+            
+            # Buscar contato de agendamento
+            contato = ContatoAgendamento.query.filter_by(cnpj=item.cnpj_cpf).first()
+            
+            dados_agendamento = {
+                'id': item.id,
+                'num_pedido': item.num_pedido,
+                'raz_social': item.raz_social,
+                'raz_social_red': item.raz_social_red,
+                'cnpj_cpf': item.cnpj_cpf,
+                'cliente_nec_agendamento': item.cliente_nec_agendamento,
+                'agendamento': item.agendamento.strftime('%Y-%m-%d') if item.agendamento else None,
+                'hora_agendamento': item.hora_agendamento.strftime('%H:%M') if item.hora_agendamento else None,
+                'protocolo': item.protocolo,
+                'contato_agendamento': {
+                    'forma': contato.forma,
+                    'contato': contato.contato,
+                    'observacao': contato.observacao
+                } if contato else None
+            }
+            
+            return jsonify(dados_agendamento)
+            
+        elif request.method == 'POST':
+            # Salvar agendamento
+            from datetime import datetime, time
+            
+            dados = request.get_json()
+            
+            # Validar data obrigatória
+            if not dados.get('data_agendamento'):
+                return jsonify({'error': 'Data do agendamento é obrigatória'}), 400
+            
+            # Atualizar campos
+            try:
+                data_agendamento = datetime.strptime(dados['data_agendamento'], '%Y-%m-%d').date()
+                item.agendamento = data_agendamento
+                
+                if dados.get('hora_agendamento'):
+                    hora_agendamento = datetime.strptime(dados['hora_agendamento'], '%H:%M').time()
+                    item.hora_agendamento = hora_agendamento
+                
+                if dados.get('protocolo'):
+                    item.protocolo = dados['protocolo']
+                
+                # Se agenda confirmada, aqui você pode adicionar lógica adicional
+                # Por enquanto apenas salvamos os dados básicos
+                
+                db.session.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Agendamento salvo com sucesso'
+                })
+                
+            except ValueError as e:
+                return jsonify({'error': f'Formato de data/hora inválido: {str(e)}'}), 400
+        
+        # Método não suportado
+        return jsonify({'error': 'Método não suportado'}), 405
+        
+    except Exception as e:
+        logger.error(f"Erro no agendamento do item {item_id}: {str(e)}")
+        return jsonify({'error': 'Erro interno do servidor'}), 500
 
 @carteira_bp.route('/importar', methods=['GET', 'POST'])
 @login_required

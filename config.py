@@ -5,9 +5,24 @@ load_dotenv()
 
 # Detecta o tipo de banco uma vez
 DATABASE_URL = os.environ.get('DATABASE_URL')
-# Correção UTF-8 para PostgreSQL
-if DATABASE_URL and 'client_encoding=' not in DATABASE_URL:
-    DATABASE_URL += '&client_encoding=utf-8' if '?' in DATABASE_URL else '?client_encoding=utf-8'
+# Correção UTF-8 para PostgreSQL - versão RENDER-READY
+if DATABASE_URL and DATABASE_URL.startswith(('postgresql://', 'postgres://')):
+    # Remove client_encoding existente primeiro
+    if 'client_encoding=' in DATABASE_URL:
+        import re
+        DATABASE_URL = re.sub(r'[?&]client_encoding=[^&]*', '', DATABASE_URL)
+    
+    # Render.com requer parâmetros específicos
+    encoding_params = [
+        'client_encoding=utf8',
+        'connect_timeout=10',
+        'application_name=sistema_fretes'
+    ]
+    
+    # Adiciona parâmetros de forma robusta
+    separator = '&' if '?' in DATABASE_URL else '?'
+    DATABASE_URL += separator + '&'.join(encoding_params)
+
 DATABASE_URL = DATABASE_URL or 'sqlite:///sistema_fretes.db'
 IS_POSTGRESQL = DATABASE_URL.startswith('postgresql://') or DATABASE_URL.startswith('postgres://')
 
@@ -15,12 +30,29 @@ IS_POSTGRESQL = DATABASE_URL.startswith('postgresql://') or DATABASE_URL.startsw
 IS_PRODUCTION = os.environ.get('ENVIRONMENT') == 'production' or 'render.com' in os.environ.get('RENDER_EXTERNAL_URL', '')
 
 class Config:
-    # Configuração de encoding UTF-8
+    # Configuração de encoding UTF-8 - mais robusta
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
         "pool_recycle": 300,
-        "connect_args": {"client_encoding": "utf8"}
+        "echo": False
     }
+    
+    # Configurações específicas por tipo de banco
+    if IS_POSTGRESQL:
+        # Configurações otimizadas para Render.com
+        SQLALCHEMY_ENGINE_OPTIONS["connect_args"] = {
+            "client_encoding": "utf8",
+            "options": "-c client_encoding=utf8 -c timezone=UTC",
+            "connect_timeout": 10,
+            "command_timeout": 30,
+            "application_name": "sistema_fretes"
+        }
+        # Pool settings para Render
+        SQLALCHEMY_ENGINE_OPTIONS["pool_size"] = 5
+        SQLALCHEMY_ENGINE_OPTIONS["max_overflow"] = 10
+        SQLALCHEMY_ENGINE_OPTIONS["pool_timeout"] = 30
+    else:
+        SQLALCHEMY_ENGINE_OPTIONS["connect_args"] = {}
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key-super-secreta-aqui'
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
