@@ -348,7 +348,7 @@ class FaturamentoService:
                         relatorio.municipio = dados_nf['municipio']
                         relatorio.estado = dados_nf['estado']      # ✅ ADICIONAR ESTADO
                         relatorio.status_faturamento = dados_nf['status']
-                        relatorio.peso_total = dados_nf['peso_total']
+                        relatorio.peso_bruto = dados_nf['peso_total']
                         relatorio.data_importacao = datetime.now()
                         relatorio.origem_importacao = 'odoo_integracao'
                         
@@ -357,7 +357,7 @@ class FaturamentoService:
                     else:
                         # Atualizar registro existente
                         existe.valor_total = dados_nf['valor_total']
-                        existe.peso_total = dados_nf['peso_total']
+                        existe.peso_bruto = dados_nf['peso_total']
                         existe.status_faturamento = dados_nf['status']
                         existe.data_importacao = datetime.now()
                         existe.origem_importacao = 'odoo_integracao'
