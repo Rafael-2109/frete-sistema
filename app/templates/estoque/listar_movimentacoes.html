@@ -813,5 +813,31 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+    
+    // Auto-abrir modal quando redirecionado de nova_movimentacao
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('nova_mov') === '1') {
+        // Abrir modal automaticamente
+        const modal = new bootstrap.Modal(document.getElementById('modalNovaMovimentacao'));
+        modal.show();
+        
+        // Pré-preencher campos se fornecidos
+        const codProduto = urlParams.get('cod_produto');
+        const tipo = urlParams.get('tipo');
+        
+        if (codProduto) {
+            const inputCodProduto = document.querySelector('#modalNovaMovimentacao input[name="cod_produto"]');
+            if (inputCodProduto) inputCodProduto.value = codProduto;
+        }
+        
+        if (tipo) {
+            const selectTipo = document.querySelector('#modalNovaMovimentacao select[name="tipo_movimentacao"]');
+            if (selectTipo) selectTipo.value = tipo;
+        }
+        
+        // Limpar parâmetros da URL para evitar reabrir modal no refresh
+        const cleanUrl = window.location.pathname + window.location.search.replace(/[?&]nova_mov=1/, '').replace(/[?&]cod_produto=[^&]*/, '').replace(/[?&]tipo=[^&]*/, '');
+        window.history.replaceState({}, document.title, cleanUrl.replace(/[?&]$/, ''));
+    }
 });
 </script> 

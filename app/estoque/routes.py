@@ -399,8 +399,19 @@ def buscar_produto_api(codigo):
 @login_required
 @require_admin()
 def nova_movimentacao():
-    """Tela para registrar nova movimentação manualmente"""
-    return render_template('estoque/nova_movimentacao.html')
+    """Redireciona para listagem onde há modal de nova movimentação"""
+    # Capturar parâmetros da URL para abrir modal com dados pré-preenchidos
+    cod_produto = request.args.get('cod_produto')
+    tipo = request.args.get('tipo')
+    
+    # Redirecionar para listagem com parâmetros para abrir modal automaticamente
+    if cod_produto and tipo:
+        return redirect(url_for('estoque.listar_movimentacoes', 
+                               nova_mov=1, 
+                               cod_produto=cod_produto, 
+                               tipo=tipo))
+    else:
+        return redirect(url_for('estoque.listar_movimentacoes', nova_mov=1))
 
 @estoque_bp.route('/movimentacoes/nova', methods=['POST'])
 @login_required
@@ -1289,5 +1300,30 @@ def exportar_dados_movimentacoes():
         logger.error(f"Erro ao exportar dados: {str(e)}")
         flash(f'Erro ao exportar dados: {str(e)}', 'error')
         return redirect(url_for('estoque.index'))
+
+
+@estoque_bp.route('/excluir_movimentacao/<int:id>')
+@login_required
+def excluir_movimentacao(id):
+    """
+    Excluir uma movimentação de estoque
+    """
+    try:
+        movimentacao = MovimentacaoEstoque.query.get_or_404(id)
+        
+        # Log da exclusão
+        logger.info(f"Excluindo movimentação ID {id}: {movimentacao.cod_produto} - {movimentacao.tipo_movimentacao}")
+        
+        db.session.delete(movimentacao)
+        db.session.commit()
+        
+        flash(f'Movimentação {movimentacao.tipo_movimentacao} do produto {movimentacao.cod_produto} excluída com sucesso.', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao excluir movimentação {id}: {str(e)}")
+        flash(f'Erro ao excluir movimentação: {str(e)}', 'danger')
+    
+    return redirect(url_for('estoque.listar_movimentacoes'))
 
  
