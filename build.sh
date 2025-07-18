@@ -5,37 +5,37 @@
 echo "=== INICIANDO DEPLOY NO RENDER ==="
 
 # 1. Instalar dependências
-echo "📦 Instalando dependências..."
+echo "Instalando dependências..."
 pip install -r requirements.txt
 
 # 2. Instalar modelo spaCy português
-echo "🧠 Instalando modelo spaCy português..."
-python -m spacy download pt_core_news_sm || echo "⚠️ spaCy pode não estar instalado, continuando..."
+echo "Instalando modelo spaCy português..."
+python -m spacy download pt_core_news_sm || echo "spaCy pode não estar instalado, continuando..."
 
 # 3. Verificar e corrigir migrações
-echo "🗃️ Verificando migrações..."
+echo "Verificando migrações..."
 
 # Verificar se há múltiplas heads
 if flask db heads | grep -q "Multiple head revisions"; then
-    echo "⚠️ Múltiplas heads detectadas, criando merge..."
+    echo "Múltiplas heads detectadas, criando merge..."
     flask db merge heads -m "Merge múltiplas heads automaticamente"
 fi
 
 # Verificar se há heads não aplicadas
 if ! flask db current | grep -q "(head)"; then
-    echo "🔄 Aplicando migrações..."
+    echo "Aplicando migrações..."
     flask db upgrade
 else
-    echo "✅ Banco já está atualizado"
+    echo "Banco já está atualizado"
 fi
 
 # 4. Verificar e aplicar migração hora_agendamento
-echo "⏰ Verificando campo hora_agendamento..."
+echo "Verificando campo hora_agendamento..."
 mkdir -p scripts
-python scripts/deploy_render.py || echo "⚠️ Script de verificação falhou, continuando..."
+python scripts/deploy_render.py || echo "Script de verificação falhou, continuando..."
 
 # 5. Inicializar banco se necessário
-echo "🗄️ Inicializando banco..."
+echo "Inicializando banco..."
 python init_db.py
 
-echo "✅ Build concluído com sucesso!"
+echo "Build concluído com sucesso!"

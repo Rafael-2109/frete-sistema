@@ -397,9 +397,6 @@ class ProcessadorFaturamento:
         if item:
             item.nota_fiscal = numero_nf
             logger.info(f"✅ NF {numero_nf} vinculada ao lote {lote_id}")
-       
-    
-    
     
     def _gerar_inconsistencia_vinculacao(self, nf: RelatorioFaturamentoImportado, 
                                        embarque_item: EmbarqueItem, usuario: str):

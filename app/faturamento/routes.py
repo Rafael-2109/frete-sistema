@@ -2,11 +2,8 @@ import os
 import pandas as pd
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, send_file, Response
 from flask_login import login_required, current_user
-from werkzeug.utils import secure_filename
 from app import db
 from app.faturamento.models import RelatorioFaturamentoImportado, FaturamentoProduto
-from app.faturamento.forms import UploadRelatorioForm  # certifique-se de que o caminho está correto
-from app.utils.helpers import limpar_valor
 from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
 from app.embarques.models import EmbarqueItem, Embarque
 from app.fretes.routes import validar_cnpj_embarque_faturamento
@@ -733,8 +730,8 @@ def dashboard_faturamento():
 def dashboard_reconciliacao():
     """Dashboard de reconciliação - visualizar inconsistências"""
     try:
-        # Importar o serviço de reconciliação
-        from app.carteira.services.reconciliacao_service import ReconciliacaoService
+        # Importar o serviço de reconciliação (movido para faturamento)
+        from app.faturamento.services.reconciliacao_service import ReconciliacaoService
         
         # Executar análise de inconsistências
         reconciliacao = ReconciliacaoService()
@@ -759,7 +756,7 @@ def tela_conciliacao_manual():
         produto = request.args.get('produto', '')
         
         # Importar o serviço de reconciliação
-        from app.carteira.services.reconciliacao_service import ReconciliacaoService
+        from app.faturamento.services.reconciliacao_service import ReconciliacaoService
         
         reconciliacao = ReconciliacaoService()
         inconsistencias_raw = reconciliacao.identificar_inconsistencias()
@@ -1026,9 +1023,9 @@ def api_processar_pendencias():
     """API para processar pendências automaticamente"""
     try:
         # Importar o processador
-        from app.carteira.services.processar_faturamento import ProcessarFaturamento
+        from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
         
-        processador = ProcessarFaturamento()
+        processador = ProcessadorFaturamento()
         resultado = processador.processar_todas_pendencias()
         
         return jsonify({
@@ -1048,7 +1045,7 @@ def api_reconciliacao_automatica():
     """API para reconciliação automática"""
     try:
         # Importar o serviço
-        from app.carteira.services.reconciliacao_service import ReconciliacaoService
+        from app.faturamento.services.reconciliacao_service import ReconciliacaoService
         
         reconciliacao = ReconciliacaoService()
         resultado = reconciliacao.reconciliacao_automatica()
