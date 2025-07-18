@@ -13,6 +13,7 @@ from app.estoque.models import SaldoEstoque, MovimentacaoEstoque
 from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
 from app.faturamento.models import FaturamentoProduto
+from app.localidades.models import CadastroRota, CadastroSubRota
 # from app.utils.auth_decorators import require_admin, require_editar_cadastros  # Removido temporariamente
 from app.utils.timezone import agora_brasil
 from sqlalchemy import func, and_, or_, inspect, literal
@@ -25,6 +26,32 @@ import random
 import time
 
 logger = logging.getLogger(__name__)
+
+# Função auxiliar para buscar rota baseada no cod_uf
+def _buscar_rota_por_uf(cod_uf):
+    """Busca rota principal baseada no cod_uf"""
+    if not cod_uf:
+        return None
+    try:
+        rota = CadastroRota.query.filter_by(cod_uf=cod_uf, ativa=True).first()
+        return rota.rota if rota else None
+    except Exception:
+        return None
+
+# Função auxiliar para buscar sub-rota baseada no cod_uf + nome_cidade
+def _buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade):
+    """Busca sub-rota baseada no cod_uf + nome_cidade"""
+    if not cod_uf or not nome_cidade:
+        return None
+    try:
+        sub_rota = CadastroSubRota.query.filter_by(
+            cod_uf=cod_uf, 
+            nome_cidade=nome_cidade,
+            ativa=True
+        ).first()
+        return sub_rota.sub_rota if sub_rota else None
+    except Exception:
+        return None
 
 # 📦 Blueprint da carteira (seguindo padrão dos outros módulos)
 carteira_bp = Blueprint('carteira', __name__, url_prefix='/carteira')
@@ -181,6 +208,7 @@ def listar_principal():
             'data_pedido': CarteiraPrincipal.data_pedido,
             'raz_social': CarteiraPrincipal.raz_social,
             'cod_uf': CarteiraPrincipal.cod_uf,
+            'rota': CarteiraPrincipal.rota,
             'cod_produto': CarteiraPrincipal.cod_produto,
             'qtd_saldo_produto_pedido': CarteiraPrincipal.qtd_saldo_produto_pedido,
             'preco_produto_pedido': CarteiraPrincipal.preco_produto_pedido,
@@ -235,7 +263,7 @@ def listar_principal():
             ).all()
             dados_palletizacao = {p.cod_produto: p for p in palletizacoes}
         
-        # 📊 CALCULAR PESO E PALLET DINAMICAMENTE para cada item
+        # 📊 CALCULAR PESO E PALLET DINAMICAMENTE + ROTA/SUB-ROTA para cada item
         if itens.items:
             for item in itens.items:
                 palletizacao = dados_palletizacao.get(item.cod_produto)
@@ -248,6 +276,12 @@ def listar_principal():
                     # Fallback para campos existentes no banco
                     item.peso_calculado = float(item.peso) if item.peso else 0
                     item.pallet_calculado = float(item.pallet) if item.pallet else 0
+                
+                # 🛣️ BUSCAR ROTA E SUB-ROTA SE NÃO EXISTIREM NO BANCO
+                if not item.rota and item.cod_uf:
+                    item.rota = _buscar_rota_por_uf(item.cod_uf)
+                if not item.sub_rota and item.cod_uf and item.nome_cidade:
+                    item.sub_rota = _buscar_sub_rota_por_uf_cidade(item.cod_uf, item.nome_cidade)
         
         return render_template('carteira/listar_principal.html',
                              itens=itens,
@@ -1157,12 +1191,12 @@ def vincular_separacoes():
         relatorio = "Processo de vinculação concluído"
         
         flash(f'Vinculação concluída: {relatorio}', 'success')
-        return redirect(url_for('carteira.dashboard'))
+        return redirect(url_for('carteira.index'))
         
     except Exception as e:
         logger.error(f"Erro na vinculação: {str(e)}")
         flash(f'Erro na vinculação: {str(e)}', 'error')
-        return redirect(url_for('carteira.dashboard'))
+        return redirect(url_for('carteira.index'))
 
 @carteira_bp.route('/relatorio-vinculacoes')
 @login_required
@@ -1426,7 +1460,7 @@ def dashboard_saldos_standby():
     except Exception as e:
         logger.error(f"Erro no dashboard de saldos standby: {str(e)}")
         flash(f'Erro ao carregar dashboard: {str(e)}', 'error')
-        return redirect(url_for('carteira.dashboard'))
+        return redirect(url_for('carteira.index'))
 
 # ========================================
 # 🔗 APIs DE VINCULAÇÃO CARTEIRA ↔ SEPARAÇÃO  
@@ -2490,6 +2524,12 @@ def _atualizar_dados_mestres(item, row, definir_chaves=False):
     item.rua_endereco_ent = row.get('rua_endereco_ent')
     item.endereco_ent = row.get('endereco_ent')
     item.telefone_endereco_ent = row.get('telefone_endereco_ent')
+    
+    # 🛣️ BUSCAR ROTA E SUB-ROTA AUTOMATICAMENTE
+    if item.cod_uf:
+        item.rota = _buscar_rota_por_uf(item.cod_uf)
+        if item.nome_cidade:
+            item.sub_rota = _buscar_sub_rota_por_uf_cidade(item.cod_uf, item.nome_cidade)
     
     # 📊 ANÁLISE DE ESTOQUE (ARQUIVO 1) - CALCULADOS
     item.menor_estoque_produto_d7 = float(row.get('menor_estoque_produto_d7', 0) or 0) if pd.notna(row.get('menor_estoque_produto_d7')) else None

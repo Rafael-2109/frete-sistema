@@ -112,6 +112,11 @@
                                 </a>
                             </th>
                             <th>
+                                <a href="javascript:void(0)" onclick="ordenarPor('rota')" class="text-decoration-none text-dark">
+                                    Rota/Sub-Rota <i class="fas fa-sort"></i>
+                                </a>
+                            </th>
+                            <th>
                                 <a href="javascript:void(0)" onclick="ordenarPor('cod_produto')" class="text-decoration-none text-dark">
                                     Produto <i class="fas fa-sort"></i>
                                 </a>
@@ -159,9 +164,9 @@
                                 <br>
                                 {% if item.status_pedido %}
                                     {% if item.status_pedido == 'Cotação' %}
-                                    <span class="badge badge-primary" style="background-color: #007bff; color: white;">{{ item.status_pedido }}</span>
+                                    <span class="badge" style="background-color: #007bff; color: white;">{{ item.status_pedido }}</span>
                                     {% elif item.status_pedido == 'Pedido de venda' %}
-                                    <span class="badge badge-success" style="background-color: #28a745; color: white;">{{ item.status_pedido }}</span>
+                                    <span class="badge" style="background-color: #28a745; color: white;">{{ item.status_pedido }}</span>
                                     {% else %}
                                     <span class="badge" style="background-color: #6c757d; color: white;">{{ item.status_pedido }}</span>
                                     {% endif %}
@@ -173,10 +178,10 @@
                                 {% if item.data_pedido %}
                                 <span class="badge" style="background-color: #6c757d; color: white;">{{ item.data_pedido|formatar_data_brasil }}</span>
                                 {% else %}
-                                <span class="badge badge-light">-</span>
+                                <span class="badge" style="background-color: #f8f9fa; color: #6c757d;">-</span>
                                 {% endif %}
                                 {% if item.data_entrega_pedido %}
-                                <br><span class="badge badge-primary">{{ item.data_entrega_pedido|formatar_data_brasil }}</span>
+                                <br><span class="badge" style="background-color: #007bff; color: white;">{{ item.data_entrega_pedido|formatar_data_brasil }}</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -188,9 +193,19 @@
                             <td>
                                 <strong>{{ item.cod_uf or '-' }}/{{ item.incoterm or '-' }}</strong>
                                 {% if item.nome_cidade %}
-                                <br><span class="badge badge-info" style="cursor: pointer;" onclick="abrirModalEndereco('{{ item.id }}')">
+                                <br><span class="badge" style="background-color: #17a2b8; color: white; cursor: pointer;" onclick="abrirModalEndereco('{{ item.id }}')">
                                     {{ item.nome_cidade }}
                                 </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.rota %}
+                                <span class="badge" style="background-color: #28a745; color: white;">{{ item.rota }}</span>
+                                {% else %}
+                                <span class="badge" style="background-color: #6c757d; color: white;">-</span>
+                                {% endif %}
+                                {% if item.sub_rota %}
+                                <br><span class="badge" style="background-color: #ffc107; color: black;">{{ item.sub_rota }}</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -207,25 +222,29 @@
                             </td>
                             <td class="text-center">
                                 {% set valor_total = (item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0) %}
-                                <strong>{{ valor_total|valor_br }}</strong>
-                                <br><small class="text-muted">{{ item.preco_produto_pedido|valor_br if item.preco_produto_pedido else '-' }}/un</small>
+                                <strong>{{ "{:,.0f}"|format(valor_total) }}</strong>
+                                <br><small class="text-muted">{{ "{:,.0f}"|format(item.preco_produto_pedido) if item.preco_produto_pedido else '-' }}/un</small>
                             </td>
                             <td class="text-center">
                                 {% if item.peso_calculado or item.pallet_calculado %}
                                 <span class="badge" style="background-color: #6c757d; color: white;">
-                                    {% if item.peso_calculado %}{{ "%.2f"|format(item.peso_calculado) }}kg{% endif %}
-                                    {% if item.peso_calculado and item.pallet_calculado %} | {% endif %}
-                                    {% if item.pallet_calculado %}{{ "%.2f"|format(item.pallet_calculado) }}pl{% endif %}
+                                    {% if item.peso_calculado %}{{ "{:,.0f}"|format(item.peso_calculado) }}kg{% endif %}
                                 </span>
+                                {% if item.peso_calculado and item.pallet_calculado %}<br>{% endif %}
+                                {% if item.pallet_calculado %}
+                                <span class="badge" style="background-color: #6c757d; color: white;">
+                                    {{ "{:.1f}"|format(item.pallet_calculado) }}pl
+                                </span>
+                                {% endif %}
                                 {% else %}
-                                <span class="badge badge-light">-</span>
+                                <span class="badge" style="background-color: #f8f9fa; color: #6c757d;">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
                                 {% if item.expedicao %}
-                                <span class="badge badge-warning" style="background-color: #ffc107; color: black;">{{ item.expedicao|formatar_data_brasil }}</span>
+                                <span class="badge" style="background-color: #ffc107; color: black;">{{ item.expedicao|formatar_data_brasil }}</span>
                                 {% else %}
-                                <span class="badge badge-light">-</span>
+                                <span class="badge" style="background-color: #f8f9fa; color: #6c757d;">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
@@ -241,7 +260,6 @@
                                             {% if item.protocolo %}
                                             <br><small>📋 {{ item.protocolo }}</small>
                                             {% endif %}
-                                            <br><small>✅ Confirmado</small>
                                         </button>
                                     {% else %}
                                         <!-- Agendamento não confirmado - amarelo com check verde -->
@@ -251,7 +269,6 @@
                                                 {% if item.protocolo %}
                                                 <br><small>📋 {{ item.protocolo }}</small>
                                                 {% endif %}
-                                                <br><small>⏳ Aguardando</small>
                                             </button>
                                             <button class="btn btn-sm btn-success" onclick="confirmarAgendamento('{{ item.id }}')" title="Confirmar agendamento">
                                                 ✅
@@ -265,12 +282,12 @@
                                     </button>
                                 {% else %}
                                     <!-- Não precisa agendamento -->
-                                    <span class="badge badge-light">-</span>
+                                    <span class="badge" style="background-color: #f8f9fa; color: #6c757d;">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
                                 {% if item.separacao_lote_id %}
-                                <span class="badge badge-success" title="Vinculado ao lote {{ item.separacao_lote_id }}">
+                                <span class="badge" style="background-color: #28a745; color: white;" title="Vinculado ao lote {{ item.separacao_lote_id }}">
                                     <i class="fas fa-link"></i> #{{ item.separacao_lote_id }}
                                 </span>
                                 {% else %}
@@ -523,11 +540,16 @@
 let currentSort = null;
 let currentOrder = 'asc';
 
-// 🔄 FUNÇÃO PARA ORDENAÇÃO INTELIGENTE
+// 🔄 FUNÇÃO PARA ORDENAÇÃO INTELIGENTE BIDIRECIONAL
 function ordenarPor(campo) {
+    // Verificar se é o mesmo campo clicado novamente
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentSortUrl = urlParams.get('sort');
+    const currentOrderUrl = urlParams.get('order') || 'asc';
+    
     // Alternar ordem se clicou no mesmo campo
-    if (currentSort === campo) {
-        currentOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+    if (currentSortUrl === campo) {
+        currentOrder = currentOrderUrl === 'asc' ? 'desc' : 'asc';
     } else {
         currentSort = campo;
         currentOrder = 'asc';
@@ -817,6 +839,7 @@ function abrirModalAgendamento(itemId, numPedido) {
             if (data.agendamento) {
                 document.getElementById('data_agendamento').value = data.agendamento;
             }
+            // PRÉ-PREENCHER data_entrega mesmo se não tiver agendamento
             if (data.data_entrega_pedido) {
                 document.getElementById('data_entrega').value = data.data_entrega_pedido;
             }

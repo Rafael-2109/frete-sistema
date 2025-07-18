@@ -93,6 +93,10 @@ class CarteiraPrincipal(db.Model):
     pallet = db.Column(db.Numeric(15, 3), nullable=True)  # Pallets no lote
     peso = db.Column(db.Numeric(15, 3), nullable=True)  # Peso no lote
     
+    # 🛣️ DADOS DE ROTA E SUB-ROTA (ADICIONADOS)
+    rota = db.Column(db.String(50), nullable=True)  # Rota principal baseada em cod_uf
+    sub_rota = db.Column(db.String(50), nullable=True)  # Sub-rota baseada em cod_uf + nome_cidade
+    
     # 📈 TOTALIZADORES POR CLIENTE (CALCULADOS)
     valor_saldo_total = db.Column(db.Numeric(15, 2), nullable=True)  # Valor total programado CNPJ
     pallet_total = db.Column(db.Numeric(15, 3), nullable=True)  # Pallet total programado CNPJ  
