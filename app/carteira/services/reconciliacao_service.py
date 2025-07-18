@@ -75,22 +75,28 @@ class ReconciliacaoService:
         """
         Separações que não têm NF vinculada
         """
-        # Buscar separações sem NF em EmbarqueItem
+        # ✅ CORRETO: Buscar separações sem NF em EmbarqueItem usando separacao_lote_id
         separacoes_sem_nf = db.session.query(Separacao)\
             .outerjoin(EmbarqueItem, 
                       EmbarqueItem.separacao_lote_id == Separacao.separacao_lote_id)\
-            .filter(EmbarqueItem.nota_fiscal.is_(None))\
+            .filter(or_(
+                EmbarqueItem.nota_fiscal.is_(None),
+                EmbarqueItem.id.is_(None)  # Separação sem EmbarqueItem
+            ))\
             .all()
         
         resultado = []
         for sep in separacoes_sem_nf:
             resultado.append({
-                'lote_id': sep.separacao_lote_id,
+                'lote_id': sep.separacao_lote_id,  # ✅ CORRETO: lote_id não lote_separacao
                 'num_pedido': sep.num_pedido,
                 'cod_produto': sep.cod_produto,
                 'nome_produto': sep.nome_produto,
                 'qtd_saldo': sep.qtd_saldo,
-                'data_separacao': sep.criado_em
+                'data_separacao': sep.criado_em,  # ✅ CORRETO: campo criado_em
+                'cliente': sep.raz_social_red,  # ✅ ADICIONAR dados do cliente da separação
+                'municipio': sep.nome_cidade,  # ✅ CORRETO: nome_cidade no modelo Separacao
+                'estado': sep.cod_uf  # ✅ CORRETO: cod_uf no modelo Separacao
             })
         
         return resultado
@@ -103,18 +109,24 @@ class ReconciliacaoService:
         # Por enquanto retorna vazio - será implementado quando o modelo existir
         return []
     
+    def identificar_inconsistencias(self) -> Dict[str, List]:
+        """
+        Método principal para identificar inconsistências - usado pelos templates
+        """
+        return self.buscar_inconsistencias()
+    
     def conciliar_nf_separacao(self, numero_nf: str, lote_id: str, usuario: str) -> Dict[str, Any]:
         """
         Concilia manualmente uma NF com uma separação
         """
         try:
-            # Verificar se NF existe
-            nf = RelatorioFaturamentoImportado.query.filter_by(
+            # ✅ CORRETO: Verificar se NF existe em FaturamentoProduto (modelo com produtos)
+            produtos_nf = FaturamentoProduto.query.filter_by(
                 numero_nf=numero_nf
-            ).first()
+            ).all()
             
-            if not nf:
-                return {'sucesso': False, 'erro': 'NF não encontrada'}
+            if not produtos_nf:
+                return {'sucesso': False, 'erro': 'NF não encontrada no faturamento de produtos'}
             
             # Verificar se separação existe
             separacao = Separacao.query.filter_by(
@@ -129,22 +141,20 @@ class ReconciliacaoService:
                 MovimentacaoEstoque.observacao.like(f'%NF {numero_nf}%Sem Separação%')
             ).delete()
             
-            # Criar nova movimentação vinculada
-            produtos = FaturamentoProduto.query.filter_by(numero_nf=numero_nf).all()
-            
-            for produto in produtos:
+            # ✅ CORRETO: Criar nova movimentação vinculada usando dados de FaturamentoProduto
+            for produto in produtos_nf:
                 movimentacao = MovimentacaoEstoque()
                 movimentacao.cod_produto = produto.cod_produto
                 movimentacao.nome_produto = produto.nome_produto
                 movimentacao.tipo_movimentacao = 'FATURAMENTO'
                 movimentacao.local_movimentacao = 'VENDA'
-                movimentacao.data_movimentacao = produto.data_fatura.date() if produto.data_fatura else nf.data_fatura
+                movimentacao.data_movimentacao = produto.data_fatura  # ✅ CORRETO: data_fatura do FaturamentoProduto
                 movimentacao.qtd_movimentacao = -produto.qtd_produto_faturado
                 movimentacao.observacao = f"Baixa automática NF {numero_nf} - lote separação {lote_id} (CONCILIADO MANUALMENTE)"
                 movimentacao.criado_por = usuario
                 db.session.add(movimentacao)
             
-            # Atualizar EmbarqueItem
+            # ✅ USAR separacao_lote_id para atualizar EmbarqueItem
             item = EmbarqueItem.query.filter_by(
                 separacao_lote_id=lote_id,
                 nota_fiscal=None
@@ -157,7 +167,7 @@ class ReconciliacaoService:
             
             return {
                 'sucesso': True,
-                'mensagem': f'NF {numero_nf} vinculada ao lote {lote_id} com sucesso'
+                'mensagem': f'NF {numero_nf} vinculada ao lote {lote_id} com sucesso. {len(produtos_nf)} produtos processados.'
             }
             
         except Exception as e:

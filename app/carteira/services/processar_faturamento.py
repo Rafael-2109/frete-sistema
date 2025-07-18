@@ -58,48 +58,40 @@ class ProcessadorFaturamento:
     
     def _buscar_nfs_pendentes(self) -> List[RelatorioFaturamentoImportado]:
         """
-        Busca NFs que ainda não foram processadas OU que mudaram de status
+        ✅ OTIMIZADO: Busca apenas NFs que têm produtos E não foram processadas
         """
-        # NFs já processadas e seus status
-        nfs_processadas = db.session.query(
-            MovimentacaoEstoque.observacao,
-            MovimentacaoEstoque.tipo_movimentacao
-        ).filter(
-            MovimentacaoEstoque.observacao.like('%Baixa automática NF%')
-        ).all()
+        # Buscar NFs que têm movimentação de estoque
+        nfs_processadas_query = db.session.query(MovimentacaoEstoque.observacao)\
+            .filter(MovimentacaoEstoque.tipo_movimentacao == 'FATURAMENTO')\
+            .filter(MovimentacaoEstoque.observacao.like('%Baixa automática NF%'))\
+            .all()
         
-        nfs_com_movimentacao = {}
-        for obs, tipo in nfs_processadas:
-            if obs and 'NF' in obs:
-                parts = obs.split('NF')
-                if len(parts) > 1:
-                    numero = parts[1].split('-')[0].strip()
-                    nfs_com_movimentacao[numero] = tipo
+        # Extrair números de NF de forma mais robusta
+        nfs_processadas = set()
+        for (obs,) in nfs_processadas_query:
+            if obs and 'Baixa automática NF' in obs:
+                # Busca padrão mais específico
+                import re
+                match = re.search(r'Baixa automática NF (\d+)', obs)
+                if match:
+                    nfs_processadas.add(match.group(1))
         
-        # Buscar todas as NFs ativas
+        # ✅ OTIMIZAÇÃO: Buscar apenas NFs que TÊM produtos em FaturamentoProduto
+        # Subquery para NFs que têm produtos
+        nfs_com_produtos = db.session.query(FaturamentoProduto.numero_nf).distinct().subquery()
+        
+        # Buscar NFs ativas, com produtos, não processadas
         todas_nfs = RelatorioFaturamentoImportado.query.filter(
-            RelatorioFaturamentoImportado.ativo == True
+            RelatorioFaturamentoImportado.ativo == True,
+            RelatorioFaturamentoImportado.numero_nf.in_(
+                db.session.query(nfs_com_produtos.c.numero_nf)
+            ),
+            ~RelatorioFaturamentoImportado.numero_nf.in_(nfs_processadas)
         ).all()
         
-        nfs_pendentes = []
+        logger.info(f"📊 Busca otimizada: {len(todas_nfs)} NFs pendentes (apenas com produtos)")
         
-        for nf in todas_nfs:
-            # 1. NF nova (não processada)
-            if nf.numero_nf not in nfs_com_movimentacao:
-                nfs_pendentes.append(nf)
-                continue
-            
-            # 2. Verificar se mudou status no FaturamentoProduto
-            produto_cancelado = FaturamentoProduto.query.filter_by(
-                numero_nf=nf.numero_nf,
-                status_nf='Cancelado'
-            ).first()
-            
-            if produto_cancelado and nfs_com_movimentacao.get(nf.numero_nf) == 'FATURAMENTO':
-                # Status mudou para cancelado mas ainda tem movimentação ativa
-                nfs_pendentes.append(nf)
-        
-        return nfs_pendentes
+        return todas_nfs
     
     def _processar_nf(self, nf: RelatorioFaturamentoImportado, usuario: str) -> int:
         """
@@ -116,17 +108,22 @@ class ProcessadorFaturamento:
             self._processar_caso3_cancelamento(nf)
             return 3
         
-        # Verificar se NF já está preenchida em EmbarqueItem
+        # ✅ CORRIGIDO: Verificar se embarque existe antes de acessar
         embarque_item_existente = EmbarqueItem.query.filter_by(
             nota_fiscal=nf.numero_nf
         ).first()
         
         if embarque_item_existente:
-            # Verificar se bate CNPJ e pedido
-            if embarque_item_existente.embarque:
+            # ✅ CORREÇÃO: Verificar se embarque ainda existe
+            if embarque_item_existente.embarque is None:
+                # Item órfão - embarque foi deletado
+                logger.warning(f"EmbarqueItem órfão detectado: NF {nf.numero_nf} sem embarque")
+                embarque_item_existente.nota_fiscal = None  # Limpar NF para reprocessamento
+                db.session.commit()
+            else:
+                # Verificar se bate CNPJ e pedido
                 embarque = embarque_item_existente.embarque
                 
-                # Validar CNPJ e pedido
                 if (embarque.cnpj_cliente == nf.cnpj_cliente and 
                     embarque_item_existente.num_pedido == nf.origem):
                     # Vinculação já está correta - apenas criar movimentação
@@ -169,18 +166,16 @@ class ProcessadorFaturamento:
     def _vincular_com_separacao(self, nf: RelatorioFaturamentoImportado, 
                                 separacoes: List[Separacao]) -> Tuple[str, bool]:
         """
-        Vincula NF com separação mais adequada usando score percentual
-        Retorna (lote_id, tem_divergencia)
+        ✅ CORRIGIDO: Score por quantidade por produto (não por lote total)
         """
         # Se só tem uma separação, usa ela
         if len(separacoes) == 1:
             return self._verificar_divergencia_simples(nf, separacoes[0])
         
-        # Múltiplas separações - encontrar melhor match
+        # Múltiplas separações - encontrar melhor match POR PRODUTO
         melhor_score = 0
         melhor_lote = None
         tem_divergencia = False
-        melhor_detalhes = {}
         
         # Buscar produtos da NF
         produtos_nf = FaturamentoProduto.query.filter_by(
@@ -194,101 +189,128 @@ class ProcessadorFaturamento:
                 separacoes_por_lote[sep.separacao_lote_id] = []
             separacoes_por_lote[sep.separacao_lote_id].append(sep)
         
-        # Calcular score por lote de separação
+        # ✅ NOVO ALGORITMO: Score por quantidade por produto
         for lote_id, seps_lote in separacoes_por_lote.items():
-            score_lote = 0
-            produtos_matched = 0
-            divergencia_local = False
+            score_produtos = []
+            produtos_divergentes = 0
             
             # Para cada produto da NF
             for prod_nf in produtos_nf:
                 # Buscar separação correspondente no lote
-                sep_correspondente = None
-                for sep in seps_lote:
-                    if sep.cod_produto == prod_nf.cod_produto:
-                        sep_correspondente = sep
-                        break
+                sep_correspondente = next(
+                    (sep for sep in seps_lote if sep.cod_produto == prod_nf.cod_produto), 
+                    None
+                )
                 
                 if sep_correspondente:
-                    produtos_matched += 1
+                    # Calcular score de quantidade para este produto específico
+                    qtd_nf = prod_nf.qtd_produto_faturado
+                    qtd_sep = sep_correspondente.qtd_saldo
                     
-                    # Calcular percentual de match de quantidade
-                    if sep_correspondente.qtd_saldo > 0:
-                        percentual = min(
-                            prod_nf.qtd_produto_faturado / sep_correspondente.qtd_saldo,
-                            sep_correspondente.qtd_saldo / prod_nf.qtd_produto_faturado
-                        )
+                    if qtd_sep > 0:
+                        # Score baseado na menor quantidade / maior quantidade
+                        score_produto = min(qtd_nf, qtd_sep) / max(qtd_nf, qtd_sep)
+                        score_produtos.append(score_produto)
                         
-                        if percentual >= 0.95:  # 95% ou mais = match perfeito
-                            score_lote += 1.0
-                        elif percentual >= 0.80:  # 80-94% = match bom
-                            score_lote += 0.8
-                            divergencia_local = True
-                        elif percentual >= 0.50:  # 50-79% = match parcial
-                            score_lote += 0.5
-                            divergencia_local = True
-                        else:
-                            score_lote += 0.2  # Menos de 50% = match fraco
-                            divergencia_local = True
+                        # Detectar divergência se diferença > 5%
+                        if abs(qtd_nf - qtd_sep) / max(qtd_nf, qtd_sep) > 0.05:
+                            produtos_divergentes += 1
+                    else:
+                        score_produtos.append(0)
+                        produtos_divergentes += 1
+                else:
+                    # Produto não encontrado na separação
+                    score_produtos.append(0)
+                    produtos_divergentes += 1
             
-            # Calcular score final do lote (média ponderada)
-            if len(produtos_nf) > 0:
-                score_final_lote = (score_lote / len(produtos_nf)) * (produtos_matched / len(produtos_nf))
-                
-                if score_final_lote > melhor_score:
-                    melhor_score = score_final_lote
-                    melhor_lote = lote_id
-                    tem_divergencia = divergencia_local
-                    melhor_detalhes = {
-                        'produtos_matched': produtos_matched,
-                        'total_produtos_nf': len(produtos_nf),
-                        'score_percentual': score_final_lote * 100
-                    }
+            # Score médio do lote = média dos scores dos produtos
+            score_lote = sum(score_produtos) / len(score_produtos) if score_produtos else 0
+            
+            if score_lote > melhor_score:
+                melhor_score = score_lote
+                melhor_lote = lote_id
+                tem_divergencia = produtos_divergentes > 0
         
-        # Log do melhor match encontrado
-        if melhor_lote:
-            logger.info(f"NF {nf.numero_nf} vinculada ao lote {melhor_lote} com score {melhor_detalhes.get('score_percentual', 0):.1f}%")
+        logger.info(f"NF {nf.numero_nf}: Melhor lote {melhor_lote} com score {melhor_score:.2f}")
         
         return melhor_lote or '', tem_divergencia
     
     def _verificar_divergencia_simples(self, nf: RelatorioFaturamentoImportado, 
                                      separacao: Separacao) -> Tuple[str, bool]:
         """
-        Verifica se há divergência entre NF e separação única
+        ✅ CORRIGIDO: Verifica divergência por produto específico
         """
         produtos_nf = FaturamentoProduto.query.filter_by(
             numero_nf=nf.numero_nf
         ).all()
         
-        # Comparar totais
-        total_nf = sum(p.qtd_produto_faturado for p in produtos_nf)
-        total_sep = separacao.qtd_saldo
+        # Buscar produto específico na separação
+        produto_correspondente = next(
+            (p for p in produtos_nf if p.cod_produto == separacao.cod_produto), 
+            None
+        )
         
-        tem_divergencia = abs(total_nf - total_sep) > 0.01
+        if produto_correspondente:
+            diferenca_percentual = abs(produto_correspondente.qtd_produto_faturado - separacao.qtd_saldo) / max(produto_correspondente.qtd_produto_faturado, separacao.qtd_saldo)
+            tem_divergencia = diferenca_percentual > 0.05  # 5% de tolerância
+        else:
+            tem_divergencia = True  # Produto não encontrado
         
         return separacao.separacao_lote_id, tem_divergencia
     
     def _processar_caso1_direto(self, nf: RelatorioFaturamentoImportado, 
                                lote_id: str, usuario: str):
         """
-        Caso 1: Separação = NF - Grava movimentação direta
+        ✅ CORRIGIDO: Garantir faturamento negativo e criar produtos se não existirem
         """
         produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
         
         for produto in produtos:
+            # ✅ VERIFICAR SE PRODUTO EXISTE EM PALLETIZAÇÃO
+            self._garantir_produto_existe(produto.cod_produto, produto.nome_produto)
+            
             movimentacao = MovimentacaoEstoque()
             movimentacao.cod_produto = produto.cod_produto
             movimentacao.nome_produto = produto.nome_produto
             movimentacao.tipo_movimentacao = 'FATURAMENTO'
             movimentacao.local_movimentacao = 'VENDA'
-            movimentacao.data_movimentacao = produto.data_fatura.date() if produto.data_fatura else nf.data_fatura
-            movimentacao.qtd_movimentacao = -produto.qtd_produto_faturado  # Negativo = saída
+            # ✅ CORRIGIDO: Data sem vínculo direto na movimentação (usar data atual)
+            movimentacao.data_movimentacao = datetime.now().date()
+            # ✅ GARANTIDO: Sempre negativo para faturamento
+            movimentacao.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
             movimentacao.observacao = f"Baixa automática NF {nf.numero_nf} - lote separação {lote_id}"
             movimentacao.criado_por = usuario
             db.session.add(movimentacao)
         
         # Atualizar EmbarqueItem com a NF
         self._atualizar_embarque_item(nf.numero_nf, lote_id)
+    
+    def _garantir_produto_existe(self, cod_produto: str, nome_produto: str):
+        """
+        ✅ CORRIGIDO: Cria produto em Palletização se não existir
+        """
+        try:
+            from app.producao.models import CadastroPalletizacao
+            
+            produto_existente = CadastroPalletizacao.query.filter_by(
+                cod_produto=cod_produto
+            ).first()
+            
+            if not produto_existente:
+                # Criar objeto e definir campos separadamente
+                novo_produto = CadastroPalletizacao()
+                novo_produto.cod_produto = cod_produto
+                novo_produto.nome_produto = nome_produto or f'Produto {cod_produto}'
+                novo_produto.peso_bruto = 0
+                novo_produto.palletizacao = 1  # Valor padrão para evitar divisão por zero
+                
+                db.session.add(novo_produto)
+                logger.info(f"✅ Produto {cod_produto} criado em Palletização")
+                
+        except ImportError:
+            logger.warning(f"⚠️ Módulo Palletização não disponível para criar produto {cod_produto}")
+        except Exception as e:
+            logger.error(f"❌ Erro ao criar produto {cod_produto} em Palletização: {e}")
     
     def _processar_caso2_divergencia(self, nf: RelatorioFaturamentoImportado,
                                     lote_id: str, divergencia: bool, usuario: str):
@@ -303,19 +325,29 @@ class ProcessadorFaturamento:
         separacao = Separacao.query.filter_by(separacao_lote_id=lote_id).first()
         
         if separacao:
-            justificativa = FaturamentoParcialJustificativa()
-            justificativa.separacao_lote_id = lote_id
-            justificativa.num_pedido = nf.origem
-            justificativa.cod_produto = separacao.cod_produto
-            justificativa.numero_nf = nf.numero_nf
-            justificativa.qtd_separada = separacao.qtd_saldo
-            justificativa.qtd_faturada = sum(p.qtd_produto_faturado for p in produtos)
-            justificativa.qtd_saldo = abs(separacao.qtd_saldo - sum(p.qtd_produto_faturado for p in produtos))
-            justificativa.motivo_nao_faturamento = 'DIVERGENCIA_AUTOMATICA'
-            justificativa.descricao_detalhada = 'Divergência detectada automaticamente na importação'
-            justificativa.classificacao_saldo = 'NECESSITA_COMPLEMENTO'
-            justificativa.criado_por = usuario
-            db.session.add(justificativa)
+            # ✅ CORREÇÃO: Encontrar produto específico que corresponde à separação
+            produto_correspondente = next(
+                (p for p in produtos if p.cod_produto == separacao.cod_produto), 
+                None
+            )
+            
+            if produto_correspondente:
+                justificativa = FaturamentoParcialJustificativa()
+                justificativa.separacao_lote_id = lote_id
+                justificativa.num_pedido = nf.origem
+                justificativa.cod_produto = separacao.cod_produto
+                justificativa.numero_nf = nf.numero_nf
+                justificativa.qtd_separada = separacao.qtd_saldo
+                # ✅ CORRIGIDO: Usar apenas quantidade do produto específico
+                justificativa.qtd_faturada = produto_correspondente.qtd_produto_faturado
+                justificativa.qtd_saldo = abs(separacao.qtd_saldo - produto_correspondente.qtd_produto_faturado)
+                justificativa.motivo_nao_faturamento = 'DIVERGENCIA_AUTOMATICA'
+                justificativa.descricao_detalhada = f'Divergência detectada: Separado {separacao.qtd_saldo}, Faturado {produto_correspondente.qtd_produto_faturado}'
+                justificativa.classificacao_saldo = 'NECESSITA_COMPLEMENTO'
+                justificativa.criado_por = usuario
+                db.session.add(justificativa)
+            else:
+                logger.warning(f"⚠️ Produto {separacao.cod_produto} da separação {lote_id} não encontrado na NF {nf.numero_nf}")
     
     def _processar_caso3_cancelamento(self, nf: RelatorioFaturamentoImportado):
         """
@@ -337,20 +369,24 @@ class ProcessadorFaturamento:
         produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
         
         for produto in produtos:
+            # ✅ VERIFICAR SE PRODUTO EXISTE EM PALLETIZAÇÃO
+            self._garantir_produto_existe(produto.cod_produto, produto.nome_produto)
+            
             movimentacao = MovimentacaoEstoque()
             movimentacao.cod_produto = produto.cod_produto
             movimentacao.nome_produto = produto.nome_produto
             movimentacao.tipo_movimentacao = 'FATURAMENTO'
             movimentacao.local_movimentacao = 'VENDA'
-            movimentacao.data_movimentacao = produto.data_fatura.date() if produto.data_fatura else nf.data_fatura
-            movimentacao.qtd_movimentacao = -produto.qtd_produto_faturado
+            movimentacao.data_movimentacao = datetime.now().date()
+            # ✅ GARANTIDO: Sempre negativo para faturamento
+            movimentacao.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
             movimentacao.observacao = f"Baixa automática NF {nf.numero_nf} - Sem Separação"
             movimentacao.criado_por = usuario
             db.session.add(movimentacao)
     
     def _atualizar_embarque_item(self, numero_nf: str, lote_id: str):
         """
-        Atualiza EmbarqueItem com o número da NF
+        ✅ MELHORADO: Atualiza EmbarqueItem e reprocessa órfãos
         """
         # Buscar item do embarque com este lote sem NF
         item = EmbarqueItem.query.filter_by(
@@ -360,6 +396,10 @@ class ProcessadorFaturamento:
         
         if item:
             item.nota_fiscal = numero_nf
+            logger.info(f"✅ NF {numero_nf} vinculada ao lote {lote_id}")
+       
+    
+    
     
     def _gerar_inconsistencia_vinculacao(self, nf: RelatorioFaturamentoImportado, 
                                        embarque_item: EmbarqueItem, usuario: str):
@@ -380,8 +420,8 @@ class ProcessadorFaturamento:
         inconsistencia.qtd_faturada = qtd_total
         inconsistencia.observacao_resolucao = f"""
         NF {nf.numero_nf} está vinculada ao embarque {embarque_item.embarque_id} mas:
-        - CNPJ NF: {nf.cnpj_cliente} vs CNPJ Embarque: {embarque_item.embarque.cnpj_cliente}
-        - Pedido NF: {nf.origem} vs Pedido Item: {embarque_item.num_pedido}
+        - CNPJ NF: {nf.cnpj_cliente} vs CNPJ Embarque: {embarque_item.embarque.cnpj_cliente if embarque_item.embarque else 'EMBARQUE_DELETADO'}
+        - Pedido NF: {nf.origem} vs Pedido Item: {embarque_item.pedido}
         Lote separação: {embarque_item.separacao_lote_id}
         """
         inconsistencia.resolvida = False

@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, send_file, Response
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app import db
@@ -13,6 +13,7 @@ from app.fretes.routes import validar_cnpj_embarque_faturamento
 from app.monitoramento.models import EntregaMonitorada
 from datetime import datetime
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func, and_, or_
 
 # 🌐 Importar sistema de arquivos S3
 from app.utils.file_storage import get_file_storage
@@ -430,7 +431,7 @@ def listar_faturamento_produtos():
         per_page = 50
     
     try:
-        from sqlalchemy import inspect, func
+        from sqlalchemy import inspect
         inspector = inspect(db.engine)
         
         if inspector.has_table('faturamento_produto'):
@@ -587,14 +588,6 @@ def api_estatisticas_produtos():
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-# ===== ROTA DE IMPORTAÇÃO PRODUTOS REMOVIDA =====
-# Esta funcionalidade foi removida conforme solicitação do usuário
-# O sistema agora usa apenas sincronização via Odoo
-
-# ===== ROTA DE MODELO REMOVIDA =====
-# Esta funcionalidade foi removida conforme solicitação do usuário
-# O sistema agora usa apenas sincronização via Odoo
 
 @faturamento_bp.route('/produtos/exportar-dados')
 @login_required 
@@ -777,48 +770,66 @@ def tela_conciliacao_manual():
         # NFs órfãs
         if not tipo or tipo == 'nfs_orfas':
             for nf in inconsistencias_raw.get('nfs_orfas', []):
-                if _filtrar_item(nf, numero, cliente, produto):
+                # Converter objeto para dict antes do filtro
+                nf_dict = {
+                    'numero_nf': nf.get('numero_nf', ''),
+                    'nome_cliente': nf.get('nome_cliente', ''),
+                    'cod_produto': ''  # NFs órfãs não têm produto específico
+                }
+                if _filtrar_item(nf_dict, numero, cliente, produto):
                     inconsistencias.append({
-                        'id': f"nf_{nf.numero_nf}",
+                        'id': f"nf_{nf['numero_nf']}",
                         'tipo': 'nf_orfa',
-                        'numero_nf': nf.numero_nf,
-                        'nome_cliente': nf.nome_cliente,
-                        'municipio': nf.municipio,
-                        'estado': nf.estado,
-                        'data_fatura': nf.data_fatura,
-                        'valor_total': nf.valor_total,
-                        'origem': nf.origem,
+                        'numero_nf': nf['numero_nf'],
+                        'nome_cliente': nf['nome_cliente'],
+                        'municipio': nf.get('municipio', ''),
+                        'estado': nf.get('estado', ''),
+                        'data_fatura': nf.get('data_fatura'),
+                        'valor_total': nf.get('valor_total'),
+                        'origem': nf.get('origem', ''),
                         'resolvido': False
                     })
         
         # Separações órfãs
         if not tipo or tipo == 'separacoes_orfas':
-            for sep in inconsistencias_raw.get('separacoes_orfas', []):
-                if _filtrar_item(sep, numero, cliente, produto):
+            for sep in inconsistencias_raw.get('separacoes_sem_nf', []):
+                # Converter objeto para dict antes do filtro
+                sep_dict = {
+                    'numero_nf': '',  # Separações órfãs não têm NF
+                    'nome_cliente': '',  # Não disponível na separação
+                    'cod_produto': sep.get('cod_produto', '')
+                }
+                if _filtrar_item(sep_dict, numero, cliente, produto):
                     inconsistencias.append({
-                        'id': f"sep_{sep.lote_separacao}",
+                        'id': f"sep_{sep['lote_id']}",
                         'tipo': 'separacao_orfa',
-                        'lote_separacao': sep.lote_separacao,
-                        'cod_produto': getattr(sep, 'cod_produto', ''),
-                        'nome_produto': getattr(sep, 'nome_produto', ''),
-                        'cliente': getattr(sep, 'cliente', ''),
-                        'qtd_separada': getattr(sep, 'qtd_separada', 0),
-                        'valor_separado': getattr(sep, 'valor_separado', 0),
-                        'data_separacao': getattr(sep, 'data_separacao', None),
+                        'lote_separacao': sep['lote_id'],
+                        'cod_produto': sep.get('cod_produto', ''),
+                        'nome_produto': sep.get('nome_produto', ''),
+                        'cliente': sep.get('cliente', ''),
+                        'qtd_separada': sep.get('qtd_saldo', 0),
+                        'valor_separado': 0,  # Não disponível na separação
+                        'data_separacao': sep.get('data_separacao'),
                         'resolvido': False
                     })
         
-        # Divergências de valor
+        # Divergências de valor (por enquanto vazio - implementar quando necessário)
         if not tipo or tipo == 'divergencias_valor':
-            for div in inconsistencias_raw.get('divergencias_valor', []):
-                if _filtrar_item(div, numero, cliente, produto):
+            for div in inconsistencias_raw.get('divergencias_quantidade', []):
+                div_dict = {
+                    'numero_nf': div.get('numero_nf', ''),
+                    'nome_cliente': div.get('nome_cliente', ''),
+                    'cod_produto': div.get('cod_produto', '')
+                }
+                if _filtrar_item(div_dict, numero, cliente, produto):
                     inconsistencias.append({
-                        'id': f"div_val_{div.numero_nf}_{div.cod_produto}",
+                        'id': f"div_{div.get('id', '')}",
                         'tipo': 'divergencia_valor',
-                        'numero_nf': div.numero_nf,
-                        'cod_produto': div.cod_produto,
-                        'valor_nf': getattr(div, 'valor_nf', 0),
-                        'valor_separacao': getattr(div, 'valor_separacao', 0),
+                        'numero_nf': div.get('numero_nf', ''),
+                        'cod_produto': div.get('cod_produto', ''),
+                        'nome_produto': div.get('nome_produto', ''),
+                        'nome_cliente': div.get('nome_cliente', ''),
+                        'valor_divergencia': div.get('valor_divergencia', 0),
                         'resolvido': False
                     })
         
@@ -847,28 +858,15 @@ def tela_conciliacao_manual():
         return redirect(url_for('faturamento.dashboard_reconciliacao'))
 
 def _filtrar_item(item, numero, cliente, produto):
-    """Função auxiliar para filtrar itens de inconsistência"""
-    if numero:
-        numero_lower = numero.lower()
-        if hasattr(item, 'numero_nf') and item.numero_nf:
-            if numero_lower not in str(item.numero_nf).lower():
-                return False
-        if hasattr(item, 'lote_separacao') and item.lote_separacao:
-            if numero_lower not in str(item.lote_separacao).lower():
-                return False
-    
-    if cliente:
-        cliente_lower = cliente.lower()
-        nome_cliente = getattr(item, 'nome_cliente', '') or getattr(item, 'cliente', '')
-        if nome_cliente and cliente_lower not in nome_cliente.lower():
-            return False
-    
-    if produto:
-        produto_lower = produto.lower()
-        cod_produto = getattr(item, 'cod_produto', '')
-        if cod_produto and produto_lower not in str(cod_produto).lower():
-            return False
-    
+    """
+    Função auxiliar para filtrar itens na conciliação manual
+    """
+    if numero and numero.lower() not in str(item.get('numero_nf', '')).lower():
+        return False
+    if cliente and cliente.lower() not in str(item.get('nome_cliente', '')).lower():
+        return False
+    if produto and produto.lower() not in str(item.get('cod_produto', '')).lower():
+        return False
     return True
 
 @faturamento_bp.route('/justificativas-parciais')
@@ -883,17 +881,78 @@ def justificativas_parciais():
         cliente = request.args.get('cliente', '')
         produto = request.args.get('produto', '')
         
-        # TODO: Implementar modelo de justificativas
-        # Por enquanto, dados de exemplo
-        justificativas = []
-        total_registros = 0
+        # ✅ BUSCAR DADOS REAIS do modelo FaturamentoParcialJustificativa
+        from app.carteira.models import FaturamentoParcialJustificativa
         
-        # Resumo para os cards
+        query = FaturamentoParcialJustificativa.query
+        
+        # Aplicar filtros
+        if numero_nf:
+            query = query.filter(FaturamentoParcialJustificativa.numero_nf.ilike(f'%{numero_nf}%'))
+        if produto:
+            query = query.filter(FaturamentoParcialJustificativa.cod_produto.ilike(f'%{produto}%'))
+        if tipo:
+            query = query.filter(FaturamentoParcialJustificativa.motivo_nao_faturamento == tipo)
+        
+        justificativas_raw = query.order_by(FaturamentoParcialJustificativa.criado_em.desc()).limit(50).all()
+        
+        # ✅ CONVERTER para formato compatível com template
+        justificativas = []
+        for just in justificativas_raw:
+            # ✅ CORRETO: Buscar dados do produto em FaturamentoProduto (tem cod_produto + dados cliente)
+            produto_dados = FaturamentoProduto.query.filter_by(
+                numero_nf=just.numero_nf,
+                cod_produto=just.cod_produto
+            ).first()
+            
+            # ✅ USAR separacao_lote_id para buscar dados da separação
+            separacao_dados = None
+            if just.separacao_lote_id:
+                from app.separacao.models import Separacao
+                separacao_dados = Separacao.query.filter_by(
+                    separacao_lote_id=just.separacao_lote_id,
+                    cod_produto=just.cod_produto
+                ).first()
+            
+            justificativa_convertida = {
+                'id': just.id,
+                'numero_nf': just.numero_nf,
+                'cod_produto': just.cod_produto,
+                'qtd_separada': float(just.qtd_separada or 0),
+                'qtd_faturada': float(just.qtd_faturada or 0),
+                'qtd_saldo': float(just.qtd_saldo or 0),
+                'justificativa': just.descricao_detalhada or 'Sem descrição',
+                'motivo_automatico': just.motivo_nao_faturamento,
+                'data_criacao': just.criado_em,
+                'aprovado_por': just.criado_por,
+                'classificacao_saldo': just.classificacao_saldo,
+                'acao_comercial': just.acao_comercial,
+                'separacao_lote_id': just.separacao_lote_id,  # ✅ ADICIONAR campo importante
+                # Campos calculados/derivados
+                'tipo_divergencia': 'quantidade',  # Sempre quantidade para parciais
+                'status': 'justificado' if just.acao_comercial else 'pendente',
+                'automatico': True,  # Justificativas automáticas
+                # ✅ CORRETO: Dados do cliente via FaturamentoProduto
+                'nome_cliente': produto_dados.nome_cliente if produto_dados else 'Cliente não encontrado',
+                'municipio': produto_dados.municipio if produto_dados else '',
+                'estado': produto_dados.estado if produto_dados else '',
+                'nome_produto': produto_dados.nome_produto if produto_dados else 'Produto não encontrado',
+                'origem': just.num_pedido,  # ✅ CORRETO: origem = num_pedido na justificativa
+                # ✅ DADOS DA SEPARAÇÃO se disponível
+                'rota': separacao_dados.rota if separacao_dados else '',
+                'agendamento': separacao_dados.agendamento if separacao_dados else None,
+                'protocolo': separacao_dados.protocolo if separacao_dados else ''
+            }
+            justificativas.append(justificativa_convertida)
+        
+        total_registros = len(justificativas)
+        
+        # Resumo para os cards - baseado em dados reais
         resumo = {
-            'pendentes': 0,
-            'justificadas': 0,
-            'automaticas_mes': 0,
-            'valor_total_divergencias': 0
+            'pendentes': len([j for j in justificativas if j['status'] == 'pendente']),
+            'justificadas': len([j for j in justificativas if j['status'] == 'justificado']),
+            'automaticas_mes': total_registros,  # Todas são automáticas
+            'valor_total_divergencias': sum(j['qtd_saldo'] for j in justificativas)
         }
         
         return render_template('faturamento/justificativas_parciais.html',

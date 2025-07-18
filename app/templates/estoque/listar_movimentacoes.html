@@ -70,9 +70,9 @@
                 <a href="{{ url_for('estoque.importar_movimentacoes') }}" class="btn btn-success">
                     <i class="fas fa-upload"></i> Importar
                 </a>
-                <a href="{{ url_for('estoque.nova_movimentacao') }}" class="btn btn-primary">
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNovaMovimentacao">
                     <i class="fas fa-plus"></i> Nova Movimentação
-                </a>
+                </button>
             </div>
         </div>
     </div>
@@ -134,7 +134,8 @@
                                     <td>{{ mov.created_by or '-' }}</td>
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <a href="{{ url_for('estoque.editar_movimentacao', id=mov.id) }}" 
+                                            <a href="javascript:void(0)" 
+                                               onclick="editarMovimentacao({{ mov.id }})"
                                                class="btn btn-outline-primary btn-sm" title="Editar">
                                                 <i class="fas fa-edit"></i>
                                             </a>
@@ -227,6 +228,212 @@
     </div>
 </div>
 
+<!-- Modal Nova Movimentação Simplificado -->
+<div class="modal fade" id="modalNovaMovimentacao" tabindex="-1" aria-labelledby="modalNovaMovimentacaoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNovaMovimentacaoLabel">
+                    <i class="fas fa-plus"></i> Nova Movimentação de Estoque
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formNovaMovimentacao" method="post" action="{{ url_for('estoque.processar_nova_movimentacao') }}">
+                {{ csrf_token() }}
+                <div class="modal-body">
+                    <div class="row">
+                        <!-- Código do Produto com Dropdown -->
+                        <div class="col-md-6 mb-3">
+                            <label for="cod_produto" class="form-label">Código ou Nome do Produto <span class="text-danger">*</span></label>
+                            <div class="position-relative">
+                                <input type="text" class="form-control" id="cod_produto" name="cod_produto" 
+                                       placeholder="Digite código ou nome do produto..." required autocomplete="off">
+                                <div class="invalid-feedback">Campo obrigatório</div>
+                                
+                                <!-- Dropdown de Sugestões -->
+                                <div id="dropdown-sugestoes" class="dropdown-suggestions" style="display: none;">
+                                    <!-- Sugestões serão inseridas aqui via JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Nome do Produto (Auto-preenchido) -->
+                        <div class="col-md-6 mb-3">
+                            <label for="nome_produto" class="form-label">Nome do Produto</label>
+                            <input type="text" class="form-control" id="nome_produto" name="nome_produto" readonly>
+                            <small class="text-muted">Selecionado automaticamente</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- Tipo de Movimentação -->
+                        <div class="col-md-6 mb-3">
+                            <label for="tipo_movimentacao" class="form-label">Tipo de Movimentação <span class="text-danger">*</span></label>
+                            <select class="form-select" id="tipo_movimentacao" name="tipo_movimentacao" required>
+                                <option value="">Selecione...</option>
+                                <option value="AJUSTE">Ajuste</option>
+                                <option value="AVARIA">Avaria</option>
+                                <option value="DEVOLUCAO">Devolução</option>
+                                <option value="TRANSFERENCIA">Transferência</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Quantidade -->
+                        <div class="col-md-6 mb-3">
+                            <label for="quantidade" class="form-label">Quantidade <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="quantidade" name="quantidade" step="0.01" required>
+                            </div>
+                            <small class="text-muted" id="avaria-hint" style="display:none;">
+                                <i class="fas fa-info-circle"></i> Avarias são automaticamente negativas
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- Data da Movimentação -->
+                        <div class="col-md-6 mb-3">
+                            <label for="data_movimentacao" class="form-label">Data da Movimentação <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="data_movimentacao" name="data_movimentacao" required>
+                        </div>
+                        
+                        <!-- Local -->
+                        <div class="col-md-6 mb-3">
+                            <label for="local_movimentacao" class="form-label">Local</label>
+                            <input type="text" class="form-control" id="local_movimentacao" name="local_movimentacao" value="ESTOQUE PRINCIPAL">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- Documento de Origem -->
+                        <div class="col-md-6 mb-3">
+                            <label for="documento_origem" class="form-label">Documento de Origem</label>
+                            <input type="text" class="form-control" id="documento_origem" name="documento_origem" placeholder="Ex: NF 123456, Ajuste 001">
+                        </div>
+                        
+                        <!-- Observações -->
+                        <div class="col-md-6 mb-3">
+                            <label for="observacoes" class="form-label">Observações</label>
+                            <textarea class="form-control" id="observacoes" name="observacoes" rows="2" placeholder="Detalhes da movimentação..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save"></i> Salvar Movimentação
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Movimentação -->
+<div class="modal fade" id="modalEditarMovimentacao" tabindex="-1" aria-labelledby="modalEditarMovimentacaoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEditarMovimentacaoLabel">
+                    <i class="fas fa-edit"></i> Editar Movimentação de Estoque
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formEditarMovimentacao" method="post">
+                {{ csrf_token() }}
+                <input type="hidden" id="edit_movimentacao_id" name="movimentacao_id">
+                
+                <div class="modal-body">
+                    <div class="row">
+                        <!-- Código do Produto (Readonly) -->
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_cod_produto" class="form-label">Código do Produto</label>
+                            <input type="text" class="form-control" id="edit_cod_produto" name="cod_produto" readonly>
+                            <small class="text-muted">Não é possível alterar o produto</small>
+                        </div>
+                        
+                        <!-- Nome do Produto (Readonly) -->
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_nome_produto" class="form-label">Nome do Produto</label>
+                            <input type="text" class="form-control" id="edit_nome_produto" name="nome_produto" readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- Tipo de Movimentação -->
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_tipo_movimentacao" class="form-label">Tipo de Movimentação <span class="text-danger">*</span></label>
+                            <select class="form-select" id="edit_tipo_movimentacao" name="tipo_movimentacao" required>
+                                <option value="">Selecione...</option>
+                                <option value="AJUSTE">Ajuste</option>
+                                <option value="AVARIA">Avaria</option>
+                                <option value="DEVOLUCAO">Devolução</option>
+                                <option value="TRANSFERENCIA">Transferência</option>
+                                <option value="ENTRADA">Entrada</option>
+                                <option value="SAIDA">Saída</option>
+                                <option value="PRODUCAO">Produção</option>
+                                <option value="FATURAMENTO">Faturamento</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Quantidade -->
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_quantidade" class="form-label">Quantidade <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="edit_quantidade" name="quantidade" step="0.01" required>
+                                <span class="input-group-text">UN</span>
+                            </div>
+                            <small class="text-muted" id="edit-avaria-hint" style="display:none;">
+                                <i class="fas fa-info-circle"></i> Avarias são automaticamente negativas
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- Data da Movimentação -->
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_data_movimentacao" class="form-label">Data da Movimentação <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="edit_data_movimentacao" name="data_movimentacao" required>
+                        </div>
+                        
+                        <!-- Local -->
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_local_movimentacao" class="form-label">Local</label>
+                            <input type="text" class="form-control" id="edit_local_movimentacao" name="local_movimentacao">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- Documento de Origem -->
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_documento_origem" class="form-label">Documento de Origem</label>
+                            <input type="text" class="form-control" id="edit_documento_origem" name="documento_origem" placeholder="Ex: NF 123456, Ajuste 001">
+                        </div>
+                        
+                        <!-- Observações -->
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_observacoes" class="form-label">Observações</label>
+                            <textarea class="form-control" id="edit_observacoes" name="observacoes" rows="2" placeholder="Detalhes da movimentação..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 function confirmarExclusao(id, codProduto, tipoMovimentacao) {
     if (confirm(`Tem certeza que deseja excluir a movimentação ${tipoMovimentacao} do produto ${codProduto}?`)) {
@@ -235,3 +442,376 @@ function confirmarExclusao(id, codProduto, tipoMovimentacao) {
 }
 </script>
 {% endblock %} 
+
+<style>
+/* Dropdown de Sugestões de Produtos */
+.dropdown-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1050;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.suggestion-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s;
+}
+
+.suggestion-item:hover {
+    background-color: #f8f9fa;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item strong {
+    color: #007bff;
+}
+
+.no-suggestions {
+    padding: 8px 12px;
+    color: #6c757d;
+    font-style: italic;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Definir data de hoje como padrão
+    const dataInput = document.getElementById('data_movimentacao');
+    const hoje = new Date().toISOString().split('T')[0];
+    dataInput.value = hoje;
+    
+    // 2. Sistema de busca com dropdown de sugestões
+    const codProdutoInput = document.getElementById('cod_produto');
+    const nomeProdutoInput = document.getElementById('nome_produto');
+    const dropdownSugestoes = document.getElementById('dropdown-sugestoes');
+    
+    let timeoutBusca;
+    let produtoSelecionado = false;
+    
+    codProdutoInput.addEventListener('input', function() {
+        clearTimeout(timeoutBusca);
+        const termo = this.value.trim();
+        
+        if (termo.length >= 2) {
+            timeoutBusca = setTimeout(() => {
+                buscarProdutos(termo);
+            }, 300);
+        } else {
+            ocultarDropdown();
+            limparProdutoSelecionado();
+        }
+    });
+    
+    // Ocultar dropdown ao clicar fora
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.position-relative')) {
+            ocultarDropdown();
+        }
+    });
+    
+    function buscarProdutos(termo) {
+        fetch(`/estoque/api/buscar-produto/${encodeURIComponent(termo)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.sugestoes && data.sugestoes.length > 0) {
+                    mostrarSugestoes(data.sugestoes);
+                } else {
+                    mostrarSemResultados();
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao buscar produtos:', error);
+                ocultarDropdown();
+            });
+    }
+    
+    function mostrarSugestoes(sugestoes) {
+        let html = '';
+        sugestoes.forEach(produto => {
+            html += `
+                <div class="suggestion-item" data-codigo="${produto.cod_produto}" data-nome="${produto.nome_produto}">
+                    <strong>${produto.cod_produto}</strong> - ${produto.nome_produto}
+                </div>
+            `;
+        });
+        
+        dropdownSugestoes.innerHTML = html;
+        dropdownSugestoes.style.display = 'block';
+        
+        // Adicionar eventos de clique nas sugestões
+        dropdownSugestoes.querySelectorAll('.suggestion-item').forEach(item => {
+            item.addEventListener('click', function() {
+                selecionarProduto(this.dataset.codigo, this.dataset.nome);
+            });
+        });
+    }
+    
+    function mostrarSemResultados() {
+        dropdownSugestoes.innerHTML = '<div class="no-suggestions">Nenhum produto encontrado</div>';
+        dropdownSugestoes.style.display = 'block';
+    }
+    
+    function selecionarProduto(codigo, nome) {
+        codProdutoInput.value = codigo;
+        nomeProdutoInput.value = nome;
+        produtoSelecionado = true;
+        
+        // Feedback visual
+        codProdutoInput.classList.remove('is-invalid');
+        codProdutoInput.classList.add('is-valid');
+        
+        ocultarDropdown();
+    }
+    
+    function ocultarDropdown() {
+        dropdownSugestoes.style.display = 'none';
+    }
+    
+    function limparProdutoSelecionado() {
+        if (!produtoSelecionado) {
+            nomeProdutoInput.value = '';
+            codProdutoInput.classList.remove('is-valid', 'is-invalid');
+        }
+        produtoSelecionado = false;
+    }
+    
+    // 3. Quantidade negativa automática para Avaria
+    const tipoSelect = document.getElementById('tipo_movimentacao');
+    const quantidadeInput = document.getElementById('quantidade');
+    const avariaHint = document.getElementById('avaria-hint');
+    
+    tipoSelect.addEventListener('change', function() {
+        if (this.value === 'AVARIA') {
+            avariaHint.style.display = 'block';
+            // Se quantidade for positiva, tornar negativa
+            if (quantidadeInput.value && parseFloat(quantidadeInput.value) > 0) {
+                quantidadeInput.value = -Math.abs(parseFloat(quantidadeInput.value));
+            }
+        } else {
+            avariaHint.style.display = 'none';
+        }
+    });
+    
+    quantidadeInput.addEventListener('input', function() {
+        if (tipoSelect.value === 'AVARIA' && this.value && parseFloat(this.value) > 0) {
+            this.value = -Math.abs(parseFloat(this.value));
+        }
+    });
+    
+    // 4. Manipular envio do formulário
+    const form = document.getElementById('formNovaMovimentacao');
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Validar se produto foi selecionado
+        if (!codProdutoInput.value.trim()) {
+            codProdutoInput.classList.add('is-invalid');
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro!',
+                text: 'Selecione um produto válido'
+            });
+            return;
+        }
+        
+        const formData = new FormData(this);
+        
+        fetch(this.action, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': formData.get('csrf_token')
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Sucesso - manter campos preenchidos mas limpar produto e quantidade
+                codProdutoInput.value = '';
+                nomeProdutoInput.value = '';
+                quantidadeInput.value = '';
+                produtoSelecionado = false;
+                
+                // Remover classes de validação
+                codProdutoInput.classList.remove('is-valid', 'is-invalid');
+                
+                // Mostrar mensagem de sucesso
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Sucesso!',
+                    text: data.message || 'Movimentação registrada com sucesso!',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                
+                // Recarregar a tabela
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro!',
+                    text: data.message || 'Erro ao salvar movimentação'
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro!',
+                text: 'Erro de comunicação com o servidor'
+            });
+        });
+    });
+});
+
+// ========================================
+// 🔧 JAVASCRIPT PARA MODAL DE EDIÇÃO
+// ========================================
+
+function editarMovimentacao(id) {
+    // Carregar dados da movimentação
+    fetch(`/estoque/movimentacoes/${id}/editar`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                preencherModalEdicao(data.movimentacao);
+                
+                // Abrir modal
+                const modal = new bootstrap.Modal(document.getElementById('modalEditarMovimentacao'));
+                modal.show();
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro!',
+                    text: data.message || 'Erro ao carregar dados da movimentação'
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro!',
+                text: 'Erro de comunicação com o servidor'
+            });
+        });
+}
+
+function preencherModalEdicao(movimentacao) {
+    // Preencher campos do modal
+    document.getElementById('edit_movimentacao_id').value = movimentacao.id;
+    document.getElementById('edit_cod_produto').value = movimentacao.cod_produto;
+    document.getElementById('edit_nome_produto').value = movimentacao.nome_produto;
+    document.getElementById('edit_tipo_movimentacao').value = movimentacao.tipo_movimentacao;
+    document.getElementById('edit_quantidade').value = movimentacao.qtd_movimentacao;
+    document.getElementById('edit_data_movimentacao').value = movimentacao.data_movimentacao;
+    document.getElementById('edit_local_movimentacao').value = movimentacao.local_movimentacao;
+    document.getElementById('edit_documento_origem').value = movimentacao.documento_origem;
+    document.getElementById('edit_observacoes').value = movimentacao.observacao;
+    
+    // Configurar hint de avaria
+    const editTipoSelect = document.getElementById('edit_tipo_movimentacao');
+    const editAvariaHint = document.getElementById('edit-avaria-hint');
+    
+    if (editTipoSelect.value === 'AVARIA') {
+        editAvariaHint.style.display = 'block';
+    } else {
+        editAvariaHint.style.display = 'none';
+    }
+}
+
+// Event listeners para modal de edição
+document.addEventListener('DOMContentLoaded', function() {
+    // Quantidade negativa automática para Avaria no modal de edição
+    const editTipoSelect = document.getElementById('edit_tipo_movimentacao');
+    const editQuantidadeInput = document.getElementById('edit_quantidade');
+    const editAvariaHint = document.getElementById('edit-avaria-hint');
+    
+    editTipoSelect.addEventListener('change', function() {
+        if (this.value === 'AVARIA') {
+            editAvariaHint.style.display = 'block';
+            // Se quantidade for positiva, tornar negativa
+            if (editQuantidadeInput.value && parseFloat(editQuantidadeInput.value) > 0) {
+                editQuantidadeInput.value = -Math.abs(parseFloat(editQuantidadeInput.value));
+            }
+        } else {
+            editAvariaHint.style.display = 'none';
+        }
+    });
+    
+    editQuantidadeInput.addEventListener('input', function() {
+        if (editTipoSelect.value === 'AVARIA' && this.value && parseFloat(this.value) > 0) {
+            this.value = -Math.abs(parseFloat(this.value));
+        }
+    });
+    
+    // Submissão do formulário de edição
+    const formEditarMovimentacao = document.getElementById('formEditarMovimentacao');
+    formEditarMovimentacao.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const movimentacaoId = document.getElementById('edit_movimentacao_id').value;
+        const formData = new FormData(this);
+        
+        fetch(`/estoque/movimentacoes/${movimentacaoId}/editar`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': formData.get('csrf_token')
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Fechar modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarMovimentacao'));
+                modal.hide();
+                
+                // Mostrar mensagem de sucesso
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Sucesso!',
+                    text: data.message || 'Movimentação atualizada com sucesso!',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                
+                // Recarregar a página
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro!',
+                    text: data.message || 'Erro ao atualizar movimentação'
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro!',
+                text: 'Erro de comunicação com o servidor'
+            });
+        });
+    });
+});
+</script> 

@@ -342,6 +342,261 @@ def processar_importacao_movimentacoes():
 
 
 # ========================================
+# 🔍 API PARA BUSCA DE PRODUTOS
+# ========================================
+
+@estoque_bp.route('/api/buscar-produto/<codigo>')
+@login_required
+def buscar_produto_api(codigo):
+    """API para buscar produtos por código ou nome (dropdown com sugestões)"""
+    try:
+        # Buscar produtos na tabela cadastro_palletizacao (CÓDIGO ou NOME)
+        from app.producao.models import CadastroPalletizacao
+        
+        produtos = CadastroPalletizacao.query.filter(
+            db.or_(
+                CadastroPalletizacao.cod_produto.ilike(f'%{codigo}%'),
+                CadastroPalletizacao.nome_produto.ilike(f'%{codigo}%')
+            ),
+            CadastroPalletizacao.ativo == True
+        ).limit(15).all()
+        
+        if produtos:
+            sugestoes = []
+            for produto in produtos:
+                sugestoes.append({
+                    'cod_produto': produto.cod_produto,
+                    'nome_produto': produto.nome_produto or 'Nome não cadastrado',
+                    'display': f"{produto.cod_produto} - {produto.nome_produto or 'Nome não cadastrado'}"
+                })
+            
+            return jsonify({
+                'success': True,
+                'sugestoes': sugestoes,
+                'total': len(sugestoes)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Nenhum produto encontrado',
+                'sugestoes': []
+            })
+            
+    except Exception as e:
+        logger.error(f"Erro ao buscar produtos com '{codigo}': {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Erro interno do servidor',
+            'sugestoes': []
+        })
+
+
+# ========================================
+# 🆕 NOVA MOVIMENTAÇÃO MANUAL
+# ========================================
+
+@estoque_bp.route('/movimentacoes/nova')
+@login_required
+@require_admin()
+def nova_movimentacao():
+    """Tela para registrar nova movimentação manualmente"""
+    return render_template('estoque/nova_movimentacao.html')
+
+@estoque_bp.route('/movimentacoes/nova', methods=['POST'])
+@login_required
+@require_admin()
+def processar_nova_movimentacao():
+    """Processar nova movimentação manual via modal"""
+    try:
+        # Capturar dados do formulário
+        cod_produto = request.form.get('cod_produto', '').strip()
+        nome_produto = request.form.get('nome_produto', '').strip()
+        tipo_movimentacao = request.form.get('tipo_movimentacao', '').strip()
+        quantidade = request.form.get('quantidade', '').strip()
+        data_movimentacao = request.form.get('data_movimentacao', '').strip()
+        local_movimentacao = request.form.get('local_movimentacao', '').strip()
+        documento_origem = request.form.get('documento_origem', '').strip()
+        observacoes = request.form.get('observacoes', '').strip()
+        
+        # Validações básicas
+        if not cod_produto:
+            return jsonify({'success': False, 'message': 'Código do produto é obrigatório'})
+        
+        if not tipo_movimentacao:
+            return jsonify({'success': False, 'message': 'Tipo de movimentação é obrigatório'})
+            
+        if not quantidade:
+            return jsonify({'success': False, 'message': 'Quantidade é obrigatória'})
+            
+        if not data_movimentacao:
+            return jsonify({'success': False, 'message': 'Data é obrigatória'})
+        
+        # Converter quantidade para float
+        try:
+            quantidade_float = float(quantidade)
+        except ValueError:
+            return jsonify({'success': False, 'message': 'Quantidade deve ser um número válido'})
+        
+        # Verificar se produto existe
+        from app.producao.models import CadastroPalletizacao
+        produto = CadastroPalletizacao.query.filter_by(
+            cod_produto=cod_produto,
+            ativo=True
+        ).first()
+        
+        if not produto:
+            return jsonify({'success': False, 'message': f'Produto {cod_produto} não encontrado no cadastro'})
+        
+        # Converter data
+        try:
+            from datetime import datetime
+            data_movimentacao_dt = datetime.strptime(data_movimentacao, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'message': 'Data inválida'})
+        
+        # Criar nova movimentação
+        nova_movimentacao = MovimentacaoEstoque()
+        nova_movimentacao.cod_produto = cod_produto
+        nova_movimentacao.nome_produto = nome_produto or produto.nome_produto
+        nova_movimentacao.tipo_movimentacao = tipo_movimentacao
+        nova_movimentacao.qtd_movimentacao = quantidade_float
+        nova_movimentacao.data_movimentacao = data_movimentacao_dt
+        nova_movimentacao.local_movimentacao = local_movimentacao or 'ESTOQUE PRINCIPAL'
+        nova_movimentacao.observacao = observacoes
+        nova_movimentacao.criado_por = current_user.nome
+        nova_movimentacao.documento_origem = documento_origem
+        
+        db.session.add(nova_movimentacao)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Movimentação de {quantidade_float} UN do produto {cod_produto} registrada com sucesso!'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao processar nova movimentação: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Erro interno do servidor. Tente novamente.'
+        })
+
+
+# ========================================
+# ✏️ EDITAR MOVIMENTAÇÃO
+# ========================================
+
+@estoque_bp.route('/movimentacoes/<int:id>/editar')
+@login_required 
+@require_admin()
+def editar_movimentacao(id):
+    """Carregar dados da movimentação para edição"""
+    movimentacao = MovimentacaoEstoque.query.get_or_404(id)
+    
+    # Por segurança, só permitir edição de movimentações recentes (últimos 30 dias)
+    from datetime import datetime, timedelta
+    limite_edicao = datetime.now().date() - timedelta(days=30)
+    
+    if movimentacao.data_movimentacao < limite_edicao:
+        return jsonify({
+            'success': False,
+            'message': 'Não é possível editar movimentações antigas (mais de 30 dias)'
+        })
+    
+    # Retornar dados da movimentação para o modal
+    return jsonify({
+        'success': True,
+        'movimentacao': {
+            'id': movimentacao.id,
+            'cod_produto': movimentacao.cod_produto,
+            'nome_produto': movimentacao.nome_produto,
+            'tipo_movimentacao': movimentacao.tipo_movimentacao,
+            'qtd_movimentacao': float(movimentacao.qtd_movimentacao),
+            'data_movimentacao': movimentacao.data_movimentacao.strftime('%Y-%m-%d'),
+            'local_movimentacao': movimentacao.local_movimentacao,
+            'documento_origem': getattr(movimentacao, 'documento_origem', ''),
+            'observacao': movimentacao.observacao or ''
+        }
+    })
+
+@estoque_bp.route('/movimentacoes/<int:id>/editar', methods=['POST'])
+@login_required
+@require_admin()
+def processar_edicao_movimentacao(id):
+    """Processar edição de movimentação"""
+    try:
+        movimentacao = MovimentacaoEstoque.query.get_or_404(id)
+        
+        # Verificar limite de edição
+        from datetime import datetime, timedelta
+        limite_edicao = datetime.now().date() - timedelta(days=30)
+        
+        if movimentacao.data_movimentacao < limite_edicao:
+            return jsonify({
+                'success': False,
+                'message': 'Não é possível editar movimentações antigas (mais de 30 dias)'
+            })
+        
+        # Capturar dados do formulário
+        tipo_movimentacao = request.form.get('tipo_movimentacao', '').strip()
+        quantidade = request.form.get('quantidade', '').strip()
+        data_movimentacao = request.form.get('data_movimentacao', '').strip()
+        local_movimentacao = request.form.get('local_movimentacao', '').strip()
+        documento_origem = request.form.get('documento_origem', '').strip()
+        observacoes = request.form.get('observacoes', '').strip()
+        
+        # Validações básicas
+        if not tipo_movimentacao:
+            return jsonify({'success': False, 'message': 'Tipo de movimentação é obrigatório'})
+            
+        if not quantidade:
+            return jsonify({'success': False, 'message': 'Quantidade é obrigatória'})
+            
+        if not data_movimentacao:
+            return jsonify({'success': False, 'message': 'Data é obrigatória'})
+        
+        # Converter quantidade para float
+        try:
+            quantidade_float = float(quantidade)
+        except ValueError:
+            return jsonify({'success': False, 'message': 'Quantidade deve ser um número válido'})
+        
+        # Converter data
+        try:
+            data_movimentacao_dt = datetime.strptime(data_movimentacao, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'message': 'Data inválida'})
+        
+        # Atualizar movimentação
+        movimentacao.tipo_movimentacao = tipo_movimentacao
+        movimentacao.qtd_movimentacao = quantidade_float
+        movimentacao.data_movimentacao = data_movimentacao_dt
+        movimentacao.local_movimentacao = local_movimentacao or 'ESTOQUE PRINCIPAL'
+        movimentacao.observacao = observacoes
+        movimentacao.atualizado_por = current_user.nome
+        
+        # Adicionar campo documento_origem se existir
+        if hasattr(movimentacao, 'documento_origem'):
+            movimentacao.documento_origem = documento_origem
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Movimentação do produto {movimentacao.cod_produto} atualizada com sucesso!'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao editar movimentação {id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Erro interno do servidor. Tente novamente.'
+        })
+
+
+# ========================================
 # 🆕 UNIFICAÇÃO DE CÓDIGOS
 # ========================================
 
