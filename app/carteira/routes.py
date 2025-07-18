@@ -204,7 +204,7 @@ def listar_principal():
             'data_pedido': CarteiraPrincipal.data_pedido,
             'raz_social': CarteiraPrincipal.raz_social,
             'cod_uf': CarteiraPrincipal.cod_uf,
-            # 'rota': CarteiraPrincipal.rota,  # TODO: Aplicar migração das colunas rota/sub_rota
+            'rota': CarteiraPrincipal.rota,
             'cod_produto': CarteiraPrincipal.cod_produto,
             'qtd_saldo_produto_pedido': CarteiraPrincipal.qtd_saldo_produto_pedido,
             'preco_produto_pedido': CarteiraPrincipal.preco_produto_pedido,
@@ -273,10 +273,11 @@ def listar_principal():
                     item.peso_calculado = float(item.peso) if item.peso else 0
                     item.pallet_calculado = float(item.pallet) if item.pallet else 0
                 
-                # 🛣️ BUSCAR ROTA E SUB-ROTA TEMPORÁRIO (até aplicar migração)
-                # TODO: Após aplicar migração, usar campos do banco
-                item.rota = _buscar_rota_por_uf(item.cod_uf) if item.cod_uf else None
-                item.sub_rota = _buscar_sub_rota_por_uf_cidade(item.cod_uf, item.nome_cidade) if item.cod_uf and item.nome_cidade else None
+                # 🛣️ BUSCAR ROTA E SUB-ROTA SE NÃO EXISTIREM NO BANCO
+                if not item.rota and item.cod_uf:
+                    item.rota = _buscar_rota_por_uf(item.cod_uf)
+                if not item.sub_rota and item.cod_uf and item.nome_cidade:
+                    item.sub_rota = _buscar_sub_rota_por_uf_cidade(item.cod_uf, item.nome_cidade)
         
         return render_template('carteira/listar_principal.html',
                              itens=itens,
