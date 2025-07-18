@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+{% set active_page = "faturamento" %}
+
+{% block title %}Dashboard de Faturamento{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-file-invoice-dollar text-primary me-2"></i>
+                Dashboard de Faturamento
+            </h1>
+            <p class="text-muted">Central de controle do faturamento integrado com Odoo</p>
+        </div>
+        <div>
+            <span class="badge bg-primary">
+                <i class="fas fa-sync-alt me-1"></i>
+                Sistema Integrado
+            </span>
+        </div>
+    </div>
+
+    <!-- Cards de Status -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                NFs Processadas (Mês)
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ nfs_processadas_mes or 0 }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Pendentes Reconciliação
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ nfs_pendentes or 0 }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Valor Faturado (Mês)
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                R$ {{ "%.2f"|format(valor_faturado_mes or 0)|replace('.', ',')|replace(',', '.', 1) }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Última Sincronização
+                            </div>
+                            <div class="h6 mb-0 font-weight-bold text-gray-800">
+                                {{ ultima_sincronizacao or 'Nunca' }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clock fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Seções Principais -->
+    <div class="row">
+        <!-- Importação e Sincronização -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-download me-2"></i>
+                        Importação e Sincronização
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <form method="POST" action="{{ url_for('odoo.faturamento_odoo.sincronizar_faturamento') }}">
+                                <input type="hidden" name="usar_filtro_venda_bonificacao" value="on">
+                                <button type="submit" class="btn btn-primary btn-lg w-100">
+                                    <i class="fas fa-sync-alt me-2"></i>
+                                    Sincronizar com Odoo
+                                </button>
+                            </form>
+                            <small class="text-muted">Importa automaticamente faturamentos (apenas Venda/Bonificação)</small>
+                        </div>
+                        <div class="col-12">
+                            <a href="{{ url_for('faturamento.listar_relatorios') }}" class="btn btn-outline-info w-100">
+                                <i class="fas fa-list me-2"></i>
+                                Listar NFs Importadas
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Faturamento por Produto -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-success">
+                        <i class="fas fa-boxes me-2"></i>
+                        Faturamento por Produto
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="btn btn-success btn-lg w-100">
+                                <i class="fas fa-eye me-2"></i>
+                                Consultar Faturamento
+                            </a>
+                            <small class="text-muted">Visualizar faturamento detalhado por produto</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Reconciliação e Auditoria -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-warning">
+                        <i class="fas fa-balance-scale me-2"></i>
+                        Reconciliação e Auditoria
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <a href="{{ url_for('faturamento.dashboard_reconciliacao') }}" class="btn btn-warning btn-lg w-100">
+                                <i class="fas fa-search me-2"></i>
+                                Dashboard Reconciliação
+                            </a>
+                            <small class="text-muted">Visualizar inconsistências e pendências</small>
+                        </div>
+                        <div class="col-12 mb-3">
+                            <a href="{{ url_for('faturamento.tela_conciliacao_manual') }}" class="btn btn-outline-warning w-100">
+                                <i class="fas fa-hands-helping me-2"></i>
+                                Conciliação Manual
+                            </a>
+                        </div>
+                        <div class="col-12">
+                            <a href="{{ url_for('faturamento.relatorio_auditoria') }}" class="btn btn-outline-secondary w-100">
+                                <i class="fas fa-clipboard-check me-2"></i>
+                                Relatório de Auditoria
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processamento e Justificativas -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-info">
+                        <i class="fas fa-cogs me-2"></i>
+                        Processamento e Justificativas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <button type="button" class="btn btn-info btn-lg w-100" onclick="processarPendencias()">
+                                <i class="fas fa-play-circle me-2"></i>
+                                Processar Pendências
+                            </button>
+                            <small class="text-muted">Executar processamento automático de NFs</small>
+                        </div>
+                        <div class="col-12 mb-3">
+                            <a href="{{ url_for('faturamento.justificativas_parciais') }}" class="btn btn-outline-info w-100">
+                                <i class="fas fa-edit me-2"></i>
+                                Justificativas Parciais
+                            </a>
+                        </div>
+                        <div class="col-12">
+                            <a href="{{ url_for('faturamento.status_processamento') }}" class="btn btn-outline-secondary w-100">
+                                <i class="fas fa-chart-line me-2"></i>
+                                Status do Processamento
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs de Atividade -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-dark">
+                        <i class="fas fa-history me-2"></i>
+                        Últimas Atividades
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div id="logs-atividade">
+                        {% if logs_atividade %}
+                            {% for log in logs_atividade %}
+                            <div class="d-flex align-items-center mb-2">
+                                <div class="mr-3">
+                                    {% if log.tipo == 'sucesso' %}
+                                        <i class="fas fa-check-circle text-success"></i>
+                                    {% elif log.tipo == 'erro' %}
+                                        <i class="fas fa-times-circle text-danger"></i>
+                                    {% else %}
+                                        <i class="fas fa-info-circle text-info"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="flex-grow-1">
+                                    <strong>{{ log.timestamp }}</strong> - {{ log.mensagem }}
+                                    {% if log.usuario %}
+                                        <small class="text-muted">({{ log.usuario }})</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted mb-0">Nenhuma atividade recente registrada.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Loading -->
+<div class="modal fade" id="loadingModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="sr-only">Carregando...</span>
+                </div>
+                <h5 id="loadingMessage">Processando...</h5>
+                <p class="text-muted mb-0" id="loadingSubtext">Por favor, aguarde</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function processarPendencias() {
+    $('#loadingModal').modal('show');
+    $('#loadingMessage').text('Processando pendências...');
+    $('#loadingSubtext').text('Analisando NFs e separações');
+    
+    fetch('/faturamento/api/processar-pendencias', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        $('#loadingModal').modal('hide');
+        if (data.success) {
+            showAlert('success', data.message);
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showAlert('warning', data.message || 'Algumas pendências não puderam ser processadas');
+        }
+    })
+    .catch(error => {
+        $('#loadingModal').modal('hide');
+        showAlert('danger', 'Erro de conexão: ' + error.message);
+    });
+}
+
+function getCSRFToken() {
+    return document.querySelector('meta[name=csrf-token]').getAttribute('content');
+}
+
+function showAlert(type, message) {
+    const alertHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            <i class="fas fa-${type === 'success' ? 'check' : type === 'danger' ? 'times' : 'exclamation'}-circle me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    // Inserir no topo da página
+    const container = document.querySelector('.container-fluid');
+    container.insertAdjacentHTML('afterbegin', alertHTML);
+    
+    // Auto-remover após 5 segundos
+    setTimeout(() => {
+        const alert = container.querySelector('.alert');
+        if (alert) alert.remove();
+    }, 5000);
+}
+
+// Auto-refresh dos cards de status a cada 5 minutos
+setInterval(() => {
+    fetch('/faturamento/api/status-cards')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Atualizar valores dos cards
+                document.querySelector('.text-primary').nextElementSibling.textContent = data.nfs_processadas_mes;
+                document.querySelector('.text-warning').nextElementSibling.textContent = data.nfs_pendentes;
+                document.querySelector('.text-info').nextElementSibling.textContent = 'R$ ' + data.valor_faturado_mes;
+                document.querySelector('.text-success').nextElementSibling.textContent = data.ultima_sincronizacao;
+            }
+        })
+        .catch(error => console.log('Erro ao atualizar status:', error));
+}, 300000); // 5 minutos
+</script>
+{% endblock %} 

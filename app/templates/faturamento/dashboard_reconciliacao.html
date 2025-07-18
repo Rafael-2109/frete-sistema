@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+{% set active_page = "faturamento" %}
+
+{% block title %}Dashboard de Reconciliação{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-balance-scale text-warning me-2"></i>
+                Dashboard de Reconciliação
+            </h1>
+            <p class="text-muted">Identificação e resolução de inconsistências entre NFs e separações</p>
+        </div>
+        <div>
+            <a href="{{ url_for('faturamento.dashboard_faturamento') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>
+                Voltar ao Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Resumo de Inconsistências -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                NFs Órfãs
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ inconsistencias.nfs_orfas|length or 0 }}
+                            </div>
+                            <small class="text-muted">Sem separação vinculada</small>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-file-invoice fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Separações Órfãs
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ inconsistencias.separacoes_orfas|length or 0 }}
+                            </div>
+                            <small class="text-muted">Sem NF correspondente</small>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-boxes fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Divergências Valor
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ inconsistencias.divergencias_valor|length or 0 }}
+                            </div>
+                            <small class="text-muted">Valor NF ≠ Separação</small>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-secondary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">
+                                Divergências Qtd
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ inconsistencias.divergencias_quantidade|length or 0 }}
+                            </div>
+                            <small class="text-muted">Qtd NF ≠ Separação</small>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-balance-scale-left fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações Rápidas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-tools me-2"></i>
+                        Ações Rápidas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-2">
+                            <button class="btn btn-success w-100" onclick="executarReconciliacaoAutomatica()">
+                                <i class="fas fa-magic me-2"></i>
+                                Reconciliação Automática
+                            </button>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <button class="btn btn-info w-100" onclick="atualizarDashboard()">
+                                <i class="fas fa-sync-alt me-2"></i>
+                                Atualizar Dashboard
+                            </button>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('faturamento.tela_conciliacao_manual') }}" class="btn btn-warning w-100">
+                                <i class="fas fa-hands-helping me-2"></i>
+                                Conciliação Manual
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <button class="btn btn-outline-secondary w-100" onclick="exportarInconsistencias()">
+                                <i class="fas fa-download me-2"></i>
+                                Exportar Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NFs Órfãs -->
+    {% if inconsistencias.nfs_orfas %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-danger">
+                        <i class="fas fa-file-invoice me-2"></i>
+                        NFs Órfãs ({{ inconsistencias.nfs_orfas|length }})
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>NF</th>
+                                    <th>Cliente</th>
+                                    <th>Data Fatura</th>
+                                    <th>Valor Total</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for nf in inconsistencias.nfs_orfas[:10] %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ nf.numero_nf }}</strong>
+                                        {% if nf.origem %}
+                                            <br><small class="text-muted">Origem: {{ nf.origem }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ nf.nome_cliente }}
+                                        {% if nf.municipio %}
+                                            <br><small class="text-muted">{{ nf.municipio }}/{{ nf.estado }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ nf.data_fatura.strftime('%d/%m/%Y') if nf.data_fatura else '-' }}</td>
+                                    <td>R$ {{ "%.2f"|format(nf.valor_total or 0)|replace('.', ',')|replace(',', '.', 1) }}</td>
+                                    <td>
+                                        <span class="badge bg-danger">Órfã</span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" onclick="vincularNF('{{ nf.numero_nf }}')">
+                                            <i class="fas fa-link"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-info" onclick="verDetalhesNF('{{ nf.numero_nf }}')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% if inconsistencias.nfs_orfas|length > 10 %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">
+                                        ... e mais {{ inconsistencias.nfs_orfas|length - 10 }} NFs órfãs
+                                        <a href="{{ url_for('faturamento.tela_conciliacao_manual') }}?tipo=nfs_orfas" class="ms-2">Ver todas</a>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Separações Órfãs -->
+    {% if inconsistencias.separacoes_orfas %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-warning">
+                        <i class="fas fa-boxes me-2"></i>
+                        Separações Órfãs ({{ inconsistencias.separacoes_orfas|length }})
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Lote</th>
+                                    <th>Produto</th>
+                                    <th>Cliente</th>
+                                    <th>Quantidade</th>
+                                    <th>Valor</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for sep in inconsistencias.separacoes_orfas[:10] %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ sep.lote_separacao }}</strong>
+                                        <br><small class="text-muted">{{ sep.data_separacao.strftime('%d/%m/%Y') if sep.data_separacao else '-' }}</small>
+                                    </td>
+                                    <td>
+                                        {{ sep.cod_produto }}
+                                        {% if sep.nome_produto %}
+                                            <br><small class="text-muted">{{ sep.nome_produto[:30] }}...</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ sep.cliente or '-' }}</td>
+                                    <td>{{ sep.qtd_separada or 0 }}</td>
+                                    <td>R$ {{ "%.2f"|format(sep.valor_separado or 0)|replace('.', ',')|replace(',', '.', 1) }}</td>
+                                    <td>
+                                        <span class="badge bg-warning">Órfã</span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" onclick="vincularSeparacao('{{ sep.lote_separacao }}')">
+                                            <i class="fas fa-link"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-info" onclick="verDetalhesSeparacao('{{ sep.lote_separacao }}')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% if inconsistencias.separacoes_orfas|length > 10 %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">
+                                        ... e mais {{ inconsistencias.separacoes_orfas|length - 10 }} separações órfãs
+                                        <a href="{{ url_for('faturamento.tela_conciliacao_manual') }}?tipo=separacoes_orfas" class="ms-2">Ver todas</a>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Divergências de Valor -->
+    {% if inconsistencias.divergencias_valor %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-info">
+                        <i class="fas fa-dollar-sign me-2"></i>
+                        Divergências de Valor ({{ inconsistencias.divergencias_valor|length }})
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>NF / Lote</th>
+                                    <th>Produto</th>
+                                    <th>Valor NF</th>
+                                    <th>Valor Separação</th>
+                                    <th>Diferença</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for div in inconsistencias.divergencias_valor[:10] %}
+                                <tr>
+                                    <td>
+                                        <strong>NF: {{ div.numero_nf }}</strong>
+                                        <br><small class="text-muted">Lote: {{ div.lote_separacao }}</small>
+                                    </td>
+                                    <td>{{ div.cod_produto }}</td>
+                                    <td>R$ {{ "%.2f"|format(div.valor_nf or 0)|replace('.', ',')|replace(',', '.', 1) }}</td>
+                                    <td>R$ {{ "%.2f"|format(div.valor_separacao or 0)|replace('.', ',')|replace(',', '.', 1) }}</td>
+                                    <td>
+                                        {% set diferenca = (div.valor_nf or 0) - (div.valor_separacao or 0) %}
+                                        <span class="badge bg-{{ 'danger' if diferenca > 0 else 'warning' }}">
+                                            {{ 'R$ +' if diferenca > 0 else 'R$ ' }}{{ "%.2f"|format(diferenca|abs)|replace('.', ',')|replace(',', '.', 1) }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-success" onclick="justificarDivergencia('{{ div.numero_nf }}', '{{ div.cod_produto }}')">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% if inconsistencias.divergencias_valor|length > 10 %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">
+                                        ... e mais {{ inconsistencias.divergencias_valor|length - 10 }} divergências
+                                        <a href="{{ url_for('faturamento.tela_conciliacao_manual') }}?tipo=divergencias_valor" class="ms-2">Ver todas</a>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Status sem inconsistências -->
+    {% if not inconsistencias.nfs_orfas and not inconsistencias.separacoes_orfas and not inconsistencias.divergencias_valor and not inconsistencias.divergencias_quantidade %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow border-left-success">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+                    <h4 class="text-success">Sistema Reconciliado!</h4>
+                    <p class="text-muted mb-0">Não foram encontradas inconsistências entre NFs e separações.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal de Loading -->
+<div class="modal fade" id="loadingModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="sr-only">Carregando...</span>
+                </div>
+                <h5 id="loadingMessage">Processando...</h5>
+                <p class="text-muted mb-0" id="loadingSubtext">Por favor, aguarde</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function executarReconciliacaoAutomatica() {
+    $('#loadingModal').modal('show');
+    $('#loadingMessage').text('Executando reconciliação automática...');
+    $('#loadingSubtext').text('Analisando e corrigindo inconsistências');
+    
+    fetch('/faturamento/api/reconciliacao-automatica', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        $('#loadingModal').modal('hide');
+        if (data.success) {
+            showAlert('success', `Reconciliação concluída! ${data.resolvidas} inconsistências resolvidas.`);
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showAlert('warning', data.message || 'Algumas inconsistências não puderam ser resolvidas automaticamente');
+        }
+    })
+    .catch(error => {
+        $('#loadingModal').modal('hide');
+        showAlert('danger', 'Erro na reconciliação: ' + error.message);
+    });
+}
+
+function atualizarDashboard() {
+    location.reload();
+}
+
+function exportarInconsistencias() {
+    window.open('/faturamento/api/exportar-inconsistencias', '_blank');
+}
+
+function vincularNF(numeroNF) {
+    window.location.href = `/faturamento/conciliacao-manual?nf=${numeroNF}`;
+}
+
+function vincularSeparacao(lote) {
+    window.location.href = `/faturamento/conciliacao-manual?lote=${lote}`;
+}
+
+function verDetalhesNF(numeroNF) {
+    // Modal com detalhes da NF
+    alert('Detalhes da NF ' + numeroNF + ' - Implementar modal');
+}
+
+function verDetalhesSeparacao(lote) {
+    // Modal com detalhes da separação
+    alert('Detalhes do lote ' + lote + ' - Implementar modal');
+}
+
+function justificarDivergencia(numeroNF, codProduto) {
+    window.location.href = `/faturamento/justificativas-parciais?nf=${numeroNF}&produto=${codProduto}`;
+}
+
+function getCSRFToken() {
+    return document.querySelector('meta[name=csrf-token]').getAttribute('content');
+}
+
+function showAlert(type, message) {
+    const alertHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            <i class="fas fa-${type === 'success' ? 'check' : type === 'danger' ? 'times' : 'exclamation'}-circle me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    const container = document.querySelector('.container-fluid');
+    container.insertAdjacentHTML('afterbegin', alertHTML);
+    
+    setTimeout(() => {
+        const alert = container.querySelector('.alert');
+        if (alert) alert.remove();
+    }, 5000);
+}
+
+// Auto-refresh a cada 5 minutos
+setInterval(() => {
+    location.reload();
+}, 300000);
+</script>
+{% endblock %} 

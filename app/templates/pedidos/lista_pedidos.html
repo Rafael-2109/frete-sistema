@@ -281,9 +281,9 @@
                                     <a href="{{ filtro_url(status='sem_data') }}"
                                     class="btn btn-sm filtro-data
                                         {% if filtro_status_ativo == 'sem_data' %}
-                                        btn-secondary
+                                        btn-danger
                                         {% elif contadores_status.sem_data > 0 %}
-                                        btn-outline-secondary
+                                        btn-outline-danger
                                         {% else %}btn-outline-light{% endif %}">
                                     <i class="fas fa-calendar-times"></i>
                                     Sem data

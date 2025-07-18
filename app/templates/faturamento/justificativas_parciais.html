@@ -1,0 +1,601 @@
+{% extends "base.html" %}
+{% set active_page = "faturamento" %}
+
+{% block title %}Justificativas de Faturamento Parcial{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-edit text-info me-2"></i>
+                Justificativas de Faturamento Parcial
+            </h1>
+            <p class="text-muted">Documentar e gerenciar divergências de faturamento</p>
+        </div>
+        <div>
+            <a href="{{ url_for('faturamento.dashboard_faturamento') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>
+                Dashboard Principal
+            </a>
+        </div>
+    </div>
+
+    <!-- Cards de Resumo -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Pendentes Justificativa
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ resumo.pendentes or 0 }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Justificadas
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ resumo.justificadas or 0 }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Automáticas (Mês)
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ resumo.automaticas_mes or 0 }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-robot fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-secondary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">
+                                Valor Total Divergências
+                            </div>
+                            <div class="h6 mb-0 font-weight-bold text-gray-800">
+                                R$ {{ "%.2f"|format(resumo.valor_total_divergencias or 0)|replace('.', ',')|replace(',', '.', 1) }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros e Ações -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-filter me-2"></i>
+                            Filtros e Ações
+                        </h6>
+                        <div>
+                            <button class="btn btn-success btn-sm" onclick="abrirModalNovaJustificativa()">
+                                <i class="fas fa-plus me-1"></i>
+                                Nova Justificativa
+                            </button>
+                            <button class="btn btn-info btn-sm" onclick="identificarDivergenciasAutomaticas()">
+                                <i class="fas fa-search me-1"></i>
+                                Detectar Divergências
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form method="GET" id="filtrosForm">
+                        <div class="row">
+                            <div class="col-md-2 mb-3">
+                                <label class="form-label">Status</label>
+                                <select name="status" class="form-select" onchange="this.form.submit()">
+                                    <option value="">Todos</option>
+                                    <option value="pendente" {{ 'selected' if request.args.get('status') == 'pendente' }}>Pendente</option>
+                                    <option value="justificado" {{ 'selected' if request.args.get('status') == 'justificado' }}>Justificado</option>
+                                    <option value="automatico" {{ 'selected' if request.args.get('status') == 'automatico' }}>Automático</option>
+                                    <option value="aprovado" {{ 'selected' if request.args.get('status') == 'aprovado' }}>Aprovado</option>
+                                    <option value="rejeitado" {{ 'selected' if request.args.get('status') == 'rejeitado' }}>Rejeitado</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label class="form-label">Tipo</label>
+                                <select name="tipo" class="form-select" onchange="this.form.submit()">
+                                    <option value="">Todos</option>
+                                    <option value="quantidade" {{ 'selected' if request.args.get('tipo') == 'quantidade' }}>Quantidade</option>
+                                    <option value="valor" {{ 'selected' if request.args.get('tipo') == 'valor' }}>Valor</option>
+                                    <option value="produto" {{ 'selected' if request.args.get('tipo') == 'produto' }}>Produto</option>
+                                    <option value="cancelamento" {{ 'selected' if request.args.get('tipo') == 'cancelamento' }}>Cancelamento</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label class="form-label">NF</label>
+                                <input type="text" name="numero_nf" class="form-control" 
+                                       value="{{ request.args.get('numero_nf', '') }}" 
+                                       placeholder="Número da NF">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Cliente</label>
+                                <input type="text" name="cliente" class="form-control" 
+                                       value="{{ request.args.get('cliente', '') }}" 
+                                       placeholder="Nome do cliente">
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label class="form-label">Produto</label>
+                                <input type="text" name="produto" class="form-control" 
+                                       value="{{ request.args.get('produto', '') }}" 
+                                       placeholder="Código">
+                            </div>
+                            <div class="col-md-1 mb-3">
+                                <label class="form-label">&nbsp;</label>
+                                <div>
+                                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <a href="{{ url_for('faturamento.justificativas_parciais') }}" class="btn btn-outline-secondary btn-sm">
+                                    <i class="fas fa-times me-1"></i>
+                                    Limpar Filtros
+                                </a>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <span class="text-muted">{{ total_registros }} justificativa(s) encontrada(s)</span>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Justificativas -->
+    {% if justificativas %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-info">
+                        <i class="fas fa-list me-2"></i>
+                        Justificativas de Faturamento
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="3%">
+                                        <input type="checkbox" id="selectAll" onchange="toggleAllCheckboxes()">
+                                    </th>
+                                    <th>NF / Produto</th>
+                                    <th>Cliente</th>
+                                    <th>Tipo Divergência</th>
+                                    <th>Valores</th>
+                                    <th>Justificativa</th>
+                                    <th>Status</th>
+                                    <th>Data</th>
+                                    <th width="12%">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for just in justificativas %}
+                                <tr id="justificativa-{{ loop.index }}">
+                                    <td>
+                                        <input type="checkbox" class="item-checkbox" value="{{ just.id }}">
+                                    </td>
+                                    <td>
+                                        <strong>NF: {{ just.numero_nf }}</strong>
+                                        {% if just.cod_produto %}
+                                            <br><code>{{ just.cod_produto }}</code>
+                                        {% endif %}
+                                        {% if just.origem %}
+                                            <br><small class="text-muted">Origem: {{ just.origem }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if just.nome_cliente %}
+                                            {{ just.nome_cliente }}
+                                            {% if just.municipio %}
+                                                <br><small class="text-muted">{{ just.municipio }}/{{ just.estado }}</small>
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if just.tipo_divergencia == 'quantidade' %}
+                                            <span class="badge bg-warning">Quantidade</span>
+                                        {% elif just.tipo_divergencia == 'valor' %}
+                                            <span class="badge bg-info">Valor</span>
+                                        {% elif just.tipo_divergencia == 'produto' %}
+                                            <span class="badge bg-secondary">Produto</span>
+                                        {% elif just.tipo_divergencia == 'cancelamento' %}
+                                            <span class="badge bg-danger">Cancelamento</span>
+                                        {% else %}
+                                            <span class="badge bg-light text-dark">{{ just.tipo_divergencia or 'N/A' }}</span>
+                                        {% endif %}
+                                        
+                                        {% if just.automatico %}
+                                            <br><span class="badge bg-success">Automático</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="small">
+                                            {% if just.tipo_divergencia == 'quantidade' %}
+                                                <strong>NF:</strong> {{ just.qtd_faturada or 0 }}<br>
+                                                <strong>Sep:</strong> {{ just.qtd_separada or 0 }}<br>
+                                                {% set dif_qtd = (just.qtd_faturada or 0) - (just.qtd_separada or 0) %}
+                                                <span class="text-{{ 'danger' if dif_qtd > 0 else 'warning' }}">
+                                                    Dif: {{ dif_qtd|abs }}
+                                                </span>
+                                            {% elif just.tipo_divergencia == 'valor' %}
+                                                <strong>NF:</strong> R$ {{ "%.2f"|format(just.valor_faturado or 0)|replace('.', ',')|replace(',', '.', 1) }}<br>
+                                                <strong>Sep:</strong> R$ {{ "%.2f"|format(just.valor_separado or 0)|replace('.', ',')|replace(',', '.', 1) }}<br>
+                                                {% set dif_valor = (just.valor_faturado or 0) - (just.valor_separado or 0) %}
+                                                <span class="text-{{ 'danger' if dif_valor > 0 else 'warning' }}">
+                                                    Dif: R$ {{ "%.2f"|format(dif_valor|abs)|replace('.', ',')|replace(',', '.', 1) }}
+                                                </span>
+                                            {% else %}
+                                                {% if just.valor_total %}
+                                                    <strong>Total:</strong> R$ {{ "%.2f"|format(just.valor_total)|replace('.', ',')|replace(',', '.', 1) }}
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if just.justificativa %}
+                                            <div class="text-truncate" style="max-width: 200px;" title="{{ just.justificativa }}">
+                                                {{ just.justificativa }}
+                                            </div>
+                                        {% else %}
+                                            <em class="text-muted">Sem justificativa</em>
+                                        {% endif %}
+                                        
+                                        {% if just.motivo_automatico %}
+                                            <br><small class="text-success">Auto: {{ just.motivo_automatico }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if just.status == 'pendente' %}
+                                            <span class="badge bg-warning">Pendente</span>
+                                        {% elif just.status == 'justificado' %}
+                                            <span class="badge bg-info">Justificado</span>
+                                        {% elif just.status == 'aprovado' %}
+                                            <span class="badge bg-success">Aprovado</span>
+                                        {% elif just.status == 'rejeitado' %}
+                                            <span class="badge bg-danger">Rejeitado</span>
+                                        {% elif just.status == 'automatico' %}
+                                            <span class="badge bg-primary">Automático</span>
+                                        {% endif %}
+                                        
+                                        {% if just.aprovado_por %}
+                                            <br><small class="text-muted">por {{ just.aprovado_por }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="small">
+                                            <strong>Criada:</strong><br>{{ just.data_criacao.strftime('%d/%m/%Y %H:%M') if just.data_criacao else '-' }}
+                                            {% if just.data_aprovacao %}
+                                                <br><strong>Aprovada:</strong><br>{{ just.data_aprovacao.strftime('%d/%m/%Y %H:%M') }}
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            {% if just.status == 'pendente' %}
+                                                <button class="btn btn-warning" onclick="editarJustificativa({{ just.id }})">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-success" onclick="aprovarJustificativa({{ just.id }})">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                                <button class="btn btn-danger" onclick="rejeitarJustificativa({{ just.id }})">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            {% elif just.status in ['justificado', 'automatico'] %}
+                                                <button class="btn btn-success" onclick="aprovarJustificativa({{ just.id }})">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                                <button class="btn btn-warning" onclick="editarJustificativa({{ just.id }})">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                            {% endif %}
+                                            
+                                            <button class="btn btn-info" onclick="verHistorico({{ just.id }})">
+                                                <i class="fas fa-history"></i>
+                                            </button>
+                                            
+                                            {% if just.anexos %}
+                                                <button class="btn btn-secondary" onclick="verAnexos({{ just.id }})">
+                                                    <i class="fas fa-paperclip"></i>
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Ações em Lote -->
+                    <div class="row mt-3">
+                        <div class="col-md-8">
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-success" onclick="aprovarSelecionadas()" disabled id="btnAprovarLote">
+                                    <i class="fas fa-check me-1"></i>
+                                    Aprovar Selecionadas
+                                </button>
+                                <button class="btn btn-danger" onclick="rejeitarSelecionadas()" disabled id="btnRejeitarLote">
+                                    <i class="fas fa-times me-1"></i>
+                                    Rejeitar Selecionadas
+                                </button>
+                                <button class="btn btn-outline-info" onclick="exportarSelecionadas()" disabled id="btnExportarLote">
+                                    <i class="fas fa-download me-1"></i>
+                                    Exportar
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <!-- Paginação aqui -->
+                            <nav>
+                                <span class="text-muted">Página 1 de 1</span>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- Estado vazio -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-file-alt fa-4x text-muted mb-3"></i>
+                    <h4 class="text-muted">Nenhuma justificativa encontrada</h4>
+                    <p class="text-muted mb-3">
+                        {% if request.args %}
+                            Tente ajustar os filtros ou <a href="{{ url_for('faturamento.justificativas_parciais') }}">limpar a pesquisa</a>.
+                        {% else %}
+                            Não há justificativas de faturamento parcial registradas.
+                        {% endif %}
+                    </p>
+                    <button class="btn btn-success" onclick="abrirModalNovaJustificativa()">
+                        <i class="fas fa-plus me-2"></i>
+                        Criar Primeira Justificativa
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal Nova Justificativa -->
+<div class="modal fade" id="modalNovaJustificativa" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus me-2"></i>
+                    Nova Justificativa de Faturamento Parcial
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="conteudoNovaJustificativa">
+                    <!-- Conteúdo carregado dinamicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarNovaJustificativa()">
+                    <i class="fas fa-save me-2"></i>
+                    Salvar Justificativa
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Controle de checkboxes
+function toggleAllCheckboxes() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.item-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    
+    updateBulkActions();
+}
+
+function updateBulkActions() {
+    const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+    const hasSelection = checkedBoxes.length > 0;
+    
+    document.getElementById('btnAprovarLote').disabled = !hasSelection;
+    document.getElementById('btnRejeitarLote').disabled = !hasSelection;
+    document.getElementById('btnExportarLote').disabled = !hasSelection;
+}
+
+// Eventos
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateBulkActions);
+    });
+});
+
+// Modais e ações
+function abrirModalNovaJustificativa() {
+    fetch('/faturamento/api/modal-nova-justificativa')
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('conteudoNovaJustificativa').innerHTML = html;
+            new bootstrap.Modal(document.getElementById('modalNovaJustificativa')).show();
+        })
+        .catch(error => {
+            alert('Erro ao carregar modal: ' + error.message);
+        });
+}
+
+function editarJustificativa(id) {
+    window.location.href = `/faturamento/justificativas-parciais/editar/${id}`;
+}
+
+function aprovarJustificativa(id) {
+    if (confirm('Aprovar esta justificativa?')) {
+        fetch(`/faturamento/api/aprovar-justificativa/${id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        });
+    }
+}
+
+function rejeitarJustificativa(id) {
+    const motivo = prompt('Motivo da rejeição:');
+    if (motivo) {
+        fetch(`/faturamento/api/rejeitar-justificativa/${id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ motivo: motivo })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        });
+    }
+}
+
+function identificarDivergenciasAutomaticas() {
+    if (confirm('Executar detecção automática de divergências? Esta operação pode demorar alguns minutos.')) {
+        fetch('/faturamento/api/detectar-divergencias-automaticas', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`Detecção concluída! ${data.divergencias_encontradas} divergências encontradas.`);
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        });
+    }
+}
+
+function verHistorico(id) {
+    window.open(`/faturamento/api/historico-justificativa/${id}`, '_blank');
+}
+
+function verAnexos(id) {
+    window.open(`/faturamento/api/anexos-justificativa/${id}`, '_blank');
+}
+
+function salvarNovaJustificativa() {
+    // Implementar lógica de salvamento
+    alert('Função em desenvolvimento');
+}
+
+function aprovarSelecionadas() {
+    const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+    if (checkedBoxes.length === 0) return;
+    
+    if (confirm(`Aprovar ${checkedBoxes.length} justificativa(s)?`)) {
+        alert('Função em desenvolvimento');
+    }
+}
+
+function rejeitarSelecionadas() {
+    const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+    if (checkedBoxes.length === 0) return;
+    
+    const motivo = prompt('Motivo da rejeição em lote:');
+    if (motivo) {
+        alert('Função em desenvolvimento');
+    }
+}
+
+function exportarSelecionadas() {
+    const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+    if (checkedBoxes.length === 0) return;
+    
+    const ids = Array.from(checkedBoxes).map(cb => cb.value);
+    window.open(`/faturamento/api/exportar-justificativas?ids=${ids.join(',')}`, '_blank');
+}
+
+function getCSRFToken() {
+    return document.querySelector('meta[name=csrf-token]').getAttribute('content');
+}
+</script>
+{% endblock %} 

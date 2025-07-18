@@ -1,0 +1,445 @@
+{% extends "base.html" %}
+{% set active_page = "faturamento" %}
+
+{% block title %}Conciliação Manual{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-hands-helping text-warning me-2"></i>
+                Conciliação Manual
+            </h1>
+            <p class="text-muted">Resolver inconsistências entre NFs e separações manualmente</p>
+        </div>
+        <div>
+            <a href="{{ url_for('faturamento.dashboard_reconciliacao') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>
+                Dashboard Reconciliação
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-filter me-2"></i>
+                        Filtros de Busca
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="GET" id="filtrosForm">
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Tipo de Inconsistência</label>
+                                <select name="tipo" class="form-select" onchange="this.form.submit()">
+                                    <option value="">Todas</option>
+                                    <option value="nfs_orfas" {{ 'selected' if request.args.get('tipo') == 'nfs_orfas' }}>NFs Órfãs</option>
+                                    <option value="separacoes_orfas" {{ 'selected' if request.args.get('tipo') == 'separacoes_orfas' }}>Separações Órfãs</option>
+                                    <option value="divergencias_valor" {{ 'selected' if request.args.get('tipo') == 'divergencias_valor' }}>Divergências de Valor</option>
+                                    <option value="divergencias_quantidade" {{ 'selected' if request.args.get('tipo') == 'divergencias_quantidade' }}>Divergências de Quantidade</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">NF / Lote</label>
+                                <input type="text" name="numero" class="form-control" 
+                                       value="{{ request.args.get('numero', '') }}" 
+                                       placeholder="Número da NF ou Lote">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Cliente</label>
+                                <input type="text" name="cliente" class="form-control" 
+                                       value="{{ request.args.get('cliente', '') }}" 
+                                       placeholder="Nome do cliente">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Produto</label>
+                                <input type="text" name="produto" class="form-control" 
+                                       value="{{ request.args.get('produto', '') }}" 
+                                       placeholder="Código do produto">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-2"></i>
+                                    Buscar
+                                </button>
+                                <a href="{{ url_for('faturamento.tela_conciliacao_manual') }}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-times me-2"></i>
+                                    Limpar Filtros
+                                </a>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <span class="text-muted">
+                                    {{ total_registros }} inconsistência(s) encontrada(s)
+                                </span>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Inconsistências -->
+    {% if inconsistencias %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-warning">
+                        <i class="fas fa-list me-2"></i>
+                        Inconsistências para Conciliação
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="5%">
+                                        <input type="checkbox" id="selectAll" onchange="toggleAllCheckboxes()">
+                                    </th>
+                                    <th>Tipo</th>
+                                    <th>NF / Lote</th>
+                                    <th>Cliente / Produto</th>
+                                    <th>Detalhes</th>
+                                    <th>Status</th>
+                                    <th width="15%">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in inconsistencias %}
+                                <tr id="item-{{ loop.index }}">
+                                    <td>
+                                        <input type="checkbox" class="item-checkbox" value="{{ item.id or loop.index }}">
+                                    </td>
+                                    <td>
+                                        {% if item.tipo == 'nf_orfa' %}
+                                            <span class="badge bg-danger">NF Órfã</span>
+                                        {% elif item.tipo == 'separacao_orfa' %}
+                                            <span class="badge bg-warning">Separação Órfã</span>
+                                        {% elif item.tipo == 'divergencia_valor' %}
+                                            <span class="badge bg-info">Divergência Valor</span>
+                                        {% elif item.tipo == 'divergencia_quantidade' %}
+                                            <span class="badge bg-secondary">Divergência Qtd</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.numero_nf %}
+                                            <strong>NF: {{ item.numero_nf }}</strong>
+                                            {% if item.origem %}
+                                                <br><small class="text-muted">Origem: {{ item.origem }}</small>
+                                            {% endif %}
+                                        {% endif %}
+                                        {% if item.lote_separacao %}
+                                            <strong>Lote: {{ item.lote_separacao }}</strong>
+                                            {% if item.data_separacao %}
+                                                <br><small class="text-muted">{{ item.data_separacao.strftime('%d/%m/%Y') }}</small>
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.nome_cliente %}
+                                            <strong>{{ item.nome_cliente }}</strong>
+                                            {% if item.municipio %}
+                                                <br><small class="text-muted">{{ item.municipio }}/{{ item.estado }}</small>
+                                            {% endif %}
+                                        {% endif %}
+                                        {% if item.cod_produto %}
+                                            <br><code>{{ item.cod_produto }}</code>
+                                            {% if item.nome_produto %}
+                                                <br><small class="text-muted">{{ item.nome_produto[:40] }}...</small>
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.tipo == 'divergencia_valor' %}
+                                            <div class="small">
+                                                <strong>NF:</strong> R$ {{ "%.2f"|format(item.valor_nf or 0)|replace('.', ',')|replace(',', '.', 1) }}<br>
+                                                <strong>Sep:</strong> R$ {{ "%.2f"|format(item.valor_separacao or 0)|replace('.', ',')|replace(',', '.', 1) }}<br>
+                                                {% set diferenca = (item.valor_nf or 0) - (item.valor_separacao or 0) %}
+                                                <span class="text-{{ 'danger' if diferenca > 0 else 'warning' }}">
+                                                    Dif: R$ {{ "%.2f"|format(diferenca|abs)|replace('.', ',')|replace(',', '.', 1) }}
+                                                </span>
+                                            </div>
+                                        {% elif item.tipo == 'divergencia_quantidade' %}
+                                            <div class="small">
+                                                <strong>NF:</strong> {{ item.qtd_nf or 0 }}<br>
+                                                <strong>Sep:</strong> {{ item.qtd_separacao or 0 }}<br>
+                                                {% set dif_qtd = (item.qtd_nf or 0) - (item.qtd_separacao or 0) %}
+                                                <span class="text-{{ 'danger' if dif_qtd > 0 else 'warning' }}">
+                                                    Dif: {{ dif_qtd|abs }}
+                                                </span>
+                                            </div>
+                                        {% else %}
+                                            <div class="small">
+                                                {% if item.data_fatura %}
+                                                    <strong>Data:</strong> {{ item.data_fatura.strftime('%d/%m/%Y') }}<br>
+                                                {% endif %}
+                                                {% if item.valor_total %}
+                                                    <strong>Valor:</strong> R$ {{ "%.2f"|format(item.valor_total)|replace('.', ',')|replace(',', '.', 1) }}<br>
+                                                {% endif %}
+                                                {% if item.qtd_separada %}
+                                                    <strong>Qtd:</strong> {{ item.qtd_separada }}
+                                                {% endif %}
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.resolvido %}
+                                            <span class="badge bg-success">Resolvido</span>
+                                        {% elif item.em_analise %}
+                                            <span class="badge bg-warning">Em Análise</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Pendente</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            {% if not item.resolvido %}
+                                                {% if item.tipo in ['nf_orfa', 'separacao_orfa'] %}
+                                                    <button class="btn btn-success" onclick="abrirModalVinculacao('{{ item.id or loop.index }}', '{{ item.tipo }}')">
+                                                        <i class="fas fa-link"></i>
+                                                    </button>
+                                                {% elif item.tipo in ['divergencia_valor', 'divergencia_quantidade'] %}
+                                                    <button class="btn btn-warning" onclick="abrirModalJustificativa('{{ item.id or loop.index }}', '{{ item.tipo }}')">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                {% endif %}
+                                            {% endif %}
+                                            <button class="btn btn-info" onclick="verDetalhes('{{ item.id or loop.index }}', '{{ item.tipo }}')">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            {% if not item.resolvido %}
+                                                <button class="btn btn-danger" onclick="marcarComoIgnorado('{{ item.id or loop.index }}')">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Ações em lote -->
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-success" onclick="resolverSelecionados()" disabled id="btnResolverLote">
+                                    <i class="fas fa-check me-2"></i>
+                                    Resolver Selecionados
+                                </button>
+                                <button class="btn btn-warning" onclick="marcarAnalise()" disabled id="btnAnalise">
+                                    <i class="fas fa-clock me-2"></i>
+                                    Marcar para Análise
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="ignorarSelecionados()" disabled id="btnIgnorar">
+                                    <i class="fas fa-times me-2"></i>
+                                    Ignorar Selecionados
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <!-- Paginação aqui se necessário -->
+                            <span class="text-muted">
+                                Mostrando {{ inconsistencias|length }} de {{ total_registros }} registros
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- Estado vazio -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-search fa-4x text-muted mb-3"></i>
+                    <h4 class="text-muted">Nenhuma inconsistência encontrada</h4>
+                    <p class="text-muted mb-3">
+                        {% if request.args %}
+                            Tente ajustar os filtros ou 
+                            <a href="{{ url_for('faturamento.tela_conciliacao_manual') }}">limpar a pesquisa</a>.
+                        {% else %}
+                            Não há inconsistências pendentes para conciliação manual.
+                        {% endif %}
+                    </p>
+                    <a href="{{ url_for('faturamento.dashboard_reconciliacao') }}" class="btn btn-primary">
+                        <i class="fas fa-arrow-left me-2"></i>
+                        Voltar ao Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal de Vinculação -->
+<div class="modal fade" id="modalVinculacao" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-link me-2"></i>
+                    Vincular Manualmente
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="conteudoVinculacao">
+                    <!-- Conteúdo carregado dinamicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="confirmarVinculacao()">
+                    <i class="fas fa-save me-2"></i>
+                    Confirmar Vinculação
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Justificativa -->
+<div class="modal fade" id="modalJustificativa" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit me-2"></i>
+                    Justificar Divergência
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="conteudoJustificativa">
+                    <!-- Conteúdo carregado dinamicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" onclick="confirmarJustificativa()">
+                    <i class="fas fa-save me-2"></i>
+                    Salvar Justificativa
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Controle de checkboxes
+function toggleAllCheckboxes() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.item-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    
+    updateBulkActions();
+}
+
+function updateBulkActions() {
+    const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+    const hasSelection = checkedBoxes.length > 0;
+    
+    document.getElementById('btnResolverLote').disabled = !hasSelection;
+    document.getElementById('btnAnalise').disabled = !hasSelection;
+    document.getElementById('btnIgnorar').disabled = !hasSelection;
+}
+
+// Eventos de checkbox
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateBulkActions);
+    });
+});
+
+// Modais
+function abrirModalVinculacao(itemId, tipo) {
+    fetch(`/faturamento/api/modal-vinculacao?item=${itemId}&tipo=${tipo}`)
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('conteudoVinculacao').innerHTML = html;
+            new bootstrap.Modal(document.getElementById('modalVinculacao')).show();
+        })
+        .catch(error => {
+            alert('Erro ao carregar modal: ' + error.message);
+        });
+}
+
+function abrirModalJustificativa(itemId, tipo) {
+    fetch(`/faturamento/api/modal-justificativa?item=${itemId}&tipo=${tipo}`)
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('conteudoJustificativa').innerHTML = html;
+            new bootstrap.Modal(document.getElementById('modalJustificativa')).show();
+        })
+        .catch(error => {
+            alert('Erro ao carregar modal: ' + error.message);
+        });
+}
+
+function verDetalhes(itemId, tipo) {
+    window.open(`/faturamento/api/detalhes-inconsistencia?item=${itemId}&tipo=${tipo}`, '_blank');
+}
+
+// Ações
+function confirmarVinculacao() {
+    // Implementar lógica de confirmação de vinculação
+    alert('Função de vinculação em desenvolvimento');
+}
+
+function confirmarJustificativa() {
+    // Implementar lógica de confirmação de justificativa
+    alert('Função de justificativa em desenvolvimento');
+}
+
+function marcarComoIgnorado(itemId) {
+    if (confirm('Tem certeza que deseja ignorar esta inconsistência?')) {
+        // Implementar lógica
+        alert('Função em desenvolvimento');
+    }
+}
+
+function resolverSelecionados() {
+    const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+    if (checkedBoxes.length === 0) return;
+    
+    if (confirm(`Resolver ${checkedBoxes.length} inconsistência(s) selecionada(s)?`)) {
+        // Implementar lógica de resolução em lote
+        alert('Função em desenvolvimento');
+    }
+}
+
+function marcarAnalise() {
+    const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+    if (checkedBoxes.length === 0) return;
+    
+    alert('Função em desenvolvimento');
+}
+
+function ignorarSelecionados() {
+    const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+    if (checkedBoxes.length === 0) return;
+    
+    if (confirm(`Ignorar ${checkedBoxes.length} inconsistência(s) selecionada(s)?`)) {
+        alert('Função em desenvolvimento');
+    }
+}
+</script>
+{% endblock %} 

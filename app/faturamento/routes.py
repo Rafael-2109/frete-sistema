@@ -63,197 +63,9 @@ def revalidar_embarques_pendentes(nfs_importadas):
     
     return None
 
-@faturamento_bp.route('/importar-relatorio', methods=['GET', 'POST'])
-@login_required
-def importar_relatorio():
-    form = UploadRelatorioForm()
-
-    if form.validate_on_submit():
-        file = form.arquivo.data
-
-        if file and file.filename.endswith('.xlsx'):
-            try:
-                # 📁 CORREÇÃO: Capturar filename antes de processar arquivo
-                original_filename = file.filename
-                
-                # Ler o arquivo uma vez e usar os bytes para ambas operações
-                file.seek(0)  # Garantir que está no início
-                file_content = file.read()  # Ler todo o conteúdo uma vez
-                
-                # 🌐 Usar sistema S3 para salvar arquivo
-                storage = get_file_storage()
-                
-                # Criar um objeto BytesIO para simular arquivo para o S3
-                from io import BytesIO
-                file_for_s3 = BytesIO(file_content)
-                file_for_s3.name = original_filename  # Usar filename capturado
-                
-                file_path = storage.save_file(
-                    file=file_for_s3,
-                    folder='faturamento',
-                    allowed_extensions=['xlsx']
-                )
-                
-                if not file_path:
-                    flash('❌ Erro ao salvar arquivo no sistema!', 'danger')
-                    return redirect(request.url)
-                
-                # 📁 Para processamento, criar arquivo temporário dos bytes
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as temp_file:
-                    temp_file.write(file_content)  # Usar os bytes já lidos
-                    temp_filepath = temp_file.name
-
-                # Processar arquivo Excel
-                df = pd.read_excel(temp_filepath)
-                df = df.drop_duplicates(subset=["Número da Nota Fiscal"])
-
-                df["Número da Nota Fiscal"] = df["Número da Nota Fiscal"].apply(
-                    lambda x: str(int(x)) if isinstance(x, float) and x.is_integer() else str(x)
-                )
-                df["Total da Nota Fiscal"] = df["Total da Nota Fiscal"].apply(limpar_valor)
-                df["Peso Bruto"] = df["Peso Bruto"].apply(limpar_valor)
-                df["Data da fatura de cliente/fornecedor"] = pd.to_datetime(
-                    df["Data da fatura de cliente/fornecedor"], errors='coerce'
-                )
-
-                nfs_importadas = []
-                linhas_ignoradas = 0
-                nfs_duplicatas = 0
-                
-                # 🔍 DEBUG: Mostrar colunas disponíveis no Excel
-                print(f"[DEBUG] 📋 Colunas disponíveis no Excel: {list(df.columns)}")
-                print(f"[DEBUG] 📊 Total de linhas no Excel: {len(df)}")
-
-                for index, row in df.iterrows():
-                    linha_num = index + 2  # +2 porque Excel começa na linha 1 e tem header
-                    
-                    # Validação 1: Número da NF não pode estar vazio
-                    numero_nf_raw = row.get("Número da Nota Fiscal")
-                    if pd.isna(numero_nf_raw) or str(numero_nf_raw).strip() == '' or str(numero_nf_raw).lower() == 'nan':
-                        print(f"[DEBUG] ❌ Linha {linha_num}: NF vazia ou inválida: '{numero_nf_raw}'")
-                        linhas_ignoradas += 1
-                        continue
-                        
-                    numero_nf = str(numero_nf_raw).strip()
-                    
-                    # Validação 2: Origem (pedido) não pode estar vazio - campo crítico
-                    origem = row.get("Origem")
-                    if pd.isna(origem) or str(origem).strip() == '' or str(origem).lower() == 'nan':
-                        print(f"[DEBUG] ❌ Linha {linha_num}: Origem vazia para NF {numero_nf}: '{origem}'")
-                        linhas_ignoradas += 1
-                        continue
-                    
-                    # Verifica se NF já existe
-                    existe = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).first()
-                    if existe:
-                        print(f"[DEBUG] ⚠️ Linha {linha_num}: NF {numero_nf} já existe no banco")
-                        nfs_duplicatas += 1
-                        continue
-                    
-                    print(f"[DEBUG] ✅ Linha {linha_num}: NF {numero_nf} será importada (Origem: {origem})")
-
-                    nf = RelatorioFaturamentoImportado(
-                        numero_nf=numero_nf,
-                        data_fatura=row["Data da fatura de cliente/fornecedor"],
-                        cnpj_cliente=row.get("CNPJ"),
-                        nome_cliente=row.get("Nome de exibição do usuário na fatura"),
-                        valor_total=row.get("Total da Nota Fiscal"),
-                        peso_bruto=row.get("Peso Bruto"),
-                        cnpj_transportadora=row.get("Carrier/Transportadora/CNPJ"),
-                        nome_transportadora=row.get("Carrier/Transportadora"),
-                        municipio=row.get("Parceiro/Município/Nome do Município"),
-                        estado=row.get("Parceiro/Estado/Código do estado"),
-                        codigo_ibge=row.get("Parceiro/Município/Código IBGE"),
-                        origem=row.get("Origem"),
-                        incoterm=row.get("Incoterm"),
-                        vendedor=row.get("Usuário")
-                    )
-                    db.session.add(nf)
-                    nfs_importadas.append(numero_nf)
-
-                db.session.commit()
-                
-                # 🗑️ Remover arquivo temporário
-                try:
-                    os.unlink(temp_filepath)
-                except OSError:
-                    pass  # Ignorar se não conseguir remover
-
-                # Re-validar embarques que estavam pendentes
-                try:
-                    resultado_revalidacao = revalidar_embarques_pendentes(nfs_importadas)
-                    if resultado_revalidacao:
-                        flash(f"🔄 {resultado_revalidacao}", "info")
-                except Exception as e:
-                    print(f"Erro na re-validação de embarques: {e}")
-
-                # Lançamento automático de fretes após importar faturamento
-                try:
-                    from app.fretes.routes import processar_lancamento_automatico_fretes
-                    
-                    # Para cada CNPJ importado, tenta lançar fretes automaticamente
-                    cnpjs_importados = set()
-                    for _, row in df.iterrows():
-                        cnpj = row.get("CNPJ")
-                        if cnpj:
-                            cnpjs_importados.add(cnpj)
-                    
-                    for cnpj in cnpjs_importados:
-                        if cnpj:
-                            sucesso, resultado = processar_lancamento_automatico_fretes(
-                                cnpj_cliente=cnpj,
-                                usuario=current_user.nome if current_user.is_authenticated else 'Sistema'
-                            )
-                            if sucesso and "lançado(s) automaticamente" in resultado:
-                                flash(f"✅ {resultado}", "success")
-                                
-                except Exception as e:
-                    print(f"Erro no lançamento automático de fretes: {e}")
-
-                # ✅ NOVA FUNCIONALIDADE: Sincroniza entregas + NFs pendentes em embarques
-                nfs_sincronizadas = 0
-                nfs_em_embarques_sincronizadas = 0
-                
-                # 1. Sincroniza NFs importadas normalmente
-                for nf in nfs_importadas:
-                    sincronizar_entrega_por_nf(nf)
-                    nfs_sincronizadas += 1
-                
-                # 2. CORREÇÃO PRINCIPAL: Busca NFs que estão em embarques mas não foram sincronizadas
-                try:
-                    nfs_em_embarques_sincronizadas = sincronizar_nfs_pendentes_embarques(nfs_importadas)
-                    if nfs_em_embarques_sincronizadas > 0:
-                        flash(f"🔄 {nfs_em_embarques_sincronizadas} NFs de embarques anteriores foram sincronizadas para o monitoramento", "info")
-                except Exception as e:
-                    print(f"Erro ao sincronizar NFs pendentes: {e}")
-                
-                print(f"[DEBUG] Sincronização: {nfs_sincronizadas} NFs normais + {nfs_em_embarques_sincronizadas} NFs de embarques")
-                
-                # Mensagens de resultado melhoradas
-                if len(nfs_importadas) > 0:
-                    flash(f'✅ Relatório importado com sucesso! {len(nfs_importadas)} NFs processadas.', 'success')
-                else:
-                    flash(f'⚠️ Nenhuma NF foi importada! Verifique os logs para detalhes.', 'warning')
-                
-                flash(f'📁 Arquivo salvo no sistema de armazenamento.', 'info')
-                
-                if linhas_ignoradas > 0:
-                    flash(f'⚠️ {linhas_ignoradas} linhas foram ignoradas (NF ou Origem vazios).', 'warning')
-                
-                if nfs_duplicatas > 0:
-                    flash(f'🔄 {nfs_duplicatas} NFs já existiam no banco (duplicatas).', 'info')
-                
-                return redirect(url_for('faturamento.importar_relatorio'))
-
-            except Exception as e:
-                flash(f'❌ Erro ao processar o arquivo: {e}', 'danger')
-                return redirect(request.url)
-
-        flash('❌ Tipo de arquivo não permitido. Envie um .xlsx', 'danger')
-        return redirect(request.url)
-
-    return render_template('faturamento/importar_relatorio.html', form=form)
+# ===== ROTA DE IMPORTAÇÃO REMOVIDA =====
+# Esta funcionalidade foi removida conforme solicitação do usuário  
+# O sistema agora usa apenas sincronização via Odoo
 
 @faturamento_bp.route('/sincronizar-orphas')
 @login_required
@@ -776,429 +588,13 @@ def api_estatisticas_produtos():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@faturamento_bp.route('/produtos/importar', methods=['GET', 'POST'])
-@login_required
-def importar_faturamento_produtos():
-    """Importar dados de faturamento por produto"""
-    if request.method == 'GET':
-        return render_template('faturamento/importar_produtos.html')
-    
-    # POST - Processar importação
-    try:
-        if 'arquivo' not in request.files:
-            flash('Nenhum arquivo selecionado!', 'error')
-            return redirect(request.url)
-            
-        arquivo = request.files['arquivo']
-        if arquivo.filename == '':
-            flash('Nenhum arquivo selecionado!', 'error')
-            return redirect(request.url)
-            
-        if not arquivo.filename.lower().endswith(('.xlsx', '.csv')):
-            flash('Tipo de arquivo não suportado! Use apenas .xlsx ou .csv', 'error')
-            return redirect(request.url)
-        
-        # 📁 CORREÇÃO: Ler arquivo uma vez e usar bytes para ambas operações
-        original_filename = arquivo.filename
-        
-        # Ler o arquivo uma vez e usar os bytes para ambas operações
-        arquivo.seek(0)  # Garantir que está no início
-        file_content = arquivo.read()  # Ler todo o conteúdo uma vez
-        
-        # 🌐 Usar sistema S3 para salvar arquivo
-        file_storage = get_file_storage()
-        
-        # Criar um objeto BytesIO para simular arquivo para o S3
-        from io import BytesIO
-        file_for_s3 = BytesIO(file_content)
-        file_for_s3.name = original_filename
-        
-        try:
-            # Salvar no S3/storage
-            file_path = file_storage.save_file(
-                file=file_for_s3,
-                folder='faturamento',
-                allowed_extensions=['xlsx', 'csv']
-            )
-        except Exception as e:
-            print(f"Erro ao salvar no S3: {e}")
-            file_path = None
-        
-        # 📁 Para processamento, criar arquivo temporário dos bytes
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as temp_file:
-            temp_file.write(file_content)  # Usar os bytes já lidos
-            temp_filepath = temp_file.name
+# ===== ROTA DE IMPORTAÇÃO PRODUTOS REMOVIDA =====
+# Esta funcionalidade foi removida conforme solicitação do usuário
+# O sistema agora usa apenas sincronização via Odoo
 
-        try:
-            # Processar arquivo
-            if original_filename.lower().endswith('.xlsx'):
-                df = pd.read_excel(temp_filepath)
-            else:
-                df = pd.read_csv(temp_filepath, encoding='utf-8', sep=';')
-        finally:
-            # 🗑️ Remover arquivo temporário
-            try:
-                os.unlink(temp_filepath)
-            except OSError:
-                pass  # Ignorar se não conseguir remover
-        
-        # Validar colunas obrigatórias
-        colunas_obrigatorias = ['numero_nf', 'data_fatura', 'cnpj_cliente', 'nome_cliente', 
-                               'cod_produto', 'nome_produto', 'qtd_produto_faturado',
-                               'preco_produto_faturado', 'valor_produto_faturado']
-        
-        # 🎯 MAPEAMENTO EXATO conforme especificação do usuário
-        colunas_esperadas = {
-            'numero_nf': 'Linhas da fatura/NF-e',
-            'cnpj_cliente': 'Linhas da fatura/Parceiro/CNPJ',
-            'nome_cliente': 'Linhas da fatura/Parceiro',
-            'municipio_estado': 'Linhas da fatura/Parceiro/Município',
-            'origem': 'Linhas da fatura/Origem',
-            'status_nf': 'Status',
-            'cod_produto': 'Linhas da fatura/Produto/Referência',
-            'nome_produto': 'Linhas da fatura/Produto/Nome',
-            'qtd_produto_faturado': 'Linhas da fatura/Quantidade',
-            'valor_produto_faturado': 'Linhas da fatura/Valor Total do Item da NF',
-            'data_fatura': 'Linhas da fatura/Data',
-            'vendedor': 'Vendedor',
-            'incoterm': 'Incoterm'
-        }
-        
-        # Verificar se as colunas obrigatórias existem
-        colunas_obrigatorias_excel = [
-            'Linhas da fatura/Parceiro/CNPJ',
-            'Linhas da fatura/Parceiro',
-            'Linhas da fatura/Produto/Referência',
-            'Linhas da fatura/Parceiro/Município',
-            'Linhas da fatura/Produto/Nome',
-            'Linhas da fatura/Valor Total do Item da NF',
-            'Linhas da fatura/Quantidade',
-            'Linhas da fatura/Data'
-        ]
-        
-        colunas_faltando = [col for col in colunas_obrigatorias_excel if col not in df.columns]
-        if colunas_faltando:
-            flash(f'❌ Colunas obrigatórias não encontradas: {", ".join(colunas_faltando)}', 'error')
-            return redirect(request.url)
-        
-        # 🔄 FORWARD FILL - Conforme especificação
-        campos_forward_fill = ['Status', 'Vendedor', 'Incoterm']
-        for campo in campos_forward_fill:
-            if campo in df.columns:
-                df[campo] = df[campo].fillna(method='ffill')
-        
-        # 🏙️ PROCESSAR CIDADE/ESTADO do formato "Cidade (UF)"
-        def extrair_cidade_uf(texto):
-            if pd.isna(texto) or str(texto).strip() == '':
-                return '', ''
-            
-            import re
-            texto = str(texto).strip()
-            match = re.search(r'^(.+?)\s*\(([A-Z]{2})\)$', texto)
-            if match:
-                return match.group(1).strip(), match.group(2).strip()
-            else:
-                return texto, ''
-        
-        # Aplicar extração de cidade/estado
-        if 'Linhas da fatura/Parceiro/Município' in df.columns:
-            cidades_ufs = df['Linhas da fatura/Parceiro/Município'].apply(extrair_cidade_uf)
-            df['municipio'] = [item[0] for item in cidades_ufs]
-            df['estado'] = [item[1] for item in cidades_ufs]
-        
-        # 💰 CONVERTER VALORES BRASILEIROS (3.281,10)
-        def converter_valor_br(valor):
-            if pd.isna(valor):
-                return 0.0
-            valor_str = str(valor).strip().replace('R$', '').replace(' ', '')
-            if ',' in valor_str:
-                valor_str = valor_str.replace('.', '').replace(',', '.')
-            try:
-                return float(valor_str)
-            except:
-                return 0.0
-        
-        if 'Linhas da fatura/Valor Total do Item da NF' in df.columns:
-            df['valor_convertido'] = df['Linhas da fatura/Valor Total do Item da NF'].apply(converter_valor_br)
-        
-        if 'Linhas da fatura/Quantidade' in df.columns:
-            df['qtd_convertida'] = df['Linhas da fatura/Quantidade'].apply(converter_valor_br)
-        
-        # ✅ VALIDAR STATUS PERMITIDOS
-        status_permitidos = ['Lançado', 'Cancelado', 'Provisório']
-        if 'Status' in df.columns:
-            status_invalidos = df[df['Status'].notna() & ~df['Status'].isin(status_permitidos)]['Status'].unique()
-            if len(status_invalidos) > 0:
-                flash(f'❌ Status inválidos encontrados: {", ".join(status_invalidos)}. Permitidos: {", ".join(status_permitidos)}', 'error')
-                return redirect(request.url)
-        
-        # Processar dados
-        produtos_importados = 0
-        produtos_atualizados = 0
-        erros = []
-        
-        for index, row in df.iterrows():
-            try:
-                # 📋 EXTRAIR DADOS usando nomes exatos das colunas Excel
-                numero_nf = str(row.get('Linhas da fatura/NF-e', '')).strip() if pd.notna(row.get('Linhas da fatura/NF-e')) else ''
-                cod_produto = str(row.get('Linhas da fatura/Produto/Referência', '')).strip() if pd.notna(row.get('Linhas da fatura/Produto/Referência')) else ''
-                
-                if not numero_nf or numero_nf == 'nan' or not cod_produto or cod_produto == 'nan':
-                    continue
-                
-                # Verificar se já existe (NF + Produto = chave única)
-                produto_existente = FaturamentoProduto.query.filter_by(
-                    numero_nf=numero_nf,
-                    cod_produto=cod_produto
-                ).first()
-                
-                # 📅 PROCESSAR DATA
-                data_fatura = row.get('Linhas da fatura/Data')
-                if pd.notna(data_fatura):
-                    if isinstance(data_fatura, str):
-                        try:
-                            # Formato brasileiro DD/MM/YYYY
-                            data_fatura = pd.to_datetime(data_fatura, format='%d/%m/%Y').date()
-                        except:
-                            try:
-                                data_fatura = pd.to_datetime(data_fatura).date()
-                            except:
-                                data_fatura = None
-                    elif hasattr(data_fatura, 'date'):
-                        data_fatura = data_fatura.date()
-                else:
-                    data_fatura = None
-                
-                # 💰 VALORES
-                qtd = row.get('qtd_convertida', 0) or 0
-                valor_total = row.get('valor_convertido', 0) or 0
-                
-                # 🧮 CALCULAR PREÇO UNITÁRIO (valor_total / quantidade)
-                preco_unitario = 0.0
-                if qtd > 0 and valor_total > 0:
-                    preco_unitario = valor_total / qtd
-                
-                # 📝 DADOS BÁSICOS
-                cnpj_cliente = str(row.get('Linhas da fatura/Parceiro/CNPJ', '')).strip()
-                nome_cliente = str(row.get('Linhas da fatura/Parceiro', '')).strip()
-                nome_produto = str(row.get('Linhas da fatura/Produto/Nome', '')).strip()
-                
-                # Criar ou atualizar produto
-                if produto_existente:
-                    # ✏️ ATUALIZAR EXISTENTE
-                    produto_existente.data_fatura = data_fatura
-                    produto_existente.cnpj_cliente = cnpj_cliente
-                    produto_existente.nome_cliente = nome_cliente
-                    produto_existente.nome_produto = nome_produto
-                    produto_existente.qtd_produto_faturado = qtd
-                    produto_existente.preco_produto_faturado = preco_unitario
-                    produto_existente.valor_produto_faturado = valor_total
-                    
-                    # 🌍 CAMPOS PROCESSADOS
-                    produto_existente.municipio = row.get('municipio', '')
-                    produto_existente.estado = row.get('estado', '')
-                    produto_existente.vendedor = str(row.get('Vendedor', '')).strip()
-                    produto_existente.incoterm = str(row.get('Incoterm', '')).strip()
-                    produto_existente.origem = str(row.get('Linhas da fatura/Origem', '')).strip()
-                    produto_existente.status_nf = str(row.get('Status', '')).strip()
-                    
-                    produto_existente.updated_by = current_user.nome
-                    produtos_atualizados += 1
-                    
-                else:
-                    # ➕ CRIAR NOVO
-                    novo_produto = FaturamentoProduto()
-                    novo_produto.numero_nf = numero_nf
-                    novo_produto.data_fatura = data_fatura
-                    novo_produto.cnpj_cliente = cnpj_cliente
-                    novo_produto.nome_cliente = nome_cliente
-                    novo_produto.cod_produto = cod_produto
-                    novo_produto.nome_produto = nome_produto
-                    novo_produto.qtd_produto_faturado = qtd
-                    novo_produto.preco_produto_faturado = preco_unitario
-                    novo_produto.valor_produto_faturado = valor_total
-                    novo_produto.municipio = row.get('municipio', '')
-                    novo_produto.estado = row.get('estado', '')
-                    novo_produto.vendedor = str(row.get('Vendedor', '')).strip()
-                    novo_produto.incoterm = str(row.get('Incoterm', '')).strip()
-                    novo_produto.origem = str(row.get('Linhas da fatura/Origem', '')).strip()
-                    novo_produto.status_nf = str(row.get('Status', '')).strip()
-                    novo_produto.created_by = current_user.nome
-                    
-                    db.session.add(novo_produto)
-                    produtos_importados += 1
-                    
-            except Exception as e:
-                erros.append(f"Linha {index + 1}: {str(e)}")
-                continue
-        
-        # Commit das alterações
-        db.session.commit()
-        
-        # 🚀 GATILHO AUTOMÁTICO: PROCESSAR CARTEIRA APÓS IMPORTAR FATURAMENTO
-        try:
-            # Importar função da carteira
-            from app.carteira.routes import _processar_baixa_faturamento
-            
-            # Buscar NFs únicas que foram importadas/atualizadas
-            nfs_processadas = set()
-            
-            for index, row in df.iterrows():
-                numero_nf = str(row.get('Linhas da fatura/NF-e', '')).strip() if pd.notna(row.get('Linhas da fatura/NF-e')) else ''
-                if numero_nf and numero_nf != 'nan':
-                    nfs_processadas.add(numero_nf)
-            
-            # Processar baixa automática para cada NF
-            nfs_baixadas_sucesso = 0
-            nfs_com_inconsistencias = 0
-            nfs_canceladas_revertidas = 0
-            
-            for numero_nf in nfs_processadas:
-                try:
-                    resultado = _processar_baixa_faturamento(numero_nf, current_user.nome)
-                    
-                    if resultado.get('sucesso'):
-                        if resultado.get('status_nf') == 'CANCELADA':
-                            # NF foi cancelada e revertida
-                            nfs_canceladas_revertidas += 1
-                            flash(f'🚫 NF {numero_nf} cancelada: {resultado["movimentacoes_excluidas"]} movimentações revertidas', 'warning')
-                        else:
-                            # NF processada normalmente
-                            itens_baixados = resultado.get('itens_baixados', 0)
-                            inconsistencias = resultado.get('inconsistencias_detectadas', 0)
-                            
-                            if itens_baixados > 0:
-                                nfs_baixadas_sucesso += 1
-                                
-                            if inconsistencias > 0:
-                                nfs_com_inconsistencias += 1
-                    else:
-                        # Erro no processamento
-                        flash(f'⚠️ Erro ao processar NF {numero_nf}: {resultado.get("erro", "Erro desconhecido")}', 'warning')
-                        
-                except Exception as e:
-                    # Log do erro mas não interrompe o processo
-                    print(f"Erro ao processar carteira para NF {numero_nf}: {str(e)}")
-                    continue
-            
-            # Relatório do processamento automático
-            if nfs_baixadas_sucesso > 0:
-                flash(f'🤖 Processamento automático: {nfs_baixadas_sucesso} NFs baixadas na carteira', 'success')
-                
-            if nfs_canceladas_revertidas > 0:
-                flash(f'🚫 {nfs_canceladas_revertidas} NFs canceladas foram revertidas automaticamente', 'info')
-                
-            if nfs_com_inconsistencias > 0:
-                flash(f'⚠️ {nfs_com_inconsistencias} NFs geraram inconsistências (verifique em Carteira → Inconsistências)', 'warning')
-                
-        except ImportError:
-            # Sistema de carteira não disponível - continua normalmente
-            flash('ℹ️ Sistema de carteira não disponível - processamento manual necessário', 'info')
-        except Exception as e:
-            # Erro no processamento automático - não interrompe a importação
-            flash(f'⚠️ Erro no processamento automático da carteira: {str(e)}', 'warning')
-        
-        # Mensagens de resultado da importação
-        if produtos_importados > 0 or produtos_atualizados > 0:
-            mensagem = f"✅ Importação concluída: {produtos_importados} novos produtos, {produtos_atualizados} atualizados"
-            if erros:
-                mensagem += f". {len(erros)} erros encontrados."
-            flash(mensagem, 'success')
-        else:
-            flash("⚠️ Nenhum produto foi importado.", 'warning')
-        
-        if erros[:5]:  # Mostrar apenas os primeiros 5 erros
-            for erro in erros[:5]:
-                flash(f"❌ {erro}", 'error')
-        
-        return redirect(url_for('faturamento.listar_faturamento_produtos'))
-        
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Erro durante importação: {str(e)}', 'error')
-        return redirect(url_for('faturamento.importar_faturamento_produtos'))
-
-@faturamento_bp.route('/produtos/baixar-modelo')
-@login_required
-def baixar_modelo_faturamento():
-    """Baixar modelo Excel para importação de faturamento por produto"""
-    try:
-        import pandas as pd
-        from flask import make_response
-        from io import BytesIO
-        
-        # Colunas exatas conforme arquivo CSV
-        colunas_modelo = [
-            'Linhas da fatura/NF-e',
-            'Linhas da fatura/Parceiro/CNPJ', 
-            'Linhas da fatura/Parceiro',
-            'Linhas da fatura/Parceiro/Município',
-            'Linhas da fatura/Produto/Referência',
-            'Linhas da fatura/Produto/Nome',
-            'Linhas da fatura/Quantidade',
-            'Linhas da fatura/Valor Total do Item da NF',
-            'Linhas da fatura/Data',
-            'Status',
-            'Vendedor', 
-            'Incoterm'
-        ]
-        
-        # Criar DataFrame com exemplo
-        dados_exemplo = {
-            'Linhas da fatura/NF-e': [128944, '', ''],
-            'Linhas da fatura/Parceiro/CNPJ': ['75.315.333/0103-33', '', ''],
-            'Linhas da fatura/Parceiro': ['ATACADAO 103', '', ''],
-            'Linhas da fatura/Parceiro/Município': ['Olímpia (SP)', '', ''],
-            'Linhas da fatura/Produto/Referência': [4220179, 4729098, 4320162],
-            'Linhas da fatura/Produto/Nome': [
-                'AZEITONA PRETA AZAPA - VD 12X360 GR - CAMPO BELO',
-                'OL. MIS AZEITE DE OLIVA VD 12X500 ML - ST ISABEL', 
-                'AZEITONA VERDE FATIADA - BD 6X2 KG - CAMPO BELO'
-            ],
-            'Linhas da fatura/Quantidade': [10, 5, 8],
-            'Linhas da fatura/Valor Total do Item da NF': ['3.281,10', '850,75', '1.200,00'],
-            'Linhas da fatura/Data': ['27/06/2025', '', ''],
-            'Status': ['Lançado', '', ''],
-            'Vendedor': ['12 SCHIAVINATTO REP COM SC LTDA', '', ''],
-            'Incoterm': ['[CIF] CIF', '', '']
-        }
-        
-        df = pd.DataFrame(dados_exemplo)
-        
-        # Criar arquivo Excel em memória
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # Aba principal
-            df.to_excel(writer, sheet_name='Dados', index=False)
-            
-            # Aba de instruções
-            instrucoes = pd.DataFrame({
-                'INSTRUÇÕES IMPORTANTES': [
-                    '1. Use as colunas EXATAMENTE como estão nomeadas',
-                    '2. O Forward Fill preencherá campos vazios automaticamente',
-                    '3. Campos obrigatórios: NF, CNPJ, Cliente, Município, Código Produto',
-                    '4. Status permitidos: Lançado, Cancelado, Provisório',
-                    '5. Data no formato DD/MM/YYYY',
-                    '6. Valores brasileiros aceitos: 3.281,10',
-                    '7. Cidade e UF: formato "Cidade (UF)"',
-                    '8. Forward Fill funciona para Status, Vendedor e Incoterm'
-                ]
-            })
-            instrucoes.to_excel(writer, sheet_name='Instruções', index=False)
-        
-        output.seek(0)
-        
-        # Criar resposta
-        response = make_response(output.getvalue())
-        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        response.headers['Content-Disposition'] = 'attachment; filename=modelo_faturamento_produto.xlsx'
-        
-        return response
-        
-    except Exception as e:
-        flash(f'Erro ao gerar modelo: {str(e)}', 'error')
-        return redirect(url_for('faturamento.listar_faturamento_produtos'))
+# ===== ROTA DE MODELO REMOVIDA =====
+# Esta funcionalidade foi removida conforme solicitação do usuário
+# O sistema agora usa apenas sincronização via Odoo
 
 @faturamento_bp.route('/produtos/exportar-dados')
 @login_required 
@@ -1274,3 +670,398 @@ def exportar_dados_faturamento():
     except Exception as e:
         flash(f'Erro ao exportar dados: {str(e)}', 'error')
         return redirect(url_for('faturamento.listar_faturamento_produtos'))
+
+# =====================================
+# 🆕 ROTAS PARA SISTEMA INTEGRADO DE FATURAMENTO
+# =====================================
+
+@faturamento_bp.route('/')
+@faturamento_bp.route('/dashboard')
+@login_required
+def dashboard_faturamento():
+    """Dashboard principal do faturamento integrado"""
+    try:
+        from datetime import date
+        from sqlalchemy import func
+        
+        # Calcular estatísticas do mês atual
+        mes_atual = date.today().replace(day=1)
+        
+        # NFs processadas no mês
+        nfs_processadas_mes = RelatorioFaturamentoImportado.query.filter(
+            RelatorioFaturamentoImportado.criado_em >= mes_atual,
+            RelatorioFaturamentoImportado.ativo == True
+        ).count()
+        
+        # NFs pendentes de reconciliação
+        nfs_pendentes = RelatorioFaturamentoImportado.query.filter(
+            RelatorioFaturamentoImportado.ativo == True
+            # TODO: Adicionar lógica de NFs sem vinculação
+        ).count()
+        
+        # Valor faturado no mês (via FaturamentoProduto se existir)
+        valor_faturado_mes = 0
+        try:
+            if db.engine.has_table('faturamento_produto'):
+                valor_faturado_mes = db.session.query(
+                    func.sum(FaturamentoProduto.valor_produto_faturado)
+                ).filter(
+                    FaturamentoProduto.data_fatura >= mes_atual
+                ).scalar() or 0
+        except Exception:
+            pass
+        
+        # Última sincronização (exemplo)
+        ultima_sincronizacao = "Nunca"  # TODO: Implementar controle de sincronização
+        
+        # Logs de atividade recentes
+        logs_atividade = [
+            {
+                'timestamp': '18/07/2025 15:30',
+                'mensagem': 'Sistema iniciado com sucesso',
+                'tipo': 'info',
+                'usuario': current_user.nome
+            }
+        ]
+        
+        return render_template('faturamento/dashboard_faturamento.html',
+                             nfs_processadas_mes=nfs_processadas_mes,
+                             nfs_pendentes=nfs_pendentes,
+                             valor_faturado_mes=valor_faturado_mes,
+                             ultima_sincronizacao=ultima_sincronizacao,
+                             logs_atividade=logs_atividade)
+        
+    except Exception as e:
+        flash(f'Erro ao carregar dashboard: {str(e)}', 'error')
+        return redirect(url_for('faturamento.listar_relatorios'))
+
+@faturamento_bp.route('/dashboard-reconciliacao')
+@login_required
+def dashboard_reconciliacao():
+    """Dashboard de reconciliação - visualizar inconsistências"""
+    try:
+        # Importar o serviço de reconciliação
+        from app.carteira.services.reconciliacao_service import ReconciliacaoService
+        
+        # Executar análise de inconsistências
+        reconciliacao = ReconciliacaoService()
+        inconsistencias = reconciliacao.identificar_inconsistencias()
+        
+        return render_template('faturamento/dashboard_reconciliacao.html',
+                             inconsistencias=inconsistencias)
+        
+    except Exception as e:
+        flash(f'Erro ao carregar dashboard de reconciliação: {str(e)}', 'error')
+        return redirect(url_for('faturamento.dashboard_faturamento'))
+
+@faturamento_bp.route('/conciliacao-manual')
+@login_required
+def tela_conciliacao_manual():
+    """Tela para conciliação manual de inconsistências"""
+    try:
+        # Filtros da URL
+        tipo = request.args.get('tipo', '')
+        numero = request.args.get('numero', '')
+        cliente = request.args.get('cliente', '')
+        produto = request.args.get('produto', '')
+        
+        # Importar o serviço de reconciliação
+        from app.carteira.services.reconciliacao_service import ReconciliacaoService
+        
+        reconciliacao = ReconciliacaoService()
+        inconsistencias_raw = reconciliacao.identificar_inconsistencias()
+        
+        # Converter para formato unificado para a tela
+        inconsistencias = []
+        
+        # NFs órfãs
+        if not tipo or tipo == 'nfs_orfas':
+            for nf in inconsistencias_raw.get('nfs_orfas', []):
+                if _filtrar_item(nf, numero, cliente, produto):
+                    inconsistencias.append({
+                        'id': f"nf_{nf.numero_nf}",
+                        'tipo': 'nf_orfa',
+                        'numero_nf': nf.numero_nf,
+                        'nome_cliente': nf.nome_cliente,
+                        'municipio': nf.municipio,
+                        'estado': nf.estado,
+                        'data_fatura': nf.data_fatura,
+                        'valor_total': nf.valor_total,
+                        'origem': nf.origem,
+                        'resolvido': False
+                    })
+        
+        # Separações órfãs
+        if not tipo or tipo == 'separacoes_orfas':
+            for sep in inconsistencias_raw.get('separacoes_orfas', []):
+                if _filtrar_item(sep, numero, cliente, produto):
+                    inconsistencias.append({
+                        'id': f"sep_{sep.lote_separacao}",
+                        'tipo': 'separacao_orfa',
+                        'lote_separacao': sep.lote_separacao,
+                        'cod_produto': getattr(sep, 'cod_produto', ''),
+                        'nome_produto': getattr(sep, 'nome_produto', ''),
+                        'cliente': getattr(sep, 'cliente', ''),
+                        'qtd_separada': getattr(sep, 'qtd_separada', 0),
+                        'valor_separado': getattr(sep, 'valor_separado', 0),
+                        'data_separacao': getattr(sep, 'data_separacao', None),
+                        'resolvido': False
+                    })
+        
+        # Divergências de valor
+        if not tipo or tipo == 'divergencias_valor':
+            for div in inconsistencias_raw.get('divergencias_valor', []):
+                if _filtrar_item(div, numero, cliente, produto):
+                    inconsistencias.append({
+                        'id': f"div_val_{div.numero_nf}_{div.cod_produto}",
+                        'tipo': 'divergencia_valor',
+                        'numero_nf': div.numero_nf,
+                        'cod_produto': div.cod_produto,
+                        'valor_nf': getattr(div, 'valor_nf', 0),
+                        'valor_separacao': getattr(div, 'valor_separacao', 0),
+                        'resolvido': False
+                    })
+        
+        # Divergências de quantidade
+        if not tipo or tipo == 'divergencias_quantidade':
+            for div in inconsistencias_raw.get('divergencias_quantidade', []):
+                if _filtrar_item(div, numero, cliente, produto):
+                    inconsistencias.append({
+                        'id': f"div_qtd_{div.numero_nf}_{div.cod_produto}",
+                        'tipo': 'divergencia_quantidade',
+                        'numero_nf': div.numero_nf,
+                        'cod_produto': div.cod_produto,
+                        'qtd_nf': getattr(div, 'qtd_nf', 0),
+                        'qtd_separacao': getattr(div, 'qtd_separacao', 0),
+                        'resolvido': False
+                    })
+        
+        total_registros = len(inconsistencias)
+        
+        return render_template('faturamento/tela_conciliacao_manual.html',
+                             inconsistencias=inconsistencias,
+                             total_registros=total_registros)
+        
+    except Exception as e:
+        flash(f'Erro ao carregar tela de conciliação: {str(e)}', 'error')
+        return redirect(url_for('faturamento.dashboard_reconciliacao'))
+
+def _filtrar_item(item, numero, cliente, produto):
+    """Função auxiliar para filtrar itens de inconsistência"""
+    if numero:
+        numero_lower = numero.lower()
+        if hasattr(item, 'numero_nf') and item.numero_nf:
+            if numero_lower not in str(item.numero_nf).lower():
+                return False
+        if hasattr(item, 'lote_separacao') and item.lote_separacao:
+            if numero_lower not in str(item.lote_separacao).lower():
+                return False
+    
+    if cliente:
+        cliente_lower = cliente.lower()
+        nome_cliente = getattr(item, 'nome_cliente', '') or getattr(item, 'cliente', '')
+        if nome_cliente and cliente_lower not in nome_cliente.lower():
+            return False
+    
+    if produto:
+        produto_lower = produto.lower()
+        cod_produto = getattr(item, 'cod_produto', '')
+        if cod_produto and produto_lower not in str(cod_produto).lower():
+            return False
+    
+    return True
+
+@faturamento_bp.route('/justificativas-parciais')
+@login_required
+def justificativas_parciais():
+    """Tela de justificativas de faturamento parcial"""
+    try:
+        # Filtros
+        status = request.args.get('status', '')
+        tipo = request.args.get('tipo', '')
+        numero_nf = request.args.get('numero_nf', '')
+        cliente = request.args.get('cliente', '')
+        produto = request.args.get('produto', '')
+        
+        # TODO: Implementar modelo de justificativas
+        # Por enquanto, dados de exemplo
+        justificativas = []
+        total_registros = 0
+        
+        # Resumo para os cards
+        resumo = {
+            'pendentes': 0,
+            'justificadas': 0,
+            'automaticas_mes': 0,
+            'valor_total_divergencias': 0
+        }
+        
+        return render_template('faturamento/justificativas_parciais.html',
+                             justificativas=justificativas,
+                             total_registros=total_registros,
+                             resumo=resumo)
+        
+    except Exception as e:
+        flash(f'Erro ao carregar justificativas: {str(e)}', 'error')
+        return redirect(url_for('faturamento.dashboard_faturamento'))
+
+@faturamento_bp.route('/status-processamento')
+@login_required
+def status_processamento():
+    """Dashboard de status do processamento"""
+    try:
+        # TODO: Implementar dashboard de status
+        return render_template('faturamento/status_processamento.html')
+        
+    except Exception as e:
+        flash(f'Erro ao carregar status: {str(e)}', 'error')
+        return redirect(url_for('faturamento.dashboard_faturamento'))
+
+@faturamento_bp.route('/relatorio-auditoria')
+@login_required
+def relatorio_auditoria():
+    """Relatório de auditoria"""
+    try:
+        # TODO: Implementar relatório de auditoria
+        return render_template('faturamento/relatorio_auditoria.html')
+        
+    except Exception as e:
+        flash(f'Erro ao carregar relatório: {str(e)}', 'error')
+        return redirect(url_for('faturamento.dashboard_faturamento'))
+
+# =====================================
+# 🔄 APIs PARA FUNCIONALIDADES DINÂMICAS
+# =====================================
+
+@faturamento_bp.route('/api/sincronizar-odoo', methods=['POST'])
+@login_required
+def api_sincronizar_odoo():
+    """API para sincronizar com Odoo"""
+    try:
+        # Importar o serviço do Odoo
+        from app.odoo.services.faturamento_service import importar_faturamento_odoo
+        
+        # Executar importação
+        resultado = importar_faturamento_odoo()
+        
+        if resultado.get('sucesso'):
+            return jsonify({
+                'success': True,
+                'message': f"Sincronização concluída! {resultado.get('registros_importados', 0)} registros importados."
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': resultado.get('erro', 'Erro na sincronização')
+            })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro na sincronização: {str(e)}'
+        })
+
+@faturamento_bp.route('/api/processar-pendencias', methods=['POST'])
+@login_required
+def api_processar_pendencias():
+    """API para processar pendências automaticamente"""
+    try:
+        # Importar o processador
+        from app.carteira.services.processar_faturamento import ProcessarFaturamento
+        
+        processador = ProcessarFaturamento()
+        resultado = processador.processar_todas_pendencias()
+        
+        return jsonify({
+            'success': True,
+            'message': f"Processamento concluído! {resultado.get('processadas', 0)} NFs processadas."
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro no processamento: {str(e)}'
+        })
+
+@faturamento_bp.route('/api/reconciliacao-automatica', methods=['POST'])
+@login_required
+def api_reconciliacao_automatica():
+    """API para reconciliação automática"""
+    try:
+        # Importar o serviço
+        from app.carteira.services.reconciliacao_service import ReconciliacaoService
+        
+        reconciliacao = ReconciliacaoService()
+        resultado = reconciliacao.reconciliacao_automatica()
+        
+        return jsonify({
+            'success': True,
+            'resolvidas': resultado.get('resolvidas', 0),
+            'message': f"Reconciliação automática concluída!"
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro na reconciliação: {str(e)}'
+        })
+
+@faturamento_bp.route('/api/status-cards')
+@login_required
+def api_status_cards():
+    """API para atualizar cards de status"""
+    try:
+        from datetime import date
+        from sqlalchemy import func
+        
+        mes_atual = date.today().replace(day=1)
+        
+        # Recalcular estatísticas
+        nfs_processadas_mes = RelatorioFaturamentoImportado.query.filter(
+            RelatorioFaturamentoImportado.criado_em >= mes_atual,
+            RelatorioFaturamentoImportado.ativo == True
+        ).count()
+        
+        nfs_pendentes = 5  # TODO: Calcular real
+        
+        valor_faturado_mes = 0
+        try:
+            if db.engine.has_table('faturamento_produto'):
+                valor_faturado_mes = db.session.query(
+                    func.sum(FaturamentoProduto.valor_produto_faturado)
+                ).filter(
+                    FaturamentoProduto.data_fatura >= mes_atual
+                ).scalar() or 0
+        except Exception:
+            pass
+        
+        return jsonify({
+            'success': True,
+            'nfs_processadas_mes': nfs_processadas_mes,
+            'nfs_pendentes': nfs_pendentes,
+            'valor_faturado_mes': f"{valor_faturado_mes:,.2f}".replace('.', ',').replace(',', '.', 1),
+            'ultima_sincronizacao': 'Agora mesmo'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
+
+@faturamento_bp.route('/api/exportar-inconsistencias')
+@login_required
+def api_exportar_inconsistencias():
+    """API para exportar inconsistências em Excel"""
+    try:
+        # TODO: Implementar exportação
+        return jsonify({
+            'success': False,
+            'message': 'Função em desenvolvimento'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })

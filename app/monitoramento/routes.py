@@ -1441,25 +1441,18 @@ def alterar_data_prevista(id):
         
         # Registra histórico
         from app.monitoramento.models import HistoricoDataPrevista
-        from app.utils.timezone import formatar_data_hora_brasil
         
         historico = HistoricoDataPrevista(
             entrega_id=entrega.id,
             data_anterior=entrega.data_entrega_prevista,
             data_nova=nova_data,
             motivo_alteracao=motivo_alteracao,
-            alterado_por=current_user.nome,
-            alterado_em=formatar_data_hora_brasil(datetime.utcnow())
+            alterado_por=current_user.nome
+            # alterado_em usa o default do modelo (datetime.utcnow)
         )
         
         # Atualiza a data na entrega
         entrega.data_entrega_prevista = nova_data
-        
-        # ✅ NOVA FUNCIONALIDADE: Sincronizar com pedido se NF está no CD
-        if entrega.nf_cd:
-            sucesso, resultado = sincronizar_agendamento_pedido(entrega)
-            if not sucesso:
-                flash(f"⚠️ Data alterada mas erro na sincronização: {resultado}", 'warning')
         
         db.session.add(historico)
         db.session.commit()
@@ -1486,8 +1479,15 @@ def historico_data_prevista(id):
     
     historico_data = []
     for h in historicos:
+        # Verifica se alterado_em é datetime antes de formatar
+        if hasattr(h.alterado_em, 'strftime'):
+            data_alteracao = formatar_data_hora_brasil(h.alterado_em)
+        else:
+            # Se for string ou outro formato, usar como está
+            data_alteracao = str(h.alterado_em) if h.alterado_em else ''
+            
         historico_data.append({
-            'data_alteracao': formatar_data_hora_brasil(h.alterado_em),
+            'data_alteracao': data_alteracao,
             'data_anterior': h.data_anterior.strftime('%d/%m/%Y') if h.data_anterior else None,
             'data_nova': h.data_nova.strftime('%d/%m/%Y'),
             'motivo': h.motivo_alteracao,
