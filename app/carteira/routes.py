@@ -2536,7 +2536,7 @@ def api_pedido_itens_editaveis(num_pedido):
                 
                 try:
                     # Se existir cadastro de palletização, usar
-                    from app.tabelas.models import CadastroPalletizacao
+                    from app.producao.models import CadastroPalletizacao
                     palletizacao = CadastroPalletizacao.query.filter_by(cod_produto=item.cod_produto).first()
                     if palletizacao:
                         if palletizacao.peso_bruto:
@@ -2888,3 +2888,110 @@ def api_dividir_linha_item(item_id):
             'error': f'Erro interno: {str(e)}'
         }), 500
 
+
+@carteira_bp.route('/api/pedido/<num_pedido>/criar-separacao', methods=['POST'])
+@login_required
+def api_criar_separacao_pedido(num_pedido):
+    """
+    API para criar separação a partir de itens selecionados (dropdown ou modal)
+    """
+    try:
+        data = request.get_json()
+        itens = data.get('itens', [])
+        
+        if not itens:
+            return jsonify({
+                'success': False,
+                'error': 'Nenhum item fornecido para separação'
+            }), 400
+        
+        # Validar se todos os itens têm data de expedição
+        for item in itens:
+            if not item.get('data_expedicao'):
+                return jsonify({
+                    'success': False,
+                    'error': 'Todos os itens devem ter Data de Expedição preenchida'
+                }), 400
+        
+        # Gerar ID único para o lote
+        import uuid
+        separacao_lote_id = f"SEP_{num_pedido}_{int(time.time())}"
+        
+        # Criar separações para cada item
+        separacoes_criadas = []
+        
+        for item in itens:
+            item_id = item.get('item_id')
+            qtd_separacao = float(item.get('qtd_separacao', 0))
+            data_expedicao = item.get('data_expedicao')
+            agendamento = item.get('agendamento')
+            protocolo = item.get('protocolo')
+            
+            if qtd_separacao <= 0:
+                continue
+            
+            # Buscar item da carteira
+            carteira_item = CarteiraPrincipal.query.get(item_id)
+            if not carteira_item:
+                continue
+            
+            # Converter data de expedição
+            try:
+                data_exp_obj = datetime.strptime(data_expedicao, '%Y-%m-%d').date() if data_expedicao else None
+            except ValueError:
+                data_exp_obj = None
+            
+            try:
+                data_agend_obj = datetime.strptime(agendamento, '%Y-%m-%d').date() if agendamento else None
+            except ValueError:
+                data_agend_obj = None
+            
+            # Calcular valores proporcionais
+            preco_unitario = float(carteira_item.preco_produto_pedido or 0)
+            valor_separacao = qtd_separacao * preco_unitario
+            
+            # Criar separação
+            separacao = Separacao(
+                separacao_lote_id=separacao_lote_id,
+                num_pedido=num_pedido,
+                cod_produto=carteira_item.cod_produto,
+                qtd_saldo=qtd_separacao,
+                valor_saldo=valor_separacao,
+                peso=0,  # TODO: Calcular peso proporcional
+                pallet=0,  # TODO: Calcular pallet proporcional
+                expedicao=data_exp_obj,
+                agendamento=data_agend_obj,
+                protocolo=protocolo,
+                status='CRIADA',
+                criado_em=agora_brasil(),
+                criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+            )
+            
+            db.session.add(separacao)
+            separacoes_criadas.append(separacao)
+        
+        if not separacoes_criadas:
+            return jsonify({
+                'success': False,
+                'error': 'Nenhuma separação válida foi criada'
+            }), 400
+        
+        # Salvar alterações
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'separacao_lote_id': separacao_lote_id,
+            'total_separacoes': len(separacoes_criadas),
+            'message': f'Separação criada com sucesso! Lote: {separacao_lote_id}'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao criar separação para pedido {num_pedido}: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+ 

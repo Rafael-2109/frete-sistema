@@ -1123,7 +1123,7 @@ function togglePedidoItens(numPedido) {
 }
 
 /**
- * Carrega itens de um pedido via AJAX
+ * Carrega itens de um pedido via AJAX (DROPDOWN REAL)
  */
 async function carregarItensPedido(numPedido) {
     const loadingDiv = document.getElementById(`loading-${numPedido}`);
@@ -1137,8 +1137,8 @@ async function carregarItensPedido(numPedido) {
         badge.textContent = 'Carregando...';
         badge.className = 'badge badge-info ml-2';
         
-        // Fazer requisição AJAX
-        const response = await fetch(`/carteira/api/pedido/${numPedido}/itens`);
+        // Fazer requisição AJAX para itens editáveis conforme CARTEIRA.csv
+        const response = await fetch(`/carteira/api/pedido/${numPedido}/itens-editaveis`);
         const data = await response.json();
         
         if (!response.ok || !data.success) {
@@ -1153,14 +1153,17 @@ async function carregarItensPedido(numPedido) {
         contentDiv.innerHTML = htmlItens;
         
         // Atualizar badge
-        badge.textContent = `${data.total_itens} itens`;
+        badge.textContent = `${data.itens.length} itens`;
         badge.className = 'badge badge-success ml-2';
         
         // Mostrar conteúdo
         loadingDiv.style.display = 'none';
         contentDiv.style.display = 'block';
         
-        console.log(`✅ Itens carregados para pedido ${numPedido}: ${data.total_itens} itens`);
+        console.log(`✅ Itens carregados para pedido ${numPedido}: ${data.itens.length} itens`);
+        
+        // Configurar contadores iniciais
+        setTimeout(() => atualizarContadoresDropdown(numPedido), 100);
         
     } catch (error) {
         console.error(`❌ Erro ao carregar itens do pedido ${numPedido}:`, error);
@@ -1184,79 +1187,677 @@ async function carregarItensPedido(numPedido) {
     }
 }
 
+// ===== FUNÇÕES ESPECÍFICAS DO DROPDOWN REAL =====
+
+/**
+ * Atualiza contadores do dropdown expandido
+ */
+function atualizarContadoresDropdown(numPedido) {
+    const checkboxesMarcados = document.querySelectorAll(`.item-checkbox-dropdown[data-pedido="${numPedido}"]:checked`);
+    const comExpedicao = Array.from(checkboxesMarcados).filter(cb => {
+        const itemId = cb.getAttribute('data-item-id');
+        const row = document.getElementById(`row-dropdown-${numPedido}-${itemId}`);
+        const dataExpedicao = row?.querySelector('.data-expedicao-dropdown')?.value;
+        return dataExpedicao && dataExpedicao.trim();
+    });
+    
+    const contadorEl = document.getElementById(`contador-dropdown-${numPedido}`);
+    const contadorExpedicaoEl = document.getElementById(`contador-expedicao-dropdown-${numPedido}`);
+    const statusEl = document.getElementById(`status-dropdown-${numPedido}`);
+    const btnEnviarEl = document.getElementById(`btn-enviar-dropdown-${numPedido}`);
+    
+    if (contadorEl) contadorEl.textContent = checkboxesMarcados.length;
+    if (contadorExpedicaoEl) contadorExpedicaoEl.textContent = comExpedicao.length;
+    
+    // Atualizar status de validação
+    if (statusEl && btnEnviarEl) {
+        if (checkboxesMarcados.length === 0) {
+            statusEl.textContent = 'Selecione itens';
+            statusEl.className = 'badge badge-secondary';
+            btnEnviarEl.disabled = true;
+        } else {
+            const semExpedicao = checkboxesMarcados.length - comExpedicao.length;
+            if (semExpedicao > 0) {
+                statusEl.textContent = `${semExpedicao} sem data expedição`;
+                statusEl.className = 'badge badge-danger';
+                btnEnviarEl.disabled = true;
+            } else {
+                statusEl.textContent = 'Pronto para enviar';
+                statusEl.className = 'badge badge-success';
+                btnEnviarEl.disabled = false;
+            }
+        }
+    }
+    
+    // Atualizar totais
+    recalcularTotaisDropdown(numPedido);
+}
+
+/**
+ * Recalcula totais do dropdown
+ */
+function recalcularTotaisDropdown(numPedido) {
+    let valorTotal = 0;
+    let pesoTotal = 0;
+    let palletTotal = 0;
+    
+    const checkboxesMarcados = document.querySelectorAll(`.item-checkbox-dropdown[data-pedido="${numPedido}"]:checked`);
+    
+    checkboxesMarcados.forEach(checkbox => {
+        const itemId = checkbox.getAttribute('data-item-id');
+        const row = document.getElementById(`row-dropdown-${numPedido}-${itemId}`);
+        
+        if (row) {
+            const valorEl = row.querySelector('.valor-calculado-dropdown');
+            const pesoEl = row.querySelector('.peso-calculado-dropdown');
+            const palletEl = row.querySelector('.pallet-calculado-dropdown');
+            
+            if (valorEl) {
+                const valor = parseFloat(valorEl.textContent.replace(/[R$\s.]/g, '').replace(',', '.') || 0);
+                valorTotal += valor;
+            }
+            
+            if (pesoEl) {
+                const peso = parseFloat(pesoEl.textContent.replace(/[kg\s]/g, '').replace(',', '.') || 0);
+                pesoTotal += peso;
+            }
+            
+            if (palletEl) {
+                const pallet = parseFloat(palletEl.textContent.replace(/[pal\s]/g, '').replace(',', '.') || 0);
+                palletTotal += pallet;
+            }
+        }
+    });
+    
+    // Atualizar elementos de total
+    const totalValorEl = document.getElementById(`total-valor-dropdown-${numPedido}`);
+    const totalPesoEl = document.getElementById(`total-peso-dropdown-${numPedido}`);
+    const totalPalletEl = document.getElementById(`total-pallet-dropdown-${numPedido}`);
+    
+    if (totalValorEl) totalValorEl.textContent = `R$ ${valorTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+    if (totalPesoEl) totalPesoEl.textContent = `${pesoTotal.toLocaleString('pt-BR', {minimumFractionDigits: 1})} kg`;
+    if (totalPalletEl) totalPalletEl.textContent = `${palletTotal.toLocaleString('pt-BR', {minimumFractionDigits: 1})} pal`;
+}
+
+/**
+ * Recalcula valores de um item no dropdown quando quantidade muda
+ */
+function recalcularValoresDropdown(input) {
+    const itemId = input.getAttribute('data-item-id');
+    const numPedido = input.getAttribute('data-pedido');
+    const qtdNova = parseFloat(input.value) || 0;
+    const precoUnitario = parseFloat(input.getAttribute('data-preco-unitario')) || 0;
+    
+    const row = document.getElementById(`row-dropdown-${numPedido}-${itemId}`);
+    if (!row) return;
+    
+    // Buscar dados originais do cache para calcular peso/pallet proporcionais
+    const dadosCache = itensPedidoCache.get(numPedido);
+    const itemOriginal = dadosCache?.itens?.find(item => item.id.toString() === itemId.toString());
+    
+    let pesoTotal = 0;
+    let palletTotal = 0;
+    
+    if (itemOriginal && itemOriginal.qtd_saldo_disponivel > 0) {
+        const pesoOriginal = parseFloat(itemOriginal.peso_calculado?.replace(/[kg\s]/g, '')?.replace(',', '.') || 0);
+        const palletOriginal = parseFloat(itemOriginal.pallet_calculado?.replace(/[pal\s]/g, '')?.replace(',', '.') || 0);
+        
+        const proporcao = qtdNova / itemOriginal.qtd_saldo_disponivel;
+        pesoTotal = pesoOriginal * proporcao;
+        palletTotal = palletOriginal * proporcao;
+    }
+    
+    // Calcular valores
+    const valorTotal = qtdNova * precoUnitario;
+    
+    // Atualizar células
+    const valorEl = row.querySelector('.valor-calculado-dropdown');
+    const pesoEl = row.querySelector('.peso-calculado-dropdown');
+    const palletEl = row.querySelector('.pallet-calculado-dropdown');
+    
+    if (valorEl) valorEl.textContent = `R$ ${valorTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+    if (pesoEl) pesoEl.textContent = `${pesoTotal.toLocaleString('pt-BR', {minimumFractionDigits: 1})} kg`;
+    if (palletEl) palletEl.textContent = `${palletTotal.toLocaleString('pt-BR', {minimumFractionDigits: 1})} pal`;
+    
+    // Atualizar totais gerais
+    recalcularTotaisDropdown(numPedido);
+}
+
+/**
+ * Processa alteração de quantidade no dropdown (implementa divisão de linhas)
+ */
+async function processarAlteracaoQuantidadeDropdown(input) {
+    const itemId = input.getAttribute('data-item-id');
+    const numPedido = input.getAttribute('data-pedido');
+    const qtdOriginal = parseFloat(input.getAttribute('data-qtd-original'));
+    const qtdNova = parseFloat(input.value) || 0;
+    
+    if (qtdNova < 0 || qtdNova > qtdOriginal) {
+        alert('⚠️ Quantidade inválida');
+        input.value = qtdOriginal;
+        return;
+    }
+    
+    // Se quantidade menor que original, dividir linha (criar PreSeparacaoItem)
+    if (qtdNova > 0 && qtdNova < qtdOriginal) {
+        await dividirLinhaDropdown(itemId, qtdNova, qtdOriginal, numPedido);
+    }
+    
+    // Se quantidade zero, unificar linha
+    if (qtdNova === 0) {
+        await unificarLinhaDropdown(itemId, numPedido);
+    }
+    
+    // Recalcular valores automáticos
+    recalcularValoresDropdown(input);
+    
+    // Salvar automaticamente
+    await salvarAlteracaoAutomatica(itemId, 'quantidade', qtdNova);
+    
+    // Atualizar contadores
+    atualizarContadoresDropdown(numPedido);
+}
+
+/**
+ * Processa alteração de data expedição no dropdown
+ */
+async function processarAlteracaoDataExpedicaoDropdown(input) {
+    const itemId = input.getAttribute('data-item-id');
+    const numPedido = input.getAttribute('data-pedido');
+    const novaData = input.value;
+    
+    if (novaData) {
+        // Recalcular estoques baseados na nova data D0
+        await recalcularEstoquesBaseadoD0Dropdown(itemId, novaData, numPedido);
+        
+        // Replicar para itens marcados (amarrar)
+        replicarCampoParaItensAmarradosDropdown(numPedido, 'data-expedicao-dropdown', novaData);
+    }
+    
+    // Salvar automaticamente
+    await salvarAlteracaoAutomatica(itemId, 'expedicao', novaData);
+    
+    // Atualizar validação
+    atualizarContadoresDropdown(numPedido);
+}
+
+/**
+ * Processa alteração de agendamento no dropdown
+ */
+async function processarAlteracaoAgendamentoDropdown(input) {
+    const itemId = input.getAttribute('data-item-id');
+    const numPedido = input.getAttribute('data-pedido');
+    const novaData = input.value;
+    
+    // Replicar para itens marcados (amarrar)
+    replicarCampoParaItensAmarradosDropdown(numPedido, 'agendamento-dropdown', novaData);
+    
+    // Salvar automaticamente
+    await salvarAlteracaoAutomatica(itemId, 'agendamento', novaData);
+}
+
+/**
+ * Processa alteração de protocolo no dropdown
+ */
+async function processarAlteracaoProtocoloDropdown(input) {
+    const itemId = input.getAttribute('data-item-id');
+    const numPedido = input.getAttribute('data-pedido');
+    const novoProtocolo = input.value;
+    
+    // Replicar para itens marcados (amarrar)
+    replicarCampoParaItensAmarradosDropdown(numPedido, 'protocolo-dropdown', novoProtocolo);
+    
+    // Salvar automaticamente
+    await salvarAlteracaoAutomatica(itemId, 'protocolo', novoProtocolo);
+}
+
+/**
+ * Replica campo para itens marcados no dropdown (amarrar campos)
+ */
+function replicarCampoParaItensAmarradosDropdown(numPedido, classeCampo, valor) {
+    const checkboxesMarcados = document.querySelectorAll(`.item-checkbox-dropdown[data-pedido="${numPedido}"]:checked`);
+    
+    checkboxesMarcados.forEach(checkbox => {
+        const itemId = checkbox.getAttribute('data-item-id');
+        const row = document.getElementById(`row-dropdown-${numPedido}-${itemId}`);
+        const campo = row?.querySelector(`.${classeCampo}`);
+        
+        if (campo && campo.value !== valor) {
+            campo.value = valor;
+            
+            // Se for data expedição, recalcular estoques
+            if (classeCampo === 'data-expedicao-dropdown' && valor) {
+                recalcularEstoquesBaseadoD0Dropdown(itemId, valor, numPedido);
+            }
+            
+            // Salvar automaticamente
+            const nomeCampo = classeCampo.replace('data-', '').replace('-dropdown', '').replace('-', '_');
+            salvarAlteracaoAutomatica(itemId, nomeCampo, valor);
+        }
+    });
+}
+
+/**
+ * Recalcula estoques D0/D7 no dropdown
+ */
+async function recalcularEstoquesBaseadoD0Dropdown(itemId, dataExpedicao, numPedido) {
+    try {
+        const response = await fetch(`/carteira/api/item/${itemId}/recalcular-estoques`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                data_d0: dataExpedicao
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Atualizar colunas de estoque na linha
+            const row = document.getElementById(`row-dropdown-${numPedido}-${itemId}`);
+            if (row) {
+                const menorEstoqueEl = row.querySelector('.menor-estoque-d7-dropdown');
+                const estoqueD0El = row.querySelector('.estoque-d0-dropdown');
+                const producaoD0El = row.querySelector('.producao-d0-dropdown');
+                
+                if (menorEstoqueEl) menorEstoqueEl.textContent = data.menor_estoque_d7 || '-';
+                if (estoqueD0El) estoqueD0El.textContent = data.estoque_d0 || '-';
+                if (producaoD0El) producaoD0El.textContent = data.producao_d0 || '-';
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao recalcular estoques no dropdown:', error);
+    }
+}
+
+/**
+ * Toggle todos os itens do dropdown
+ */
+function toggleTodosItensDropdown(numPedido, selectAll) {
+    const checkboxes = document.querySelectorAll(`.item-checkbox-dropdown[data-pedido="${numPedido}"]:not(:disabled)`);
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    atualizarContadoresDropdown(numPedido);
+}
+
+/**
+ * Envia itens selecionados do dropdown para separação
+ */
+async function enviarParaSeparacaoDropdown(numPedido) {
+    const checkboxesMarcados = document.querySelectorAll(`.item-checkbox-dropdown[data-pedido="${numPedido}"]:checked`);
+    
+    if (checkboxesMarcados.length === 0) {
+        alert('⚠️ Selecione pelo menos um item para enviar para separação');
+        return;
+    }
+    
+    // Validar se todos têm data de expedição
+    const semExpedicao = Array.from(checkboxesMarcados).filter(cb => {
+        const itemId = cb.getAttribute('data-item-id');
+        const row = document.getElementById(`row-dropdown-${numPedido}-${itemId}`);
+        const dataExpedicao = row?.querySelector('.data-expedicao-dropdown')?.value;
+        return !dataExpedicao || !dataExpedicao.trim();
+    });
+    
+    if (semExpedicao.length > 0) {
+        alert(`⚠️ ${semExpedicao.length} itens não possuem Data de Expedição.\n\nPreencha a Data de Expedição para todos os itens selecionados.`);
+        return;
+    }
+    
+    // Coletar dados dos itens selecionados
+    const itensParaSeparacao = [];
+    
+    checkboxesMarcados.forEach(checkbox => {
+        const itemId = checkbox.getAttribute('data-item-id');
+        const row = document.getElementById(`row-dropdown-${numPedido}-${itemId}`);
+        
+        if (row) {
+            const qtdInput = row.querySelector('.qtd-dropdown');
+            const dataExpedicaoInput = row.querySelector('.data-expedicao-dropdown');
+            const agendamentoInput = row.querySelector('.agendamento-dropdown');
+            const protocoloInput = row.querySelector('.protocolo-dropdown');
+            
+            const qtd = parseFloat(qtdInput?.value) || 0;
+            const dataExpedicao = dataExpedicaoInput?.value || '';
+            const agendamento = agendamentoInput?.value || '';
+            const protocolo = protocoloInput?.value || '';
+            
+            if (qtd > 0) {
+                itensParaSeparacao.push({
+                    item_id: itemId,
+                    qtd_separacao: qtd,
+                    data_expedicao: dataExpedicao,
+                    agendamento: agendamento,
+                    protocolo: protocolo
+                });
+            }
+        }
+    });
+    
+    if (itensParaSeparacao.length === 0) {
+        alert('⚠️ Nenhum item válido para separação');
+        return;
+    }
+    
+    try {
+        const btnEnviar = document.getElementById(`btn-enviar-dropdown-${numPedido}`);
+        btnEnviar.disabled = true;
+        btnEnviar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+        
+        const response = await fetch(`/carteira/api/pedido/${numPedido}/criar-separacao`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                itens: itensParaSeparacao
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`✅ Separação criada com sucesso!\n\nLote ID: ${data.separacao_lote_id}\nItens: ${itensParaSeparacao.length}`);
+            
+            // Recarregar itens do dropdown
+            await carregarItensPedido(numPedido);
+        } else {
+            throw new Error(data.error || 'Erro ao criar separação');
+        }
+        
+    } catch (error) {
+        console.error('Erro ao enviar para separação do dropdown:', error);
+        alert(`❌ Erro ao criar separação:\n\n${error.message}`);
+    } finally {
+        const btnEnviar = document.getElementById(`btn-enviar-dropdown-${numPedido}`);
+        if (btnEnviar) {
+            btnEnviar.disabled = false;
+            btnEnviar.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar para Separação';
+        }
+    }
+}
+
+/**
+ * Replica campos manualmente (botão do dropdown)
+ */
+function replicarCamposAmarradosDropdown(numPedido) {
+    const checkboxesMarcados = document.querySelectorAll(`.item-checkbox-dropdown[data-pedido="${numPedido}"]:checked`);
+    
+    if (checkboxesMarcados.length < 2) {
+        alert('⚠️ Marque pelo menos 2 itens para replicar campos');
+        return;
+    }
+    
+    // Perguntar qual item usar como origem
+    const itensDisponiveis = Array.from(checkboxesMarcados).map((cb, index) => {
+        const itemId = cb.getAttribute('data-item-id');
+        const row = document.getElementById(`row-dropdown-${numPedido}-${itemId}`);
+        const codProduto = row?.querySelector('td:nth-child(2)')?.textContent || '';
+        return `${index + 1}. ${codProduto} (ID: ${itemId})`;
+    }).join('\n');
+    
+    const origem = prompt(`📋 REPLICAR CAMPOS\n\nItens selecionados:\n${itensDisponiveis}\n\nDigite o número do item origem (1, 2, 3...):`);
+    
+    if (!origem) return;
+    
+    const indiceOrigem = parseInt(origem) - 1;
+    if (indiceOrigem < 0 || indiceOrigem >= checkboxesMarcados.length) {
+        alert('⚠️ Número inválido');
+        return;
+    }
+    
+    // Obter dados do item origem
+    const checkboxOrigem = checkboxesMarcados[indiceOrigem];
+    const itemIdOrigem = checkboxOrigem.getAttribute('data-item-id');
+    const rowOrigem = document.getElementById(`row-dropdown-${numPedido}-${itemIdOrigem}`);
+    
+    if (!rowOrigem) return;
+    
+    const dataExpedicao = rowOrigem.querySelector('.data-expedicao-dropdown')?.value || '';
+    const agendamento = rowOrigem.querySelector('.agendamento-dropdown')?.value || '';
+    const protocolo = rowOrigem.querySelector('.protocolo-dropdown')?.value || '';
+    
+    // Replicar para todos os outros marcados
+    checkboxesMarcados.forEach((checkbox, index) => {
+        if (index === indiceOrigem) return; // Pular o próprio item origem
+        
+        const itemId = checkbox.getAttribute('data-item-id');
+        const row = document.getElementById(`row-dropdown-${numPedido}-${itemId}`);
+        
+        if (row) {
+            if (dataExpedicao) {
+                const expedicaoEl = row.querySelector('.data-expedicao-dropdown');
+                if (expedicaoEl) {
+                    expedicaoEl.value = dataExpedicao;
+                    salvarAlteracaoAutomatica(itemId, 'expedicao', dataExpedicao);
+                    recalcularEstoquesBaseadoD0Dropdown(itemId, dataExpedicao, numPedido);
+                }
+            }
+            
+            if (agendamento) {
+                const agendamentoEl = row.querySelector('.agendamento-dropdown');
+                if (agendamentoEl) {
+                    agendamentoEl.value = agendamento;
+                    salvarAlteracaoAutomatica(itemId, 'agendamento', agendamento);
+                }
+            }
+            
+            if (protocolo) {
+                const protocoloEl = row.querySelector('.protocolo-dropdown');
+                if (protocoloEl) {
+                    protocoloEl.value = protocolo;
+                    salvarAlteracaoAutomatica(itemId, 'protocolo', protocolo);
+                }
+            }
+        }
+    });
+    
+    // Atualizar validação
+    atualizarContadoresDropdown(numPedido);
+    
+    alert(`✅ Campos replicados do item ${itemIdOrigem} para ${checkboxesMarcados.length - 1} itens`);
+}
+
+/**
+ * Divide linha no dropdown (placeholder - implementar quando necessário)
+ */
+async function dividirLinhaDropdown(itemId, qtdUtilizada, qtdOriginal, numPedido) {
+    console.log(`📊 Dividindo linha dropdown: Item ${itemId}, Qtd ${qtdUtilizada}, Original ${qtdOriginal}`);
+    // TODO: Implementar divisão de linha específica para dropdown se necessário
+    return true;
+}
+
+/**
+ * Unifica linha no dropdown (placeholder - implementar quando necessário)  
+ */
+async function unificarLinhaDropdown(itemId, numPedido) {
+    console.log(`🔄 Unificando linha dropdown: Item ${itemId}`);
+    // TODO: Implementar unificação específica para dropdown se necessário
+    return true;
+}
+
 /**
  * Gera HTML da tabela de itens
  */
 function gerarHtmlItens(data) {
+    const numPedido = data.num_pedido;
+    
     let html = `
+        <!-- Botão Enviar para Separação no topo conforme CARTEIRA.csv -->
+        <div class="card mb-2">
+            <div class="card-header bg-success text-white p-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-boxes"></i> Ações de Separação
+                    </h6>
+                    <button type="button" class="btn btn-light btn-sm" onclick="enviarParaSeparacaoDropdown('${numPedido}')" id="btn-enviar-dropdown-${numPedido}">
+                        <i class="fas fa-paper-plane"></i> Enviar para Separação
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-2">
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong>Itens Selecionados:</strong>
+                        <span id="contador-dropdown-${numPedido}" class="badge badge-warning">0</span>
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Com Data Expedição:</strong>
+                        <span id="contador-expedicao-dropdown-${numPedido}" class="badge badge-success">0</span>
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Status:</strong>
+                        <span id="status-dropdown-${numPedido}" class="badge badge-secondary">Selecione itens</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <div class="table-responsive">
-            <table class="table table-sm table-striped mb-0">
-                <thead class="thead-light">
+            <table class="table table-sm table-striped mb-0" id="tabela-dropdown-${numPedido}">
+                <thead class="thead-dark">
                     <tr>
+                        <th width="30">
+                            <input type="checkbox" id="select-all-dropdown-${numPedido}" onchange="toggleTodosItensDropdown('${numPedido}', this)" title="Selecionar todos">
+                        </th>
                         <th>Código</th>
                         <th>Produto</th>
                         <th>Qtd</th>
-                        <th>Preço</th>
                         <th>Valor</th>
                         <th>Peso</th>
                         <th>Pallet</th>
-                        <th>Expedição</th>
-                        <th>Agenda</th>
-                        <th>Status</th>
-                        <th>Ações</th>
+                        <th>Menor Estoque D7</th>
+                        <th>Estoque D0</th>
+                        <th>Produção D0</th>
+                        <th>Data Expedição</th>
+                        <th>Agendamento</th>
+                        <th>Protocolo</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
     
     data.itens.forEach(item => {
-        const statusClass = item.tem_separacao ? 'success' : 'warning';
-        const statusText = item.tem_separacao ? 'Separado' : 'Pendente';
-        const statusIcon = item.tem_separacao ? 'check-circle' : 'clock';
+        const itemId = item.id;
+        const saldoDisponivel = item.qtd_saldo_disponivel || 0;
+        const disabled = saldoDisponivel <= 0 ? 'disabled' : '';
         
         html += `
-            <tr>
-                <td><small>${item.cod_produto}</small></td>
-                <td><small>${item.nome_produto || ''}</small></td>
-                <td><strong>${item.qtd_saldo_formatado}</strong></td>
-                <td>R$ ${item.preco.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                <td><strong>${item.valor_item_formatado}</strong></td>
-                <td>${item.peso_item_formatado}</td>
-                <td>${item.pallet_item_formatado}</td>
-                <td>${item.expedicao || '-'}</td>
-                <td>${item.agendamento || '-'}</td>
+            <tr id="row-dropdown-${numPedido}-${itemId}" data-item-id="${itemId}" data-pedido="${numPedido}">
                 <td>
-                    <span class="badge ${item.tem_separacao ? 'badge-success' : 'badge-warning'}" style="${item.tem_separacao ? 'background-color: #28a745; color: white;' : 'background-color: #ffc107; color: black;'}">
-                        <i class="fas fa-${statusIcon}"></i> ${statusText}
-                    </span>
+                    <input type="checkbox" 
+                           class="item-checkbox-dropdown" 
+                           data-item-id="${itemId}"
+                           data-pedido="${numPedido}"
+                           onchange="atualizarContadoresDropdown('${numPedido}')"
+                           ${disabled}>
+                </td>
+                <td><strong>${item.cod_produto}</strong></td>
+                <td class="text-truncate" style="max-width: 200px;" title="${item.nome_produto}">
+                    ${item.nome_produto}
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary" 
-                            onclick="editarItem(${item.id})" 
-                            title="Editar item">
-                        <i class="fas fa-edit"></i>
-                    </button>
+                    <input type="number" 
+                           class="form-control form-control-sm qtd-dropdown" 
+                           data-item-id="${itemId}"
+                           data-pedido="${numPedido}"
+                           data-qtd-original="${saldoDisponivel}"
+                           data-preco-unitario="${item.preco_unitario || 0}"
+                           step="1"
+                           min="0"
+                           max="${saldoDisponivel}"
+                           value="${saldoDisponivel}"
+                           placeholder="${saldoDisponivel}"
+                           onchange="processarAlteracaoQuantidadeDropdown(this)"
+                           oninput="recalcularValoresDropdown(this)"
+                           ${disabled}>
+                    <small class="text-muted">Máx: ${saldoDisponivel}</small>
+                </td>
+                <td class="valor-calculado-dropdown">${item.valor_calculado || 'R$ 0,00'}</td>
+                <td class="peso-calculado-dropdown">${item.peso_calculado || '0 kg'}</td>
+                <td class="pallet-calculado-dropdown">${item.pallet_calculado || '0,0 pal'}</td>
+                <td class="menor-estoque-d7-dropdown">${item.menor_estoque_d7 || '-'}</td>
+                <td class="estoque-d0-dropdown">${item.estoque_d0 || '-'}</td>
+                <td class="producao-d0-dropdown">${item.producao_d0 || '-'}</td>
+                <td>
+                    <input type="date" 
+                           class="form-control form-control-sm data-expedicao-dropdown" 
+                           data-item-id="${itemId}"
+                           data-pedido="${numPedido}"
+                           value="${item.expedicao || ''}"
+                           onchange="processarAlteracaoDataExpedicaoDropdown(this)"
+                           ${disabled}>
+                </td>
+                <td>
+                    <input type="date" 
+                           class="form-control form-control-sm agendamento-dropdown" 
+                           data-item-id="${itemId}"
+                           data-pedido="${numPedido}"
+                           value="${item.agendamento || ''}"
+                           onchange="processarAlteracaoAgendamentoDropdown(this)"
+                           ${disabled}>
+                </td>
+                <td>
+                    <input type="text" 
+                           class="form-control form-control-sm protocolo-dropdown" 
+                           data-item-id="${itemId}"
+                           data-pedido="${numPedido}"
+                           value="${item.protocolo || ''}"
+                           placeholder="Protocolo"
+                           onchange="processarAlteracaoProtocoloDropdown(this)"
+                           ${disabled}>
                 </td>
             </tr>
         `;
+    });
+    
+    // Calcular totais dos valores atuais
+    let valorTotal = 0;
+    let pesoTotal = 0;
+    let palletTotal = 0;
+    
+    data.itens.forEach(item => {
+        const valor = parseFloat(item.valor_calculado?.replace(/[R$\s.]/g, '')?.replace(',', '.') || 0);
+        const peso = parseFloat(item.peso_calculado?.replace(/[kg\s]/g, '')?.replace(',', '.') || 0);
+        const pallet = parseFloat(item.pallet_calculado?.replace(/[pal\s]/g, '')?.replace(',', '.') || 0);
+        
+        valorTotal += valor;
+        pesoTotal += peso;
+        palletTotal += pallet;
     });
     
     html += `
                 </tbody>
                 <tfoot class="bg-light">
                     <tr>
-                        <th colspan="4">TOTAIS:</th>
-                        <th>R$ ${data.totais.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</th>
-                        <th>${Math.round(data.totais.peso).toLocaleString('pt-BR')} kg</th>
-                        <th>${data.totais.pallet.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})} pal</th>
-                        <th colspan="4">
-                            <small class="text-muted">
-                                ${data.itens_separados}/${data.total_itens} separados
-                            </small>
+                        <th colspan="4">TOTAIS SELECIONADOS:</th>
+                        <th id="total-valor-dropdown-${numPedido}">R$ ${valorTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</th>
+                        <th id="total-peso-dropdown-${numPedido}">${pesoTotal.toLocaleString('pt-BR', {minimumFractionDigits: 1})} kg</th>
+                        <th id="total-pallet-dropdown-${numPedido}">${palletTotal.toLocaleString('pt-BR', {minimumFractionDigits: 1})} pal</th>
+                        <th colspan="6">
+                            <button class="btn btn-sm btn-outline-info" onclick="replicarCamposAmarradosDropdown('${numPedido}')">
+                                <i class="fas fa-link"></i> Replicar Campos
+                            </button>
                         </th>
                     </tr>
                 </tfoot>
             </table>
+        </div>
+        
+        <!-- Instruções de uso conforme CARTEIRA.csv -->
+        <div class="alert alert-info mt-2">
+            <strong>📋 Como usar:</strong>
+            <ul class="mb-0">
+                <li><strong>Qtd:</strong> Edite para dividir linha (saldo restante vira nova linha)</li>
+                <li><strong>Campos amarrados:</strong> Data Expedição, Agendamento e Protocolo replicam automaticamente para itens marcados</li>
+                <li><strong>Validação:</strong> Só é possível enviar para separação itens com Data de Expedição preenchida</li>
+                <li><strong>Auto-save:</strong> Alterações são salvas automaticamente</li>
+            </ul>
         </div>
     `;
     
