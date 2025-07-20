@@ -13,7 +13,7 @@ Separação Agrupada;Separação;Status;Prev. Expedição / Embarque;Agenda;Info
 ;;****Descritivo****Fragmento da Carteira, contendo total do produto ou fragmento do produto (Previsão da Separação com Pedido Parcial e item total ou com item parcial);"Permitir alteração até limite do item no pedido
 Com alteração, deverá criar uma nova linha com o saldo
 Dessa forma possibilita enviar em 2 embarques o pedido
-";;;;Auto calculados;Auto calculados;Auto calculados;Campos editaveis;Editavel pelo modal;Editavel pelo modal;
+";;;;Auto calculados;Auto calculados;Auto calculados;Campos editaveis;Campos editaveis;Campos editaveis;
 DROP DOWN CARTEIRA;Código;Produto; Qtd ; Valor ; Pallet ;Peso;Menor Estoque D7;Estoque D0;Produção D0;Data expedicao;Data agenda;Protocolo;Enviar pra Separação
 ;cod_produto;nome_produto;"qtd_saldo_produto_pedido (isso seria um ""place holder"" para permitir alteração)";campo de qtd da linha * preco_produto_pedido;campo de qtd da linha / CadastroPalletizacao.palletizacao;campo de qtd da linha * CadastroPalletizacao.palletizacao;"Precisa estudar módulo de estoque.models pois lá tem mta coisa criada já.
 calcular_estoque_inicial

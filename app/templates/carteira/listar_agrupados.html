@@ -170,12 +170,15 @@
                                     </div>
                                     
                                     <div class="btn-group" role="group">
-                                        <button type="button" class="btn btn-warning btn-sm dropdown-toggle" data-toggle="dropdown" title="Avaliar Itens">
+                                        <button type="button" class="btn btn-warning btn-sm dropdown-toggle" data-toggle="dropdown" title="Avaliar Estoques">
                                             🔍 Avaliar
                                         </button>
                                         <div class="dropdown-menu">
-                                            <a class="dropdown-item" href="#" onclick="abrirModalAvaliarItens('{{ pedido.num_pedido }}')">
-                                                📋 Avaliar Itens
+                                            <a class="dropdown-item" href="#" onclick="abrirModalAvaliarEstoques('{{ pedido.num_pedido }}')">
+                                                📊 Avaliar Estoques
+                                            </a>
+                                            <a class="dropdown-item" href="#" onclick="abrirModalItensEditaveis('{{ pedido.num_pedido }}')">
+                                                📝 Itens do Pedido
                                             </a>
                                             <a class="dropdown-item" href="#" onclick="calcularEstoqueD0D7('{{ pedido.num_pedido }}')">
                                                 📊 Estoque D0/D7
@@ -516,7 +519,7 @@
 
 <!-- Modal para Detalhes do Endereço - CÓPIA EXATA DA CARTEIRA PRINCIPAL -->
 <div class="modal fade" id="modalEndereco" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
+    <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-map-marker-alt"></i> Detalhes do Endereço</h5>
@@ -553,14 +556,14 @@
     </div>
 </div>
 
-<!-- Modal Avaliar Itens -->
-<div class="modal fade" id="modalAvaliarItens" tabindex="-1" role="dialog" aria-labelledby="modalAvaliarItensLabel" aria-hidden="true">
+<!-- Modal Avaliar Estoques -->
+<div class="modal fade" id="modalAvaliarEstoques" tabindex="-1" role="dialog" aria-labelledby="modalAvaliarEstoquesLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalAvaliarItensLabel">
-                    <i class="fas fa-edit"></i> Avaliar Itens do Pedido
-                    <span id="modal-num-pedido" class="badge badge-primary ml-2"></span>
+                <h5 class="modal-title" id="modalAvaliarEstoquesLabel">
+                    <i class="fas fa-chart-bar"></i> Avaliar Estoques do Pedido (28 dias)
+                    <span id="modal-num-pedido-estoques" class="badge badge-primary ml-2"></span>
                 </h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
@@ -742,6 +745,132 @@
                 </button>
                 <button type="button" class="btn btn-primary" id="btn-salvar-avaliacoes" onclick="salvarAvaliacoes()">
                     <i class="fas fa-save"></i> Salvar Avaliações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Itens Editáveis do Pedido -->
+<div class="modal fade" id="modalItensEditaveis" tabindex="-1" role="dialog" aria-labelledby="modalItensEditaveisLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalItensEditaveisLabel">
+                    <i class="fas fa-edit"></i> Itens do Pedido - Edição Avançada
+                    <span id="modal-num-pedido-editavel" class="badge badge-primary ml-2"></span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Loading state -->
+                <div id="modal-editavel-loading" class="text-center p-4">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p class="mt-2">Carregando itens para edição...</p>
+                </div>
+                
+                <!-- Error state -->
+                <div id="modal-editavel-error" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="modal-editavel-error-message"></span>
+                    <button class="btn btn-sm btn-outline-danger ml-2" onclick="recarregarModalEditavel()">
+                        <i class="fas fa-redo"></i> Tentar novamente
+                    </button>
+                </div>
+                
+                <!-- Content -->
+                <div id="modal-editavel-content" style="display: none;">
+                    <!-- Botão Enviar para Separação no topo -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-success text-white">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-boxes"></i> Ações de Separação
+                                </h6>
+                                <button type="button" class="btn btn-light btn-sm" onclick="enviarParaSeparacao()" id="btn-enviar-separacao">
+                                    <i class="fas fa-paper-plane"></i> Enviar para Separação
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body p-2">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <strong>Itens Selecionados:</strong>
+                                    <span id="contador-selecionados" class="badge badge-warning">0</span>
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Com Data Expedição:</strong>
+                                    <span id="contador-com-expedicao" class="badge badge-success">0</span>
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Status:</strong>
+                                    <span id="status-validacao" class="badge badge-secondary">Selecione itens</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tabela de itens editáveis -->
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm" id="tabela-itens-editaveis">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th width="40">
+                                        <input type="checkbox" id="select-all-editaveis" onchange="toggleTodosItensEditaveis(this)" title="Selecionar todos">
+                                    </th>
+                                    <th>Código</th>
+                                    <th>Produto</th>
+                                    <th>Qtd Disponível</th>
+                                    <th>Valor</th>
+                                    <th>Peso</th>
+                                    <th>Pallet</th>
+                                    <th>Menor Estoque D7</th>
+                                    <th>Estoque D0</th>
+                                    <th>Produção D0</th>
+                                    <th>Data Expedição</th>
+                                    <th>Agendamento</th>
+                                    <th>Protocolo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-itens-editaveis">
+                                <!-- Será preenchido via JavaScript -->
+                            </tbody>
+                            <tfoot class="bg-light">
+                                <tr>
+                                    <th colspan="4">TOTAIS SELECIONADOS:</th>
+                                    <th id="total-valor-editavel">R$ 0,00</th>
+                                    <th id="total-peso-editavel">0 kg</th>
+                                    <th id="total-pallet-editavel">0,0 pal</th>
+                                    <th colspan="6">
+                                        <button class="btn btn-sm btn-outline-info" onclick="replicarCamposAmarrados()">
+                                            <i class="fas fa-link"></i> Replicar Campos
+                                        </button>
+                                    </th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    
+                    <!-- Instruções de uso -->
+                    <div class="alert alert-info">
+                        <strong>📋 Como usar:</strong>
+                        <ul class="mb-0">
+                            <li><strong>Qtd:</strong> Edite para dividir linha (saldo restante vira nova linha)</li>
+                            <li><strong>Campos amarrados:</strong> Data Expedição, Agendamento e Protocolo replicam automaticamente para itens marcados</li>
+                            <li><strong>Validação:</strong> Só é possível enviar para separação itens com Data de Expedição preenchida</li>
+                            <li><strong>Auto-save:</strong> Alterações são salvas automaticamente</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+                <button type="button" class="btn btn-info" onclick="recalcularEstoquesD0D7()">
+                    <i class="fas fa-calculator"></i> Recalcular Estoques
                 </button>
             </div>
         </div>
@@ -1138,34 +1267,34 @@ function gerarHtmlItens(data) {
  * Placeholder para editar item - agora redireciona para modal
  */
 function editarItem(itemId) {
-    // Buscar o pedido do item para abrir modal
+    // Buscar o pedido do item para abrir modal de itens editáveis
     const pedidoRow = document.querySelector(`tr[data-pedido]`);
     if (pedidoRow) {
         const numPedido = pedidoRow.getAttribute('data-pedido');
-        abrirModalAvaliarItens(numPedido);
+        abrirModalItensEditaveis(numPedido);
     }
 }
 
-// ===== FUNÇÕES DO MODAL AVALIAR ITENS =====
+// ===== FUNÇÕES DO MODAL AVALIAR ESTOQUES =====
 
 // Variáveis globais do modal
 let dadosModalAtual = null;
 let numPedidoModal = null;
 
 /**
- * Abre modal para avaliar itens de um pedido
- * Implementação: Fase 2.3 - Modal Avaliar Itens
+ * Abre modal para avaliar estoques de um pedido (28 dias)
+ * Implementação: Fase 2.3 - Modal Avaliar Estoques
  */
-async function abrirModalAvaliarItens(numPedido) {
-    console.log(`🔍 Avaliar Itens pedido ${numPedido}`);
+async function abrirModalAvaliarEstoques(numPedido) {
+    console.log(`📊 Avaliar Estoques pedido ${numPedido}`);
     numPedidoModal = numPedido;
     
     // Configurar modal
-    document.getElementById('modal-num-pedido').textContent = numPedido;
+    document.getElementById('modal-num-pedido-estoques').textContent = numPedido;
     document.getElementById('form-num-pedido').value = numPedido;
     
     // Mostrar modal
-    $('#modalAvaliarItens').modal('show');
+    $('#modalAvaliarEstoques').modal('show');
     
     // Carregar dados
     await carregarDadosModal(numPedido);
@@ -2798,6 +2927,748 @@ function abrirModalEndereco(numPedido) {
 
 
 // Inicialização
+// ===== FUNÇÕES DO MODAL ITENS EDITÁVEIS =====
+
+// Variáveis globais do modal editável
+let dadosModalEditavel = null;
+let numPedidoEditavel = null;
+let itensDivididos = new Map(); // Controla itens que foram divididos
+
+/**
+ * Abre modal para editar itens do pedido conforme CARTEIRA.csv
+ */
+async function abrirModalItensEditaveis(numPedido) {
+    console.log(`📝 Abrindo modal itens editáveis para pedido ${numPedido}`);
+    numPedidoEditavel = numPedido;
+    
+    // Configurar modal
+    document.getElementById('modal-num-pedido-editavel').textContent = numPedido;
+    
+    // Mostrar modal
+    $('#modalItensEditaveis').modal('show');
+    
+    // Carregar dados
+    await carregarDadosModalEditavel(numPedido);
+}
+
+/**
+ * Carrega dados para o modal de itens editáveis
+ */
+async function carregarDadosModalEditavel(numPedido) {
+    const modalLoading = document.getElementById('modal-editavel-loading');
+    const modalError = document.getElementById('modal-editavel-error');
+    const modalContent = document.getElementById('modal-editavel-content');
+    
+    try {
+        // Mostrar loading
+        modalLoading.style.display = 'block';
+        modalError.style.display = 'none';
+        modalContent.style.display = 'none';
+        
+        // Fazer requisição para obter itens com saldo calculado
+        const response = await fetch(`/carteira/api/pedido/${numPedido}/itens-editaveis`, {
+            headers: {
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Erro ao carregar itens editáveis');
+        }
+        
+        // Armazenar dados
+        dadosModalEditavel = data;
+        
+        // Gerar HTML da tabela
+        gerarTabelaItensEditaveis(data);
+        
+        // Atualizar contadores
+        atualizarContadoresModalEditavel();
+        
+        // Mostrar conteúdo
+        modalLoading.style.display = 'none';
+        modalContent.style.display = 'block';
+        
+        console.log(`✅ Modal editável carregado: ${data.itens.length} itens`);
+        
+    } catch (error) {
+        console.error(`❌ Erro ao carregar modal editável:`, error);
+        
+        document.getElementById('modal-editavel-error-message').textContent = error.message;
+        modalLoading.style.display = 'none';
+        modalError.style.display = 'block';
+        modalContent.style.display = 'none';
+    }
+}
+
+/**
+ * Gera HTML da tabela de itens editáveis
+ */
+function gerarTabelaItensEditaveis(data) {
+    const tbody = document.getElementById('tbody-itens-editaveis');
+    let html = '';
+    
+    data.itens.forEach((item, index) => {
+        const itemId = item.id;
+        const saldoDisponivel = item.qtd_saldo_disponivel || 0;
+        const disabled = saldoDisponivel <= 0 ? 'disabled' : '';
+        
+        html += `
+            <tr id="row-editavel-${itemId}" data-item-id="${itemId}">
+                <td>
+                    <input type="checkbox" 
+                           class="item-checkbox-editavel" 
+                           data-item-id="${itemId}"
+                           onchange="atualizarContadoresModalEditavel()"
+                           ${disabled}>
+                </td>
+                <td><strong>${item.cod_produto}</strong></td>
+                <td class="text-truncate" style="max-width: 200px;" title="${item.nome_produto}">
+                    ${item.nome_produto}
+                </td>
+                <td>
+                    <input type="number" 
+                           class="form-control form-control-sm qtd-editavel" 
+                           data-item-id="${itemId}"
+                           data-qtd-original="${saldoDisponivel}"
+                           step="1"
+                           min="0"
+                           max="${saldoDisponivel}"
+                           value="${saldoDisponivel}"
+                           onchange="processarAlteracaoQuantidade(this)"
+                           ${disabled}>
+                    <small class="text-muted">Máx: ${saldoDisponivel}</small>
+                </td>
+                <td class="valor-calculado">${item.valor_calculado || 'R$ 0,00'}</td>
+                <td class="peso-calculado">${item.peso_calculado || '0 kg'}</td>
+                <td class="pallet-calculado">${item.pallet_calculado || '0,0 pal'}</td>
+                <td class="menor-estoque-d7">${item.menor_estoque_d7 || '-'}</td>
+                <td class="estoque-d0">${item.estoque_d0 || '-'}</td>
+                <td class="producao-d0">${item.producao_d0 || '-'}</td>
+                <td>
+                    <input type="date" 
+                           class="form-control form-control-sm data-expedicao" 
+                           data-item-id="${itemId}"
+                           value="${item.expedicao || ''}"
+                           onchange="processarAlteracaoDataExpedicao(this)"
+                           ${disabled}>
+                </td>
+                <td>
+                    <input type="date" 
+                           class="form-control form-control-sm agendamento" 
+                           data-item-id="${itemId}"
+                           value="${item.agendamento || ''}"
+                           onchange="processarAlteracaoAgendamento(this)"
+                           ${disabled}>
+                </td>
+                <td>
+                    <input type="text" 
+                           class="form-control form-control-sm protocolo" 
+                           data-item-id="${itemId}"
+                           value="${item.protocolo || ''}"
+                           placeholder="Protocolo"
+                           onchange="processarAlteracaoProtocolo(this)"
+                           ${disabled}>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+/**
+ * Processa alteração de quantidade (Implementa lógica de divisão de linhas)
+ */
+async function processarAlteracaoQuantidade(input) {
+    const itemId = input.getAttribute('data-item-id');
+    const qtdOriginal = parseFloat(input.getAttribute('data-qtd-original'));
+    const qtdNova = parseFloat(input.value) || 0;
+    
+    if (qtdNova < 0 || qtdNova > qtdOriginal) {
+        alert('⚠️ Quantidade inválida');
+        input.value = qtdOriginal;
+        return;
+    }
+    
+    // Se quantidade zero, remover divisão (unificar)
+    if (qtdNova === 0) {
+        await unificarLinhaItem(itemId);
+        return;
+    }
+    
+    // Se quantidade menor que original, dividir linha
+    if (qtdNova < qtdOriginal) {
+        await dividirLinhaItem(itemId, qtdNova, qtdOriginal);
+    }
+    
+    // Recalcular valores automáticos
+    recalcularValoresItem(itemId, qtdNova);
+    
+    // Salvar automaticamente
+    await salvarAlteracaoAutomatica(itemId, 'quantidade', qtdNova);
+    
+    // Atualizar contadores
+    atualizarContadoresModalEditavel();
+}
+
+/**
+ * Divide linha do item quando quantidade é alterada
+ */
+async function dividirLinhaItem(itemId, qtdUtilizada, qtdOriginal) {
+    const qtdRestante = qtdOriginal - qtdUtilizada;
+    
+    if (qtdRestante <= 0) return;
+    
+    // Criar PreSeparacaoItem com quantidade utilizada
+    await criarPreSeparacaoItem(itemId, qtdUtilizada);
+    
+    // Criar nova linha com quantidade restante
+    await criarNovaLinhaItem(itemId, qtdRestante);
+    
+    console.log(`📊 Linha dividida: ${qtdUtilizada} + ${qtdRestante} = ${qtdOriginal}`);
+}
+
+/**
+ * Cria nova linha com saldo restante
+ */
+async function criarNovaLinhaItem(itemIdOriginal, qtdRestante) {
+    const rowOriginal = document.getElementById(`row-editavel-${itemIdOriginal}`);
+    const tbody = document.getElementById('tbody-itens-editaveis');
+    
+    // Gerar novo ID temporário
+    const novoItemId = `${itemIdOriginal}_saldo_${Date.now()}`;
+    
+    // Clonar linha original
+    const novaRow = rowOriginal.cloneNode(true);
+    novaRow.id = `row-editavel-${novoItemId}`;
+    
+    // Atualizar dados da nova linha
+    const qtdInput = novaRow.querySelector('.qtd-editavel');
+    qtdInput.value = qtdRestante;
+    qtdInput.setAttribute('data-qtd-original', qtdRestante);
+    qtdInput.setAttribute('data-item-id', novoItemId);
+    
+    // Atualizar outros campos
+    novaRow.querySelectorAll('[data-item-id]').forEach(element => {
+        element.setAttribute('data-item-id', novoItemId);
+    });
+    
+    // Adicionar badge indicando saldo
+    const produtoCell = novaRow.querySelector('td:nth-child(3)');
+    produtoCell.innerHTML += ' <span class="badge badge-info">Saldo</span>';
+    
+    // Inserir após linha original
+    rowOriginal.parentNode.insertBefore(novaRow, rowOriginal.nextSibling);
+    
+    // Marcar como item dividido
+    itensDivididos.set(novoItemId, {
+        itemOriginal: itemIdOriginal,
+        qtdRestante: qtdRestante,
+        tipo: 'saldo'
+    });
+}
+
+/**
+ * Processa alteração de data de expedição (D0) e recalcula estoques
+ */
+async function processarAlteracaoDataExpedicao(input) {
+    const itemId = input.getAttribute('data-item-id');
+    const novaData = input.value;
+    
+    if (novaData) {
+        // Recalcular estoques baseados na nova data D0
+        await recalcularEstoquesBaseadoD0(itemId, novaData);
+        
+        // Replicar para itens marcados (amarrar)
+        replicarCampoParaItensAmarrados('data-expedicao', novaData);
+    }
+    
+    // Salvar automaticamente
+    await salvarAlteracaoAutomatica(itemId, 'expedicao', novaData);
+    
+    // Atualizar validação
+    atualizarValidacaoEnvioSeparacao();
+}
+
+/**
+ * Recalcula estoques D0/D7 baseado na nova data de expedição
+ */
+async function recalcularEstoquesBaseadoD0(itemId, dataExpedicao) {
+    try {
+        const response = await fetch(`/carteira/api/item/${itemId}/recalcular-estoques`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                data_d0: dataExpedicao
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Atualizar colunas de estoque na linha
+            const row = document.getElementById(`row-editavel-${itemId}`);
+            row.querySelector('.menor-estoque-d7').textContent = data.menor_estoque_d7 || '-';
+            row.querySelector('.estoque-d0').textContent = data.estoque_d0 || '-';
+            row.querySelector('.producao-d0').textContent = data.producao_d0 || '-';
+        }
+    } catch (error) {
+        console.error('Erro ao recalcular estoques:', error);
+    }
+}
+
+/**
+ * Replica campo para itens marcados no checkbox (amarrar campos)
+ */
+function replicarCampoParaItensAmarrados(classeCampo, valor) {
+    const checkboxesMarcados = document.querySelectorAll('.item-checkbox-editavel:checked');
+    
+    checkboxesMarcados.forEach(checkbox => {
+        const itemId = checkbox.getAttribute('data-item-id');
+        const row = document.getElementById(`row-editavel-${itemId}`);
+        const campo = row.querySelector(`.${classeCampo}`);
+        
+        if (campo && campo.value !== valor) {
+            campo.value = valor;
+            
+            // Se for data expedição, recalcular estoques
+            if (classeCampo === 'data-expedicao' && valor) {
+                recalcularEstoquesBaseadoD0(itemId, valor);
+            }
+            
+            // Salvar automaticamente
+            const nomeCampo = classeCampo.replace('data-', '').replace('-', '_');
+            salvarAlteracaoAutomatica(itemId, nomeCampo, valor);
+        }
+    });
+}
+
+/**
+ * Atualiza contadores do modal
+ */
+function atualizarContadoresModalEditavel() {
+    const checkboxesMarcados = document.querySelectorAll('.item-checkbox-editavel:checked');
+    const comExpedicao = Array.from(checkboxesMarcados).filter(cb => {
+        const itemId = cb.getAttribute('data-item-id');
+        const row = document.getElementById(`row-editavel-${itemId}`);
+        const dataExpedicao = row.querySelector('.data-expedicao').value;
+        return dataExpedicao && dataExpedicao.trim();
+    });
+    
+    document.getElementById('contador-selecionados').textContent = checkboxesMarcados.length;
+    document.getElementById('contador-com-expedicao').textContent = comExpedicao.length;
+    
+    // Atualizar status de validação
+    atualizarValidacaoEnvioSeparacao();
+}
+
+/**
+ * Atualiza validação para envio de separação
+ */
+function atualizarValidacaoEnvioSeparacao() {
+    const checkboxesMarcados = document.querySelectorAll('.item-checkbox-editavel:checked');
+    const statusSpan = document.getElementById('status-validacao');
+    const btnEnviar = document.getElementById('btn-enviar-separacao');
+    
+    if (checkboxesMarcados.length === 0) {
+        statusSpan.textContent = 'Selecione itens';
+        statusSpan.className = 'badge badge-secondary';
+        btnEnviar.disabled = true;
+        return;
+    }
+    
+    const semExpedicao = Array.from(checkboxesMarcados).filter(cb => {
+        const itemId = cb.getAttribute('data-item-id');
+        const row = document.getElementById(`row-editavel-${itemId}`);
+        const dataExpedicao = row.querySelector('.data-expedicao').value;
+        return !dataExpedicao || !dataExpedicao.trim();
+    });
+    
+    if (semExpedicao.length > 0) {
+        statusSpan.textContent = `${semExpedicao.length} sem data expedição`;
+        statusSpan.className = 'badge badge-danger';
+        btnEnviar.disabled = true;
+    } else {
+        statusSpan.textContent = 'Pronto para enviar';
+        statusSpan.className = 'badge badge-success';
+        btnEnviar.disabled = false;
+    }
+}
+
+/**
+ * Envia itens selecionados para separação
+ */
+async function enviarParaSeparacao() {
+    const checkboxesMarcados = document.querySelectorAll('.item-checkbox-editavel:checked');
+    
+    if (checkboxesMarcados.length === 0) {
+        alert('⚠️ Selecione pelo menos um item para enviar para separação');
+        return;
+    }
+    
+    // Validar se todos têm data de expedição
+    const semExpedicao = Array.from(checkboxesMarcados).filter(cb => {
+        const itemId = cb.getAttribute('data-item-id');
+        const row = document.getElementById(`row-editavel-${itemId}`);
+        const dataExpedicao = row.querySelector('.data-expedicao').value;
+        return !dataExpedicao || !dataExpedicao.trim();
+    });
+    
+    if (semExpedicao.length > 0) {
+        alert(`⚠️ ${semExpedicao.length} itens não possuem Data de Expedição.\n\nPreencha a Data de Expedição para todos os itens selecionados.`);
+        return;
+    }
+    
+    // Coletar dados dos itens selecionados
+    const itensParaSeparacao = [];
+    
+    checkboxesMarcados.forEach(checkbox => {
+        const itemId = checkbox.getAttribute('data-item-id');
+        const row = document.getElementById(`row-editavel-${itemId}`);
+        
+        const qtd = parseFloat(row.querySelector('.qtd-editavel').value) || 0;
+        const dataExpedicao = row.querySelector('.data-expedicao').value;
+        const agendamento = row.querySelector('.agendamento').value;
+        const protocolo = row.querySelector('.protocolo').value;
+        
+        if (qtd > 0) {
+            itensParaSeparacao.push({
+                item_id: itemId,
+                qtd_separacao: qtd,
+                data_expedicao: dataExpedicao,
+                agendamento: agendamento,
+                protocolo: protocolo
+            });
+        }
+    });
+    
+    if (itensParaSeparacao.length === 0) {
+        alert('⚠️ Nenhum item válido para separação');
+        return;
+    }
+    
+    try {
+        const btnEnviar = document.getElementById('btn-enviar-separacao');
+        btnEnviar.disabled = true;
+        btnEnviar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+        
+        const response = await fetch(`/carteira/api/pedido/${numPedidoEditavel}/criar-separacao`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                itens: itensParaSeparacao
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`✅ Separação criada com sucesso!\n\nLote ID: ${data.separacao_lote_id}\nItens: ${itensParaSeparacao.length}`);
+            
+            // Fechar modal e recarregar pedidos
+            $('#modalItensEditaveis').modal('hide');
+            
+            // Opcional: recarregar a página ou atualizar lista
+            location.reload();
+        } else {
+            throw new Error(data.error || 'Erro ao criar separação');
+        }
+        
+    } catch (error) {
+        console.error('Erro ao enviar para separação:', error);
+        alert(`❌ Erro ao criar separação:\n\n${error.message}`);
+    } finally {
+        const btnEnviar = document.getElementById('btn-enviar-separacao');
+        btnEnviar.disabled = false;
+        btnEnviar.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar para Separação';
+    }
+}
+
+ /**
+  * Salva alteração automaticamente
+  */
+ async function salvarAlteracaoAutomatica(itemId, campo, valor) {
+     try {
+         console.log(`💾 Auto-save: Item ${itemId}, Campo ${campo}, Valor ${valor}`);
+         
+         const response = await fetch(`/carteira/api/item/${itemId}/salvar-alteracao`, {
+             method: 'POST',
+             headers: {
+                 'Content-Type': 'application/json',
+                 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+             },
+             body: JSON.stringify({
+                 campo: campo,
+                 valor: valor
+             })
+         });
+         
+         const data = await response.json();
+         
+         if (!data.success) {
+             console.error(`Erro no auto-save:`, data.error);
+         } else {
+             console.log(`✅ Auto-save: ${data.message}`);
+         }
+         
+     } catch (error) {
+         console.error('Erro no auto-save:', error);
+     }
+ }
+
+/**
+ * Toggle todos os itens editáveis
+ */
+function toggleTodosItensEditaveis(selectAll) {
+    const checkboxes = document.querySelectorAll('.item-checkbox-editavel:not(:disabled)');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    atualizarContadoresModalEditavel();
+}
+
+ /**
+  * Recarrega modal editável
+  */
+ function recarregarModalEditavel() {
+     if (numPedidoEditavel) {
+         carregarDadosModalEditavel(numPedidoEditavel);
+     }
+ }
+
+/**
+ * Processa alteração de agendamento (replica automaticamente)
+ */
+async function processarAlteracaoAgendamento(input) {
+    const itemId = input.getAttribute('data-item-id');
+    const novaData = input.value;
+    
+    // Replicar para itens marcados (amarrar)
+    replicarCampoParaItensAmarrados('agendamento', novaData);
+    
+    // Salvar automaticamente
+    await salvarAlteracaoAutomatica(itemId, 'agendamento', novaData);
+}
+
+/**
+ * Processa alteração de protocolo (replica automaticamente)
+ */
+async function processarAlteracaoProtocolo(input) {
+    const itemId = input.getAttribute('data-item-id');
+    const novoProtocolo = input.value;
+    
+    // Replicar para itens marcados (amarrar)
+    replicarCampoParaItensAmarrados('protocolo', novoProtocolo);
+    
+    // Salvar automaticamente
+    await salvarAlteracaoAutomatica(itemId, 'protocolo', novoProtocolo);
+}
+
+/**
+ * Recalcula valores automáticos de um item baseado na nova quantidade
+ */
+function recalcularValoresItem(itemId, qtdNova) {
+    const row = document.getElementById(`row-editavel-${itemId}`);
+    if (!row) return;
+    
+    // Buscar dados originais do item
+    const dadosItem = dadosModalEditavel?.itens?.find(item => item.id.toString() === itemId.toString());
+    if (!dadosItem) return;
+    
+    const precoUnitario = dadosItem.preco_unitario || 0;
+    
+    // Calcular novos valores
+    const valorTotal = qtdNova * precoUnitario;
+    const pesoTotal = qtdNova * (dadosItem.peso_unitario || 0);
+    const palletTotal = qtdNova * (dadosItem.pallet_unitario || 0);
+    
+    // Atualizar células
+    row.querySelector('.valor-calculado').textContent = `R$ ${valorTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+    row.querySelector('.peso-calculado').textContent = `${pesoTotal.toLocaleString('pt-BR', {minimumFractionDigits: 1})} kg`;
+    row.querySelector('.pallet-calculado').textContent = `${palletTotal.toLocaleString('pt-BR', {minimumFractionDigits: 1})} pal`;
+}
+
+/**
+ * Unifica linha quando quantidade é zerada (remove divisão)
+ */
+async function unificarLinhaItem(itemId) {
+    console.log(`🔄 Unificando linha do item ${itemId}`);
+    
+    // Verificar se há linha de saldo para unificar
+    const linhasSaldo = Array.from(document.querySelectorAll('[id^="row-editavel-"]')).filter(row => {
+        const id = row.id.replace('row-editavel-', '');
+        return itensDivididos.has(id) && itensDivididos.get(id).itemOriginal === itemId;
+    });
+    
+    if (linhasSaldo.length > 0) {
+        // Somar quantidades das linhas de saldo
+        let qtdTotalSaldo = 0;
+        linhasSaldo.forEach(linha => {
+            const qtdInput = linha.querySelector('.qtd-editavel');
+            qtdTotalSaldo += parseFloat(qtdInput.value) || 0;
+            
+            // Remover linha de saldo
+            linha.remove();
+            
+            // Remover do mapeamento
+            const linhaId = linha.id.replace('row-editavel-', '');
+            itensDivididos.delete(linhaId);
+        });
+        
+        // Restaurar quantidade original na linha principal
+        const linhaPrincipal = document.getElementById(`row-editavel-${itemId}`);
+        if (linhaPrincipal) {
+            const qtdInput = linhaPrincipal.querySelector('.qtd-editavel');
+            const qtdOriginal = parseFloat(qtdInput.getAttribute('data-qtd-original'));
+            qtdInput.value = qtdOriginal;
+            
+            // Recalcular valores
+            recalcularValoresItem(itemId, qtdOriginal);
+        }
+        
+        console.log(`✅ Item ${itemId} unificado, quantidade restaurada`);
+    }
+}
+
+ /**
+  * Cria PreSeparacaoItem via API
+  */
+ async function criarPreSeparacaoItem(itemId, qtdUtilizada) {
+     try {
+         console.log(`📝 Criando PreSeparacaoItem: Item ${itemId}, Qtd ${qtdUtilizada}`);
+         
+         const response = await fetch(`/carteira/api/item/${itemId}/dividir-linha`, {
+             method: 'POST',
+             headers: {
+                 'Content-Type': 'application/json',
+                 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+             },
+             body: JSON.stringify({
+                 qtd_utilizada: qtdUtilizada
+             })
+         });
+         
+         const data = await response.json();
+         
+         if (data.success) {
+             console.log(`✅ PreSeparacaoItem criado: ID ${data.pre_separacao_id}, Novo item: ${data.novo_item_id}`);
+             return true;
+         } else {
+             console.error('Erro ao criar PreSeparacaoItem:', data.error);
+             return false;
+         }
+         
+     } catch (error) {
+         console.error('Erro ao criar PreSeparacaoItem:', error);
+         return false;
+     }
+ }
+
+/**
+ * Recalcula todos os estoques D0/D7 do modal
+ */
+async function recalcularEstoquesD0D7() {
+    const rows = document.querySelectorAll('[id^="row-editavel-"]');
+    let recalculados = 0;
+    
+    for (const row of rows) {
+        const itemId = row.id.replace('row-editavel-', '');
+        const dataExpedicaoInput = row.querySelector('.data-expedicao');
+        
+        if (dataExpedicaoInput && dataExpedicaoInput.value) {
+            try {
+                await recalcularEstoquesBaseadoD0(itemId, dataExpedicaoInput.value);
+                recalculados++;
+            } catch (error) {
+                console.error(`Erro ao recalcular estoque do item ${itemId}:`, error);
+            }
+        }
+    }
+    
+    if (recalculados > 0) {
+        alert(`✅ ${recalculados} itens tiveram seus estoques recalculados`);
+    } else {
+        alert('ℹ️ Nenhum item com data de expedição para recalcular');
+    }
+}
+
+/**
+ * Replica campos manualmente (botão "Replicar Campos")
+ */
+function replicarCamposAmarrados() {
+    const checkboxesMarcados = document.querySelectorAll('.item-checkbox-editavel:checked');
+    
+    if (checkboxesMarcados.length < 2) {
+        alert('⚠️ Marque pelo menos 2 itens para replicar campos');
+        return;
+    }
+    
+    // Perguntar qual item usar como origem
+    const itensDisponiveis = Array.from(checkboxesMarcados).map((cb, index) => {
+        const itemId = cb.getAttribute('data-item-id');
+        const row = document.getElementById(`row-editavel-${itemId}`);
+        const codProduto = row.querySelector('td:nth-child(2)').textContent;
+        return `${index + 1}. ${codProduto} (ID: ${itemId})`;
+    }).join('\n');
+    
+    const origem = prompt(`📋 REPLICAR CAMPOS\n\nItens selecionados:\n${itensDisponiveis}\n\nDigite o número do item origem (1, 2, 3...):`);
+    
+    if (!origem) return;
+    
+    const indiceOrigem = parseInt(origem) - 1;
+    if (indiceOrigem < 0 || indiceOrigem >= checkboxesMarcados.length) {
+        alert('⚠️ Número inválido');
+        return;
+    }
+    
+    // Obter dados do item origem
+    const checkboxOrigem = checkboxesMarcados[indiceOrigem];
+    const itemIdOrigem = checkboxOrigem.getAttribute('data-item-id');
+    const rowOrigem = document.getElementById(`row-editavel-${itemIdOrigem}`);
+    
+    const dataExpedicao = rowOrigem.querySelector('.data-expedicao').value;
+    const agendamento = rowOrigem.querySelector('.agendamento').value;
+    const protocolo = rowOrigem.querySelector('.protocolo').value;
+    
+    // Replicar para todos os outros marcados
+    checkboxesMarcados.forEach((checkbox, index) => {
+        if (index === indiceOrigem) return; // Pular o próprio item origem
+        
+        const itemId = checkbox.getAttribute('data-item-id');
+        const row = document.getElementById(`row-editavel-${itemId}`);
+        
+        if (dataExpedicao) {
+            row.querySelector('.data-expedicao').value = dataExpedicao;
+            salvarAlteracaoAutomatica(itemId, 'expedicao', dataExpedicao);
+            if (dataExpedicao) recalcularEstoquesBaseadoD0(itemId, dataExpedicao);
+        }
+        
+        if (agendamento) {
+            row.querySelector('.agendamento').value = agendamento;
+            salvarAlteracaoAutomatica(itemId, 'agendamento', agendamento);
+        }
+        
+        if (protocolo) {
+            row.querySelector('.protocolo').value = protocolo;
+            salvarAlteracaoAutomatica(itemId, 'protocolo', protocolo);
+        }
+    });
+    
+    // Atualizar validação
+    atualizarValidacaoEnvioSeparacao();
+    
+    alert(`✅ Campos replicados do item ${checkboxesMarcados[indiceOrigem].getAttribute('data-item-id')} para ${checkboxesMarcados.length - 1} itens`);
+}
+
 $(document).ready(function() {
     console.log('✅ JavaScript expandir/colapsar inicializado');
     console.log(`📊 ${$('.pedido-row').length} pedidos disponíveis para expansão`);

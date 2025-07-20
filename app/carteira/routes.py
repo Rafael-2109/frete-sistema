@@ -2471,3 +2471,420 @@ def api_separacao_criar():
         logger.error(f"Erro ao criar separação: {e}")
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
+
+# ===== APIS PARA MODAL ITENS EDITÁVEIS =====
+
+@carteira_bp.route('/api/pedido/<num_pedido>/itens-editaveis')
+@login_required
+def api_pedido_itens_editaveis(num_pedido):
+    """
+    API para carregar itens editáveis de um pedido com saldo calculado
+    Implementa fórmula: Qtd = carteira_principal.qtd_saldo_produto_pedido - separacao.qtd_saldo - pre_separacao_item.qtd_selecionada_usuario
+    """
+    try:
+        # Buscar itens da carteira principal para o pedido
+        itens_carteira = CarteiraPrincipal.query.filter_by(num_pedido=num_pedido).all()
+        
+        if not itens_carteira:
+            return jsonify({
+                'success': False,
+                'error': f'Nenhum item encontrado para o pedido {num_pedido}'
+            }), 404
+        
+        itens_resultado = []
+        
+        for item in itens_carteira:
+            try:
+                # 📊 CALCULAR SALDO DISPONÍVEL conforme especificação
+                qtd_carteira = float(item.qtd_saldo_produto_pedido or 0)
+                
+                # Somar quantidades em separações
+                qtd_separacoes = db.session.query(func.coalesce(func.sum(Separacao.qtd_saldo), 0)).filter(
+                    and_(
+                        Separacao.num_pedido == num_pedido,
+                        Separacao.cod_produto == item.cod_produto
+                    )
+                ).scalar() or 0
+                
+                # Somar quantidades em pré-separações (se existir o modelo)
+                qtd_pre_separacoes = 0
+                try:
+                    from app.carteira.models import PreSeparacaoItem
+                    qtd_pre_separacoes = db.session.query(func.coalesce(func.sum(PreSeparacaoItem.qtd_selecionada_usuario), 0)).filter(
+                        and_(
+                            PreSeparacaoItem.num_pedido == num_pedido,
+                            PreSeparacaoItem.cod_produto == item.cod_produto
+                        )
+                    ).scalar() or 0
+                except (ImportError, AttributeError):
+                    # Modelo PreSeparacaoItem não existe ainda, usar apenas separações
+                    pass
+                
+                # Calcular saldo disponível
+                qtd_saldo_disponivel = qtd_carteira - float(qtd_separacoes) - float(qtd_pre_separacoes)
+                
+                # Garantir que não seja negativo
+                qtd_saldo_disponivel = max(0, qtd_saldo_disponivel)
+                
+                # 💰 CALCULAR VALORES AUTOMÁTICOS
+                preco_unitario = float(item.preco_produto_pedido or 0)
+                valor_calculado = qtd_saldo_disponivel * preco_unitario
+                
+                # 📦 BUSCAR DADOS DE PALLETIZAÇÃO/PESO
+                peso_calculado = 0
+                pallet_calculado = 0
+                
+                try:
+                    # Se existir cadastro de palletização, usar
+                    from app.tabelas.models import CadastroPalletizacao
+                    palletizacao = CadastroPalletizacao.query.filter_by(cod_produto=item.cod_produto).first()
+                    if palletizacao:
+                        if palletizacao.peso_bruto:
+                            peso_calculado = qtd_saldo_disponivel * float(palletizacao.peso_bruto)
+                        if palletizacao.palletizacao and palletizacao.palletizacao > 0:
+                            pallet_calculado = qtd_saldo_disponivel / float(palletizacao.palletizacao)
+                except ImportError:
+                    # Usar valores da carteira se disponíveis
+                    if item.peso:
+                        peso_calculado = qtd_saldo_disponivel * (float(item.peso) / float(item.qtd_saldo_produto_pedido)) if item.qtd_saldo_produto_pedido else 0
+                    if item.pallet:
+                        pallet_calculado = qtd_saldo_disponivel * (float(item.pallet) / float(item.qtd_saldo_produto_pedido)) if item.qtd_saldo_produto_pedido else 0
+                
+                # 📊 CALCULAR ESTOQUES D0/D7 (usando SaldoEstoque)
+                menor_estoque_d7 = '-'
+                estoque_d0 = '-'
+                producao_d0 = '-'
+                
+                try:
+                    # Data de expedição padrão (hoje + 1 dia se não houver)
+                    data_expedicao = item.expedicao or (datetime.now().date() + timedelta(days=1))
+                    
+                    # Usar SaldoEstoque para calcular
+                    saldo_estoque = SaldoEstoque()
+                    estoque_d0_calc = saldo_estoque.calcular_estoque_data(item.cod_produto, data_expedicao)
+                    if estoque_d0_calc is not None:
+                        estoque_d0 = f"{int(estoque_d0_calc)}" if estoque_d0_calc >= 0 else "RUPTURA"
+                    
+                    # Calcular menor estoque nos próximos 7 dias
+                    menor_estoque = None
+                    for i in range(8):  # 0 a 7 dias
+                        data_check = data_expedicao + timedelta(days=i)
+                        estoque_check = saldo_estoque.calcular_estoque_data(item.cod_produto, data_check)
+                        if estoque_check is not None:
+                            if menor_estoque is None or estoque_check < menor_estoque:
+                                menor_estoque = estoque_check
+                    
+                    if menor_estoque is not None:
+                        menor_estoque_d7 = f"{int(menor_estoque)}" if menor_estoque >= 0 else "RUPTURA"
+                    
+                    # Calcular produção D0 (placeholder - implementar conforme lógica de produção)
+                    producao_d0 = "0"  # TODO: Implementar cálculo de produção
+                    
+                except Exception as e:
+                    logger.warning(f"Erro ao calcular estoques para {item.cod_produto}: {e}")
+                
+                # Montar item resultado
+                item_data = {
+                    'id': item.id,
+                    'cod_produto': item.cod_produto,
+                    'nome_produto': item.nome_produto,
+                    'qtd_carteira': qtd_carteira,
+                    'qtd_separacoes': float(qtd_separacoes),
+                    'qtd_pre_separacoes': float(qtd_pre_separacoes),
+                    'qtd_saldo_disponivel': qtd_saldo_disponivel,
+                    'preco_unitario': preco_unitario,
+                    'valor_calculado': f"R$ {valor_calculado:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
+                    'peso_calculado': f"{peso_calculado:,.1f} kg".replace(',', 'X').replace('.', ',').replace('X', '.'),
+                    'pallet_calculado': f"{pallet_calculado:,.1f} pal".replace(',', 'X').replace('.', ',').replace('X', '.'),
+                    'menor_estoque_d7': menor_estoque_d7,
+                    'estoque_d0': estoque_d0,
+                    'producao_d0': producao_d0,
+                    'expedicao': item.expedicao.strftime('%Y-%m-%d') if item.expedicao else '',
+                    'agendamento': item.agendamento.strftime('%Y-%m-%d') if item.agendamento else '',
+                    'protocolo': item.protocolo or ''
+                }
+                
+                itens_resultado.append(item_data)
+                
+            except Exception as e:
+                logger.error(f"Erro ao processar item {item.cod_produto}: {e}")
+                continue
+        
+        return jsonify({
+            'success': True,
+            'itens': itens_resultado,
+            'total_itens': len(itens_resultado),
+            'num_pedido': num_pedido
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao carregar itens editáveis do pedido {num_pedido}: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@carteira_bp.route('/api/item/<item_id>/recalcular-estoques', methods=['POST'])
+@login_required
+def api_recalcular_estoques_item(item_id):
+    """
+    API para recalcular estoques D0/D7 baseado em nova data de expedição
+    """
+    try:
+        data = request.get_json()
+        data_d0_str = data.get('data_d0')
+        
+        if not data_d0_str:
+            return jsonify({
+                'success': False,
+                'error': 'Data D0 é obrigatória'
+            }), 400
+        
+        # Converter string para date
+        try:
+            data_d0 = datetime.strptime(data_d0_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'error': 'Formato de data inválido. Use YYYY-MM-DD'
+            }), 400
+        
+        # Buscar item da carteira
+        item = CarteiraPrincipal.query.get(item_id)
+        if not item:
+            return jsonify({
+                'success': False,
+                'error': f'Item {item_id} não encontrado'
+            }), 404
+        
+        # Recalcular estoques usando SaldoEstoque
+        try:
+            saldo_estoque = SaldoEstoque()
+            
+            # Estoque D0 (na data de expedição)
+            estoque_d0_calc = saldo_estoque.calcular_estoque_data(item.cod_produto, data_d0)
+            estoque_d0 = f"{int(estoque_d0_calc)}" if estoque_d0_calc is not None and estoque_d0_calc >= 0 else "RUPTURA"
+            
+            # Menor estoque nos próximos 7 dias
+            menor_estoque = None
+            for i in range(8):  # 0 a 7 dias
+                data_check = data_d0 + timedelta(days=i)
+                estoque_check = saldo_estoque.calcular_estoque_data(item.cod_produto, data_check)
+                if estoque_check is not None:
+                    if menor_estoque is None or estoque_check < menor_estoque:
+                        menor_estoque = estoque_check
+            
+            menor_estoque_d7 = f"{int(menor_estoque)}" if menor_estoque is not None and menor_estoque >= 0 else "RUPTURA"
+            
+            # Produção D0 (placeholder - implementar conforme lógica de produção)
+            producao_d0 = "0"  # TODO: Implementar cálculo de produção baseado na data
+            
+            return jsonify({
+                'success': True,
+                'estoque_d0': estoque_d0,
+                'menor_estoque_d7': menor_estoque_d7,
+                'producao_d0': producao_d0,
+                'data_d0': data_d0_str
+            })
+            
+        except Exception as e:
+            logger.error(f"Erro ao calcular estoques para item {item_id} com data {data_d0}: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Erro ao calcular estoques: {str(e)}'
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Erro ao recalcular estoques do item {item_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@carteira_bp.route('/api/item/<item_id>/salvar-alteracao', methods=['POST'])
+@login_required
+def api_salvar_alteracao_item(item_id):
+    """
+    API para salvar alterações automáticas de um item
+    """
+    try:
+        data = request.get_json()
+        campo = data.get('campo')
+        valor = data.get('valor')
+        
+        if not campo:
+            return jsonify({
+                'success': False,
+                'error': 'Campo é obrigatório'
+            }), 400
+        
+        # Buscar item da carteira
+        item = CarteiraPrincipal.query.get(item_id)
+        if not item:
+            return jsonify({
+                'success': False,
+                'error': f'Item {item_id} não encontrado'
+            }), 404
+        
+        # Atualizar campo conforme tipo
+        if campo == 'expedicao':
+            if valor:
+                try:
+                    item.expedicao = datetime.strptime(valor, '%Y-%m-%d').date()
+                except ValueError:
+                    return jsonify({'success': False, 'error': 'Data de expedição inválida'}), 400
+            else:
+                item.expedicao = None
+                
+        elif campo == 'agendamento':
+            if valor:
+                try:
+                    item.agendamento = datetime.strptime(valor, '%Y-%m-%d').date()
+                except ValueError:
+                    return jsonify({'success': False, 'error': 'Data de agendamento inválida'}), 400
+            else:
+                item.agendamento = None
+                
+        elif campo == 'protocolo':
+            item.protocolo = valor
+            
+        elif campo == 'quantidade':
+            # Para quantidade, criar PreSeparacaoItem se necessário
+            qtd_nova = float(valor) if valor else 0
+            qtd_original = float(item.qtd_saldo_produto_pedido or 0)
+            
+            if qtd_nova < qtd_original:
+                # Criar ou atualizar PreSeparacaoItem
+                from app.carteira.models import PreSeparacaoItem
+                
+                pre_separacao = PreSeparacaoItem.query.filter_by(
+                    num_pedido=item.num_pedido,
+                    cod_produto=item.cod_produto
+                ).first()
+                
+                if pre_separacao:
+                    pre_separacao.qtd_selecionada_usuario = qtd_nova
+                else:
+                    pre_separacao = PreSeparacaoItem(
+                        num_pedido=item.num_pedido,
+                        cod_produto=item.cod_produto,
+                        qtd_selecionada_usuario=qtd_nova,
+                        qtd_original_carteira=qtd_original,
+                        qtd_restante_calculada=qtd_original - qtd_nova,
+                        valor_original_item=float(item.preco_produto_pedido or 0) * qtd_original,
+                        peso_original_item=0,  # TODO: Calcular peso correto
+                        cnpj_cliente=item.cnpj_cpf,
+                        nome_produto=item.nome_produto,
+                        data_expedicao_editada=item.expedicao,
+                        data_agendamento_editada=item.agendamento,
+                        protocolo_editado=item.protocolo
+                    )
+                    db.session.add(pre_separacao)
+        
+        # Salvar alterações
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Campo {campo} atualizado com sucesso'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao salvar alteração do item {item_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@carteira_bp.route('/api/item/<item_id>/dividir-linha', methods=['POST'])
+@login_required
+def api_dividir_linha_item(item_id):
+    """
+    API para dividir linha de item (criar PreSeparacaoItem + nova linha)
+    """
+    try:
+        data = request.get_json()
+        qtd_utilizada = float(data.get('qtd_utilizada', 0))
+        
+        if qtd_utilizada <= 0:
+            return jsonify({
+                'success': False,
+                'error': 'Quantidade deve ser maior que zero'
+            }), 400
+        
+        # Buscar item da carteira
+        item = CarteiraPrincipal.query.get(item_id)
+        if not item:
+            return jsonify({
+                'success': False,
+                'error': f'Item {item_id} não encontrado'
+            }), 404
+        
+        qtd_original = float(item.qtd_saldo_produto_pedido or 0)
+        
+        if qtd_utilizada >= qtd_original:
+            return jsonify({
+                'success': False,
+                'error': 'Quantidade utilizada deve ser menor que a original'
+            }), 400
+        
+        qtd_restante = qtd_original - qtd_utilizada
+        
+        # Criar PreSeparacaoItem para quantidade utilizada
+        from app.carteira.models import PreSeparacaoItem
+        
+        pre_separacao = PreSeparacaoItem(
+            num_pedido=item.num_pedido,
+            cod_produto=item.cod_produto,
+            qtd_selecionada_usuario=qtd_utilizada,
+            qtd_original_carteira=qtd_original,
+            qtd_restante_calculada=qtd_restante,
+            valor_original_item=float(item.preco_produto_pedido or 0) * qtd_original,
+            peso_original_item=0,  # TODO: Calcular peso correto
+            cnpj_cliente=item.cnpj_cpf,
+            nome_produto=item.nome_produto,
+            data_expedicao_editada=item.expedicao,
+            data_agendamento_editada=item.agendamento,
+            protocolo_editado=item.protocolo
+        )
+        db.session.add(pre_separacao)
+        
+        # Criar nova linha com saldo restante (clonar item original)
+        novo_item = CarteiraPrincipal(
+            num_pedido=item.num_pedido,
+            cod_produto=item.cod_produto,
+            qtd_saldo_produto_pedido=qtd_restante,
+            nome_produto=item.nome_produto + ' (Saldo)',
+            preco_produto_pedido=item.preco_produto_pedido,
+            # Copiar outros campos relevantes
+            cnpj_cpf=item.cnpj_cpf,
+            raz_social_red=item.raz_social_red,
+            data_pedido=item.data_pedido,
+            status_pedido=item.status_pedido,
+            vendedor=item.vendedor
+        )
+        db.session.add(novo_item)
+        
+        # Salvar alterações
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'pre_separacao_id': pre_separacao.id,
+            'novo_item_id': novo_item.id,
+            'qtd_utilizada': qtd_utilizada,
+            'qtd_restante': qtd_restante
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao dividir linha do item {item_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
