@@ -3,7 +3,7 @@
 {% block title %}Carteira Agrupada{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid carteira-page">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">
             <i class="fas fa-layer-group text-primary"></i> 
@@ -1619,15 +1619,15 @@ function toggleSeparacoesPedido(numPedido) {
         
         // Carregar separações se ainda não foram carregadas
         if (!separacoesPedidoCache.has(numPedido)) {
-            carregarSeparacoesPedido(numPedido);
+            carregarSeparacoesPedidoInline(numPedido);
         }
     }
 }
 
 /**
- * Carrega separações de um pedido via AJAX
+ * Carrega separações de um pedido via AJAX (INLINE ROW VERSION)
  */
-async function carregarSeparacoesPedido(numPedido) {
+async function carregarSeparacoesPedidoInline(numPedido) {
     const loadingDiv = document.getElementById(`separacoes-loading-${numPedido}`);
     const contentDiv = document.getElementById(`separacoes-content-${numPedido}`);
     const badge = document.getElementById(`separacoes-badge-${numPedido}`);
@@ -1685,15 +1685,23 @@ async function carregarSeparacoesPedido(numPedido) {
         // Mostrar erro
         badge.textContent = 'Erro';
         badge.className = 'badge badge-danger ml-2';
-        contentDiv.innerHTML = `
-            <div class="alert alert-danger m-3">
-                <i class="fas fa-exclamation-triangle"></i>
-                Erro ao carregar separações: ${error.message}
-                <button class="btn btn-sm btn-outline-danger ml-2" onclick="carregarSeparacoesPedido('${numPedido}')">
-                    <i class="fas fa-redo"></i> Tentar novamente
-                </button>
-            </div>
-        `;
+        
+        // CORRIGIDO: XSS - criar elementos DOM ao invés de innerHTML com error.message
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-danger m-3';
+        alertDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erro ao carregar separações: ';
+        const errorSpan = document.createElement('span');
+        errorSpan.textContent = error.message || 'Erro desconhecido';
+        alertDiv.appendChild(errorSpan);
+        
+        const retryBtn = document.createElement('button');
+        retryBtn.className = 'btn btn-sm btn-outline-danger ml-2';
+        retryBtn.onclick = () => carregarSeparacoesPedidoInline(numPedido);
+        retryBtn.innerHTML = '<i class="fas fa-redo"></i> Tentar novamente';
+        alertDiv.appendChild(retryBtn);
+        
+        contentDiv.innerHTML = '';
+        contentDiv.appendChild(alertDiv);
         
         loadingDiv.style.display = 'none';
         contentDiv.style.display = 'block';
@@ -4406,31 +4414,34 @@ async function carregarContadoresSeparacoes() {
     const pedidoRows = document.querySelectorAll('.pedido-row');
     console.log(`🔢 Carregando contadores de separações para ${pedidoRows.length} pedidos...`);
     
-    for (const row of pedidoRows) {
-        const numPedido = row.getAttribute('data-pedido');
-        if (numPedido) {
+    // CORRIGIDO: Performance - usar Promise.all para requisições paralelas ao invés de sequenciais
+    await Promise.all(
+        Array.from(pedidoRows).map(async (row) => {
+            const numPedido = row.getAttribute('data-pedido');
+            if (!numPedido) return;
+            
             try {
                 const response = await fetch(`/carteira/api/pedido/${numPedido}/separacoes`);
                 const data = await response.json();
                 
-                                 if (data.success) {
-                     const totalSep = data.total_separacoes || 0;
-                     const badgeEl = document.getElementById(`separacoes-badge-${numPedido}`);
-                     
-                     if (badgeEl) {
-                         badgeEl.textContent = `${totalSep} separação${totalSep !== 1 ? 'ões' : ''}`;
-                         badgeEl.style.backgroundColor = totalSep > 0 ? '#28a745' : '#6c757d';
-                         badgeEl.style.color = 'white';
-                     }
-                     
-                     // Armazenar no cache para uso futuro
-                     separacoesPedidoCache.set(numPedido, data);
-                 }
+                if (data.success) {
+                    const totalSep = data.total_separacoes || 0;
+                    const badgeEl = document.getElementById(`separacoes-badge-${numPedido}`);
+                    
+                    if (badgeEl) {
+                        badgeEl.textContent = `${totalSep} separação${totalSep !== 1 ? 'ões' : ''}`;
+                        badgeEl.style.backgroundColor = totalSep > 0 ? '#28a745' : '#6c757d';
+                        badgeEl.style.color = 'white';
+                    }
+                    
+                    // Armazenar no cache para uso futuro
+                    separacoesPedidoCache.set(numPedido, data);
+                }
             } catch (error) {
                 console.warn(`⚠️ Erro ao carregar contador de separações do pedido ${numPedido}:`, error);
             }
-        }
-    }
+        })
+    );
     
     console.log('✅ Contadores de separações carregados');
 }
@@ -4564,7 +4575,8 @@ async function criarNovaSeparacao() {
 
 <style>
 /* 🎨 CORREÇÃO DE CONTRASTE - BADGES VISÍVEIS */
-.badge {
+/* CORRIGIDO: CSS namespace para não afetar Bootstrap global */
+.carteira-page .badge {
     font-weight: 500 !important;
     font-size: 0.75rem !important;
 }
