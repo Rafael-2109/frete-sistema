@@ -1378,6 +1378,11 @@ function atualizarCalculosItem(input) {
 
 /**
  * 🗓️ MODAL AGENDAMENTO - FUNÇÕES IMPLEMENTADAS
+ * 
+ * ✅ OTIMIZAÇÕES APLICADAS (CodeRabbit):
+ * - Cache de instâncias de modal para evitar recriação desnecessária
+ * - Uso de getOrCreateInstance() quando disponível (Bootstrap 5.2+)
+ * - Fallback para getInstance() para compatibilidade com versões anteriores
  */
 function carregarDadosAgendamento(numPedido) {
     const modalLoading = document.getElementById('modal-agendamento-loading');
@@ -1526,9 +1531,14 @@ async function salvarAgendamento() {
         
         // Fechar modal
         const modalElement = document.getElementById('modalAgendamento');
-        const modal = bootstrap.Modal.getInstance(modalElement);
-        if (modal) {
-            modal.hide();
+        // ✅ OTIMIZAÇÃO: Usar getOrCreateInstance se disponível (Bootstrap 5.2+), fallback para compatibilidade
+        if (bootstrap.Modal.getOrCreateInstance) {
+            bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+        } else {
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) {
+                modal.hide();
+            }
         }
         
         // Recarregar página para mostrar mudanças
@@ -2439,8 +2449,11 @@ function abrirModalAvaliarItens(numPedido) {
 
 function solicitarAgendamento(numPedido) {
     console.log(`🗓️ Solicitar Agendamento pedido ${numPedido}`);
-    const modal = new bootstrap.Modal(document.getElementById('modalAgendamento'));
-    modal.show();
+    // ✅ OTIMIZAÇÃO: Cache da instância do modal para evitar recriação
+    if (!window._modalAgendamento) {
+        window._modalAgendamento = new bootstrap.Modal(document.getElementById('modalAgendamento'));
+    }
+    window._modalAgendamento.show();
     carregarDadosAgendamento(numPedido);
 }
 
@@ -2481,8 +2494,11 @@ function abrirModalEndereco(numPedido) {
             document.getElementById('modal_telefone_endereco').textContent = data.telefone_endereco_ent || '-';
             
             // Mostrar modal
-            const modal = new bootstrap.Modal(document.getElementById('modalEndereco'));
-            modal.show();
+            // ✅ OTIMIZAÇÃO: Cache da instância do modal para evitar recriação
+            if (!window._modalEndereco) {
+                window._modalEndereco = new bootstrap.Modal(document.getElementById('modalEndereco'));
+            }
+            window._modalEndereco.show();
         })
         .catch(error => {
             console.error('Erro ao buscar dados do endereço:', error);
