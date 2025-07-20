@@ -63,7 +63,9 @@
                                 <br><small class="text-muted">{{ pedido.equipe_vendas }}</small>
                                 {% endif %}
                                 {% if pedido.status_pedido %}
-                                <br><span class="badge badge-secondary badge-sm">{{ pedido.status_pedido }}</span>
+                                <br><span class="badge badge-sm" 
+                                style="background-color: #495057; color: white;">
+                                {{ pedido.status_pedido }}</span>
                                 {% endif %}
                             </td>
                             
@@ -128,11 +130,17 @@
                             </td>
                             
                             <!-- Saldo (Total das separações sem NF) -->
-                            <td>
-                                <div class="text-center">
-                                    <i class="fas fa-info-circle text-muted" title="Total das separações sem NF utilizando Separacao.qtd_saldo"></i>
-                                    <br><small class="text-muted">Em desenvolvimento</small>
-                                </div>
+                            <td class="text-center">
+                                <button class="btn btn-link p-0" 
+                                        onclick="toggleSeparacoesPedido('{{ pedido.num_pedido }}')"
+                                        title="Expandir/Colapsar separações do pedido">
+                                    <i class="fas fa-chevron-right separacao-icon" id="separacao-icon-{{ pedido.num_pedido }}"></i>
+                                </button>
+                                <br>
+                                <span class="badge" style="background-color: #17a2b8; color: white;" id="separacoes-badge-{{ pedido.num_pedido }}">
+                                    0 separações
+                                </span>
+                                <br><small class="text-muted">Clique para ver</small>
                             </td>
                             
                             <!-- Expedição / Agenda / Protocolo -->
@@ -160,7 +168,7 @@
                                             📋 Consultar
                                         </button>
                                         <div class="dropdown-menu">
-                                            <a class="dropdown-item" href="#" onclick="consultarSeparacoes('{{ pedido.num_pedido }}')">
+                                            <a class="dropdown-item" href="#" onclick="toggleSeparacoesPedido('{{ pedido.num_pedido }}')">
                                                 📦 Ver Separações
                                             </a>
                                             <a class="dropdown-item" href="#" onclick="calcularEstoqueD0D7('{{ pedido.num_pedido }}')">
@@ -209,6 +217,31 @@
                                         </div>
                                         <div id="content-{{ pedido.num_pedido }}" style="display: none;">
                                             <!-- Conteúdo será carregado via AJAX -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        
+                        <!-- Linha expandida para separações do pedido (inicialmente oculta) -->
+                        <tr class="separacoes-expandidas collapse" id="separacoes-{{ pedido.num_pedido }}">
+                            <td colspan="9">
+                                <div class="card mt-2 mb-2" style="border-left: 4px solid #17a2b8;">
+                                    <div class="card-header" style="background-color: #17a2b8; color: white;">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-boxes"></i> 
+                                            Separações do Pedido {{ pedido.num_pedido }}
+                                            <span class="badge badge-light ml-2" id="separacoes-header-badge-{{ pedido.num_pedido }}">
+                                                Carregando...
+                                            </span>
+                                        </h6>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div id="separacoes-loading-{{ pedido.num_pedido }}" class="text-center p-3">
+                                            <i class="fas fa-spinner fa-spin"></i> Carregando separações...
+                                        </div>
+                                        <div id="separacoes-content-{{ pedido.num_pedido }}" style="display: none;">
+                                            <!-- Conteúdo das separações será carregado via AJAX -->
                                         </div>
                                     </div>
                                 </div>
@@ -1086,17 +1119,23 @@ function atualizarContadoresDropdown(numPedido) {
     if (statusEl && btnEnviarEl) {
         if (checkboxesMarcados.length === 0) {
             statusEl.textContent = 'Selecione itens';
-            statusEl.className = 'badge badge-secondary';
+            statusEl.className = 'badge';
+            statusEl.style.backgroundColor = '#6c757d';
+            statusEl.style.color = 'white';
             btnEnviarEl.disabled = true;
         } else {
             const semExpedicao = checkboxesMarcados.length - comExpedicao.length;
             if (semExpedicao > 0) {
                 statusEl.textContent = `${semExpedicao} sem data expedição`;
-                statusEl.className = 'badge badge-danger';
+                statusEl.className = 'badge';
+                statusEl.style.backgroundColor = '#dc3545';
+                statusEl.style.color = 'white';
                 btnEnviarEl.disabled = true;
             } else {
                 statusEl.textContent = 'Pronto para enviar';
-                statusEl.className = 'badge badge-success';
+                statusEl.className = 'badge';
+                statusEl.style.backgroundColor = '#198754';
+                statusEl.style.color = 'white';
                 btnEnviarEl.disabled = false;
             }
         }
@@ -1554,6 +1593,236 @@ async function unificarLinhaDropdown(itemId, numPedido) {
     return true;
 }
 
+// ===== FUNÇÕES ESPECÍFICAS DO DROPDOWN SEPARAÇÕES =====
+
+// Estado de expansão das separações (cache local)
+const separacoesExpandidas = new Set();
+const separacoesPedidoCache = new Map();
+
+/**
+ * Toggle expansão/colapso de separações de um pedido
+ */
+function toggleSeparacoesPedido(numPedido) {
+    const linhaSeparacoes = document.getElementById(`separacoes-${numPedido}`);
+    const icone = document.getElementById(`separacao-icon-${numPedido}`);
+    
+    if (separacoesExpandidas.has(numPedido)) {
+        // Colapsar
+        $(linhaSeparacoes).collapse('hide');
+        icone.className = 'fas fa-chevron-right separacao-icon';
+        separacoesExpandidas.delete(numPedido);
+    } else {
+        // Expandir
+        $(linhaSeparacoes).collapse('show');
+        icone.className = 'fas fa-chevron-down separacao-icon';
+        separacoesExpandidas.add(numPedido);
+        
+        // Carregar separações se ainda não foram carregadas
+        if (!separacoesPedidoCache.has(numPedido)) {
+            carregarSeparacoesPedido(numPedido);
+        }
+    }
+}
+
+/**
+ * Carrega separações de um pedido via AJAX
+ */
+async function carregarSeparacoesPedido(numPedido) {
+    const loadingDiv = document.getElementById(`separacoes-loading-${numPedido}`);
+    const contentDiv = document.getElementById(`separacoes-content-${numPedido}`);
+    const badge = document.getElementById(`separacoes-badge-${numPedido}`);
+    
+    try {
+        // Mostrar loading
+        loadingDiv.style.display = 'block';
+        contentDiv.style.display = 'none';
+        badge.textContent = 'Carregando...';
+        badge.className = 'badge badge-light ml-2';
+        
+        // Fazer requisição AJAX para separações
+        const response = await fetch(`/carteira/api/pedido/${numPedido}/separacoes`);
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Erro ao carregar separações');
+        }
+        
+        // Armazenar no cache
+        separacoesPedidoCache.set(numPedido, data);
+        
+        // Gerar HTML das separações
+        const htmlSeparacoes = gerarHtmlSeparacoes(data);
+        contentDiv.innerHTML = htmlSeparacoes;
+        
+        // Atualizar badge do header
+        const totalSep = data.total_separacoes || 0;
+        badge.textContent = `${totalSep} separação${totalSep !== 1 ? 'ões' : ''}`;
+        badge.className = totalSep > 0 ? 'badge badge-success ml-2' : 'badge badge-secondary ml-2';
+        
+        // Atualizar badge principal da coluna
+        const badgePrincipal = document.getElementById(`separacoes-badge-${numPedido}`);
+        if (badgePrincipal) {
+            badgePrincipal.textContent = `${totalSep} separação${totalSep !== 1 ? 'ões' : ''}`;
+            badgePrincipal.style.backgroundColor = totalSep > 0 ? '#28a745' : '#6c757d';
+        }
+        
+        // Atualizar badge do cabeçalho expandido
+        const badgeHeader = document.getElementById(`separacoes-header-badge-${numPedido}`);
+        if (badgeHeader) {
+            badgeHeader.textContent = badge.textContent;
+            badgeHeader.className = badge.className;
+        }
+        
+        // Mostrar conteúdo
+        loadingDiv.style.display = 'none';
+        contentDiv.style.display = 'block';
+        
+        console.log(`✅ Separações carregadas para pedido ${numPedido}: ${totalSep} separações`);
+        
+    } catch (error) {
+        console.error(`❌ Erro ao carregar separações do pedido ${numPedido}:`, error);
+        
+        // Mostrar erro
+        badge.textContent = 'Erro';
+        badge.className = 'badge badge-danger ml-2';
+        contentDiv.innerHTML = `
+            <div class="alert alert-danger m-3">
+                <i class="fas fa-exclamation-triangle"></i>
+                Erro ao carregar separações: ${error.message}
+                <button class="btn btn-sm btn-outline-danger ml-2" onclick="carregarSeparacoesPedido('${numPedido}')">
+                    <i class="fas fa-redo"></i> Tentar novamente
+                </button>
+            </div>
+        `;
+        
+        loadingDiv.style.display = 'none';
+        contentDiv.style.display = 'block';
+    }
+}
+
+/**
+ * Gera HTML das separações conforme CARTEIRA.csv (DROP DOWN SEPARAÇÃO)
+ */
+function gerarHtmlSeparacoes(data) {
+    const numPedido = data.num_pedido;
+    const separacoes = data.separacoes || [];
+    
+    if (separacoes.length === 0) {
+        return `
+            <div class="alert alert-info m-3">
+                <i class="fas fa-info-circle"></i>
+                <strong>Nenhuma separação encontrada</strong>
+                <p class="mb-0">Este pedido ainda não possui separações criadas.</p>
+            </div>
+        `;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-sm table-striped mb-0">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Código</th>
+                        <th>Produto</th>
+                        <th>Qtd</th>
+                        <th>Valor</th>
+                        <th>Pallet</th>
+                        <th>Peso</th>
+                        <th>Menor Estoque D7</th>
+                        <th>Estoque D0</th>
+                        <th>Produção D0</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    separacoes.forEach(sep => {
+        const statusClass = sep.status_class || 'info';
+        const statusColors = {
+            'success': '#28a745',
+            'warning': '#ffc107',
+            'danger': '#dc3545',
+            'info': '#17a2b8',
+            'primary': '#007bff'
+        };
+        const backgroundColor = statusColors[statusClass] || '#17a2b8';
+        const textColor = statusClass === 'warning' ? '#212529' : 'white';
+        
+        html += `
+            <tr>
+                <td><strong>${sep.cod_produto || '-'}</strong></td>
+                <td class="text-truncate" style="max-width: 200px;" title="${sep.nome_produto || ''}">
+                    ${sep.nome_produto || '-'}
+                </td>
+                <td><strong>${(sep.qtd_saldo || 0).toLocaleString('pt-BR')}</strong></td>
+                <td>${(sep.valor_saldo || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</td>
+                <td>${(sep.pallet || 0).toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})} pal</td>
+                <td>${(sep.peso || 0).toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})} kg</td>
+                <td class="text-muted">-</td>
+                <td class="text-muted">-</td>
+                <td class="text-muted">-</td>
+                <td>
+                    <span class="badge" style="background-color: ${backgroundColor}; color: ${textColor};">
+                        ${sep.status}
+                    </span>
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-info btn-sm" 
+                                onclick="verDetalhesSeparacao('${sep.separacao_lote_id}')"
+                                title="Ver detalhes">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" 
+                                onclick="editarSeparacao('${sep.separacao_lote_id}')"
+                                title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    // Calcular totais
+    const totalQtd = separacoes.reduce((sum, sep) => sum + (sep.qtd_saldo || 0), 0);
+    const totalValor = separacoes.reduce((sum, sep) => sum + (sep.valor_saldo || 0), 0);
+    const totalPallet = separacoes.reduce((sum, sep) => sum + (sep.pallet || 0), 0);
+    const totalPeso = separacoes.reduce((sum, sep) => sum + (sep.peso || 0), 0);
+    
+    html += `
+                </tbody>
+                <tfoot class="bg-light">
+                    <tr>
+                        <th colspan="2">TOTAIS:</th>
+                        <th>${totalQtd.toLocaleString('pt-BR')}</th>
+                        <th>${totalValor.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</th>
+                        <th>${totalPallet.toLocaleString('pt-BR', {minimumFractionDigits: 1})} pal</th>
+                        <th>${totalPeso.toLocaleString('pt-BR', {minimumFractionDigits: 1})} kg</th>
+                        <th colspan="5">
+                            <small class="text-muted">
+                                ${data.separacoes_embarcadas}/${data.total_separacoes} embarcadas
+                            </small>
+                        </th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        
+        <!-- Resumo das separações -->
+        <div class="alert alert-info mt-2">
+            <strong>📦 Resumo:</strong>
+            <span class="badge badge-success ml-2">${data.separacoes_embarcadas} Embarcadas</span>
+            <span class="badge badge-warning ml-2">${data.separacoes_pendentes} Pendentes</span>
+            <span class="badge badge-info ml-2">${data.total_separacoes} Total</span>
+        </div>
+    `;
+    
+    return html;
+}
+
 /**
  * Gera HTML da tabela de itens
  */
@@ -1577,15 +1846,15 @@ function gerarHtmlItens(data) {
                 <div class="row">
                     <div class="col-md-4">
                         <strong>Itens Selecionados:</strong>
-                        <span id="contador-dropdown-${numPedido}" class="badge badge-warning">0</span>
+                        <span id="contador-dropdown-${numPedido}" class="badge" style="background-color: #ffc107; color: #212529;">0</span>
                     </div>
                     <div class="col-md-4">
                         <strong>Com Data Expedição:</strong>
-                        <span id="contador-expedicao-dropdown-${numPedido}" class="badge badge-success">0</span>
+                        <span id="contador-expedicao-dropdown-${numPedido}" class="badge" style="background-color: #198754; color: white;">0</span>
                     </div>
                     <div class="col-md-4">
                         <strong>Status:</strong>
-                        <span id="status-dropdown-${numPedido}" class="badge badge-secondary">Selecione itens</span>
+                        <span id="status-dropdown-${numPedido}" class="badge" style="background-color: #6c757d; color: white;">Selecione itens</span>
                     </div>
                 </div>
             </div>
@@ -4125,7 +4394,46 @@ function replicarCamposAmarrados() {
 $(document).ready(function() {
     console.log('✅ JavaScript expandir/colapsar inicializado');
     console.log(`📊 ${$('.pedido-row').length} pedidos disponíveis para expansão`);
+    
+    // 🔄 Carregar contadores de separações para todos os pedidos
+    carregarContadoresSeparacoes();
 });
+
+/**
+ * Carrega contadores de separações para todos os pedidos visíveis
+ */
+async function carregarContadoresSeparacoes() {
+    const pedidoRows = document.querySelectorAll('.pedido-row');
+    console.log(`🔢 Carregando contadores de separações para ${pedidoRows.length} pedidos...`);
+    
+    for (const row of pedidoRows) {
+        const numPedido = row.getAttribute('data-pedido');
+        if (numPedido) {
+            try {
+                const response = await fetch(`/carteira/api/pedido/${numPedido}/separacoes`);
+                const data = await response.json();
+                
+                                 if (data.success) {
+                     const totalSep = data.total_separacoes || 0;
+                     const badgeEl = document.getElementById(`separacoes-badge-${numPedido}`);
+                     
+                     if (badgeEl) {
+                         badgeEl.textContent = `${totalSep} separação${totalSep !== 1 ? 'ões' : ''}`;
+                         badgeEl.style.backgroundColor = totalSep > 0 ? '#28a745' : '#6c757d';
+                         badgeEl.style.color = 'white';
+                     }
+                     
+                     // Armazenar no cache para uso futuro
+                     separacoesPedidoCache.set(numPedido, data);
+                 }
+            } catch (error) {
+                console.warn(`⚠️ Erro ao carregar contador de separações do pedido ${numPedido}:`, error);
+            }
+        }
+    }
+    
+    console.log('✅ Contadores de separações carregados');
+}
 
 /**
  * 🔧 P2.1: Criar nova separação (IMPLEMENTAÇÃO REAL)
@@ -4253,5 +4561,121 @@ async function criarNovaSeparacao() {
     }
 }
 </script>
+
+<style>
+/* 🎨 CORREÇÃO DE CONTRASTE - BADGES VISÍVEIS */
+.badge {
+    font-weight: 500 !important;
+    font-size: 0.75rem !important;
+}
+
+/* Forçar contraste em badges secundários */
+.badge-secondary {
+    background-color: #495057 !important;
+    color: white !important;
+}
+
+/* Garantir que badges em cabeçalhos verdes tenham contraste */
+.bg-success .badge {
+    font-weight: 600 !important;
+    border: 1px solid rgba(255,255,255,0.3) !important;
+}
+
+/* Status do pedido sempre visível */
+.pedido-row .badge {
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2) !important;
+}
+
+/* Contadores do dropdown sempre visíveis */
+[id^="contador-dropdown-"],
+[id^="contador-expedicao-dropdown-"],
+[id^="status-dropdown-"] {
+    font-weight: 600 !important;
+    border: 1px solid rgba(255,255,255,0.3) !important;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.3) !important;
+}
+
+/* 📦 ESTILOS ESPECÍFICOS DO DROPDOWN SEPARAÇÕES */
+
+/* Ícones de separação */
+.separacao-icon {
+    transition: transform 0.2s ease;
+    color: #17a2b8;
+}
+
+.separacao-icon:hover {
+    transform: scale(1.1);
+    color: #138496;
+}
+
+/* Cards de separação com borda azul */
+.separacoes-expandidas .card {
+    box-shadow: 0 0.125rem 0.25rem rgba(23, 162, 184, 0.2) !important;
+}
+
+/* Header das separações */
+.separacoes-expandidas .card-header {
+    border-bottom: 2px solid rgba(255,255,255,0.3) !important;
+}
+
+/* Badges de separação sempre visíveis */
+[id^="separacoes-badge-"] {
+    font-weight: 600 !important;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.3) !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+}
+
+/* Tabela de separações */
+.separacoes-expandidas .table-responsive {
+    border-radius: 0.375rem;
+    overflow: hidden;
+}
+
+.separacoes-expandidas .table thead th {
+    background-color: #343a40 !important;
+    color: white !important;
+    border: none !important;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.separacoes-expandidas .table tbody td {
+    font-size: 0.85rem;
+    vertical-align: middle;
+    border-color: #dee2e6;
+}
+
+/* Status badges nas separações */
+.separacoes-expandidas .badge {
+    font-weight: 500 !important;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.2) !important;
+}
+
+/* Botões de ação nas separações */
+.separacoes-expandidas .btn-group-sm .btn {
+    padding: 0.25rem 0.4rem;
+    font-size: 0.75rem;
+}
+
+/* Animação suave no hover dos botões */
+.separacoes-expandidas .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    transition: all 0.15s ease;
+}
+
+/* Resumo no final das separações */
+.separacoes-expandidas .alert-info {
+    border-left: 4px solid #17a2b8;
+    background-color: rgba(23, 162, 184, 0.05);
+}
+
+/* Totais na tabela de separações */
+.separacoes-expandidas tfoot th {
+    background-color: #f8f9fa !important;
+    border-top: 2px solid #17a2b8 !important;
+    font-weight: 600 !important;
+}
+</style>
 
 {% endblock %} 
