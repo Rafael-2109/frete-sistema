@@ -177,9 +177,7 @@
                                             <a class="dropdown-item" href="#" onclick="abrirModalAvaliarEstoques('{{ pedido.num_pedido }}')">
                                                 📊 Avaliar Estoques
                                             </a>
-                                            <a class="dropdown-item" href="#" onclick="abrirModalItensEditaveis('{{ pedido.num_pedido }}')">
-                                                📝 Itens do Pedido
-                                            </a>
+                                            
                                             <a class="dropdown-item" href="#" onclick="calcularEstoqueD0D7('{{ pedido.num_pedido }}')">
                                                 📊 Estoque D0/D7
                                             </a>
@@ -751,131 +749,6 @@
     </div>
 </div>
 
-<!-- Modal Itens Editáveis do Pedido -->
-<div class="modal fade" id="modalItensEditaveis" tabindex="-1" role="dialog" aria-labelledby="modalItensEditaveisLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalItensEditaveisLabel">
-                    <i class="fas fa-edit"></i> Itens do Pedido - Edição Avançada
-                    <span id="modal-num-pedido-editavel" class="badge badge-primary ml-2"></span>
-                </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <!-- Loading state -->
-                <div id="modal-editavel-loading" class="text-center p-4">
-                    <i class="fas fa-spinner fa-spin fa-2x"></i>
-                    <p class="mt-2">Carregando itens para edição...</p>
-                </div>
-                
-                <!-- Error state -->
-                <div id="modal-editavel-error" class="alert alert-danger" style="display: none;">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span id="modal-editavel-error-message"></span>
-                    <button class="btn btn-sm btn-outline-danger ml-2" onclick="recarregarModalEditavel()">
-                        <i class="fas fa-redo"></i> Tentar novamente
-                    </button>
-                </div>
-                
-                <!-- Content -->
-                <div id="modal-editavel-content" style="display: none;">
-                    <!-- Botão Enviar para Separação no topo -->
-                    <div class="card mb-3">
-                        <div class="card-header bg-success text-white">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0">
-                                    <i class="fas fa-boxes"></i> Ações de Separação
-                                </h6>
-                                <button type="button" class="btn btn-light btn-sm" onclick="enviarParaSeparacao()" id="btn-enviar-separacao">
-                                    <i class="fas fa-paper-plane"></i> Enviar para Separação
-                                </button>
-                            </div>
-                        </div>
-                        <div class="card-body p-2">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <strong>Itens Selecionados:</strong>
-                                    <span id="contador-selecionados" class="badge badge-warning">0</span>
-                                </div>
-                                <div class="col-md-4">
-                                    <strong>Com Data Expedição:</strong>
-                                    <span id="contador-com-expedicao" class="badge badge-success">0</span>
-                                </div>
-                                <div class="col-md-4">
-                                    <strong>Status:</strong>
-                                    <span id="status-validacao" class="badge badge-secondary">Selecione itens</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Tabela de itens editáveis -->
-                    <div class="table-responsive">
-                        <table class="table table-striped table-sm" id="tabela-itens-editaveis">
-                            <thead class="thead-dark">
-                                <tr>
-                                    <th width="40">
-                                        <input type="checkbox" id="select-all-editaveis" onchange="toggleTodosItensEditaveis(this)" title="Selecionar todos">
-                                    </th>
-                                    <th>Código</th>
-                                    <th>Produto</th>
-                                    <th>Qtd Disponível</th>
-                                    <th>Valor</th>
-                                    <th>Peso</th>
-                                    <th>Pallet</th>
-                                    <th>Menor Estoque D7</th>
-                                    <th>Estoque D0</th>
-                                    <th>Produção D0</th>
-                                    <th>Data Expedição</th>
-                                    <th>Agendamento</th>
-                                    <th>Protocolo</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tbody-itens-editaveis">
-                                <!-- Será preenchido via JavaScript -->
-                            </tbody>
-                            <tfoot class="bg-light">
-                                <tr>
-                                    <th colspan="4">TOTAIS SELECIONADOS:</th>
-                                    <th id="total-valor-editavel">R$ 0,00</th>
-                                    <th id="total-peso-editavel">0 kg</th>
-                                    <th id="total-pallet-editavel">0,0 pal</th>
-                                    <th colspan="6">
-                                        <button class="btn btn-sm btn-outline-info" onclick="replicarCamposAmarrados()">
-                                            <i class="fas fa-link"></i> Replicar Campos
-                                        </button>
-                                    </th>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                    
-                    <!-- Instruções de uso -->
-                    <div class="alert alert-info">
-                        <strong>📋 Como usar:</strong>
-                        <ul class="mb-0">
-                            <li><strong>Qtd:</strong> Edite para dividir linha (saldo restante vira nova linha)</li>
-                            <li><strong>Campos amarrados:</strong> Data Expedição, Agendamento e Protocolo replicam automaticamente para itens marcados</li>
-                            <li><strong>Validação:</strong> Só é possível enviar para separação itens com Data de Expedição preenchida</li>
-                            <li><strong>Auto-save:</strong> Alterações são salvas automaticamente</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">
-                    <i class="fas fa-times"></i> Fechar
-                </button>
-                <button type="button" class="btn btn-info" onclick="recalcularEstoquesD0D7()">
-                    <i class="fas fa-calculator"></i> Recalcular Estoques
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Modal Consultar Separações -->
 <div class="modal fade" id="modalConsultarSeparacoes" tabindex="-1" role="dialog" aria-labelledby="modalConsultarSeparacoesLabel" aria-hidden="true">
@@ -1872,7 +1745,8 @@ function editarItem(itemId) {
     const pedidoRow = document.querySelector(`tr[data-pedido]`);
     if (pedidoRow) {
         const numPedido = pedidoRow.getAttribute('data-pedido');
-        abrirModalItensEditaveis(numPedido);
+        // ❌ REMOVIDO: Modal obsoleto - funcionalidade agora no dropdown real
+    console.log('⚠️ Modal editável foi substituído pelo dropdown expandido');
     }
 }
 
@@ -3528,29 +3402,7 @@ function abrirModalEndereco(numPedido) {
 
 
 // Inicialização
-// ===== FUNÇÕES DO MODAL ITENS EDITÁVEIS =====
-
-// Variáveis globais do modal editável
-let dadosModalEditavel = null;
-let numPedidoEditavel = null;
-let itensDivididos = new Map(); // Controla itens que foram divididos
-
-/**
- * Abre modal para editar itens do pedido conforme CARTEIRA.csv
- */
-async function abrirModalItensEditaveis(numPedido) {
-    console.log(`📝 Abrindo modal itens editáveis para pedido ${numPedido}`);
-    numPedidoEditavel = numPedido;
-    
-    // Configurar modal
-    document.getElementById('modal-num-pedido-editavel').textContent = numPedido;
-    
-    // Mostrar modal
-    $('#modalItensEditaveis').modal('show');
-    
-    // Carregar dados
-    await carregarDadosModalEditavel(numPedido);
-}
+// ===== MODAL EDITÁVEL REMOVIDO (FUNCIONALIDADE MOVIDA PARA DROPDOWN) =====
 
 /**
  * Carrega dados para o modal de itens editáveis
