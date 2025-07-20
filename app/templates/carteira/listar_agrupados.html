@@ -2426,17 +2426,194 @@ function recarregarModalSeparacoes() {
 }
 
 /**
- * Placeholder para ver detalhes de separação
+ * 🔧 P2.1: Ver detalhes completos de uma separação (IMPLEMENTAÇÃO REAL)
+ * Conecta à API /api/separacao/<lote_id>/detalhes
  */
-function verDetalhesSeparacao(loteId) {
-    alert(`🔧 Função ver detalhes da separação ${loteId} será implementada na Fase 3.4 - Dropdown Separações`);
+async function verDetalhesSeparacao(loteId) {
+    console.log(`📊 Carregando detalhes da separação: ${loteId}`);
+    
+    try {
+        // Mostrar loading
+        const response = await fetch(`/carteira/api/separacao/${loteId}/detalhes`, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Erro ao carregar detalhes da separação');
+        }
+        
+        // ✅ SUCESSO - Mostrar detalhes em modal ou alert detalhado
+        const separacao = data.separacao;
+        const cabecalho = separacao.cabecalho;
+        const totais = separacao.totais;
+        const status = separacao.status;
+        
+        const detalhesTexto = `
+📊 **DETALHES DA SEPARAÇÃO**
+
+🏷️ **IDENTIFICAÇÃO:**
+   • Lote: ${cabecalho.lote_id}
+   • Pedido: ${cabecalho.num_pedido}
+   • Data Pedido: ${cabecalho.data_pedido}
+
+👤 **CLIENTE:**
+   • ${cabecalho.raz_social_red}
+   • CNPJ/CPF: ${cabecalho.cnpj_cpf}
+   • Cidade: ${cabecalho.nome_cidade} - ${cabecalho.cod_uf}
+
+📦 **TOTAIS:**
+   • Produtos: ${totais.produtos}
+   • Quantidade: ${totais.quantidade.toLocaleString('pt-BR')}
+   • Valor: R$ ${totais.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+   • Peso: ${totais.peso.toLocaleString('pt-BR')} kg
+   • Pallets: ${totais.pallet.toLocaleString('pt-BR', {minimumFractionDigits: 1})}
+
+🔗 **STATUS:**
+   • Pedido: ${status.pedido_vinculado ? `Vinculado (${status.pedido_status})` : 'Não vinculado'}
+   • Embarque: ${status.embarque_vinculado ? `Vinculado (#${status.embarque_numero})` : 'Não vinculado'}
+   • Pode editar: ${status.pode_editar ? 'Sim' : 'Não'}
+
+🛤️ **ROTA:**
+   • Rota: ${cabecalho.rota || 'N/A'}
+   • Sub-rota: ${cabecalho.sub_rota || 'N/A'}`;
+        
+        alert(detalhesTexto);
+        
+        // Log para debugging
+        console.log('✅ Detalhes da separação carregados:', data);
+        
+    } catch (error) {
+        console.error('❌ Erro ao carregar detalhes:', error);
+        alert(`❌ **ERRO AO CARREGAR DETALHES**\n\nSeparação: ${loteId}\nDetalhes: ${error.message}\n\n🔧 Verifique se a separação existe.`);
+    }
 }
 
 /**
- * Placeholder para editar separação
+ * 🔧 P2.1: Editar dados de uma separação (IMPLEMENTAÇÃO REAL)
+ * Conecta à API /api/separacao/<lote_id>/editar
  */
-function editarSeparacao(loteId) {
-    alert(`🔧 Função editar separação ${loteId} será implementada na Fase 3.4 - Dropdown Separações`);
+async function editarSeparacao(loteId) {
+    console.log(`✏️ Editando separação: ${loteId}`);
+    
+    try {
+        // 1. Primeiro carregar dados atuais da separação
+        const responseDetalhes = await fetch(`/carteira/api/separacao/${loteId}/detalhes`, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        });
+        
+        const dataDetalhes = await responseDetalhes.json();
+        
+        if (!responseDetalhes.ok || !dataDetalhes.success) {
+            throw new Error('Não foi possível carregar dados da separação');
+        }
+        
+        const separacao = dataDetalhes.separacao;
+        const status = separacao.status;
+        
+        // 2. Verificar se pode editar
+        if (!status.pode_editar) {
+            alert(`⚠️ **NÃO É POSSÍVEL EDITAR**\n\nA separação ${loteId} não pode ser editada.\n\nStatus do pedido: ${status.pedido_status || 'Desconhecido'}\n\n💡 Apenas separações de pedidos ABERTOS ou COTADOS podem ser editadas.`);
+            return;
+        }
+        
+        // 3. Obter dados atuais para pré-preenchimento
+        const produto = separacao.produtos[0] || {}; // Usar primeiro produto como referência
+        
+        // 4. Prompt para edição com campos mais comuns
+        const novaExpedicao = prompt(`📅 **EDITAR EXPEDIÇÃO**\n\nSeparação: ${loteId}\nExpedição atual: ${produto.expedicao || 'Não definida'}\n\nNova data de expedição (dd/mm/yyyy):\n(Deixe vazio para não alterar)`, produto.expedicao || '');
+        
+        // Cancelou a edição
+        if (novaExpedicao === null) {
+            return;
+        }
+        
+        const novoAgendamento = prompt(`📅 **EDITAR AGENDAMENTO**\n\nSeparação: ${loteId}\nAgendamento atual: ${produto.agendamento || 'Não definido'}\n\nNova data de agendamento (dd/mm/yyyy):\n(Deixe vazio para não alterar)`, produto.agendamento || '');
+        
+        if (novoAgendamento === null) {
+            return;
+        }
+        
+        const novoProtocolo = prompt(`📋 **EDITAR PROTOCOLO**\n\nSeparação: ${loteId}\nProtocolo atual: ${produto.protocolo || 'Não definido'}\n\nNovo protocolo:\n(Deixe vazio para não alterar)`, produto.protocolo || '');
+        
+        if (novoProtocolo === null) {
+            return;
+        }
+        
+        const novasObservacoes = prompt(`💬 **EDITAR OBSERVAÇÕES**\n\nSeparação: ${loteId}\nObservações atuais: ${produto.observ_ped_1 || 'Nenhuma'}\n\nNovas observações:\n(Deixe vazio para não alterar)`, produto.observ_ped_1 || '');
+        
+        if (novasObservacoes === null) {
+            return;
+        }
+        
+        // 5. Preparar dados para envio (apenas campos preenchidos)
+        const dadosEdicao = {};
+        
+        if (novaExpedicao && novaExpedicao.trim()) {
+            dadosEdicao.expedicao = novaExpedicao.trim();
+        }
+        
+        if (novoAgendamento && novoAgendamento.trim()) {
+            dadosEdicao.agendamento = novoAgendamento.trim();
+        }
+        
+        if (novoProtocolo && novoProtocolo.trim()) {
+            dadosEdicao.protocolo = novoProtocolo.trim();
+        }
+        
+        if (novasObservacoes && novasObservacoes.trim()) {
+            dadosEdicao.observ_ped_1 = novasObservacoes.trim();
+        }
+        
+        // 6. Verificar se há alguma alteração
+        if (Object.keys(dadosEdicao).length === 0) {
+            alert('ℹ️ **NENHUMA ALTERAÇÃO**\n\nNenhum campo foi modificado.\n\nEdição cancelada.');
+            return;
+        }
+        
+        // 7. Enviar alterações para API
+        const responseEdicao = await fetch(`/carteira/api/separacao/${loteId}/editar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify(dadosEdicao)
+        });
+        
+        const dataEdicao = await responseEdicao.json();
+        
+        if (!responseEdicao.ok || !dataEdicao.success) {
+            throw new Error(dataEdicao.error || 'Erro ao salvar alterações');
+        }
+        
+        // ✅ SUCESSO
+        console.log('✅ Separação editada com sucesso:', dataEdicao);
+        
+        let mensagemSucesso = `✅ **SEPARAÇÃO ATUALIZADA!**\n\nSeparação: ${loteId}\nProdutos afetados: ${dataEdicao.total_produtos}`;
+        
+        if (dataEdicao.alteracoes && dataEdicao.alteracoes.length > 0) {
+            mensagemSucesso += `\n\n📝 **ALTERAÇÕES:**\n${dataEdicao.alteracoes.map(alt => `• ${alt}`).join('\n')}`;
+        }
+        
+        mensagemSucesso += '\n\n🔄 A página será recarregada para mostrar as alterações.';
+        
+        alert(mensagemSucesso);
+        
+        // Recarregar dados da página para mostrar alterações
+        location.reload();
+        
+    } catch (error) {
+        console.error('❌ Erro ao editar separação:', error);
+        alert(`❌ **ERRO AO EDITAR SEPARAÇÃO**\n\nSeparação: ${loteId}\nDetalhes: ${error.message}\n\n🔧 Verifique os dados e tente novamente.`);
+    }
 }
 
 /**
@@ -2621,20 +2798,139 @@ function abrirModalEndereco(numPedido) {
 
 
 
-/**
- * Placeholder para criar nova separação
- */
-function criarNovaSeparacao() {
-    if (numPedidoSeparacoes) {
-        alert(`🔧 Função criar nova separação para pedido ${numPedidoSeparacoes} será implementada na Fase 3.3 - Sistema Pré-Separação`);
-    }
-}
+
 
 // Inicialização
 $(document).ready(function() {
     console.log('✅ JavaScript expandir/colapsar inicializado');
     console.log(`📊 ${$('.pedido-row').length} pedidos disponíveis para expansão`);
 });
+
+/**
+ * 🔧 P2.1: Criar nova separação (IMPLEMENTAÇÃO REAL)
+ * Conecta à API /api/separacao/criar
+ */
+async function criarNovaSeparacao() {
+    if (!numPedidoSeparacoes) {
+        alert('⚠️ **NENHUM PEDIDO SELECIONADO**\n\nSelecione um pedido na aba "Separações" para criar nova separação.');
+        return;
+    }
+    
+    console.log(`➕ Criando nova separação para pedido: ${numPedidoSeparacoes}`);
+    
+    try {
+        // 1. Carregar itens disponíveis do pedido (sem separação)
+        const responseItens = await fetch(`/carteira/api/pedido/${numPedidoSeparacoes}/itens`, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        });
+        
+        const dataItens = await responseItens.json();
+        
+        if (!responseItens.ok || !dataItens.success) {
+            throw new Error('Não foi possível carregar itens do pedido');
+        }
+        
+        // 2. Filtrar apenas itens sem separação
+        const itensSemSeparacao = dataItens.itens.filter(item => !item.tem_separacao);
+        
+        if (itensSemSeparacao.length === 0) {
+            alert(`ℹ️ **TODOS OS ITENS JÁ SEPARADOS**\n\nPedido: ${numPedidoSeparacoes}\n\nTodos os itens deste pedido já possuem separação.\n\nNão é possível criar nova separação.`);
+            return;
+        }
+        
+        // 3. Mostrar itens disponíveis e permitir seleção
+        let itensTexto = `📦 **ITENS DISPONÍVEIS PARA SEPARAÇÃO**\n\nPedido: ${numPedidoSeparacoes}\nItens sem separação: ${itensSemSeparacao.length}\n\n`;
+        
+        itensSemSeparacao.forEach((item, index) => {
+            itensTexto += `${index + 1}. ${item.cod_produto} - ${item.nome_produto}\n   Qtd: ${item.qtd_saldo.toLocaleString('pt-BR')} | Valor: R$ ${item.valor_item.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n\n`;
+        });
+        
+        // 4. Perguntar se quer separar todos ou selecionar
+        const separarTodos = confirm(`${itensTexto}\n\n❓ **COMO PROCEDER?**\n\n✅ OK = Separar TODOS os itens listados\n❌ Cancelar = Selecionar itens específicos\n\n⚠️ Nota: Para seleção específica, use a interface da carteira principal.`);
+        
+        let itensSelecionados;
+        
+        if (separarTodos) {
+            // Separar todos os itens disponíveis
+            itensSelecionados = itensSemSeparacao.map(item => item.id);
+        } else {
+            // Para simplificar, por enquanto vamos usar apenas o primeiro item
+            // Em uma implementação mais avançada, poderia ter um modal de seleção
+            alert(`💡 **SELEÇÃO ESPECÍFICA**\n\nPara selecionar itens específicos, use os checkboxes na interface principal da carteira.\n\nPor enquanto, vamos criar separação apenas com o primeiro item.`);
+            itensSelecionados = [itensSemSeparacao[0].id];
+        }
+        
+        // 5. Obter dados opcionais da separação
+        const tipoEnvio = confirm(`📦 **TIPO DE ENVIO**\n\n✅ OK = TOTAL (envio completo)\n❌ Cancelar = PARCIAL (envio parcial)`) ? 'total' : 'parcial';
+        
+        const dataExpedicao = prompt(`📅 **DATA DE EXPEDIÇÃO**\n\nInforme a data de expedição (dd/mm/yyyy):\n(Deixe vazio se não souber ainda)`, '');
+        
+        const dataAgendamento = prompt(`📅 **DATA DE AGENDAMENTO**\n\nInforme a data de agendamento (dd/mm/yyyy):\n(Deixe vazio se não souber ainda)`, '');
+        
+        const protocolo = prompt(`📋 **PROTOCOLO**\n\nInforme o protocolo (opcional):`, '');
+        
+        const observacoes = prompt(`💬 **OBSERVAÇÕES**\n\nInforme observações sobre a separação (opcional):`, '');
+        
+        // 6. Preparar dados para criação
+        const dadosCriacao = {
+            num_pedido: numPedidoSeparacoes,
+            itens_selecionados: itensSelecionados,
+            tipo_envio: tipoEnvio
+        };
+        
+        if (dataExpedicao && dataExpedicao.trim()) {
+            dadosCriacao.expedicao = dataExpedicao.trim();
+        }
+        
+        if (dataAgendamento && dataAgendamento.trim()) {
+            dadosCriacao.agendamento = dataAgendamento.trim();
+        }
+        
+        if (protocolo && protocolo.trim()) {
+            dadosCriacao.protocolo = protocolo.trim();
+        }
+        
+        if (observacoes && observacoes.trim()) {
+            dadosCriacao.observacoes = observacoes.trim();
+        }
+        
+        // 7. Enviar para API
+        const responseCriacao = await fetch(`/carteira/api/separacao/criar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify(dadosCriacao)
+        });
+        
+        const dataCriacao = await responseCriacao.json();
+        
+        if (!responseCriacao.ok || !dataCriacao.success) {
+            throw new Error(dataCriacao.error || 'Erro ao criar separação');
+        }
+        
+        // ✅ SUCESSO
+        console.log('✅ Separação criada com sucesso:', dataCriacao);
+        
+        const separacao = dataCriacao.separacao;
+        const totais = separacao.totais;
+        
+        const mensagemSucesso = `✅ **SEPARAÇÃO CRIADA!**\n\n🏷️ **DADOS:**\n• Lote: ${separacao.lote_id}\n• Pedido: ${separacao.num_pedido}\n• Tipo: ${separacao.tipo_envio.toUpperCase()}\n• Criada em: ${separacao.data_criacao}\n\n📦 **TOTAIS:**\n• Produtos: ${separacao.total_produtos}\n• Quantidade: ${totais.quantidade.toLocaleString('pt-BR')}\n• Valor: R$ ${totais.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n• Peso: ${totais.peso.toLocaleString('pt-BR')} kg\n• Pallets: ${totais.pallet.toLocaleString('pt-BR', {minimumFractionDigits: 1})}\n\n🔄 A página será recarregada para mostrar a nova separação.`;
+        
+        alert(mensagemSucesso);
+        
+        // Recarregar dados da página para mostrar nova separação
+        location.reload();
+        
+    } catch (error) {
+        console.error('❌ Erro ao criar separação:', error);
+        alert(`❌ **ERRO AO CRIAR SEPARAÇÃO**\n\nPedido: ${numPedidoSeparacoes}\nDetalhes: ${error.message}\n\n🔧 Verifique os dados e tente novamente.`);
+    }
+}
 </script>
 
 {% endblock %} 

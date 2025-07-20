@@ -2122,3 +2122,352 @@ def api_export_excel_produto_detalhes(cod_produto):
         logger.error(f"Erro ao exportar detalhes produto {cod_produto}: {e}")
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
+@carteira_bp.route('/api/separacao/<lote_id>/detalhes')
+@login_required
+def api_separacao_detalhes(lote_id):
+    """
+    🔧 P2.1: Ver detalhes completos de uma separação por lote_id
+    """
+    try:
+        from app.separacao.models import Separacao
+        from app.pedidos.models import Pedido
+        from app.embarques.models import Embarque
+        
+        # 1. Buscar todas as separações do lote
+        separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
+        
+        if not separacoes:
+            return jsonify({'error': f'Separação {lote_id} não encontrada'}), 404
+        
+        # 2. Buscar dados complementares
+        # Pedido relacionado
+        pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
+        
+        # Embarque relacionado
+        embarque = Embarque.query.filter_by(separacao_lote_id=lote_id).first()
+        
+        # Itens da carteira relacionados
+        itens_carteira = CarteiraPrincipal.query.filter_by(
+            separacao_lote_id=lote_id,
+            ativo=True
+        ).all()
+        
+        # 3. Organizar dados da separação
+        produtos_separacao = []
+        totais = {
+            'quantidade': 0,
+            'valor': 0,
+            'peso': 0,
+            'pallet': 0,
+            'produtos': len(separacoes)
+        }
+        
+        for sep in separacoes:
+            produto_info = {
+                'id': sep.id,
+                'cod_produto': sep.cod_produto,
+                'nome_produto': sep.nome_produto,
+                'qtd_saldo': sep.qtd_saldo or 0,
+                'valor_saldo': sep.valor_saldo or 0,
+                'peso': sep.peso or 0,
+                'pallet': sep.pallet or 0,
+                'tipo_envio': sep.tipo_envio or 'total',
+                'rota': sep.rota,
+                'sub_rota': sep.sub_rota,
+                'observ_ped_1': sep.observ_ped_1,
+                'roteirizacao': sep.roteirizacao,
+                'expedicao': sep.expedicao.strftime('%d/%m/%Y') if sep.expedicao else '',
+                'agendamento': sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else '',
+                'protocolo': sep.protocolo or '',
+                'criado_em': sep.criado_em.strftime('%d/%m/%Y %H:%M') if sep.criado_em else ''
+            }
+            produtos_separacao.append(produto_info)
+            
+            # Somar totais
+            totais['quantidade'] += produto_info['qtd_saldo']
+            totais['valor'] += produto_info['valor_saldo']
+            totais['peso'] += produto_info['peso']
+            totais['pallet'] += produto_info['pallet']
+        
+        # 4. Dados do cabeçalho da separação (primeiro item)
+        primeira_sep = separacoes[0]
+        info_cabecalho = {
+            'lote_id': lote_id,
+            'num_pedido': primeira_sep.num_pedido,
+            'data_pedido': primeira_sep.data_pedido.strftime('%d/%m/%Y') if primeira_sep.data_pedido else '',
+            'cnpj_cpf': primeira_sep.cnpj_cpf,
+            'raz_social_red': primeira_sep.raz_social_red,
+            'nome_cidade': primeira_sep.nome_cidade,
+            'cod_uf': primeira_sep.cod_uf,
+            'rota': primeira_sep.rota,
+            'sub_rota': primeira_sep.sub_rota
+        }
+        
+        # 5. Status e vínculos
+        status_info = {
+            'pedido_vinculado': bool(pedido),
+            'pedido_status': pedido.status_calculado if pedido else None,
+            'embarque_vinculado': bool(embarque),
+            'embarque_numero': embarque.numero if embarque else None,
+            'itens_carteira': len(itens_carteira),
+            'pode_editar': pedido.status_calculado in ['ABERTO', 'COTADO'] if pedido else True,
+            'pode_excluir': pedido.status_calculado == 'ABERTO' if pedido else True
+        }
+        
+        return jsonify({
+            'success': True,
+            'separacao': {
+                'cabecalho': info_cabecalho,
+                'produtos': produtos_separacao,
+                'totais': totais,
+                'status': status_info
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar detalhes separação {lote_id}: {e}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+
+@carteira_bp.route('/api/separacao/<lote_id>/editar', methods=['POST'])
+@login_required
+def api_separacao_editar(lote_id):
+    """
+    🔧 P2.1: Editar dados de uma separação existente
+    """
+    try:
+        from app.separacao.models import Separacao
+        from app.pedidos.models import Pedido
+        
+        dados = request.get_json()
+        
+        if not dados:
+            return jsonify({'error': 'Dados não fornecidos'}), 400
+        
+        # 1. Verificar se a separação existe
+        separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
+        
+        if not separacoes:
+            return jsonify({'error': f'Separação {lote_id} não encontrada'}), 404
+        
+        # 2. Verificar se pode editar (status do pedido)
+        pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
+        if pedido and pedido.status_calculado not in ['ABERTO', 'COTADO']:
+            return jsonify({'error': f'Não é possível editar separação. Pedido está {pedido.status_calculado}'}), 403
+        
+        # 3. Campos que podem ser editados
+        campos_editaveis = [
+            'expedicao', 'agendamento', 'protocolo', 'observ_ped_1', 
+            'tipo_envio', 'rota', 'sub_rota', 'roteirizacao'
+        ]
+        
+        # 4. Atualizar dados da separação
+        alteracoes_realizadas = []
+        
+        for separacao in separacoes:
+            for campo in campos_editaveis:
+                if campo in dados:
+                    valor_atual = getattr(separacao, campo)
+                    valor_novo = dados[campo]
+                    
+                    # Tratamento especial para datas
+                    if campo in ['expedicao', 'agendamento'] and valor_novo:
+                        try:
+                            from datetime import datetime
+                            if isinstance(valor_novo, str):
+                                # Assumir formato brasileiro dd/mm/yyyy
+                                valor_novo = datetime.strptime(valor_novo, '%d/%m/%Y').date()
+                        except ValueError:
+                            return jsonify({'error': f'Data inválida para {campo}: {valor_novo}'}), 400
+                    
+                    # Aplicar alteração se valor mudou
+                    if valor_atual != valor_novo:
+                        setattr(separacao, campo, valor_novo)
+                        alteracoes_realizadas.append(f'{campo}: {valor_atual} → {valor_novo}')
+        
+        # 5. Atualizar também na carteira principal se necessário
+        if 'expedicao' in dados or 'agendamento' in dados or 'protocolo' in dados:
+            itens_carteira = CarteiraPrincipal.query.filter_by(
+                separacao_lote_id=lote_id,
+                ativo=True
+            ).all()
+            
+            for item in itens_carteira:
+                if 'expedicao' in dados and dados['expedicao']:
+                    item.expedicao = datetime.strptime(dados['expedicao'], '%d/%m/%Y').date() if isinstance(dados['expedicao'], str) else dados['expedicao']
+                if 'agendamento' in dados and dados['agendamento']:
+                    item.agendamento = datetime.strptime(dados['agendamento'], '%d/%m/%Y').date() if isinstance(dados['agendamento'], str) else dados['agendamento']
+                if 'protocolo' in dados:
+                    item.protocolo = dados['protocolo']
+        
+        # 6. Salvar alterações
+        if alteracoes_realizadas:
+            db.session.commit()
+            
+            logger.info(f"Separação {lote_id} editada por {current_user.nome}. Alterações: {alteracoes_realizadas}")
+            
+            return jsonify({
+                'success': True,
+                'message': f'Separação {lote_id} atualizada com sucesso',
+                'alteracoes': alteracoes_realizadas,
+                'total_produtos': len(separacoes)
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': 'Nenhuma alteração foi necessária',
+                'alteracoes': []
+            })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao editar separação {lote_id}: {e}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+
+@carteira_bp.route('/api/separacao/criar', methods=['POST'])
+@login_required
+def api_separacao_criar():
+    """
+    🔧 P2.1: Criar nova separação a partir de itens da carteira
+    """
+    try:
+        from app.separacao.models import Separacao
+        from app.pedidos.models import Pedido
+        import uuid
+        from datetime import datetime, date
+        
+        dados = request.get_json()
+        
+        if not dados:
+            return jsonify({'error': 'Dados não fornecidos'}), 400
+        
+        # 1. Validar campos obrigatórios
+        campos_obrigatorios = ['num_pedido', 'itens_selecionados']
+        for campo in campos_obrigatorios:
+            if campo not in dados:
+                return jsonify({'error': f'Campo obrigatório: {campo}'}), 400
+        
+        num_pedido = dados['num_pedido']
+        itens_ids = dados['itens_selecionados']  # Lista de IDs dos itens da carteira
+        
+        if not itens_ids:
+            return jsonify({'error': 'Nenhum item selecionado para separação'}), 400
+        
+        # 2. Buscar itens da carteira
+        itens_carteira = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.id.in_(itens_ids),
+            CarteiraPrincipal.num_pedido == num_pedido,
+            CarteiraPrincipal.ativo == True
+        ).all()
+        
+        if len(itens_carteira) != len(itens_ids):
+            return jsonify({'error': 'Alguns itens selecionados não foram encontrados'}), 400
+        
+        # 3. Verificar se já existe separação para estes itens
+        itens_com_separacao = [item for item in itens_carteira if item.separacao_lote_id]
+        if itens_com_separacao:
+            return jsonify({'error': f'Alguns itens já possuem separação: {[item.cod_produto for item in itens_com_separacao]}'}), 400
+        
+        # 4. Gerar novo lote_id único
+        lote_id = f"SEP{datetime.now().strftime('%Y%m%d%H%M%S')}{str(uuid.uuid4())[:4]}"
+        
+        # 5. Obter dados do primeiro item para cabeçalho
+        primeiro_item = itens_carteira[0]
+        
+        # 6. Campos opcionais da separação
+        tipo_envio = dados.get('tipo_envio', 'total')
+        data_expedicao = None
+        data_agendamento = None
+        protocolo = dados.get('protocolo', '')
+        observacoes = dados.get('observacoes', '')
+        
+        # Processar datas se fornecidas
+        if dados.get('expedicao'):
+            try:
+                data_expedicao = datetime.strptime(dados['expedicao'], '%d/%m/%Y').date()
+            except ValueError:
+                return jsonify({'error': 'Data de expedição inválida'}), 400
+                
+        if dados.get('agendamento'):
+            try:
+                data_agendamento = datetime.strptime(dados['agendamento'], '%d/%m/%Y').date()
+            except ValueError:
+                return jsonify({'error': 'Data de agendamento inválida'}), 400
+        
+        # 7. Criar registros de separação
+        separacoes_criadas = []
+        totais = {'quantidade': 0, 'valor': 0, 'peso': 0, 'pallet': 0}
+        
+        for item in itens_carteira:
+            # Criar objeto Separacao e definir atributos
+            separacao = Separacao()
+            separacao.separacao_lote_id = lote_id
+            separacao.num_pedido = item.num_pedido
+            separacao.data_pedido = item.data_pedido
+            separacao.cnpj_cpf = item.cnpj_cpf
+            separacao.raz_social_red = item.raz_social
+            separacao.nome_cidade = item.nome_cidade
+            separacao.cod_uf = item.cod_uf
+            separacao.cod_produto = item.cod_produto
+            separacao.nome_produto = item.nome_produto
+            separacao.qtd_saldo = item.qtd_saldo_produto_pedido
+            separacao.valor_saldo = (item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0)
+            separacao.pallet = item.qtd_pal_pro_ped
+            separacao.peso = item.peso_produto_pedido
+            separacao.rota = item.rota
+            separacao.sub_rota = item.sub_rota
+            separacao.observ_ped_1 = observacoes
+            separacao.roteirizacao = item.roteirizacao
+            separacao.expedicao = data_expedicao
+            separacao.agendamento = data_agendamento
+            separacao.protocolo = protocolo
+            separacao.tipo_envio = tipo_envio
+            separacao.criado_em = datetime.utcnow()
+            
+            db.session.add(separacao)
+            separacoes_criadas.append(separacao)
+            
+            # 8. Atualizar item da carteira com lote_id
+            item.separacao_lote_id = lote_id
+            if data_expedicao:
+                item.expedicao = data_expedicao
+            if data_agendamento:
+                item.agendamento = data_agendamento
+            if protocolo:
+                item.protocolo = protocolo
+            
+            # Somar totais
+            totais['quantidade'] += item.qtd_saldo_produto_pedido or 0
+            totais['valor'] += (item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0)
+            totais['peso'] += item.peso_produto_pedido or 0
+            totais['pallet'] += item.qtd_pal_pro_ped or 0
+        
+        # 9. Atualizar pedido se necessário
+        pedido = Pedido.query.filter_by(num_pedido=num_pedido).first()
+        if pedido and not pedido.separacao_lote_id:
+            pedido.separacao_lote_id = lote_id
+        
+        # 10. Salvar todas as alterações
+        db.session.commit()
+        
+        logger.info(f"Nova separação criada: {lote_id} para pedido {num_pedido} por {current_user.nome}. {len(separacoes_criadas)} produtos.")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Separação criada com sucesso',
+            'separacao': {
+                'lote_id': lote_id,
+                'num_pedido': num_pedido,
+                'total_produtos': len(separacoes_criadas),
+                'tipo_envio': tipo_envio,
+                'totais': totais,
+                'data_criacao': datetime.now().strftime('%d/%m/%Y %H:%M')
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao criar separação: {e}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
