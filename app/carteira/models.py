@@ -141,12 +141,6 @@ class CarteiraPrincipal(db.Model):
     estoque_d27 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D27
     estoque_d28 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D28
     
-    # ✂️ CAMPOS PRÉ-SEPARAÇÃO (Fase 3.3)
-    pre_separacao_avaliado = db.Column(db.Boolean, default=False, index=True)  # Item foi avaliado para separação
-    pre_separacao_qtd = db.Column(db.Numeric(15, 3), nullable=True)  # Quantidade selecionada para separação
-    pre_separacao_em = db.Column(db.DateTime, nullable=True)  # Data/hora da avaliação
-    pre_separacao_por = db.Column(db.String(100), nullable=True)  # Usuário que fez a avaliação
-    
     # 🛡️ AUDITORIA
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
