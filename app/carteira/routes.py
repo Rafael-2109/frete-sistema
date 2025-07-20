@@ -404,6 +404,10 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
                 if dados.get('protocolo'):
                     item.protocolo = dados['protocolo']
                 
+                # ✅ CORREÇÃO: Suporte a observações de agendamento
+                if dados.get('observacoes'):
+                    item.observ_ped_1 = dados['observacoes']
+                
                 # Processar confirmação do agendamento
                 item.agendamento_confirmado = dados.get('agenda_confirmada', False)
                 
@@ -424,6 +428,9 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
                             item_pedido.hora_agendamento = hora_agendamento
                         if dados.get('protocolo'):
                             item_pedido.protocolo = dados['protocolo']
+                        # ✅ CORREÇÃO: Aplicar observações a todos os itens
+                        if dados.get('observacoes'):
+                            item_pedido.observ_ped_1 = dados['observacoes']
                         item_pedido.agendamento_confirmado = dados.get('agenda_confirmada', False)
                     
                     message = f'Agendamento aplicado a {len(itens_mesmo_pedido)} itens do pedido {item.num_pedido}'

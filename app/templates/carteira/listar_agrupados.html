@@ -1495,6 +1495,7 @@ async function salvarAgendamento() {
             data_entrega: formData.get('data_expedicao') || null, // Campo 'data_expedicao' vira 'data_entrega'
             hora_agendamento: formData.get('hora_agendamento') || null,
             protocolo: formData.get('protocolo') || null,
+            observacoes: formData.get('observacoes') || null, // ✅ CORREÇÃO: Incluir observações
             agenda_confirmada: formData.get('agenda_confirmada') === 'on' || false,
             aplicar_todos: true // ✅ SEMPRE aplicar a todos os itens do pedido
         };
@@ -1524,7 +1525,11 @@ async function salvarAgendamento() {
         alert(`✅ ${dataAgendamento.message || 'Agendamento salvo com sucesso!'}`);
         
         // Fechar modal
-        $('#modalAgendamento').modal('hide');
+        const modalElement = document.getElementById('modalAgendamento');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) {
+            modal.hide();
+        }
         
         // Recarregar página para mostrar mudanças
         setTimeout(() => {
@@ -2434,7 +2439,8 @@ function abrirModalAvaliarItens(numPedido) {
 
 function solicitarAgendamento(numPedido) {
     console.log(`🗓️ Solicitar Agendamento pedido ${numPedido}`);
-    $('#modalAgendamento').modal('show');
+    const modal = new bootstrap.Modal(document.getElementById('modalAgendamento'));
+    modal.show();
     carregarDadosAgendamento(numPedido);
 }
 
