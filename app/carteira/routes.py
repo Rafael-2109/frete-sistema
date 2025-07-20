@@ -854,16 +854,21 @@ def api_itens_pedido(num_pedido):
                 'id': item.id,
                 'cod_produto': item.cod_produto,
                 'nome_produto': item.nome_produto,
-                'qtd_saldo': float(item.qtd_saldo_produto_pedido) if item.qtd_saldo_produto_pedido else 0,
+                'qtd_saldo': int(item.qtd_saldo_produto_pedido) if item.qtd_saldo_produto_pedido else 0,  # SEM casa decimal
                 'preco': float(item.preco_produto_pedido) if item.preco_produto_pedido else 0,
                 'valor_item': valor_item,
-                'peso_item': peso_item,
-                'pallet_item': pallet_item,
+                'peso_item': int(peso_item),  # SEM casa decimal  
+                'pallet_item': round(pallet_item, 1),  # 1 casa decimal
                 'expedicao': item.expedicao.strftime('%Y-%m-%d') if item.expedicao else '',
                 'agendamento': item.agendamento.strftime('%Y-%m-%d') if item.agendamento else '',
                 'protocolo': item.protocolo or '',
                 'separacao_lote_id': item.separacao_lote_id or '',
-                'tem_separacao': bool(item.separacao_lote_id)
+                'tem_separacao': bool(item.separacao_lote_id),
+                # Formatação brasileira para frontend
+                'valor_item_formatado': f"R$ {valor_item:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
+                'peso_item_formatado': f"{int(peso_item):,} kg".replace(',', '.'),
+                'pallet_item_formatado': f"{pallet_item:,.1f} pal".replace(',', 'X').replace('.', ',').replace('X', '.'),
+                'qtd_saldo_formatado': f"{int(item.qtd_saldo_produto_pedido) if item.qtd_saldo_produto_pedido else 0:,}".replace(',', '.')
             }
             itens_json.append(item_data)
         

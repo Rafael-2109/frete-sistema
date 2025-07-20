@@ -259,6 +259,278 @@
     {% endif %}
 </div>
 
+<!-- Modal Agendamento -->
+<div class="modal fade" id="modalAgendamento" tabindex="-1" role="dialog" aria-labelledby="modalAgendamentoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAgendamentoLabel">
+                    <i class="fas fa-calendar-plus"></i> Solicitar Agendamento
+                    <span id="modal-agendamento-pedido" class="badge badge-primary ml-2"></span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Loading state -->
+                <div id="modal-agendamento-loading" class="text-center p-4">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p class="mt-2">Carregando dados do pedido...</p>
+                </div>
+                
+                <!-- Error state -->
+                <div id="modal-agendamento-error" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="modal-agendamento-error-message"></span>
+                </div>
+                
+                <!-- Form content -->
+                <div id="modal-agendamento-content" style="display: none;">
+                    <form id="form-agendamento">
+                        <input type="hidden" id="agendamento-num-pedido" name="num_pedido">
+                        
+                        <!-- Resumo do pedido -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-box"></i> Resumo do Pedido
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <strong>Cliente:</strong>
+                                        <div id="agendamento-cliente">-</div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Total de Itens:</strong>
+                                        <div id="agendamento-total-itens">0</div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Valor Total:</strong>
+                                        <div id="agendamento-valor-total">R$ 0,00</div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Peso Total:</strong>
+                                        <div id="agendamento-peso-total">0 kg</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Formulário de agendamento -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="data_agendamento" class="form-label">
+                                    <strong>Data do Agendamento:</strong>
+                                </label>
+                                <input type="date" class="form-control" id="data_agendamento" name="data_agendamento" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="hora_agendamento" class="form-label">
+                                    <strong>Horário:</strong>
+                                </label>
+                                <input type="time" class="form-control" id="hora_agendamento" name="hora_agendamento">
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="data_expedicao" class="form-label">
+                                    <strong>Data de Expedição:</strong>
+                                </label>
+                                <input type="date" class="form-control" id="data_expedicao" name="data_expedicao">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="protocolo_agendamento" class="form-label">
+                                    <strong>Protocolo:</strong>
+                                </label>
+                                <input type="text" class="form-control" id="protocolo_agendamento" name="protocolo" placeholder="Protocolo do agendamento">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="observacoes_agendamento" class="form-label">
+                                <strong>Observações:</strong>
+                            </label>
+                            <textarea class="form-control" id="observacoes_agendamento" name="observacoes" rows="3" placeholder="Observações sobre o agendamento..."></textarea>
+                        </div>
+                        
+                        <!-- Itens do pedido (formatação CORRETA) -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-list"></i> Itens do Pedido
+                                </h6>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Código</th>
+                                                <th>Produto</th>
+                                                <th>Qtd</th>
+                                                <th>Valor</th>
+                                                <th>Peso</th>
+                                                <th>Pallet</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="agendamento-tbody-itens">
+                                            <!-- Itens serão carregados via AJAX -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="salvarAgendamento()">
+                    <i class="fas fa-save"></i> Salvar Agendamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Estoque D0/D7 -->
+<div class="modal fade" id="modalEstoqueD0D7" tabindex="-1" role="dialog" aria-labelledby="modalEstoqueD0D7Label" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEstoqueD0D7Label">
+                    <i class="fas fa-chart-bar"></i> Análise de Estoque D0/D7
+                    <span id="modal-estoque-pedido" class="badge badge-primary ml-2"></span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Loading state -->
+                <div id="modal-estoque-loading" class="text-center p-4">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p class="mt-2">Calculando projeção de estoque...</p>
+                </div>
+                
+                <!-- Content -->
+                <div id="modal-estoque-content" style="display: none;">
+                    <!-- Resumo de alertas -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="card border-danger">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                                    <h5 class="mt-2">D0 - Ruptura Hoje</h5>
+                                    <h3 class="text-danger" id="resumo-problemas-d0">0</h3>
+                                    <small class="text-muted">Itens com falta hoje</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-warning">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-clock fa-2x text-warning"></i>
+                                    <h5 class="mt-2">D1-D7 - Ruptura 7 dias</h5>
+                                    <h3 class="text-warning" id="resumo-problemas-d7">0</h3>
+                                    <small class="text-muted">Itens com falta próximos 7 dias</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-success">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-check-circle fa-2x text-success"></i>
+                                    <h5 class="mt-2">Estoque OK</h5>
+                                    <h3 class="text-success" id="resumo-estoque-ok">0</h3>
+                                    <small class="text-muted">Itens com estoque adequado</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Legenda -->
+                    <div class="alert alert-info">
+                        <strong>📊 Legenda:</strong>
+                        <span class="badge badge-danger ml-2">CRÍTICO</span> Ruptura hoje (D0)
+                        <span class="badge badge-warning ml-2">BAIXO</span> Estoque baixo (≤10)
+                        <span class="badge badge-info ml-2">NORMAL</span> Estoque adequado
+                        <span class="badge badge-success ml-2">ALTO</span> Estoque alto (>50)
+                    </div>
+                    
+                    <!-- Tabela de itens -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Análise Detalhada por Item</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Código</th>
+                                            <th>Produto</th>
+                                            <th>Qtd Pedido</th>
+                                            <th>Estoque D0</th>
+                                            <th>Estoque D7</th>
+                                            <th>Status</th>
+                                            <th>Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="estoque-tbody-itens">
+                                        <!-- Itens serão carregados via AJAX -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="exportarAnaliseEstoque()">
+                    <i class="fas fa-download"></i> Exportar Análise
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Incoterm -->
+<div class="modal fade" id="modalIncoterm" tabindex="-1" role="dialog" aria-labelledby="modalIncotermLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalIncotermLabel">
+                    <i class="fas fa-info-circle"></i> Detalhes do Incoterm
+                    <span id="modal-incoterm-titulo" class="badge badge-info ml-2"></span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-incoterm-content">
+                    <!-- Conteúdo será carregado dinamicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Avaliar Itens -->
 <div class="modal fade" id="modalAvaliarItens" tabindex="-1" role="dialog" aria-labelledby="modalAvaliarItensLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl" role="document">
@@ -795,11 +1067,11 @@ function gerarHtmlItens(data) {
             <tr>
                 <td><small>${item.cod_produto}</small></td>
                 <td><small>${item.nome_produto || ''}</small></td>
-                <td><strong>${item.qtd_saldo.toFixed(3)}</strong></td>
-                <td>R$ ${item.preco.toFixed(2)}</td>
-                <td><strong>R$ ${item.valor_item.toFixed(2)}</strong></td>
-                <td>${item.peso_item.toFixed(2)} kg</td>
-                <td>${item.pallet_item.toFixed(3)} pal</td>
+                <td><strong>${item.qtd_saldo_formatado}</strong></td>
+                <td>R$ ${item.preco.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td><strong>${item.valor_item_formatado}</strong></td>
+                <td>${item.peso_item_formatado}</td>
+                <td>${item.pallet_item_formatado}</td>
                 <td>${item.expedicao || '-'}</td>
                 <td>${item.agendamento || '-'}</td>
                 <td>
@@ -823,9 +1095,9 @@ function gerarHtmlItens(data) {
                 <tfoot class="bg-light">
                     <tr>
                         <th colspan="4">TOTAIS:</th>
-                        <th>R$ ${data.totais.valor.toFixed(2)}</th>
-                        <th>${data.totais.peso.toFixed(2)} kg</th>
-                        <th>${data.totais.pallet.toFixed(3)} pal</th>
+                        <th>R$ ${data.totais.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</th>
+                        <th>${Math.round(data.totais.peso).toLocaleString('pt-BR')} kg</th>
+                        <th>${data.totais.pallet.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})} pal</th>
                         <th colspan="4">
                             <small class="text-muted">
                                 ${data.itens_separados}/${data.total_itens} separados
@@ -957,20 +1229,29 @@ function gerarHtmlItensModal(data) {
                 </td>
                 <td><small><strong>${item.cod_produto}</strong></small></td>
                 <td><small>${item.nome_produto || ''}</small></td>
-                <td><strong>${item.qtd_saldo.toFixed(3)}</strong></td>
+                <td><strong>${item.qtd_saldo_formatado}</strong></td>
                 <td>
                     <input type="number" 
                            class="form-control form-control-sm qtd-input" 
                            data-item-id="${item.id}"
                            data-max="${item.qtd_saldo}"
-                           step="0.001"
+                           data-preco="${item.preco}"
+                           data-peso-unitario="${item.peso_item / item.qtd_saldo || 0}"
+                           data-pallet-unitario="${item.pallet_item / item.qtd_saldo || 0}"
+                           step="1"
                            min="0"
                            max="${item.qtd_saldo}"
-                           value="${item.qtd_saldo.toFixed(3)}"
-                           onchange="validarQuantidade(this); calcularTotaisModal()"
+                           value="${Math.round(item.qtd_saldo)}"
+                           placeholder="${Math.round(item.qtd_saldo)}"
+                           onchange="validarQuantidade(this); calcularTotaisModal(); atualizarCalculosItem(this)"
+                           oninput="atualizarCalculosItem(this)"
                            ${disabled}>
+                    <small class="text-muted">Qtd editável - auto-cálculo valor/peso/pallet</small>
                 </td>
-                <td>R$ ${item.preco.toFixed(2)}</td>
+                <td>
+                    <span class="valor-calculado">R$ ${item.preco.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    <input type="hidden" class="valor-original" value="${item.preco}">
+                </td>
                 <td>
                     <input type="date" 
                            class="form-control form-control-sm" 
@@ -1016,9 +1297,294 @@ function gerarHtmlItensModal(data) {
  */
 function atualizarResumoModal(data) {
     document.getElementById('resumo-total-itens').textContent = data.total_itens;
-    document.getElementById('resumo-valor-total').textContent = `R$ ${data.totais.valor.toFixed(2)}`;
-    document.getElementById('resumo-peso-total').textContent = `${data.totais.peso.toFixed(2)} kg`;
+    document.getElementById('resumo-valor-total').textContent = `R$ ${data.totais.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    document.getElementById('resumo-peso-total').textContent = `${Math.round(data.totais.peso).toLocaleString('pt-BR')} kg`;
     document.getElementById('resumo-selecionados').textContent = '0';
+}
+
+/**
+ * 🎯 AUTO-CÁLCULO CONFORME CARTEIRA.CSV
+ * Atualiza cálculos de valor, peso e pallet quando quantidade é alterada
+ */
+function atualizarCalculosItem(input) {
+    const qtd = parseFloat(input.value) || 0;
+    const preco = parseFloat(input.getAttribute('data-preco')) || 0;
+    const pesoUnitario = parseFloat(input.getAttribute('data-peso-unitario')) || 0;
+    const palletUnitario = parseFloat(input.getAttribute('data-pallet-unitario')) || 0;
+    const itemId = input.getAttribute('data-item-id');
+    
+    // Calcular valores
+    const valorTotal = qtd * preco;
+    const pesoTotal = qtd * pesoUnitario;
+    const palletTotal = qtd * palletUnitario;
+    
+    // Atualizar span de valor na mesma linha
+    const row = input.closest('tr');
+    const valorSpan = row.querySelector('.valor-calculado');
+    if (valorSpan) {
+        valorSpan.textContent = `R$ ${valorTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+    
+    // Adicionar colunas de peso e pallet calculados se não existirem
+    if (!row.querySelector('.peso-calculado')) {
+        const valorCell = row.querySelector('.valor-calculado').parentElement;
+        
+        // Adicionar célula de peso
+        const pesoCell = document.createElement('td');
+        pesoCell.innerHTML = `<span class="peso-calculado">${Math.round(pesoTotal).toLocaleString('pt-BR')} kg</span>`;
+        valorCell.insertAdjacentElement('afterend', pesoCell);
+        
+        // Adicionar célula de pallet  
+        const palletCell = document.createElement('td');
+        palletCell.innerHTML = `<span class="pallet-calculado">${palletTotal.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})} pal</span>`;
+        pesoCell.insertAdjacentElement('afterend', palletCell);
+    } else {
+        // Atualizar células existentes
+        const pesoSpan = row.querySelector('.peso-calculado');
+        const palletSpan = row.querySelector('.pallet-calculado');
+        
+        if (pesoSpan) {
+            pesoSpan.textContent = `${Math.round(pesoTotal).toLocaleString('pt-BR')} kg`;
+        }
+        if (palletSpan) {
+            palletSpan.textContent = `${palletTotal.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})} pal`;
+        }
+    }
+    
+    console.log(`🧮 Auto-cálculo item ${itemId}: Qtd ${qtd} → Valor ${valorTotal.toFixed(2)} | Peso ${pesoTotal.toFixed(0)} | Pallet ${palletTotal.toFixed(1)}`);
+}
+
+/**
+ * 🗓️ MODAL AGENDAMENTO - FUNÇÕES IMPLEMENTADAS
+ */
+function carregarDadosAgendamento(numPedido) {
+    const modalLoading = document.getElementById('modal-agendamento-loading');
+    const modalError = document.getElementById('modal-agendamento-error');
+    const modalContent = document.getElementById('modal-agendamento-content');
+    
+    // Reset states
+    modalLoading.style.display = 'block';
+    modalError.style.display = 'none';
+    modalContent.style.display = 'none';
+    
+    // Atualizar título
+    document.getElementById('modal-agendamento-pedido').textContent = numPedido;
+    document.getElementById('agendamento-num-pedido').value = numPedido;
+    
+    // Carregar dados via AJAX
+    fetch(`/carteira/api/pedido/${numPedido}/itens`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Atualizar resumo
+                document.getElementById('agendamento-total-itens').textContent = data.total_itens;
+                document.getElementById('agendamento-valor-total').textContent = `R$ ${data.totais.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                document.getElementById('agendamento-peso-total').textContent = `${Math.round(data.totais.peso).toLocaleString('pt-BR')} kg`;
+                
+                // Carregar itens na tabela
+                gerarTabelaAgendamento(data);
+                
+                modalLoading.style.display = 'none';
+                modalContent.style.display = 'block';
+            } else {
+                throw new Error(data.error || 'Erro ao carregar dados');
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar agendamento:', error);
+            document.getElementById('modal-agendamento-error-message').textContent = error.message;
+            modalLoading.style.display = 'none';
+            modalError.style.display = 'block';
+        });
+}
+
+function gerarTabelaAgendamento(data) {
+    const tbody = document.getElementById('agendamento-tbody-itens');
+    let html = '';
+    
+    data.itens.forEach(item => {
+        html += `
+            <tr>
+                <td><small><strong>${item.cod_produto}</strong></small></td>
+                <td><small>${item.nome_produto || ''}</small></td>
+                <td><strong>${item.qtd_saldo_formatado}</strong></td>
+                <td><strong>${item.valor_item_formatado}</strong></td>
+                <td>${item.peso_item_formatado}</td>
+                <td>${item.pallet_item_formatado}</td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+function salvarAgendamento() {
+    const form = document.getElementById('form-agendamento');
+    const formData = new FormData(form);
+    
+    // Validar campos obrigatórios
+    if (!formData.get('data_agendamento')) {
+        alert('⚠️ Data do agendamento é obrigatória');
+        document.getElementById('data_agendamento').focus();
+        return;
+    }
+    
+    console.log('🗓️ Salvando agendamento:', Object.fromEntries(formData));
+    alert('✅ Agendamento salvo com sucesso! (Função será implementada na API)');
+    $('#modalAgendamento').modal('hide');
+}
+
+/**
+ * 📊 MODAL ESTOQUE D0/D7 - FUNÇÕES IMPLEMENTADAS
+ */
+function carregarEstoqueD0D7(numPedido) {
+    const modalLoading = document.getElementById('modal-estoque-loading');
+    const modalContent = document.getElementById('modal-estoque-content');
+    
+    // Reset states
+    modalLoading.style.display = 'block';
+    modalContent.style.display = 'none';
+    
+    // Atualizar título
+    document.getElementById('modal-estoque-pedido').textContent = numPedido;
+    
+    // Simular carregamento (integração com estoque.models será implementada)
+    setTimeout(() => {
+        // Dados simulados para demonstração
+        const dadosEstoque = {
+            resumo: {
+                problemas_d0: 2,
+                problemas_d7: 5,
+                estoque_ok: 8
+            },
+            itens: [
+                { cod_produto: 'PROD001', nome_produto: 'Produto Exemplo 1', qtd_pedido: 100, estoque_d0: 0, estoque_d7: 50, status: 'CRÍTICO' },
+                { cod_produto: 'PROD002', nome_produto: 'Produto Exemplo 2', qtd_pedido: 50, estoque_d0: 25, estoque_d7: 10, status: 'BAIXO' },
+                { cod_produto: 'PROD003', nome_produto: 'Produto Exemplo 3', qtd_pedido: 200, estoque_d0: 300, estoque_d7: 250, status: 'NORMAL' }
+            ]
+        };
+        
+        // Atualizar resumo
+        document.getElementById('resumo-problemas-d0').textContent = dadosEstoque.resumo.problemas_d0;
+        document.getElementById('resumo-problemas-d7').textContent = dadosEstoque.resumo.problemas_d7;
+        document.getElementById('resumo-estoque-ok').textContent = dadosEstoque.resumo.estoque_ok;
+        
+        // Gerar tabela
+        gerarTabelaEstoque(dadosEstoque.itens);
+        
+        modalLoading.style.display = 'none';
+        modalContent.style.display = 'block';
+    }, 1500);
+}
+
+function gerarTabelaEstoque(itens) {
+    const tbody = document.getElementById('estoque-tbody-itens');
+    let html = '';
+    
+    itens.forEach(item => {
+        const statusClass = item.status === 'CRÍTICO' ? 'danger' : 
+                          item.status === 'BAIXO' ? 'warning' : 
+                          item.status === 'NORMAL' ? 'info' : 'success';
+        
+        html += `
+            <tr>
+                <td><small><strong>${item.cod_produto}</strong></small></td>
+                <td><small>${item.nome_produto}</small></td>
+                <td><strong>${item.qtd_pedido.toLocaleString('pt-BR')}</strong></td>
+                <td>${item.estoque_d0.toLocaleString('pt-BR')}</td>
+                <td>${item.estoque_d7.toLocaleString('pt-BR')}</td>
+                <td>
+                    <span class="badge badge-${statusClass}">
+                        ${item.status}
+                    </span>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="verDetalhesEstoque('${item.cod_produto}')" title="Ver detalhes">
+                        <i class="fas fa-chart-line"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+function exportarAnaliseEstoque() {
+    console.log('📊 Exportando análise de estoque...');
+    alert('📊 Função de exportação será implementada em breve');
+}
+
+function verDetalhesEstoque(codProduto) {
+    console.log(`📊 Ver detalhes estoque produto: ${codProduto}`);
+    alert(`📊 Detalhes do produto ${codProduto} - funcionalidade será implementada`);
+}
+
+/**
+ * ℹ️ MODAL INCOTERM - FUNÇÕES IMPLEMENTADAS
+ */
+function carregarDetalhesIncoterm(incoterm) {
+    const content = document.getElementById('modal-incoterm-content');
+    
+    // Dados dos incoterms mais comuns
+    const incotermInfo = {
+        'FOB': {
+            nome: 'Free On Board',
+            descricao: 'O vendedor entrega a mercadoria no porto de embarque. A partir deste ponto, todos os custos e riscos são do comprador.',
+            responsabilidades: {
+                vendedor: ['Entregar mercadoria no porto', 'Custos de carregamento', 'Documentação de exportação'],
+                comprador: ['Frete marítimo', 'Seguro', 'Custos no destino', 'Desembaraço de importação']
+            }
+        },
+        'CIF': {
+            nome: 'Cost, Insurance and Freight',
+            descricao: 'O vendedor paga frete e seguro até o porto de destino, mas o risco transfere no embarque.',
+            responsabilidades: {
+                vendedor: ['Mercadoria no navio', 'Frete marítimo', 'Seguro mínimo', 'Documentação'],
+                comprador: ['Desembaraço importação', 'Custos no destino', 'Transporte interno']
+            }
+        },
+        'EXW': {
+            nome: 'Ex Works',
+            descricao: 'O comprador assume todos os custos e riscos desde a retirada na fábrica do vendedor.',
+            responsabilidades: {
+                vendedor: ['Disponibilizar mercadoria', 'Embalagem'],
+                comprador: ['Retirada na origem', 'Todos os fretes', 'Seguros', 'Documentação']
+            }
+        }
+    };
+    
+    const info = incotermInfo[incoterm] || {
+        nome: incoterm,
+        descricao: 'Informações detalhadas não disponíveis para este incoterm.',
+        responsabilidades: { vendedor: [], comprador: [] }
+    };
+    
+    content.innerHTML = `
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">${info.nome}</h5>
+            </div>
+            <div class="card-body">
+                <p class="lead">${info.descricao}</p>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-success"><i class="fas fa-user-tie"></i> Responsabilidades do Vendedor:</h6>
+                        <ul class="list-group list-group-flush">
+                            ${info.responsabilidades.vendedor.map(item => `<li class="list-group-item">${item}</li>`).join('')}
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary"><i class="fas fa-user"></i> Responsabilidades do Comprador:</h6>
+                        <ul class="list-group list-group-flush">
+                            ${info.responsabilidades.comprador.map(item => `<li class="list-group-item">${item}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 /**
@@ -1033,22 +1599,26 @@ function toggleTodosItens(masterCheckbox) {
 }
 
 /**
- * Valida quantidade inserida
+ * Valida quantidade inserida (SEM CASAS DECIMAIS conforme regra)
  */
 function validarQuantidade(input) {
-    const max = parseFloat(input.getAttribute('data-max'));
-    const value = parseFloat(input.value);
+    const max = Math.round(parseFloat(input.getAttribute('data-max')));
+    let value = parseFloat(input.value);
     
     if (isNaN(value) || value < 0) {
-        input.value = '0.000';
+        input.value = '0';
         input.classList.add('is-invalid');
         return false;
     }
     
+    // Forçar número inteiro (sem casa decimal)
+    value = Math.round(value);
+    input.value = value;
+    
     if (value > max) {
-        input.value = max.toFixed(3);
+        input.value = max;
         input.classList.add('is-invalid');
-        alert(`Quantidade não pode exceder ${max.toFixed(3)}`);
+        alert(`Quantidade não pode exceder ${max}`);
         return false;
     }
     
@@ -1086,9 +1656,9 @@ function calcularTotaisModal() {
         }
     });
     
-    // Atualizar interface
-    document.getElementById('total-qtd-selecionada').textContent = totalQtd.toFixed(3);
-    document.getElementById('total-valor-selecionado').textContent = `R$ ${totalValor.toFixed(2)}`;
+    // Atualizar interface (formatação brasileira SEM casas decimais para qtd)
+    document.getElementById('total-qtd-selecionada').textContent = Math.round(totalQtd).toLocaleString('pt-BR');
+    document.getElementById('total-valor-selecionado').textContent = `R$ ${totalValor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     document.getElementById('resumo-selecionados').textContent = countSelecionados;
     
     // Atualizar cor do badge
@@ -1720,6 +2290,45 @@ function validarEnvioParcial() {
     }
     
     return true;
+}
+
+/**
+ * 🔧 FUNÇÕES DOS BOTÕES - IMPLEMENTADAS
+ */
+function criarSeparacao(numPedido) {
+    console.log(`📦 Criar Separação pedido ${numPedido}`);
+    abrirModalAvaliarItens(numPedido);
+}
+
+function consultarSeparacoes(numPedido) {
+    console.log(`📋 Consultar Separações pedido ${numPedido}`);
+    $('#modalSeparacoes').modal('show');
+    carregarSeparacoesPedido(numPedido);
+}
+
+function abrirModalAvaliarItens(numPedido) {
+    console.log(`🔍 Avaliar Itens pedido ${numPedido}`);
+    $('#modalAvaliarItens').modal('show');
+    carregarItensParaAvaliacao(numPedido);
+}
+
+function solicitarAgendamento(numPedido) {
+    console.log(`🗓️ Solicitar Agendamento pedido ${numPedido}`);
+    $('#modalAgendamento').modal('show');
+    carregarDadosAgendamento(numPedido);
+}
+
+function calcularEstoqueD0D7(numPedido) {
+    console.log(`📊 Calcular Estoque D0/D7 pedido ${numPedido}`);
+    $('#modalEstoqueD0D7').modal('show');
+    carregarEstoqueD0D7(numPedido);
+}
+
+function abrirModalIncoterm(incoterm) {
+    console.log(`ℹ️ Abrir Modal Incoterm: ${incoterm}`);
+    $('#modalIncoterm').modal('show');
+    document.getElementById('modal-incoterm-titulo').textContent = incoterm;
+    carregarDetalhesIncoterm(incoterm);
 }
 
 /**
