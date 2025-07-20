@@ -162,4 +162,28 @@ db.session.add(pre_separacao)
 - **ETAPA 3**: Sistema real conectado → ✅ CONCLUÍDA
 
 ### **Status Final:**
-**🟢 PROJETO CARTEIRA: 100% IMPLEMENTADO E OPERACIONAL** 
+**🟢 PROJETO CARTEIRA: 100% IMPLEMENTADO E OPERACIONAL**
+
+---
+
+## 🚨 **CORREÇÕES CRÍTICAS PÓS-IMPLEMENTAÇÃO**
+
+### **🔧 Correção #1 - BuildError (20/07 01:12)**
+- **Problema**: `url_for('carteira.agrupados')` incorreto no template
+- **Solução**: Corrigido para `url_for('carteira.listar_pedidos_agrupados')`
+- **Commit**: `d12b0fd`
+- **Status**: ✅ RESOLVIDO
+
+### **🔧 Correção #2 - UndefinedColumn (20/07 01:26)**  
+- **Problema**: Campos `pre_separacao_*` no modelo mas não no banco
+- **Solução**: Removidos 4 campos obsoletos do `CarteiraPrincipal`
+- **Commit**: `1dba634`
+- **Status**: ✅ RESOLVIDO
+
+### **📊 Resultado das Correções:**
+- ✅ Dashboard da carteira funcionando 100%
+- ✅ Modelo alinhado com banco PostgreSQL  
+- ✅ Arquitetura limpa (tabelas especializadas)
+- ✅ Sistema usa `pre_separacao_itens` corretamente
+
+**🎯 SISTEMA TOTALMENTE ESTÁVEL NO RENDER** 

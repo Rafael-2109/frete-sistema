@@ -346,9 +346,29 @@ def create_app(config_name=None):
         except (ValueError, TypeError):
             return '0 kg'
     
+    def formatar_pallet_brasileiro(valor):
+        """Formata pallet em padrão brasileiro com 1 casa decimal (1.234,5 pal)"""
+        if valor is None or valor == '':
+            return '0,0 pal'
+        
+        try:
+            valor_float = float(valor)
+            valor_formatado = f"{valor_float:,.1f}"
+            # Converte para padrão brasileiro
+            partes = valor_formatado.split('.')
+            if len(partes) == 2:
+                inteira = partes[0].replace(',', '.')
+                decimal = partes[1]
+                return f"{inteira},{decimal} pal"
+            else:
+                return f"{valor_formatado.replace(',', '.')} pal"
+        except (ValueError, TypeError):
+            return '0,0 pal'
+    
     app.jinja_env.filters['valor_br'] = formatar_valor_brasileiro
     app.jinja_env.filters['numero_br'] = formatar_numero_brasileiro
     app.jinja_env.filters['peso_br'] = formatar_peso_brasileiro
+    app.jinja_env.filters['pallet_br'] = formatar_pallet_brasileiro
     
     # ✅ NOVO: Registrar filtros de arquivo
     try:
