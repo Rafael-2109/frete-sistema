@@ -287,11 +287,40 @@ class SaldoEstoque:
     @staticmethod
     def calcular_saida_periodo(cod_produto, data_inicio, data_fim):
         """
-        Calcula saída prevista para um produto em um período
-        Por enquanto retorna 0 - será implementado quando tiver carteira de pedidos
+        Calcula saída prevista para um produto em um período usando CarteiraPrincipal
+        Implementação: Fase 1.2 - Integração com Carteira conforme CARTEIRA.csv
         """
-        # TODO: Implementar quando tiver módulo carteira de pedidos (arquivo 1)
-        return 0
+        try:
+            from app.carteira.models import CarteiraPrincipal
+            
+            # Buscar todos os códigos relacionados (considerando unificação)
+            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            
+            total_saida = 0
+            for codigo in codigos_relacionados:
+                # Buscar itens na carteira que ainda não foram para separação
+                # separacao_lote_id.is_(None) = ainda não separado = saída prevista
+                itens_carteira = CarteiraPrincipal.query.filter(
+                    CarteiraPrincipal.cod_produto == str(codigo),
+                    CarteiraPrincipal.data_entrega_pedido.between(data_inicio, data_fim),
+                    CarteiraPrincipal.separacao_lote_id.is_(None),  # Ainda não separado
+                    CarteiraPrincipal.ativo == True
+                ).all()
+                
+                # Somar quantidade de saída prevista
+                for item in itens_carteira:
+                    if item.qtd_saldo_produto_pedido:
+                        total_saida += float(item.qtd_saldo_produto_pedido)
+            
+            logger.info(f"Saída período calculada - Produto: {cod_produto}, "
+                       f"Período: {data_inicio} a {data_fim}, Saída: {total_saida}")
+            
+            return total_saida
+            
+        except Exception as e:
+            logger.error(f"Erro ao calcular saída período para {cod_produto}: {str(e)}")
+            # Fallback para não quebrar sistema existente
+            return 0
     
     @staticmethod
     def calcular_projecao_completa(cod_produto):

@@ -1,0 +1,1702 @@
+{% extends "base.html" %}
+
+{% block title %}Carteira Agrupada{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-layer-group text-primary"></i> 
+            Carteira Agrupada por Pedidos
+            {% if total_pedidos %}
+                <span class="badge badge-primary">{{ total_pedidos }} pedidos</span>
+            {% endif %}
+        </h1>
+        <div>
+            <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <a href="{{ url_for('carteira.listar_principal') }}" class="btn btn-info btn-sm">
+                <i class="fas fa-list"></i> Lista Detalhada
+            </a>
+        </div>
+    </div>
+
+    {% if pedidos %}
+    <!-- Status da implementação -->
+    <div class="alert alert-info">
+        <strong>🔧 Fase 1.1 - Query de Agrupamento Base</strong><br>
+        Status: ✅ Implementada e testando<br>
+        Funcionalidade: Agrupamento por num_pedido com agregações conforme CARTEIRA.csv
+    </div>
+
+    <!-- Resultados Agrupados -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-table"></i> Pedidos Agrupados ({{ total_pedidos }} pedidos encontrados)
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>Vendedor</th>
+                            <th>Pedido</th>
+                            <th>Cliente</th>
+                            <th>Rota</th>
+                            <th>Data Entrega</th>
+                            <th>Valor Total</th>
+                            <th>Peso Total</th>
+                            <th>Pallet Total</th>
+                            <th>Itens</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pedido in pedidos %}
+                        <tr class="pedido-row" data-pedido="{{ pedido.num_pedido }}">
+                            <td>{{ pedido.vendedor or '' }}</td>
+                            <td>
+                                <button class="btn btn-link p-0 mr-2 btn-expandir" 
+                                        onclick="togglePedidoItens('{{ pedido.num_pedido }}')"
+                                        title="Expandir/Colapsar itens">
+                                    <i class="fas fa-chevron-right expand-icon" id="icon-{{ pedido.num_pedido }}"></i>
+                                </button>
+                                <strong>{{ pedido.num_pedido }}</strong>
+                                {% if pedido.status_pedido %}
+                                <br><small class="text-muted">{{ pedido.status_pedido }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ pedido.raz_social_red or '' }}
+                                {% if pedido.cod_uf and pedido.nome_cidade %}
+                                <br><small class="text-muted">{{ pedido.nome_cidade }}/{{ pedido.cod_uf }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ pedido.rota or '' }}
+                                {% if pedido.sub_rota %}
+                                / {{ pedido.sub_rota }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if pedido.data_entrega_pedido %}
+                                {{ pedido.data_entrega_pedido.strftime('%d/%m/%Y') }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if pedido.valor_total %}
+                                <strong>R$ {{ "%.2f"|format(pedido.valor_total) }}</strong>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if pedido.peso_total %}
+                                {{ "%.2f"|format(pedido.peso_total) }} Kg
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if pedido.pallet_total %}
+                                {{ "%.2f"|format(pedido.pallet_total) }} Pal
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge badge-info">{{ pedido.total_itens }} itens</span>
+                            </td>
+                            <td>
+                                <!-- 4 botões conforme CARTEIRA.csv -->
+                                <div class="btn-group-vertical btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-primary btn-sm" title="Criar Separação">
+                                        📦 Separação
+                                    </button>
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-info btn-sm dropdown-toggle" data-toggle="dropdown" title="Consultar Separações">
+                                            📋 Consultar
+                                        </button>
+                                        <div class="dropdown-menu">
+                                            <a class="dropdown-item" href="#" onclick="abrirModalAvaliarItens('{{ pedido.num_pedido }}')">
+                                                📋 Avaliar Itens
+                                            </a>
+                                            <a class="dropdown-item" href="#" onclick="consultarSeparacoes('{{ pedido.num_pedido }}')">
+                                                📦 Ver Separações
+                                            </a>
+                                            <a class="dropdown-item" href="#" onclick="calcularEstoqueD0D7('{{ pedido.num_pedido }}')">
+                                                📊 Estoque D0/D7
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-warning btn-sm dropdown-toggle" data-toggle="dropdown" title="Avaliar Itens">
+                                            🔍 Avaliar
+                                        </button>
+                                        <div class="dropdown-menu">
+                                            <a class="dropdown-item" href="#" onclick="abrirModalAvaliarItens('{{ pedido.num_pedido }}')">
+                                                📋 Avaliar Itens
+                                            </a>
+                                            <a class="dropdown-item" href="#" onclick="calcularEstoqueD0D7('{{ pedido.num_pedido }}')">
+                                                📊 Estoque D0/D7
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-success btn-sm" title="Agendar">
+                                        🗓️ Agendar
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        <!-- Linha expandida para itens do pedido (inicialmente oculta) -->
+                        <tr class="itens-expandidos collapse" id="itens-{{ pedido.num_pedido }}">
+                            <td colspan="10">
+                                <div class="card mt-2 mb-2">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-list"></i> 
+                                            Itens do Pedido {{ pedido.num_pedido }}
+                                            <span class="badge badge-info ml-2" id="badge-{{ pedido.num_pedido }}">
+                                                Carregando...
+                                            </span>
+                                        </h6>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div id="loading-{{ pedido.num_pedido }}" class="text-center p-3">
+                                            <i class="fas fa-spinner fa-spin"></i> Carregando itens...
+                                        </div>
+                                        <div id="content-{{ pedido.num_pedido }}" style="display: none;">
+                                            <!-- Conteúdo será carregado via AJAX -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Info -->
+    <div class="card shadow mt-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-secondary">
+                <i class="fas fa-bug"></i> Informações de Debug
+            </h6>
+        </div>
+        <div class="card-body">
+            <p><strong>Total de pedidos agrupados:</strong> {{ total_pedidos }}</p>
+            <p><strong>Campos agregados sendo calculados:</strong></p>
+            <ul>
+                <li>valor_total = SUM(qtd_saldo_produto_pedido * preco_produto_pedido)</li>
+                <li>peso_total = SUM(qtd_saldo_produto_pedido * CadastroPalletizacao.peso_bruto)</li>
+                <li>pallet_total = SUM(qtd_saldo_produto_pedido / CadastroPalletizacao.palletizacao)</li>
+                <li>total_itens = COUNT(id)</li>
+            </ul>
+            <p><strong>Status da implementação:</strong> ✅ Query base funcionando, próximo: calcular_saida_periodo()</p>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Sem dados -->
+    <div class="card shadow mb-4">
+        <div class="card-body text-center">
+            <i class="fas fa-inbox fa-3x text-gray-300 mb-3"></i>
+            <h5 class="text-gray-500">Nenhum pedido encontrado</h5>
+            <p class="text-gray-400">
+                {% if not pedidos %}
+                Verifique se existem dados na carteira principal ou se houve erro na query.
+                {% else %}
+                Os filtros aplicados não retornaram resultados.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal Avaliar Itens -->
+<div class="modal fade" id="modalAvaliarItens" tabindex="-1" role="dialog" aria-labelledby="modalAvaliarItensLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAvaliarItensLabel">
+                    <i class="fas fa-edit"></i> Avaliar Itens do Pedido
+                    <span id="modal-num-pedido" class="badge badge-primary ml-2"></span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Loading state -->
+                <div id="modal-loading" class="text-center p-4">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p class="mt-2">Carregando itens para avaliação...</p>
+                </div>
+                
+                <!-- Error state -->
+                <div id="modal-error" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="modal-error-message"></span>
+                    <button class="btn btn-sm btn-outline-danger ml-2" onclick="recarregarModalItens()">
+                        <i class="fas fa-redo"></i> Tentar novamente
+                    </button>
+                </div>
+                
+                <!-- Form content -->
+                <div id="modal-content" style="display: none;">
+                    <form id="form-avaliar-itens">
+                        <input type="hidden" id="form-num-pedido" name="num_pedido">
+                        
+                        <!-- Resumo do pedido -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-info-circle"></i> Resumo do Pedido
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <strong>Total de Itens:</strong>
+                                        <span id="resumo-total-itens" class="badge badge-info">0</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Valor Total:</strong>
+                                        <span id="resumo-valor-total">R$ 0,00</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Peso Total:</strong>
+                                        <span id="resumo-peso-total">0 kg</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Selecionados:</strong>
+                                        <span id="resumo-selecionados" class="badge badge-warning">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 🎯 ETAPA 2: DROPDOWN TIPO DE ENVIO (IMPLEMENTADO) -->
+                        <div class="card border-primary mb-3">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-shipping-fast"></i> Configuração do Tipo de Envio
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label for="tipo_envio" class="form-label">
+                                            <strong>Tipo de Envio:</strong>
+                                        </label>
+                                        <select class="form-control" id="tipo_envio" name="tipo_envio" onchange="atualizarTipoEnvio()">
+                                            <option value="total">📦 Envio Total</option>
+                                            <option value="parcial">📋 Envio Parcial</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <div id="explicacao_tipo_envio">
+                                            <div id="explicacao_total" class="alert alert-success mb-0">
+                                                <strong>📦 Envio Total:</strong> Todos os itens selecionados serão enviados em uma única separação completa. Ideal para pedidos que podem ser entregues integralmente.
+                                            </div>
+                                            <div id="explicacao_parcial" class="alert alert-warning mb-0" style="display: none;">
+                                                <strong>📋 Envio Parcial:</strong> Apenas parte dos itens será enviada agora, o restante ficará para próximos envios. Configure os motivos e justificativas abaixo.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Campos específicos para Envio Parcial -->
+                                <div id="campos_envio_parcial" style="display: none;">
+                                    <hr>
+                                    <h6 class="text-muted mb-3">
+                                        <i class="fas fa-edit"></i> Configurações do Envio Parcial
+                                    </h6>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label for="motivo_parcial" class="form-label">Motivo do Envio Parcial:</label>
+                                            <select class="form-control" id="motivo_parcial" name="motivo_parcial">
+                                                <option value="">Selecionar motivo...</option>
+                                                <option value="ruptura_estoque">🔴 Ruptura de Estoque</option>
+                                                <option value="capacidade_transporte">🚛 Limitação de Transporte</option>
+                                                <option value="prazo_cliente">⏰ Urgência do Cliente</option>
+                                                <option value="producao_andamento">🏭 Produção em Andamento</option>
+                                                <option value="estrategia_comercial">💼 Estratégia Comercial</option>
+                                                <option value="outros">❓ Outros</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label for="justificativa_parcial" class="form-label">Justificativa Detalhada:</label>
+                                            <textarea class="form-control" id="justificativa_parcial" name="justificativa_parcial" 
+                                                      rows="2" placeholder="Descreva o motivo específico do envio parcial..."></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label for="previsao_complemento" class="form-label">Previsão para Complemento:</label>
+                                            <input type="date" class="form-control" id="previsao_complemento" name="previsao_complemento">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label for="responsavel_aprovacao" class="form-label">Responsável pela Aprovação:</label>
+                                            <input type="text" class="form-control" id="responsavel_aprovacao" name="responsavel_aprovacao" 
+                                                   placeholder="Nome do responsável..." value="{{ current_user.nome if current_user else '' }}">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Instruções -->
+                        <div class="alert alert-info">
+                            <strong>📋 Instruções:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>🎯 <strong>Configure o tipo de envio</strong> acima antes de selecionar itens</li>
+                                <li>✅ <strong>Selecione</strong> os itens que deseja incluir na separação</li>
+                                <li>✏️ <strong>Edite</strong> quantidades (não pode exceder o disponível)</li>
+                                <li>📅 <strong>Ajuste</strong> datas de expedição e agendamento conforme necessário</li>
+                                <li>📝 <strong>Adicione</strong> protocolo se necessário</li>
+                                <li>💡 <strong>Quantidade parcial</strong> criará nova linha com saldo restante</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- Tabela de itens editáveis -->
+                        <div class="table-responsive">
+                            <table class="table table-striped" id="tabela-itens-modal">
+                                <thead class="thead-dark">
+                                    <tr>
+                                        <th width="40">
+                                            <input type="checkbox" id="select-all-itens" onchange="toggleTodosItens(this)">
+                                        </th>
+                                        <th>Código</th>
+                                        <th>Produto</th>
+                                        <th>Qtd Disponível</th>
+                                        <th>Qtd Selecionada</th>
+                                        <th>Valor Unit.</th>
+                                        <th>Expedição</th>
+                                        <th>Agendamento</th>
+                                        <th>Protocolo</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-itens-modal">
+                                    <!-- Será preenchido via JavaScript -->
+                                </tbody>
+                                <tfoot class="bg-light">
+                                    <tr>
+                                        <th colspan="4">TOTAIS SELECIONADOS:</th>
+                                        <th id="total-qtd-selecionada">0</th>
+                                        <th></th>
+                                        <th colspan="4">
+                                            <span id="total-valor-selecionado">R$ 0,00</span>
+                                        </th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-salvar-avaliacoes" onclick="salvarAvaliacoes()">
+                    <i class="fas fa-save"></i> Salvar Avaliações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Consultar Separações -->
+<div class="modal fade" id="modalConsultarSeparacoes" tabindex="-1" role="dialog" aria-labelledby="modalConsultarSeparacoesLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConsultarSeparacoesLabel">
+                    <i class="fas fa-boxes"></i> Separações do Pedido
+                    <span id="modal-separacoes-pedido" class="badge badge-primary ml-2"></span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Loading state -->
+                <div id="modal-separacoes-loading" class="text-center p-4">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p class="mt-2">Carregando separações...</p>
+                </div>
+                
+                <!-- Error state -->
+                <div id="modal-separacoes-error" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="modal-separacoes-error-message"></span>
+                    <button class="btn btn-sm btn-outline-danger ml-2" onclick="recarregarModalSeparacoes()">
+                        <i class="fas fa-redo"></i> Tentar novamente
+                    </button>
+                </div>
+                
+                <!-- Empty state -->
+                <div id="modal-separacoes-empty" class="text-center p-5" style="display: none;">
+                    <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Nenhuma separação encontrada</h5>
+                    <p class="text-muted">Este pedido ainda não possui separações criadas.</p>
+                </div>
+                
+                <!-- Content -->
+                <div id="modal-separacoes-content" style="display: none;">
+                    <!-- Resumo das separações -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0">
+                                <i class="fas fa-chart-bar"></i> Resumo das Separações
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <strong>Total de Separações:</strong>
+                                    <span id="resumo-total-separacoes" class="badge badge-info">0</span>
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Embarcadas:</strong>
+                                    <span id="resumo-separacoes-embarcadas" class="badge badge-success">0</span>
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Pendentes:</strong>
+                                    <span id="resumo-separacoes-pendentes" class="badge badge-warning">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de separações -->
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="tabela-separacoes">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>Lote ID</th>
+                                    <th>Status</th>
+                                    <th>Criada em</th>
+                                    <th>Embarque</th>
+                                    <th>Transportadora</th>
+                                    <th>Prev. Embarque</th>
+                                    <th>Data Embarque</th>
+                                    <th>Valor</th>
+                                    <th>Peso</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-separacoes">
+                                <!-- Será preenchido via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="criarNovaSeparacao()">
+                    <i class="fas fa-plus"></i> Nova Separação
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Estoque D0/D7 -->
+<div class="modal fade" id="modalEstoqueD0D7" tabindex="-1" role="dialog" aria-labelledby="modalEstoqueD0D7Label" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEstoqueD0D7Label">
+                    <i class="fas fa-warehouse"></i> Estoque D0/D7 - Pedido
+                    <span id="modal-estoque-pedido" class="badge badge-primary ml-2"></span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Loading state -->
+                <div id="modal-estoque-loading" class="text-center p-4">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p class="mt-2">Calculando estoque D0/D7...</p>
+                </div>
+                
+                <!-- Error state -->
+                <div id="modal-estoque-error" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="modal-estoque-error-message"></span>
+                    <button class="btn btn-sm btn-outline-danger ml-2" onclick="recarregarModalEstoque()">
+                        <i class="fas fa-redo"></i> Tentar novamente
+                    </button>
+                </div>
+                
+                <!-- Content -->
+                <div id="modal-estoque-content" style="display: none;">
+                    <!-- Resumo das estatísticas -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-warning text-dark">
+                            <h6 class="mb-0">
+                                <i class="fas fa-chart-pie"></i> Resumo do Estoque
+                                <small class="float-right" id="estoque-data-calculo"></small>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <strong>Total de Produtos:</strong>
+                                    <span id="resumo-total-produtos" class="badge badge-info">0</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Ruptura D0:</strong>
+                                    <span id="resumo-ruptura-d0" class="badge badge-danger">0</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Problemas D7:</strong>
+                                    <span id="resumo-problemas-d7" class="badge badge-warning">0</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Menor Estoque:</strong>
+                                    <span id="resumo-menor-estoque" class="badge badge-secondary">0</span>
+                                </div>
+                            </div>
+                            <div class="row mt-2" id="alerta-ruptura" style="display: none;">
+                                <div class="col-12">
+                                    <div class="alert alert-danger mb-0">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        <strong>ATENÇÃO:</strong> Ruptura prevista em 
+                                        <span id="dias-ruptura"></span> dias!
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Legenda -->
+                    <div class="alert alert-info">
+                        <strong>📊 Legenda:</strong>
+                        <span class="badge badge-success ml-2">NORMAL</span> Estoque OK
+                        <span class="badge badge-warning ml-2">BAIXO</span> Estoque baixo (≤10)
+                        <span class="badge badge-danger ml-2">RUPTURA</span> Sem estoque (≤0)
+                        <span class="badge badge-secondary ml-2">SEM_DADOS</span> Produto sem dados
+                    </div>
+                    
+                    <!-- Tabela de produtos -->
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="tabela-estoque-produtos">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Produto</th>
+                                    <th>Qtd Pedido</th>
+                                    <th>Estoque D0</th>
+                                    <th>Status D0</th>
+                                    <th>Menor D7</th>
+                                    <th>Status D7</th>
+                                    <th>Suficiente?</th>
+                                    <th>Projeção</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-estoque-produtos">
+                                <!-- Será preenchido via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+                <button type="button" class="btn btn-info" onclick="exportarDadosEstoque()">
+                    <i class="fas fa-download"></i> Exportar Dados
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript para expandir/colapsar itens -->
+<script>
+// Estado de expansão dos pedidos (cache local)
+const pedidosExpandidos = new Set();
+const itensPedidoCache = new Map();
+
+/**
+ * Toggle expansão/colapso de itens de um pedido
+ * Implementação: Fase 2.2 - JavaScript Expandir/Colapsar
+ */
+function togglePedidoItens(numPedido) {
+    const linhaItens = document.getElementById(`itens-${numPedido}`);
+    const icone = document.getElementById(`icon-${numPedido}`);
+    
+    if (pedidosExpandidos.has(numPedido)) {
+        // Colapsar
+        $(linhaItens).collapse('hide');
+        icone.className = 'fas fa-chevron-right expand-icon';
+        pedidosExpandidos.delete(numPedido);
+    } else {
+        // Expandir
+        $(linhaItens).collapse('show');
+        icone.className = 'fas fa-chevron-down expand-icon';
+        pedidosExpandidos.add(numPedido);
+        
+        // Carregar itens se ainda não foram carregados
+        if (!itensPedidoCache.has(numPedido)) {
+            carregarItensPedido(numPedido);
+        }
+    }
+}
+
+/**
+ * Carrega itens de um pedido via AJAX
+ */
+async function carregarItensPedido(numPedido) {
+    const loadingDiv = document.getElementById(`loading-${numPedido}`);
+    const contentDiv = document.getElementById(`content-${numPedido}`);
+    const badge = document.getElementById(`badge-${numPedido}`);
+    
+    try {
+        // Mostrar loading
+        loadingDiv.style.display = 'block';
+        contentDiv.style.display = 'none';
+        badge.textContent = 'Carregando...';
+        badge.className = 'badge badge-info ml-2';
+        
+        // Fazer requisição AJAX
+        const response = await fetch(`/carteira/api/pedido/${numPedido}/itens`);
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Erro ao carregar itens');
+        }
+        
+        // Armazenar no cache
+        itensPedidoCache.set(numPedido, data);
+        
+        // Gerar HTML dos itens
+        const htmlItens = gerarHtmlItens(data);
+        contentDiv.innerHTML = htmlItens;
+        
+        // Atualizar badge
+        badge.textContent = `${data.total_itens} itens`;
+        badge.className = 'badge badge-success ml-2';
+        
+        // Mostrar conteúdo
+        loadingDiv.style.display = 'none';
+        contentDiv.style.display = 'block';
+        
+        console.log(`✅ Itens carregados para pedido ${numPedido}: ${data.total_itens} itens`);
+        
+    } catch (error) {
+        console.error(`❌ Erro ao carregar itens do pedido ${numPedido}:`, error);
+        
+        // Mostrar erro
+        contentDiv.innerHTML = `
+            <div class="alert alert-danger m-3">
+                <i class="fas fa-exclamation-triangle"></i>
+                Erro ao carregar itens: ${error.message}
+                <button class="btn btn-sm btn-outline-danger ml-2" onclick="carregarItensPedido('${numPedido}')">
+                    <i class="fas fa-redo"></i> Tentar novamente
+                </button>
+            </div>
+        `;
+        
+        badge.textContent = 'Erro';
+        badge.className = 'badge badge-danger ml-2';
+        
+        loadingDiv.style.display = 'none';
+        contentDiv.style.display = 'block';
+    }
+}
+
+/**
+ * Gera HTML da tabela de itens
+ */
+function gerarHtmlItens(data) {
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-sm table-striped mb-0">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Código</th>
+                        <th>Produto</th>
+                        <th>Qtd</th>
+                        <th>Preço</th>
+                        <th>Valor</th>
+                        <th>Peso</th>
+                        <th>Pallet</th>
+                        <th>Expedição</th>
+                        <th>Agenda</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    data.itens.forEach(item => {
+        const statusClass = item.tem_separacao ? 'success' : 'warning';
+        const statusText = item.tem_separacao ? 'Separado' : 'Pendente';
+        const statusIcon = item.tem_separacao ? 'check-circle' : 'clock';
+        
+        html += `
+            <tr>
+                <td><small>${item.cod_produto}</small></td>
+                <td><small>${item.nome_produto || ''}</small></td>
+                <td><strong>${item.qtd_saldo.toFixed(3)}</strong></td>
+                <td>R$ ${item.preco.toFixed(2)}</td>
+                <td><strong>R$ ${item.valor_item.toFixed(2)}</strong></td>
+                <td>${item.peso_item.toFixed(2)} kg</td>
+                <td>${item.pallet_item.toFixed(3)} pal</td>
+                <td>${item.expedicao || '-'}</td>
+                <td>${item.agendamento || '-'}</td>
+                <td>
+                    <span class="badge badge-${statusClass}">
+                        <i class="fas fa-${statusIcon}"></i> ${statusText}
+                    </span>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" 
+                            onclick="editarItem(${item.id})" 
+                            title="Editar item">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+                <tfoot class="bg-light">
+                    <tr>
+                        <th colspan="4">TOTAIS:</th>
+                        <th>R$ ${data.totais.valor.toFixed(2)}</th>
+                        <th>${data.totais.peso.toFixed(2)} kg</th>
+                        <th>${data.totais.pallet.toFixed(3)} pal</th>
+                        <th colspan="4">
+                            <small class="text-muted">
+                                ${data.itens_separados}/${data.total_itens} separados
+                            </small>
+                        </th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+    
+    return html;
+}
+
+/**
+ * Placeholder para editar item - agora redireciona para modal
+ */
+function editarItem(itemId) {
+    // Buscar o pedido do item para abrir modal
+    const pedidoRow = document.querySelector(`tr[data-pedido]`);
+    if (pedidoRow) {
+        const numPedido = pedidoRow.getAttribute('data-pedido');
+        abrirModalAvaliarItens(numPedido);
+    }
+}
+
+// ===== FUNÇÕES DO MODAL AVALIAR ITENS =====
+
+// Variáveis globais do modal
+let dadosModalAtual = null;
+let numPedidoModal = null;
+
+/**
+ * Abre modal para avaliar itens de um pedido
+ * Implementação: Fase 2.3 - Modal Avaliar Itens
+ */
+async function abrirModalAvaliarItens(numPedido) {
+    numPedidoModal = numPedido;
+    
+    // Configurar modal
+    document.getElementById('modal-num-pedido').textContent = numPedido;
+    document.getElementById('form-num-pedido').value = numPedido;
+    
+    // Mostrar modal
+    $('#modalAvaliarItens').modal('show');
+    
+    // Carregar dados
+    await carregarDadosModal(numPedido);
+}
+
+/**
+ * Carrega dados dos itens para o modal
+ */
+async function carregarDadosModal(numPedido) {
+    const modalLoading = document.getElementById('modal-loading');
+    const modalError = document.getElementById('modal-error');
+    const modalContent = document.getElementById('modal-content');
+    
+    try {
+        // Mostrar loading
+        modalLoading.style.display = 'block';
+        modalError.style.display = 'none';
+        modalContent.style.display = 'none';
+        
+        // Verificar se já temos os dados no cache
+        let data = itensPedidoCache.get(numPedido);
+        
+        if (!data) {
+            // Fazer requisição AJAX
+            const response = await fetch(`/carteira/api/pedido/${numPedido}/itens`);
+            data = await response.json();
+            
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Erro ao carregar itens');
+            }
+            
+            // Armazenar no cache
+            itensPedidoCache.set(numPedido, data);
+        }
+        
+        // Armazenar dados para uso no modal
+        dadosModalAtual = data;
+        
+        // Gerar HTML dos itens editáveis
+        gerarHtmlItensModal(data);
+        
+        // Atualizar resumo
+        atualizarResumoModal(data);
+        
+        // Mostrar conteúdo
+        modalLoading.style.display = 'none';
+        modalContent.style.display = 'block';
+        
+        console.log(`✅ Modal carregado para pedido ${numPedido}: ${data.total_itens} itens`);
+        
+    } catch (error) {
+        console.error(`❌ Erro ao carregar modal do pedido ${numPedido}:`, error);
+        
+        // Mostrar erro
+        document.getElementById('modal-error-message').textContent = error.message;
+        modalLoading.style.display = 'none';
+        modalError.style.display = 'block';
+        modalContent.style.display = 'none';
+    }
+}
+
+/**
+ * Gera HTML da tabela de itens editáveis no modal
+ */
+function gerarHtmlItensModal(data) {
+    const tbody = document.getElementById('tbody-itens-modal');
+    let html = '';
+    
+    data.itens.forEach((item, index) => {
+        const disabled = item.tem_separacao ? 'disabled' : '';
+        const checkboxDisabled = item.tem_separacao ? 'disabled' : '';
+        const statusClass = item.tem_separacao ? 'success' : 'warning';
+        const statusText = item.tem_separacao ? 'Separado' : 'Pendente';
+        
+        html += `
+            <tr id="row-item-${item.id}" ${item.tem_separacao ? 'class="table-secondary"' : ''}>
+                <td>
+                    <input type="checkbox" 
+                           class="item-checkbox" 
+                           data-item-id="${item.id}"
+                           data-index="${index}"
+                           onchange="calcularTotaisModal()"
+                           ${checkboxDisabled}>
+                </td>
+                <td><small><strong>${item.cod_produto}</strong></small></td>
+                <td><small>${item.nome_produto || ''}</small></td>
+                <td><strong>${item.qtd_saldo.toFixed(3)}</strong></td>
+                <td>
+                    <input type="number" 
+                           class="form-control form-control-sm qtd-input" 
+                           data-item-id="${item.id}"
+                           data-max="${item.qtd_saldo}"
+                           step="0.001"
+                           min="0"
+                           max="${item.qtd_saldo}"
+                           value="${item.qtd_saldo.toFixed(3)}"
+                           onchange="validarQuantidade(this); calcularTotaisModal()"
+                           ${disabled}>
+                </td>
+                <td>R$ ${item.preco.toFixed(2)}</td>
+                <td>
+                    <input type="date" 
+                           class="form-control form-control-sm" 
+                           data-item-id="${item.id}"
+                           data-field="expedicao"
+                           value="${item.expedicao}"
+                           ${disabled}>
+                </td>
+                <td>
+                    <input type="date" 
+                           class="form-control form-control-sm" 
+                           data-item-id="${item.id}"
+                           data-field="agendamento"
+                           value="${item.agendamento}"
+                           ${disabled}>
+                </td>
+                <td>
+                    <input type="text" 
+                           class="form-control form-control-sm" 
+                           data-item-id="${item.id}"
+                           data-field="protocolo"
+                           value="${item.protocolo}"
+                           placeholder="Protocolo"
+                           ${disabled}>
+                </td>
+                <td>
+                    <span class="badge badge-${statusClass}">
+                        ${statusText}
+                    </span>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+    
+    // Calcular totais iniciais
+    calcularTotaisModal();
+}
+
+/**
+ * Atualiza resumo do pedido no modal
+ */
+function atualizarResumoModal(data) {
+    document.getElementById('resumo-total-itens').textContent = data.total_itens;
+    document.getElementById('resumo-valor-total').textContent = `R$ ${data.totais.valor.toFixed(2)}`;
+    document.getElementById('resumo-peso-total').textContent = `${data.totais.peso.toFixed(2)} kg`;
+    document.getElementById('resumo-selecionados').textContent = '0';
+}
+
+/**
+ * Toggle todos os itens (selecionar/desselecionar todos)
+ */
+function toggleTodosItens(masterCheckbox) {
+    const checkboxes = document.querySelectorAll('.item-checkbox:not(:disabled)');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = masterCheckbox.checked;
+    });
+    calcularTotaisModal();
+}
+
+/**
+ * Valida quantidade inserida
+ */
+function validarQuantidade(input) {
+    const max = parseFloat(input.getAttribute('data-max'));
+    const value = parseFloat(input.value);
+    
+    if (isNaN(value) || value < 0) {
+        input.value = '0.000';
+        input.classList.add('is-invalid');
+        return false;
+    }
+    
+    if (value > max) {
+        input.value = max.toFixed(3);
+        input.classList.add('is-invalid');
+        alert(`Quantidade não pode exceder ${max.toFixed(3)}`);
+        return false;
+    }
+    
+    input.classList.remove('is-invalid');
+    input.classList.add('is-valid');
+    return true;
+}
+
+/**
+ * Calcula totais dos itens selecionados
+ */
+function calcularTotaisModal() {
+    let totalQtd = 0;
+    let totalValor = 0;
+    let countSelecionados = 0;
+    
+    const checkboxes = document.querySelectorAll('.item-checkbox:checked');
+    
+    checkboxes.forEach(checkbox => {
+        const itemId = checkbox.getAttribute('data-item-id');
+        const qtdInput = document.querySelector(`.qtd-input[data-item-id="${itemId}"]`);
+        
+        if (qtdInput) {
+            const qtd = parseFloat(qtdInput.value) || 0;
+            
+            // Buscar preço do item nos dados
+            if (dadosModalAtual) {
+                const item = dadosModalAtual.itens.find(i => i.id == itemId);
+                if (item) {
+                    totalQtd += qtd;
+                    totalValor += qtd * item.preco;
+                    countSelecionados++;
+                }
+            }
+        }
+    });
+    
+    // Atualizar interface
+    document.getElementById('total-qtd-selecionada').textContent = totalQtd.toFixed(3);
+    document.getElementById('total-valor-selecionado').textContent = `R$ ${totalValor.toFixed(2)}`;
+    document.getElementById('resumo-selecionados').textContent = countSelecionados;
+    
+    // Atualizar cor do badge
+    const badge = document.getElementById('resumo-selecionados');
+    badge.className = countSelecionados > 0 ? 'badge badge-success ml-2' : 'badge badge-warning ml-2';
+}
+
+/**
+ * Salva avaliações dos itens selecionados via API
+ * 🎯 ETAPA 2: IMPLEMENTAÇÃO COM TIPO DE ENVIO (ATUALIZADA)
+ */
+async function salvarAvaliacoes() {
+    if (!numPedidoModal || !dadosModalAtual) {
+        alert('Erro: Dados do modal não carregados');
+        return;
+    }
+    
+    // 🎯 ETAPA 2: VALIDAÇÃO DO TIPO DE ENVIO
+    if (!validarEnvioParcial()) {
+        return; // Validação falhou, não continuar
+    }
+    
+    // Coletar dados do formulário
+    const itensSelecionados = [];
+    const checkboxes = document.querySelectorAll('.item-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        alert('⚠️ Selecione pelo menos um item para continuar');
+        return;
+    }
+    
+    checkboxes.forEach(checkbox => {
+        const itemId = checkbox.getAttribute('data-item-id');
+        const qtdInput = document.querySelector(`.qtd-input[data-item-id="${itemId}"]`);
+        const expedicaoInput = document.querySelector(`input[data-item-id="${itemId}"][data-field="expedicao"]`);
+        const agendamentoInput = document.querySelector(`input[data-item-id="${itemId}"][data-field="agendamento"]`);
+        const protocoloInput = document.querySelector(`input[data-item-id="${itemId}"][data-field="protocolo"]`);
+        
+        if (qtdInput && validarQuantidade(qtdInput)) {
+            itensSelecionados.push({
+                item_id: parseInt(itemId),
+                qtd_selecionada: parseFloat(qtdInput.value),
+                expedicao: expedicaoInput ? expedicaoInput.value : '',
+                agendamento: agendamentoInput ? agendamentoInput.value : '',
+                protocolo: protocoloInput ? protocoloInput.value : ''
+            });
+        }
+    });
+    
+    if (itensSelecionados.length === 0) {
+        alert('⚠️ Nenhum item válido selecionado');
+        return;
+    }
+    
+    // 🔄 PROCESSAR VIA API
+    const btnSalvar = document.getElementById('btn-salvar-avaliacoes');
+    const textoOriginal = btnSalvar.innerHTML;
+    
+    try {
+        // Mostrar loading
+        btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+        btnSalvar.disabled = true;
+        
+        // 🎯 ETAPA 2: COLETAR DADOS DO TIPO DE ENVIO
+        const tipoEnvio = document.getElementById('tipo_envio').value;
+        const configEnvioParcial = tipoEnvio === 'parcial' ? {
+            motivo: document.getElementById('motivo_parcial').value,
+            justificativa: document.getElementById('justificativa_parcial').value,
+            previsao_complemento: document.getElementById('previsao_complemento').value,
+            responsavel_aprovacao: document.getElementById('responsavel_aprovacao').value
+        } : null;
+        
+        // Chamar API
+        const response = await fetch(`/carteira/api/pedido/${numPedidoModal}/salvar-avaliacoes`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify({
+                itens: itensSelecionados,
+                tipo_envio: tipoEnvio,
+                config_envio_parcial: configEnvioParcial
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Erro ao processar avaliações');
+        }
+        
+        // ✅ SUCESSO
+        console.log('✅ Avaliações salvas com sucesso:', data);
+        
+        // Mostrar resultados detalhados
+        let mensagem = `🎉 **AVALIAÇÕES PROCESSADAS COM SUCESSO!**\n\n`;
+        mensagem += `📊 **Resumo:**\n`;
+        mensagem += `• Itens processados: ${data.processados}\n`;
+        mensagem += `• Sucessos: ${data.sucessos}\n`;
+        mensagem += `• Erros: ${data.erros}\n\n`;
+        
+        if (data.resultados && data.resultados.length > 0) {
+            mensagem += `📋 **Detalhes:**\n`;
+            data.resultados.forEach(resultado => {
+                if (resultado.status === 'sucesso') {
+                    const icone = resultado.acao === 'dividido' ? '✂️' : '✅';
+                    mensagem += `${icone} ${resultado.mensagem}\n`;
+                } else {
+                    mensagem += `❌ Item ${resultado.item_id}: ${resultado.erro}\n`;
+                }
+            });
+        }
+        
+        alert(mensagem);
+        
+        // Fechar modal e recarregar dados
+        $('#modalAvaliarItens').modal('hide');
+        
+        // Limpar cache para forçar reload
+        itensPedidoCache.delete(numPedidoModal);
+        
+        // Recarregar dados da tabela principal
+        setTimeout(() => {
+            location.reload(); // Recarregar página para mostrar mudanças
+        }, 1000);
+        
+    } catch (error) {
+        console.error('❌ Erro ao salvar avaliações:', error);
+        
+        let mensagemErro = `❌ **ERRO AO PROCESSAR AVALIAÇÕES**\n\n`;
+        mensagemErro += `Detalhes: ${error.message}\n\n`;
+        mensagemErro += `📋 Dados coletados: ${itensSelecionados.length} itens\n`;
+        mensagemErro += `🔧 Verifique os logs do sistema ou tente novamente.`;
+        
+        alert(mensagemErro);
+        
+    } finally {
+        // Restaurar botão
+        btnSalvar.innerHTML = textoOriginal;
+        btnSalvar.disabled = false;
+    }
+}
+
+/**
+ * Recarrega dados do modal
+ */
+function recarregarModalItens() {
+    if (numPedidoModal) {
+        // Remover do cache para forçar reload
+        itensPedidoCache.delete(numPedidoModal);
+        carregarDadosModal(numPedidoModal);
+    }
+}
+
+/**
+ * Calcula e exibe estoque D0/D7 de um pedido
+ * Implementação: Fase 3.2 - Integração Estoque D0/D7
+ */
+async function calcularEstoqueD0D7(numPedido) {
+    // Configurar modal
+    document.getElementById('modal-estoque-pedido').textContent = numPedido;
+    
+    // Mostrar modal
+    $('#modalEstoqueD0D7').modal('show');
+    
+    // Carregar dados
+    await carregarDadosEstoque(numPedido);
+}
+
+// Variáveis globais para estoque
+let dadosEstoqueAtual = null;
+let numPedidoEstoque = null;
+
+/**
+ * Carrega dados de estoque D0/D7 via API
+ */
+async function carregarDadosEstoque(numPedido) {
+    numPedidoEstoque = numPedido;
+    
+    const modalLoading = document.getElementById('modal-estoque-loading');
+    const modalError = document.getElementById('modal-estoque-error');
+    const modalContent = document.getElementById('modal-estoque-content');
+    
+    try {
+        // Mostrar loading
+        modalLoading.style.display = 'block';
+        modalError.style.display = 'none';
+        modalContent.style.display = 'none';
+        
+        // Fazer requisição AJAX
+        const response = await fetch(`/carteira/api/pedido/${numPedido}/estoque-d0-d7`);
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Erro ao calcular estoque');
+        }
+        
+        // Armazenar dados
+        dadosEstoqueAtual = data;
+        
+        // Gerar HTML dos produtos
+        gerarHtmlEstoqueProdutos(data);
+        
+        // Atualizar resumo
+        atualizarResumoEstoque(data);
+        
+        // Mostrar conteúdo
+        modalLoading.style.display = 'none';
+        modalContent.style.display = 'block';
+        
+        console.log(`✅ Estoque D0/D7 carregado para pedido ${numPedido}: ${data.produtos.length} produtos`);
+        
+    } catch (error) {
+        console.error(`❌ Erro ao carregar estoque D0/D7 do pedido ${numPedido}:`, error);
+        
+        // Mostrar erro
+        document.getElementById('modal-estoque-error-message').textContent = error.message;
+        modalLoading.style.display = 'none';
+        modalError.style.display = 'block';
+        modalContent.style.display = 'none';
+    }
+}
+
+/**
+ * Gera HTML da tabela de produtos com estoque
+ */
+function gerarHtmlEstoqueProdutos(data) {
+    const tbody = document.getElementById('tbody-estoque-produtos');
+    let html = '';
+    
+    data.produtos.forEach(produto => {
+        // Classes CSS para status
+        const statusD0Class = getStatusClass(produto.status_d0);
+        const statusD7Class = getStatusClass(produto.status_d7);
+        
+        // Ícone de suficiência
+        const suficienteIcon = produto.tem_estoque_suficiente ? 
+            '<i class="fas fa-check text-success"></i>' : 
+            '<i class="fas fa-times text-danger"></i>';
+        
+        // Projeção resumida
+        const projecaoHtml = produto.projecao_resumo && produto.projecao_resumo.length > 0 ?
+            produto.projecao_resumo.map(dia => 
+                `<span class="badge badge-${getStatusClass(dia.status)} badge-sm">${dia.data}</span>`
+            ).join(' ') : 
+            '<small class="text-muted">Sem dados</small>';
+        
+        html += `
+            <tr ${produto.status_d0 === 'RUPTURA' ? 'class="table-danger"' : produto.status_d0 === 'BAIXO' ? 'class="table-warning"' : ''}>
+                <td><strong>${produto.cod_produto}</strong></td>
+                <td><small>${produto.nome_produto}</small></td>
+                <td><strong>${produto.qtd_pedido.toFixed(3)}</strong></td>
+                <td>
+                    <strong>${produto.estoque_d0.toFixed(3)}</strong>
+                    ${produto.dia_ruptura === 0 ? '<br><small class="text-danger">Ruptura hoje!</small>' : ''}
+                </td>
+                <td>
+                    <span class="badge badge-${statusD0Class}">
+                        ${formatarStatus(produto.status_d0)}
+                    </span>
+                </td>
+                <td>
+                    <strong>${produto.menor_estoque_d7.toFixed(3)}</strong>
+                    ${produto.dia_ruptura !== null && produto.dia_ruptura > 0 ? 
+                      `<br><small class="text-warning">Ruptura D${produto.dia_ruptura}</small>` : ''}
+                </td>
+                <td>
+                    <span class="badge badge-${statusD7Class}">
+                        ${formatarStatus(produto.status_d7)}
+                    </span>
+                </td>
+                <td class="text-center">
+                    ${suficienteIcon}
+                    ${produto.tem_estoque_suficiente ? 
+                      '<br><small class="text-success">OK</small>' : 
+                      '<br><small class="text-danger">Insuficiente</small>'}
+                </td>
+                <td style="max-width: 200px;">
+                    <div class="projecao-container" style="font-size: 0.8em;">
+                        ${projecaoHtml}
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+/**
+ * Atualiza resumo das estatísticas de estoque
+ */
+function atualizarResumoEstoque(data) {
+    const stats = data.estatisticas;
+    
+    document.getElementById('estoque-data-calculo').textContent = data.data_calculo;
+    document.getElementById('resumo-total-produtos').textContent = stats.total_produtos;
+    document.getElementById('resumo-ruptura-d0').textContent = stats.produtos_ruptura_d0;
+    document.getElementById('resumo-problemas-d7').textContent = stats.produtos_ruptura_d7;
+    document.getElementById('resumo-menor-estoque').textContent = stats.menor_estoque_geral.toFixed(3);
+    
+    // Alerta de ruptura
+    const alertaRuptura = document.getElementById('alerta-ruptura');
+    if (stats.dia_ruptura_mais_proximo !== null) {
+        document.getElementById('dias-ruptura').textContent = stats.dia_ruptura_mais_proximo;
+        alertaRuptura.style.display = 'block';
+    } else {
+        alertaRuptura.style.display = 'none';
+    }
+}
+
+/**
+ * Mapeia status para classes CSS do Bootstrap
+ */
+function getStatusClass(status) {
+    switch (status) {
+        case 'NORMAL': return 'success';
+        case 'BAIXO': 
+        case 'BAIXO_PREVISTO': return 'warning';
+        case 'RUPTURA': 
+        case 'RUPTURA_PREVISTA': return 'danger';
+        case 'SEM_DADOS': return 'secondary';
+        default: return 'secondary';
+    }
+}
+
+/**
+ * Formata status para exibição
+ */
+function formatarStatus(status) {
+    switch (status) {
+        case 'NORMAL': return 'Normal';
+        case 'BAIXO': return 'Baixo';
+        case 'BAIXO_PREVISTO': return 'Baixo Prev.';
+        case 'RUPTURA': return 'Ruptura';
+        case 'RUPTURA_PREVISTA': return 'Ruptura Prev.';
+        case 'SEM_DADOS': return 'Sem Dados';
+        default: return status;
+    }
+}
+
+/**
+ * Recarrega modal de estoque
+ */
+function recarregarModalEstoque() {
+    if (numPedidoEstoque) {
+        carregarDadosEstoque(numPedidoEstoque);
+    }
+}
+
+/**
+ * Placeholder para exportar dados de estoque
+ */
+function exportarDadosEstoque() {
+    if (dadosEstoqueAtual) {
+        alert(`🔧 Função exportar dados de estoque será implementada na Fase 4 - Validação/Performance\n\nDados disponíveis: ${dadosEstoqueAtual.produtos.length} produtos`);
+    }
+}
+
+/**
+ * Consulta separações de um pedido
+ * Implementação: Fase 3.1 - Query Separações por Pedido
+ */
+async function consultarSeparacoes(numPedido) {
+    // Configurar modal
+    document.getElementById('modal-separacoes-pedido').textContent = numPedido;
+    
+    // Mostrar modal
+    $('#modalConsultarSeparacoes').modal('show');
+    
+    // Carregar dados
+    await carregarSeparacoesPedido(numPedido);
+}
+
+// Variáveis globais para separações
+let dadosSeparacoesAtual = null;
+let numPedidoSeparacoes = null;
+
+/**
+ * Carrega separações de um pedido via API
+ */
+async function carregarSeparacoesPedido(numPedido) {
+    numPedidoSeparacoes = numPedido;
+    
+    const modalLoading = document.getElementById('modal-separacoes-loading');
+    const modalError = document.getElementById('modal-separacoes-error');
+    const modalEmpty = document.getElementById('modal-separacoes-empty');
+    const modalContent = document.getElementById('modal-separacoes-content');
+    
+    try {
+        // Mostrar loading
+        modalLoading.style.display = 'block';
+        modalError.style.display = 'none';
+        modalEmpty.style.display = 'none';
+        modalContent.style.display = 'none';
+        
+        // Fazer requisição AJAX
+        const response = await fetch(`/carteira/api/pedido/${numPedido}/separacoes`);
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Erro ao carregar separações');
+        }
+        
+        // Armazenar dados
+        dadosSeparacoesAtual = data;
+        
+        // Verificar se tem separações
+        if (data.total_separacoes === 0) {
+            modalLoading.style.display = 'none';
+            modalEmpty.style.display = 'block';
+            return;
+        }
+        
+        // Gerar HTML das separações
+        gerarHtmlSeparacoes(data);
+        
+        // Atualizar resumo
+        atualizarResumoSeparacoes(data);
+        
+        // Mostrar conteúdo
+        modalLoading.style.display = 'none';
+        modalContent.style.display = 'block';
+        
+        console.log(`✅ Separações carregadas para pedido ${numPedido}: ${data.total_separacoes} separações`);
+        
+    } catch (error) {
+        console.error(`❌ Erro ao carregar separações do pedido ${numPedido}:`, error);
+        
+        // Mostrar erro
+        document.getElementById('modal-separacoes-error-message').textContent = error.message;
+        modalLoading.style.display = 'none';
+        modalError.style.display = 'block';
+        modalContent.style.display = 'none';
+    }
+}
+
+/**
+ * Gera HTML da tabela de separações
+ */
+function gerarHtmlSeparacoes(data) {
+    const tbody = document.getElementById('tbody-separacoes');
+    let html = '';
+    
+    data.separacoes.forEach(sep => {
+        const transportadora = sep.transportadora.razao_social || sep.transportadora.nome_fantasia || '-';
+        const embarqueInfo = sep.embarque.numero ? `#${sep.embarque.numero}` : '-';
+        
+        html += `
+            <tr>
+                <td>
+                    <strong>${sep.separacao_lote_id}</strong>
+                    <br><small class="text-muted">${sep.total_itens} itens</small>
+                </td>
+                <td>
+                    <span class="badge badge-${sep.status_class}">
+                        ${sep.status}
+                    </span>
+                </td>
+                <td>${sep.criado_em}</td>
+                <td>
+                    ${embarqueInfo}
+                    ${sep.embarque.tipo_carga ? `<br><small class="text-muted">${sep.embarque.tipo_carga}</small>` : ''}
+                </td>
+                <td>
+                    <small>${transportadora}</small>
+                </td>
+                <td>${sep.embarque.data_prevista || '-'}</td>
+                <td>${sep.embarque.data_embarque || '-'}</td>
+                <td>
+                    <strong>R$ ${sep.valor_saldo.toFixed(2)}</strong>
+                </td>
+                <td>
+                    ${sep.peso.toFixed(2)} kg
+                    <br><small class="text-muted">${sep.pallet.toFixed(2)} pal</small>
+                </td>
+                <td>
+                    <div class="btn-group-vertical btn-group-sm">
+                        <button class="btn btn-outline-primary btn-sm" 
+                                onclick="verDetalhesSeparacao('${sep.separacao_lote_id}')"
+                                title="Ver detalhes">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        ${sep.status === 'CRIADA' ? `
+                        <button class="btn btn-outline-warning btn-sm" 
+                                onclick="editarSeparacao('${sep.separacao_lote_id}')"
+                                title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+/**
+ * Atualiza resumo das separações
+ */
+function atualizarResumoSeparacoes(data) {
+    document.getElementById('resumo-total-separacoes').textContent = data.total_separacoes;
+    document.getElementById('resumo-separacoes-embarcadas').textContent = data.separacoes_embarcadas;
+    document.getElementById('resumo-separacoes-pendentes').textContent = data.separacoes_pendentes;
+}
+
+/**
+ * Recarrega modal de separações
+ */
+function recarregarModalSeparacoes() {
+    if (numPedidoSeparacoes) {
+        carregarSeparacoesPedido(numPedidoSeparacoes);
+    }
+}
+
+/**
+ * Placeholder para ver detalhes de separação
+ */
+function verDetalhesSeparacao(loteId) {
+    alert(`🔧 Função ver detalhes da separação ${loteId} será implementada na Fase 3.4 - Dropdown Separações`);
+}
+
+/**
+ * Placeholder para editar separação
+ */
+function editarSeparacao(loteId) {
+    alert(`🔧 Função editar separação ${loteId} será implementada na Fase 3.4 - Dropdown Separações`);
+}
+
+/**
+ * 🎯 ETAPA 2: FUNÇÃO DROPDOWN TIPO DE ENVIO (IMPLEMENTADA)
+ * Controla exibição de campos baseado no tipo de envio selecionado
+ */
+function atualizarTipoEnvio() {
+    const tipoEnvio = document.getElementById('tipo_envio').value;
+    const explicacaoTotal = document.getElementById('explicacao_total');
+    const explicacaoParcial = document.getElementById('explicacao_parcial');
+    const camposParcial = document.getElementById('campos_envio_parcial');
+    
+    if (tipoEnvio === 'parcial') {
+        // Mostrar configurações para envio parcial
+        explicacaoTotal.style.display = 'none';
+        explicacaoParcial.style.display = 'block';
+        camposParcial.style.display = 'block';
+        
+        // Tornar campos obrigatórios
+        document.getElementById('motivo_parcial').required = true;
+        document.getElementById('justificativa_parcial').required = true;
+        
+        console.log('🎯 Modo Envio Parcial ativado - campos específicos exibidos');
+        
+        // Atualizar instruções
+        const instrucoes = document.querySelector('.alert-info ul');
+        if (instrucoes && !instrucoes.innerHTML.includes('envio parcial')) {
+            const novaInstrucao = document.createElement('li');
+            novaInstrucao.innerHTML = '🔴 <strong>Envio Parcial:</strong> Configure motivo e justificativa nos campos acima';
+            novaInstrucao.style.color = '#dc3545';
+            instrucoes.appendChild(novaInstrucao);
+        }
+        
+    } else {
+        // Mostrar configurações para envio total
+        explicacaoTotal.style.display = 'block';
+        explicacaoParcial.style.display = 'none';
+        camposParcial.style.display = 'none';
+        
+        // Remover obrigatoriedade
+        document.getElementById('motivo_parcial').required = false;
+        document.getElementById('justificativa_parcial').required = false;
+        
+        // Limpar campos de envio parcial
+        document.getElementById('motivo_parcial').value = '';
+        document.getElementById('justificativa_parcial').value = '';
+        document.getElementById('previsao_complemento').value = '';
+        
+        console.log('📦 Modo Envio Total ativado - interface simplificada');
+        
+        // Remover instrução específica do parcial
+        const instrucoes = document.querySelector('.alert-info ul');
+        if (instrucoes) {
+            const instrucoesList = instrucoes.querySelectorAll('li');
+            instrucoesList.forEach(li => {
+                if (li.innerHTML.includes('Envio Parcial')) {
+                    li.remove();
+                }
+            });
+        }
+    }
+    
+    // Recalcular totais se necessário
+    if (typeof calcularTotaisModal === 'function') {
+        calcularTotaisModal();
+    }
+}
+
+/**
+ * 🎯 VALIDAÇÃO ESPECÍFICA PARA ENVIO PARCIAL
+ * Valida se campos obrigatórios estão preenchidos
+ */
+function validarEnvioParcial() {
+    const tipoEnvio = document.getElementById('tipo_envio').value;
+    
+    if (tipoEnvio === 'parcial') {
+        const motivo = document.getElementById('motivo_parcial').value;
+        const justificativa = document.getElementById('justificativa_parcial').value.trim();
+        
+        if (!motivo) {
+            alert('❌ Selecione o motivo do envio parcial');
+            document.getElementById('motivo_parcial').focus();
+            return false;
+        }
+        
+        if (!justificativa) {
+            alert('❌ Preencha a justificativa detalhada do envio parcial');
+            document.getElementById('justificativa_parcial').focus();
+            return false;
+        }
+        
+        if (justificativa.length < 10) {
+            alert('❌ Justificativa deve ter pelo menos 10 caracteres');
+            document.getElementById('justificativa_parcial').focus();
+            return false;
+        }
+        
+        console.log('✅ Validação envio parcial aprovada:', { motivo, justificativa });
+    }
+    
+    return true;
+}
+
+/**
+ * Placeholder para criar nova separação
+ */
+function criarNovaSeparacao() {
+    if (numPedidoSeparacoes) {
+        alert(`🔧 Função criar nova separação para pedido ${numPedidoSeparacoes} será implementada na Fase 3.3 - Sistema Pré-Separação`);
+    }
+}
+
+// Inicialização
+$(document).ready(function() {
+    console.log('✅ JavaScript expandir/colapsar inicializado');
+    console.log(`📊 ${$('.pedido-row').length} pedidos disponíveis para expansão`);
+});
+</script>
+
+{% endblock %} 

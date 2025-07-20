@@ -1,0 +1,46 @@
+﻿;Vendedor;PEDIDO;CLIENTE;ROTA;DATA_ENTREGA;Informações;Saldo;Expedição / Agenda;Solicitar Agendamento;;;;
+CARTEIRA AGRUPADA;vendedor;data_pedido;cnpj_cpf;rota;data_entrega_pedido;Soma de [(qtd_saldo_produto_pedido * preco_produto_pedido) de todos cod_produto];Mesmos tipos de Informações, porem alterando Informações - Total das separações sem NF (Utilizar Separacao.qtd_saldo);expedicao;Criar Separação;;;;
+;equipe_vendas;num_pedido;raz_social_red;sub_rota;observ_ped_1;Soma de [(qtd_saldo_produto_pedido * CadastroPalletizacao.peso_bruto) de todos cod_produto];Mesmos tipos de Informações, porem alterando Informações - Total das separações sem NF (Utilizar Separacao.qtd_saldo);protocolo;Consultar Separações;*** DropDown;;;
+;status_pedido;pedido_cliente;cod_uf / nome_cidade;incoterm (colocar o botão para abrir o modal existente nessa campo);;Soma de [(qtd_saldo_produto_pedido / CadastroPalletizacao.palletizacao) de todos cod_produto];Mesmos tipos de Informações, porem alterando Informações - Total das separações sem NF (Utilizar Separacao.qtd_saldo);agendamento;Avaliar Itens;*** DropDown;;;
+;;;;;;;;;;;;;
+;;;;;;;;;;;;;
+;;;;;;;;;;;;;
+Separação Agrupada;Separação;Status;Prev. Expedição / Embarque;Agenda;Info da Carga;Estoque;;;;;;;
+;separacao_lote_id (campo chave da separação, lógica complexa para ser preenchida ao atualizar a carteira);Embarque.numero;Pedido.expedicao;Pedido.agendamento;Pedido.valor_saldo_total;"""D0"" - (Qtd de itens com falta de estoque na data de expedição)(Há lógica em estoque.routes para isso)";;;;;;;
+;Pedido.status_calculado;Embarque.transportadora;Embarque.data_prevista_embarque;Pedido.protocolo;"Pedido.peso_total ""Kg"" / Pedido.pallet.total";"""D7"" - (Qtd de itens com falta de estoque em algum dos próximos 7 dias) (Há lógica em estoque.routes para isso)";;;;;;;
+;;;;;;;;;;;;;
+;;;;;;;;;;;;;
+;;****Descritivo****Fragmento da Carteira, contendo total do produto ou fragmento do produto (Previsão da Separação com Pedido Parcial e item total ou com item parcial);"Permitir alteração até limite do item no pedido
+Com alteração, deverá criar uma nova linha com o saldo
+Dessa forma possibilita enviar em 2 embarques o pedido
+";;;;Auto calculados;Auto calculados;Auto calculados;Campos editaveis;Editavel pelo modal;Editavel pelo modal;
+DROP DOWN CARTEIRA;Código;Produto; Qtd ; Valor ; Pallet ;Peso;Menor Estoque D7;Estoque D0;Produção D0;Data expedicao;Data agenda;Protocolo;Enviar pra Separação
+;cod_produto;nome_produto;"qtd_saldo_produto_pedido (isso seria um ""place holder"" para permitir alteração)";campo de qtd da linha * preco_produto_pedido;campo de qtd da linha / CadastroPalletizacao.palletizacao;campo de qtd da linha * CadastroPalletizacao.palletizacao;"Precisa estudar módulo de estoque.models pois lá tem mta coisa criada já.
+calcular_estoque_inicial
+calcular_projecao_completa
+calular_producao_periodo
+calcular_previsao_ruptura
+Precisa criar calcular_saida_periodo (Atual com TODO)";<<<;<<<;;;;Checkbox para poder enviar pra Separação pedido parcial e para aplicação do agendamento e expedicao
+;cod_produto;nome_produto;"qtd_saldo_produto_pedido (isso seria um ""place holder"" para permitir alteração)";campo de qtd da linha * preco_produto_pedido;campo de qtd da linha / CadastroPalletizacao.palletizacao;campo de qtd da linha * CadastroPalletizacao.palletizacao;"Precisa estudar módulo de estoque.models pois lá tem mta coisa criada já.
+calcular_estoque_inicial
+calcular_projecao_completa
+calular_producao_periodo
+calcular_previsao_ruptura
+Precisa criar calcular_saida_periodo (Atual com TODO)";<<<;<<<;;;;Checkbox para poder enviar pra Separação pedido parcial e para aplicação do agendamento e expedicao
+;;;;;;;;;;;;;
+;;;;;;;;;;;;;
+;;;;;;;;;;;;;
+;;;;;;;;;;;;;
+DROP DOWN SEPARAÇÃO;Código;Produto; Qtd ; Valor ; Pallet ;Peso;Menor Estoque D7;Estoque D0;Produção D0;;;;
+;cod_produto;nome_produto;qtd_saldo;valor_saldo;pallet;peso;"Precisa estudar módulo de estoque.models pois lá tem mta coisa criada já.
+calcular_estoque_inicial
+calcular_projecao_completa
+calular_producao_periodo
+calcular_previsao_ruptura
+Precisa criar calcular_saida_periodo (Atual com TODO)";<<<;<<<;;;;
+;cod_produto;nome_produto;qtd_saldo;valor_saldo;pallet;peso;"Precisa estudar módulo de estoque.models pois lá tem mta coisa criada já.
+calcular_estoque_inicial
+calcular_projecao_completa
+calular_producao_periodo
+calcular_previsao_ruptura
+Precisa criar calcular_saida_periodo (Atual com TODO)";<<<;<<<;;;;

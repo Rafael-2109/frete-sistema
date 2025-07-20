@@ -31,19 +31,20 @@ Caso 3 - NF Cancelada -> Deverá buscar a movimentação de estoque através da 
 
 
 
-3- Atualização Carteira Pendente:
+3- Atualização Carteira Pendente através da importação do Odoo:
 
 A- Manter os registros realizados em expedicao, data de entrega, agendamento e protocolo.
 
 B- Manter as separações vinculadas.
+
+C- Atualizar as Separações em caso de alteração no pedido decorrente da importação do Odoo:
+
 *** Há 2 tipos de separações: Totais e Parciais
 
-    B.1 - Separação Total:
-    Deverá manter os registros no pedido após a atualização da carteira.
-    Caso haja alteração no pedido após a atualização, deverá ser alterada a Separação e manter todas as linhas do pedido atualizadas e com os registros.
+    C.1 - Separação Total:
+    Caso haja alteração no pedido após a atualização, deverá ser atualizada a Separação e manter todas as linhas do pedido atualizadas e com os registros.
 
-    B.2 - Separação Parcial:
-    Deverá manter os registros no pedido após a atualização da carteira.
+    C.2 - Separação Parcial:
     Caso haja alteração no pedido após a atualização, deverá ter uma tela mostrando: 
     - Separação / Separações (Pode separar por página cada Separação) Atual (codigo do produto / nome do produto / qtd do produto / valor total do produto / peso total do produto / pallet total do produto)
     - Saldo Pedido (Mesmos campos, na frente de cada campo) (Pedido total - Separação)

@@ -686,3 +686,768 @@ def _gerar_novo_lote_id():
         import time
         return f"LOTE_{int(time.time())}"
 
+@carteira_bp.route('/agrupados')
+@login_required
+def listar_pedidos_agrupados():
+    """
+    Lista pedidos agrupados por num_pedido conforme CARTEIRA.csv
+    Implementação: Fase 1.1 - Query de Agrupamento Base
+    """
+    try:
+        inspector = inspect(db.engine)
+        if not inspector.has_table('carteira_principal'):
+            flash('Sistema de carteira ainda não foi inicializado', 'warning')
+            return render_template('carteira/listar_agrupados.html', pedidos=None)
+        
+        # Verificar se tabela palletizacao existe
+        if not inspector.has_table('cadastro_palletizacao'):
+            flash('Tabela de palletização não encontrada', 'warning')
+            return render_template('carteira/listar_agrupados.html', pedidos=None)
+        
+        # Import necessário para join
+        from app.producao.models import CadastroPalletizacao
+        
+        # 📊 QUERY AGRUPADA conforme CARTEIRA.csv
+        # Campos agregados: valor_total, peso_total, pallet_total
+        pedidos_agrupados = db.session.query(
+            # Campos base do agrupamento
+            CarteiraPrincipal.num_pedido,
+            CarteiraPrincipal.vendedor,
+            CarteiraPrincipal.equipe_vendas,
+            CarteiraPrincipal.data_pedido,
+            CarteiraPrincipal.cnpj_cpf,
+            CarteiraPrincipal.raz_social_red,
+            CarteiraPrincipal.rota,
+            CarteiraPrincipal.sub_rota,
+            CarteiraPrincipal.data_entrega_pedido,
+            CarteiraPrincipal.observ_ped_1,
+            CarteiraPrincipal.status_pedido,
+            CarteiraPrincipal.pedido_cliente,
+            CarteiraPrincipal.cod_uf,
+            CarteiraPrincipal.nome_cidade,
+            CarteiraPrincipal.incoterm,
+            CarteiraPrincipal.expedicao,
+            CarteiraPrincipal.protocolo,
+            CarteiraPrincipal.agendamento,
+            
+            # Agregações conforme CSV
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * 
+                    CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * 
+                    CadastroPalletizacao.peso_bruto).label('peso_total'),
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido / 
+                    CadastroPalletizacao.palletizacao).label('pallet_total'),
+            func.count(CarteiraPrincipal.id).label('total_itens')
+            
+        ).outerjoin(
+            CadastroPalletizacao,
+            and_(
+                CarteiraPrincipal.cod_produto == CadastroPalletizacao.cod_produto,
+                CadastroPalletizacao.ativo == True
+            )
+        ).filter(
+            CarteiraPrincipal.ativo == True
+        ).group_by(
+            CarteiraPrincipal.num_pedido,
+            CarteiraPrincipal.vendedor,
+            CarteiraPrincipal.equipe_vendas,
+            CarteiraPrincipal.data_pedido,
+            CarteiraPrincipal.cnpj_cpf,
+            CarteiraPrincipal.raz_social_red,
+            CarteiraPrincipal.rota,
+            CarteiraPrincipal.sub_rota,
+            CarteiraPrincipal.data_entrega_pedido,
+            CarteiraPrincipal.observ_ped_1,
+            CarteiraPrincipal.status_pedido,
+            CarteiraPrincipal.pedido_cliente,
+            CarteiraPrincipal.cod_uf,
+            CarteiraPrincipal.nome_cidade,
+            CarteiraPrincipal.incoterm,
+            CarteiraPrincipal.expedicao,
+            CarteiraPrincipal.protocolo,
+            CarteiraPrincipal.agendamento
+        ).order_by(
+            CarteiraPrincipal.expedicao.asc().nullslast(),
+            CarteiraPrincipal.num_pedido.asc()
+        ).all()
+        
+        # 📊 VALIDAÇÃO: Log de resultado para debug
+        logger.info(f"Query agrupamento executada: {len(pedidos_agrupados)} pedidos encontrados")
+        
+        # Converter resultados para formato JSON para debugging
+        pedidos_debug = []
+        for pedido in pedidos_agrupados[:5]:  # Apenas primeiros 5 para debug
+            pedidos_debug.append({
+                'num_pedido': pedido.num_pedido,
+                'valor_total': float(pedido.valor_total) if pedido.valor_total else 0,
+                'peso_total': float(pedido.peso_total) if pedido.peso_total else 0,
+                'pallet_total': float(pedido.pallet_total) if pedido.pallet_total else 0,
+                'total_itens': pedido.total_itens
+            })
+        
+        logger.info(f"Primeiros 5 pedidos (debug): {pedidos_debug}")
+        
+        return render_template('carteira/listar_agrupados.html', 
+                             pedidos=pedidos_agrupados,
+                             total_pedidos=len(pedidos_agrupados))
+        
+    except Exception as e:
+        logger.error(f"Erro ao listar pedidos agrupados: {str(e)}")
+        flash(f'Erro ao carregar pedidos agrupados: {str(e)}', 'error')
+        return render_template('carteira/listar_agrupados.html', pedidos=None)
+
+@carteira_bp.route('/api/pedido/<num_pedido>/itens')
+@login_required
+def api_itens_pedido(num_pedido):
+    """
+    API para carregar itens de um pedido específico via AJAX
+    Implementação: Fase 2.2 - JavaScript Expandir/Colapsar
+    """
+    try:
+        # Import necessário para join
+        from app.producao.models import CadastroPalletizacao
+        
+        # 📊 BUSCAR ITENS DO PEDIDO com dados de palletização
+        itens = db.session.query(
+            CarteiraPrincipal.id,
+            CarteiraPrincipal.cod_produto,
+            CarteiraPrincipal.nome_produto,
+            CarteiraPrincipal.qtd_saldo_produto_pedido,
+            CarteiraPrincipal.preco_produto_pedido,
+            CarteiraPrincipal.expedicao,
+            CarteiraPrincipal.agendamento,
+            CarteiraPrincipal.protocolo,
+            CarteiraPrincipal.separacao_lote_id,
+            
+            # Dados de palletização para cálculos
+            CadastroPalletizacao.peso_bruto,
+            CadastroPalletizacao.palletizacao
+            
+        ).outerjoin(
+            CadastroPalletizacao,
+            and_(
+                CarteiraPrincipal.cod_produto == CadastroPalletizacao.cod_produto,
+                CadastroPalletizacao.ativo == True
+            )
+        ).filter(
+            CarteiraPrincipal.num_pedido == num_pedido,
+            CarteiraPrincipal.ativo == True
+        ).all()
+        
+        # 📋 CONVERTER PARA JSON
+        itens_json = []
+        for item in itens:
+            # Calcular peso e pallet
+            peso_item = 0
+            pallet_item = 0
+            if item.peso_bruto and item.qtd_saldo_produto_pedido:
+                peso_item = float(item.qtd_saldo_produto_pedido) * float(item.peso_bruto)
+            if item.palletizacao and item.qtd_saldo_produto_pedido and item.palletizacao > 0:
+                pallet_item = float(item.qtd_saldo_produto_pedido) / float(item.palletizacao)
+            
+            # Calcular valor
+            valor_item = 0
+            if item.preco_produto_pedido and item.qtd_saldo_produto_pedido:
+                valor_item = float(item.qtd_saldo_produto_pedido) * float(item.preco_produto_pedido)
+            
+            item_data = {
+                'id': item.id,
+                'cod_produto': item.cod_produto,
+                'nome_produto': item.nome_produto,
+                'qtd_saldo': float(item.qtd_saldo_produto_pedido) if item.qtd_saldo_produto_pedido else 0,
+                'preco': float(item.preco_produto_pedido) if item.preco_produto_pedido else 0,
+                'valor_item': valor_item,
+                'peso_item': peso_item,
+                'pallet_item': pallet_item,
+                'expedicao': item.expedicao.strftime('%Y-%m-%d') if item.expedicao else '',
+                'agendamento': item.agendamento.strftime('%Y-%m-%d') if item.agendamento else '',
+                'protocolo': item.protocolo or '',
+                'separacao_lote_id': item.separacao_lote_id or '',
+                'tem_separacao': bool(item.separacao_lote_id)
+            }
+            itens_json.append(item_data)
+        
+        # 📊 ESTATÍSTICAS DO PEDIDO
+        total_itens = len(itens_json)
+        total_valor = sum(item['valor_item'] for item in itens_json)
+        total_peso = sum(item['peso_item'] for item in itens_json)
+        total_pallet = sum(item['pallet_item'] for item in itens_json)
+        itens_separados = sum(1 for item in itens_json if item['tem_separacao'])
+        
+        return jsonify({
+            'success': True,
+            'num_pedido': num_pedido,
+            'total_itens': total_itens,
+            'itens_separados': itens_separados,
+            'itens_pendentes': total_itens - itens_separados,
+            'totais': {
+                'valor': total_valor,
+                'peso': total_peso,
+                'pallet': total_pallet
+            },
+            'itens': itens_json
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao carregar itens do pedido {num_pedido}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao carregar itens: {str(e)}'
+        }), 500
+
+@carteira_bp.route('/api/pedido/<num_pedido>/separacoes')
+@login_required
+def api_separacoes_pedido(num_pedido):
+    """
+    API para buscar separações de um pedido específico via AJAX
+    Implementação: Fase 3.1 - Query Separações por Pedido
+    """
+    try:
+        from app.embarques.models import Embarque
+        from app.pedidos.models import Pedido
+        from app.transportadoras.models import Transportadora
+        
+        # 📊 QUERY COMPLEXA: Separacao + Embarque + Pedido + Transportadora
+        separacoes = db.session.query(
+            Separacao.separacao_lote_id,
+            Separacao.num_pedido,
+            Separacao.criado_em,
+            Separacao.qtd_saldo,
+            Separacao.valor_saldo,
+            Separacao.peso,
+            Separacao.pallet,
+            Separacao.expedicao,
+            Separacao.agendamento,
+            Separacao.protocolo,
+            
+            # Dados do embarque
+            Embarque.numero.label('embarque_numero'),
+            Embarque.data_prevista_embarque,
+            Embarque.data_embarque,
+            Embarque.status.label('embarque_status'),
+            Embarque.tipo_carga,
+            Embarque.valor_total.label('embarque_valor_total'),
+            Embarque.peso_total.label('embarque_peso_total'),
+            Embarque.pallet_total.label('embarque_pallet_total'),
+            
+            # Dados da transportadora
+            Transportadora.razao_social.label('transportadora_razao'),
+            Transportadora.nome_fantasia.label('transportadora_fantasia'),
+            
+            # Dados do pedido
+            Pedido.valor_saldo_total.label('pedido_valor_total'),
+            Pedido.peso_total.label('pedido_peso_total'),
+            Pedido.pallet_total.label('pedido_pallet_total')
+            
+        ).outerjoin(
+            Embarque, 
+            Separacao.separacao_lote_id == Embarque.separacao_lote_id
+        ).outerjoin(
+            Transportadora,
+            Embarque.transportadora_id == Transportadora.id
+        ).outerjoin(
+            Pedido,
+            and_(
+                Separacao.num_pedido == Pedido.num_pedido,
+                Separacao.separacao_lote_id == Pedido.separacao_lote_id
+            )
+        ).filter(
+            Separacao.num_pedido == num_pedido,
+            Separacao.separacao_lote_id.isnot(None)  # Apenas separações válidas
+        ).order_by(
+            Separacao.criado_em.desc()
+        ).all()
+        
+        # 📋 CONVERTER PARA JSON
+        separacoes_json = []
+        for sep in separacoes:
+            # Determinar status da separação
+            status_separacao = 'CRIADA'
+            status_class = 'info'
+            
+            if sep.embarque_numero:
+                if sep.data_embarque:
+                    status_separacao = 'EMBARCADA'
+                    status_class = 'success'
+                elif sep.embarque_status == 'ativo':
+                    status_separacao = 'AGUARDANDO EMBARQUE'
+                    status_class = 'warning'
+                elif sep.embarque_status == 'cancelado':
+                    status_separacao = 'EMBARQUE CANCELADO'
+                    status_class = 'danger'
+                else:
+                    status_separacao = 'EM EMBARQUE'
+                    status_class = 'primary'
+            
+            # Calcular totais da separação
+            total_itens_separacao = db.session.query(func.count(Separacao.id)).filter(
+                Separacao.separacao_lote_id == sep.separacao_lote_id
+            ).scalar() or 0
+            
+            sep_data = {
+                'separacao_lote_id': sep.separacao_lote_id,
+                'num_pedido': sep.num_pedido,
+                'criado_em': sep.criado_em.strftime('%d/%m/%Y %H:%M') if sep.criado_em else '',
+                'status': status_separacao,
+                'status_class': status_class,
+                'total_itens': total_itens_separacao,
+                
+                # Dados da separação
+                'qtd_saldo': float(sep.qtd_saldo) if sep.qtd_saldo else 0,
+                'valor_saldo': float(sep.valor_saldo) if sep.valor_saldo else 0,
+                'peso': float(sep.peso) if sep.peso else 0,
+                'pallet': float(sep.pallet) if sep.pallet else 0,
+                'expedicao': sep.expedicao.strftime('%d/%m/%Y') if sep.expedicao else '',
+                'agendamento': sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else '',
+                'protocolo': sep.protocolo or '',
+                
+                # Dados do embarque
+                'embarque': {
+                    'numero': sep.embarque_numero,
+                    'data_prevista': sep.data_prevista_embarque.strftime('%d/%m/%Y') if sep.data_prevista_embarque else '',
+                    'data_embarque': sep.data_embarque.strftime('%d/%m/%Y') if sep.data_embarque else '',
+                    'status': sep.embarque_status or '',
+                    'tipo_carga': sep.tipo_carga or '',
+                    'valor_total': float(sep.embarque_valor_total) if sep.embarque_valor_total else 0,
+                    'peso_total': float(sep.embarque_peso_total) if sep.embarque_peso_total else 0,
+                    'pallet_total': float(sep.embarque_pallet_total) if sep.embarque_pallet_total else 0
+                },
+                
+                # Dados da transportadora
+                'transportadora': {
+                    'razao_social': sep.transportadora_razao or '',
+                    'nome_fantasia': sep.transportadora_fantasia or ''
+                }
+            }
+            separacoes_json.append(sep_data)
+        
+        # 📊 ESTATÍSTICAS GERAIS
+        total_separacoes = len(separacoes_json)
+        separacoes_embarcadas = sum(1 for s in separacoes_json if s['status'] == 'EMBARCADA')
+        separacoes_pendentes = total_separacoes - separacoes_embarcadas
+        
+        return jsonify({
+            'success': True,
+            'num_pedido': num_pedido,
+            'total_separacoes': total_separacoes,
+            'separacoes_embarcadas': separacoes_embarcadas,
+            'separacoes_pendentes': separacoes_pendentes,
+            'separacoes': separacoes_json
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao carregar separações do pedido {num_pedido}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao carregar separações: {str(e)}'
+        }), 500
+
+@carteira_bp.route('/api/produto/<cod_produto>/estoque-d0-d7')
+@login_required  
+def api_estoque_d0_d7(cod_produto):
+    """
+    API para calcular estoque D0/D7 de um produto via AJAX
+    Implementação: Fase 3.2 - Integração Estoque D0/D7
+    """
+    try:
+        from app.estoque.models import SaldoEstoque
+        from datetime import datetime, timedelta
+        
+        # 📊 CALCULAR PROJEÇÃO COMPLETA (D0 até D+28)
+        projecao_completa = SaldoEstoque.calcular_projecao_completa(cod_produto)
+        
+        if not projecao_completa:
+            return jsonify({
+                'success': False,
+                'error': f'Não foi possível calcular projeção para produto {cod_produto}'
+            }), 500
+        
+        # 📋 EXTRAIR DADOS D0 E D7
+        data_hoje = datetime.now().date()
+        
+        # D0 - Estoque atual (hoje)
+        d0_data = projecao_completa[0] if projecao_completa else None
+        estoque_d0 = d0_data['estoque_final'] if d0_data else 0
+        
+        # D7 - Menor estoque nos próximos 7 dias
+        estoques_d7 = [dia['estoque_final'] for dia in projecao_completa[:8]]  # D0 até D7
+        menor_estoque_d7 = min(estoques_d7) if estoques_d7 else 0
+        
+        # 🚨 DETECTAR ALERTAS
+        status_d0 = 'NORMAL'
+        status_d7 = 'NORMAL' 
+        
+        if estoque_d0 <= 0:
+            status_d0 = 'RUPTURA'
+        elif estoque_d0 <= 10:  # Configurável
+            status_d0 = 'BAIXO'
+            
+        if menor_estoque_d7 <= 0:
+            status_d7 = 'RUPTURA_PREVISTA'
+        elif menor_estoque_d7 <= 10:  # Configurável
+            status_d7 = 'BAIXO_PREVISTO'
+        
+        # 📅 DETECTAR DIA DA RUPTURA
+        dia_ruptura = None
+        for i, dia in enumerate(projecao_completa[:8]):
+            if dia['estoque_final'] <= 0:
+                dia_ruptura = i
+                break
+        
+        # 📊 ESTATÍSTICAS DETALHADAS
+        projecao_d7 = projecao_completa[:8]  # D0 até D7
+        
+        total_saidas_d7 = sum(dia['saida_prevista'] for dia in projecao_d7)
+        total_producao_d7 = sum(dia['producao_programada'] for dia in projecao_d7)
+        
+        resultado = {
+            'success': True,
+            'cod_produto': cod_produto,
+            'data_calculo': data_hoje.strftime('%d/%m/%Y'),
+            
+            # Dados principais
+            'estoque_d0': float(estoque_d0),
+            'menor_estoque_d7': float(menor_estoque_d7),
+            'status_d0': status_d0,
+            'status_d7': status_d7,
+            
+            # Alertas
+            'dia_ruptura': dia_ruptura,
+            'tem_ruptura': dia_ruptura is not None,
+            
+            # Estatísticas
+            'total_saidas_d7': float(total_saidas_d7),
+            'total_producao_d7': float(total_producao_d7),
+            
+            # Projeção detalhada D0-D7
+            'projecao_d7': [
+                {
+                    'dia': dia['dia'],
+                    'data': dia['data'].strftime('%d/%m'),
+                    'estoque_inicial': float(dia['estoque_inicial']),
+                    'saida_prevista': float(dia['saida_prevista']),
+                    'producao_programada': float(dia['producao_programada']),
+                    'estoque_final': float(dia['estoque_final']),
+                    'status': 'RUPTURA' if dia['estoque_final'] <= 0 else 
+                             'BAIXO' if dia['estoque_final'] <= 10 else 'NORMAL'
+                }
+                for dia in projecao_d7
+            ]
+        }
+        
+        return jsonify(resultado)
+        
+    except Exception as e:
+        logger.error(f"Erro ao calcular estoque D0/D7 para produto {cod_produto}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao calcular estoque: {str(e)}'
+        }), 500
+
+@carteira_bp.route('/api/pedido/<num_pedido>/estoque-d0-d7')
+@login_required
+def api_estoque_pedido_d0_d7(num_pedido):
+    """
+    API para calcular estoque D0/D7 de todos os produtos de um pedido via AJAX
+    Implementação: Fase 3.2 - Integração Estoque D0/D7
+    """
+    try:
+        from app.estoque.models import SaldoEstoque
+        from datetime import datetime
+        
+        # 📋 BUSCAR ITENS DO PEDIDO
+        itens_pedido = db.session.query(CarteiraPrincipal).filter(
+            CarteiraPrincipal.num_pedido == num_pedido
+        ).all()
+        
+        if not itens_pedido:
+            return jsonify({
+                'success': False,
+                'error': f'Nenhum item encontrado para o pedido {num_pedido}'
+            }), 404
+        
+        # 📊 CALCULAR D0/D7 PARA CADA PRODUTO
+        resultados_produtos = []
+        estatisticas_gerais = {
+            'total_produtos': 0,
+            'produtos_ruptura_d0': 0,
+            'produtos_ruptura_d7': 0,
+            'produtos_baixo_estoque': 0,
+            'menor_estoque_geral': float('inf'),
+            'dia_ruptura_mais_proximo': None
+        }
+        
+        for item in itens_pedido:
+            cod_produto = item.cod_produto
+            
+            # Calcular projeção do produto
+            projecao_completa = SaldoEstoque.calcular_projecao_completa(cod_produto)
+            
+            if projecao_completa:
+                # D0 e D7
+                estoque_d0 = projecao_completa[0]['estoque_final'] if projecao_completa else 0
+                estoques_d7 = [dia['estoque_final'] for dia in projecao_completa[:8]]
+                menor_estoque_d7 = min(estoques_d7) if estoques_d7 else 0
+                
+                # Status
+                status_d0 = 'RUPTURA' if estoque_d0 <= 0 else 'BAIXO' if estoque_d0 <= 10 else 'NORMAL'
+                status_d7 = 'RUPTURA_PREVISTA' if menor_estoque_d7 <= 0 else 'BAIXO_PREVISTO' if menor_estoque_d7 <= 10 else 'NORMAL'
+                
+                # Dia da ruptura
+                dia_ruptura = None
+                for i, dia in enumerate(projecao_completa[:8]):
+                    if dia['estoque_final'] <= 0:
+                        dia_ruptura = i
+                        break
+                
+                # Dados do produto
+                produto_data = {
+                    'cod_produto': cod_produto,
+                    'nome_produto': item.nome_produto or '',
+                    'qtd_pedido': float(item.qtd_saldo_produto_pedido) if item.qtd_saldo_produto_pedido else 0,
+                    'estoque_d0': float(estoque_d0),
+                    'menor_estoque_d7': float(menor_estoque_d7),
+                    'status_d0': status_d0,
+                    'status_d7': status_d7,
+                    'dia_ruptura': dia_ruptura,
+                    'tem_ruptura': dia_ruptura is not None,
+                    'tem_estoque_suficiente': estoque_d0 >= float(item.qtd_saldo_produto_pedido or 0),
+                    'projecao_resumo': [
+                        {
+                            'dia': dia['dia'],
+                            'data': dia['data'].strftime('%d/%m'),
+                            'estoque_final': float(dia['estoque_final']),
+                            'status': 'RUPTURA' if dia['estoque_final'] <= 0 else 
+                                     'BAIXO' if dia['estoque_final'] <= 10 else 'NORMAL'
+                        }
+                        for dia in projecao_completa[:8]  # D0 até D7
+                    ]
+                }
+                
+                resultados_produtos.append(produto_data)
+                
+                # Atualizar estatísticas gerais
+                estatisticas_gerais['total_produtos'] += 1
+                if status_d0 == 'RUPTURA':
+                    estatisticas_gerais['produtos_ruptura_d0'] += 1
+                if status_d7 in ['RUPTURA_PREVISTA', 'BAIXO_PREVISTO']:
+                    estatisticas_gerais['produtos_ruptura_d7'] += 1 
+                if status_d0 == 'BAIXO' or status_d7 in ['BAIXO_PREVISTO']:
+                    estatisticas_gerais['produtos_baixo_estoque'] += 1
+                
+                if menor_estoque_d7 < estatisticas_gerais['menor_estoque_geral']:
+                    estatisticas_gerais['menor_estoque_geral'] = menor_estoque_d7
+                
+                if dia_ruptura is not None:
+                    if (estatisticas_gerais['dia_ruptura_mais_proximo'] is None or 
+                        dia_ruptura < estatisticas_gerais['dia_ruptura_mais_proximo']):
+                        estatisticas_gerais['dia_ruptura_mais_proximo'] = dia_ruptura
+            
+            else:
+                # Produto sem dados de estoque
+                produto_data = {
+                    'cod_produto': cod_produto,
+                    'nome_produto': item.nome_produto or '',
+                    'qtd_pedido': float(item.qtd_saldo_produto_pedido) if item.qtd_saldo_produto_pedido else 0,
+                    'estoque_d0': 0,
+                    'menor_estoque_d7': 0,
+                    'status_d0': 'SEM_DADOS',
+                    'status_d7': 'SEM_DADOS',
+                    'dia_ruptura': None,
+                    'tem_ruptura': False,
+                    'tem_estoque_suficiente': False,
+                    'projecao_resumo': []
+                }
+                resultados_produtos.append(produto_data)
+                estatisticas_gerais['total_produtos'] += 1
+        
+        # Ajustar estatísticas
+        if estatisticas_gerais['menor_estoque_geral'] == float('inf'):
+            estatisticas_gerais['menor_estoque_geral'] = 0
+        
+        return jsonify({
+            'success': True,
+            'num_pedido': num_pedido,
+            'data_calculo': datetime.now().strftime('%d/%m/%Y %H:%M'),
+            'estatisticas': estatisticas_gerais,
+            'produtos': resultados_produtos
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao calcular estoque D0/D7 do pedido {num_pedido}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao calcular estoque: {str(e)}'
+        }), 500
+
+@carteira_bp.route('/api/pedido/<num_pedido>/salvar-avaliacoes', methods=['POST'])
+@login_required
+def api_salvar_avaliacoes(num_pedido):
+    """
+    🎯 ETAPA 3: API SISTEMA REAL DE PRÉ-SEPARAÇÃO (SEM WORKAROUND)
+    Salva avaliações usando tabela pre_separacao_itens
+    """
+    try:
+        # 📝 RECEBER DADOS DA REQUISIÇÃO
+        dados = request.get_json()
+        
+        if not dados or 'itens' not in dados:
+            return jsonify({
+                'success': False,
+                'error': 'Dados inválidos. Esperado: {"itens": [...]}'
+            }), 400
+        
+        itens_selecionados = dados['itens']
+        tipo_envio = dados.get('tipo_envio', 'total')
+        config_envio_parcial = dados.get('config_envio_parcial')
+        
+        if not itens_selecionados:
+            return jsonify({
+                'success': False,
+                'error': 'Nenhum item selecionado'
+            }), 400
+        
+        # 📋 VALIDAR ITENS EXISTEM NO PEDIDO
+        itens_pedido = db.session.query(CarteiraPrincipal).filter(
+            CarteiraPrincipal.num_pedido == num_pedido
+        ).all()
+        
+        itens_dict = {str(item.id): item for item in itens_pedido}
+        resultados_processamento = []
+        
+        # 🔄 PROCESSAR CADA ITEM SELECIONADO - SISTEMA REAL
+        from app.carteira.models import PreSeparacaoItem
+        
+        for item_avaliado in itens_selecionados:
+            item_id = str(item_avaliado['item_id'])
+            qtd_selecionada = float(item_avaliado['qtd_selecionada'])
+            
+            if item_id not in itens_dict:
+                resultados_processamento.append({
+                    'item_id': item_id,
+                    'status': 'erro',
+                    'erro': f'Item {item_id} não encontrado no pedido {num_pedido}'
+                })
+                continue
+            
+            item_original = itens_dict[item_id]
+            qtd_disponivel = float(item_original.qtd_saldo_produto_pedido or 0)
+            
+            # ⚖️ VALIDAR QUANTIDADE
+            if qtd_selecionada <= 0:
+                resultados_processamento.append({
+                    'item_id': item_id,
+                    'status': 'erro',
+                    'erro': 'Quantidade deve ser maior que zero'
+                })
+                continue
+            
+            if qtd_selecionada > qtd_disponivel:
+                resultados_processamento.append({
+                    'item_id': item_id,
+                    'status': 'erro',
+                    'erro': f'Quantidade selecionada ({qtd_selecionada}) excede disponível ({qtd_disponivel})'
+                })
+                continue
+            
+            # 🎯 PROCESSAR VIA SISTEMA REAL (SEM WORKAROUND)
+            try:
+                # Preparar dados editáveis
+                dados_editaveis = {
+                    'expedicao': item_avaliado.get('expedicao'),
+                    'agendamento': item_avaliado.get('agendamento'),
+                    'protocolo': item_avaliado.get('protocolo'),
+                    'observacoes': item_avaliado.get('observacoes')
+                }
+                
+                # Criar pré-separação na tabela real
+                pre_separacao = PreSeparacaoItem.criar_e_salvar(
+                    carteira_item=item_original,
+                    qtd_selecionada=qtd_selecionada,
+                    dados_editaveis=dados_editaveis,
+                    usuario=current_user.nome if current_user else 'sistema',
+                    tipo_envio=tipo_envio,
+                    config_parcial=config_envio_parcial
+                )
+                
+                # Atualizar item na carteira (aplicar mudanças editáveis)
+                if dados_editaveis.get('expedicao'):
+                    try:
+                        from datetime import datetime
+                        item_original.expedicao = datetime.strptime(dados_editaveis['expedicao'], '%Y-%m-%d').date()
+                    except:
+                        pass
+                
+                if dados_editaveis.get('agendamento'):
+                    try:
+                        from datetime import datetime
+                        item_original.agendamento = datetime.strptime(dados_editaveis['agendamento'], '%Y-%m-%d').date()
+                    except:
+                        pass
+                
+                if dados_editaveis.get('protocolo'):
+                    item_original.protocolo = dados_editaveis['protocolo']
+                
+                resultados_processamento.append({
+                    'item_id': item_id,
+                    'status': 'sucesso',
+                    'acao': 'pre_separacao_criada',
+                    'qtd_processada': qtd_selecionada,
+                    'pre_separacao_id': pre_separacao.id,
+                    'tipo_envio': tipo_envio,
+                    'mensagem': f'Pré-separação criada para {item_original.cod_produto} - {qtd_selecionada} unidades ({tipo_envio})'
+                })
+                
+            except Exception as e:
+                logger.error(f"Erro ao processar pré-separação do item {item_id}: {e}")
+                resultados_processamento.append({
+                    'item_id': item_id,
+                    'status': 'erro',
+                    'erro': f'Erro interno: {str(e)}'
+                })
+        
+        # 📊 CONSOLIDAR RESULTADOS
+        sucessos = [r for r in resultados_processamento if r['status'] == 'sucesso']
+        erros = [r for r in resultados_processamento if r['status'] == 'erro']
+        
+        # 💾 COMMIT DAS ALTERAÇÕES SE TUDO OK
+        if len(erros) == 0:
+            db.session.commit()
+            logger.info(f"✅ Pré-separação concluída para pedido {num_pedido}: {len(sucessos)} itens processados")
+        else:
+            db.session.rollback()
+            logger.warning(f"❌ Pré-separação falhou para pedido {num_pedido}: {len(erros)} erros")
+        
+        return jsonify({
+            'success': len(erros) == 0,
+            'num_pedido': num_pedido,
+            'processados': len(resultados_processamento),
+            'sucessos': len(sucessos),
+            'erros': len(erros),
+            'resultados': resultados_processamento,
+            'mensagem': f'Processados {len(sucessos)} itens com sucesso' if len(erros) == 0 
+                       else f'{len(erros)} erros encontrados'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao salvar avaliações do pedido {num_pedido}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
+# 🎯 ETAPA 3: FUNÇÕES AUXILIARES DO SISTEMA REAL (SEM WORKAROUND)
+
+def buscar_pre_separacoes_pedido(num_pedido):
+    """
+    Busca pré-separações ativas de um pedido na tabela real
+    """
+    try:
+        from app.carteira.models import PreSeparacaoItem
+        return PreSeparacaoItem.buscar_por_pedido_produto(num_pedido)
+    except Exception as e:
+        logger.error(f"Erro ao buscar pré-separações do pedido {num_pedido}: {e}")
+        return []
+

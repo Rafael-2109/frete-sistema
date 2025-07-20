@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from app.utils.timezone import agora_brasil
 from sqlalchemy import func, and_, or_, Index
 import logging
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,12 @@ class CarteiraPrincipal(db.Model):
     estoque_d26 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D26
     estoque_d27 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D27
     estoque_d28 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D28
+    
+    # ✂️ CAMPOS PRÉ-SEPARAÇÃO (Fase 3.3)
+    pre_separacao_avaliado = db.Column(db.Boolean, default=False, index=True)  # Item foi avaliado para separação
+    pre_separacao_qtd = db.Column(db.Numeric(15, 3), nullable=True)  # Quantidade selecionada para separação
+    pre_separacao_em = db.Column(db.DateTime, nullable=True)  # Data/hora da avaliação
+    pre_separacao_por = db.Column(db.String(100), nullable=True)  # Usuário que fez a avaliação
     
     # 🛡️ AUDITORIA
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
@@ -1179,3 +1186,325 @@ class TipoEnvio(db.Model):
         if self.capacidade_volume_m3 and self.capacidade_volume_m3 > 0:
             return max(0, self.capacidade_volume_m3 - self.volume_atual_m3)
         return float('inf')  # Sem limite
+
+
+class PreSeparacaoItem(db.Model):
+    """
+    Modelo para sistema de pré-separação que SOBREVIVE à reimportação do Odoo
+    
+    FUNCIONALIDADE CRÍTICA: Quando Odoo reimporta e SUBSTITUI a carteira_principal,
+    este modelo preserva as decisões dos usuários e permite "recompor" as divisões.
+    
+    FLUXO DE RECOMPOSIÇÃO:
+    1. Usuário faz pré-separação (divisão parcial)
+    2. Sistema salva dados com chave de negócio estável  
+    3. Odoo reimporta → carteira_principal é substituída
+    4. Sistema detecta pré-separações não recompostas
+    5. Aplica novamente as divisões na nova carteira
+    6. Preserva dados editáveis (datas, protocolos, etc.)
+    """
+    
+    __tablename__ = 'pre_separacao_item'
+    
+    # Campos principais
+    id = db.Column(db.Integer, primary_key=True)
+    num_pedido = db.Column(db.String(50), nullable=False, index=True)
+    cod_produto = db.Column(db.String(50), nullable=False, index=True) 
+    cnpj_cliente = db.Column(db.String(20), index=True)
+    
+    #  DADOS ORIGINAIS (momento da pré-separação)
+    nome_produto = db.Column(db.String(255), nullable=True)
+    qtd_original_carteira = db.Column(db.Numeric(15, 3), nullable=False)  # Qtd total no momento
+    qtd_selecionada_usuario = db.Column(db.Numeric(15, 3), nullable=False)  # Qtd escolhida
+    qtd_restante_calculada = db.Column(db.Numeric(15, 3), nullable=False)  # Saldo restante
+    
+    # Dados originais preservados (sobrevivência à reimportação)
+    valor_original_item = db.Column(db.Numeric(15,2))
+    peso_original_item = db.Column(db.Numeric(15,3))
+    hash_item_original = db.Column(db.String(128))
+    
+    # Trabalho do usuário preservado
+    data_expedicao_editada = db.Column(db.Date)
+    data_agendamento_editada = db.Column(db.Date)
+    protocolo_editado = db.Column(db.String(50))
+    observacoes_usuario = db.Column(db.Text)
+    
+    # Controle de recomposição (sobrevivência ao Odoo)
+    recomposto = db.Column(db.Boolean, default=False, index=True)
+    data_recomposicao = db.Column(db.DateTime)
+    recomposto_por = db.Column(db.String(100))
+    versao_carteira_original = db.Column(db.String(50))
+    versao_carteira_recomposta = db.Column(db.String(50))
+    
+    # Status e tipo
+    status = db.Column(db.String(20), default='CRIADO', index=True)  # CRIADO, RECOMPOSTO, ENVIADO_SEPARACAO
+    tipo_envio = db.Column(db.String(10), default='total')  # total, parcial
+    
+    # Auditoria
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_por = db.Column(db.String(100))
+    
+    # Índice único para evitar duplicatas
+    __table_args__ = (
+        db.UniqueConstraint('num_pedido', 'cod_produto', 'cnpj_cliente', 'data_criacao', 
+                          name='pre_separacao_itens_pedido_produto_unique'),
+    )
+    
+    def __repr__(self):
+        return f'<PreSeparacaoItem {self.num_pedido}-{self.cod_produto}: {self.qtd_selecionada_usuario}/{self.qtd_original_carteira}>'
+    
+    # ===== PROPERTIES CALCULADAS =====
+    
+    @property
+    def valor_selecionado(self):
+        """Valor da quantidade selecionada"""
+        if self.valor_original_item and self.qtd_original_carteira:
+            return (float(self.qtd_selecionada_usuario) / float(self.qtd_original_carteira)) * float(self.valor_original_item)
+        return 0
+    
+    @property 
+    def valor_restante(self):
+        """Valor da quantidade restante"""
+        if self.valor_original_item and self.qtd_original_carteira:
+            return (float(self.qtd_restante_calculada) / float(self.qtd_original_carteira)) * float(self.valor_original_item)
+        return 0
+        
+    @property
+    def peso_selecionado(self):
+        """Peso da quantidade selecionada"""
+        if self.peso_original_item and self.qtd_original_carteira:
+            return (float(self.qtd_selecionada_usuario) / float(self.qtd_original_carteira)) * float(self.peso_original_item)
+        return 0
+        
+    @property
+    def percentual_selecionado(self):
+        """Percentual selecionado do total"""
+        if self.qtd_original_carteira:
+            return (float(self.qtd_selecionada_usuario) / float(self.qtd_original_carteira)) * 100
+        return 0
+    
+    # ===== MÉTODOS DE NEGÓCIO =====
+    
+    def gerar_hash_item(self, carteira_item):
+        """Gera hash do item para detectar mudanças"""
+        dados = f"{carteira_item.num_pedido}|{carteira_item.cod_produto}|{carteira_item.qtd_saldo_produto_pedido}|{carteira_item.preco_produto_pedido}"
+        return hashlib.md5(dados.encode()).hexdigest()
+    
+    def validar_quantidades(self):
+        """Valida se quantidades são consistentes"""
+        if float(self.qtd_selecionada_usuario) > float(self.qtd_original_carteira):
+            raise ValueError("Quantidade selecionada não pode ser maior que a original")
+        
+        if float(self.qtd_restante_calculada) != (float(self.qtd_original_carteira) - float(self.qtd_selecionada_usuario)):
+            self.qtd_restante_calculada = float(self.qtd_original_carteira) - float(self.qtd_selecionada_usuario)
+    
+    def marcar_como_recomposto(self, usuario):
+        """Marca item como recomposto após sincronização Odoo"""
+        self.recomposto = True
+        self.data_recomposicao = datetime.utcnow()
+        self.recomposto_por = usuario
+        self.status = 'RECOMPOSTO'
+    
+    def recompor_na_carteira(self, carteira_item, usuario):
+        """Recompõe divisão na carteira após reimportação Odoo"""
+        try:
+            # Verificar se hash mudou (item foi alterado)
+            novo_hash = self.gerar_hash_item(carteira_item)
+            
+            if self.hash_item_original != novo_hash:
+                logger.warning(f"Item {self.num_pedido}-{self.cod_produto} foi alterado no Odoo")
+            
+            # Aplicar divisão na carteira
+            if float(self.qtd_selecionada_usuario) < float(carteira_item.qtd_saldo_produto_pedido):
+                # Criar nova linha com o saldo
+                self._criar_linha_saldo_carteira(carteira_item)
+                
+                # Atualizar linha original
+                carteira_item.qtd_saldo_produto_pedido = self.qtd_selecionada_usuario
+                
+                # Aplicar dados editáveis preservados
+                if self.data_expedicao_editada:
+                    carteira_item.expedicao = self.data_expedicao_editada
+                if self.data_agendamento_editada:
+                    carteira_item.agendamento = self.data_agendamento_editada  
+                if self.protocolo_editado:
+                    carteira_item.protocolo = self.protocolo_editado
+                    
+            # Marcar como recomposto
+            self.marcar_como_recomposto(usuario)
+            
+            logger.info(f"✅ Item {self.num_pedido}-{self.cod_produto} recomposto com sucesso")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao recompor item {self.num_pedido}-{self.cod_produto}: {e}")
+            return False
+    
+    def _criar_linha_saldo_carteira(self, carteira_item):
+        """Cria nova linha na carteira com saldo restante"""
+        from .models import CarteiraPrincipal
+        
+                         # Criar nova linha copiando campos do item original
+        nova_linha = CarteiraPrincipal()
+        for column in CarteiraPrincipal.__table__.columns:
+            if column.name not in ['id']:
+                if hasattr(carteira_item, column.name):
+                    setattr(nova_linha, column.name, getattr(carteira_item, column.name))
+        
+        # Sobrescrever quantidade com saldo restante
+        nova_linha.qtd_saldo_produto_pedido = self.qtd_restante_calculada
+        
+        db.session.add(nova_linha)
+        logger.info(f"➕ Criada linha com saldo: {self.qtd_restante_calculada}")
+    
+    # ===== MÉTODOS DE CLASSE (QUERIES) =====
+    
+    @classmethod
+    def criar_pre_separacao(cls, carteira_item, qtd_selecionada, dados_editaveis, usuario, tipo_envio='total'):
+        """Cria nova pré-separação"""
+        
+        # Calcular quantidades
+        qtd_original = float(carteira_item.qtd_saldo_produto_pedido)
+        qtd_selecionada = float(qtd_selecionada)
+        qtd_restante = qtd_original - qtd_selecionada
+        
+        # Criar instância
+        pre_separacao = cls(
+            num_pedido=carteira_item.num_pedido,
+            cod_produto=carteira_item.cod_produto,
+            cnpj_cliente=carteira_item.cnpj_cliente,
+            qtd_original_carteira=qtd_original,
+            qtd_selecionada_usuario=qtd_selecionada,
+            qtd_restante_calculada=qtd_restante,
+            valor_original_item=carteira_item.preco_produto_pedido * qtd_original,
+            peso_original_item=getattr(carteira_item, 'peso_total', 0),
+            hash_item_original=cls().gerar_hash_item(carteira_item),
+            data_expedicao_editada=dados_editaveis.get('data_expedicao'),
+            data_agendamento_editada=dados_editaveis.get('data_agendamento'),
+            protocolo_editado=dados_editaveis.get('protocolo'),
+            observacoes_usuario=dados_editaveis.get('observacoes'),
+            tipo_envio=tipo_envio,
+            criado_por=usuario,
+            status='CRIADO'
+        )
+        
+        # Validar e salvar
+        pre_separacao.validar_quantidades()
+        db.session.add(pre_separacao)
+        
+        return pre_separacao
+    
+    @classmethod
+    def buscar_nao_recompostas(cls):
+        """Busca pré-separações que precisam ser recompostas após Odoo"""
+        return cls.query.filter(cls.recomposto == False).all()
+    
+    @classmethod  
+    def buscar_por_pedido(cls, num_pedido):
+        """Busca pré-separações de um pedido específico"""
+        return cls.query.filter(cls.num_pedido == num_pedido).all()
+    
+    @classmethod
+    def recompor_todas_pendentes(cls, usuario):
+        """Recompõe todas as pré-separações pendentes após reimportação Odoo"""
+        from .models import CarteiraPrincipal
+        
+        pendentes = cls.buscar_nao_recompostas()
+        sucesso = 0
+        erro = 0
+        
+        for pre_sep in pendentes:
+            # Buscar item na carteira atual
+            carteira_item = CarteiraPrincipal.query.filter(
+                and_(
+                    CarteiraPrincipal.num_pedido == pre_sep.num_pedido,
+                    CarteiraPrincipal.cod_produto == pre_sep.cod_produto,
+                    CarteiraPrincipal.cnpj_cliente == pre_sep.cnpj_cliente
+                )
+            ).first()
+            
+            if carteira_item:
+                if pre_sep.recompor_na_carteira(carteira_item, usuario):
+                    sucesso += 1
+                else:
+                    erro += 1
+            else:
+                logger.warning(f"Item {pre_sep.num_pedido}-{pre_sep.cod_produto} não encontrado na carteira atual")
+                erro += 1
+        
+        db.session.commit()
+        
+        logger.info(f"✅ Recomposição concluída: {sucesso} sucessos, {erro} erros")
+        return {'sucesso': sucesso, 'erro': erro, 'total': len(pendentes)}
+
+    # ===== SISTEMA REAL DE PRÉ-SEPARAÇÃO (TABELA PRÓPRIA) =====
+    
+    @classmethod
+    def criar_e_salvar(cls, carteira_item, qtd_selecionada, dados_editaveis, usuario, tipo_envio='total', config_parcial=None):
+        """
+        Cria e salva pré-separação na tabela real (pós-migração UTF-8)
+        """
+        try:
+            # Calcular quantidades
+            qtd_original = float(carteira_item.qtd_saldo_produto_pedido or 0)
+            qtd_selecionada = float(qtd_selecionada)
+            qtd_restante = qtd_original - qtd_selecionada
+            
+            # Criar instância
+            pre_separacao = cls()
+            pre_separacao.num_pedido = carteira_item.num_pedido
+            pre_separacao.cod_produto = carteira_item.cod_produto
+            pre_separacao.cnpj_cliente = carteira_item.cnpj_cpf
+            pre_separacao.nome_produto = carteira_item.nome_produto
+            pre_separacao.qtd_original_carteira = qtd_original
+            pre_separacao.qtd_selecionada_usuario = qtd_selecionada
+            pre_separacao.qtd_restante_calculada = qtd_restante
+            pre_separacao.valor_original_item = float(carteira_item.preco_produto_pedido or 0) * qtd_original
+            pre_separacao.peso_original_item = float(getattr(carteira_item, 'peso', 0) or 0)
+            pre_separacao.hash_item_original = cls._gerar_hash_item(carteira_item)
+            pre_separacao.data_expedicao_editada = dados_editaveis.get('expedicao')
+            pre_separacao.data_agendamento_editada = dados_editaveis.get('agendamento')
+            pre_separacao.protocolo_editado = dados_editaveis.get('protocolo')
+            pre_separacao.observacoes_usuario = dados_editaveis.get('observacoes')
+            pre_separacao.tipo_envio = tipo_envio
+            pre_separacao.criado_por = usuario
+            pre_separacao.status = 'CRIADO'
+            
+            # Adicionar configuração de envio parcial se necessário
+            if tipo_envio == 'parcial' and config_parcial:
+                observacoes_parcial = f"ENVIO PARCIAL - Motivo: {config_parcial.get('motivo', 'N/A')} | " \
+                                    f"Justificativa: {config_parcial.get('justificativa', 'N/A')} | " \
+                                    f"Previsão Complemento: {config_parcial.get('previsao_complemento', 'N/A')} | " \
+                                    f"Responsável: {config_parcial.get('responsavel_aprovacao', 'N/A')}"
+                
+                if pre_separacao.observacoes_usuario:
+                    pre_separacao.observacoes_usuario += f"\n{observacoes_parcial}"
+                else:
+                    pre_separacao.observacoes_usuario = observacoes_parcial
+            
+            # Validar e salvar
+            pre_separacao.validar_quantidades()
+            db.session.add(pre_separacao)
+            db.session.commit()
+            
+            logger.info(f"✅ Pré-separação criada com sucesso: {pre_separacao.num_pedido}-{pre_separacao.cod_produto}")
+            return pre_separacao
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao criar pré-separação: {e}")
+            db.session.rollback()
+            raise
+    
+    @classmethod
+    def _gerar_hash_item(cls, carteira_item):
+        """Gera hash do item para detectar mudanças"""
+        dados = f"{carteira_item.num_pedido}|{carteira_item.cod_produto}|{carteira_item.qtd_saldo_produto_pedido}|{carteira_item.preco_produto_pedido}"
+        return hashlib.md5(dados.encode()).hexdigest()
+    
+    @classmethod
+    def buscar_por_pedido_produto(cls, num_pedido, cod_produto=None):
+        """Busca pré-separações de um pedido específico"""
+        query = cls.query.filter(cls.num_pedido == num_pedido)
+        if cod_produto:
+            query = query.filter(cls.cod_produto == cod_produto)
+        return query.all()

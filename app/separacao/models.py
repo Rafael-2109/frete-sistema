@@ -28,9 +28,12 @@ class Separacao(db.Model):
     expedicao     = db.Column(db.Date, nullable=True)
     agendamento   = db.Column(db.Date, nullable=True)
     protocolo     = db.Column(db.String(50), nullable=True)
+    
+    # 🎯 ETAPA 2: CAMPO TIPO DE ENVIO (ADICIONADO NA MIGRAÇÃO)
+    tipo_envio    = db.Column(db.String(10), default='total', nullable=True)  # total, parcial
 
     criado_em     = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):
-        return f'<Separacao #{self.id} - {self.num_pedido} - Lote: {self.separacao_lote_id}>'
+        return f'<Separacao #{self.id} - {self.num_pedido} - Lote: {self.separacao_lote_id} - Tipo: {self.tipo_envio}>'
 
