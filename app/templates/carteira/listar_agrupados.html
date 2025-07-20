@@ -101,10 +101,9 @@
                                 <br><small class="text-muted">{{ pedido.sub_rota }}</small>
                                 {% endif %}
                                 {% if pedido.incoterm %}
-                                <br>
-                                <button class="btn btn-outline-info btn-xs" onclick="abrirModalIncoterm('{{ pedido.incoterm }}')" title="Ver detalhes do Incoterm">
+                                <br><span class="badge" style="background-color: #17a2b8; color: white; cursor: pointer;" onclick="abrirModalEndereco('{{ pedido.num_pedido }}')">
                                     {{ pedido.incoterm }}
-                                </button>
+                                </span>
                                 {% endif %}
                             </td>
                             
@@ -357,6 +356,17 @@
                             <textarea class="form-control" id="observacoes_agendamento" name="observacoes" rows="3" placeholder="Observações sobre o agendamento..."></textarea>
                         </div>
                         
+                        <!-- Checkbox Agenda Confirmada -->
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="agenda_confirmada" name="agenda_confirmada">
+                                <label class="form-check-label" for="agenda_confirmada">
+                                    <strong>Agenda Confirmada</strong>
+                                    <br><small class="text-muted">Marque se o agendamento já foi confirmado com o cliente</small>
+                                </label>
+                            </div>
+                        </div>
+                        
                         <!-- Itens do pedido (formatação CORRETA) -->
                         <div class="card">
                             <div class="card-header">
@@ -504,28 +514,40 @@
     </div>
 </div>
 
-<!-- Modal Incoterm -->
-<div class="modal fade" id="modalIncoterm" tabindex="-1" role="dialog" aria-labelledby="modalIncotermLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
+<!-- Modal para Detalhes do Endereço - CÓPIA EXATA DA CARTEIRA PRINCIPAL -->
+<div class="modal fade" id="modalEndereco" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalIncotermLabel">
-                    <i class="fas fa-info-circle"></i> Detalhes do Incoterm
-                    <span id="modal-incoterm-titulo" class="badge badge-info ml-2"></span>
-                </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
+                <h5 class="modal-title"><i class="fas fa-map-marker-alt"></i> Detalhes do Endereço</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div id="modal-incoterm-content">
-                    <!-- Conteúdo será carregado dinamicamente -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-user"></i> Cliente</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>UF:</strong> <span id="modal_cliente_uf"></span></li>
+                            <li><strong>Município:</strong> <span id="modal_cliente_municipio"></span></li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-shipping-fast"></i> Endereço de Entrega</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>CNPJ:</strong> <span id="modal_cnpj_endereco"></span></li>
+                            <li><strong>Empresa:</strong> <span id="modal_empresa_endereco"></span></li>
+                            <li><strong>UF:</strong> <span id="modal_uf_endereco"></span></li>
+                            <li><strong>Município:</strong> <span id="modal_municipio_endereco"></span></li>
+                            <li><strong>Bairro:</strong> <span id="modal_bairro_endereco"></span></li>
+                            <li><strong>CEP:</strong> <span id="modal_cep_endereco"></span></li>
+                            <li><strong>Rua:</strong> <span id="modal_rua_endereco"></span></li>
+                            <li><strong>Telefone:</strong> <span id="modal_telefone_endereco"></span></li>
+                        </ul>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">
-                    <i class="fas fa-times"></i> Fechar
-                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>
@@ -1075,7 +1097,7 @@ function gerarHtmlItens(data) {
                 <td>${item.expedicao || '-'}</td>
                 <td>${item.agendamento || '-'}</td>
                 <td>
-                    <span class="badge badge-${statusClass}">
+                    <span class="badge ${item.tem_separacao ? 'badge-success' : 'badge-warning'}" style="${item.tem_separacao ? 'background-color: #28a745; color: white;' : 'background-color: #ffc107; color: black;'}">
                         <i class="fas fa-${statusIcon}"></i> ${statusText}
                     </span>
                 </td>
@@ -1278,7 +1300,7 @@ function gerarHtmlItensModal(data) {
                            ${disabled}>
                 </td>
                 <td>
-                    <span class="badge badge-${statusClass}">
+                    <span class="badge ${item.tem_separacao ? 'badge-success' : 'badge-warning'}" style="${item.tem_separacao ? 'background-color: #28a745; color: white;' : 'background-color: #ffc107; color: black;'}">
                         ${statusText}
                     </span>
                 </td>
@@ -1376,12 +1398,19 @@ function carregarDadosAgendamento(numPedido) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Atualizar resumo
-                document.getElementById('agendamento-total-itens').textContent = data.total_itens;
-                document.getElementById('agendamento-valor-total').textContent = `R$ ${data.totais.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                document.getElementById('agendamento-peso-total').textContent = `${Math.round(data.totais.peso).toLocaleString('pt-BR')} kg`;
+                // Buscar informações do cliente (pegar do primeiro item)
+                const clienteInfo = data.itens.length > 0 ? data.itens[0] : null;
                 
-                // Carregar itens na tabela
+                // Atualizar resumo com dados corretos
+                document.getElementById('agendamento-cliente').textContent = 
+                    clienteInfo ? (clienteInfo.nome_produto ? `Cliente do pedido ${numPedido}` : 'N/A') : 'N/A';
+                document.getElementById('agendamento-total-itens').textContent = data.total_itens;
+                document.getElementById('agendamento-valor-total').textContent = 
+                    `R$ ${data.totais.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                document.getElementById('agendamento-peso-total').textContent = 
+                    `${Math.round(data.totais.peso).toLocaleString('pt-BR')} kg`;
+                
+                // Carregar itens na tabela  
                 gerarTabelaAgendamento(data);
                 
                 modalLoading.style.display = 'none';
@@ -1418,9 +1447,10 @@ function gerarTabelaAgendamento(data) {
     tbody.innerHTML = html;
 }
 
-function salvarAgendamento() {
+async function salvarAgendamento() {
     const form = document.getElementById('form-agendamento');
     const formData = new FormData(form);
+    const numPedido = formData.get('num_pedido');
     
     // Validar campos obrigatórios
     if (!formData.get('data_agendamento')) {
@@ -1429,15 +1459,99 @@ function salvarAgendamento() {
         return;
     }
     
-    console.log('🗓️ Salvando agendamento:', Object.fromEntries(formData));
-    alert('✅ Agendamento salvo com sucesso! (Função será implementada na API)');
-    $('#modalAgendamento').modal('hide');
+    if (!numPedido) {
+        alert('⚠️ Número do pedido não encontrado');
+        return;
+    }
+    
+    // 🔄 IMPLEMENTAÇÃO REAL - CONECTAR À API EXISTENTE
+    const btnSalvar = document.querySelector('.modal-footer .btn-primary');
+    const textoOriginal = btnSalvar.innerHTML;
+    
+    try {
+        // Mostrar loading
+        btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+        btnSalvar.disabled = true;
+        
+        // 1. Buscar primeiro item do pedido para obter item_id
+        console.log(`🗓️ Buscando itens do pedido ${numPedido} para agendamento...`);
+        
+        const responseItens = await fetch(`/carteira/api/pedido/${numPedido}/itens`);
+        const dataItens = await responseItens.json();
+        
+        if (!responseItens.ok || !dataItens.success || !dataItens.itens.length) {
+            throw new Error(`Erro ao buscar itens do pedido: ${dataItens.error || 'Pedido sem itens'}`);
+        }
+        
+        // Pegar o primeiro item (será usado para aplicar a todos)
+        const primeiroItem = dataItens.itens[0];
+        const itemId = primeiroItem.id;
+        
+        console.log(`🗓️ Usando item ${itemId} para aplicar agendamento a todo o pedido ${numPedido}`);
+        
+        // 2. Preparar dados para API agendamento existente
+        const dadosAgendamento = {
+            data_agendamento: formData.get('data_agendamento'),
+            data_entrega: formData.get('data_expedicao') || null, // Campo 'data_expedicao' vira 'data_entrega'
+            hora_agendamento: formData.get('hora_agendamento') || null,
+            protocolo: formData.get('protocolo') || null,
+            agenda_confirmada: formData.get('agenda_confirmada') === 'on' || false,
+            aplicar_todos: true // ✅ SEMPRE aplicar a todos os itens do pedido
+        };
+        
+        console.log('🗓️ Dados do agendamento:', dadosAgendamento);
+        
+        // 3. Chamar API real de agendamento
+        const responseAgendamento = await fetch(`/carteira/item/${itemId}/agendamento`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify(dadosAgendamento)
+        });
+        
+        const dataAgendamento = await responseAgendamento.json();
+        
+        if (!responseAgendamento.ok || !dataAgendamento.success) {
+            throw new Error(dataAgendamento.error || 'Erro ao salvar agendamento');
+        }
+        
+        // ✅ SUCESSO
+        console.log('✅ Agendamento salvo com sucesso:', dataAgendamento);
+        
+        // Mostrar mensagem de sucesso
+        alert(`✅ ${dataAgendamento.message || 'Agendamento salvo com sucesso!'}`);
+        
+        // Fechar modal
+        $('#modalAgendamento').modal('hide');
+        
+        // Recarregar página para mostrar mudanças
+        setTimeout(() => {
+            location.reload();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('❌ Erro ao salvar agendamento:', error);
+        
+        let mensagemErro = `❌ **ERRO AO SALVAR AGENDAMENTO**\n\n`;
+        mensagemErro += `Detalhes: ${error.message}\n\n`;
+        mensagemErro += `📋 Pedido: ${numPedido}\n`;
+        mensagemErro += `🔧 Verifique os dados e tente novamente.`;
+        
+        alert(mensagemErro);
+        
+    } finally {
+        // Restaurar botão
+        btnSalvar.innerHTML = textoOriginal;
+        btnSalvar.disabled = false;
+    }
 }
 
 /**
- * 📊 MODAL ESTOQUE D0/D7 - FUNÇÕES IMPLEMENTADAS
+ * 📊 MODAL ESTOQUE D0/D7 - INTEGRAÇÃO REAL COM ESTOQUE.MODELS
  */
-function carregarEstoqueD0D7(numPedido) {
+async function carregarEstoqueD0D7(numPedido) {
     const modalLoading = document.getElementById('modal-estoque-loading');
     const modalContent = document.getElementById('modal-estoque-content');
     
@@ -1448,66 +1562,137 @@ function carregarEstoqueD0D7(numPedido) {
     // Atualizar título
     document.getElementById('modal-estoque-pedido').textContent = numPedido;
     
-    // Simular carregamento (integração com estoque.models será implementada)
-    setTimeout(() => {
-        // Dados simulados para demonstração
-        const dadosEstoque = {
-            resumo: {
-                problemas_d0: 2,
-                problemas_d7: 5,
-                estoque_ok: 8
-            },
-            itens: [
-                { cod_produto: 'PROD001', nome_produto: 'Produto Exemplo 1', qtd_pedido: 100, estoque_d0: 0, estoque_d7: 50, status: 'CRÍTICO' },
-                { cod_produto: 'PROD002', nome_produto: 'Produto Exemplo 2', qtd_pedido: 50, estoque_d0: 25, estoque_d7: 10, status: 'BAIXO' },
-                { cod_produto: 'PROD003', nome_produto: 'Produto Exemplo 3', qtd_pedido: 200, estoque_d0: 300, estoque_d7: 250, status: 'NORMAL' }
-            ]
-        };
+    try {
+        console.log(`📊 Carregando análise REAL de estoque D0/D7 para pedido ${numPedido}...`);
         
-        // Atualizar resumo
-        document.getElementById('resumo-problemas-d0').textContent = dadosEstoque.resumo.problemas_d0;
-        document.getElementById('resumo-problemas-d7').textContent = dadosEstoque.resumo.problemas_d7;
-        document.getElementById('resumo-estoque-ok').textContent = dadosEstoque.resumo.estoque_ok;
+        // Carregar dados reais via API
+        const response = await fetch(`/carteira/api/pedido/${numPedido}/estoque-d0-d7`);
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
         
-        // Gerar tabela
-        gerarTabelaEstoque(dadosEstoque.itens);
+        const data = await response.json();
+        console.log('📊 Dados de estoque recebidos:', data);
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Erro ao carregar dados de estoque');
+        }
+        
+        // Atualizar resumo com dados reais
+        document.getElementById('resumo-problemas-d0').textContent = data.resumo.problemas_d0 || 0;
+        document.getElementById('resumo-problemas-d7').textContent = data.resumo.problemas_d7 || 0;
+        document.getElementById('resumo-estoque-ok').textContent = data.resumo.estoque_ok || 0;
+        
+        // Gerar tabela com dados reais
+        gerarTabelaEstoqueReal(data.itens || []);
         
         modalLoading.style.display = 'none';
         modalContent.style.display = 'block';
-    }, 1500);
+        
+        console.log(`✅ Análise de estoque carregada: ${data.itens?.length || 0} produtos analisados`);
+        
+    } catch (error) {
+        console.error(`❌ Erro ao carregar estoque D0/D7 do pedido ${numPedido}:`, error);
+        
+        // Mostrar erro
+        modalLoading.style.display = 'none';
+        modalContent.innerHTML = `
+            <div class="alert alert-danger text-center">
+                <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                <h5>Erro ao carregar análise de estoque</h5>
+                <p>${error.message}</p>
+                <button class="btn btn-primary" onclick="carregarEstoqueD0D7('${numPedido}')">
+                    <i class="fas fa-redo"></i> Tentar Novamente
+                </button>
+            </div>
+        `;
+        modalContent.style.display = 'block';
+    }
 }
 
-function gerarTabelaEstoque(itens) {
+function gerarTabelaEstoqueReal(itens) {
     const tbody = document.getElementById('estoque-tbody-itens');
     let html = '';
     
+    if (!itens || itens.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center p-4">
+                    <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Nenhum dado de estoque encontrado</h5>
+                    <p class="text-muted">Os produtos deste pedido não possuem dados de estoque disponíveis.</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
     itens.forEach(item => {
-        const statusClass = item.status === 'CRÍTICO' ? 'danger' : 
-                          item.status === 'BAIXO' ? 'warning' : 
-                          item.status === 'NORMAL' ? 'info' : 'success';
+        // Determinar status e classe CSS baseado nos dados reais
+        let status = 'NORMAL';
+        let statusClass = 'info';
+        
+        if (item.estoque_d0 <= 0) {
+            status = 'CRÍTICO - SEM ESTOQUE';
+            statusClass = 'danger';
+        } else if (item.estoque_d0 < item.qtd_pedido) {
+            status = 'INSUFICIENTE';
+            statusClass = 'warning';
+        } else if (item.estoque_d7 <= 0) {
+            status = 'RUPTURA D7';
+            statusClass = 'warning';
+        } else {
+            status = 'DISPONÍVEL';
+            statusClass = 'success';
+        }
+        
+        // Calcular percentual de disponibilidade
+        const disponibilidade = item.qtd_pedido > 0 ? 
+            Math.round((Math.min(item.estoque_d0, item.qtd_pedido) / item.qtd_pedido) * 100) : 0;
         
         html += `
-            <tr>
+            <tr class="${statusClass === 'danger' ? 'table-danger' : statusClass === 'warning' ? 'table-warning' : ''}">
                 <td><small><strong>${item.cod_produto}</strong></small></td>
-                <td><small>${item.nome_produto}</small></td>
+                <td><small>${item.nome_produto || '-'}</small></td>
                 <td><strong>${item.qtd_pedido.toLocaleString('pt-BR')}</strong></td>
-                <td>${item.estoque_d0.toLocaleString('pt-BR')}</td>
-                <td>${item.estoque_d7.toLocaleString('pt-BR')}</td>
                 <td>
-                    <span class="badge badge-${statusClass}">
-                        ${item.status}
+                    <strong class="${item.estoque_d0 <= 0 ? 'text-danger' : item.estoque_d0 < item.qtd_pedido ? 'text-warning' : 'text-success'}">
+                        ${item.estoque_d0.toLocaleString('pt-BR')}
+                    </strong>
+                </td>
+                <td>
+                    <span class="${item.estoque_d7 <= 0 ? 'text-danger' : 'text-dark'}">
+                        ${item.estoque_d7.toLocaleString('pt-BR')}
                     </span>
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="verDetalhesEstoque('${item.cod_produto}')" title="Ver detalhes">
-                        <i class="fas fa-chart-line"></i>
-                    </button>
+                    <span class="badge badge-${statusClass}" style="${statusClass === 'danger' ? 'background-color: #dc3545; color: white;' : statusClass === 'warning' ? 'background-color: #ffc107; color: black;' : statusClass === 'success' ? 'background-color: #28a745; color: white;' : 'background-color: #17a2b8; color: white;'}">
+                        ${status}
+                    </span>
+                    <br><small class="text-muted">${disponibilidade}% disponível</small>
+                </td>
+                <td>
+                    <div class="btn-group-vertical btn-group-sm">
+                        <button class="btn btn-sm btn-outline-primary" onclick="verDetalhesEstoque('${item.cod_produto}')" title="Ver projeção completa">
+                            <i class="fas fa-chart-line"></i>
+                        </button>
+                        ${item.estoque_d0 < item.qtd_pedido ? `
+                        <button class="btn btn-sm btn-outline-warning" onclick="sugerirAlternativa('${item.cod_produto}')" title="Sugerir alternativa">
+                            <i class="fas fa-lightbulb"></i>
+                        </button>
+                        ` : ''}
+                    </div>
                 </td>
             </tr>
         `;
     });
     
     tbody.innerHTML = html;
+}
+
+// Manter função antiga para compatibilidade
+function gerarTabelaEstoque(itens) {
+    gerarTabelaEstoqueReal(itens);
 }
 
 function exportarAnaliseEstoque() {
@@ -1520,72 +1705,7 @@ function verDetalhesEstoque(codProduto) {
     alert(`📊 Detalhes do produto ${codProduto} - funcionalidade será implementada`);
 }
 
-/**
- * ℹ️ MODAL INCOTERM - FUNÇÕES IMPLEMENTADAS
- */
-function carregarDetalhesIncoterm(incoterm) {
-    const content = document.getElementById('modal-incoterm-content');
-    
-    // Dados dos incoterms mais comuns
-    const incotermInfo = {
-        'FOB': {
-            nome: 'Free On Board',
-            descricao: 'O vendedor entrega a mercadoria no porto de embarque. A partir deste ponto, todos os custos e riscos são do comprador.',
-            responsabilidades: {
-                vendedor: ['Entregar mercadoria no porto', 'Custos de carregamento', 'Documentação de exportação'],
-                comprador: ['Frete marítimo', 'Seguro', 'Custos no destino', 'Desembaraço de importação']
-            }
-        },
-        'CIF': {
-            nome: 'Cost, Insurance and Freight',
-            descricao: 'O vendedor paga frete e seguro até o porto de destino, mas o risco transfere no embarque.',
-            responsabilidades: {
-                vendedor: ['Mercadoria no navio', 'Frete marítimo', 'Seguro mínimo', 'Documentação'],
-                comprador: ['Desembaraço importação', 'Custos no destino', 'Transporte interno']
-            }
-        },
-        'EXW': {
-            nome: 'Ex Works',
-            descricao: 'O comprador assume todos os custos e riscos desde a retirada na fábrica do vendedor.',
-            responsabilidades: {
-                vendedor: ['Disponibilizar mercadoria', 'Embalagem'],
-                comprador: ['Retirada na origem', 'Todos os fretes', 'Seguros', 'Documentação']
-            }
-        }
-    };
-    
-    const info = incotermInfo[incoterm] || {
-        nome: incoterm,
-        descricao: 'Informações detalhadas não disponíveis para este incoterm.',
-        responsabilidades: { vendedor: [], comprador: [] }
-    };
-    
-    content.innerHTML = `
-        <div class="card">
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0">${info.nome}</h5>
-            </div>
-            <div class="card-body">
-                <p class="lead">${info.descricao}</p>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6 class="text-success"><i class="fas fa-user-tie"></i> Responsabilidades do Vendedor:</h6>
-                        <ul class="list-group list-group-flush">
-                            ${info.responsabilidades.vendedor.map(item => `<li class="list-group-item">${item}</li>`).join('')}
-                        </ul>
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="text-primary"><i class="fas fa-user"></i> Responsabilidades do Comprador:</h6>
-                        <ul class="list-group list-group-flush">
-                            ${info.responsabilidades.comprador.map(item => `<li class="list-group-item">${item}</li>`).join('')}
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-}
+
 
 /**
  * Toggle todos os itens (selecionar/desselecionar todos)
@@ -2324,12 +2444,47 @@ function calcularEstoqueD0D7(numPedido) {
     carregarEstoqueD0D7(numPedido);
 }
 
-function abrirModalIncoterm(incoterm) {
-    console.log(`ℹ️ Abrir Modal Incoterm: ${incoterm}`);
-    $('#modalIncoterm').modal('show');
-    document.getElementById('modal-incoterm-titulo').textContent = incoterm;
-    carregarDetalhesIncoterm(incoterm);
+function abrirModalEndereco(numPedido) {
+    // Buscar dados do pedido via AJAX - ADAPTADO PARA CARTEIRA AGRUPADA
+    fetch('/carteira/item/' + numPedido + '/endereco')
+        .then(response => response.json())
+        .then(data => {
+            // Preencher dados do cliente
+            document.getElementById('modal_cliente_uf').textContent = data.estado || '-';
+            document.getElementById('modal_cliente_municipio').textContent = data.municipio || '-';
+            
+            // Preencher dados do endereço de entrega
+            document.getElementById('modal_cnpj_endereco').textContent = data.cnpj_endereco_ent || '-';
+            document.getElementById('modal_empresa_endereco').textContent = data.empresa_endereco_ent || '-';
+            document.getElementById('modal_uf_endereco').textContent = data.cod_uf || '-';
+            document.getElementById('modal_municipio_endereco').textContent = data.nome_cidade || '-';
+            document.getElementById('modal_bairro_endereco').textContent = data.bairro_endereco_ent || '-';
+            document.getElementById('modal_cep_endereco').textContent = data.cep_endereco_ent || '-';
+            
+            // Combinar rua e endereço
+            let ruaCompleta = '';
+            if (data.rua_endereco_ent && data.endereco_ent) {
+                ruaCompleta = data.rua_endereco_ent + ' / ' + data.endereco_ent;
+            } else if (data.rua_endereco_ent) {
+                ruaCompleta = data.rua_endereco_ent;
+            } else if (data.endereco_ent) {
+                ruaCompleta = data.endereco_ent;
+            }
+            document.getElementById('modal_rua_endereco').textContent = ruaCompleta || '-';
+            
+            document.getElementById('modal_telefone_endereco').textContent = data.telefone_endereco_ent || '-';
+            
+            // Mostrar modal
+            const modal = new bootstrap.Modal(document.getElementById('modalEndereco'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Erro ao buscar dados do endereço:', error);
+            alert('Erro ao carregar dados do endereço');
+        });
 }
+
+
 
 /**
  * Placeholder para criar nova separação
@@ -2347,4 +2502,5 @@ $(document).ready(function() {
 });
 </script>
 
+{% endblock %} 
 {% endblock %} 
