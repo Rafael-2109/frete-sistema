@@ -1710,14 +1710,83 @@ function gerarTabelaEstoque(itens) {
     gerarTabelaEstoqueReal(itens);
 }
 
-function exportarAnaliseEstoque() {
-    console.log('📊 Exportando análise de estoque...');
-    alert('📊 Função de exportação será implementada em breve');
+async function exportarAnaliseEstoque() {
+    if (!numPedidoEstoque) {
+        alert('⚠️ Nenhum pedido selecionado para análise de estoque');
+        return;
+    }
+    
+    console.log(`📊 Exportando análise de estoque para pedido ${numPedidoEstoque}...`);
+    
+    try {
+        // Mostrar loading
+        const response = await fetch(`/carteira/api/export-excel/estoque-analise/${numPedidoEstoque}`, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Erro ao gerar arquivo Excel');
+        }
+        
+        // ✅ SUCESSO - Mostrar resultado e forçar download
+        console.log('✅ Análise exportada com sucesso:', data);
+        
+        alert(`✅ **ANÁLISE DE ESTOQUE EXPORTADA!**\n\n📊 Arquivo: ${data.filename}\n📦 Produtos analisados: ${data.total_produtos}\n\n🔄 Download iniciando automaticamente...`);
+        
+        // Forçar download do arquivo
+        const link = document.createElement('a');
+        link.href = data.url;
+        link.download = data.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+    } catch (error) {
+        console.error('❌ Erro ao exportar análise:', error);
+        alert(`❌ **ERRO AO EXPORTAR ANÁLISE**\n\nDetalhes: ${error.message}\n\n🔧 Verifique sua conexão e tente novamente.`);
+    }
 }
 
-function verDetalhesEstoque(codProduto) {
-    console.log(`📊 Ver detalhes estoque produto: ${codProduto}`);
-    alert(`📊 Detalhes do produto ${codProduto} - funcionalidade será implementada`);
+async function verDetalhesEstoque(codProduto) {
+    console.log(`📊 Exportando detalhes completos do produto: ${codProduto}`);
+    
+    try {
+        // Mostrar loading
+        const response = await fetch(`/carteira/api/export-excel/produto-detalhes/${codProduto}`, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Erro ao gerar arquivo Excel');
+        }
+        
+        // ✅ SUCESSO - Mostrar resultado e forçar download
+        console.log('✅ Detalhes do produto exportados:', data);
+        
+        alert(`✅ **DETALHES DO PRODUTO EXPORTADOS!**\n\n📦 Produto: ${data.produto_nome}\n📋 Código: ${codProduto}\n📊 Pedidos na carteira: ${data.total_pedidos}\n📄 Arquivo: ${data.filename}\n\n🔄 Download iniciando automaticamente...`);
+        
+        // Forçar download do arquivo
+        const link = document.createElement('a');
+        link.href = data.url;
+        link.download = data.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+    } catch (error) {
+        console.error('❌ Erro ao exportar detalhes:', error);
+        alert(`❌ **ERRO AO EXPORTAR DETALHES**\n\nProduto: ${codProduto}\nDetalhes: ${error.message}\n\n🔧 Verifique se o produto existe na carteira.`);
+    }
 }
 
 
@@ -2146,11 +2215,55 @@ function recarregarModalEstoque() {
 }
 
 /**
- * Placeholder para exportar dados de estoque
+ * 🔧 P1.2: SISTEMA EXCEL/EXPORTAÇÕES - Exportar dados completos de estoque
+ * Funcionalidade real conectada à API /api/export-excel/estoque-dados
  */
-function exportarDadosEstoque() {
-    if (dadosEstoqueAtual) {
-        alert(`🔧 Função exportar dados de estoque será implementada na Fase 4 - Validação/Performance\n\nDados disponíveis: ${dadosEstoqueAtual.produtos.length} produtos`);
+async function exportarDadosEstoque() {
+    if (!numPedidoEstoque) {
+        alert('⚠️ Nenhum pedido selecionado para exportação de dados');
+        return;
+    }
+    
+    if (!dadosEstoqueAtual || !dadosEstoqueAtual.produtos) {
+        alert('⚠️ Dados de estoque não carregados. Carregue a análise primeiro.');
+        return;
+    }
+    
+    console.log(`📊 Exportando dados completos de estoque para pedido ${numPedidoEstoque}...`);
+    
+    try {
+        // Mostrar loading
+        const response = await fetch(`/carteira/api/export-excel/estoque-dados/${numPedidoEstoque}`, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Erro ao gerar arquivo Excel');
+        }
+        
+        // ✅ SUCESSO - Mostrar resultado detalhado e forçar download
+        console.log('✅ Dados exportados com sucesso:', data);
+        
+        const valorTotal = data.valor_total.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        
+        alert(`✅ **DADOS DE ESTOQUE EXPORTADOS!**\n\n📊 Arquivo: ${data.filename}\n📦 Produtos: ${data.total_produtos}\n💰 Valor Total: R$ ${valorTotal}\n\n🔄 Download iniciando automaticamente...`);
+        
+        // Forçar download do arquivo
+        const link = document.createElement('a');
+        link.href = data.url;
+        link.download = data.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+    } catch (error) {
+        console.error('❌ Erro ao exportar dados:', error);
+        alert(`❌ **ERRO AO EXPORTAR DADOS**\n\nDetalhes: ${error.message}\n\n🔧 Verifique sua conexão e tente novamente.`);
     }
 }
 

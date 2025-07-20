@@ -1596,3 +1596,529 @@ def buscar_pre_separacoes_pedido(num_pedido):
         logger.error(f"Erro ao buscar pré-separações do pedido {num_pedido}: {e}")
         return []
 
+
+def _carregar_dados_estoque_d0_d7(num_pedido):
+    """
+    🔧 P1.2: Função auxiliar para carregar dados de estoque D0/D7
+    Reutiliza lógica da API existente
+    """
+    try:
+        # Reutilizar lógica da API existente
+        from datetime import datetime, timedelta
+        from app.estoque.models import SaldoEstoque
+        
+        # 1. Buscar itens do pedido
+        itens_pedido = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.num_pedido == num_pedido,
+            CarteiraPrincipal.ativo == True
+        ).all()
+        
+        if not itens_pedido:
+            return {'success': False, 'error': 'Pedido não encontrado'}
+        
+        # 2. Calcular dados de estoque para cada produto
+        produtos_estoque = []
+        data_hoje = datetime.now().date()
+        data_d7 = data_hoje + timedelta(days=7)
+        
+        for item in itens_pedido:
+            try:
+                # Buscar saldo do produto
+                saldo = SaldoEstoque.query.filter_by(cod_produto=item.cod_produto).first()
+                
+                if saldo:
+                    estoque_d0 = saldo.qtd_saldo_estoque_d0 or 0
+                    saida_periodo = SaldoEstoque.calcular_saida_periodo(
+                        item.cod_produto, data_hoje, data_d7
+                    )
+                    estoque_d7 = estoque_d0 - saida_periodo
+                    
+                    # Determinar status
+                    qtd_pedido = item.qtd_saldo_produto_pedido or 0
+                    
+                    if estoque_d0 >= qtd_pedido:
+                        status_d0 = 'NORMAL'
+                    elif estoque_d0 > 0:
+                        status_d0 = 'BAIXO'
+                    else:
+                        status_d0 = 'RUPTURA'
+                    
+                    if estoque_d7 >= qtd_pedido:
+                        status_d7 = 'NORMAL'
+                    elif estoque_d7 > 0:
+                        status_d7 = 'BAIXO_PREVISTO'
+                    else:
+                        status_d7 = 'RUPTURA_PREVISTA'
+                    
+                    # Calcular dias para ruptura
+                    if estoque_d0 > 0 and saida_periodo > 0:
+                        dias_ruptura = int(estoque_d0 / (saida_periodo / 7))
+                    else:
+                        dias_ruptura = None
+                else:
+                    estoque_d0 = 0
+                    estoque_d7 = 0
+                    status_d0 = 'SEM_DADOS'
+                    status_d7 = 'SEM_DADOS'
+                    dias_ruptura = None
+                
+                produtos_estoque.append({
+                    'cod_produto': item.cod_produto,
+                    'nome_produto': item.nome_produto,
+                    'qtd_pedido': qtd_pedido,
+                    'estoque_d0': estoque_d0,
+                    'estoque_d7': estoque_d7,
+                    'status_d0': status_d0,
+                    'status_d7': status_d7,
+                    'dias_ruptura': dias_ruptura
+                })
+                
+            except Exception as e:
+                logger.warning(f"Erro ao calcular estoque produto {item.cod_produto}: {e}")
+                produtos_estoque.append({
+                    'cod_produto': item.cod_produto,
+                    'nome_produto': item.nome_produto,
+                    'qtd_pedido': item.qtd_saldo_produto_pedido or 0,
+                    'estoque_d0': 0,
+                    'estoque_d7': 0,
+                    'status_d0': 'SEM_DADOS',
+                    'status_d7': 'SEM_DADOS',
+                    'dias_ruptura': None
+                })
+        
+        # 3. Calcular estatísticas
+        total_produtos = len(produtos_estoque)
+        produtos_ruptura_d0 = sum(1 for p in produtos_estoque if p['status_d0'] == 'RUPTURA')
+        produtos_ruptura_d7 = sum(1 for p in produtos_estoque if p['status_d7'] in ['RUPTURA_PREVISTA', 'BAIXO_PREVISTO'])
+        menor_estoque = min([p['estoque_d0'] for p in produtos_estoque if p['estoque_d0'] > 0], default=0)
+        
+        estatisticas = {
+            'total_produtos': total_produtos,
+            'produtos_ruptura_d0': produtos_ruptura_d0,
+            'produtos_ruptura_d7': produtos_ruptura_d7,
+            'menor_estoque_geral': menor_estoque
+        }
+        
+        return {
+            'success': True,
+            'produtos': produtos_estoque,
+            'estatisticas': estatisticas,
+            'data_calculo': data_hoje.strftime('%d/%m/%Y')
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro em _carregar_dados_estoque_d0_d7: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def _carregar_dados_itens_pedido(num_pedido):
+    """
+    🔧 P1.2: Função auxiliar para carregar dados dos itens do pedido
+    Reutiliza lógica da API existente
+    """
+    try:
+        # Reutilizar lógica da API /api/pedido/<num_pedido>/itens existente
+        itens_pedido = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.num_pedido == num_pedido,
+            CarteiraPrincipal.ativo == True
+        ).all()
+        
+        if not itens_pedido:
+            return {'success': False, 'error': 'Pedido não encontrado'}
+        
+        # Processar itens (mesma lógica da API existente)
+        itens_processados = []
+        totais = {'quantidade': 0, 'valor': 0, 'peso': 0, 'pallet': 0}
+        
+        for item in itens_pedido:
+            qtd_saldo = item.qtd_saldo_produto_pedido or 0
+            preco = item.preco_produto_pedido or 0
+            peso_unit = item.peso_produto_pedido or 0
+            pallet_unit = item.qtd_pal_pro_ped or 0
+            
+            valor_item = qtd_saldo * preco
+            peso_item = qtd_saldo * peso_unit
+            pallet_item = qtd_saldo * pallet_unit
+            
+            # Verificar se tem separação
+            from app.separacao.models import Separacao
+            tem_separacao = db.session.query(
+                db.exists().where(
+                    db.and_(
+                        Separacao.num_pedido == num_pedido,
+                        Separacao.cod_produto == item.cod_produto,
+                        Separacao.status == 'ativo'
+                    )
+                )
+            ).scalar()
+            
+            item_processado = {
+                'id': item.id,
+                'cod_produto': item.cod_produto,
+                'nome_produto': item.nome_produto,
+                'qtd_saldo': qtd_saldo,
+                'preco': preco,
+                'peso_produto': peso_unit,
+                'pallet_produto': pallet_unit,
+                'valor_item': valor_item,
+                'peso_item': peso_item,
+                'pallet_item': pallet_item,
+                'tem_separacao': tem_separacao,
+                'expedicao': item.expedicao.strftime('%Y-%m-%d') if item.expedicao else None,
+                'expedicao_formatada': item.expedicao.strftime('%d/%m/%Y') if item.expedicao else '',
+                'agendamento': item.agendamento.strftime('%Y-%m-%d') if item.agendamento else None,
+                'agendamento_formatado': item.agendamento.strftime('%d/%m/%Y') if item.agendamento else '',
+                'protocolo': item.protocolo or ''
+            }
+            
+            itens_processados.append(item_processado)
+            
+            # Somar totais
+            totais['quantidade'] += qtd_saldo
+            totais['valor'] += valor_item
+            totais['peso'] += peso_item
+            totais['pallet'] += pallet_item
+        
+        return {
+            'success': True,
+            'itens': itens_processados,
+            'total_itens': len(itens_processados),
+            'totais': totais
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro em _carregar_dados_itens_pedido: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@carteira_bp.route('/api/export-excel/estoque-analise/<num_pedido>')
+@login_required
+def api_export_excel_estoque_analise(num_pedido):
+    """
+    🔧 P1.2: Exportar análise de estoque D0/D7 em Excel
+    """
+    try:
+        import pandas as pd
+        from datetime import datetime
+        import os
+        from flask import send_file
+        
+        # 1. Buscar dados de estoque D0/D7 (reutilizar lógica existente)
+        dados_estoque = _carregar_dados_estoque_d0_d7(num_pedido)
+        
+        if not dados_estoque.get('success'):
+            return jsonify({'error': 'Erro ao carregar dados de estoque'}), 400
+        
+        # 2. Preparar dados para Excel
+        produtos = dados_estoque['produtos']
+        estatisticas = dados_estoque['estatisticas']
+        
+        # DataFrame principal
+        df_produtos = pd.DataFrame([{
+            'Código Produto': p['cod_produto'],
+            'Nome Produto': p['nome_produto'],
+            'Qtd Pedido': p['qtd_pedido'],
+            'Estoque D0': p['estoque_d0'],
+            'Estoque D7': p['estoque_d7'],
+            'Status D0': p['status_d0'],
+            'Status D7': p['status_d7'],
+            'Dias Ruptura': p['dias_ruptura'] if p['dias_ruptura'] else 'Sem previsão'
+        } for p in produtos])
+        
+        # DataFrame resumo
+        df_resumo = pd.DataFrame([{
+            'Métrica': 'Total de Produtos',
+            'Valor': estatisticas['total_produtos']
+        }, {
+            'Métrica': 'Produtos com Ruptura D0',
+            'Valor': estatisticas['produtos_ruptura_d0']
+        }, {
+            'Métrica': 'Produtos com Problemas D7',
+            'Valor': estatisticas['produtos_ruptura_d7']
+        }, {
+            'Métrica': 'Menor Estoque Geral',
+            'Valor': f"{estatisticas['menor_estoque_geral']:.2f}"
+        }])
+        
+        # 3. Gerar arquivo Excel
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'analise_estoque_pedido_{num_pedido}_{timestamp}.xlsx'
+        filepath = os.path.join('app', 'static', 'reports', filename)
+        
+        # Criar diretório se não existir
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+            # Aba principal
+            df_produtos.to_excel(writer, sheet_name='Análise D0-D7', index=False)
+            
+            # Aba resumo
+            df_resumo.to_excel(writer, sheet_name='Resumo Executivo', index=False)
+            
+            # Aba instruções
+            df_instrucoes = pd.DataFrame([{
+                'Informação': 'Data Geração',
+                'Valor': datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+            }, {
+                'Informação': 'Pedido Analisado',
+                'Valor': num_pedido
+            }, {
+                'Informação': 'Status D0',
+                'Valor': 'Estoque atual (hoje)'
+            }, {
+                'Informação': 'Status D7',
+                'Valor': 'Projeção 7 dias úteis'
+            }, {
+                'Informação': 'NORMAL',
+                'Valor': 'Estoque suficiente'
+            }, {
+                'Informação': 'BAIXO',
+                'Valor': 'Estoque baixo mas disponível'
+            }, {
+                'Informação': 'RUPTURA',
+                'Valor': 'Estoque insuficiente'
+            }])
+            df_instrucoes.to_excel(writer, sheet_name='Como Ler', index=False)
+        
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'url': f'/static/reports/{filename}',
+            'total_produtos': len(produtos)
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao exportar análise estoque pedido {num_pedido}: {e}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+
+@carteira_bp.route('/api/export-excel/estoque-dados/<num_pedido>')
+@login_required  
+def api_export_excel_estoque_dados(num_pedido):
+    """
+    🔧 P1.2: Exportar dados brutos de estoque em Excel
+    """
+    try:
+        import pandas as pd
+        from datetime import datetime
+        import os
+        from flask import send_file
+        
+        # 1. Buscar dados brutos de estoque (mais detalhados)
+        dados_estoque = _carregar_dados_estoque_d0_d7(num_pedido)
+        
+        if not dados_estoque.get('success'):
+            return jsonify({'error': 'Erro ao carregar dados de estoque'}), 400
+        
+        # 2. Buscar dados dos itens do pedido também
+        dados_itens = _carregar_dados_itens_pedido(num_pedido)
+        
+        if not dados_itens.get('success'):
+            return jsonify({'error': 'Erro ao carregar itens do pedido'}), 400
+        
+        # 3. Combinar dados para dataset completo
+        produtos_completos = []
+        produtos_dict = {p['cod_produto']: p for p in dados_estoque['produtos']}
+        
+        for item in dados_itens['itens']:
+            produto_estoque = produtos_dict.get(item['cod_produto'], {})
+            
+            produtos_completos.append({
+                'Pedido': num_pedido,
+                'Código Produto': item['cod_produto'],
+                'Nome Produto': item['nome_produto'],
+                'Qtd Saldo Pedido': item['qtd_saldo'],
+                'Preço Unitário': item['preco'],
+                'Valor Total Item': item['qtd_saldo'] * item['preco'],
+                'Peso Unitário': item.get('peso_produto', 0),
+                'Peso Total': (item.get('peso_produto', 0) * item['qtd_saldo']),
+                'Pallet Unitário': item.get('pallet_produto', 0),
+                'Pallet Total': (item.get('pallet_produto', 0) * item['qtd_saldo']),
+                'Estoque D0': produto_estoque.get('estoque_d0', 'N/A'),
+                'Estoque D7': produto_estoque.get('estoque_d7', 'N/A'),
+                'Status D0': produto_estoque.get('status_d0', 'SEM_DADOS'),
+                'Status D7': produto_estoque.get('status_d7', 'SEM_DADOS'),
+                'Dias até Ruptura': produto_estoque.get('dias_ruptura', 'N/A'),
+                'Expedição': item.get('expedicao_formatada', ''),
+                'Agendamento': item.get('agendamento_formatado', ''),
+                'Protocolo': item.get('protocolo', ''),
+                'Separação': 'Sim' if item.get('tem_separacao') else 'Não'
+            })
+        
+        df_completo = pd.DataFrame(produtos_completos)
+        
+        # 4. Dados de resumo por status
+        status_counts = df_completo['Status D0'].value_counts()
+        df_status = pd.DataFrame([{
+            'Status': status,
+            'Quantidade Produtos': count,
+            'Percentual': f"{(count/len(df_completo)*100):.1f}%"
+        } for status, count in status_counts.items()])
+        
+        # 5. Gerar arquivo Excel
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'dados_estoque_pedido_{num_pedido}_{timestamp}.xlsx'
+        filepath = os.path.join('app', 'static', 'reports', filename)
+        
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+            # Dados completos
+            df_completo.to_excel(writer, sheet_name='Dados Completos', index=False)
+            
+            # Análise por status
+            df_status.to_excel(writer, sheet_name='Análise Status', index=False)
+            
+            # Resumo financeiro
+            resumo_financeiro = pd.DataFrame([{
+                'Métrica': 'Total Itens',
+                'Valor': len(df_completo)
+            }, {
+                'Métrica': 'Valor Total Pedido',
+                'Valor': f"R$ {df_completo['Valor Total Item'].sum():,.2f}"
+            }, {
+                'Métrica': 'Peso Total',
+                'Valor': f"{df_completo['Peso Total'].sum():,.0f} kg"
+            }, {
+                'Métrica': 'Pallets Total',
+                'Valor': f"{df_completo['Pallet Total'].sum():.1f}"
+            }])
+            resumo_financeiro.to_excel(writer, sheet_name='Resumo Financeiro', index=False)
+        
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'url': f'/static/reports/{filename}',
+            'total_produtos': len(produtos_completos),
+            'valor_total': df_completo['Valor Total Item'].sum()
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao exportar dados estoque pedido {num_pedido}: {e}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+
+@carteira_bp.route('/api/export-excel/produto-detalhes/<cod_produto>')
+@login_required
+def api_export_excel_produto_detalhes(cod_produto):
+    """
+    🔧 P1.2: Exportar detalhes específicos de um produto em Excel
+    """
+    try:
+        import pandas as pd
+        from datetime import datetime, timedelta
+        import os
+        from app.estoque.models import SaldoEstoque
+        
+        # 1. Buscar todos os dados do produto na carteira
+        itens_produto = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.cod_produto == cod_produto,
+            CarteiraPrincipal.ativo == True
+        ).all()
+        
+        if not itens_produto:
+            return jsonify({'error': f'Produto {cod_produto} não encontrado na carteira'}), 404
+        
+        # 2. Buscar dados de estoque
+        saldo_estoque = SaldoEstoque.query.filter_by(cod_produto=cod_produto).first()
+        
+        # 3. Preparar dados detalhados por pedido
+        dados_pedidos = []
+        for item in itens_produto:
+            # Calcular estoque D0 e D7 para este produto
+            try:
+                if saldo_estoque:
+                    estoque_d0 = saldo_estoque.qtd_saldo_estoque_d0 or 0
+                    saida_periodo = SaldoEstoque.calcular_saida_periodo(
+                        cod_produto, 
+                        datetime.now().date(),
+                        datetime.now().date() + timedelta(days=7)
+                    )
+                    estoque_d7 = estoque_d0 - saida_periodo
+                else:
+                    estoque_d0 = 0
+                    estoque_d7 = 0
+            except:
+                estoque_d0 = 0
+                estoque_d7 = 0
+            
+            dados_pedidos.append({
+                'Pedido': item.num_pedido,
+                'Cliente': item.raz_social,
+                'Vendedor': item.vendedor,
+                'Status Pedido': item.status_pedido,
+                'Qtd Saldo': item.qtd_saldo_produto_pedido,
+                'Preço': item.preco_produto_pedido,
+                'Valor Total': (item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0),
+                'Peso Unitário': item.peso_produto_pedido,
+                'Pallet Unitário': item.qtd_pal_pro_ped,
+                'Expedição': item.expedicao.strftime('%d/%m/%Y') if item.expedicao else '',
+                'Agendamento': item.agendamento.strftime('%d/%m/%Y') if item.agendamento else '',
+                'Protocolo': item.protocolo or '',
+                'Estoque D0': estoque_d0,
+                'Estoque D7': estoque_d7,
+                'Criado em': item.created_at.strftime('%d/%m/%Y %H:%M') if item.created_at else ''
+            })
+        
+        df_produto = pd.DataFrame(dados_pedidos)
+        
+        # 4. Dados do produto (info geral)
+        primeiro_item = itens_produto[0]
+        info_produto = pd.DataFrame([{
+            'Campo': 'Código Produto',
+            'Valor': cod_produto
+        }, {
+            'Campo': 'Nome Produto',
+            'Valor': primeiro_item.nome_produto
+        }, {
+            'Campo': 'Total Pedidos',
+            'Valor': len(set(item.num_pedido for item in itens_produto))
+        }, {
+            'Campo': 'Qtd Total Carteira',
+            'Valor': sum(item.qtd_saldo_produto_pedido or 0 for item in itens_produto)
+        }, {
+            'Campo': 'Valor Total Carteira',
+            'Valor': f"R$ {sum((item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0) for item in itens_produto):,.2f}"
+        }, {
+            'Campo': 'Estoque D0',
+            'Valor': estoque_d0
+        }, {
+            'Campo': 'Estoque D7',
+            'Valor': estoque_d7
+        }])
+        
+        # 5. Gerar arquivo Excel
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'detalhes_produto_{cod_produto}_{timestamp}.xlsx'
+        filepath = os.path.join('app', 'static', 'reports', filename)
+        
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+            # Dados por pedido
+            df_produto.to_excel(writer, sheet_name='Por Pedido', index=False)
+            
+            # Informações gerais
+            info_produto.to_excel(writer, sheet_name='Informações Produto', index=False)
+            
+            # Resumo por cliente
+            resumo_cliente = df_produto.groupby('Cliente').agg({
+                'Qtd Saldo': 'sum',
+                'Valor Total': 'sum',
+                'Pedido': 'count'
+            }).reset_index()
+            resumo_cliente.columns = ['Cliente', 'Qtd Total', 'Valor Total', 'Num Pedidos']
+            resumo_cliente.to_excel(writer, sheet_name='Resumo por Cliente', index=False)
+        
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'url': f'/static/reports/{filename}',
+            'total_pedidos': len(dados_pedidos),
+            'produto_nome': primeiro_item.nome_produto
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao exportar detalhes produto {cod_produto}: {e}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
