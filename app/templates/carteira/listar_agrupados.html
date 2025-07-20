@@ -1157,6 +1157,7 @@ let numPedidoModal = null;
  * Implementação: Fase 2.3 - Modal Avaliar Itens
  */
 async function abrirModalAvaliarItens(numPedido) {
+    console.log(`🔍 Avaliar Itens pedido ${numPedido}`);
     numPedidoModal = numPedido;
     
     // Configurar modal
@@ -2725,11 +2726,7 @@ function criarSeparacao(numPedido) {
     abrirModalAvaliarItens(numPedido);
 }
 
-function consultarSeparacoes(numPedido) {
-    console.log(`📋 Consultar Separações pedido ${numPedido}`);
-    $('#modalSeparacoes').modal('show');
-    carregarSeparacoesPedido(numPedido);
-}
+
 
 function abrirModalAvaliarItens(numPedido) {
     console.log(`🔍 Avaliar Itens pedido ${numPedido}`);
