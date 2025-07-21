@@ -38,7 +38,7 @@ class PerfilUsuario(db.Model):
     criado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     
     # Relacionamentos
-    usuarios = db.relationship('Usuario', backref='perfil_detalhado', lazy='dynamic')
+    usuarios = db.relationship('Usuario', backref='perfil_detalhado', lazy='select')
     
     def __repr__(self):
         return f'<PerfilUsuario {self.nome}>'
