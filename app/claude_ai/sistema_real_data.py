@@ -35,7 +35,7 @@ class SistemaRealData:
             from app.cadastros_agendamento.models import ContatoAgendamento
             from app.vinculos.models import CidadeAtendida
             from app.localidades.models import Cidade
-            from app.carteira.models import CarteiraPrincipal, CarteiraCopia, ControleCruzadoSeparacao, InconsistenciaFaturamento, TipoCarga, 
+            from app.carteira.models import CarteiraPrincipal, CarteiraCopia, ControleCruzadoSeparacao, InconsistenciaFaturamento, TipoCarga
             
             modelos_sistema = {
                 'EntregaMonitorada': EntregaMonitorada,
