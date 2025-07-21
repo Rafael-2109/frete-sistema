@@ -19,6 +19,10 @@ from sqlalchemy import and_, desc, func
 # Definir o blueprint seguindo o padrão do sistema
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
+# Registrar sub-blueprint do Odoo
+from app.api.odoo import odoo_bp
+api_bp.register_blueprint(odoo_bp)
+
 # ============================================================================
 # ENDPOINTS DA API MCP
 # ============================================================================

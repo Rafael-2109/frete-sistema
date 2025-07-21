@@ -8,10 +8,8 @@ Autor: Sistema de Fretes
 Data: 2025-07-14
 """
 
-from app.odoo.routes.carteira import carteira_bp
-from app.odoo.routes.faturamento import faturamento_bp
+# Apenas rotas de sincronização integrada disponíveis
+# As rotas antigas de carteira e faturamento foram removidas
+# Toda funcionalidade foi migrada para app.api.odoo.routes
 
-__all__ = [
-    'carteira_bp',
-    'faturamento_bp'
-] 
+__all__ = [] 
