@@ -117,8 +117,27 @@ class FlaskFallback:
                 from flask import current_app
                 return current_app
             except RuntimeError:
-                # Fora do contexto Flask
-                return self.mock_app
+                # Fora do contexto Flask - tentar obter app real
+                try:
+                    # Tentar importar e criar app real
+                    import sys
+                    import os
+                    
+                    # Adicionar path do projeto se necessário
+                    projeto_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+                    if projeto_path not in sys.path:
+                        sys.path.insert(0, projeto_path)
+                    
+                    # Tentar importar o app real
+                    from app import create_app
+                    app = create_app()
+                    
+                    self.logger.info("✅ App Flask real obtido fora do contexto web")
+                    return app
+                    
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Não foi possível obter app Flask real: {e}")
+                    return self.mock_app
         else:
             return self.mock_app
     
@@ -134,37 +153,57 @@ class FlaskFallback:
         """
         if self.available:
             try:
-                # Tentar importar modelo real
-                if model_name == 'Pedido':
-                    from app.pedidos.models import Pedido
-                    return Pedido
-                elif model_name == 'Embarque':
-                    from app.embarques.models import Embarque
-                    return Embarque
-                elif model_name == 'EmbarqueItem':
-                    from app.embarques.models import EmbarqueItem
-                    return EmbarqueItem
-                elif model_name == 'EntregaMonitorada':
-                    from app.monitoramento.models import EntregaMonitorada
-                    return EntregaMonitorada
-                elif model_name == 'RelatorioFaturamentoImportado':
-                    from app.faturamento.models import RelatorioFaturamentoImportado
-                    return RelatorioFaturamentoImportado
-                elif model_name == 'Transportadora':
-                    from app.transportadoras.models import Transportadora
-                    return Transportadora
-                elif model_name == 'Usuario':
-                    from app.auth.models import Usuario
-                    return Usuario
-                elif model_name == 'Frete':
-                    from app.fretes.models import Frete
-                    return Frete
-                # Adicionar outros modelos conforme necessário
-                else:
+                # CORREÇÃO: Verificar Flask context primeiro
+                try:
+                    from flask import current_app
+                    current_app.config
+                    
+                    # Estamos em contexto Flask válido - importar modelos reais
+                    if model_name == 'Pedido':
+                        from app.pedidos.models import Pedido
+                        self.logger.info(f"✅ Modelo real {model_name} obtido")
+                        return Pedido
+                    elif model_name == 'Embarque':
+                        from app.embarques.models import Embarque
+                        self.logger.info(f"✅ Modelo real {model_name} obtido")
+                        return Embarque
+                    elif model_name == 'EmbarqueItem':
+                        from app.embarques.models import EmbarqueItem
+                        self.logger.info(f"✅ Modelo real {model_name} obtido")
+                        return EmbarqueItem
+                    elif model_name == 'EntregaMonitorada':
+                        from app.monitoramento.models import EntregaMonitorada
+                        self.logger.info(f"✅ Modelo real {model_name} obtido")
+                        return EntregaMonitorada
+                    elif model_name == 'RelatorioFaturamentoImportado':
+                        from app.faturamento.models import RelatorioFaturamentoImportado
+                        self.logger.info(f"✅ Modelo real {model_name} obtido")
+                        return RelatorioFaturamentoImportado
+                    elif model_name == 'Transportadora':
+                        from app.transportadoras.models import Transportadora
+                        self.logger.info(f"✅ Modelo real {model_name} obtido")
+                        return Transportadora
+                    elif model_name == 'Usuario':
+                        from app.auth.models import Usuario
+                        self.logger.info(f"✅ Modelo real {model_name} obtido")
+                        return Usuario
+                    elif model_name == 'Frete':
+                        from app.fretes.models import Frete
+                        self.logger.info(f"✅ Modelo real {model_name} obtido")
+                        return Frete
+                    else:
+                        # Modelo não mapeado - usar mock
+                        self.logger.warning(f"⚠️ Modelo {model_name} não mapeado, usando mock")
+                        return self.mock_models.get(model_name, Mock())
+                        
+                except RuntimeError:
+                    # Fora do contexto Flask
+                    self.logger.warning(f"⚠️ Fora do contexto Flask, usando mock para {model_name}")
                     return self.mock_models.get(model_name, Mock())
                     
             except ImportError:
                 # Fallback para mock se import falhar
+                self.logger.warning(f"⚠️ Import falhou para {model_name}, usando mock")
                 return self.mock_models.get(model_name, Mock())
         else:
             return self.mock_models.get(model_name, Mock())
@@ -178,21 +217,24 @@ class FlaskFallback:
         """
         if self.available:
             try:
-                # Tentar import com fallback seguro
+                # CORREÇÃO: Primeiro verificar se estamos em Flask context válido
                 try:
-                    import sys
-                    import os
-                    # Adicionar caminho para encontrar app
-                    parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-                    if parent_dir not in sys.path:
-                        sys.path.insert(0, parent_dir)
+                    from flask import current_app
+                    # Se current_app funciona, estamos em contexto Flask válido
+                    current_app.config
+                    
+                    # Importar db real
                     from app import db
+                    self.logger.info("✅ DB real obtido com sucesso")
                     return db
-                except ImportError:
-                    logger.warning("⚠️ Não foi possível importar app.db, usando mock")
+                    
+                except RuntimeError:
+                    # Não estamos em contexto Flask
+                    self.logger.warning("⚠️ Fora do contexto Flask, usando mock DB")
                     return self._create_mock_db()
+                    
             except Exception as e:
-                logger.warning(f"⚠️ Erro ao obter db: {e}")
+                self.logger.warning(f"⚠️ Erro ao obter db real: {e}")
                 return self._create_mock_db()
         else:
             return self._create_mock_db()

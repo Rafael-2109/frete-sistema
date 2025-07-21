@@ -1897,37 +1897,83 @@ function gerarHtmlItens(data) {
         const itemId = item.id;
         const saldoDisponivel = item.qtd_saldo_disponivel || 0;
         const disabled = saldoDisponivel <= 0 ? 'disabled' : '';
+        const isPreSeparacao = item.tipo_item === 'pre_separacao';
+        const rowClass = isPreSeparacao ? 'table-warning' : '';
         
         html += `
-            <tr id="row-dropdown-${numPedido}-${itemId}" data-item-id="${itemId}" data-pedido="${numPedido}">
+            <tr id="row-dropdown-${numPedido}-${itemId}" 
+                data-item-id="${itemId}" 
+                data-pedido="${numPedido}"
+                data-tipo-item="${item.tipo_item || 'carteira'}"
+                ${isPreSeparacao ? `data-pre-separacao-id="${item.pre_separacao_id}"` : ''}
+                class="${rowClass}">
                 <td>
-                    <input type="checkbox" 
-                           class="item-checkbox-dropdown" 
-                           data-item-id="${itemId}"
-                           data-pedido="${numPedido}"
-                           onchange="atualizarContadoresDropdown('${numPedido}')"
-                           ${disabled}>
+                    ${isPreSeparacao ? 
+                        `<div class="btn-group-vertical" role="group">
+                            <button type="button" 
+                                    class="btn btn-sm btn-outline-primary mb-1" 
+                                    onclick="editarPreSeparacao('${item.pre_separacao_id}')"
+                                    title="Editar pré-separação">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-sm btn-outline-danger mb-1" 
+                                    onclick="cancelarPreSeparacao('${item.pre_separacao_id}')"
+                                    title="Cancelar pré-separação">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-sm btn-outline-success" 
+                                    onclick="enviarPreSeparacaoParaSeparacao('${item.pre_separacao_id}')"
+                                    title="Enviar para separação">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>` :
+                        `<input type="checkbox" 
+                                class="item-checkbox-dropdown" 
+                                data-item-id="${itemId}"
+                                data-pedido="${numPedido}"
+                                onchange="atualizarContadoresDropdown('${numPedido}')"
+                                ${disabled}>`
+                    }
                 </td>
-                <td><strong>${item.cod_produto}</strong></td>
+                <td>
+                    <strong>${item.cod_produto}</strong>
+                    ${isPreSeparacao ? `<br><small class="text-warning"><i class="fas fa-clock"></i> Pré-separação</small>` : ''}
+                </td>
                 <td class="text-truncate" style="max-width: 200px;" title="${item.nome_produto}">
                     ${item.nome_produto}
+                    ${isPreSeparacao && item.status ? `<br><small class="badge badge-info">${item.status}</small>` : ''}
                 </td>
                 <td>
-                    <input type="number" 
-                           class="form-control form-control-sm qtd-dropdown" 
-                           data-item-id="${itemId}"
-                           data-pedido="${numPedido}"
-                           data-qtd-original="${saldoDisponivel}"
-                           data-preco-unitario="${item.preco_unitario || 0}"
-                           step="1"
-                           min="0"
-                           max="${saldoDisponivel}"
-                           value="${saldoDisponivel}"
-                           placeholder="${saldoDisponivel}"
-                           onchange="processarAlteracaoQuantidadeDropdown(this)"
-                           oninput="recalcularValoresDropdown(this)"
-                           ${disabled}>
-                    <small class="text-muted">Máx: ${saldoDisponivel}</small>
+                    ${isPreSeparacao ? 
+                        `<input type="number" 
+                                class="form-control form-control-sm qtd-pre-separacao" 
+                                data-pre-separacao-id="${item.pre_separacao_id}"
+                                data-qtd-original="${item.qtd_carteira}"
+                                step="1"
+                                min="0"
+                                max="${item.qtd_carteira}"
+                                value="${saldoDisponivel}"
+                                onchange="editarQuantidadePreSeparacao(this)"
+                                title="Quantidade editável da pré-separação">
+                         <small class="text-muted">Pré-sep: ${saldoDisponivel} de ${item.qtd_carteira}</small>` :
+                        `<input type="number" 
+                                class="form-control form-control-sm qtd-dropdown" 
+                                data-item-id="${itemId}"
+                                data-pedido="${numPedido}"
+                                data-qtd-original="${saldoDisponivel}"
+                                data-preco-unitario="${item.preco_unitario || 0}"
+                                step="1"
+                                min="0"
+                                max="${saldoDisponivel}"
+                                value="${saldoDisponivel}"
+                                placeholder="${saldoDisponivel}"
+                                onchange="processarAlteracaoQuantidadeDropdown(this)"
+                                oninput="recalcularValoresDropdown(this)"
+                                ${disabled}>
+                         <small class="text-muted">Máx: ${saldoDisponivel}</small>`
+                    }
                 </td>
                 <td class="valor-calculado-dropdown">${item.valor_calculado || 'R$ 0,00'}</td>
                 <td class="peso-calculado-dropdown">${item.peso_calculado || '0 kg'}</td>
@@ -1937,32 +1983,58 @@ function gerarHtmlItens(data) {
                     <td class="producao-d0-dropdown">${item.producao_data_expedicao || '-'}</td>
                 <td class="proxima-data-estoque">${item.proxima_data_estoque || '-'}</td>
                 <td>
-                    <input type="date" 
-                           class="form-control form-control-sm data-expedicao-dropdown" 
-                           data-item-id="${itemId}"
-                           data-pedido="${numPedido}"
-                           value="${item.expedicao || ''}"
-                           onchange="processarAlteracaoDataExpedicaoDropdown(this)"
-                           ${disabled}>
+                    ${isPreSeparacao ?
+                        `<input type="date" 
+                                class="form-control form-control-sm data-expedicao-pre-separacao" 
+                                data-pre-separacao-id="${item.pre_separacao_id}"
+                                value="${item.expedicao || ''}"
+                                onchange="editarDataPreSeparacao(this, 'expedicao')"
+                                title="Data de expedição da pré-separação">` :
+                        `<input type="date" 
+                                class="form-control form-control-sm data-expedicao-dropdown" 
+                                data-item-id="${itemId}"
+                                data-pedido="${numPedido}"
+                                value="${item.expedicao || ''}"
+                                onchange="processarAlteracaoDataExpedicaoDropdown(this)"
+                                ${disabled}>`
+                    }
                 </td>
                 <td>
-                    <input type="date" 
-                           class="form-control form-control-sm agendamento-dropdown" 
-                           data-item-id="${itemId}"
-                           data-pedido="${numPedido}"
-                           value="${item.agendamento || ''}"
-                           onchange="processarAlteracaoAgendamentoDropdown(this)"
-                           ${disabled}>
+                    ${isPreSeparacao ?
+                        `<input type="date" 
+                                class="form-control form-control-sm agendamento-pre-separacao" 
+                                data-pre-separacao-id="${item.pre_separacao_id}"
+                                value="${item.agendamento || ''}"
+                                onchange="editarDataPreSeparacao(this, 'agendamento')"
+                                title="Data de agendamento da pré-separação">` :
+                        `<input type="date" 
+                                class="form-control form-control-sm agendamento-dropdown" 
+                                data-item-id="${itemId}"
+                                data-pedido="${numPedido}"
+                                value="${item.agendamento || ''}"
+                                onchange="processarAlteracaoAgendamentoDropdown(this)"
+                                ${disabled}>`
+                    }
                 </td>
                 <td>
-                    <input type="text" 
-                           class="form-control form-control-sm protocolo-dropdown" 
-                           data-item-id="${itemId}"
-                           data-pedido="${numPedido}"
-                           value="${item.protocolo || ''}"
-                           placeholder="Protocolo"
-                           onchange="processarAlteracaoProtocoloDropdown(this)"
-                           ${disabled}>
+                    ${isPreSeparacao ?
+                        `<input type="text" 
+                                class="form-control form-control-sm protocolo-pre-separacao" 
+                                data-pre-separacao-id="${item.pre_separacao_id}"
+                                value="${item.protocolo || ''}"
+                                placeholder="Protocolo"
+                                onchange="editarCampoPreSeparacao(this, 'protocolo')"
+                                title="Protocolo da pré-separação">
+                         ${item.observacoes ? `<br><small class="text-info" title="${item.observacoes}"><i class="fas fa-comment"></i> Obs.</small>` : ''}` :
+                        `<input type="text" 
+                                class="form-control form-control-sm protocolo-dropdown" 
+                                data-item-id="${itemId}"
+                                data-pedido="${numPedido}"
+                                value="${item.protocolo || ''}"
+                                placeholder="Protocolo"
+                                onchange="processarAlteracaoProtocoloDropdown(this)"
+                                ${disabled}>`
+                    }
                 </td>
             </tr>
         `;
@@ -3605,16 +3677,335 @@ function validarEnvioParcial() {
  * 🔧 FUNÇÕES DOS BOTÕES - IMPLEMENTADAS
  */
 function criarSeparacao(numPedido) {
-    console.log(`📦 Criar Separação pedido ${numPedido}`);
-    abrirModalAvaliarItens(numPedido);
+    console.log(`📦 Criar Separação pedido ${numPedido} (com pré-separações agrupadas)`);
+    abrirModalGerarSeparacao(numPedido);
 }
 
+function abrirModalGerarSeparacao(numPedido) {
+    console.log(`🔍 Gerar Separação pedido ${numPedido}`);
+    $('#modalAvaliarEstoques').modal('show');
+    carregarItensEPreSeparacoes(numPedido);
+}
 
+/**
+ * Carrega itens da carteira + PreSeparacaoItem agrupadas para o modal de separação
+ */
+async function carregarItensEPreSeparacoes(numPedido) {
+    const modalLoading = document.getElementById('modal-loading');
+    const modalError = document.getElementById('modal-error');
+    const modalContent = document.getElementById('modal-content');
+    const modalErrorMessage = document.getElementById('modal-error-message');
+    const modalNumPedido = document.getElementById('modal-num-pedido-estoques');
+    
+    // Mostrar loading
+    modalLoading.style.display = 'block';
+    modalError.style.display = 'none';
+    modalContent.style.display = 'none';
+    modalNumPedido.textContent = numPedido;
+    
+    try {
+        // Carregar itens da carteira em paralelo com pré-separações agrupadas
+        const [itensResponse, preseparacoesResponse] = await Promise.all([
+            fetch(`/carteira/api/pedido/${numPedido}/itens-editaveis`),
+            fetch(`/carteira/api/pedido/${numPedido}/pre-separacoes-agrupadas`)
+        ]);
+        
+        const [itensData, preseparacoesData] = await Promise.all([
+            itensResponse.json(),
+            preseparacoesResponse.json()
+        ]);
+        
+        if (!itensData.success) {
+            throw new Error(itensData.error || 'Erro ao carregar itens');
+        }
+        
+        if (!preseparacoesData.success) {
+            throw new Error(preseparacoesData.error || 'Erro ao carregar pré-separações');
+        }
+        
+        // Ocultar loading
+        modalLoading.style.display = 'none';
+        
+        // Gerar HTML dos itens da carteira
+        gerarHtmlItensModal(itensData);
+        
+        // Se há pré-separações agrupadas, adicionar seção específica
+        if (preseparacoesData.agrupamentos && preseparacoesData.agrupamentos.length > 0) {
+            adicionarSecaoPreSeparacoesAgrupadas(preseparacoesData.agrupamentos, numPedido);
+        }
+        
+        // Mostrar conteúdo
+        modalContent.style.display = 'block';
+        
+        // Calcular totais iniciais
+        calcularTotaisModal();
+        
+         } catch (error) {
+         console.error('Erro ao carregar dados para separação:', error);
+         modalLoading.style.display = 'none';
+         modalError.style.display = 'block';
+         modalErrorMessage.textContent = error.message;
+     }
+ }
 
-function abrirModalAvaliarItens(numPedido) {
-    console.log(`🔍 Avaliar Itens pedido ${numPedido}`);
-    $('#modalAvaliarItens').modal('show');
-    carregarItensParaAvaliacao(numPedido);
+/**
+ * Adiciona seção de pré-separações agrupadas ao modal
+ */
+function adicionarSecaoPreSeparacoesAgrupadas(agrupamentos, numPedido) {
+    const modalContent = document.getElementById('modal-content');
+    
+    // Criar seção de pré-separações agrupadas
+    const secaoPreSeparacoes = document.createElement('div');
+    secaoPreSeparacoes.className = 'mt-4';
+    secaoPreSeparacoes.innerHTML = `
+        <hr>
+        <h6 class="text-warning">
+            <i class="fas fa-layer-group"></i> 
+            Pré-Separações Agrupadas (${agrupamentos.length})
+            <small class="text-muted">- Por expedição, agendamento e protocolo</small>
+        </h6>
+        
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            <strong>Como funciona:</strong> Selecione os agrupamentos desejados. 
+            Cada agrupamento será convertido em <strong>1 separação</strong> contendo todos os produtos do grupo.
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-sm table-striped" id="tabela-agrupamentos">
+                <thead class="thead-dark">
+                    <tr>
+                        <th width="40">
+                            <input type="checkbox" id="select-all-agrupamentos" onchange="toggleTodosAgrupamentos(this)">
+                        </th>
+                        <th>Agrupamento</th>
+                        <th>Produtos</th>
+                        <th>Qtd Total</th>
+                        <th>Valor Total</th>
+                        <th>Peso Total</th>
+                        <th>Pallet Total</th>
+                        <th>Detalhes</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-agrupamentos">
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="text-center mt-3">
+            <button type="button" 
+                    class="btn btn-warning btn-lg" 
+                    onclick="enviarAgrupamentosParaSeparacao('${numPedido}')"
+                    id="btn-enviar-agrupamentos">
+                <i class="fas fa-paper-plane"></i> 
+                Criar Separações dos Agrupamentos Selecionados
+            </button>
+        </div>
+    `;
+    
+    // Inserir após o conteúdo principal
+    modalContent.appendChild(secaoPreSeparacoes);
+    
+    // Preencher tabela de agrupamentos
+    const tbody = document.getElementById('tbody-agrupamentos');
+    let html = '';
+    
+    agrupamentos.forEach((agrup, index) => {
+        const preSeraracaoIds = agrup.pre_separacoes.map(ps => ps.id).join(',');
+        
+        html += `
+            <tr id="row-agrupamento-${agrup.id_agrupamento}">
+                <td>
+                    <input type="checkbox" 
+                           class="agrupamento-checkbox" 
+                           data-agrupamento-id="${agrup.id_agrupamento}"
+                           data-pre-separacao-ids="${preSeraracaoIds}"
+                           data-descricao="${agrup.descricao}"
+                           onchange="atualizarContadorAgrupamentos()">
+                </td>
+                <td>
+                    <strong>${agrup.descricao}</strong>
+                    <br>
+                    <small class="text-muted">
+                        ${agrup.total_pre_separacoes} pré-separação(ões)
+                    </small>
+                </td>
+                <td>
+                    <strong>${agrup.total_produtos}</strong> produto(s)
+                    <br>
+                    <small class="text-muted">
+                        ${agrup.produtos.map(p => p.cod_produto).join(', ')}
+                    </small>
+                </td>
+                <td><strong>${agrup.total_quantidade.toFixed(0)}</strong></td>
+                <td><strong>${agrup.total_valor_formatado}</strong></td>
+                <td><strong>${agrup.total_peso_formatado}</strong></td>
+                <td><strong>${agrup.total_pallet_formatado}</strong></td>
+                <td>
+                    <button type="button" 
+                            class="btn btn-sm btn-outline-info" 
+                            onclick="mostrarDetalhesAgrupamento('${agrup.id_agrupamento}')"
+                            title="Ver produtos do agrupamento">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+    
+    // Armazenar dados dos agrupamentos globalmente
+    window.agrupamentosData = agrupamentos;
+}
+
+/**
+ * Toggle todos os agrupamentos
+ */
+function toggleTodosAgrupamentos(checkbox) {
+    const checkboxes = document.querySelectorAll('.agrupamento-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = checkbox.checked;
+    });
+    atualizarContadorAgrupamentos();
+}
+
+/**
+ * Atualiza contador de agrupamentos selecionados
+ */
+function atualizarContadorAgrupamentos() {
+    const checkboxes = document.querySelectorAll('.agrupamento-checkbox:checked');
+    const btnEnviar = document.getElementById('btn-enviar-agrupamentos');
+    
+    if (btnEnviar) {
+        if (checkboxes.length > 0) {
+            btnEnviar.disabled = false;
+            btnEnviar.innerHTML = `<i class="fas fa-paper-plane"></i> Criar ${checkboxes.length} Separação(ões)`;
+        } else {
+            btnEnviar.disabled = true;
+            btnEnviar.innerHTML = '<i class="fas fa-paper-plane"></i> Criar Separações dos Agrupamentos Selecionados';
+        }
+    }
+}
+
+/**
+ * Mostra detalhes de um agrupamento
+ */
+function mostrarDetalhesAgrupamento(agrupamentoId) {
+    if (!window.agrupamentosData) {
+        alert('Dados não carregados');
+        return;
+    }
+    
+    const agrupamento = window.agrupamentosData.find(a => a.id_agrupamento === agrupamentoId);
+    if (!agrupamento) {
+        alert('Agrupamento não encontrado');
+        return;
+    }
+    
+    let detalhes = `📋 DETALHES DO AGRUPAMENTO\n\n`;
+    detalhes += `${agrupamento.descricao}\n\n`;
+    detalhes += `📊 RESUMO:\n`;
+    detalhes += `• ${agrupamento.total_produtos} produto(s)\n`;
+    detalhes += `• ${agrupamento.total_pre_separacoes} pré-separação(ões)\n`;
+    detalhes += `• Total: ${agrupamento.total_valor_formatado}\n\n`;
+    detalhes += `🛍️ PRODUTOS:\n`;
+    
+    agrupamento.pre_separacoes.forEach((ps, i) => {
+        detalhes += `${i + 1}. ${ps.cod_produto} - ${ps.nome_produto}\n`;
+        detalhes += `   Qtd: ${ps.quantidade} | Status: ${ps.status}\n`;
+        if (ps.criado_em) {
+            detalhes += `   Criado: ${ps.criado_em}\n`;
+        }
+        detalhes += `\n`;
+    });
+    
+    alert(detalhes);
+}
+
+/**
+ * Envia agrupamentos selecionados para separação
+ */
+async function enviarAgrupamentosParaSeparacao(numPedido) {
+    const checkboxes = document.querySelectorAll('.agrupamento-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        alert('⚠️ Selecione pelo menos um agrupamento');
+        return;
+    }
+    
+    const observacoes = prompt(`📝 Observações para as ${checkboxes.length} separação(ões) (opcional):`) || '';
+    
+    if (!confirm(`Confirma a criação de ${checkboxes.length} separação(ões)?`)) {
+        return;
+    }
+    
+    const btnEnviar = document.getElementById('btn-enviar-agrupamentos');
+    btnEnviar.disabled = true;
+    btnEnviar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+    
+    try {
+        // Montar dados dos agrupamentos selecionados
+        const agrupamentosSelecionados = [];
+        
+        checkboxes.forEach(checkbox => {
+            const agrupamentoId = checkbox.getAttribute('data-agrupamento-id');
+            const preSeracaoIds = checkbox.getAttribute('data-pre-separacao-ids').split(',').map(id => parseInt(id));
+            const descricao = checkbox.getAttribute('data-descricao');
+            
+            agrupamentosSelecionados.push({
+                agrupamento_id: agrupamentoId,
+                pre_separacao_ids: preSeracaoIds,
+                descricao: descricao
+            });
+        });
+        
+        // Enviar para API
+        const response = await fetch('/carteira/api/agrupamentos/enviar-separacao', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                agrupamentos: agrupamentosSelecionados,
+                observacoes: observacoes
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(`${data.message}`, 'success');
+            
+            // Mostrar detalhes das separações criadas
+            let detalhes = '✅ SEPARAÇÕES CRIADAS:\n\n';
+            data.separacoes_criadas.forEach((sep, i) => {
+                detalhes += `${i + 1}. Lote: ${sep.lote_id}\n`;
+                detalhes += `   Itens: ${sep.total_itens}\n`;
+                detalhes += `   Grupo: ${sep.descricao}\n\n`;
+            });
+            
+            alert(detalhes);
+            
+            // Fechar modal
+            $('#modalAvaliarEstoques').modal('hide');
+            
+            // Recarregar página para refletir alterações
+            window.location.reload();
+            
+        } else {
+            showNotification('Erro: ' + data.error, 'error');
+            btnEnviar.disabled = false;
+            btnEnviar.innerHTML = '<i class="fas fa-paper-plane"></i> Criar Separações dos Agrupamentos Selecionados';
+        }
+        
+    } catch (error) {
+        console.error('Erro ao enviar agrupamentos:', error);
+        showNotification('Erro de conexão', 'error');
+        btnEnviar.disabled = false;
+        btnEnviar.innerHTML = '<i class="fas fa-paper-plane"></i> Criar Separações dos Agrupamentos Selecionados';
+    }
 }
 
 function solicitarAgendamento(numPedido) {
@@ -4318,6 +4709,223 @@ async function unificarLinhaItem(itemId) {
          return false;
      }
  }
+
+// ========================================
+// 🗂️ FUNÇÕES PARA GERENCIAR PRÉ-SEPARAÇÕES
+// ========================================
+
+/**
+ * Edita campo de pré-separação
+ */
+async function editarCampoPreSeparacao(element, campo) {
+    const preSeparacaoId = element.getAttribute('data-pre-separacao-id');
+    const valor = element.value;
+    
+    try {
+        const response = await fetch(`/carteira/api/pre-separacao/${preSeparacaoId}/editar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                campo: campo,
+                valor: valor
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log(`✅ Campo ${campo} da pré-separação ${preSeparacaoId} atualizado`);
+            // Mostrar feedback visual
+            element.style.borderColor = '#28a745';
+            setTimeout(() => {
+                element.style.borderColor = '';
+            }, 2000);
+        } else {
+            console.error('Erro ao editar pré-separação:', data.error);
+            showNotification('Erro ao salvar alteração: ' + data.error, 'error');
+            element.focus();
+        }
+        
+    } catch (error) {
+        console.error('Erro ao editar pré-separação:', error);
+        showNotification('Erro de conexão ao salvar alteração', 'error');
+    }
+}
+
+/**
+ * Edita data de pré-separação
+ */
+async function editarDataPreSeparacao(element, campo) {
+    await editarCampoPreSeparacao(element, campo);
+}
+
+/**
+ * Edita quantidade de pré-separação
+ */
+async function editarQuantidadePreSeparacao(element) {
+    const preSeparacaoId = element.getAttribute('data-pre-separacao-id');
+    const novaQuantidade = parseFloat(element.value) || 0;
+    const qtdOriginal = parseFloat(element.getAttribute('data-qtd-original')) || 0;
+    
+    // Validar quantidade
+    if (novaQuantidade <= 0) {
+        showNotification('Quantidade deve ser maior que zero', 'error');
+        element.focus();
+        return;
+    }
+    
+    if (novaQuantidade > qtdOriginal) {
+        showNotification(`Quantidade não pode ser maior que ${qtdOriginal}`, 'error');
+        element.value = qtdOriginal;
+        element.focus();
+        return;
+    }
+    
+    await editarCampoPreSeparacao(element, 'quantidade');
+}
+
+/**
+ * Cancela pré-separação
+ */
+async function cancelarPreSeparacao(preSeparacaoId) {
+    if (!confirm('Tem certeza que deseja cancelar esta pré-separação?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/carteira/api/pre-separacao/${preSeparacaoId}/cancelar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Pré-separação cancelada com sucesso', 'success');
+            
+            // Remover linha da tabela
+            const row = document.querySelector(`[data-pre-separacao-id="${preSeparacaoId}"]`);
+            if (row) {
+                row.style.transition = 'opacity 0.3s';
+                row.style.opacity = '0.5';
+                setTimeout(() => {
+                    row.remove();
+                }, 300);
+            }
+            
+        } else {
+            showNotification('Erro ao cancelar pré-separação: ' + data.error, 'error');
+        }
+        
+    } catch (error) {
+        console.error('Erro ao cancelar pré-separação:', error);
+        showNotification('Erro de conexão ao cancelar pré-separação', 'error');
+    }
+}
+
+/**
+ * Envia pré-separação para separação definitiva
+ */
+async function enviarPreSeparacaoParaSeparacao(preSeparacaoId) {
+    const observacoes = prompt('Observações para a separação (opcional):') || '';
+    
+    if (!confirm('Tem certeza que deseja enviar esta pré-separação para separação definitiva?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/carteira/api/pre-separacao/${preSeparacaoId}/enviar-separacao`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                observacoes: observacoes
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(`Pré-separação enviada para separação ${data.lote_id}`, 'success');
+            
+            // Atualizar status da linha
+            const row = document.querySelector(`[data-pre-separacao-id="${preSeparacaoId}"]`);
+            if (row) {
+                row.classList.remove('table-warning');
+                row.classList.add('table-success');
+                
+                // Atualizar badge de status
+                const statusBadge = row.querySelector('.badge');
+                if (statusBadge) {
+                    statusBadge.textContent = 'ENVIADO_SEPARACAO';
+                    statusBadge.className = 'badge badge-success';
+                }
+                
+                // Desabilitar botões
+                const buttons = row.querySelectorAll('button');
+                buttons.forEach(btn => {
+                    btn.disabled = true;
+                    btn.classList.add('disabled');
+                });
+            }
+            
+        } else {
+            showNotification('Erro ao enviar para separação: ' + data.error, 'error');
+        }
+        
+    } catch (error) {
+        console.error('Erro ao enviar pré-separação para separação:', error);
+        showNotification('Erro de conexão ao enviar para separação', 'error');
+    }
+}
+
+/**
+ * Abre modal para editar detalhes da pré-separação
+ */
+function editarPreSeparacao(preSeparacaoId) {
+    // TODO: Implementar modal de edição completa se necessário
+    showNotification('Use os campos da tabela para editar a pré-separação', 'info');
+}
+
+/**
+ * Função auxiliar para mostrar notificações
+ */
+function showNotification(message, type = 'info') {
+    // Implementação básica - pode ser melhorada com uma biblioteca de notificações
+    const alertClass = {
+        'success': 'alert-success',
+        'error': 'alert-danger',
+        'warning': 'alert-warning',
+        'info': 'alert-info'
+    }[type] || 'alert-info';
+    
+    const notification = document.createElement('div');
+    notification.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="close" data-dismiss="alert">
+            <span>&times;</span>
+        </button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remover após 5 segundos
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 5000);
+}
 
 /**
  * Recalcula todos os estoques D0/D7 do modal

@@ -962,7 +962,7 @@ def api_separacoes_pedido(num_pedido):
     Implementação: Fase 3.1 - Query Separações por Pedido
     """
     try:
-        from app.embarques.models import Embarque
+        from app.embarques.models import Embarque, EmbarqueItem
         from app.pedidos.models import Pedido
         from app.transportadoras.models import Transportadora
         
@@ -999,8 +999,11 @@ def api_separacoes_pedido(num_pedido):
             Pedido.pallet_total.label('pedido_pallet_total')
             
         ).outerjoin(
-            Embarque, 
-            Separacao.separacao_lote_id == Embarque.separacao_lote_id
+            EmbarqueItem, 
+            Separacao.separacao_lote_id == EmbarqueItem.separacao_lote_id
+        ).outerjoin(
+            Embarque,
+            EmbarqueItem.embarque_id == Embarque.id
         ).outerjoin(
             Transportadora,
             Embarque.transportadora_id == Transportadora.id
@@ -1644,6 +1647,138 @@ def buscar_pre_separacoes_pedido(num_pedido):
         return []
 
 
+def calcular_peso_pallet_produto(cod_produto, quantidade):
+    """
+    Calcula peso e pallet usando CadastroPalletizacao
+    
+    Args:
+        cod_produto (str): Código do produto
+        quantidade (float): Quantidade do produto
+        
+    Returns:
+        tuple: (peso_total, pallet_total)
+    """
+    try:
+        from app.producao.models import CadastroPalletizacao
+        
+        palletizacao = CadastroPalletizacao.query.filter_by(
+            cod_produto=cod_produto, 
+            ativo=True
+        ).first()
+        
+        if palletizacao:
+            # Calcular peso total
+            peso = float(quantidade) * float(palletizacao.peso_bruto or 0)
+            
+            # Calcular pallet total
+            if palletizacao.palletizacao and palletizacao.palletizacao > 0:
+                pallet = float(quantidade) / float(palletizacao.palletizacao)
+            else:
+                pallet = 0
+                
+            logger.debug(f"✅ Cálculo {cod_produto}: Qtd={quantidade}, Peso={peso:.2f}kg, Pallet={pallet:.2f}")
+            return peso, pallet
+        else:
+            logger.warning(f"⚠️ Produto {cod_produto} sem cadastro de palletização")
+            return 0, 0
+            
+    except Exception as e:
+        logger.error(f"❌ Erro ao calcular peso/pallet {cod_produto}: {e}")
+        return 0, 0
+
+
+def validar_saldo_disponivel_real(num_pedido, cod_produto, qtd_solicitada):
+    """
+    🚨 VALIDAÇÃO CRÍTICA DE SALDO DISPONÍVEL
+    
+    REGRA FUNDAMENTAL: Separacao(Aberto|Cotado) + PreSeparacao(CRIADO|RECOMPOSTO) ≤ CarteiraPrincipal
+    
+    Esta função DEVE ser chamada SEMPRE antes de:
+    - Criar PreSeparacaoItem
+    - Editar quantidade de PreSeparacaoItem  
+    - Criar Separacao
+    
+    Args:
+        num_pedido (str): Número do pedido
+        cod_produto (str): Código do produto
+        qtd_solicitada (float): Quantidade que se deseja separar/pré-separar
+        
+    Returns:
+        float: Saldo disponível após validação
+        
+    Raises:
+        ValueError: Se quantidade solicitada excede saldo disponível
+    """
+    from sqlalchemy import func, and_, or_
+    
+    try:
+        # 1. Buscar saldo da carteira
+        carteira_item = CarteiraPrincipal.query.filter_by(
+            num_pedido=num_pedido,
+            cod_produto=cod_produto,
+            ativo=True
+        ).first()
+        
+        if not carteira_item:
+            raise ValueError(f"Item {num_pedido}-{cod_produto} não encontrado na carteira")
+        
+        # 2. Calcular separações ativas (via status do Pedido)
+        from app.pedidos.models import Pedido
+        separacoes_ativas = db.session.query(func.coalesce(func.sum(Separacao.qtd_saldo), 0)).join(
+            Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+        ).filter(
+            and_(
+                Separacao.num_pedido == num_pedido,
+                Separacao.cod_produto == cod_produto,
+                or_(
+                    Pedido.status == 'Aberto',
+                    Pedido.status == 'Cotado'
+                )
+            )
+        ).scalar() or 0
+        
+        # 3. Calcular pré-separações ativas (apenas CRIADO e RECOMPOSTO)
+        pre_separacoes_ativas = 0
+        try:
+            from app.carteira.models import PreSeparacaoItem
+            pre_separacoes_ativas = db.session.query(func.coalesce(func.sum(PreSeparacaoItem.qtd_selecionada_usuario), 0)).filter(
+                and_(
+                    PreSeparacaoItem.num_pedido == num_pedido,
+                    PreSeparacaoItem.cod_produto == cod_produto,
+                    or_(
+                        PreSeparacaoItem.status == 'CRIADO',
+                        PreSeparacaoItem.status == 'RECOMPOSTO'
+                    )
+                )
+            ).scalar() or 0
+        except (ImportError, AttributeError):
+            pass
+        
+        # 4. Calcular saldo disponível real
+        saldo_carteira = float(carteira_item.qtd_saldo_produto_pedido or 0)
+        saldo_disponivel = saldo_carteira - float(separacoes_ativas) - float(pre_separacoes_ativas)
+        
+        # 5. Validar se quantidade solicitada é viável
+        if qtd_solicitada > saldo_disponivel:
+            raise ValueError(
+                f"❌ VALIDAÇÃO CRÍTICA FALHOU\n"
+                f"Quantidade solicitada: {qtd_solicitada}\n"
+                f"Saldo disponível: {saldo_disponivel}\n"
+                f"Detalhes:\n"
+                f"  • Carteira: {saldo_carteira}\n"
+                f"  • Separações ativas: {separacoes_ativas}\n"
+                f"  • Pré-separações ativas: {pre_separacoes_ativas}\n"
+                f"Item: {num_pedido}-{cod_produto}"
+            )
+        
+        logger.info(f"✅ Validação OK: {num_pedido}-{cod_produto} - Solicitado: {qtd_solicitada}, Disponível: {saldo_disponivel}")
+        return saldo_disponivel
+        
+    except Exception as e:
+        logger.error(f"❌ Erro na validação de saldo {num_pedido}-{cod_produto}: {e}")
+        raise
+
+
 def _carregar_dados_estoque_d0_d7(num_pedido):
     """
     🔧 P1.2: Função auxiliar para carregar dados de estoque D0/D7
@@ -2178,7 +2313,7 @@ def api_separacao_detalhes(lote_id):
     try:
         from app.separacao.models import Separacao
         from app.pedidos.models import Pedido
-        from app.embarques.models import Embarque
+        from app.embarques.models import Embarque, EmbarqueItem
         
         # 1. Buscar todas as separações do lote
         separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
@@ -2190,8 +2325,9 @@ def api_separacao_detalhes(lote_id):
         # Pedido relacionado
         pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
         
-        # Embarque relacionado
-        embarque = Embarque.query.filter_by(separacao_lote_id=lote_id).first()
+        # Embarque relacionado (via EmbarqueItem)
+        embarque_item = EmbarqueItem.query.filter_by(separacao_lote_id=lote_id).first()
+        embarque = embarque_item.embarque if embarque_item else None
         
         # Itens da carteira relacionados
         itens_carteira = CarteiraPrincipal.query.filter_by(
@@ -2525,14 +2661,18 @@ def api_separacao_criar():
 @login_required
 def api_pedido_itens_editaveis(num_pedido):
     """
-    API para carregar itens editáveis de um pedido com saldo calculado
+    API para carregar itens editáveis de um pedido com saldo calculado + PreSeparacaoItem
     Implementa fórmula: Qtd = carteira_principal.qtd_saldo_produto_pedido - separacao.qtd_saldo - pre_separacao_item.qtd_selecionada_usuario
+    INCLUI: PreSeparacaoItem como itens editáveis/canceláveis
     """
     try:
         # Buscar itens da carteira principal para o pedido
         itens_carteira = CarteiraPrincipal.query.filter_by(num_pedido=num_pedido).all()
         
-        if not itens_carteira:
+        # Buscar pré-separações do pedido
+        pre_separacoes = buscar_pre_separacoes_pedido(num_pedido)
+        
+        if not itens_carteira and not pre_separacoes:
             return jsonify({
                 'success': False,
                 'error': f'Nenhum item encontrado para o pedido {num_pedido}'
@@ -2545,22 +2685,35 @@ def api_pedido_itens_editaveis(num_pedido):
                 # 📊 CALCULAR SALDO DISPONÍVEL conforme especificação
                 qtd_carteira = float(item.qtd_saldo_produto_pedido or 0)
                 
-                # Somar quantidades em separações
-                qtd_separacoes = db.session.query(func.coalesce(func.sum(Separacao.qtd_saldo), 0)).filter(
+                # Somar quantidades em separações ATIVAS (via status do Pedido)
+                from app.pedidos.models import Pedido
+                qtd_separacoes = db.session.query(func.coalesce(func.sum(Separacao.qtd_saldo), 0)).join(
+                    Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                ).filter(
                     and_(
                         Separacao.num_pedido == num_pedido,
-                        Separacao.cod_produto == item.cod_produto
+                        Separacao.cod_produto == item.cod_produto,
+                        or_(
+                            # SEPARAÇÕES QUE AINDA CONSOMEM SALDO (via status do Pedido)
+                            Pedido.status == 'Aberto',
+                            Pedido.status == 'Cotado'
+                        )
                     )
                 ).scalar() or 0
                 
-                # Somar quantidades em pré-separações (se existir o modelo)
+                # Somar quantidades em pré-separações ATIVAS (apenas "CRIADO" e "RECOMPOSTO")
                 qtd_pre_separacoes = 0
                 try:
                     from app.carteira.models import PreSeparacaoItem
                     qtd_pre_separacoes = db.session.query(func.coalesce(func.sum(PreSeparacaoItem.qtd_selecionada_usuario), 0)).filter(
                         and_(
                             PreSeparacaoItem.num_pedido == num_pedido,
-                            PreSeparacaoItem.cod_produto == item.cod_produto
+                            PreSeparacaoItem.cod_produto == item.cod_produto,
+                            or_(
+                                # PRÉ-SEPARAÇÕES QUE AINDA CONSOMEM SALDO
+                                PreSeparacaoItem.status == 'CRIADO',
+                                PreSeparacaoItem.status == 'RECOMPOSTO'
+                            )
                         )
                     ).scalar() or 0
                 except (ImportError, AttributeError):
@@ -2671,15 +2824,560 @@ def api_pedido_itens_editaveis(num_pedido):
                 logger.error(f"Erro ao processar item {item.cod_produto}: {e}")
                 continue
         
+        # 📋 PROCESSAR PRÉ-SEPARAÇÕES COMO ITENS EDITÁVEIS
+        for pre_sep in pre_separacoes:
+            try:
+                # 💰 CALCULAR VALORES DAS PRÉ-SEPARAÇÕES
+                valor_calculado = float(pre_sep.qtd_selecionada_usuario) * float(pre_sep.valor_original_item / pre_sep.qtd_original_carteira if pre_sep.qtd_original_carteira else 0)
+                peso_calculado = float(pre_sep.peso_selecionado if hasattr(pre_sep, 'peso_selecionado') else 0)
+                
+                # 📦 CALCULAR PALLET PROPORCIONAL
+                pallet_calculado = 0
+                try:
+                    from app.producao.models import CadastroPalletizacao
+                    palletizacao = CadastroPalletizacao.query.filter_by(cod_produto=pre_sep.cod_produto).first()
+                    if palletizacao and palletizacao.palletizacao and palletizacao.palletizacao > 0:
+                        pallet_calculado = float(pre_sep.qtd_selecionada_usuario) / float(palletizacao.palletizacao)
+                except ImportError:
+                    pass
+                
+                # 📊 ESTOQUE D0/D7 (mesmo produto, mesmos dados)
+                menor_estoque_d7 = '-'
+                estoque_d0 = '-'
+                producao_d0 = '-'
+                proxima_data_disponivel = None
+                
+                try:
+                    data_expedicao = pre_sep.data_expedicao_editada or (datetime.now().date() + timedelta(days=1))
+                    resumo_estoque = SaldoEstoque.obter_resumo_produto(pre_sep.cod_produto, pre_sep.nome_produto)
+                    
+                    if resumo_estoque and resumo_estoque['projecao_29_dias']:
+                        estoque_expedicao = _calcular_estoque_data_especifica(
+                            resumo_estoque['projecao_29_dias'], data_expedicao
+                        )
+                        estoque_d0 = f"{int(estoque_expedicao)}" if estoque_expedicao >= 0 else "RUPTURA"
+                        
+                        producao_expedicao = SaldoEstoque.calcular_producao_periodo(
+                            pre_sep.cod_produto, data_expedicao, data_expedicao
+                        )
+                        producao_d0 = f"{int(producao_expedicao)}" if producao_expedicao > 0 else "0"
+                        
+                        menor_estoque_calc = resumo_estoque['previsao_ruptura']
+                        menor_estoque_d7 = f"{int(menor_estoque_calc)}" if menor_estoque_calc >= 0 else "RUPTURA"
+                        
+                        proxima_data_disponivel = _encontrar_proxima_data_com_estoque(
+                            resumo_estoque['projecao_29_dias'], float(pre_sep.qtd_selecionada_usuario)
+                        )
+                except Exception as e:
+                    logger.warning(f"Erro ao calcular estoques para pré-separação {pre_sep.cod_produto}: {e}")
+                
+                # Montar item de pré-separação
+                pre_sep_data = {
+                    'id': f"pre_{pre_sep.id}",  # ID especial para identificar como pré-separação
+                    'pre_separacao_id': pre_sep.id,  # ID real da pré-separação
+                    'tipo_item': 'pre_separacao',  # Identificar tipo
+                    'cod_produto': pre_sep.cod_produto,
+                    'nome_produto': f"[PRÉ-SEP] {pre_sep.nome_produto or pre_sep.cod_produto}",  # Indicar que é pré-separação
+                    'qtd_carteira': float(pre_sep.qtd_original_carteira),
+                    'qtd_separacoes': 0,  # Pré-separações não têm separações filhas
+                    'qtd_pre_separacoes': float(pre_sep.qtd_selecionada_usuario),
+                    'qtd_saldo_disponivel': float(pre_sep.qtd_selecionada_usuario),  # Quantidade editável
+                    'preco_unitario': float(pre_sep.valor_original_item / pre_sep.qtd_original_carteira if pre_sep.qtd_original_carteira else 0),
+                    'valor_calculado': f"R$ {valor_calculado:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
+                    'peso_calculado': f"{peso_calculado:,.1f} kg".replace(',', 'X').replace('.', ',').replace('X', '.'),
+                    'pallet_calculado': f"{pallet_calculado:,.1f} pal".replace(',', 'X').replace('.', ',').replace('X', '.'),
+                    'menor_estoque_d7': menor_estoque_d7,
+                    'estoque_data_expedicao': estoque_d0,
+                    'producao_data_expedicao': producao_d0,
+                    'proxima_data_estoque': proxima_data_disponivel,
+                    'expedicao': pre_sep.data_expedicao_editada.strftime('%Y-%m-%d') if pre_sep.data_expedicao_editada else '',
+                    'agendamento': pre_sep.data_agendamento_editada.strftime('%Y-%m-%d') if pre_sep.data_agendamento_editada else '',
+                    'protocolo': pre_sep.protocolo_editado or '',
+                    'status': pre_sep.status,
+                    'criado_em': pre_sep.data_criacao.strftime('%d/%m/%Y %H:%M') if hasattr(pre_sep, 'data_criacao') and pre_sep.data_criacao else '',
+                    'criado_por': pre_sep.criado_por or '',
+                    'observacoes': pre_sep.observacoes_usuario or ''
+                }
+                
+                itens_resultado.append(pre_sep_data)
+                
+            except Exception as e:
+                logger.error(f"Erro ao processar pré-separação {pre_sep.id}: {e}")
+                continue
+        
         return jsonify({
             'success': True,
             'itens': itens_resultado,
             'total_itens': len(itens_resultado),
+            'total_carteira': len(itens_carteira),
+            'total_pre_separacoes': len(pre_separacoes),
             'num_pedido': num_pedido
         })
         
     except Exception as e:
         logger.error(f"Erro ao carregar itens editáveis do pedido {num_pedido}: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
+# 🗂️ ROTAS PARA GERENCIAR PRÉ-SEPARAÇÕES NO DROPDOWN
+
+@carteira_bp.route('/api/pre-separacao/<int:pre_sep_id>/editar', methods=['POST'])
+@login_required
+def api_editar_pre_separacao(pre_sep_id):
+    """
+    API para editar PreSeparacaoItem via dropdown
+    """
+    try:
+        from app.carteira.models import PreSeparacaoItem
+        
+        data = request.get_json()
+        campo = data.get('campo')
+        valor = data.get('valor')
+        
+        if not campo:
+            return jsonify({
+                'success': False,
+                'error': 'Campo é obrigatório'
+            }), 400
+        
+        # Buscar pré-separação
+        pre_sep = PreSeparacaoItem.query.get(pre_sep_id)
+        if not pre_sep:
+            return jsonify({
+                'success': False,
+                'error': f'Pré-separação {pre_sep_id} não encontrada'
+            }), 404
+        
+        # Atualizar campo específico
+        if campo == 'expedicao':
+            if valor:
+                try:
+                    pre_sep.data_expedicao_editada = datetime.strptime(valor, '%Y-%m-%d').date()
+                except ValueError:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Formato de data inválido'
+                    }), 400
+            else:
+                pre_sep.data_expedicao_editada = None
+                
+        elif campo == 'agendamento':
+            if valor:
+                try:
+                    pre_sep.data_agendamento_editada = datetime.strptime(valor, '%Y-%m-%d').date()
+                except ValueError:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Formato de data inválido'
+                    }), 400
+            else:
+                pre_sep.data_agendamento_editada = None
+                
+        elif campo == 'protocolo':
+            pre_sep.protocolo_editado = valor or None
+            
+        elif campo == 'quantidade':
+            qtd_nova = float(valor) if valor else 0
+            if qtd_nova <= 0:
+                return jsonify({
+                    'success': False,
+                    'error': 'Quantidade deve ser maior que zero'
+                }), 400
+            
+            # ✅ VALIDAÇÃO CRÍTICA DE SALDO DISPONÍVEL
+            try:
+                saldo_disponivel = validar_saldo_disponivel_real(
+                    pre_sep.num_pedido, 
+                    pre_sep.cod_produto, 
+                    qtd_nova
+                )
+                
+                pre_sep.qtd_selecionada_usuario = qtd_nova
+                pre_sep.qtd_restante_calculada = pre_sep.qtd_original_carteira - qtd_nova
+                
+            except ValueError as e:
+                return jsonify({
+                    'success': False,
+                    'error': f'Validação de saldo falhou: {str(e)}'
+                }), 400
+            
+        elif campo == 'observacoes':
+            pre_sep.observacoes_usuario = valor or None
+            
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Campo {campo} não suportado'
+            }), 400
+        
+        # Salvar alterações
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Campo {campo} da pré-separação atualizado com sucesso'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao editar pré-separação {pre_sep_id}: {e}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@carteira_bp.route('/api/pre-separacao/<int:pre_sep_id>/cancelar', methods=['POST'])
+@login_required
+def api_cancelar_pre_separacao(pre_sep_id):
+    """
+    API para cancelar PreSeparacaoItem via dropdown
+    """
+    try:
+        from app.carteira.models import PreSeparacaoItem
+        
+        # Buscar pré-separação
+        pre_sep = PreSeparacaoItem.query.get(pre_sep_id)
+        if not pre_sep:
+            return jsonify({
+                'success': False,
+                'error': f'Pré-separação {pre_sep_id} não encontrada'
+            }), 404
+        
+        # Verificar se pode ser cancelada
+        if pre_sep.status in ['ENVIADO_SEPARACAO', 'PROCESSADO']:
+            return jsonify({
+                'success': False,
+                'error': 'Não é possível cancelar pré-separação já enviada para separação'
+            }), 400
+        
+        # Marcar como cancelada ao invés de deletar (auditoria)
+        pre_sep.status = 'CANCELADO'
+        pre_sep.observacoes_usuario = (pre_sep.observacoes_usuario or '') + f"\n[CANCELADO em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome if hasattr(current_user, 'nome') else 'Sistema'}]"
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Pré-separação cancelada com sucesso',
+            'pre_separacao_id': pre_sep_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao cancelar pré-separação {pre_sep_id}: {e}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@carteira_bp.route('/api/pre-separacao/<int:pre_sep_id>/enviar-separacao', methods=['POST'])
+@login_required  
+def api_enviar_pre_separacao_para_separacao(pre_sep_id):
+    """
+    API para converter PreSeparacaoItem em Separacao definitiva
+    """
+    try:
+        from app.carteira.models import PreSeparacaoItem
+        
+        data = request.get_json()
+        observacoes = data.get('observacoes', '')
+        
+        # Buscar pré-separação
+        pre_sep = PreSeparacaoItem.query.get(pre_sep_id)
+        if not pre_sep:
+            return jsonify({
+                'success': False,
+                'error': f'Pré-separação {pre_sep_id} não encontrada'
+            }), 404
+        
+        # Verificar se pode ser enviada
+        if pre_sep.status in ['ENVIADO_SEPARACAO', 'CANCELADO']:
+            return jsonify({
+                'success': False,
+                'error': f'Pré-separação já está {pre_sep.status.lower()}'
+            }), 400
+        
+        # Validar se tem data de expedição
+        if not pre_sep.data_expedicao_editada:
+            return jsonify({
+                'success': False,
+                'error': 'Data de expedição é obrigatória para enviar para separação'
+            }), 400
+        
+        # Gerar lote de separação usando função local
+        lote_id = _gerar_novo_lote_id()
+        
+        # Criar separação baseada na pré-separação
+        separacao = Separacao()
+        separacao.separacao_lote_id = lote_id
+        separacao.num_pedido = pre_sep.num_pedido
+        separacao.cod_produto = pre_sep.cod_produto
+        separacao.nome_produto = pre_sep.nome_produto
+        separacao.qtd_saldo = pre_sep.qtd_selecionada_usuario
+        separacao.valor_saldo = pre_sep.valor_selecionado if hasattr(pre_sep, 'valor_selecionado') else 0
+        
+        # ✅ CALCULAR PESO E PALLET CORRETAMENTE
+        peso_calculado, pallet_calculado = calcular_peso_pallet_produto(pre_sep.cod_produto, pre_sep.qtd_selecionada_usuario)
+        separacao.peso = peso_calculado
+        separacao.pallet = pallet_calculado
+        
+        separacao.cnpj_cpf = pre_sep.cnpj_cliente
+        separacao.expedicao = pre_sep.data_expedicao_editada
+        separacao.agendamento = pre_sep.data_agendamento_editada
+        separacao.protocolo = pre_sep.protocolo_editado
+        separacao.observ_ped_1 = observacoes or f"Criado a partir de pré-separação #{pre_sep.id}"
+        separacao.criado_em = datetime.utcnow()
+        # ❌ REMOVIDO: status (campo não existe no modelo - status está em Pedido)
+        
+        db.session.add(separacao)
+        
+        # Atualizar status da pré-separação
+        pre_sep.status = 'ENVIADO_SEPARACAO'
+        pre_sep.observacoes_usuario = (pre_sep.observacoes_usuario or '') + f"\n[ENVIADO para separação {lote_id} em {datetime.now().strftime('%d/%m/%Y %H:%M')}]"
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Pré-separação enviada para separação com sucesso',
+            'lote_id': lote_id,
+            'separacao_id': separacao.id
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao enviar pré-separação {pre_sep_id} para separação: {e}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@carteira_bp.route('/api/pedido/<num_pedido>/pre-separacoes-agrupadas')
+@login_required
+def api_pedido_pre_separacoes_agrupadas(num_pedido):
+    """
+    API para carregar PreSeparacaoItem agrupadas por (expedição, agendamento, protocolo)
+    para exibir no modal "Gerar Separação"
+    """
+    try:
+        from app.carteira.models import PreSeparacaoItem
+        
+        # Buscar pré-separações ativas do pedido
+        pre_separacoes = PreSeparacaoItem.query.filter(
+            and_(
+                PreSeparacaoItem.num_pedido == num_pedido,
+                PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])  # Apenas ativos
+            )
+        ).all()
+        
+        if not pre_separacoes:
+            return jsonify({
+                'success': True,
+                'agrupamentos': [],
+                'total_agrupamentos': 0,
+                'num_pedido': num_pedido
+            })
+        
+        # Agrupar por (expedição, agendamento, protocolo)
+        agrupamentos = {}
+        
+        for pre_sep in pre_separacoes:
+            # Criar chave de agrupamento
+            chave_exp = pre_sep.data_expedicao_editada.strftime('%Y-%m-%d') if pre_sep.data_expedicao_editada else ''
+            chave_agend = pre_sep.data_agendamento_editada.strftime('%Y-%m-%d') if pre_sep.data_agendamento_editada else ''
+            chave_prot = pre_sep.protocolo_editado or ''
+            
+            chave_agrupamento = f"{chave_exp}|{chave_agend}|{chave_prot}"
+            
+            if chave_agrupamento not in agrupamentos:
+                agrupamentos[chave_agrupamento] = {
+                    'expedicao': chave_exp,
+                    'agendamento': chave_agend,
+                    'protocolo': chave_prot,
+                    'pre_separacoes': [],
+                    'total_quantidade': 0,
+                    'total_valor': 0,
+                    'total_peso': 0,
+                    'total_pallet': 0,
+                    'produtos': []
+                }
+            
+            # Adicionar à lista de pré-separações do agrupamento
+            agrupamentos[chave_agrupamento]['pre_separacoes'].append({
+                'id': pre_sep.id,
+                'cod_produto': pre_sep.cod_produto,
+                'nome_produto': pre_sep.nome_produto,
+                'quantidade': float(pre_sep.qtd_selecionada_usuario),
+                'valor': float(pre_sep.valor_selecionado if hasattr(pre_sep, 'valor_selecionado') else 0),
+                'peso': float(pre_sep.peso_selecionado if hasattr(pre_sep, 'peso_selecionado') else 0),
+                'status': pre_sep.status,
+                'criado_em': pre_sep.data_criacao.strftime('%d/%m/%Y %H:%M') if hasattr(pre_sep, 'data_criacao') and pre_sep.data_criacao else ''
+            })
+            
+            # Somar totais do agrupamento
+            agrupamentos[chave_agrupamento]['total_quantidade'] += float(pre_sep.qtd_selecionada_usuario)
+            agrupamentos[chave_agrupamento]['total_valor'] += float(pre_sep.valor_selecionado if hasattr(pre_sep, 'valor_selecionado') else 0)
+            agrupamentos[chave_agrupamento]['total_peso'] += float(pre_sep.peso_selecionado if hasattr(pre_sep, 'peso_selecionado') else 0)
+            
+            # Calcular pallet proporcional
+            try:
+                from app.producao.models import CadastroPalletizacao
+                palletizacao = CadastroPalletizacao.query.filter_by(cod_produto=pre_sep.cod_produto).first()
+                if palletizacao and palletizacao.palletizacao and palletizacao.palletizacao > 0:
+                    pallet_item = float(pre_sep.qtd_selecionada_usuario) / float(palletizacao.palletizacao)
+                    agrupamentos[chave_agrupamento]['total_pallet'] += pallet_item
+            except ImportError:
+                pass
+            
+            # Adicionar produto à lista (se não existir)
+            produto_existe = any(p['cod_produto'] == pre_sep.cod_produto for p in agrupamentos[chave_agrupamento]['produtos'])
+            if not produto_existe:
+                agrupamentos[chave_agrupamento]['produtos'].append({
+                    'cod_produto': pre_sep.cod_produto,
+                    'nome_produto': pre_sep.nome_produto
+                })
+        
+        # Converter agrupamentos para lista
+        lista_agrupamentos = []
+        for i, (chave, agrup) in enumerate(agrupamentos.items(), 1):
+            # Formatar valores para exibição
+            agrup['id_agrupamento'] = f"agrup_{i}"
+            agrup['total_valor_formatado'] = f"R$ {agrup['total_valor']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            agrup['total_peso_formatado'] = f"{agrup['total_peso']:,.1f} kg".replace(',', 'X').replace('.', ',').replace('X', '.')
+            agrup['total_pallet_formatado'] = f"{agrup['total_pallet']:,.1f} pal".replace(',', 'X').replace('.', ',').replace('X', '.')
+            agrup['total_produtos'] = len(agrup['produtos'])
+            agrup['total_pre_separacoes'] = len(agrup['pre_separacoes'])
+            
+            # Criar descrição do agrupamento
+            descricao_partes = []
+            if agrup['expedicao']:
+                descricao_partes.append(f"Exp: {datetime.strptime(agrup['expedicao'], '%Y-%m-%d').strftime('%d/%m')}")
+            if agrup['agendamento']:
+                descricao_partes.append(f"Agend: {datetime.strptime(agrup['agendamento'], '%Y-%m-%d').strftime('%d/%m')}")
+            if agrup['protocolo']:
+                descricao_partes.append(f"Prot: {agrup['protocolo']}")
+            
+            agrup['descricao'] = ' | '.join(descricao_partes) if descricao_partes else 'Sem agrupamento'
+            
+            lista_agrupamentos.append(agrup)
+        
+        # Ordenar por data de expedição
+        lista_agrupamentos.sort(key=lambda x: x['expedicao'] or '9999-12-31')
+        
+        return jsonify({
+            'success': True,
+            'agrupamentos': lista_agrupamentos,
+            'total_agrupamentos': len(lista_agrupamentos),
+            'num_pedido': num_pedido
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao carregar pré-separações agrupadas do pedido {num_pedido}: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@carteira_bp.route('/api/agrupamentos/enviar-separacao', methods=['POST'])
+@login_required
+def api_enviar_agrupamentos_para_separacao():
+    """
+    API para enviar agrupamentos de PreSeparacaoItem para separação
+    Cria 1 Separação para cada agrupamento selecionado
+    """
+    try:
+        from app.carteira.models import PreSeparacaoItem
+        
+        data = request.get_json()
+        agrupamentos_selecionados = data.get('agrupamentos', [])
+        observacoes_gerais = data.get('observacoes', '')
+        
+        if not agrupamentos_selecionados:
+            return jsonify({
+                'success': False,
+                'error': 'Selecione pelo menos um agrupamento'
+            }), 400
+        
+        separacoes_criadas = []
+        
+        for agrup_data in agrupamentos_selecionados:
+            pre_separacao_ids = agrup_data.get('pre_separacao_ids', [])
+            
+            if not pre_separacao_ids:
+                continue
+            
+            # Buscar pré-separações do agrupamento
+            pre_separacoes = PreSeparacaoItem.query.filter(
+                PreSeparacaoItem.id.in_(pre_separacao_ids)
+            ).all()
+            
+            if not pre_separacoes:
+                continue
+            
+            # Gerar lote de separação para o agrupamento usando função local
+            lote_id = _gerar_novo_lote_id()
+            
+            # Pegar dados do primeiro item para dados gerais
+            primeira_pre_sep = pre_separacoes[0]
+            
+            # Criar separações individuais para cada pré-separação do agrupamento
+            for pre_sep in pre_separacoes:
+                # Verificar se pode ser enviada
+                if pre_sep.status not in ['CRIADO', 'RECOMPOSTO']:
+                    continue
+                
+                # Criar separação baseada na pré-separação
+                separacao = Separacao()
+                separacao.separacao_lote_id = lote_id
+                separacao.num_pedido = pre_sep.num_pedido
+                separacao.cod_produto = pre_sep.cod_produto
+                separacao.nome_produto = pre_sep.nome_produto
+                separacao.qtd_saldo = pre_sep.qtd_selecionada_usuario
+                separacao.valor_saldo = pre_sep.valor_selecionado if hasattr(pre_sep, 'valor_selecionado') else 0
+                
+                # ✅ CALCULAR PESO E PALLET CORRETAMENTE
+                peso_calculado, pallet_calculado = calcular_peso_pallet_produto(pre_sep.cod_produto, pre_sep.qtd_selecionada_usuario)
+                separacao.peso = peso_calculado
+                separacao.pallet = pallet_calculado
+                
+                separacao.cnpj_cpf = pre_sep.cnpj_cliente
+                separacao.expedicao = pre_sep.data_expedicao_editada
+                separacao.agendamento = pre_sep.data_agendamento_editada
+                separacao.protocolo = pre_sep.protocolo_editado
+                separacao.observ_ped_1 = f"{observacoes_gerais}\n[Agrupamento: {agrup_data.get('descricao', 'N/A')}]"
+                separacao.criado_em = datetime.utcnow()
+                # ❌ REMOVIDO: status (campo não existe no modelo - status está em Pedido)
+                
+                db.session.add(separacao)
+                
+                # Atualizar status da pré-separação
+                pre_sep.status = 'ENVIADO_SEPARACAO'
+                pre_sep.observacoes_usuario = (pre_sep.observacoes_usuario or '') + f"\n[ENVIADO para separação {lote_id} em {datetime.now().strftime('%d/%m/%Y %H:%M')}]"
+            
+            separacoes_criadas.append({
+                'lote_id': lote_id,
+                'total_itens': len(pre_separacoes),
+                'descricao': agrup_data.get('descricao', 'N/A')
+            })
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'{len(separacoes_criadas)} separação(ões) criada(s) com sucesso',
+            'separacoes_criadas': separacoes_criadas
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao enviar agrupamentos para separação: {e}")
+        db.session.rollback()
         return jsonify({
             'success': False,
             'error': f'Erro interno: {str(e)}'
@@ -2844,20 +3542,19 @@ def api_salvar_alteracao_item(item_id):
                 if pre_separacao:
                     pre_separacao.qtd_selecionada_usuario = qtd_nova
                 else:
-                    pre_separacao = PreSeparacaoItem(
-                        num_pedido=item.num_pedido,
-                        cod_produto=item.cod_produto,
-                        qtd_selecionada_usuario=qtd_nova,
-                        qtd_original_carteira=qtd_original,
-                        qtd_restante_calculada=qtd_original - qtd_nova,
-                        valor_original_item=float(item.preco_produto_pedido or 0) * qtd_original,
-                        peso_original_item=0,  # TODO: Calcular peso correto
-                        cnpj_cliente=item.cnpj_cpf,
-                        nome_produto=item.nome_produto,
-                        data_expedicao_editada=item.expedicao,
-                        data_agendamento_editada=item.agendamento,
-                        protocolo_editado=item.protocolo
-                    )
+                    pre_separacao = PreSeparacaoItem()
+                    pre_separacao.num_pedido = item.num_pedido
+                    pre_separacao.cod_produto = item.cod_produto
+                    pre_separacao.qtd_selecionada_usuario = qtd_nova
+                    pre_separacao.qtd_original_carteira = qtd_original
+                    pre_separacao.qtd_restante_calculada = qtd_original - qtd_nova
+                    pre_separacao.valor_original_item = float(item.preco_produto_pedido or 0) * qtd_original
+                    pre_separacao.peso_original_item = 0  # TODO: Calcular peso correto
+                    pre_separacao.cnpj_cliente = item.cnpj_cpf
+                    pre_separacao.nome_produto = item.nome_produto
+                    pre_separacao.data_expedicao_editada = item.expedicao
+                    pre_separacao.data_agendamento_editada = item.agendamento
+                    pre_separacao.protocolo_editado = item.protocolo
                     db.session.add(pre_separacao)
         
         # Salvar alterações
@@ -2914,20 +3611,19 @@ def api_dividir_linha_item(item_id):
         # Criar PreSeparacaoItem para quantidade utilizada
         from app.carteira.models import PreSeparacaoItem
         
-        pre_separacao = PreSeparacaoItem(
-            num_pedido=item.num_pedido,
-            cod_produto=item.cod_produto,
-            qtd_selecionada_usuario=qtd_utilizada,
-            qtd_original_carteira=qtd_original,
-            qtd_restante_calculada=qtd_restante,
-            valor_original_item=float(item.preco_produto_pedido or 0) * qtd_original,
-            peso_original_item=0,  # TODO: Calcular peso correto
-            cnpj_cliente=item.cnpj_cpf,
-            nome_produto=item.nome_produto,
-            data_expedicao_editada=item.expedicao,
-            data_agendamento_editada=item.agendamento,
-            protocolo_editado=item.protocolo
-        )
+        pre_separacao = PreSeparacaoItem()
+        pre_separacao.num_pedido = item.num_pedido
+        pre_separacao.cod_produto = item.cod_produto
+        pre_separacao.qtd_selecionada_usuario = qtd_utilizada
+        pre_separacao.qtd_original_carteira = qtd_original
+        pre_separacao.qtd_restante_calculada = qtd_restante
+        pre_separacao.valor_original_item = float(item.preco_produto_pedido or 0) * qtd_original
+        pre_separacao.peso_original_item = 0  # TODO: Calcular peso correto
+        pre_separacao.cnpj_cliente = item.cnpj_cpf
+        pre_separacao.nome_produto = item.nome_produto
+        pre_separacao.data_expedicao_editada = item.expedicao
+        pre_separacao.data_agendamento_editada = item.agendamento
+        pre_separacao.protocolo_editado = item.protocolo
         db.session.add(pre_separacao)
         
         # Criar nova linha com saldo restante (clonar item original)
@@ -2990,9 +3686,8 @@ def api_criar_separacao_pedido(num_pedido):
                     'error': 'Todos os itens devem ter Data de Expedição preenchida'
                 }), 400
         
-        # Gerar ID único para o lote
-        import uuid
-        separacao_lote_id = f"SEP_{num_pedido}_{int(time.time())}"
+        # Gerar ID único para o lote usando função centralizada
+        separacao_lote_id = _gerar_novo_lote_id()
         
         # Criar separações para cada item
         separacoes_criadas = []
@@ -3027,6 +3722,9 @@ def api_criar_separacao_pedido(num_pedido):
             preco_unitario = float(carteira_item.preco_produto_pedido or 0)
             valor_separacao = qtd_separacao * preco_unitario
             
+            # ✅ CALCULAR PESO E PALLET CORRETAMENTE
+            peso_calculado, pallet_calculado = calcular_peso_pallet_produto(carteira_item.cod_produto, qtd_separacao)
+            
             # Criar separação
             separacao = Separacao(
                 separacao_lote_id=separacao_lote_id,
@@ -3034,14 +3732,15 @@ def api_criar_separacao_pedido(num_pedido):
                 cod_produto=carteira_item.cod_produto,
                 qtd_saldo=qtd_separacao,
                 valor_saldo=valor_separacao,
-                peso=0,  # TODO: Calcular peso proporcional
-                pallet=0,  # TODO: Calcular pallet proporcional
+                peso=peso_calculado,
+                pallet=pallet_calculado,
                 expedicao=data_exp_obj,
                 agendamento=data_agend_obj,
                 protocolo=protocolo,
-                status='CRIADA',
-                criado_em=agora_brasil(),
-                criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+                cnpj_cpf=carteira_item.cnpj_cpf,  # ✅ CAMPO OBRIGATÓRIO ADICIONADO
+                criado_em=agora_brasil()
+                # ❌ REMOVIDO: status (campo não existe no modelo - status está em Pedido)
+                # ❌ REMOVIDO: criado_por (campo não existe no modelo)
             )
             
             db.session.add(separacao)

@@ -110,18 +110,83 @@ class EntregasLoader:
     def _load_with_context(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Carrega dados garantindo contexto Flask"""
         try:
-            from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
+            # CORREÇÃO CRÍTICA: Verificar múltiplas formas de obter Flask context
+            app = None
+            flask_context_available = False
             
-            # Garantir que temos db válido
-            db = get_db()
-            if not db:
-                self.logger.warning("⚠️ DB não disponível, retornando dados mock")
+            # Método 1: Tentar current_app primeiro
+            try:
+                from flask import current_app
+                # Verificar se current_app realmente funciona
+                current_app.config  # Isso vai falhar se não há contexto
+                app = current_app
+                flask_context_available = True
+                self.logger.info("✅ Flask context obtido via current_app")
+            except RuntimeError:
+                # Método 2: Tentar obter app via flask_fallback
+                from app.claude_ai_novo.utils.flask_fallback import get_app
+                app = get_app()
+                if app and hasattr(app, 'config'):
+                    flask_context_available = True
+                    self.logger.info("✅ Flask context obtido via fallback")
+                else:
+                    # Método 3: Tentar importar create_app diretamente
+                    try:
+                        from app import create_app
+                        app = create_app()
+                        flask_context_available = True
+                        self.logger.info("✅ Flask context criado via create_app direta")
+                    except Exception as e:
+                        self.logger.warning(f"⚠️ Não foi possível criar app: {e}")
+            
+            # Se conseguiu obter Flask context, usar dados reais
+            if flask_context_available and app:
+                try:
+                    # Verificar se já estamos em contexto ou precisamos criar um
+                    try:
+                        # Se current_app já funciona, estamos em contexto
+                        from flask import current_app
+                        current_app.config
+                        self.logger.info("🎯 Já estamos em Flask context - carregando dados REAIS")
+                        return self._load_with_app_context(filters)
+                    except RuntimeError:
+                        # Precisa criar contexto
+                        with app.app_context():
+                            self.logger.info("🎯 Contexto Flask criado - carregando dados REAIS")
+                            return self._load_with_app_context(filters)
+                            
+                except Exception as e:
+                    self.logger.error(f"❌ Erro ao carregar com contexto Flask: {e}")
+                    self.logger.warning("⚠️ Fallback para dados mock devido a erro")
+                    return self._get_mock_data(filters)
+            else:
+                # Se não conseguiu obter Flask context, usar dados mock
+                self.logger.warning("⚠️ Flask context não disponível, usando dados mock")
                 return self._get_mock_data(filters)
+                
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao carregar com contexto: {e}")
+            return self._get_mock_data(filters)
+    
+    def _load_with_app_context(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Carrega dados dentro do contexto Flask"""
+        try:
+            # CORREÇÃO: Usar imports diretos quando Flask context está disponível
+            self.logger.info("🔄 Tentando acessar dados reais com imports diretos")
             
-            # Usar modelo via get_model
-            EntregaMonitorada = get_model('EntregaMonitorada')
-            if not EntregaMonitorada:
-                self.logger.warning("⚠️ Modelo EntregaMonitorada não disponível")
+            # Import direto dos objetos reais
+            from app import db
+            from app.monitoramento.models import EntregaMonitorada
+            
+            self.logger.info("✅ Imports diretos bem-sucedidos - db e EntregaMonitorada carregados")
+            
+            # Verificar se db session está ativa
+            try:
+                from sqlalchemy import text
+                db.session.execute(text('SELECT 1'))
+                self.logger.info("✅ Sessão do banco de dados ativa")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Problema com sessão DB: {e}")
                 return self._get_mock_data(filters)
             
             query = db.session.query(EntregaMonitorada)
@@ -147,7 +212,7 @@ class EntregasLoader:
             
             entregas = query.limit(100).all()
             
-            self.logger.info(f"✅ Entregas carregadas: {len(entregas)} registros")
+            self.logger.info(f"✅ Entregas REAIS carregadas: {len(entregas)} registros")
             
             return [
                 {
@@ -164,8 +229,11 @@ class EntregasLoader:
                 for e in entregas
             ]
             
+        except ImportError as e:
+            self.logger.error(f"❌ Erro de import: {e}")
+            return self._get_mock_data(filters)
         except Exception as e:
-            self.logger.error(f"❌ Erro ao carregar com contexto: {e}")
+            self.logger.error(f"❌ Erro ao carregar dados reais: {e}")
             return self._get_mock_data(filters)
     
     def _get_mock_data(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:

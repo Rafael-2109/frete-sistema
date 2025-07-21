@@ -77,11 +77,31 @@ class ClaudeTransitionManager:
                 try:
                     # Sistema novo - verificar se é assíncrono
                     if hasattr(self.claude, 'process_query'):
-                        # CORREÇÃO: Executar com Flask context se disponível
+                        # CORREÇÃO DEFINITIVA: Garantir Flask context COMPLETO durante todo o processamento
                         if hasattr(self, '_app'):
+                            # Criar novo contexto Flask para garantir disponibilidade de db, current_app, etc.
                             with self._app.app_context():
+                                # IMPORTANTE: Configurar db session para o contexto atual
+                                from app import db
+                                from sqlalchemy import text
+                                
+                                # Garantir que a sessão DB está disponível 
+                                try:
+                                    # Verificar se há sessão ativa
+                                    db.session.execute(text('SELECT 1'))
+                                    logger.debug("✅ Sessão DB já ativa")
+                                except:
+                                    # Se não há sessão, criar uma nova
+                                    db.session.remove()
+                                    logger.debug("✅ Nova sessão DB criada")
+                                
+                                # Log para debug
+                                logger.info("✅ Executando sistema novo COM Flask context completo")
+                                
+                                # Processar com contexto Flask completo
                                 result = await self.claude.process_query(consulta, user_context)
                         else:
+                            logger.warning("⚠️ App context não disponível, tentando sem contexto")
                             result = await self.claude.process_query(consulta, user_context)
                         
                         # CORREÇÃO: Extrair resposta corretamente do resultado complexo
@@ -229,37 +249,81 @@ class ClaudeTransitionManager:
         if depth > 10:
             return None
         
+        # LOG PARA DEBUG
+        if depth == 0:
+            logger.info(f"🔍 EXTRAINDO RESPOSTA: {type(data)} | Keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}")
+        
         # Se já é uma string válida, retornar
         if isinstance(data, str) and len(data.strip()) > 10:
             # Evitar retornar strings que são claramente não-respostas
-            if not any(skip in data for skip in ['task_id', 'success', 'error', 'timestamp']):
+            excluded_patterns = ['task_id', 'success', 'error', 'timestamp', '_from_', 'workflow', 'orchestrator']
+            if not any(skip in data for skip in excluded_patterns):
+                logger.info(f"✅ Resposta extraída: {data[:100]}...")
                 return data
         
         # Se é um dicionário, procurar em campos conhecidos
         if isinstance(data, dict):
-            # Campos prioritários para resposta
-            priority_fields = ['response', 'result', 'answer', 'message', 'text', 'content']
+            # ⭐ CAMPOS PRIORITÁRIOS EXPANDIDOS PARA ORCHESTRATORS
+            priority_fields = [
+                'response', 'result', 'answer', 'message', 'text', 'content',
+                # Campos específicos dos orchestrators:
+                'agent_response', 'final_response', 'response_text', 'output',
+                'steps_results', 'workflow_result', 'orchestrator_response'
+            ]
             
             for field in priority_fields:
                 if field in data and data[field]:
                     # Recursão para extrair do campo
                     extracted = self._extract_response_from_nested(data[field], depth + 1)
                     if extracted:
+                        logger.info(f"✅ Resposta extraída do campo '{field}': {extracted[:100]}...")
                         return extracted
             
-            # Se não encontrou nos campos prioritários, tentar todos os campos
+            # ⭐ PROCESSAR STEPS_RESULTS (ESPECÍFICO DO ORCHESTRATOR)
+            if 'steps_results' in data and isinstance(data['steps_results'], dict):
+                logger.info("🔍 Processando steps_results...")
+                for step_name, step_result in data['steps_results'].items():
+                    extracted = self._extract_response_from_nested(step_result, depth + 1)
+                    if extracted:
+                        logger.info(f"✅ Resposta extraída do step '{step_name}': {extracted[:100]}...")
+                        return extracted
+            
+            # ⭐ BUSCAR EM TODOS OS CAMPOS (FALLBACK)
+            excluded_keys = ['task_id', 'success', 'error', 'timestamp', 'mode', 'orchestrator', 'workflow', 'session_id', '_from_']
             for key, value in data.items():
-                if value and key not in ['task_id', 'success', 'error', 'timestamp', 'mode', 'orchestrator']:
+                if value and key not in excluded_keys:
+                    # Se o valor é um dict e tem 'response', tentar extrair
+                    if isinstance(value, dict) and 'response' in value:
+                        extracted = self._extract_response_from_nested(value['response'], depth + 1)
+                        if extracted:
+                            logger.info(f"✅ Resposta extraída da estrutura '{key}.response': {extracted[:100]}...")
+                            return extracted
+                    
+                    # Tentar extrair diretamente
                     extracted = self._extract_response_from_nested(value, depth + 1)
                     if extracted:
+                        logger.info(f"✅ Resposta extraída do campo '{key}': {extracted[:100]}...")
                         return extracted
         
         # Se é uma lista, verificar cada item
         elif isinstance(data, list) and data:
-            for item in data:
+            for i, item in enumerate(data):
                 extracted = self._extract_response_from_nested(item, depth + 1)
                 if extracted:
+                    logger.info(f"✅ Resposta extraída do item {i}: {extracted[:100]}...")
                     return extracted
+        
+        # ⭐ FALLBACK FINAL: Se chegou aqui e é o nível 0, tentar converter para string
+        if depth == 0 and data:
+            logger.warning(f"⚠️ Extração padrão falhou, usando fallback para: {type(data)}")
+            if isinstance(data, dict):
+                # Tentar criar uma resposta útil a partir dos dados disponíveis
+                if data.get('success'):
+                    return f"Sistema processou com sucesso. Dados: {str(data)[:500]}..."
+                else:
+                    return f"Processamento concluído. Resultado: {str(data)[:500]}..."
+            else:
+                return str(data)[:500] + "..." if len(str(data)) > 500 else str(data)
         
         return None
     

@@ -515,45 +515,26 @@ Para melhor experiência, configure a API do Claude Anthropic.
 **Timestamp:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
 **Processador:** Response Processor"""
 
-# Instância global
-_responseprocessor = None
+# ============================================================================
+# INSTÂNCIA GLOBAL E FUNÇÃO DE CONVENIÊNCIA
+# ============================================================================
 
-def get_responseprocessor():
-    """Retorna instância de ResponseProcessor"""
-    global _responseprocessor
-    if _responseprocessor is None:
-        _responseprocessor = ResponseProcessor()
-    return _responseprocessor
+# Instância global do ResponseProcessor
+_response_processor_instance = None
 
-def generate_api_fallback_response(query: str, error: str, context: Optional[Dict] = None) -> str:
+def get_response_processor():
     """
-    Gera resposta de fallback para APIs externas.
+    Obtém instância singleton do ResponseProcessor.
     
-    Args:
-        query: Consulta original do usuário
-        error: Erro ocorrido na integração
-        context: Contexto adicional (conexões, status, etc.)
-        
     Returns:
-        Resposta de fallback formatada para exibição
+        ResponseProcessor: Instância do processador de respostas
     """
-    return f"""🌐 **SISTEMA DE INTEGRAÇÃO EXTERNA - MODO FALLBACK**
+    global _response_processor_instance
+    
+    if _response_processor_instance is None:
+        _response_processor_instance = ResponseProcessor()
+        
+    return _response_processor_instance
 
-**Consulta:** {query}
-
-**⚠️ Status:** {error}
-
-**🔌 CONEXÕES EXTERNAS:**
-• 🤖 Claude API: {'✅ Conectada' if context and context.get('claude_connected') else '❌ Desconectada'}
-• 🎯 Integration Manager: {'✅ Ativo' if context and context.get('integration_manager') else '❌ Inativo'}
-
-**🛠️ RESOLUÇÃO:**
-1. Verificar ANTHROPIC_API_KEY configurada
-2. Verificar conectividade de rede
-3. Verificar logs para erros específicos
-
-**📋 SISTEMA MODULAR:**
-Sistema com arquitetura modular preparado para integração com múltiplas APIs externas.
-
-**Timestamp:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
-**Processador:** Response Processor - External API Fallback"""
+# Alias para compatibilidade
+get_responseprocessor = get_response_processor
