@@ -1935,6 +1935,7 @@ function gerarHtmlItens(data) {
                 <td class="menor-estoque-d7-dropdown">${item.menor_estoque_d7 || '-'}</td>
                                     <td class="estoque-d0-dropdown">${item.estoque_data_expedicao || '-'}</td>
                     <td class="producao-d0-dropdown">${item.producao_data_expedicao || '-'}</td>
+                <td class="proxima-data-estoque">${item.proxima_data_estoque || '-'}</td>
                 <td>
                     <input type="date" 
                            class="form-control form-control-sm data-expedicao-dropdown" 
@@ -1990,7 +1991,7 @@ function gerarHtmlItens(data) {
                         <th id="total-valor-dropdown-${numPedido}">R$ ${valorTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</th>
                         <th id="total-peso-dropdown-${numPedido}">${pesoTotal.toLocaleString('pt-BR', {minimumFractionDigits: 1})} kg</th>
                         <th id="total-pallet-dropdown-${numPedido}">${palletTotal.toLocaleString('pt-BR', {minimumFractionDigits: 1})} pal</th>
-                        <th colspan="6">
+                        <th colspan="7">
                             <button class="btn btn-sm btn-outline-info" onclick="replicarCamposAmarradosDropdown('${numPedido}')">
                                 <i class="fas fa-link"></i> Replicar Campos
                             </button>
