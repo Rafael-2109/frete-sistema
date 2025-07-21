@@ -1238,11 +1238,8 @@ class PreSeparacaoItem(db.Model):
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
     criado_por = db.Column(db.String(100))
     
-    # Índice único para evitar duplicatas
-    __table_args__ = (
-        db.UniqueConstraint('num_pedido', 'cod_produto', 'cnpj_cliente', 'data_criacao', 
-                          name='pre_separacao_itens_pedido_produto_unique'),
-    )
+    # Removida constraint única para permitir múltiplas pré-separações do mesmo produto
+    # Múltiplas pré-separações fazem parte do processo normal de operação
     
     def __repr__(self):
         return f'<PreSeparacaoItem {self.num_pedido}-{self.cod_produto}: {self.qtd_selecionada_usuario}/{self.qtd_original_carteira}>'
@@ -1502,3 +1499,46 @@ class PreSeparacaoItem(db.Model):
         if cod_produto:
             query = query.filter(cls.cod_produto == cod_produto)
         return query.all()
+    
+    @classmethod
+    def criar_e_salvar(cls, carteira_item, qtd_selecionada, dados_editaveis, usuario, tipo_envio, config_parcial=None):
+        """
+        Cria e salva pré-separação (MÉTODO AUSENTE IMPLEMENTADO)
+        Este método era chamado na linha 1559 do routes.py mas não existia
+        """
+        try:
+            # Validar disponibilidade
+            if qtd_selecionada > carteira_item.qtd_saldo_produto_pedido:
+                raise ValueError(f"Quantidade indisponível. Disponível: {carteira_item.qtd_saldo_produto_pedido}")
+            
+            # Criar pré-separação
+            pre_separacao = cls()
+            pre_separacao.num_pedido = carteira_item.num_pedido
+            pre_separacao.cod_produto = carteira_item.cod_produto
+            pre_separacao.cnpj_cliente = carteira_item.cnpj_cpf
+            pre_separacao.qtd_original_carteira = carteira_item.qtd_saldo_produto_pedido
+            pre_separacao.qtd_selecionada_usuario = qtd_selecionada
+            pre_separacao.qtd_restante_calculada = carteira_item.qtd_saldo_produto_pedido - qtd_selecionada
+            
+            # Dados editáveis
+            pre_separacao.data_expedicao_editada = dados_editaveis.get('expedicao')
+            pre_separacao.data_agendamento_editada = dados_editaveis.get('agendamento') 
+            pre_separacao.protocolo_editado = dados_editaveis.get('protocolo')
+            pre_separacao.observacoes_usuario = dados_editaveis.get('observacoes')
+            
+            # Controle
+            pre_separacao.tipo_envio = tipo_envio
+            pre_separacao.status = 'CRIADO'
+            pre_separacao.criado_por = usuario
+            pre_separacao.hash_item_original = cls._gerar_hash_item(carteira_item)
+            
+            # Salvar
+            db.session.add(pre_separacao)
+            db.session.flush()  # Para obter ID
+            
+            logger.info(f"✅ Pré-separação criada: {pre_separacao.id}")
+            return pre_separacao
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao criar pré-separação: {e}")
+            raise

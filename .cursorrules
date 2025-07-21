@@ -232,4 +232,39 @@ Quando usar o Composer, mencione:
 - Use tasks predefinidas (Ctrl+Shift+P > Tasks)
 - Monitor em terminal separado
 - REST Client para API testing
-- Debug integrado do Python 
+- Debug integrado do Python
+
+## 🚀 MAXIMIZANDO CLAUDE CODE
+
+### Conexão IDE Otimizada:
+1. **SEMPRE abrir workspace**: `frete_sistema_corrected.code-workspace`
+2. **Verificar interpretador**: Ctrl+Shift+P > "Python: Select Interpreter" > `./venv/Scripts/python.exe`
+3. **Ativar ambiente**: Terminal integrado deve mostrar `(venv)`
+4. **Status IDE**: Canto inferior direito deve mostrar "✅ Connected" (não "⚠️ IDE disconnected")
+
+### Configurações Críticas:
+```json
+"cursor.ai.enabled": true,
+"cursor.ai.model": "claude-3.5-sonnet",
+"python.defaultInterpreterPath": "./venv/Scripts/python.exe"
+```
+
+### Comandos Essenciais:
+- **Chat**: Ctrl+L (conversa com Claude)
+- **Composer**: Ctrl+I (edições multi-arquivo)
+- **Completions**: Tab (aceitar sugestões)
+- **Terminal**: Ctrl+` (terminal integrado)
+
+### Troubleshooting IDE Disconnected:
+1. Recarregar workspace: Ctrl+Shift+P > "Developer: Reload Window"
+2. Verificar venv ativo: `which python` deve apontar para `./venv/Scripts/python.exe`
+3. Reinstalar extensões se necessário
+4. Verificar logs: View > Output > Python/Cursor
+
+### Extensões Críticas:
+- ✅ Python (ms-python.python)
+- ✅ Pylance (ms-python.vscode-pylance)  
+- ✅ REST Client (humao.rest-client)
+- ✅ Error Lens (usernamehw.errorlens)
+- ✅ GitLens (eamodio.gitlens)
+- ✅ Jinja (wholroyd.jinja) 

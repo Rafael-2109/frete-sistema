@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m flask db revision:*)",
+      "Bash(python:*)",
+      "Bash(call venv_tempScriptsactivate)",
+      "Bash(pip install:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)"
+    ],
+    "deny": []
+  }
+}

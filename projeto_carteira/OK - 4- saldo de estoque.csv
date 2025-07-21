@@ -1,30 +1,11 @@
-﻿Explicação do campo;Nome do campo já existente no sistema;Sugestão de nome;Nome do campo no excel;Explicação dos campos mais complexos
-Codigo do produto;cod_produto;; COD ;Deverão estar listados nesse módulo, os itens únicos que ou tiverem estoque ou tiverem na carteira de pedidos (arquivo 1)
-Descrição do produto;nome_produto;; Descrição Produto ;segue a lógica do código porem como critério usar o código
-Qtd total do item na carteira de pedidos;;qtd_total_produto_carteira; CART ;Somatória dos produtos na carteira de pedidos (arquivo 1)
-Menor estoque do item em 7 dias;;menor_estoque_produto_d7; Previsão de ruptura ;"menor qtd de ""EST FINAL - D#"", sendo ""#"" = 0 até 7"
-Ajuste de estoque (no sistema, ao ser lançado deverá gerar um lançamento nas movimentações de estoque);;ajuste_estoque_produto; AJUSTE EST ;"Qtds que serão lançadas e registradas na movimentação de estoque como: ""Descrito abaixo como Ajuste Estoque"
-Estoque inicial / atual do item D0;;estoque;EST INICIAL - D0;O estoque nada mais é do que o estoque inicial (registrado nas próprias movimentações) e todas as movimentações (onde as movimentações de estoque serão todas realizadas no módulo próprio já existente com exceção das movimentações de baixa de estoque realizadas pelo faturamento)
-Qtd prevista para expedição de D0;;qtd_produto_saida_d0;SAIDA - D0;"Somatória dos produtos da carteira (arquivo 1) onde a data de ""expedicao"" for igual a ""D0"""
-Estoque inicial D0 - Qtd prevista para expedição de D0;;estoque_d0;EST FINAL - D0;"calculo entre:""EST INICIAL - D0"" - ""SAIDA - D0"""
-programação de produção D0;;producao_produto_d0;PROG PROD - D0;"Somatória de todos os produtos do módulo de programação de produção, onde a data for igual a ""D0"""
-Estoque Final D0 + programação de produção D0;;estoque_inicial_d1;EST INICIAL - D+1;"calculo entre:""EST FINAL -D0"" + ""PROG PROD - D0"""
-Qtd prevista para expedição de D+1;;qtd_produto_saida_d1;SAIDA - D+1;Daqui pra baixo segue a lógica dos de cima.
-Estoque final D0 + programação de produção D0 - Qtd prevista para expedição de D+1;;estoque_d1;EST FINAL - D+1;
-programação de produção D+1;;producao_produto_d1;PROG PROD - D+1;
-Estoque Final D+1 + programação de produção D+1;;estoque_inicial_d2;EST INICIAL - D+2;
-Qtd prevista para expedição de D+1;;qtd_produto_saida_d2;SAIDA - D+2;
-Estoque final D+1 + programação de produção D+1 - Qtd prevista para expedição de D+2;;estoque_d2;EST FINAL - D+2;
-programação de produção D+2;;producao_produto_d2;PROG PROD - D+2;
-Estoque Final D+2 + programação de produção D+2;;estoque_inicial_d3;EST INICIAL - D+3;
-;;;...;
-;;;;
-;;;;
-;;;;
-Ajuste Estoque:;;;;
-tipo_movimentacao;AJUSTE (Lembro de termos definido opções para esse campo, se for gerar problema, acrescentar essa opção);;;
-cod_produto;codigo do produto;;;
-nome_produto;nome do produto;;;
-local_movimentacao;CD;;;
-data_movimentacao;Data que foi gerado o ajuste;;;
-qtd_movimentacao;qtd que foi ajustada (podendo ser positiva e negativa);;;
+﻿Estoque inicial / atual do item D0;EST INICIAL - D0;estoque
+Qtd prevista para expedição de D0;SAIDA - D0;"Sum(Separacao.qtd_saldo) if (query Separacao.cod_produto = ""Código analisado"" and Separacao.expedicao = ""D0"") + Sum(PreSeparacaoItem....."
+Estoque inicial D0 - Qtd prevista para expedição de D0;EST FINAL - D0;"""EST INICIAL - D0"" - ""SAIDA - D0"""
+programação de produção D0;PROG PROD - D0;"Sum(ProgramacaoProducao.qtd_programada) if (query ProgramacaoProducao.cod_produto = ""Código analisado"" and ProgramacaoProducao.data_programacao = ""D0"")"
+Estoque Final D0 + programação de produção D0;EST INICIAL - D+1;"""EST FINAL - D0"" + ""PROG PROD - D0"""
+Qtd prevista para expedição de D+1;SAIDA - D+1;
+Estoque final D0 + programação de produção D0 - Qtd prevista para expedição de D+1;EST FINAL - D+1;
+programação de produção D+1;PROG PROD - D+1;
+Estoque Final D+1 + programação de produção D+1;EST INICIAL - D+2;
+Qtd prevista para expedição de D+1;SAIDA - D+2;
+Estoque final D+1 + programação de produção D+1 - Qtd prevista para expedição de D+2;EST FINAL - D+2;

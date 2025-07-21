@@ -519,8 +519,11 @@ Para melhor experiência, configure a API do Claude Anthropic.
 # INSTÂNCIA GLOBAL E FUNÇÃO DE CONVENIÊNCIA
 # ============================================================================
 
+import threading
+
 # Instância global do ResponseProcessor
 _response_processor_instance = None
+_response_processor_lock = threading.Lock()
 
 def get_response_processor():
     """
@@ -532,7 +535,9 @@ def get_response_processor():
     global _response_processor_instance
     
     if _response_processor_instance is None:
-        _response_processor_instance = ResponseProcessor()
+        with _response_processor_lock:
+            if _response_processor_instance is None:
+                _response_processor_instance = ResponseProcessor()
         
     return _response_processor_instance
 

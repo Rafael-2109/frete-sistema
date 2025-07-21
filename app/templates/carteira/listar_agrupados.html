@@ -1210,11 +1210,11 @@ function recalcularValoresDropdown(input) {
     let pesoTotal = 0;
     let palletTotal = 0;
     
-    if (itemOriginal && itemOriginal.qtd_saldo_disponivel > 0) {
-        const pesoOriginal = parseFloat(itemOriginal.peso_calculado?.replace(/[kg\s]/g, '')?.replace(',', '.') || 0);
-        const palletOriginal = parseFloat(itemOriginal.pallet_calculado?.replace(/[pal\s]/g, '')?.replace(',', '.') || 0);
+    if (itemOriginal && itemOriginal.qtd_saldo_produto_pedido > 0) {
+        const pesoOriginal = parseFloat(itemOriginal.peso?.replace(/[kg\s]/g, '')?.replace(',', '.') || 0);
+        const palletOriginal = parseFloat(itemOriginal.pallet?.replace(/[pal\s]/g, '')?.replace(',', '.') || 0);
         
-        const proporcao = qtdNova / itemOriginal.qtd_saldo_disponivel;
+        const proporcao = qtdNova / itemOriginal.qtd_saldo_produto_pedido;
         pesoTotal = pesoOriginal * proporcao;
         palletTotal = palletOriginal * proporcao;
     }
@@ -1895,7 +1895,7 @@ function gerarHtmlItens(data) {
     
     data.itens.forEach(item => {
         const itemId = item.id;
-        const saldoDisponivel = item.qtd_saldo_disponivel || 0;
+        const saldoDisponivel = item.qtd_saldo_produto_pedido || 0;
         const disabled = saldoDisponivel <= 0 ? 'disabled' : '';
         const isPreSeparacao = item.tipo_item === 'pre_separacao';
         const rowClass = isPreSeparacao ? 'table-warning' : '';
@@ -1976,8 +1976,8 @@ function gerarHtmlItens(data) {
                     }
                 </td>
                 <td class="valor-calculado-dropdown">${item.valor_calculado || 'R$ 0,00'}</td>
-                <td class="peso-calculado-dropdown">${item.peso_calculado || '0 kg'}</td>
-                <td class="pallet-calculado-dropdown">${item.pallet_calculado || '0,0 pal'}</td>
+                <td class="peso-calculado-dropdown">${item.peso || '0 kg'}</td>
+                <td class="pallet-calculado-dropdown">${item.pallet || '0,0 pal'}</td>
                 <td class="menor-estoque-d7-dropdown">${item.menor_estoque_d7 || '-'}</td>
                                     <td class="estoque-d0-dropdown">${item.estoque_data_expedicao || '-'}</td>
                     <td class="producao-d0-dropdown">${item.producao_data_expedicao || '-'}</td>
@@ -2047,8 +2047,8 @@ function gerarHtmlItens(data) {
     
     data.itens.forEach(item => {
         const valor = parseFloat(item.valor_calculado?.replace(/[R$\s.]/g, '')?.replace(',', '.') || 0);
-        const peso = parseFloat(item.peso_calculado?.replace(/[kg\s]/g, '')?.replace(',', '.') || 0);
-        const pallet = parseFloat(item.pallet_calculado?.replace(/[pal\s]/g, '')?.replace(',', '.') || 0);
+        const peso = parseFloat(item.peso?.replace(/[kg\s]/g, '')?.replace(',', '.') || 0);
+        const pallet = parseFloat(item.pallet?.replace(/[pal\s]/g, '')?.replace(',', '.') || 0);
         
         valorTotal += valor;
         pesoTotal += peso;
@@ -4135,7 +4135,7 @@ function gerarTabelaItensEditaveis(data) {
     
     data.itens.forEach((item, index) => {
         const itemId = item.id;
-        const saldoDisponivel = item.qtd_saldo_disponivel || 0;
+        const saldoDisponivel = item.qtd_saldo_produto_pedido || 0;
         const disabled = saldoDisponivel <= 0 ? 'disabled' : '';
         
         html += `
@@ -4165,8 +4165,8 @@ function gerarTabelaItensEditaveis(data) {
                     <small class="text-muted">Máx: ${saldoDisponivel}</small>
                 </td>
                 <td class="valor-calculado">${item.valor_calculado || 'R$ 0,00'}</td>
-                <td class="peso-calculado">${item.peso_calculado || '0 kg'}</td>
-                <td class="pallet-calculado">${item.pallet_calculado || '0,0 pal'}</td>
+                <td class="peso-calculado">${item.peso || '0 kg'}</td>
+                <td class="pallet-calculado">${item.pallet || '0,0 pal'}</td>
                 <td class="menor-estoque-d7">${item.menor_estoque_d7 || '-'}</td>
                 <td class="estoque-data-expedicao">${item.estoque_data_expedicao || '-'}</td>
                 <td class="producao-data-expedicao">${item.producao_data_expedicao || '-'}</td>
@@ -4679,18 +4679,20 @@ async function unificarLinhaItem(itemId) {
  /**
   * Cria PreSeparacaoItem via API
   */
- async function criarPreSeparacaoItem(itemId, qtdUtilizada) {
+ async function criarPreSeparacaoItem(itemId, qtdUtilizada, numPedido) {
      try {
          console.log(`📝 Criando PreSeparacaoItem: Item ${itemId}, Qtd ${qtdUtilizada}`);
          
-         const response = await fetch(`/carteira/api/item/${itemId}/dividir-linha`, {
+         const response = await fetch(`/carteira/api/pedido/${numPedido}/criar-pre-separacao`, {
              method: 'POST',
              headers: {
                  'Content-Type': 'application/json',
                  'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
              },
              body: JSON.stringify({
-                 qtd_utilizada: qtdUtilizada
+                 item_id: itemId,
+                 qtd_pre_separacao: qtdUtilizada,
+                 tipo_envio: 'total'
              })
          });
          
@@ -5193,6 +5195,210 @@ async function criarNovaSeparacao() {
     } catch (error) {
         console.error('❌ Erro ao criar separação:', error);
         alert(`❌ **ERRO AO CRIAR SEPARAÇÃO**\n\nPedido: ${numPedidoSeparacoes}\nDetalhes: ${error.message}\n\n🔧 Verifique os dados e tente novamente.`);
+    }
+}
+
+/**
+ * FUNÇÃO PRINCIPAL: Criar pré-separação com dados editáveis
+ * Implementada para corrigir gap identificado na análise
+ */
+async function criarPreSeparacao(itemId, numPedido) {
+    try {
+        // Buscar dados do item da linha atual
+        const linha = document.querySelector(`tr[data-item-id="${itemId}"]`);
+        if (!linha) {
+            throw new Error('Item não encontrado na tabela');
+        }
+        
+        // Obter dados dos campos da linha
+        const qtdInput = linha.querySelector('.qtd-dropdown');
+        const dataExpedicaoInput = linha.querySelector('.data-expedicao-dropdown');
+        const agendamentoInput = linha.querySelector('.agendamento-dropdown');
+        const protocoloInput = linha.querySelector('.protocolo-dropdown');
+        
+        const qtdPreSeparacao = parseFloat(qtdInput?.value || 0);
+        const dataExpedicao = dataExpedicaoInput?.value;
+        const agendamento = agendamentoInput?.value;
+        const protocolo = protocoloInput?.value;
+        
+        // Validações básicas
+        if (qtdPreSeparacao <= 0) {
+            throw new Error('Quantidade deve ser maior que zero');
+        }
+        
+        if (!dataExpedicao) {
+            throw new Error('Data de expedição é obrigatória');
+        }
+        
+        // Confirmar com usuário
+        if (!confirm(`Criar pré-separação?\n\nQuantidade: ${qtdPreSeparacao}\nExpedição: ${dataExpedicao}\nAgendamento: ${agendamento || 'Não definido'}\nProtocolo: ${protocolo || 'Não definido'}`)) {
+            return;
+        }
+        
+        // Chamar API
+        const response = await fetch(`/carteira/api/pedido/${numPedido}/criar-pre-separacao`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                item_id: itemId,
+                qtd_pre_separacao: qtdPreSeparacao,
+                data_expedicao: dataExpedicao,
+                data_agendamento: agendamento,
+                protocolo: protocolo,
+                tipo_envio: 'total'
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`Pré-separação criada com sucesso! ID: ${result.pre_separacao_id}`, 'success');
+            
+            // Recarregar dados do pedido
+            if (window.recarregarItens) {
+                window.recarregarItens(numPedido);
+            }
+        } else {
+            throw new Error(result.error || 'Erro desconhecido');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro ao criar pré-separação:', error);
+        showNotification(`Erro ao criar pré-separação: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Editar pré-separação existente com modal
+ */
+function editarPreSeparacaoCompleta(preSeparacaoId) {
+    // Buscar dados atuais da pré-separação
+    fetch(`/carteira/api/pre-separacao/${preSeparacaoId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Criar modal com dados atuais para edição
+                const modalHtml = `
+                    <div class="modal fade" id="modalEditarPreSeparacao" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Editar Pré-Separação #${preSeparacaoId}</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <form id="formEditarPreSeparacao">
+                                        <div class="mb-3">
+                                            <label class="form-label">Quantidade</label>
+                                            <input type="number" class="form-control" name="quantidade" 
+                                                   value="${data.pre_separacao.qtd_selecionada_usuario}" step="0.001" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Data Expedição</label>
+                                            <input type="date" class="form-control" name="data_expedicao" 
+                                                   value="${data.pre_separacao.data_expedicao_editada || ''}">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Agendamento</label>
+                                            <input type="date" class="form-control" name="agendamento" 
+                                                   value="${data.pre_separacao.data_agendamento_editada || ''}">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Protocolo</label>
+                                            <input type="text" class="form-control" name="protocolo" 
+                                                   value="${data.pre_separacao.protocolo_editado || ''}">
+                                        </div>
+                                    </form>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="button" class="btn btn-primary" onclick="salvarEdicaoPreSeparacao(${preSeparacaoId})">Salvar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                
+                // Remover modal anterior se existir
+                const modalAntigo = document.getElementById('modalEditarPreSeparacao');
+                if (modalAntigo) {
+                    modalAntigo.remove();
+                }
+                
+                // Adicionar novo modal
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                
+                // Mostrar modal
+                const modal = new bootstrap.Modal(document.getElementById('modalEditarPreSeparacao'));
+                modal.show();
+            } else {
+                showNotification(`Erro ao buscar pré-separação: ${data.error}`, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Erro ao buscar pré-separação:', error);
+            showNotification('Erro ao carregar dados da pré-separação', 'error');
+        });
+}
+
+/**
+ * Salvar edições da pré-separação
+ */
+async function salvarEdicaoPreSeparacao(preSeparacaoId) {
+    try {
+        const form = document.getElementById('formEditarPreSeparacao');
+        const formData = new FormData(form);
+        
+        const dados = {
+            qtd_selecionada_usuario: parseFloat(formData.get('quantidade')),
+            data_expedicao_editada: formData.get('data_expedicao'),
+            data_agendamento_editada: formData.get('agendamento'),
+            protocolo_editado: formData.get('protocolo')
+        };
+        
+        // Validar campos obrigatórios
+        if (dados.qtd_selecionada_usuario <= 0) {
+            throw new Error('Quantidade deve ser maior que zero');
+        }
+        
+        // Salvar cada campo individualmente (usando API existente)
+        for (const [campo, valor] of Object.entries(dados)) {
+            if (valor !== null && valor !== '') {
+                const response = await fetch(`/carteira/api/pre-separacao/${preSeparacaoId}/editar`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    body: JSON.stringify({
+                        campo: campo,
+                        valor: valor
+                    })
+                });
+                
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(`Erro ao salvar ${campo}: ${result.error}`);
+                }
+            }
+        }
+        
+        // Fechar modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarPreSeparacao'));
+        modal.hide();
+        
+        showNotification('Pré-separação atualizada com sucesso!', 'success');
+        
+        // Recarregar página para mostrar alterações
+        if (window.recarregarItens) {
+            window.recarregarItens();
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro ao salvar pré-separação:', error);
+        showNotification(`Erro ao salvar: ${error.message}`, 'error');
     }
 }
 </script>

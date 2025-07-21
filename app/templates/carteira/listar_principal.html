@@ -224,14 +224,14 @@
                                 <br><small class="text-muted">{{ "{:,.0f}"|format(item.preco_produto_pedido) if item.preco_produto_pedido else '-' }}/un</small>
                             </td>
                             <td class="text-center">
-                                {% if item.peso_calculado or item.pallet_calculado %}
+                                {% if item.peso or item.pallet %}
                                 <span class="badge" style="background-color: #6c757d; color: white;">
-                                    {% if item.peso_calculado %}{{ "{:,.0f}"|format(item.peso_calculado) }}kg{% endif %}
+                                    {% if item.peso %}{{ "{:,.0f}"|format(item.peso) }}kg{% endif %}
                                 </span>
-                                {% if item.peso_calculado and item.pallet_calculado %}<br>{% endif %}
-                                {% if item.pallet_calculado %}
+                                {% if item.peso and item.pallet %}<br>{% endif %}
+                                {% if item.pallet %}
                                 <span class="badge" style="background-color: #6c757d; color: white;">
-                                    {{ "{:.1f}"|format(item.pallet_calculado) }}pl
+                                    {{ "{:.1f}"|format(item.pallet) }}pl
                                 </span>
                                 {% endif %}
                                 {% else %}

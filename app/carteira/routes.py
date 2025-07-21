@@ -2924,6 +2924,105 @@ def api_pedido_itens_editaveis(num_pedido):
 
 # 🗂️ ROTAS PARA GERENCIAR PRÉ-SEPARAÇÕES NO DROPDOWN
 
+@carteira_bp.route('/api/pedido/<num_pedido>/criar-pre-separacao', methods=['POST'])
+@login_required
+def api_criar_pre_separacao(num_pedido):
+    """
+    API CRÍTICA: Criar pré-separação a partir de item da carteira
+    Esta API estava sendo chamada pelo frontend mas não existia
+    """
+    try:
+        from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
+        
+        data = request.get_json()
+        
+        # Validar dados obrigatórios
+        item_id = data.get('item_id')
+        qtd_pre_separacao = float(data.get('qtd_pre_separacao', 0))
+        
+        if not item_id or qtd_pre_separacao <= 0:
+            return jsonify({
+                'success': False,
+                'error': 'Item ID e quantidade são obrigatórios'
+            }), 400
+        
+        # Buscar item da carteira
+        item_carteira = CarteiraPrincipal.query.filter_by(
+            id=item_id,
+            num_pedido=num_pedido
+        ).first()
+        
+        if not item_carteira:
+            return jsonify({
+                'success': False,
+                'error': 'Item não encontrado na carteira'
+            }), 404
+        
+        # Validar disponibilidade
+        if qtd_pre_separacao > item_carteira.qtd_saldo_produto_pedido:
+            return jsonify({
+                'success': False,
+                'error': f'Quantidade indisponível. Disponível: {item_carteira.qtd_saldo_produto_pedido}'
+            }), 400
+        
+        # Preparar dados editáveis
+        dados_editaveis = {
+            'expedicao': data.get('data_expedicao'),
+            'agendamento': data.get('data_agendamento'),
+            'protocolo': data.get('protocolo'),
+            'observacoes': data.get('observacoes')
+        }
+        
+        # Criar pré-separação usando método implementado
+        pre_separacao = PreSeparacaoItem.criar_e_salvar(
+            carteira_item=item_carteira,
+            qtd_selecionada=qtd_pre_separacao,
+            dados_editaveis=dados_editaveis,
+            usuario=current_user.nome,
+            tipo_envio=data.get('tipo_envio', 'total')
+        )
+        
+        # Ajustar carteira principal se necessário
+        if qtd_pre_separacao < item_carteira.qtd_saldo_produto_pedido:
+            # Criar nova linha com saldo restante
+            nova_linha = CarteiraPrincipal()
+            # Copiar dados do item original
+            for column in item_carteira.__table__.columns:
+                if column.name not in ['id']:
+                    setattr(nova_linha, column.name, getattr(item_carteira, column.name))
+            
+            # Ajustar quantidades
+            nova_linha.qtd_saldo_produto_pedido = item_carteira.qtd_saldo_produto_pedido - qtd_pre_separacao
+            item_carteira.qtd_saldo_produto_pedido = qtd_pre_separacao
+            
+            db.session.add(nova_linha)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'pre_separacao_id': pre_separacao.id,
+            'mensagem': 'Pré-separação criada com sucesso',
+            'qtd_criada': qtd_pre_separacao,
+            'saldo_restante': item_carteira.qtd_saldo_produto_pedido - qtd_pre_separacao
+        })
+        
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao criar pré-separação: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
 @carteira_bp.route('/api/pre-separacao/<int:pre_sep_id>/editar', methods=['POST'])
 @login_required
 def api_editar_pre_separacao(pre_sep_id):
