@@ -1376,8 +1376,8 @@ async function recalcularEstoquesBaseadoD0Dropdown(itemId, dataExpedicao, numPed
                 const producaoD0El = row.querySelector('.producao-d0-dropdown');
                 
                 if (menorEstoqueEl) menorEstoqueEl.textContent = data.menor_estoque_d7 || '-';
-                if (estoqueD0El) estoqueD0El.textContent = data.estoque_d0 || '-';
-                if (producaoD0El) producaoD0El.textContent = data.producao_d0 || '-';
+                            if (estoqueD0El) estoqueD0El.textContent = data.estoque_data_expedicao || '-';
+            if (producaoD0El) producaoD0El.textContent = data.producao_data_expedicao || '-';
             }
         }
     } catch (error) {
@@ -1882,8 +1882,9 @@ function gerarHtmlItens(data) {
                         <th>Peso</th>
                         <th>Pallet</th>
                         <th>Menor Estoque D7</th>
-                        <th>Estoque D0</th>
-                        <th>Produção D0</th>
+                        <th>Est. Expedição</th>
+                        <th>Prod. Expedição</th>
+                        <th>Próx. Disponível</th>
                         <th>Data Expedição</th>
                         <th>Agendamento</th>
                         <th>Protocolo</th>
@@ -1932,8 +1933,8 @@ function gerarHtmlItens(data) {
                 <td class="peso-calculado-dropdown">${item.peso_calculado || '0 kg'}</td>
                 <td class="pallet-calculado-dropdown">${item.pallet_calculado || '0,0 pal'}</td>
                 <td class="menor-estoque-d7-dropdown">${item.menor_estoque_d7 || '-'}</td>
-                <td class="estoque-d0-dropdown">${item.estoque_d0 || '-'}</td>
-                <td class="producao-d0-dropdown">${item.producao_d0 || '-'}</td>
+                                    <td class="estoque-d0-dropdown">${item.estoque_data_expedicao || '-'}</td>
+                    <td class="producao-d0-dropdown">${item.producao_data_expedicao || '-'}</td>
                 <td>
                     <input type="date" 
                            class="form-control form-control-sm data-expedicao-dropdown" 
@@ -2529,10 +2530,10 @@ function gerarTabelaEstoqueReal(itens) {
         let status = 'NORMAL';
         let statusClass = 'info';
         
-        if (item.estoque_d0 <= 0) {
+        if (item.estoque_data_expedicao <= 0) {
             status = 'CRÍTICO - SEM ESTOQUE';
             statusClass = 'danger';
-        } else if (item.estoque_d0 < item.qtd_pedido) {
+        } else if (item.estoque_data_expedicao < item.qtd_pedido) {
             status = 'INSUFICIENTE';
             statusClass = 'warning';
         } else if (item.estoque_d7 <= 0) {
@@ -2545,7 +2546,7 @@ function gerarTabelaEstoqueReal(itens) {
         
         // Calcular percentual de disponibilidade
         const disponibilidade = item.qtd_pedido > 0 ? 
-            Math.round((Math.min(item.estoque_d0, item.qtd_pedido) / item.qtd_pedido) * 100) : 0;
+            Math.round((Math.min(item.estoque_data_expedicao, item.qtd_pedido) / item.qtd_pedido) * 100) : 0;
         
         html += `
             <tr class="${statusClass === 'danger' ? 'table-danger' : statusClass === 'warning' ? 'table-warning' : ''}">
@@ -2553,8 +2554,8 @@ function gerarTabelaEstoqueReal(itens) {
                 <td><small>${item.nome_produto || '-'}</small></td>
                 <td><strong>${item.qtd_pedido.toLocaleString('pt-BR')}</strong></td>
                 <td>
-                    <strong class="${item.estoque_d0 <= 0 ? 'text-danger' : item.estoque_d0 < item.qtd_pedido ? 'text-warning' : 'text-success'}">
-                        ${item.estoque_d0.toLocaleString('pt-BR')}
+                    <strong class="${item.estoque_data_expedicao <= 0 ? 'text-danger' : item.estoque_data_expedicao < item.qtd_pedido ? 'text-warning' : 'text-success'}">
+                        ${item.estoque_data_expedicao.toLocaleString('pt-BR')}
                     </strong>
                 </td>
                 <td>
@@ -2573,7 +2574,7 @@ function gerarTabelaEstoqueReal(itens) {
                         <button class="btn btn-sm btn-outline-primary" onclick="verDetalhesEstoque('${item.cod_produto}')" title="Ver projeção completa">
                             <i class="fas fa-chart-line"></i>
                         </button>
-                        ${item.estoque_d0 < item.qtd_pedido ? `
+                        ${item.estoque_data_expedicao < item.qtd_pedido ? `
                         <button class="btn btn-sm btn-outline-warning" onclick="sugerirAlternativa('${item.cod_produto}')" title="Sugerir alternativa">
                             <i class="fas fa-lightbulb"></i>
                         </button>
@@ -2999,7 +3000,7 @@ function gerarHtmlEstoqueProdutos(data) {
                 <td><small>${produto.nome_produto}</small></td>
                 <td><strong>${produto.qtd_pedido.toFixed(3)}</strong></td>
                 <td>
-                    <strong>${produto.estoque_d0.toFixed(3)}</strong>
+                    <strong>${produto.estoque_data_expedicao.toFixed(3)}</strong>
                     ${produto.dia_ruptura === 0 ? '<br><small class="text-danger">Ruptura hoje!</small>' : ''}
                 </td>
                 <td>
@@ -3775,8 +3776,14 @@ function gerarTabelaItensEditaveis(data) {
                 <td class="peso-calculado">${item.peso_calculado || '0 kg'}</td>
                 <td class="pallet-calculado">${item.pallet_calculado || '0,0 pal'}</td>
                 <td class="menor-estoque-d7">${item.menor_estoque_d7 || '-'}</td>
-                <td class="estoque-d0">${item.estoque_d0 || '-'}</td>
-                <td class="producao-d0">${item.producao_d0 || '-'}</td>
+                <td class="estoque-data-expedicao">${item.estoque_data_expedicao || '-'}</td>
+                <td class="producao-data-expedicao">${item.producao_data_expedicao || '-'}</td>
+                <td class="proxima-data-estoque">
+                    ${item.proxima_data_com_estoque ? 
+                        `<small class="text-info"><i class="fas fa-calendar-alt"></i> ${item.proxima_data_com_estoque}</small>` : 
+                        '<small class="text-muted">-</small>'
+                    }
+                </td>
                 <td>
                     <input type="date" 
                            class="form-control form-control-sm data-expedicao" 
@@ -3945,8 +3952,16 @@ async function recalcularEstoquesBaseadoD0(itemId, dataExpedicao) {
             // Atualizar colunas de estoque na linha
             const row = document.getElementById(`row-editavel-${itemId}`);
             row.querySelector('.menor-estoque-d7').textContent = data.menor_estoque_d7 || '-';
-            row.querySelector('.estoque-d0').textContent = data.estoque_d0 || '-';
-            row.querySelector('.producao-d0').textContent = data.producao_d0 || '-';
+            row.querySelector('.estoque-data-expedicao').textContent = data.estoque_data_expedicao || '-';
+            row.querySelector('.producao-data-expedicao').textContent = data.producao_data_expedicao || '-';
+            
+            // Atualizar próxima data disponível
+            const proximaDataEl = row.querySelector('.proxima-data-estoque');
+            if (proximaDataEl && data.proxima_data_com_estoque) {
+                proximaDataEl.innerHTML = `<small class="text-info"><i class="fas fa-calendar-alt"></i> ${data.proxima_data_com_estoque}</small>`;
+            } else if (proximaDataEl) {
+                proximaDataEl.innerHTML = '<small class="text-muted">-</small>';
+            }
         }
     } catch (error) {
         console.error('Erro ao recalcular estoques:', error);

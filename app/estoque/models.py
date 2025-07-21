@@ -201,7 +201,7 @@ class SaldoEstoque:
     Não é uma tabela persistente, mas sim um calculador que integra dados de:
     - MovimentacaoEstoque (módulo já existente)
     - ProgramacaoProducao (módulo já existente) 
-    - CarteiraPedidos (futuro - arquivo 1)
+    - CarteiraPrincipal (módulo implementado) - saída prevista dos pedidos
     - UnificacaoCodigos (módulo recém implementado)
     """
     
@@ -284,47 +284,19 @@ class SaldoEstoque:
             logger.error(f"Erro ao calcular produção para {cod_produto}: {str(e)}")
             return 0
     
-    @staticmethod
-    def calcular_saida_periodo(cod_produto, data_inicio, data_fim):
-        """
-        Calcula saída prevista para um produto em um período usando CarteiraPrincipal
-        Implementação: Fase 1.2 - Integração com Carteira conforme CARTEIRA.csv
-        """
-        try:
-            from app.carteira.models import CarteiraPrincipal
-            
-            # Buscar todos os códigos relacionados (considerando unificação)
-            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
-            
-            total_saida = 0
-            for codigo in codigos_relacionados:
-                # Buscar itens na carteira que ainda não foram para separação
-                # separacao_lote_id.is_(None) = ainda não separado = saída prevista
-                itens_carteira = CarteiraPrincipal.query.filter(
-                    CarteiraPrincipal.cod_produto == str(codigo),
-                    CarteiraPrincipal.data_entrega_pedido.between(data_inicio, data_fim),
-                    CarteiraPrincipal.separacao_lote_id.is_(None),  # Ainda não separado
-                    CarteiraPrincipal.ativo == True
-                ).all()
-                
-                # Somar quantidade de saída prevista
-                for item in itens_carteira:
-                    if item.qtd_saldo_produto_pedido:
-                        total_saida += float(item.qtd_saldo_produto_pedido)
-            
-            logger.info(f"Saída período calculada - Produto: {cod_produto}, "
-                       f"Período: {data_inicio} a {data_fim}, Saída: {total_saida}")
-            
-            return total_saida
-            
-        except Exception as e:
-            logger.error(f"Erro ao calcular saída período para {cod_produto}: {str(e)}")
-            # Fallback para não quebrar sistema existente
-            return 0
+
     
     @staticmethod
     def calcular_projecao_completa(cod_produto):
-        """Calcula projeção completa de estoque para 29 dias (D0 até D+28)"""
+        """
+        Calcula projeção completa de estoque para 29 dias (D0 até D+28)
+        IMPLEMENTA LÓGICA JUST-IN-TIME CORRETA:
+        - EST INICIAL D0 = estoque atual
+        - SAÍDA D0 = Separacao + CarteiraPrincipal + PreSeparacaoItem (expedição D0)
+        - EST FINAL D0 = EST INICIAL D0 - SAÍDA D0
+        - PROD D0 = ProgramacaoProducao (data_programacao D0)
+        - EST INICIAL D+1 = EST FINAL D0 + PROD D0 (Just-in-Time!)
+        """
         try:
             projecao = []
             data_hoje = datetime.now().date()
@@ -335,21 +307,25 @@ class SaldoEstoque:
             # Calcular para cada dia (D0 até D+28)
             for dia in range(29):
                 data_calculo = data_hoje + timedelta(days=dia)
-                data_fim_dia = data_calculo
                 
-                # Saída prevista para o dia (futuro - carteira de pedidos)
-                saida_dia = SaldoEstoque.calcular_saida_periodo(cod_produto, data_calculo, data_fim_dia)
+                # 📤 SAÍDAS do dia (todas as fontes com expedição = data_calculo)
+                saida_dia = SaldoEstoque._calcular_saidas_completas(cod_produto, data_calculo)
                 
-                # Produção programada para o dia
-                producao_dia = SaldoEstoque.calcular_producao_periodo(cod_produto, data_calculo, data_fim_dia)
+                # 🏭 PRODUÇÃO programada para o dia (fica disponível AMANHÃ - Just-in-Time)
+                producao_dia = SaldoEstoque.calcular_producao_periodo(cod_produto, data_calculo, data_calculo)
                 
-                # Cálculo do estoque final do dia
+                # 📊 LÓGICA SEQUENCIAL CORRETA
                 if dia == 0:
+                    # D0: Estoque atual
                     estoque_inicial_dia = estoque_atual
                 else:
-                    estoque_inicial_dia = projecao[dia-1]['estoque_final']
+                    # D+1: EST FINAL D0 + PROD D0 (Just-in-Time!)
+                    estoque_final_anterior = projecao[dia-1]['estoque_final']
+                    producao_anterior = projecao[dia-1]['producao_programada']
+                    estoque_inicial_dia = estoque_final_anterior + producao_anterior
                 
-                estoque_final_dia = estoque_inicial_dia - saida_dia + producao_dia
+                # EST FINAL = EST INICIAL - SAÍDA (produção NÃO entra no mesmo dia)
+                estoque_final_dia = estoque_inicial_dia - saida_dia
                 
                 # Dados do dia
                 dia_dados = {
@@ -358,7 +334,7 @@ class SaldoEstoque:
                     'data_formatada': data_calculo.strftime('%d/%m'),
                     'estoque_inicial': estoque_inicial_dia,
                     'saida_prevista': saida_dia,
-                    'producao_programada': producao_dia,
+                    'producao_programada': producao_dia,  # Fica disponível amanhã
                     'estoque_final': estoque_final_dia
                 }
                 
@@ -400,8 +376,8 @@ class SaldoEstoque:
             estoque_inicial = projecao[0]['estoque_inicial']
             previsao_ruptura = SaldoEstoque.calcular_previsao_ruptura(projecao)
             
-            # Totais carteira (futuro)
-            qtd_total_carteira = 0  # TODO: Implementar com arquivo 1
+            # 📊 TOTAIS CARTEIRA (implementado com CarteiraPrincipal)
+            qtd_total_carteira = SaldoEstoque._calcular_qtd_total_carteira(cod_produto)
             
             resumo = {
                 'cod_produto': cod_produto,
@@ -419,6 +395,102 @@ class SaldoEstoque:
             logger.error(f"Erro ao obter resumo do produto {cod_produto}: {str(e)}")
             return None
     
+    @staticmethod
+    def _calcular_saidas_completas(cod_produto, data_expedicao):
+        """
+        Calcula TODAS as saídas previstas para uma data específica
+        IMPLEMENTA: SAÍDA = Separacao + CarteiraPrincipal + PreSeparacaoItem (expedição = data)
+        """
+        try:
+            # Buscar todos os códigos relacionados (considerando unificação)
+            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            
+            total_saida = 0
+            
+            for codigo in codigos_relacionados:
+                # 📦 1. SEPARAÇÕES já efetivadas (app.separacao.models)
+                try:
+                    from app.separacao.models import Separacao
+                    separacoes = Separacao.query.filter(
+                        Separacao.cod_produto == str(codigo),
+                        Separacao.expedicao == data_expedicao,  # Data de expedição correta
+                        Separacao.ativo == True
+                    ).all()
+                    
+                    for sep in separacoes:
+                        if sep.qtd_saldo and sep.qtd_saldo > 0:
+                            total_saida += float(sep.qtd_saldo)
+                except Exception as e:
+                    logger.debug(f"Separacao não encontrada ou erro: {e}")
+                
+                # 🎯 2. CARTEIRA PRINCIPAL (pré-separação)
+                try:
+                    from app.carteira.models import CarteiraPrincipal
+                    itens_carteira = CarteiraPrincipal.query.filter(
+                        CarteiraPrincipal.cod_produto == str(codigo),
+                        CarteiraPrincipal.expedicao == data_expedicao,  # Campo correto
+                        CarteiraPrincipal.separacao_lote_id.is_(None),  # Ainda não separado
+                        CarteiraPrincipal.ativo == True
+                    ).all()
+                    
+                    for item in itens_carteira:
+                        if item.qtd_saldo_produto_pedido and item.qtd_saldo_produto_pedido > 0:
+                            total_saida += float(item.qtd_saldo_produto_pedido)
+                except Exception as e:
+                    logger.debug(f"CarteiraPrincipal não encontrada ou erro: {e}")
+                
+                # ⚡ 3. PRÉ-SEPARAÇÃO ITENS
+                try:
+                    from app.carteira.models import PreSeparacaoItem
+                    pre_separacoes = PreSeparacaoItem.query.filter(
+                        PreSeparacaoItem.cod_produto == str(codigo),
+                        PreSeparacaoItem.data_expedicao_editada == data_expedicao,  # Campo da data
+                        PreSeparacaoItem.ativo == True
+                    ).all()
+                    
+                    for pre_sep in pre_separacoes:
+                        if pre_sep.qtd_selecionada_usuario and pre_sep.qtd_selecionada_usuario > 0:
+                            total_saida += float(pre_sep.qtd_selecionada_usuario)
+                except Exception as e:
+                    logger.debug(f"PreSeparacaoItem não encontrada ou erro: {e}")
+            
+            return total_saida
+            
+        except Exception as e:
+            logger.error(f"Erro ao calcular saídas completas para {cod_produto} em {data_expedicao}: {str(e)}")
+            return 0
+
+    @staticmethod
+    def _calcular_qtd_total_carteira(cod_produto):
+        """
+        Calcula quantidade total em carteira para um produto específico
+        Soma todos os itens pendentes de separação na CarteiraPrincipal
+        """
+        try:
+            from app.carteira.models import CarteiraPrincipal
+            
+            # Buscar todos os códigos relacionados (considerando unificação)
+            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            
+            total_carteira = 0
+            for codigo in codigos_relacionados:
+                # Somar itens ainda não separados (sem separacao_lote_id)
+                itens_carteira = CarteiraPrincipal.query.filter(
+                    CarteiraPrincipal.cod_produto == str(codigo),
+                    CarteiraPrincipal.separacao_lote_id.is_(None),  # Ainda não separado
+                    CarteiraPrincipal.ativo == True
+                ).all()
+                
+                for item in itens_carteira:
+                    if item.qtd_saldo_produto_pedido:
+                        total_carteira += float(item.qtd_saldo_produto_pedido)
+            
+            return total_carteira
+            
+        except Exception as e:
+            logger.error(f"Erro ao calcular qtd total carteira para {cod_produto}: {str(e)}")
+            return 0
+
     @staticmethod
     def processar_ajuste_estoque(cod_produto, qtd_ajuste, motivo, usuario):
         """Processa ajuste de estoque gerando movimentação automática"""

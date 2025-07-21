@@ -34,6 +34,53 @@ def _buscar_rota_por_uf(cod_uf):
     except Exception:
         return None
 
+def _calcular_estoque_data_especifica(projecao_29_dias, data_target):
+    """
+    Calcula estoque para uma data específica baseado na projeção
+    """
+    try:
+        data_hoje = datetime.now().date()
+        diff_dias = (data_target - data_hoje).days
+        
+        # Se data é passado ou muito futuro, usar fallbacks
+        if diff_dias < 0:
+            return 0  # Data no passado = sem estoque
+        if diff_dias >= len(projecao_29_dias):
+            return 0  # Além da projeção = sem estoque
+        
+        # Buscar estoque final do dia específico na projeção
+        dia_especifico = projecao_29_dias[diff_dias]
+        return dia_especifico.get('estoque_final', 0)
+        
+    except Exception as e:
+        logger.warning(f"Erro ao calcular estoque para data {data_target}: {e}")
+        return 0
+
+def _encontrar_proxima_data_com_estoque(projecao_29_dias, qtd_necessaria):
+    """
+    Encontra a próxima data com estoque suficiente para atender a quantidade
+    """
+    try:
+        data_hoje = datetime.now().date()
+        qtd_necessaria = float(qtd_necessaria or 0)
+        
+        if qtd_necessaria <= 0:
+            return data_hoje  # Se não precisa de nada, qualquer data serve
+        
+        # Procurar primeiro dia com estoque suficiente
+        for i, dia in enumerate(projecao_29_dias):
+            estoque_final = dia.get('estoque_final', 0)
+            if estoque_final >= qtd_necessaria:
+                data_disponivel = data_hoje + timedelta(days=i)
+                return data_disponivel.strftime('%d/%m/%Y')
+        
+        # Se não encontrou em 29 dias, retornar informação
+        return "Sem estoque em 29 dias"
+        
+    except Exception as e:
+        logger.warning(f"Erro ao encontrar próxima data com estoque: {e}")
+        return None
+
 # Função auxiliar para buscar sub-rota baseada no cod_uf + nome_cidade
 def _buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade):
     """Busca sub-rota baseada no cod_uf + nome_cidade"""
@@ -944,7 +991,7 @@ def api_separacoes_pedido(num_pedido):
             
             # Dados da transportadora
             Transportadora.razao_social.label('transportadora_razao'),
-            Transportadora.nome_fantasia.label('transportadora_fantasia'),
+            Transportadora.razao_social.label('transportadora_fantasia'),  # CORRIGIDO: usar razao_social ao invés de nome_fantasia
             
             # Dados do pedido
             Pedido.valor_saldo_total.label('pedido_valor_total'),
@@ -2556,29 +2603,42 @@ def api_pedido_itens_editaveis(num_pedido):
                 producao_d0 = '-'
                 
                 try:
-                    # Data de expedição padrão (hoje + 1 dia se não houver)
+                    # Data de expedição específica (ou hoje+1 se não definida)
                     data_expedicao = item.expedicao or (datetime.now().date() + timedelta(days=1))
                     
-                    # Usar SaldoEstoque para calcular
-                    saldo_estoque = SaldoEstoque()
-                    estoque_d0_calc = saldo_estoque.calcular_estoque_data(item.cod_produto, data_expedicao)
-                    if estoque_d0_calc is not None:
-                        estoque_d0 = f"{int(estoque_d0_calc)}" if estoque_d0_calc >= 0 else "RUPTURA"
+                    # SISTEMA DINÂMICO: Estoque e produção baseados na data de expedição
+                    resumo_estoque = SaldoEstoque.obter_resumo_produto(item.cod_produto, item.nome_produto)
                     
-                    # Calcular menor estoque nos próximos 7 dias
-                    menor_estoque = None
-                    for i in range(8):  # 0 a 7 dias
-                        data_check = data_expedicao + timedelta(days=i)
-                        estoque_check = saldo_estoque.calcular_estoque_data(item.cod_produto, data_check)
-                        if estoque_check is not None:
-                            if menor_estoque is None or estoque_check < menor_estoque:
-                                menor_estoque = estoque_check
-                    
-                    if menor_estoque is not None:
-                        menor_estoque_d7 = f"{int(menor_estoque)}" if menor_estoque >= 0 else "RUPTURA"
-                    
-                    # Calcular produção D0 (placeholder - implementar conforme lógica de produção)
-                    producao_d0 = "0"  # TODO: Implementar cálculo de produção
+                    if resumo_estoque and resumo_estoque['projecao_29_dias']:
+                        # 📅 ESTOQUE DA DATA DE EXPEDIÇÃO (não D0)
+                        estoque_expedicao = _calcular_estoque_data_especifica(
+                            resumo_estoque['projecao_29_dias'], data_expedicao
+                        )
+                        estoque_d0 = f"{int(estoque_expedicao)}" if estoque_expedicao >= 0 else "RUPTURA"
+                        
+                        # 🏭 PRODUÇÃO DA DATA DE EXPEDIÇÃO (não D0)
+                        producao_expedicao = SaldoEstoque.calcular_producao_periodo(
+                            item.cod_produto, data_expedicao, data_expedicao
+                        )
+                        producao_d0 = f"{int(producao_expedicao)}" if producao_expedicao > 0 else "0"
+                        
+                        # 📊 MENOR ESTOQUE D7 (mantém D0 até D7)
+                        menor_estoque_calc = resumo_estoque['previsao_ruptura']
+                        menor_estoque_d7 = f"{int(menor_estoque_calc)}" if menor_estoque_calc >= 0 else "RUPTURA"
+                        
+                        # 🎯 PRÓXIMA DATA COM ESTOQUE (sugestão inteligente)
+                        proxima_data_disponivel = _encontrar_proxima_data_com_estoque(
+                            resumo_estoque['projecao_29_dias'], item.qtd_saldo_produto_pedido or 0
+                        )
+                    else:
+                        # Fallback se não conseguir calcular projeção
+                        estoque_inicial = SaldoEstoque.calcular_estoque_inicial(item.cod_produto)
+                        estoque_d0 = f"{int(estoque_inicial)}" if estoque_inicial >= 0 else "RUPTURA"
+                        producao_d0 = "0"
+                        menor_estoque_d7 = estoque_d0
+                        proxima_data_disponivel = None
+
+
                     
                 except Exception as e:
                     logger.warning(f"Erro ao calcular estoques para {item.cod_produto}: {e}")
@@ -2597,8 +2657,9 @@ def api_pedido_itens_editaveis(num_pedido):
                     'peso_calculado': f"{peso_calculado:,.1f} kg".replace(',', 'X').replace('.', ',').replace('X', '.'),
                     'pallet_calculado': f"{pallet_calculado:,.1f} pal".replace(',', 'X').replace('.', ',').replace('X', '.'),
                     'menor_estoque_d7': menor_estoque_d7,
-                    'estoque_d0': estoque_d0,
-                    'producao_d0': producao_d0,
+                    'estoque_data_expedicao': estoque_d0,  # CORRIGIDO: nome mais claro
+                    'producao_data_expedicao': producao_d0,  # CORRIGIDO: nome mais claro
+                    'proxima_data_com_estoque': proxima_data_disponivel,  # NOVO: sugestão inteligente
                     'expedicao': item.expedicao.strftime('%Y-%m-%d') if item.expedicao else '',
                     'agendamento': item.agendamento.strftime('%Y-%m-%d') if item.agendamento else '',
                     'protocolo': item.protocolo or ''
@@ -2658,34 +2719,50 @@ def api_recalcular_estoques_item(item_id):
                 'error': f'Item {item_id} não encontrado'
             }), 404
         
-        # Recalcular estoques usando SaldoEstoque
+        # Recalcular estoques usando data de expedição dinâmica
         try:
-            saldo_estoque = SaldoEstoque()
+            # Data de expedição específica do item (ou hoje+1 se não definida)
+            data_expedicao = item.expedicao or (datetime.now().date() + timedelta(days=1))
             
-            # Estoque D0 (na data de expedição)
-            estoque_d0_calc = saldo_estoque.calcular_estoque_data(item.cod_produto, data_d0)
-            estoque_d0 = f"{int(estoque_d0_calc)}" if estoque_d0_calc is not None and estoque_d0_calc >= 0 else "RUPTURA"
+            # SISTEMA DINÂMICO: Usar projeção completa para data específica
+            resumo_estoque = SaldoEstoque.obter_resumo_produto(item.cod_produto, item.nome_produto)
             
-            # Menor estoque nos próximos 7 dias
-            menor_estoque = None
-            for i in range(8):  # 0 a 7 dias
-                data_check = data_d0 + timedelta(days=i)
-                estoque_check = saldo_estoque.calcular_estoque_data(item.cod_produto, data_check)
-                if estoque_check is not None:
-                    if menor_estoque is None or estoque_check < menor_estoque:
-                        menor_estoque = estoque_check
-            
-            menor_estoque_d7 = f"{int(menor_estoque)}" if menor_estoque is not None and menor_estoque >= 0 else "RUPTURA"
-            
-            # Produção D0 (placeholder - implementar conforme lógica de produção)
-            producao_d0 = "0"  # TODO: Implementar cálculo de produção baseado na data
+            if resumo_estoque and resumo_estoque['projecao_29_dias']:
+                # 📅 ESTOQUE DA DATA DE EXPEDIÇÃO (dinâmico)
+                estoque_expedicao = _calcular_estoque_data_especifica(
+                    resumo_estoque['projecao_29_dias'], data_expedicao
+                )
+                estoque_d0 = f"{int(estoque_expedicao)}" if estoque_expedicao >= 0 else "RUPTURA"
+                
+                # 🏭 PRODUÇÃO DA DATA DE EXPEDIÇÃO (dinâmico)
+                producao_expedicao = SaldoEstoque.calcular_producao_periodo(
+                    item.cod_produto, data_expedicao, data_expedicao
+                )
+                producao_d0 = f"{int(producao_expedicao)}" if producao_expedicao > 0 else "0"
+                
+                # 📊 MENOR ESTOQUE D7 (mantém D0 até D7)
+                menor_estoque_calc = resumo_estoque['previsao_ruptura']
+                menor_estoque_d7 = f"{int(menor_estoque_calc)}" if menor_estoque_calc >= 0 else "RUPTURA"
+                
+                # 🎯 PRÓXIMA DATA COM ESTOQUE (sugestão inteligente)
+                proxima_data_disponivel = _encontrar_proxima_data_com_estoque(
+                    resumo_estoque['projecao_29_dias'], item.qtd_saldo_produto_pedido or 0
+                )
+            else:
+                # Fallback simples se projeção não disponível
+                estoque_inicial = SaldoEstoque.calcular_estoque_inicial(item.cod_produto)
+                estoque_d0 = f"{int(estoque_inicial)}" if estoque_inicial >= 0 else "RUPTURA"
+                menor_estoque_d7 = estoque_d0
+                producao_d0 = "0"
+                proxima_data_disponivel = None
             
             return jsonify({
                 'success': True,
-                'estoque_d0': estoque_d0,
+                'estoque_data_expedicao': estoque_d0,  # CORRIGIDO: nome mais claro
                 'menor_estoque_d7': menor_estoque_d7,
-                'producao_d0': producao_d0,
-                'data_d0': data_d0_str
+                'producao_data_expedicao': producao_d0,  # CORRIGIDO: nome mais claro
+                'proxima_data_com_estoque': proxima_data_disponivel,  # NOVO: sugestão inteligente
+                'data_expedicao': data_d0_str
             })
             
         except Exception as e:
