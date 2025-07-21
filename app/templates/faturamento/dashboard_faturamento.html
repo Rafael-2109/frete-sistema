@@ -12,7 +12,7 @@
                 <i class="fas fa-file-invoice-dollar text-primary me-2"></i>
                 Dashboard de Faturamento
             </h1>
-            <p class="text-muted">Central de controle do faturamento integrado com Odoo</p>
+            <p class="text-muted">Central de controle do faturamento integrado</p>
         </div>
         <div>
             <span class="badge bg-primary">
@@ -119,14 +119,11 @@
                 <div class="card-body">
                     <div class="row">
                         <div class="col-12 mb-3">
-                            <form method="POST" action="{{ url_for('odoo.faturamento_odoo.sincronizar_faturamento') }}">
-                                <input type="hidden" name="usar_filtro_venda_bonificacao" value="on">
-                                <button type="submit" class="btn btn-primary btn-lg w-100">
-                                    <i class="fas fa-sync-alt me-2"></i>
-                                    Sincronizar com Odoo
-                                </button>
-                            </form>
-                            <small class="text-muted">Importa automaticamente faturamentos (apenas Venda/Bonificação)</small>
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Sincronização Integrada</strong><br>
+                                <small>A sincronização com o sistema ERP agora está integrada diretamente nas páginas de Carteira & Estoque.</small>
+                            </div>
                         </div>
                         <div class="col-12">
                             <a href="{{ url_for('faturamento.listar_relatorios') }}" class="btn btn-outline-info w-100">
@@ -199,34 +196,38 @@
             </div>
         </div>
 
+        <!-- Sincronização Segura -->
+        <div class="col-lg-3 mb-4">
+        </div>
+        
         <!-- Processamento e Justificativas -->
-        <div class="col-lg-6 mb-4">
+        <div class="col-lg-3 mb-4">
             <div class="card shadow">
                 <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-info">
                         <i class="fas fa-cogs me-2"></i>
-                        Processamento e Justificativas
+                        Processamento
                     </h6>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-12 mb-3">
-                            <button type="button" class="btn btn-info btn-lg w-100" onclick="processarPendencias()">
+                            <button type="button" class="btn btn-info btn-sm w-100" onclick="processarPendencias()">
                                 <i class="fas fa-play-circle me-2"></i>
                                 Processar Pendências
                             </button>
-                            <small class="text-muted">Executar processamento automático de NFs</small>
+                            <small class="text-muted d-block mt-1">Executar processamento automático de NFs</small>
                         </div>
                         <div class="col-12 mb-3">
-                            <a href="{{ url_for('faturamento.justificativas_parciais') }}" class="btn btn-outline-info w-100">
+                            <a href="{{ url_for('faturamento.justificativas_parciais') }}" class="btn btn-outline-info btn-sm w-100">
                                 <i class="fas fa-edit me-2"></i>
-                                Justificativas Parciais
+                                Justificativas
                             </a>
                         </div>
                         <div class="col-12">
-                            <a href="{{ url_for('faturamento.status_processamento') }}" class="btn btn-outline-secondary w-100">
+                            <a href="{{ url_for('faturamento.status_processamento') }}" class="btn btn-outline-secondary btn-sm w-100">
                                 <i class="fas fa-chart-line me-2"></i>
-                                Status do Processamento
+                                Status
                             </a>
                         </div>
                     </div>

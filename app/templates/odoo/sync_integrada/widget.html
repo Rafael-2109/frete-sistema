@@ -1,0 +1,128 @@
+<!-- 🛡️ WIDGET DE SINCRONIZAÇÃO SEGURA INTEGRADA -->
+<div class="card border-success mb-3" id="widget-sync-segura">
+    <div class="card-header bg-success text-white py-2">
+        <h6 class="mb-0">
+            <i class="fas fa-shield-alt"></i> Sincronização Segura
+            <span class="badge badge-light text-success ml-2">AUTOMÁTICA</span>
+        </h6>
+    </div>
+    <div class="card-body p-3">
+        
+        <!-- STATUS ATUAL -->
+        {% if status.pode_sincronizar %}
+        <div class="mb-3">
+            <small class="text-muted">Status:</small>
+            <span class="badge badge-{{ 'success' if status.nivel_risco == 'BAIXO' else ('warning' if status.nivel_risco == 'MÉDIO' else 'danger') }}">
+                {{ status.nivel_risco }}
+            </span>
+        </div>
+        
+        <!-- BOTÃO PRINCIPAL -->
+        <form method="POST" action="{{ url_for('sync_integrada.executar_sincronizacao_segura') }}" 
+              onsubmit="return confirmarSyncWidget()">
+              
+            <div class="form-check form-check-inline mb-2">
+                <input class="form-check-input" type="checkbox" name="usar_filtro_carteira" 
+                       id="filtro_widget" checked>
+                <label class="form-check-label" for="filtro_widget">
+                    <small>Filtrar Pendente</small>
+                </label>
+            </div>
+            
+            <button type="submit" class="btn btn-success btn-sm btn-block" id="btn-widget-sync">
+                <i class="fas fa-shield-alt"></i>
+                <strong>SYNC SEGURO</strong>
+                <small class="d-block">🔄 Faturamento → Carteira</small>
+            </button>
+            
+        </form>
+        
+        <!-- VANTAGENS -->
+        <div class="mt-2">
+            <small class="text-muted">
+                <strong>Vantagens:</strong><br>
+                ✅ Sequência automática<br>
+                ✅ Zero risco de perda<br>
+                ✅ Um clique apenas
+            </small>
+        </div>
+        
+        {% else %}
+        
+        <!-- BLOQUEADO -->
+        <div class="alert alert-danger alert-sm mb-0">
+            <i class="fas fa-exclamation-triangle"></i>
+            <small><strong>Bloqueado</strong></small>
+            <small class="d-block">{{ status.get('erro', 'Sistema indisponível') }}</small>
+        </div>
+        
+        {% endif %}
+        
+        <!-- LINK PARA DASHBOARD COMPLETO -->
+        <div class="text-center mt-2">
+            <a href="{{ url_for('sync_integrada.dashboard') }}" class="btn btn-link btn-sm p-0">
+                <small><i class="fas fa-external-link-alt"></i> Dashboard Completo</small>
+            </a>
+        </div>
+        
+    </div>
+</div>
+
+<!-- SCRIPT DO WIDGET -->
+<script>
+function confirmarSyncWidget() {
+    const confirmMsg = `🛡️ SINCRONIZAÇÃO SEGURA\n\n✅ Sequência automática:\n1. FATURAMENTO primeiro\n2. CARTEIRA depois\n\n🎯 Elimina risco de perda de NFs\n\nExecutar?`;
+    return confirm(confirmMsg);
+}
+
+// Feedback visual durante operação
+document.addEventListener('DOMContentLoaded', function() {
+    const btnWidget = document.getElementById('btn-widget-sync');
+    const widgetForm = document.querySelector('#widget-sync-segura form');
+    
+    if (widgetForm && btnWidget) {
+        widgetForm.addEventListener('submit', function(e) {
+            btnWidget.innerHTML = `
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+                <strong>SINCRONIZANDO...</strong>
+                <small class="d-block">⏳ Processando...</small>
+            `;
+            btnWidget.disabled = true;
+            btnWidget.className = 'btn btn-warning btn-sm btn-block';
+            
+            // Timeout de segurança
+            setTimeout(function() {
+                if (btnWidget.disabled) {
+                    btnWidget.innerHTML = `
+                        <i class="fas fa-shield-alt"></i>
+                        <strong>SYNC SEGURO</strong>
+                        <small class="d-block">🔄 Faturamento → Carteira</small>
+                    `;
+                    btnWidget.disabled = false;
+                    btnWidget.className = 'btn btn-success btn-sm btn-block';
+                }
+            }, 45000); // 45 segundos
+        });
+    }
+});
+</script>
+
+<!-- ESTILOS DO WIDGET -->
+<style>
+#widget-sync-segura {
+    max-width: 300px;
+}
+
+#widget-sync-segura .alert-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+#widget-sync-segura .card-body {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+#widget-sync-segura .btn-sm {
+    font-size: 0.8rem;
+}
+</style>

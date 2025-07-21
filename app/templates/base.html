@@ -276,34 +276,6 @@
           </ul>
         </li>
 
-        <!-- ODOO - Integração com ERP Odoo -->
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" id="menuOdoo" role="button" data-bs-toggle="dropdown">
-            <i class="fas fa-link text-warning"></i> Odoo
-          </a>
-          <ul class="dropdown-menu">
-            <li><h6 class="dropdown-header">🛒 Carteira Odoo</h6></li>
-            <li><a class="dropdown-item" href="{{ url_for('odoo.carteira_odoo.dashboard') }}">
-              <i class="fas fa-tachometer-alt text-primary"></i> Dashboard Carteira
-              <span class="badge bg-warning ms-2">ERP</span>
-            </a></li>
-            <li><a class="dropdown-item" href="{{ url_for('odoo.carteira_odoo.pendente') }}">
-              <i class="fas fa-shopping-cart text-warning"></i> Carteira Pendente
-            </a></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><h6 class="dropdown-header">📋 Faturamento Odoo</h6></li>
-            <li><a class="dropdown-item" href="{{ url_for('odoo.faturamento_odoo.dashboard') }}">
-              <i class="fas fa-chart-bar text-success"></i> Dashboard Faturamento
-              <span class="badge bg-warning ms-2">ERP</span>
-            </a></li>
-            <li><a class="dropdown-item" href="{{ url_for('odoo.faturamento_odoo.produtos') }}">
-              <i class="fas fa-boxes text-info"></i> Faturamento por Produtos
-            </a></li>
-            <li><a class="dropdown-item" href="{{ url_for('odoo.faturamento_odoo.consolidado') }}">
-              <i class="fas fa-file-invoice text-primary"></i> Faturamento Consolidado
-            </a></li>
-          </ul>
-        </li>
 
         <!-- USUÁRIOS - Gestão de usuários (apenas para admins e gerentes comerciais) -->
         {% if current_user.is_authenticated and current_user.pode_aprovar_usuarios() %}
@@ -318,6 +290,11 @@
             </a></li>
             <li><a class="dropdown-item" href="{{ url_for('auth.listar_usuarios') }}">
               <i class="fas fa-users"></i> Todos os Usuários
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">🔒 Sistema de Permissões</h6></li>
+            <li><a class="dropdown-item" href="{{ url_for('permissions.index') }}">
+              <i class="fas fa-shield-alt text-primary"></i> Gerenciar Permissões
             </a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="{{ url_for('auth.registro') }}" target="_blank">

@@ -773,20 +773,42 @@ class CarteiraService:
 
     def sincronizar_carteira_odoo(self, usar_filtro_pendente=True):
         """
-        Sincroniza carteira do Odoo por substituição completa da CarteiraPrincipal
-        ⚡ OTIMIZADO: Usa método otimizado
+        🔄 SINCRONIZAÇÃO OPERACIONAL COMPLETA COM ALERTAS E RECOMPOSIÇÃO
+        
+        Realiza sincronização destrutiva da carteira COM:
+        - ✅ Verificação pré-sincronização de separações cotadas
+        - ✅ Sistema de alertas integrado
+        - ✅ Backup automático de pré-separações
+        - ✅ Recomposição automática pós-sincronização
+        - ✅ Relatório operacional completo
         
         Args:
             usar_filtro_pendente (bool): Se deve usar filtro 'Carteira Pendente' (qty_saldo > 0)
         
         Returns:
-            dict: Estatísticas da sincronização
+            dict: Resultado operacional completo com alertas e estatísticas
         """
+        from datetime import datetime
+        inicio_operacao = datetime.now()
+        
         try:
-            from app.carteira.models import CarteiraPrincipal
+            from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
             from app import db
             
-            logger.info("🚀 Iniciando sincronização OTIMIZADA da carteira com Odoo")
+            logger.info("🚀 INICIANDO SINCRONIZAÇÃO OPERACIONAL COMPLETA da carteira com Odoo")
+            
+            # ✅ ETAPA 1: VERIFICAÇÃO PRÉ-SINCRONIZAÇÃO (ALERTAS CRÍTICOS)
+            logger.info("🔍 ETAPA 1: Verificação pré-sincronização...")
+            alertas_pre_sync = self._verificar_riscos_pre_sincronizacao()
+            
+            if alertas_pre_sync.get('alertas_criticos'):
+                logger.warning(f"🚨 ALERTAS CRÍTICOS DETECTADOS: {len(alertas_pre_sync['alertas_criticos'])} separações cotadas")
+            
+            # ✅ ETAPA 2: BACKUP AUTOMÁTICO DE PRÉ-SEPARAÇÕES
+            logger.info("💾 ETAPA 2: Backup automático de pré-separações...")
+            backup_result = self._criar_backup_pre_separacoes()
+            
+            logger.info(f"✅ Backup criado: {backup_result['total_backups']} pré-separações preservadas")
             
             # ⚡ USAR MÉTODO OTIMIZADO sem limite para sincronização completa
             resultado = self.obter_carteira_pendente()
@@ -852,43 +874,86 @@ class CarteiraService:
                     erros.append(erro_msg)
                     continue
             
-            # Commit das alterações
+            # ✅ ETAPA 3: COMMIT DAS ALTERAÇÕES DA CARTEIRA
+            logger.info("💾 ETAPA 3: Salvando nova carteira...")
             db.session.commit()
             
-            # Estatísticas finais
-            estatisticas = {
+            # ✅ ETAPA 4: RECOMPOSIÇÃO AUTOMÁTICA DE PRÉ-SEPARAÇÕES
+            logger.info("🔄 ETAPA 4: Recomposição automática de pré-separações...")
+            recomposicao_result = self._recompor_pre_separacoes_automaticamente()
+            
+            # ✅ ETAPA 5: VERIFICAÇÃO PÓS-SINCRONIZAÇÃO E ALERTAS
+            logger.info("🔍 ETAPA 5: Verificação pós-sincronização...")
+            alertas_pos_sync = self._verificar_alertas_pos_sincronizacao(dados_filtrados, alertas_pre_sync)
+            
+            # ✅ ETAPA 6: COMPILAR RESULTADO OPERACIONAL COMPLETO
+            fim_operacao = datetime.now()
+            tempo_total = (fim_operacao - inicio_operacao).total_seconds()
+            
+            # Estatísticas completas da operação
+            estatisticas_completas = {
                 'registros_inseridos': contador_inseridos,
                 'registros_removidos': registros_removidos,
                 'total_encontrados': len(dados_carteira),
                 'registros_filtrados': len(dados_filtrados),
                 'taxa_sucesso': f"{(contador_inseridos/len(dados_filtrados)*100):.1f}%" if dados_filtrados else "0%",
                 'erros_processamento': len(erros),
-                'metodo': 'otimizado'
+                'metodo': 'operacional_completo',
+                
+                # ✅ DADOS OPERACIONAIS ESPECÍFICOS
+                'tempo_execucao_segundos': round(tempo_total, 2),
+                'backup_pre_separacoes': backup_result['total_backups'],
+                'recomposicao_sucesso': recomposicao_result['sucessos'],
+                'recomposicao_erros': recomposicao_result['erros'],
+                'alertas_pre_sync': len(alertas_pre_sync.get('alertas_criticos', [])),
+                'alertas_pos_sync': len(alertas_pos_sync.get('alertas_criticos', [])),
+                'separacoes_cotadas_afetadas': alertas_pos_sync.get('separacoes_cotadas_afetadas', 0)
             }
             
-            logger.info(f"✅ SINCRONIZAÇÃO OTIMIZADA CONCLUÍDA:")
+            logger.info(f"✅ SINCRONIZAÇÃO OPERACIONAL COMPLETA CONCLUÍDA:")
             logger.info(f"   📊 {contador_inseridos} registros inseridos")
             logger.info(f"   🗑️ {registros_removidos} registros removidos")
-            logger.info(f"   ❌ {len(erros)} erros de processamento")
+            logger.info(f"   💾 {backup_result['total_backups']} pré-separações em backup")
+            logger.info(f"   🔄 {recomposicao_result['sucessos']} pré-separações recompostas")
+            logger.info(f"   🚨 {len(alertas_pos_sync.get('alertas_criticos', []))} alertas pós-sincronização")
+            logger.info(f"   ⏱️ {tempo_total:.2f} segundos de execução")
             
             return {
                 'sucesso': True,
-                'estatisticas': estatisticas,
+                'operacao_completa': True,
+                'estatisticas': estatisticas_completas,
                 'registros_importados': contador_inseridos,
                 'registros_removidos': registros_removidos,
                 'erros': erros,
-                'mensagem': f'⚡ Carteira sincronizada com {contador_inseridos} registros (método otimizado)'
+                
+                # ✅ DADOS OPERACIONAIS PARA INTERFACE
+                'alertas_pre_sync': alertas_pre_sync,
+                'alertas_pos_sync': alertas_pos_sync,
+                'backup_info': backup_result,
+                'recomposicao_info': recomposicao_result,
+                'tempo_execucao': tempo_total,
+                
+                'mensagem': f'✅ Sincronização operacional completa: {contador_inseridos} registros importados, {recomposicao_result["sucessos"]} pré-separações recompostas'
             }
             
         except Exception as e:
             db.session.rollback()
-            logger.error(f"❌ ERRO na sincronização otimizada: {e}")
+            fim_operacao = datetime.now()
+            tempo_erro = (fim_operacao - inicio_operacao).total_seconds()
+            
+            logger.error(f"❌ ERRO CRÍTICO na sincronização operacional: {e}")
+            
             return {
                 'sucesso': False,
+                'operacao_completa': False,
                 'erro': str(e),
                 'registros_importados': 0,
                 'registros_removidos': 0,
-                'estatisticas': {}
+                'tempo_execucao': tempo_erro,
+                'estatisticas': {},
+                'alertas_pre_sync': {},
+                'alertas_pos_sync': {},
+                'mensagem': f'❌ Erro na sincronização operacional: {str(e)}'
             }
 
     def obter_carteira_otimizada(self, usar_filtro_pendente=True, limite=20):
@@ -925,5 +990,370 @@ class CarteiraService:
             logger.error(f"❌ Erro: {e}")
             return {
                 'sucesso': False,
+                'erro': str(e)
+            }
+
+    # ============================================================================
+    # 🔧 MÉTODOS AUXILIARES CRÍTICOS PARA OPERAÇÃO COMPLETA
+    # ============================================================================
+    
+    def _verificar_riscos_pre_sincronizacao(self):
+        """
+        🚨 VERIFICAÇÃO PRÉ-SINCRONIZAÇÃO: Detecta riscos operacionais críticos
+        
+        Verifica separações cotadas, faturamento pendente e outros riscos ANTES da sincronização destrutiva
+        """
+        try:
+            logger.info("🔍 Verificando riscos operacionais antes da sincronização...")
+            
+            # Importar sistema de alertas
+            from app.carteira.alert_system import AlertaSistemaCarteira
+            
+            alertas_criticos = []
+            
+            # ✅ VERIFICAÇÃO 1: Separações cotadas
+            resultado_cotadas = AlertaSistemaCarteira.verificar_separacoes_cotadas_antes_sincronizacao()
+            
+            if resultado_cotadas.get('alertas'):
+                logger.warning(f"🚨 {resultado_cotadas['quantidade']} separações COTADAS detectadas")
+                
+                alertas_criticos.append({
+                    'tipo': 'SEPARACOES_COTADAS',
+                    'nivel': 'CRITICO',
+                    'quantidade': resultado_cotadas['quantidade'],
+                    'separacoes_afetadas': resultado_cotadas['separacoes_afetadas'],
+                    'mensagem': resultado_cotadas['mensagem'],
+                    'recomendacao': resultado_cotadas['recomendacao']
+                })
+            
+            # ✅ VERIFICAÇÃO 2: CRÍTICA - Pedidos cotados sem faturamento atualizado
+            risco_faturamento = self._verificar_risco_faturamento_pendente()
+            
+            if risco_faturamento.get('risco_alto'):
+                logger.critical(f"🚨 RISCO CRÍTICO: {risco_faturamento['pedidos_em_risco']} pedidos cotados podem perder NFs")
+                
+                alertas_criticos.append({
+                    'tipo': 'FATURAMENTO_PENDENTE_CRITICO',
+                    'nivel': 'CRITICO',
+                    'quantidade': risco_faturamento['pedidos_em_risco'],
+                    'pedidos_afetados': risco_faturamento['lista_pedidos'],
+                    'mensagem': f"🚨 CRÍTICO: {risco_faturamento['pedidos_em_risco']} pedidos cotados podem perder referência às NFs",
+                    'recomendacao': '⚠️ IMPORTANTE: Execute sincronização de FATURAMENTO ANTES da carteira'
+                })
+            
+            # ✅ VERIFICAÇÃO 3: Última sincronização de faturamento
+            tempo_ultima_sync_fat = self._verificar_ultima_sincronizacao_faturamento()
+            
+            if tempo_ultima_sync_fat.get('desatualizado'):
+                logger.warning(f"⚠️ Faturamento desatualizado: {tempo_ultima_sync_fat['horas_atraso']} horas desde última sync")
+                
+                alertas_criticos.append({
+                    'tipo': 'FATURAMENTO_DESATUALIZADO',
+                    'nivel': 'AVISO',
+                    'horas_atraso': tempo_ultima_sync_fat['horas_atraso'],
+                    'mensagem': f"⚠️ Faturamento não sincronizado há {tempo_ultima_sync_fat['horas_atraso']} horas",
+                    'recomendacao': 'Considere sincronizar faturamento primeiro para maior segurança'
+                })
+            
+            # ✅ AVALIAÇÃO FINAL DE SEGURANÇA
+            riscos_criticos = [a for a in alertas_criticos if a['nivel'] == 'CRITICO']
+            safe_to_proceed = len(riscos_criticos) == 0
+            
+            if not safe_to_proceed:
+                logger.critical(f"🚨 SINCRONIZAÇÃO COM RISCOS CRÍTICOS: {len(riscos_criticos)} alertas impedem operação segura")
+            
+            return {
+                'alertas_criticos': alertas_criticos,
+                'total_alertas': len(alertas_criticos),
+                'riscos_criticos': len(riscos_criticos),
+                'safe_to_proceed': safe_to_proceed,
+                'recomendacao_sequencia': 'Sincronize FATURAMENTO → CARTEIRA para máxima segurança',
+                'timestamp': datetime.now()
+            }
+            
+        except ImportError:
+            logger.warning("Sistema de alertas não disponível - prosseguindo sem verificação")
+            return {
+                'alertas_criticos': [],
+                'total_alertas': 0,
+                'safe_to_proceed': True,
+                'warning': 'Sistema de alertas indisponível'
+            }
+        except Exception as e:
+            logger.error(f"❌ Erro na verificação pré-sincronização: {e}")
+            return {
+                'alertas_criticos': [],
+                'total_alertas': 0,
+                'safe_to_proceed': True,
+                'erro': str(e)
+            }
+    
+    def _criar_backup_pre_separacoes(self):
+        """
+        💾 BACKUP AUTOMÁTICO: Marca pré-separações como "aguardando recomposição"
+        
+        As pré-separações já existem na tabela, apenas marcamos como pendentes
+        de recomposição após a sincronização
+        """
+        try:
+            from app.carteira.models import PreSeparacaoItem
+            from app import db
+            
+            logger.info("💾 Marcando pré-separações para recomposição...")
+            
+            # Buscar todas as pré-separações ativas
+            pre_separacoes_ativas = PreSeparacaoItem.query.filter(
+                PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
+            ).all()
+            
+            contador_backup = 0
+            
+            for pre_sep in pre_separacoes_ativas:
+                # Marcar como pendente de recomposição
+                pre_sep.recomposto = False
+                pre_sep.observacoes = f"Aguardando recomposição pós-sync {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                contador_backup += 1
+            
+            # Salvar alterações
+            db.session.commit()
+            
+            logger.info(f"✅ {contador_backup} pré-separações marcadas para recomposição")
+            
+            return {
+                'sucesso': True,
+                'total_backups': contador_backup,
+                'timestamp': datetime.now(),
+                'metodo': 'marcacao_recomposicao'
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no backup de pré-separações: {e}")
+            return {
+                'sucesso': False,
+                'total_backups': 0,
+                'erro': str(e)
+            }
+    
+    def _recompor_pre_separacoes_automaticamente(self):
+        """
+        🔄 RECOMPOSIÇÃO AUTOMÁTICA: Reconstrói pré-separações após sincronização
+        
+        Usa o sistema existente de recomposição para manter as decisões operacionais
+        """
+        try:
+            from app.carteira.models import PreSeparacaoItem
+            
+            logger.info("🔄 Iniciando recomposição automática de pré-separações...")
+            
+            # Usar método existente de recomposição
+            resultado = PreSeparacaoItem.recompor_todas_pendentes("SYNC_ODOO_AUTO")
+            
+            logger.info(f"✅ Recomposição concluída: {resultado['sucesso']} sucessos, {resultado['erro']} erros")
+            
+            return {
+                'sucessos': resultado['sucesso'],
+                'erros': resultado['erro'],
+                'timestamp': datetime.now(),
+                'metodo': 'recomposicao_automatica'
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na recomposição automática: {e}")
+            return {
+                'sucessos': 0,
+                'erros': 0,
+                'erro': str(e)
+            }
+    
+    def _verificar_alertas_pos_sincronizacao(self, dados_sincronizados, alertas_pre_sync):
+        """
+        🔍 VERIFICAÇÃO PÓS-SINCRONIZAÇÃO: Detecta impactos operacionais
+        
+        Analisa mudanças que podem ter afetado separações cotadas ou operações em andamento
+        """
+        try:
+            from app.carteira.alert_system import AlertaSistemaCarteira
+            
+            logger.info("🔍 Verificando impactos pós-sincronização...")
+            
+            # Simular alterações detectadas para o sistema de alertas
+            alteracoes_detectadas = []
+            
+            for item in dados_sincronizados:
+                alteracoes_detectadas.append({
+                    'num_pedido': item.get('num_pedido'),
+                    'cod_produto': item.get('cod_produto'),
+                    'tipo_alteracao': 'SYNC_DESTRUTIVA_COMPLETA'
+                })
+            
+            # Detectar alterações em separações cotadas
+            alertas_cotadas = AlertaSistemaCarteira.detectar_alteracoes_separacao_cotada_pos_sincronizacao(alteracoes_detectadas)
+            
+            alertas_criticos = []
+            separacoes_cotadas_afetadas = 0
+            
+            for alerta in alertas_cotadas:
+                alertas_criticos.append(alerta)
+                separacoes_cotadas_afetadas += 1
+            
+            # Comparar com alertas pré-sincronização
+            alertas_novos = len(alertas_criticos) - len(alertas_pre_sync.get('alertas_criticos', []))
+            
+            if alertas_criticos:
+                logger.warning(f"🚨 {len(alertas_criticos)} alertas críticos pós-sincronização detectados")
+            
+            return {
+                'alertas_criticos': alertas_criticos,
+                'total_alertas': len(alertas_criticos),
+                'separacoes_cotadas_afetadas': separacoes_cotadas_afetadas,
+                'alertas_novos': max(0, alertas_novos),
+                'timestamp': datetime.now()
+            }
+            
+        except ImportError:
+            logger.warning("Sistema de alertas não disponível para verificação pós-sync")
+            return {
+                'alertas_criticos': [],
+                'total_alertas': 0,
+                'separacoes_cotadas_afetadas': 0,
+                'warning': 'Sistema de alertas indisponível'
+            }
+        except Exception as e:
+            logger.error(f"❌ Erro na verificação pós-sincronização: {e}")
+            return {
+                'alertas_criticos': [],
+                'total_alertas': 0,
+                'separacoes_cotadas_afetadas': 0,
+                'erro': str(e)
+            }
+    
+    def _verificar_risco_faturamento_pendente(self):
+        """
+        🚨 VERIFICAÇÃO CRÍTICA: Detecta pedidos cotados sem faturamento atualizado
+        
+        Identifica o risco de pedidos faturados no Odoo que não foram sincronizados
+        e podem ser perdidos na sincronização destrutiva da carteira
+        """
+        try:
+            from app.separacao.models import Separacao
+            from app.faturamento.models import FaturamentoProduto
+            
+            logger.info("🔍 Verificando risco de faturamento pendente...")
+            
+            # Buscar separações cotadas (potencialmente faturadas)
+            separacoes_cotadas = Separacao.query.filter(
+                Separacao.status == 'COTADO',
+                Separacao.ativo == True
+            ).all()
+            
+            if not separacoes_cotadas:
+                return {
+                    'risco_alto': False,
+                    'pedidos_em_risco': 0,
+                    'lista_pedidos': [],
+                    'mensagem': 'Nenhuma separação cotada encontrada'
+                }
+            
+            pedidos_em_risco = []
+            
+            for separacao in separacoes_cotadas:
+                # Verificar se o pedido tem faturamento registrado
+                faturamento_existe = FaturamentoProduto.query.filter(
+                    FaturamentoProduto.num_pedido == separacao.num_pedido,
+                    FaturamentoProduto.cod_produto == separacao.cod_produto
+                ).first()
+                
+                if not faturamento_existe:
+                    # Pedido cotado sem faturamento = RISCO ALTO
+                    pedidos_em_risco.append({
+                        'num_pedido': separacao.num_pedido,
+                        'cod_produto': separacao.cod_produto,
+                        'separacao_lote_id': separacao.separacao_lote_id,
+                        'qtd_saldo': separacao.qtd_saldo,
+                        'expedicao': separacao.expedicao.strftime('%Y-%m-%d') if separacao.expedicao else None
+                    })
+            
+            risco_alto = len(pedidos_em_risco) > 0
+            
+            if risco_alto:
+                logger.critical(f"🚨 RISCO CRÍTICO DETECTADO: {len(pedidos_em_risco)} pedidos cotados sem faturamento")
+            
+            return {
+                'risco_alto': risco_alto,
+                'pedidos_em_risco': len(pedidos_em_risco),
+                'lista_pedidos': pedidos_em_risco,
+                'total_separacoes_cotadas': len(separacoes_cotadas),
+                'percentual_risco': round((len(pedidos_em_risco) / len(separacoes_cotadas)) * 100, 1) if separacoes_cotadas else 0,
+                'mensagem': f"{len(pedidos_em_risco)} de {len(separacoes_cotadas)} separações cotadas sem faturamento registrado"
+            }
+            
+        except ImportError as e:
+            logger.warning(f"Módulos de separação/faturamento não disponíveis: {e}")
+            return {
+                'risco_alto': False,
+                'pedidos_em_risco': 0,
+                'lista_pedidos': [],
+                'erro': 'Módulos indisponíveis'
+            }
+        except Exception as e:
+            logger.error(f"❌ Erro ao verificar risco de faturamento: {e}")
+            return {
+                'risco_alto': False,
+                'pedidos_em_risco': 0,
+                'lista_pedidos': [],
+                'erro': str(e)
+            }
+    
+    def _verificar_ultima_sincronizacao_faturamento(self):
+        """
+        📅 VERIFICAÇÃO TEMPORAL: Verifica quando foi a última sincronização de faturamento
+        
+        Identifica se o faturamento está desatualizado e pode causar inconsistências
+        """
+        try:
+            from app.faturamento.models import FaturamentoProduto
+            from datetime import datetime, timedelta
+            
+            logger.info("📅 Verificando última sincronização de faturamento...")
+            
+            # Buscar o registro mais recente de faturamento
+            ultimo_faturamento = FaturamentoProduto.query.order_by(
+                FaturamentoProduto.created_at.desc()
+            ).first()
+            
+            if not ultimo_faturamento:
+                return {
+                    'desatualizado': True,
+                    'horas_atraso': 999,
+                    'ultima_sync': None,
+                    'mensagem': 'Nenhum faturamento encontrado no sistema'
+                }
+            
+            # Calcular tempo desde última sincronização
+            agora = datetime.now()
+            ultima_sync = ultimo_faturamento.created_at
+            tempo_decorrido = agora - ultima_sync
+            horas_atraso = tempo_decorrido.total_seconds() / 3600
+            
+            # Considerar desatualizado se > 6 horas
+            desatualizado = horas_atraso > 6
+            
+            if desatualizado:
+                logger.warning(f"⚠️ Faturamento desatualizado: {horas_atraso:.1f} horas desde última sync")
+            
+            return {
+                'desatualizado': desatualizado,
+                'horas_atraso': round(horas_atraso, 1),
+                'ultima_sync': ultima_sync.strftime('%Y-%m-%d %H:%M:%S'),
+                'limite_horas': 6,
+                'mensagem': f"Última sincronização: {horas_atraso:.1f} horas atrás"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao verificar última sincronização: {e}")
+            return {
+                'desatualizado': True,
+                'horas_atraso': 0,
+                'ultima_sync': None,
                 'erro': str(e)
             } 

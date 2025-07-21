@@ -447,8 +447,10 @@ def create_app(config_name=None):
     from app.cotacao.routes import cotacao_bp
     from app.portaria.routes import portaria_bp
     from app.api.routes import api_bp
-    from app.odoo import odoo_bp  # ✅ Módulo Odoo organizado
+    # from app.odoo import odoo_bp  # DESATIVADO - Movido para Carteira & Estoque
+    # from app.odoo.routes.sincronizacao_integrada import sync_integrada_bp  # DESATIVADO - Movido para Carteira & Estoque
     from app.claude_ai import claude_ai_bp
+    from app.permissions import permissions_bp  # ✅ Sistema de Permissões
     
     # 📦 Importando blueprints dos módulos de carteira (seguindo padrão existente)
     from app.carteira.routes import carteira_bp
@@ -477,11 +479,15 @@ def create_app(config_name=None):
     # 🆕 API REST para funcionalidades MCP
     app.register_blueprint(api_bp)
     
-    # 🔗 API Odoo Integration
-    app.register_blueprint(odoo_bp)  # ✅ Novo blueprint da API Odoo
+    # 🔗 API Odoo Integration - DESATIVADO (funcionalidade integrada em Carteira & Estoque)
+    # app.register_blueprint(odoo_bp)  # Movido para Carteira & Estoque
+    # app.register_blueprint(sync_integrada_bp)  # Movido para Carteira & Estoque
     
     # 🤖 Claude AI Integration
     app.register_blueprint(claude_ai_bp)
+    
+    # 🔐 Sistema de Permissões
+    app.register_blueprint(permissions_bp)
     
     # 📦 Módulos de Carteira de Pedidos
     app.register_blueprint(carteira_bp)
@@ -535,7 +541,7 @@ def create_app(config_name=None):
                     
                     # Atualizar configuração do app
                     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-                    db.init_app(app)
+                    # db já foi inicializado na linha 124, não precisa reinicializar
                     
                     # Tentar criar tabelas com encoding correto
                     with engine.connect() as conn:

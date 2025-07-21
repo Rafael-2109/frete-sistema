@@ -307,6 +307,7 @@ class FaturamentoService:
                         'origem': dado.get('origem'),             # Campo correto
                         'incoterm': dado.get('incoterm'),         # Campo correto
                         'vendedor': dado.get('vendedor'),         # Campo correto
+                        'equipe_vendas': dado.get('equipe_vendas'),  # ✅ NOVO CAMPO
                         'municipio': dado.get('municipio'),       # Campo correto
                         'estado': dado.get('estado'),             # ✅ ADICIONAR ESTADO
                         'status': dado.get('status_nf'),          # Campo correto: status_nf
@@ -345,6 +346,7 @@ class FaturamentoService:
                         relatorio.origem = dados_nf['origem']
                         relatorio.incoterm = dados_nf['incoterm']
                         relatorio.vendedor = dados_nf['vendedor']
+                        relatorio.equipe_vendas = dados_nf['equipe_vendas']  # ✅ NOVO CAMPO
                         relatorio.municipio = dados_nf['municipio']
                         relatorio.estado = dados_nf['estado']      # ✅ ADICIONAR ESTADO
                         relatorio.status_faturamento = dados_nf['status']
@@ -359,6 +361,7 @@ class FaturamentoService:
                         existe.valor_total = dados_nf['valor_total']
                         existe.peso_bruto = dados_nf['peso_total']
                         existe.status_faturamento = dados_nf['status']
+                        existe.equipe_vendas = dados_nf['equipe_vendas']  # ✅ NOVO CAMPO
                         existe.data_importacao = datetime.now()
                         existe.origem_importacao = 'odoo_integracao'
                 
@@ -521,6 +524,49 @@ class FaturamentoService:
             logger.info(f"✅ Sincronização principal concluída: {contador_novos} novos, {contador_atualizados} atualizados")
             
             # ============================================
+            # 🚨 PROCESSAMENTO DE MOVIMENTAÇÕES DE ESTOQUE
+            # ============================================
+            
+            # 🏭 PROCESSAR NFs para gerar movimentações de estoque
+            logger.info("🏭 Iniciando processamento de movimentações de estoque...")
+            stats_estoque = {'processadas': 0, 'movimentacoes_criadas': 0, 'erros_processamento': []}
+            
+            try:
+                from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
+                
+                processador = ProcessadorFaturamento()
+                resultado_processamento = processador.processar_nfs_importadas(usuario='Sincronização Odoo')
+                
+                if resultado_processamento:
+                    stats_estoque['processadas'] = resultado_processamento.get('processadas', 0)
+                    stats_estoque['caso1_direto'] = resultado_processamento.get('caso1_direto', 0)
+                    stats_estoque['caso2_parcial'] = resultado_processamento.get('caso2_parcial', 0)
+                    stats_estoque['caso3_cancelado'] = resultado_processamento.get('caso3_cancelado', 0)
+                    stats_estoque['erros_processamento'] = resultado_processamento.get('erros', [])
+                    
+                    # Contar movimentações criadas (estimativa: casos 1+2)
+                    stats_estoque['movimentacoes_criadas'] = (
+                        resultado_processamento.get('caso1_direto', 0) + 
+                        resultado_processamento.get('caso2_parcial', 0)
+                    )
+                    
+                    logger.info(f"✅ Processamento de estoque concluído: {stats_estoque['processadas']} NFs processadas, {stats_estoque['movimentacoes_criadas']} movimentações criadas")
+                    
+                    if stats_estoque['erros_processamento']:
+                        logger.warning(f"⚠️ {len(stats_estoque['erros_processamento'])} erros no processamento de estoque")
+                else:
+                    logger.warning("⚠️ ProcessadorFaturamento retornou None")
+                    
+            except ImportError as e:
+                erro_msg = f"Módulo ProcessadorFaturamento não disponível: {e}"
+                logger.error(f"❌ {erro_msg}")
+                stats_estoque['erros_processamento'].append(erro_msg)
+            except Exception as e:
+                erro_msg = f"Erro no processamento de movimentações de estoque: {e}"
+                logger.error(f"❌ {erro_msg}")
+                stats_estoque['erros_processamento'].append(erro_msg)
+            
+            # ============================================
             # 🔄 CONSOLIDAÇÃO PARA RELATORIOFATURAMENTOIMPORTADO
             # ============================================
             
@@ -657,9 +703,10 @@ class FaturamentoService:
                 'registros_atualizados': contador_atualizados,
                 'registros_processados': total_processados,
                 'tempo_execucao': tempo_execucao,
-                'erros': erros + stats_sincronizacao['erros_sincronizacao'],
+                'erros': erros + stats_sincronizacao['erros_sincronizacao'] + stats_estoque['erros_processamento'],
                 'sincronizacoes': stats_sincronizacao,
-                'mensagem': f'🚀 Sincronização incremental completa: {contador_novos} novos, {contador_atualizados} atualizados, {stats_sincronizacao["relatorios_consolidados"]} relatórios consolidados + {stats_sincronizacao["fretes_lancados"]} fretes em {tempo_execucao:.2f}s'
+                'movimentacoes_estoque': stats_estoque,
+                'mensagem': f'🚀 Sincronização incremental completa: {contador_novos} novos, {contador_atualizados} atualizados, {stats_estoque["movimentacoes_criadas"]} movimentações de estoque, {stats_sincronizacao["relatorios_consolidados"]} relatórios consolidados + {stats_sincronizacao["fretes_lancados"]} fretes em {tempo_execucao:.2f}s'
             }
             
         except Exception as e:

@@ -808,9 +808,9 @@ function abrirModalAgendamento(itemId, numPedido) {
             let badgesHtml = '';
             let temContato = false;
             
-            // A.1 - Odoo (cliente_nec_agendamento = "Sim")
+            // A.1 - ERP Integrado (cliente_nec_agendamento = "Sim")
             if (data.cliente_nec_agendamento === 'Sim') {
-                badgesHtml += '<span class="badge badge-primary me-2" style="background-color: #007bff; color: white;">Odoo</span>';
+                badgesHtml += '<span class="badge badge-primary me-2" style="background-color: #007bff; color: white;">ERP</span>';
             }
             
             // A.2 - Sistema (ContatoAgendamento existe e forma != "SEM AGENDAMENTO")

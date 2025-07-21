@@ -35,6 +35,7 @@ class FaturamentoMapper:
             
             # 🏢 DADOS COMERCIAIS
             'vendedor': 'move_id/invoice_user_id/name',  # Vendedor da fatura
+            'equipe_vendas': 'move_id/team_id/name',  # Equipe de vendas da fatura
             'incoterm': 'move_id/invoice_incoterm_id/name',  # Incoterm da fatura
             
             # 📦 DADOS DO PRODUTO
@@ -100,6 +101,8 @@ class FaturamentoMapper:
                 queries.append(("l10n_br_ciel_it_account.res.municipio", partes[i]))
             elif partes[i-1] == 'invoice_user_id':
                 queries.append(("res.users", partes[i]))
+            elif partes[i-1] == 'team_id':
+                queries.append(("crm.team", partes[i]))
             elif partes[i-1] == 'invoice_incoterm_id':
                 queries.append(("account.incoterms", partes[i]))
             else:

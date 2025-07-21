@@ -77,6 +77,18 @@ def bulk_update_carteira():
         
         logger.info(f"Iniciando bulk update carteira com {len(items)} itens")
         
+        # ✅ REGISTRAR INÍCIO DA SINCRONIZAÇÃO
+        inicio_sync = datetime.now()
+        try:
+            from app.carteira.alert_system import MonitoramentoSincronizacao
+            pre_check = MonitoramentoSincronizacao.pre_sincronizacao_check()
+            
+            if not pre_check.get('safe_to_sync', True):
+                logger.warning(f"⚠️ SINCRONIZAÇÃO COM ALERTAS: {pre_check.get('warnings', [])}")
+            
+        except ImportError:
+            logger.info("Sistema de monitoramento não disponível")
+        
         # Validar cada item
         validation_errors = []
         validated_items = []
@@ -104,6 +116,37 @@ def bulk_update_carteira():
         )
         
         logger.info(f"Bulk update carteira concluído: {result}")
+        
+        # ✅ MONITORAMENTO PÓS-SINCRONIZAÇÃO
+        try:
+            fim_sync = datetime.now()
+            tempo_execucao = int((fim_sync - inicio_sync).total_seconds() * 1000)
+            
+            from app.carteira.alert_system import MonitoramentoSincronizacao
+            from app.carteira.monitoring import MetricasCarteira
+            
+            # Detectar alterações para alertas
+            alteracoes_detectadas = []
+            for item in validated_items:
+                alteracoes_detectadas.append({
+                    'num_pedido': item.get('num_pedido'),
+                    'cod_produto': item.get('cod_produto'),
+                    'tipo_alteracao': 'SYNC_ODOO_UPDATE'
+                })
+            
+            # Verificação pós-sincronização
+            pos_check = MonitoramentoSincronizacao.pos_sincronizacao_check(alteracoes_detectadas)
+            
+            if pos_check.get('alertas_criticos'):
+                logger.critical(f"🚨 ALERTAS CRÍTICOS PÓS-SYNC: {len(pos_check['alertas_criticos'])} alertas gerados")
+            
+            # Registrar métricas
+            MetricasCarteira.registrar_sincronizacao_odoo(result, tempo_execucao, alteracoes_detectadas)
+            
+        except ImportError:
+            logger.info("Sistema de monitoramento pós-sync não disponível")
+        except Exception as e:
+            logger.warning(f"Erro no monitoramento pós-sync: {e}")
         
         return create_response(
             success=True,
@@ -150,10 +193,70 @@ def _process_carteira_item(item):
         raise ValueError(f"Erro no processamento: {str(e)}")
 
 def _update_carteira_item(item, data):
-    """Atualiza um item existente da carteira"""
+    """
+    Atualiza um item existente da carteira com integração ao sistema de pré-separação
+    ✅ INTEGRADO COM SISTEMA PRÉ-SEPARAÇÃO AVANÇADO
+    """
+    
+    # ✅ CAPTURAR VALORES PARA DETECÇÃO DE ALTERAÇÕES
+    qtd_anterior = float(item.qtd_saldo_produto_pedido or 0)
+    qtd_nova = float(data['qtd_saldo_produto_pedido'])
+    
+    # ✅ VERIFICAR ALERTAS ANTES DA SINCRONIZAÇÃO
+    if qtd_nova != qtd_anterior:
+        try:
+            from app.carteira.alert_system import AlertaSistemaCarteira
+            alertas_pre = AlertaSistemaCarteira.verificar_separacoes_cotadas_antes_sincronizacao()
+            
+            if alertas_pre.get('alertas'):
+                logger.warning(f"🚨 ALERTA PRÉ-SYNC: {alertas_pre.get('quantidade', 0)} separações cotadas podem ser afetadas")
+                
+        except ImportError:
+            logger.warning("Sistema de alertas não disponível")
+    
     # Atualizar dados mestres preservando operacionais
     item.nome_produto = data['nome_produto']
     item.qtd_produto_pedido = data['qtd_produto_pedido']
+    
+    # ⚠️ IMPORTANTE: Aplicar alteração de quantidade ANTES de atualizar o campo
+    if qtd_nova != qtd_anterior:
+        try:
+            from app.carteira.models import PreSeparacaoItem
+            
+            if qtd_nova < qtd_anterior:
+                # REDUÇÃO DE QUANTIDADE
+                qtd_reduzida = qtd_anterior - qtd_nova
+                logger.info(f"🔻 ODOO SYNC: Aplicando redução de {qtd_reduzida} para {item.num_pedido}-{item.cod_produto}")
+                
+                resultado_reducao = PreSeparacaoItem.aplicar_reducao_quantidade(
+                    item.num_pedido, item.cod_produto, qtd_reduzida, "SYNC_ODOO"
+                )
+                
+                if resultado_reducao.get('sucesso'):
+                    logger.info(f"✅ Redução aplicada: {resultado_reducao}")
+                    if resultado_reducao.get('qtd_nao_aplicada', 0) > 0:
+                        logger.warning(f"⚠️ {resultado_reducao['qtd_nao_aplicada']} unidades não puderam ser reduzidas")
+                else:
+                    logger.error(f"❌ Erro na redução: {resultado_reducao}")
+                
+            elif qtd_nova > qtd_anterior:
+                # AUMENTO DE QUANTIDADE
+                qtd_aumentada = qtd_nova - qtd_anterior
+                logger.info(f"🔺 ODOO SYNC: Aplicando aumento de {qtd_aumentada} para {item.num_pedido}-{item.cod_produto}")
+                
+                resultado_aumento = PreSeparacaoItem.aplicar_aumento_quantidade(
+                    item.num_pedido, item.cod_produto, qtd_aumentada, "SYNC_ODOO"
+                )
+                
+                logger.info(f"✅ Aumento aplicado: {resultado_aumento}")
+                
+        except ImportError:
+            logger.warning("Sistema de pré-separação não disponível - aplicando alteração direta")
+        except Exception as e:
+            logger.error(f"❌ Erro ao aplicar lógica pós-Odoo: {e}")
+            # Continuar com atualização normal para não quebrar o processo
+    
+    # Atualizar campo após aplicar lógica
     item.qtd_saldo_produto_pedido = data['qtd_saldo_produto_pedido']
     item.preco_produto_pedido = data['preco_produto_pedido']
     item.cnpj_cpf = data['cnpj_cpf']
@@ -458,6 +561,8 @@ def _update_faturamento_consolidado_item(item, data):
         item.incoterm = data['incoterm']
     if 'vendedor' in data:
         item.vendedor = data['vendedor']
+    if 'equipe_vendas' in data:
+        item.equipe_vendas = data['equipe_vendas']
 
 def _create_faturamento_consolidado_item(data):
     """Cria um novo item do faturamento consolidado"""
@@ -522,6 +627,8 @@ def _update_faturamento_produto_item(item, data):
         item.estado = data['estado']
     if 'vendedor' in data:
         item.vendedor = data['vendedor']
+    if 'equipe_vendas' in data:
+        item.equipe_vendas = data['equipe_vendas']
     if 'incoterm' in data:
         item.incoterm = data['incoterm']
     if 'origem' in data:

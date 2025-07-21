@@ -20,6 +20,7 @@ class RelatorioFaturamentoImportado(db.Model):
     origem = db.Column(db.String(50), nullable=True)
     incoterm = db.Column(db.String(20), nullable=True)
     vendedor= db.Column(db.String(100), nullable=True)
+    equipe_vendas = db.Column(db.String(100), nullable=True)  # 🆕 Campo para equipe de vendas
     ativo = db.Column(db.Boolean, default=True, nullable=False)  # 🆕 Campo para inativação
     inativado_em = db.Column(db.DateTime, nullable=True)  # 🆕 Data de inativação
     inativado_por = db.Column(db.String(100), nullable=True)  # 🆕 Quem inativou
@@ -51,6 +52,7 @@ class FaturamentoProduto(db.Model):
     
     # Dados do vendedor
     vendedor = db.Column(db.String(100), nullable=True)  # Campo do CSV original
+    equipe_vendas = db.Column(db.String(100), nullable=True)  # 🆕 Campo para equipe de vendas
     incoterm = db.Column(db.String(20), nullable=True)  # Campo do CSV original
     
     # Dados do produto na NF
@@ -103,6 +105,7 @@ class FaturamentoProduto(db.Model):
             'preco_produto_faturado': float(self.preco_produto_faturado) if self.preco_produto_faturado else 0,
             'valor_produto_faturado': float(self.valor_produto_faturado) if self.valor_produto_faturado else 0,
             'vendedor': self.vendedor,
+            'equipe_vendas': self.equipe_vendas,
             'incoterm': self.incoterm
         }
 
