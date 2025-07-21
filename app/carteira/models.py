@@ -627,18 +627,19 @@ class PreSeparacaoItem(db.Model):
     # Permite múltiplas pré-separações POR CONTEXTO diferente (data + agendamento + protocolo)
     __table_args__ = (
         # Constraint única: mesmo pedido/produto pode ter múltiplas pré-separações com contextos diferentes
+        # NOTA: func.coalesce será aplicado via trigger/constraint de BD para campos NULL
         db.UniqueConstraint(
             'num_pedido', 
             'cod_produto', 
-            'data_expedicao_editada',  # Obrigatório
-            func.coalesce('data_agendamento_editada', '1900-01-01'),  # NULL = valor padrão
-            func.coalesce('protocolo_editado', 'SEM_PROTOCOLO'),      # NULL = valor padrão
+            'data_expedicao_editada',
+            'data_agendamento_editada',
+            'protocolo_editado',
             name='uq_pre_separacao_contexto_unico'
         ),
         # Índices de performance
-        Index('idx_pre_sep_data_expedicao', 'cod_produto', 'data_expedicao_editada', 'status'),
-        Index('idx_pre_sep_dashboard', 'num_pedido', 'status', 'data_criacao'),
-        Index('idx_pre_sep_recomposicao', 'recomposto', 'hash_item_original'),
+        db.Index('idx_pre_sep_data_expedicao', 'cod_produto', 'data_expedicao_editada', 'status'),
+        db.Index('idx_pre_sep_dashboard', 'num_pedido', 'status', 'data_criacao'),
+        db.Index('idx_pre_sep_recomposicao', 'recomposto', 'hash_item_original'),
     )
     
     def __repr__(self):
