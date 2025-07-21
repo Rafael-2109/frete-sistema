@@ -233,11 +233,22 @@
 </div>
 
 <script>
+// Garantir que jQuery está carregado
+$(document).ready(function() {
+    console.log('✅ jQuery carregado na página de permissões');
+    carregarDados();
+});
+
 let usuarioSelecionado = null;
 
-// Inicializar
-$(document).ready(function() {
-    $('#usuario-select').on('change', function() {
+// Função para carregar dados iniciais
+function carregarDados() {
+    carregarUsuarios();
+    carregarModulos();
+}
+
+// Inicializar eventos
+$('#usuario-select').on('change', function() {
         const usuarioId = $(this).val();
         if (usuarioId) {
             usuarioSelecionado = usuarioId;
