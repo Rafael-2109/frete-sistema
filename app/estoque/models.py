@@ -199,10 +199,13 @@ class SaldoEstoque:
     """
     Classe de serviço para cálculos de saldo de estoque em tempo real
     Não é uma tabela persistente, mas sim um calculador que integra dados de:
-    - MovimentacaoEstoque (módulo já existente)
-    - ProgramacaoProducao (módulo já existente) 
-    - CarteiraPrincipal (módulo implementado) - saída prevista dos pedidos
-    - UnificacaoCodigos (módulo recém implementado)
+    - MovimentacaoEstoque (módulo já existente) - entrada/saída histórica
+    - ProgramacaoProducao (módulo já existente) - produção futura
+    - ✅ PreSeparacaoItem (principal) - saídas futuras por data de expedição
+    - ✅ Separacao (complementar) - saídas já separadas
+    - UnificacaoCodigos (módulo recém implementado) - códigos relacionados
+    
+    ❌ REMOVIDO: CarteiraPrincipal (não participa mais do cálculo de estoque futuro)
     """
     
     @staticmethod
@@ -399,7 +402,8 @@ class SaldoEstoque:
     def _calcular_saidas_completas(cod_produto, data_expedicao):
         """
         Calcula TODAS as saídas previstas para uma data específica
-        IMPLEMENTA: SAÍDA = Separacao + CarteiraPrincipal + PreSeparacaoItem (expedição = data)
+        ✅ NOVA IMPLEMENTAÇÃO: SAÍDA = Separacao + PreSeparacaoItem (expedição = data)
+        ❌ CarteiraPrincipal removida (não tem campo expedição na nova lógica)
         """
         try:
             # Buscar todos os códigos relacionados (considerando unificação)
@@ -423,29 +427,13 @@ class SaldoEstoque:
                 except Exception as e:
                     logger.debug(f"Separacao não encontrada ou erro: {e}")
                 
-                # 🎯 2. CARTEIRA PRINCIPAL (pré-separação)
-                try:
-                    from app.carteira.models import CarteiraPrincipal
-                    itens_carteira = CarteiraPrincipal.query.filter(
-                        CarteiraPrincipal.cod_produto == str(codigo),
-                        CarteiraPrincipal.expedicao == data_expedicao,  # Campo correto
-                        CarteiraPrincipal.separacao_lote_id.is_(None),  # Ainda não separado
-                        CarteiraPrincipal.ativo == True
-                    ).all()
-                    
-                    for item in itens_carteira:
-                        if item.qtd_saldo_produto_pedido and item.qtd_saldo_produto_pedido > 0:
-                            total_saida += float(item.qtd_saldo_produto_pedido)
-                except Exception as e:
-                    logger.debug(f"CarteiraPrincipal não encontrada ou erro: {e}")
-                
-                # ⚡ 3. PRÉ-SEPARAÇÃO ITENS
+                # ✅ 2. PRÉ-SEPARAÇÃO ITENS (principal fonte de saídas futuras)
                 try:
                     from app.carteira.models import PreSeparacaoItem
                     pre_separacoes = PreSeparacaoItem.query.filter(
                         PreSeparacaoItem.cod_produto == str(codigo),
-                        PreSeparacaoItem.data_expedicao_editada == data_expedicao,  # Campo da data
-                        PreSeparacaoItem.ativo == True
+                        PreSeparacaoItem.data_expedicao_editada == data_expedicao,  # Data de expedição obrigatória
+                        PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])  # Apenas ativas
                     ).all()
                     
                     for pre_sep in pre_separacoes:
@@ -453,6 +441,10 @@ class SaldoEstoque:
                             total_saida += float(pre_sep.qtd_selecionada_usuario)
                 except Exception as e:
                     logger.debug(f"PreSeparacaoItem não encontrada ou erro: {e}")
+                
+                # ❌ CARTEIRA PRINCIPAL REMOVIDA DO CÁLCULO
+                # NOVA REGRA: CarteiraPrincipal NÃO tem campo expedição
+                # Apenas PreSeparacao + Separacao participam do cálculo de estoque futuro
             
             return total_saida
             

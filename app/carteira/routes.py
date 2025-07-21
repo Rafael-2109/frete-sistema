@@ -2958,14 +2958,14 @@ def api_criar_pre_separacao(num_pedido):
                 'error': 'Item não encontrado na carteira'
             }), 404
         
-        # Validar disponibilidade
-        if qtd_pre_separacao > item_carteira.qtd_saldo_produto_pedido:
+        # Validar disponibilidade usando função existente
+        try:
+            validar_saldo_disponivel_real(num_pedido, item_carteira.cod_produto, qtd_pre_separacao)
+        except ValueError as e:
             return jsonify({
                 'success': False,
-                'error': f'Quantidade indisponível. Disponível: {item_carteira.qtd_saldo_produto_pedido}'
-            }), 400
-        
-        # Preparar dados editáveis
+                'error': str(e)
+            }), 400        # Preparar dados editáveis
         dados_editaveis = {
             'expedicao': data.get('data_expedicao'),
             'agendamento': data.get('data_agendamento'),

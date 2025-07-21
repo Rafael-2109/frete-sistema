@@ -134,7 +134,6 @@ resolvida_por = String(100)    # Quem resolveu
 - `FaturamentoParcialJustificativa` - Justificativas de faturamento parcial
 - `SaldoStandby` - Saldos em standby
 - `SnapshotCarteira` - Snapshots da carteira
-- `ValidacaoNFSimples` - Validações de NFs
 - `ControleDescasamentoNF` - Controle de descasamentos
 
 ---

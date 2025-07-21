@@ -342,6 +342,222 @@ class InconsistenciaFaturamento(db.Model):
     def __repr__(self):
         return f'<Inconsistencia {self.tipo} NF:{self.numero_nf} Produto:{self.cod_produto}>'
 
+# HistoricoFaturamento - CLASSE REMOVIDA (obsoleta)
+# Funcionalidade não era utilizada no sistema atual
+
+# LogAtualizacaoCarteira - CLASSE REMOVIDA (obsoleta)
+# Sistema de log não implementado, funcionalidade coberta pelos logs da aplicação
+
+class VinculacaoCarteiraSeparacao(db.Model):
+    """
+    🔗 VINCULAÇÃO MULTI-DIMENSIONAL CARTEIRA ↔ SEPARAÇÃO
+    
+    PROBLEMA RESOLVIDO:
+    - 1 pedido pode ter múltiplas cargas
+    - 1 produto pode ser dividido em várias separações
+    - Necessário vincular pela tríade: protocolo + agendamento + expedição
+    
+    CHAVE DE VINCULAÇÃO:
+    num_pedido + cod_produto + protocolo + agendamento + expedição
+    """
+    __tablename__ = 'vinculacao_carteira_separacao'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # 🆔 CHAVES DE VINCULAÇÃO MULTI-DIMENSIONAL
+    num_pedido = db.Column(db.String(50), nullable=False, index=True)
+    cod_produto = db.Column(db.String(50), nullable=False, index=True)
+    protocolo_agendamento = db.Column(db.String(50), nullable=False, index=True)
+    data_agendamento = db.Column(db.Date, nullable=False, index=True)
+    data_expedicao = db.Column(db.Date, nullable=False, index=True)
+    
+    # �� IDs DE VINCULAÇÃO
+    carteira_item_id = db.Column(db.Integer, nullable=False, index=True)  # FK para CarteiraPrincipal
+    separacao_lote_id = db.Column(db.String(50), nullable=False, index=True)  # Lote da separação
+    
+    # 📊 QUANTIDADES CONTROLADAS
+    qtd_carteira_original = db.Column(db.Numeric(15,3), nullable=False)  # Qtd quando criou vinculação
+    qtd_separacao_original = db.Column(db.Numeric(15,3), nullable=False)  # Qtd na separação
+    qtd_vinculada = db.Column(db.Numeric(15,3), nullable=False)  # Qtd efetivamente vinculada
+    
+    # 🎯 STATUS DA VINCULAÇÃO
+    status_vinculacao = db.Column(db.String(20), default='ATIVA', index=True)  
+    # ATIVA, DIVERGENTE, CANCELADA, FATURADA
+    
+    # 🔄 CONTROLE DE SINCRONIZAÇÃO
+    ultima_sincronizacao = db.Column(db.DateTime, nullable=True)
+    divergencia_detectada = db.Column(db.Boolean, default=False, index=True)
+    tipo_divergencia = db.Column(db.String(50), nullable=True)  
+    # QTD_ALTERADA, ITEM_CANCELADO, ITEM_FATURADO, PROTOCOLO_ALTERADO
+    
+    # 🛡️ AUDITORIA
+    criada_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criada_por = db.Column(db.String(100), nullable=False)
+    atualizada_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    
+    # 📊 ÍNDICES COMPOSTOS CRÍTICOS
+    __table_args__ = (
+        # Chave única de vinculação multi-dimensional
+        db.UniqueConstraint(
+            'num_pedido', 'cod_produto', 'protocolo_agendamento', 
+            'data_agendamento', 'data_expedicao',
+            name='uq_vinculacao_multi_dimensional'
+        ),
+        # Índices de performance
+        Index('idx_vinculacao_status_divergencia', 'status_vinculacao', 'divergencia_detectada'),
+        Index('idx_vinculacao_carteira_separacao', 'carteira_item_id', 'separacao_lote_id'),
+        Index('idx_vinculacao_protocolo_data', 'protocolo_agendamento', 'data_agendamento'),
+    )
+
+    def __repr__(self):
+        return f'<VinculacaoCarteiraSeparacao {self.num_pedido}-{self.cod_produto} Protocolo:{self.protocolo_agendamento}>' 
+
+class EventoCarteira(db.Model):
+    """
+    🎯 RASTREAMENTO DE EVENTOS DA CARTEIRA
+    
+    PROBLEMA RESOLVIDO:
+    - Saber se item sumiu por FATURAMENTO ou CANCELAMENTO
+    - Auditoria completa de todas as mudanças
+    - Reconciliação automática entre sistemas
+    """
+    __tablename__ = 'evento_carteira'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # 🆔 IDENTIFICAÇÃO
+    num_pedido = db.Column(db.String(50), nullable=False, index=True)
+    cod_produto = db.Column(db.String(50), nullable=False, index=True)
+    carteira_item_id = db.Column(db.Integer, nullable=False, index=True)
+    
+    # 🎯 TIPO DE EVENTO
+    tipo_evento = db.Column(db.String(30), nullable=False, index=True)
+    # FATURAMENTO, CANCELAMENTO, ALTERACAO_QTD, ALTERACAO_PROTOCOLO, 
+    # ALTERACAO_AGENDAMENTO, ALTERACAO_EXPEDICAO
+    
+    # 📊 DADOS DO EVENTO
+    qtd_anterior = db.Column(db.Numeric(15,3), nullable=True)
+    qtd_nova = db.Column(db.Numeric(15,3), nullable=True)
+    qtd_impactada = db.Column(db.Numeric(15,3), nullable=False)  # Diferença
+    
+    # 📋 DETALHES ESPECÍFICOS
+    numero_nf = db.Column(db.String(20), nullable=True)  # Para FATURAMENTO
+    motivo_cancelamento = db.Column(db.String(100), nullable=True)  # Para CANCELAMENTO
+    campo_alterado = db.Column(db.String(50), nullable=True)  # Para ALTERACAO_*
+    valor_anterior = db.Column(db.String(255), nullable=True)  # Valor anterior do campo
+    valor_novo = db.Column(db.String(255), nullable=True)  # Novo valor do campo
+    
+    # 🔄 IMPACTO NA SEPARAÇÃO
+    afeta_separacao = db.Column(db.Boolean, default=False, index=True)
+    separacao_notificada = db.Column(db.Boolean, default=False, index=True)
+    cotacao_afetada = db.Column(db.Boolean, default=False, index=True)
+    responsavel_cotacao = db.Column(db.String(100), nullable=True)
+    
+    # 🎯 STATUS DO EVENTO
+    status_processamento = db.Column(db.String(20), default='PENDENTE', index=True)
+    # PENDENTE, PROCESSADO, REJEITADO, AGUARDA_APROVACAO
+    
+    # 🛡️ AUDITORIA
+    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_por = db.Column(db.String(100), nullable=False)
+    processado_em = db.Column(db.DateTime, nullable=True)
+    processado_por = db.Column(db.String(100), nullable=True)
+    
+    # 📊 ÍNDICES
+    __table_args__ = (
+        Index('idx_evento_tipo_status', 'tipo_evento', 'status_processamento'),
+        Index('idx_evento_cotacao_afetada', 'cotacao_afetada', 'responsavel_cotacao'),
+        Index('idx_evento_separacao_notificada', 'afeta_separacao', 'separacao_notificada'),
+        Index('idx_evento_pedido_produto', 'num_pedido', 'cod_produto'),
+    )
+
+    def __repr__(self):
+        return f'<EventoCarteira {self.tipo_evento} {self.num_pedido}-{self.cod_produto} Qtd:{self.qtd_impactada}>' 
+
+class AprovacaoMudancaCarteira(db.Model):
+    """
+    ✅ SISTEMA DE APROVAÇÃO PARA MUDANÇAS EM PEDIDOS COTADOS
+    
+    PROBLEMA RESOLVIDO:
+    - Mudanças em pedidos cotados precisam de aprovação
+    - Área específica para quem cotou visualizar mudanças
+    - Workflow de aprovação sem passar batido
+    """
+    __tablename__ = 'aprovacao_mudanca_carteira'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # 🆔 IDENTIFICAÇÃO
+    evento_carteira_id = db.Column(db.Integer, nullable=False, index=True)  # FK para EventoCarteira
+    num_pedido = db.Column(db.String(50), nullable=False, index=True)
+    cod_produto = db.Column(db.String(50), nullable=False, index=True)
+    
+    # 🎯 DADOS DA COTAÇÃO AFETADA
+    cotacao_id = db.Column(db.Integer, nullable=True, index=True)  # FK para CotacaoItem (se existir)
+    responsavel_cotacao = db.Column(db.String(100), nullable=False, index=True)
+    valor_frete_cotado = db.Column(db.Numeric(15,2), nullable=True)
+    transportadora_cotada = db.Column(db.String(100), nullable=True)
+    
+    # 📋 DETALHES DA MUDANÇA
+    tipo_mudanca = db.Column(db.String(30), nullable=False)
+    # ALTERACAO_QTD, CANCELAMENTO_ITEM, ALTERACAO_PROTOCOLO, ALTERACAO_DATA
+    descricao_mudanca = db.Column(db.Text, nullable=False)
+    impacto_estimado = db.Column(db.String(20), nullable=False)  # BAIXO, MEDIO, ALTO, CRITICO
+    
+    # 🎯 STATUS DA APROVAÇÃO
+    status_aprovacao = db.Column(db.String(20), default='AGUARDA_VISUALIZACAO', index=True)
+    # AGUARDA_VISUALIZACAO, VISUALIZADA, APROVADA, REJEITADA, EXPIRADA
+    
+    # ⏰ CONTROLE DE TEMPO
+    prazo_resposta = db.Column(db.DateTime, nullable=False)  # 24h para visualizar, 48h para aprovar
+    notificacoes_enviadas = db.Column(db.Integer, default=0)
+    ultima_notificacao = db.Column(db.DateTime, nullable=True)
+    
+    # ✅ RESPOSTA DO RESPONSÁVEL
+    visualizada_em = db.Column(db.DateTime, nullable=True)
+    respondida_em = db.Column(db.DateTime, nullable=True)
+    observacao_resposta = db.Column(db.Text, nullable=True)
+    acao_tomada = db.Column(db.String(50), nullable=True)
+    # ACEITAR_MUDANCA, REJEITAR_MUDANCA, REQUOTAR_FRETE, CANCELAR_COTACAO
+    
+    # 🔄 AÇÕES AUTOMÁTICAS
+    acao_automatica_aplicada = db.Column(db.Boolean, default=False)
+    motivo_acao_automatica = db.Column(db.String(100), nullable=True)
+    
+    # 🛡️ AUDITORIA
+    criada_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criada_por = db.Column(db.String(100), nullable=False)
+    
+    # 📊 ÍNDICES
+    __table_args__ = (
+        Index('idx_aprovacao_responsavel_status', 'responsavel_cotacao', 'status_aprovacao'),
+        Index('idx_aprovacao_prazo_status', 'prazo_resposta', 'status_aprovacao'),
+        Index('idx_aprovacao_impacto_status', 'impacto_estimado', 'status_aprovacao'),
+        Index('idx_aprovacao_pedido_produto', 'num_pedido', 'cod_produto'),
+    )
+
+    def __repr__(self):
+        return f'<AprovacaoMudanca {self.num_pedido}-{self.cod_produto} Por:{self.responsavel_cotacao} Status:{self.status_aprovacao}>'
+    
+    def esta_vencida(self):
+        """Verifica se a aprovação está vencida"""
+        return agora_brasil() > self.prazo_resposta and self.status_aprovacao in ['AGUARDA_VISUALIZACAO', 'VISUALIZADA']
+    
+    def precisa_notificacao(self):
+        """Verifica se precisa enviar notificação"""
+        if self.status_aprovacao not in ['AGUARDA_VISUALIZACAO', 'VISUALIZADA']:
+            return False
+        
+        # Primeira notificação imediata
+        if self.notificacoes_enviadas == 0:
+            return True
+            
+        # Notificações subsequentes a cada 4 horas
+        if self.ultima_notificacao:
+            tempo_desde_ultima = agora_brasil() - self.ultima_notificacao
+            return tempo_desde_ultima.total_seconds() > 14400  # 4 horas
+            
+        return False 
 
 class TipoCarga(db.Model):
     """
@@ -414,6 +630,7 @@ class TipoCarga(db.Model):
             return 0
         return (float(self.peso_atual) / float(self.capacidade_maxima_peso)) * 100
 
+
 class FaturamentoParcialJustificativa(db.Model):
     """
     📋 JUSTIFICATIVAS PARA FATURAMENTO PARCIAL
@@ -485,8 +702,67 @@ class FaturamentoParcialJustificativa(db.Model):
     def __repr__(self):
         return f'<FaturamentoParcial {self.separacao_lote_id} {self.num_pedido} - {self.motivo_nao_faturamento}>'
 
-# ControleAlteracaoCarga - CLASSE REMOVIDA (obsoleta)
-# Funcionalidade não utilizada no sistema atual
+
+class ControleAlteracaoCarga(db.Model):
+    """
+    ⚖️ CONTROLE INTELIGENTE DE ALTERAÇÕES NA CARGA
+    
+    PROBLEMA RESOLVIDO:
+    - Pedido tinha 100, separou 60, carteira importada com 120
+    - Decidir se adiciona +20 na carga ou cria nova carga
+    - Validar se carga suporta alteração (peso, dimensões)
+    """
+    __tablename__ = 'controle_alteracao_carga'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # 🆔 IDENTIFICAÇÃO
+    carteira_item_id = db.Column(db.Integer, nullable=False, index=True)
+    separacao_lote_id = db.Column(db.String(50), nullable=False, index=True)
+    num_pedido = db.Column(db.String(50), nullable=False, index=True)
+    cod_produto = db.Column(db.String(50), nullable=False, index=True)
+    
+    # 📊 ALTERAÇÃO DETECTADA
+    qtd_anterior = db.Column(db.Numeric(15,3), nullable=False)      # Quantidade antes da alteração
+    qtd_nova = db.Column(db.Numeric(15,3), nullable=False)          # Quantidade após alteração
+    qtd_diferenca = db.Column(db.Numeric(15,3), nullable=False)     # Diferença (+/-)
+    
+    peso_anterior = db.Column(db.Numeric(15,3), nullable=True)
+    peso_novo = db.Column(db.Numeric(15,3), nullable=True)
+    peso_diferenca = db.Column(db.Numeric(15,3), nullable=True)
+    
+    # 🎯 DECISÃO TOMADA
+    decisao_sistema = db.Column(db.String(20), nullable=False, index=True)
+    # ADICIONAR_CARGA_ATUAL: Adicionou à carga existente
+    # CRIAR_NOVA_CARGA: Criou nova carga para a diferença
+    # REJEITAR_ALTERACAO: Manteve dados originais
+    # AGUARDA_APROVACAO: Pendente de decisão manual
+    
+    # 🔍 MOTIVO DA DECISÃO
+    motivo_decisao = db.Column(db.String(200), nullable=True)
+    # "Carga suporta +20kg", "Peso excederia limite", etc.
+    
+    # 📋 VALIDAÇÕES DE CAPACIDADE
+    capacidade_peso_ok = db.Column(db.Boolean, nullable=True)
+    capacidade_pallets_ok = db.Column(db.Boolean, nullable=True)
+    capacidade_valor_ok = db.Column(db.Boolean, nullable=True)
+    
+    # 🔄 AÇÃO EXECUTADA
+    acao_executada = db.Column(db.String(20), nullable=True, index=True)
+    # EXECUTADA: Ação foi aplicada
+    # PENDENTE: Aguarda execução
+    # CANCELADA: Decisão cancelada
+    
+    nova_carga_criada_id = db.Column(db.String(50), nullable=True)  # Se criou nova carga
+    
+    # 🛡️ AUDITORIA
+    detectado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    processado_em = db.Column(db.DateTime, nullable=True)
+    processado_por = db.Column(db.String(100), nullable=True)
+    
+    def __repr__(self):
+        return f'<ControleAlteracao {self.num_pedido} {self.decisao_sistema}: {self.qtd_diferenca}>'
+
 
 class SaldoStandby(db.Model):
     """
@@ -565,6 +841,216 @@ class SaldoStandby(db.Model):
         hoje = datetime.now().date()
         return not self.proximo_alerta or hoje >= self.proximo_alerta 
 
+class ControleDescasamentoNF(db.Model):
+    """
+    🚨 CONTROLE CRÍTICO DE DESCASAMENTO - SOLUÇÃO PARA PROBLEMA IDENTIFICADO
+    
+    PROBLEMA RESOLVIDO:
+    - NF preenchida em Embarques ≠ NF importada na carteira
+    - Impacto direto em separações e justificativas parciais
+    - Sincronização automática entre todos os sistemas
+    """
+    __tablename__ = 'controle_descasamento_nf'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # 🆔 IDENTIFICAÇÃO DA NF
+    numero_nf = db.Column(db.String(20), nullable=False, index=True)
+    num_pedido = db.Column(db.String(50), nullable=False, index=True)
+    cod_produto = db.Column(db.String(50), nullable=False, index=True)
+    
+    # 📊 QUANTIDADES DOS 3 SISTEMAS
+    qtd_embarques = db.Column(db.Numeric(15,3), nullable=True)        # Preenchido em Embarques
+    qtd_importacao = db.Column(db.Numeric(15,3), nullable=True)       # Importação carteira
+    qtd_separacao = db.Column(db.Numeric(15,3), nullable=True)        # Separação original
+    
+    # ⚠️ DETECÇÃO AUTOMÁTICA DE PROBLEMAS
+    descasamento_detectado = db.Column(db.Boolean, default=False, index=True)
+    tipo_descasamento = db.Column(db.String(50), nullable=True)
+    # EMBARQUE_MAIOR_IMPORTACAO: Embarque faturou mais que carteira importou
+    # IMPORTACAO_MAIOR_EMBARQUE: Carteira importou mais que embarque faturou
+    # EXCEDE_SEPARACAO: Qualquer faturamento > separação original
+    # DADOS_FALTANTES: Um dos sistemas sem dados
+    
+    diferenca_critica = db.Column(db.Numeric(15,3), nullable=True)    # Magnitude da diferença
+    
+    # 🎯 IMPACTOS IDENTIFICADOS
+    impacta_separacao = db.Column(db.Boolean, default=False)
+    separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)
+    justificativa_invalida = db.Column(db.Boolean, default=False)
+    justificativa_id = db.Column(db.Integer, nullable=True)  # FK para FaturamentoParcialJustificativa
+    
+    # 🔧 RESOLUÇÃO AUTOMÁTICA
+    acao_automatica = db.Column(db.String(50), nullable=True)
+    # SINCRONIZAR_EMBARQUE: Usar dados da importação no embarque
+    # SINCRONIZAR_CARTEIRA: Usar dados do embarque na carteira
+    # CORRIGIR_SEPARACAO: Ajustar separação conforme realidade
+    # RECRIAR_JUSTIFICATIVA: Refazer justificativa com dados corretos
+    # AGUARDA_MANUAL: Precisa intervenção humana
+    
+    acao_executada = db.Column(db.Boolean, default=False)
+    executada_em = db.Column(db.DateTime, nullable=True)
+    
+    # 📋 DADOS PARA RECONCILIAÇÃO
+    fonte_correta = db.Column(db.String(20), nullable=True)  # EMBARQUES, IMPORTACAO, MEDIA
+    qtd_reconciliada = db.Column(db.Numeric(15,3), nullable=True)    # Quantidade final acordada
+    motivo_escolha = db.Column(db.String(200), nullable=True)
+    
+    # 🛡️ AUDITORIA
+    detectado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    resolvido_em = db.Column(db.DateTime, nullable=True)
+    resolvido_por = db.Column(db.String(100), nullable=True)
+    observacoes = db.Column(db.Text, nullable=True)
+    
+    # 📊 ÍNDICES PARA PERFORMANCE
+    __table_args__ = (
+        Index('idx_descasamento_nf_pedido', 'numero_nf', 'num_pedido'),
+        Index('idx_descasamento_detectado_impacto', 'descasamento_detectado', 'impacta_separacao'),
+        Index('idx_descasamento_acao', 'acao_automatica', 'acao_executada'),
+        Index('idx_descasamento_separacao', 'separacao_lote_id', 'justificativa_invalida'),
+    )
+
+    def __repr__(self):
+        return f'<ControleDescasamento NF:{self.numero_nf} {self.tipo_descasamento} - Diff:{self.diferenca_critica}>'
+    
+    @property
+    def percentual_diferenca(self):
+        """Calcula percentual da diferença em relação à separação"""
+        if not self.qtd_separacao or self.qtd_separacao == 0:
+            return 0
+        return abs(float(self.diferenca_critica) / float(self.qtd_separacao)) * 100
+    
+    @property 
+    def criticidade(self):
+        """Classifica criticidade do descasamento"""
+        perc = self.percentual_diferenca
+        if perc == 0:
+            return 'NENHUMA'
+        elif perc <= 5:
+            return 'BAIXA'
+        elif perc <= 15:
+            return 'MEDIA'
+        elif perc <= 30:
+            return 'ALTA'
+        else:
+            return 'CRITICA'
+            
+    def detectar_descasamento(self):
+        """Algoritmo inteligente para detectar descasamento"""
+        if not self.qtd_embarques or not self.qtd_importacao:
+            self.tipo_descasamento = 'DADOS_FALTANTES'
+            self.descasamento_detectado = True
+            return
+            
+        # Comparação principal
+        diff = abs(float(self.qtd_embarques) - float(self.qtd_importacao))
+        
+        if diff == 0:
+            self.descasamento_detectado = False
+            return
+        
+        self.diferenca_critica = diff
+        self.descasamento_detectado = True
+        
+        # Classificação do tipo
+        if self.qtd_embarques > self.qtd_importacao:
+            self.tipo_descasamento = 'EMBARQUE_MAIOR_IMPORTACAO'
+        else:
+            self.tipo_descasamento = 'IMPORTACAO_MAIOR_EMBARQUE'
+            
+        # Verificação crítica vs separação
+        if self.qtd_separacao:
+            if max(self.qtd_embarques, self.qtd_importacao) > self.qtd_separacao:
+                self.tipo_descasamento = 'EXCEDE_SEPARACAO'
+                self.impacta_separacao = True
+                
+    def sugerir_acao_automatica(self):
+        """Sugere ação automática baseada na análise"""
+        if not self.descasamento_detectado:
+            return
+            
+        if self.tipo_descasamento == 'DADOS_FALTANTES':
+            self.acao_automatica = 'AGUARDA_MANUAL'
+        elif self.tipo_descasamento == 'EXCEDE_SEPARACAO':
+            self.acao_automatica = 'CORRIGIR_SEPARACAO'
+        elif self.percentual_diferenca <= 5:  # Diferença pequena
+            # Usar fonte com maior credibilidade (importação é mais recente)
+            self.acao_automatica = 'SINCRONIZAR_EMBARQUE'
+            self.fonte_correta = 'IMPORTACAO'
+        else:
+            self.acao_automatica = 'AGUARDA_MANUAL' 
+
+class SnapshotCarteira(db.Model):
+    """
+    📸 SNAPSHOT NA IMPORTAÇÃO DA CARTEIRA - SOLUÇÃO CORRIGIDA
+    
+    MOMENTO CORRETO:
+    - Snapshot criado na IMPORTAÇÃO da carteira
+    - Separação pode ser alterada após snapshot
+    - Faturamento sempre validado contra snapshot original
+    """
+    __tablename__ = 'snapshot_carteira'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # 🆔 IDENTIFICAÇÃO
+    data_importacao = db.Column(db.DateTime, default=agora_brasil, nullable=False, index=True)
+    versao_carteira = db.Column(db.String(50), nullable=False, index=True)  # Ex: "2025-06-30-18h30"
+    
+    # 📋 DADOS DO PEDIDO (PRESERVADOS NO MOMENTO DA IMPORTAÇÃO)
+    num_pedido = db.Column(db.String(50), nullable=False, index=True)
+    cod_produto = db.Column(db.String(50), nullable=False, index=True)
+    cnpj_cliente = db.Column(db.String(20), nullable=False, index=True)
+    nome_cliente = db.Column(db.String(255), nullable=False)
+    qtd_produto_pedido = db.Column(db.Float, nullable=False)
+    preco_produto = db.Column(db.Float, nullable=False)
+    valor_produto_pedido = db.Column(db.Float, nullable=False)
+    
+    # 🔗 CHAVE ÚNICA
+    __table_args__ = (
+        db.UniqueConstraint('num_pedido', 'cod_produto', 'versao_carteira'),
+    )
+
+
+class TipoEnvio(db.Model):
+    """
+    🎯 TIPO DE ENVIO SIMPLIFICADO - PARCIAL/TOTAL
+    """
+    __tablename__ = 'tipo_envio'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # 🆔 IDENTIFICAÇÃO DA CARGA
+    separacao_lote_id = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    
+    # 🎯 TIPO DE ENVIO
+    tipo_envio = db.Column(db.String(20), nullable=False, default='TOTAL', index=True)
+    # TOTAL: Carga completa - aceita alterações até o limite
+    # PARCIAL: Carga parcial planejada - alterações vão para nova carga
+    
+    # 📊 CONTROLE DE CAPACIDADE
+    capacidade_peso_kg = db.Column(db.Float, nullable=True, default=0)
+    capacidade_volume_m3 = db.Column(db.Float, nullable=True, default=0)
+    peso_atual_kg = db.Column(db.Float, nullable=False, default=0)
+    volume_atual_m3 = db.Column(db.Float, nullable=False, default=0)
+    
+    # 📅 AUDITORIA
+    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_por = db.Column(db.String(100), nullable=False)
+    
+    @property
+    def capacidade_disponivel_peso(self):
+        """Peso disponível em kg"""
+        if self.capacidade_peso_kg and self.capacidade_peso_kg > 0:
+            return max(0, self.capacidade_peso_kg - self.peso_atual_kg)
+        return float('inf')  # Sem limite
+    
+    @property  
+    def capacidade_disponivel_volume(self):
+        """Volume disponível em m³"""
+        if self.capacidade_volume_m3 and self.capacidade_volume_m3 > 0:
+            return max(0, self.capacidade_volume_m3 - self.volume_atual_m3)
+        return float('inf')  # Sem limite
 
 
 class PreSeparacaoItem(db.Model):
@@ -603,7 +1089,7 @@ class PreSeparacaoItem(db.Model):
     hash_item_original = db.Column(db.String(128))
     
     # Trabalho do usuário preservado
-    data_expedicao_editada = db.Column(db.Date, nullable=False)  # ✅ OBRIGATÓRIO para constraint única
+    data_expedicao_editada = db.Column(db.Date)
     data_agendamento_editada = db.Column(db.Date)
     protocolo_editado = db.Column(db.String(50))
     observacoes_usuario = db.Column(db.Text)
@@ -623,23 +1109,8 @@ class PreSeparacaoItem(db.Model):
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
     criado_por = db.Column(db.String(100))
     
-    # ✅ CONSTRAINT ÚNICA COMPOSTA - Sistema de contexto único
-    # Permite múltiplas pré-separações POR CONTEXTO diferente (data + agendamento + protocolo)
-    __table_args__ = (
-        # Constraint única: mesmo pedido/produto pode ter múltiplas pré-separações com contextos diferentes
-        db.UniqueConstraint(
-            'num_pedido', 
-            'cod_produto', 
-            'data_expedicao_editada',  # Obrigatório
-            func.coalesce('data_agendamento_editada', '1900-01-01'),  # NULL = valor padrão
-            func.coalesce('protocolo_editado', 'SEM_PROTOCOLO'),      # NULL = valor padrão
-            name='uq_pre_separacao_contexto_unico'
-        ),
-        # Índices de performance
-        Index('idx_pre_sep_data_expedicao', 'cod_produto', 'data_expedicao_editada', 'status'),
-        Index('idx_pre_sep_dashboard', 'num_pedido', 'status', 'data_criacao'),
-        Index('idx_pre_sep_recomposicao', 'recomposto', 'hash_item_original'),
-    )
+    # Removida constraint única para permitir múltiplas pré-separações do mesmo produto
+    # Múltiplas pré-separações fazem parte do processo normal de operação
     
     def __repr__(self):
         return f'<PreSeparacaoItem {self.num_pedido}-{self.cod_produto}: {self.qtd_selecionada_usuario}/{self.qtd_original_carteira}>'
@@ -941,267 +1412,3 @@ class PreSeparacaoItem(db.Model):
         except Exception as e:
             logger.error(f"❌ Erro ao criar pré-separação: {e}")
             raise
-
-    # ===== SISTEMA PÓS-SINCRONIZAÇÃO ODOO =====
-    
-    @classmethod
-    def aplicar_reducao_quantidade(cls, num_pedido, cod_produto, qtd_reduzida, motivo="SYNC_ODOO"):
-        """
-        Aplica redução de quantidade seguindo hierarquia de impacto
-        1º SALDO LIVRE → 2º PRÉ-SEPARAÇÃO → 3º SEPARAÇÃO ABERTO → 4º SEPARAÇÃO COTADO
-        """
-        try:
-            qtd_restante = float(qtd_reduzida)
-            log_operacoes = []
-            
-            # 1º Consumir do saldo livre primeiro (CarteiraPrincipal sem separação)
-            carteira_item = CarteiraPrincipal.query.filter(
-                CarteiraPrincipal.num_pedido == num_pedido,
-                CarteiraPrincipal.cod_produto == cod_produto,
-                CarteiraPrincipal.separacao_lote_id.is_(None)
-            ).first()
-            
-            if carteira_item and carteira_item.qtd_saldo_produto_pedido and qtd_restante > 0:
-                qtd_consumida_saldo = min(float(carteira_item.qtd_saldo_produto_pedido), qtd_restante)
-                carteira_item.qtd_saldo_produto_pedido -= qtd_consumida_saldo
-                qtd_restante -= qtd_consumida_saldo
-                log_operacoes.append(f"Saldo livre reduzido em {qtd_consumida_saldo}")
-            
-            # 2º Consumir de pré-separações (mais recentes primeiro)
-            if qtd_restante > 0:
-                pre_separacoes = cls.query.filter(
-                    cls.num_pedido == num_pedido,
-                    cls.cod_produto == cod_produto,
-                    cls.status.in_(['CRIADO', 'RECOMPOSTO'])
-                ).order_by(cls.data_criacao.desc()).all()
-                
-                for pre_sep in pre_separacoes:
-                    if qtd_restante <= 0:
-                        break
-                    
-                    qtd_consumida_pre = min(float(pre_sep.qtd_selecionada_usuario), qtd_restante)
-                    pre_sep.qtd_selecionada_usuario -= qtd_consumida_pre
-                    qtd_restante -= qtd_consumida_pre
-                    log_operacoes.append(f"Pré-separação ID:{pre_sep.id} reduzida em {qtd_consumida_pre}")
-                    
-                    # Marcar para exclusão se zerou
-                    if pre_sep.qtd_selecionada_usuario <= 0:
-                        db.session.delete(pre_sep)
-                        log_operacoes.append(f"Pré-separação ID:{pre_sep.id} removida (zerada)")
-            
-            # 3º Consumir de separações ABERTO
-            if qtd_restante > 0:
-                try:
-                    from app.separacao.models import Separacao
-                    separacoes_aberto = Separacao.query.filter(
-                        Separacao.num_pedido == num_pedido,
-                        Separacao.cod_produto == cod_produto,
-                        Separacao.status == 'ABERTO'
-                    ).all()
-                    
-                    for separacao in separacoes_aberto:
-                        if qtd_restante <= 0:
-                            break
-                        
-                        qtd_consumida_sep = min(float(separacao.qtd_saldo or 0), qtd_restante)
-                        separacao.qtd_saldo -= qtd_consumida_sep
-                        qtd_restante -= qtd_consumida_sep
-                        log_operacoes.append(f"Separação ABERTO {separacao.separacao_lote_id} reduzida em {qtd_consumida_sep}")
-                        
-                except ImportError:
-                    log_operacoes.append("AVISO: Módulo separação não disponível")
-            
-            # 4º ÚLTIMO RECURSO: Separações COTADO (gerar alerta crítico)
-            if qtd_restante > 0:
-                try:
-                    from app.separacao.models import Separacao
-                    separacoes_cotado = Separacao.query.filter(
-                        Separacao.num_pedido == num_pedido,
-                        Separacao.cod_produto == cod_produto,
-                        Separacao.status == 'COTADO'
-                    ).all()
-                    
-                    if separacoes_cotado:
-                        # GERAR ALERTA CRÍTICO
-                        cls._gerar_alerta_separacao_cotada_afetada(
-                            num_pedido, cod_produto, qtd_restante, separacoes_cotado, motivo
-                        )
-                        
-                        # Aplicar redução mesmo com alerta
-                        for separacao in separacoes_cotado:
-                            if qtd_restante <= 0:
-                                break
-                            
-                            qtd_consumida_cotado = min(float(separacao.qtd_saldo or 0), qtd_restante)
-                            separacao.qtd_saldo -= qtd_consumida_cotado
-                            qtd_restante -= qtd_consumida_cotado
-                            log_operacoes.append(f"🚨 CRÍTICO: Separação COTADA {separacao.separacao_lote_id} reduzida em {qtd_consumida_cotado}")
-                            
-                except ImportError:
-                    log_operacoes.append("ERRO: Não foi possível acessar separações COTADO")
-            
-            db.session.commit()
-            
-            resultado = {
-                'sucesso': True,
-                'qtd_reduzida_total': float(qtd_reduzida) - qtd_restante,
-                'qtd_nao_aplicada': qtd_restante,
-                'operacoes': log_operacoes
-            }
-            
-            logger.info(f"✅ Redução aplicada: {num_pedido}-{cod_produto} | {resultado}")
-            return resultado
-            
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"❌ Erro ao aplicar redução: {e}")
-            return {'sucesso': False, 'erro': str(e)}
-    
-    @classmethod
-    def aplicar_aumento_quantidade(cls, num_pedido, cod_produto, qtd_aumentada, motivo="SYNC_ODOO"):
-        """
-        Aplica aumento de quantidade seguindo lógica de tipo_envio
-        TOTAL = atualiza registro único | PARCIAL = cria saldo livre
-        """
-        try:
-            # 1º Detectar tipo atual do pedido
-            tipo_envio_atual = cls.detectar_tipo_envio_automatico(num_pedido, cod_produto)
-            
-            if tipo_envio_atual == 'total':
-                # PEDIDO TOTAL: Atualizar registro único
-                pre_sep_unica = cls.query.filter(
-                    cls.num_pedido == num_pedido,
-                    cls.cod_produto == cod_produto,
-                    cls.status.in_(['CRIADO', 'RECOMPOSTO'])
-                ).first()
-                
-                if pre_sep_unica:
-                    # ATUALIZAR pré-separação única
-                    pre_sep_unica.qtd_selecionada_usuario += float(qtd_aumentada)
-                    db.session.commit()
-                    
-                    logger.info(f"✅ Pré-separação TOTAL atualizada: {pre_sep_unica.id} +{qtd_aumentada}")
-                    return {
-                        'acao': 'ATUALIZACAO_PRE_SEPARACAO_TOTAL',
-                        'pre_separacao_id': pre_sep_unica.id,
-                        'nova_qtd': float(pre_sep_unica.qtd_selecionada_usuario)
-                    }
-                
-                # Verificar separação única
-                try:
-                    from app.separacao.models import Separacao
-                    separacao_unica = Separacao.query.filter(
-                        Separacao.num_pedido == num_pedido,
-                        Separacao.cod_produto == cod_produto,
-                        Separacao.ativo == True
-                    ).first()
-                    
-                    if separacao_unica:
-                        # ATUALIZAR separação única
-                        separacao_unica.qtd_saldo += float(qtd_aumentada)
-                        db.session.commit()
-                        
-                        logger.info(f"✅ Separação TOTAL atualizada: {separacao_unica.separacao_lote_id} +{qtd_aumentada}")
-                        return {
-                            'acao': 'ATUALIZACAO_SEPARACAO_TOTAL',
-                            'separacao_lote_id': separacao_unica.separacao_lote_id,
-                            'nova_qtd': float(separacao_unica.qtd_saldo)
-                        }
-                except ImportError:
-                    pass
-            
-            # PARCIAL ou SEM PROGRAMAÇÃO: Criar saldo livre na carteira
-            carteira_item = CarteiraPrincipal.query.filter(
-                CarteiraPrincipal.num_pedido == num_pedido,
-                CarteiraPrincipal.cod_produto == cod_produto
-            ).first()
-            
-            if carteira_item:
-                carteira_item.qtd_saldo_produto_pedido += float(qtd_aumentada)
-                db.session.commit()
-                
-                logger.info(f"✅ Saldo livre criado: {num_pedido}-{cod_produto} +{qtd_aumentada}")
-                return {
-                    'acao': 'SALDO_LIVRE_CRIADO',
-                    'qtd_disponivel': float(qtd_aumentada),
-                    'motivo': f'Pedido tipo {tipo_envio_atual or "sem programação"} - quantidade fica disponível'
-                }
-            
-            logger.warning(f"⚠️ Item não encontrado na carteira: {num_pedido}-{cod_produto}")
-            return {'acao': 'ITEM_NAO_ENCONTRADO', 'qtd_perdida': float(qtd_aumentada)}
-            
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"❌ Erro ao aplicar aumento: {e}")
-            return {'sucesso': False, 'erro': str(e)}
-    
-    @classmethod
-    def detectar_tipo_envio_automatico(cls, num_pedido, cod_produto=None):
-        """
-        Detecta automaticamente se envio é total ou parcial
-        TOTAL = 1 registro único | PARCIAL = múltiplos registros
-        """
-        try:
-            # Verificar pré-separações do pedido/produto
-            query_pre = cls.query.filter(
-                cls.num_pedido == num_pedido,
-                cls.status.in_(['CRIADO', 'RECOMPOSTO'])
-            )
-            if cod_produto:
-                query_pre = query_pre.filter(cls.cod_produto == cod_produto)
-            
-            total_pre_separacoes = query_pre.count()
-            
-            # Verificar separações do pedido/produto
-            total_separacoes = 0
-            try:
-                from app.separacao.models import Separacao
-                query_sep = Separacao.query.filter(
-                    Separacao.num_pedido == num_pedido,
-                    Separacao.ativo == True
-                )
-                if cod_produto:
-                    query_sep = query_sep.filter(Separacao.cod_produto == cod_produto)
-                
-                total_separacoes = query_sep.count()
-            except ImportError:
-                pass
-            
-            # REGRA: TOTAL = 1 único registro | PARCIAL = múltiplos registros
-            if (total_pre_separacoes == 1 and total_separacoes == 0) or \
-               (total_pre_separacoes == 0 and total_separacoes == 1):
-                return 'total'
-            elif (total_pre_separacoes > 1) or (total_separacoes > 1) or \
-                 (total_pre_separacoes >= 1 and total_separacoes >= 1):
-                return 'parcial'
-            else:
-                return None  # Sem programação
-                
-        except Exception as e:
-            logger.error(f"❌ Erro ao detectar tipo envio: {e}")
-            return None
-    
-    @classmethod
-    def _gerar_alerta_separacao_cotada_afetada(cls, num_pedido, cod_produto, qtd_afetada, separacoes, motivo):
-        """Gera alerta crítico quando separação COTADA é afetada"""
-        try:
-            alerta = {
-                'nivel': 'CRITICO',
-                'tipo': 'SEPARACAO_COTADA_ALTERADA',
-                'pedido': num_pedido,
-                'produto': cod_produto,
-                'quantidade_afetada': qtd_afetada,
-                'motivo': motivo,
-                'separacoes_afetadas': [s.separacao_lote_id for s in separacoes],
-                'timestamp': datetime.utcnow(),
-                'mensagem': f'🚨 URGENTE: {len(separacoes)} separação(ões) COTADA(s) afetada(s) por {motivo}',
-                'acao_requerida': 'Verificar impacto no processo físico imediatamente'
-            }
-            
-            logger.critical(f"🚨 ALERTA CRÍTICO: {alerta}")
-            
-            # TODO: Implementar sistema de notificações (email, webhook, etc.)
-            # TODO: Salvar alerta em tabela de auditoria
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao gerar alerta: {e}")

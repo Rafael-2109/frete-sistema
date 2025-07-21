@@ -567,12 +567,10 @@ def create_app(config_name=None):
     
     # 🆕 MODELOS DO SISTEMA CARTEIRA DE PEDIDOS (17 MODELOS)
     from app.carteira.models import (
-        CarteiraPrincipal, CarteiraCopia, ControleCruzadoSeparacao,
-        InconsistenciaFaturamento, HistoricoFaturamento, LogAtualizacaoCarteira,
-        VinculacaoCarteiraSeparacao, EventoCarteira, AprovacaoMudancaCarteira,
-        TipoCarga, FaturamentoParcialJustificativa, ControleAlteracaoCarga,
-        SaldoStandby, ControleDescasamentoNF, SnapshotCarteira, ValidacaoNFSimples,
-        TipoEnvio
+        CarteiraPrincipal, PreSeparacaoItem,
+        InconsistenciaFaturamento, FaturamentoParcialJustificativa,
+        CarteiraCopia, ControleCruzadoSeparacao, TipoCarga, 
+        SaldoStandby
     )
 
     # ✅ MIDDLEWARE PARA RECONEXÃO AUTOMÁTICA DO BANCO
