@@ -974,21 +974,9 @@ def api_separacoes_pedido(num_pedido):
         from app.pedidos.models import Pedido
         from app.transportadoras.models import Transportadora
         
-        # 🎯 QUERY CORRETA CONFORME FLUXO:
-        # 1. Buscar pedidos ABERTO/COTADO → 2. Pegar separacao_lote_id → 3. Buscar separações
+        # 🔍 QUERY SIMPLES: Buscar TODAS as separações do pedido primeiro
+        logger.info(f"🔍 DEBUG: Buscando separações para pedido {num_pedido}")
         
-        from app.pedidos.models import Pedido
-        
-        # STEP 1: Buscar separacao_lote_id de pedidos ABERTO/COTADO para este num_pedido
-        pedidos_validos = db.session.query(Pedido.separacao_lote_id).filter(
-            and_(
-                Pedido.num_pedido == num_pedido,
-                Pedido.status.in_(['ABERTO', 'COTADO']),
-                Pedido.separacao_lote_id.isnot(None)
-            )
-        ).subquery()
-        
-        # STEP 2: Buscar separações usando os separacao_lote_id válidos
         separacoes = db.session.query(
             Separacao.separacao_lote_id,
             Separacao.num_pedido,
@@ -1000,45 +988,17 @@ def api_separacoes_pedido(num_pedido):
             Separacao.pallet,
             Separacao.expedicao,
             Separacao.agendamento,
-            Separacao.protocolo,
-            
-            # Dados do embarque
-            Embarque.numero.label('embarque_numero'),
-            Embarque.data_prevista_embarque,
-            Embarque.data_embarque,
-            Embarque.status.label('embarque_status'),
-            Embarque.tipo_carga,
-            
-            # Dados da transportadora
-            Transportadora.razao_social.label('transportadora_razao'),
-            
-            # Dados da carteira para cod_produto
-            CarteiraPrincipal.nome_produto
-            
-        ).join(
-            pedidos_validos,
-            Separacao.separacao_lote_id == pedidos_validos.c.separacao_lote_id
-        ).outerjoin(
-            CarteiraPrincipal,
-            and_(
-                Separacao.separacao_lote_id == CarteiraPrincipal.separacao_lote_id,
-                Separacao.cod_produto == CarteiraPrincipal.cod_produto
-            )
-        ).outerjoin(
-            EmbarqueItem, 
-            Separacao.separacao_lote_id == EmbarqueItem.separacao_lote_id
-        ).outerjoin(
-            Embarque,
-            EmbarqueItem.embarque_id == Embarque.id
-        ).outerjoin(
-            Transportadora,
-            Embarque.transportadora_id == Transportadora.id
+            Separacao.protocolo
         ).filter(
-            Separacao.qtd_saldo > 0  # Apenas com saldo válido
-        ).order_by(
-            Separacao.separacao_lote_id.asc(),
-            Separacao.cod_produto.asc()
+            Separacao.num_pedido == num_pedido
         ).all()
+        
+        logger.info(f"🔍 DEBUG: Encontradas {len(separacoes)} separações para pedido {num_pedido}")
+        if separacoes:
+            for sep in separacoes[:3]:  # Log apenas primeiras 3
+                logger.info(f"🔍 DEBUG Sep: lote={sep.separacao_lote_id}, cod={sep.cod_produto}, qtd={sep.qtd_saldo}")
+        else:
+            logger.warning(f"🔍 DEBUG: NENHUMA separação encontrada para pedido {num_pedido}")
         
         # 📋 CONVERTER PARA JSON
         separacoes_json = []
