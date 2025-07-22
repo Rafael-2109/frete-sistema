@@ -489,6 +489,25 @@ def create_app(config_name=None):
     # 🔐 Sistema de Permissões
     app.register_blueprint(permissions_bp)
     
+    # 🎭 Registrar helpers de permissão nos templates
+    @app.context_processor
+    def inject_permission_helpers():
+        """Injeta helpers de permissão nos templates Jinja2"""
+        try:
+            from app.permissions.decorators import user_can_access, user_is_admin, user_level
+            return {
+                'user_can_access': user_can_access,
+                'user_is_admin': user_is_admin,
+                'user_level': user_level
+            }
+        except Exception as e:
+            app.logger.error(f"Erro ao registrar helpers de permissão: {e}")
+            return {
+                'user_can_access': lambda *args: False,
+                'user_is_admin': lambda: False,
+                'user_level': lambda: 0
+            }
+    
     # 📦 Módulos de Carteira de Pedidos
     app.register_blueprint(carteira_bp)
     app.register_blueprint(estoque_bp)

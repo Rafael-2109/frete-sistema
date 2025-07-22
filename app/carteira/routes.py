@@ -317,8 +317,8 @@ def listar_principal():
                     item.pallet_calculado = float(item.qtd_saldo_produto_pedido) / palletizacao.palletizacao
                 else:
                     # Fallback para campos existentes no banco
-                    item.peso_calculado = float(item.peso) if item.peso else 0
-                    item.pallet_calculado = float(item.pallet) if item.pallet else 0
+                    item.peso_calculado = float(getattr(item, 'peso', 0) or 0)
+                    item.pallet_calculado = float(getattr(item, 'pallet', 0) or 0)
                 
                 # 🛣️ BUSCAR ROTA E SUB-ROTA SE NÃO EXISTIREM NO BANCO
                 if not item.rota and item.cod_uf:
@@ -336,8 +336,10 @@ def listar_principal():
                              contatos_agendamento=contatos_agendamento)
         
     except Exception as e:
+        import traceback
         logger.error(f"Erro ao listar carteira principal: {str(e)}")
-        flash('Erro ao carregar carteira principal', 'error')
+        logger.error(f"Traceback completo: {traceback.format_exc()}")
+        flash(f'Erro ao carregar carteira principal: {str(e)}', 'error')
         return redirect(url_for('carteira.index'))
 
 @carteira_bp.route('/item/<int:item_id>/endereco')
@@ -2877,7 +2879,7 @@ def api_pedido_itens_editaveis(num_pedido):
                     'pre_separacao_id': pre_sep.id,  # ID real da pré-separação
                     'tipo_item': 'pre_separacao',  # Identificar tipo
                     'cod_produto': pre_sep.cod_produto,
-                    'nome_produto': f"[PRÉ-SEP] {pre_sep.nome_produto or pre_sep.cod_produto}",  # Indicar que é pré-separação
+                    'nome_produto': f"[PRÉ-SEP] {getattr(pre_sep, 'nome_produto', None) or pre_sep.cod_produto or 'Produto sem nome'}",  # Fix undefined
                     'qtd_carteira': float(pre_sep.qtd_original_carteira),
                     'qtd_separacoes': 0,  # Pré-separações não têm separações filhas
                     'qtd_pre_separacoes': float(pre_sep.qtd_selecionada_usuario),
@@ -2895,7 +2897,7 @@ def api_pedido_itens_editaveis(num_pedido):
                     'protocolo': pre_sep.protocolo_editado or '',
                     'status': pre_sep.status,
                     'criado_em': pre_sep.data_criacao.strftime('%d/%m/%Y %H:%M') if hasattr(pre_sep, 'data_criacao') and pre_sep.data_criacao else '',
-                    'criado_por': pre_sep.criado_por or '',
+                    'criado_por': getattr(pre_sep, 'criado_por', None) or 'Sistema',
                     'observacoes': pre_sep.observacoes_usuario or ''
                 }
                 
@@ -3153,10 +3155,13 @@ def api_cancelar_pre_separacao(pre_sep_id):
                 'error': 'Não é possível cancelar pré-separação já enviada para separação'
             }), 400
         
-        # Marcar como cancelada ao invés de deletar (auditoria)
-        pre_sep.status = 'CANCELADO'
-        pre_sep.observacoes_usuario = (pre_sep.observacoes_usuario or '') + f"\n[CANCELADO em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome if hasattr(current_user, 'nome') else 'Sistema'}]"
+        # DELETAR a pré-separação ao invés de apenas marcar como cancelada
+        # Guardar informações para log antes de deletar
+        info_log = f"Pré-separação deletada: ID={pre_sep.id}, Pedido={pre_sep.num_pedido}, Produto={pre_sep.cod_produto}, Qtd={pre_sep.qtd_selecionada_usuario}"
+        logger.info(f"{info_log} por {current_user.nome if hasattr(current_user, 'nome') else 'Sistema'}")
         
+        # DELETAR o registro
+        db.session.delete(pre_sep)
         db.session.commit()
         
         return jsonify({

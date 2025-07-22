@@ -575,7 +575,7 @@
             {% for lote_id in lotes_separacao %}
               {% set item_com_lote = embarque.itens_ativos | selectattr('separacao_lote_id', 'equalto', lote_id) | first %}
               {% if item_com_lote %}
-                <li><h6 class="dropdown-header">{{ item_com_lote.pedido }} - {{ item_com_lote.cliente }}</h6></li>
+                <li><h6 class="dropdown-header">{{ item_com_lote.pedido or 'Sem pedido' }} - {{ item_com_lote.cliente or 'Sem cliente' }}</h6></li>
                 <li>
                   <a class="dropdown-item" href="{{ url_for('embarques.acessar_separacao', embarque_id=embarque.id, separacao_lote_id=lote_id) }}">
                     <i class="fas fa-eye"></i> Acessar Dados

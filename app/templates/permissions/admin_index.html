@@ -254,9 +254,25 @@ $('#usuario-select').on('change', function() {
         usuarioSelecionado = usuarioId;
         carregarPermissoesUsuario(usuarioId);
         $('#permissions-area').show();
+        
+        // Habilitar dropdown de perfis
+        $('#perfil-select').prop('disabled', false);
+        
+        // Pegar o perfil atual do usuário selecionado
+        const perfilAtual = $(this).find(':selected').data('perfil');
+        if (perfilAtual) {
+            // Selecionar o perfil correspondente no dropdown
+            $('#perfil-select option').each(function() {
+                if ($(this).text().toLowerCase().includes(perfilAtual.toLowerCase())) {
+                    $('#perfil-select').val($(this).val());
+                    return false;
+                }
+            });
+        }
     } else {
         usuarioSelecionado = null;
         $('#permissions-area').hide();
+        $('#perfil-select').prop('disabled', true).val('');
     }
 });
 

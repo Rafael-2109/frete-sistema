@@ -15,6 +15,7 @@ from app import db
 from app.localidades.forms import CidadeForm
 from app.localidades.models import Cidade, CadastroRota, CadastroSubRota
 from app.utils.auth_decorators import require_admin
+from app.permissions.decorators import require_permission, require_admin_new
 from app.utils.timezone import agora_brasil
 
 localidades_bp = Blueprint('localidades', __name__, url_prefix='/localidades')
@@ -264,7 +265,7 @@ def listar_sub_rotas():
 
 @localidades_bp.route('/rotas/importar')
 @login_required
-@require_admin
+@require_permission('localidades', 'importar', 'editar')  # Sistema novo: módulo.função.nível
 def importar_rotas():
     """Tela para importar rotas"""
     return render_template('localidades/importar_rotas.html')
@@ -390,7 +391,7 @@ def processar_importacao_rotas():
 
 @localidades_bp.route('/sub-rotas/importar')
 @login_required
-@require_admin
+@require_permission('localidades', 'importar', 'editar')  # Sistema novo: mesmo nível que rotas
 def importar_sub_rotas():
     """Tela para importar sub-rotas"""
     return render_template('localidades/importar_sub_rotas.html')

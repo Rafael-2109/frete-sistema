@@ -164,7 +164,7 @@
                                     </button>
                                     
                                     <div class="btn-group" role="group">
-                                        <button type="button" class="btn btn-info btn-sm dropdown-toggle" data-toggle="dropdown" title="Consultar Separações">
+                                        <button type="button" class="btn btn-info btn-sm dropdown-toggle" data-bs-toggle="dropdown" title="Consultar Separações">
                                             📋 Consultar
                                         </button>
                                         <div class="dropdown-menu">
@@ -178,7 +178,7 @@
                                     </div>
                                     
                                     <div class="btn-group" role="group">
-                                        <button type="button" class="btn btn-warning btn-sm dropdown-toggle" data-toggle="dropdown" title="Avaliar Estoques">
+                                        <button type="button" class="btn btn-warning btn-sm dropdown-toggle" data-bs-toggle="dropdown" title="Avaliar Estoques">
                                             🔍 Avaliar
                                         </button>
                                         <div class="dropdown-menu">
@@ -2119,8 +2119,14 @@ async function abrirModalAvaliarEstoques(numPedido) {
     document.getElementById('modal-num-pedido-estoques').textContent = numPedido;
     document.getElementById('form-num-pedido').value = numPedido;
     
-    // Mostrar modal
-    $('#modalAvaliarEstoques').modal('show');
+    // Mostrar modal (Bootstrap 5)
+    const modalElement = document.getElementById('modalAvaliarEstoques');
+    if (modalElement) {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    } else {
+        console.error('Modal modalAvaliarEstoques não encontrado');
+    }
     
     // Carregar dados
     await carregarDadosModal(numPedido);
@@ -2982,8 +2988,14 @@ async function calcularEstoqueD0D7(numPedido) {
     // Configurar modal
     document.getElementById('modal-estoque-pedido').textContent = numPedido;
     
-    // Mostrar modal
-    $('#modalEstoqueD0D7').modal('show');
+    // Mostrar modal (Bootstrap 5)
+    const modalElement = document.getElementById('modalEstoqueD0D7');
+    if (modalElement) {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    } else {
+        console.error('Modal modalEstoqueD0D7 não encontrado');
+    }
     
     // Carregar dados
     await carregarDadosEstoque(numPedido);
@@ -3683,7 +3695,14 @@ function criarSeparacao(numPedido) {
 
 function abrirModalGerarSeparacao(numPedido) {
     console.log(`🔍 Gerar Separação pedido ${numPedido}`);
-    $('#modalAvaliarEstoques').modal('show');
+    // Mostrar modal (Bootstrap 5)
+    const modalElement = document.getElementById('modalAvaliarEstoques');
+    if (modalElement) {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    } else {
+        console.error('Modal modalAvaliarEstoques não encontrado');
+    }
     carregarItensEPreSeparacoes(numPedido);
 }
 
@@ -4018,11 +4037,7 @@ function solicitarAgendamento(numPedido) {
     carregarDadosAgendamento(numPedido);
 }
 
-function calcularEstoqueD0D7(numPedido) {
-    console.log(`📊 Calcular Estoque D0/D7 pedido ${numPedido}`);
-    $('#modalEstoqueD0D7').modal('show');
-    carregarEstoqueD0D7(numPedido);
-}
+// Função removida - usando a versão async acima
 
 function abrirModalEndereco(numPedido) {
     // Buscar dados do pedido via AJAX - ADAPTADO PARA CARTEIRA AGRUPADA
