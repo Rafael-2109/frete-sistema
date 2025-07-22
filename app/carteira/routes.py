@@ -444,9 +444,9 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
                 item.agendamento = data_agendamento
                 
                 # Data de entrega (novo campo)
-                if dados.get('data_entrega'):
-                    data_entrega = datetime.strptime(dados['data_entrega'], '%Y-%m-%d').date()
-                    item.data_entrega_pedido = data_entrega
+                if dados.get('data_expedicao'):
+                    data_expedicao = datetime.strptime(dados['data_expedicao'], '%Y-%m-%d').date()
+                    item.data_expedicao_pedido = data_expedicao
                 
                 if dados.get('hora_agendamento'):
                     hora_agendamento = datetime.strptime(dados['hora_agendamento'], '%H:%M').time()
@@ -473,8 +473,8 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
                     # Aplicar o agendamento a todos os itens
                     for item_pedido in itens_mesmo_pedido:
                         item_pedido.agendamento = data_agendamento
-                        if dados.get('data_entrega'):
-                            item_pedido.data_entrega_pedido = data_entrega
+                        if dados.get('data_expedicao'):
+                            item_pedido.data_expedicao_pedido = data_expedicao
                         if dados.get('hora_agendamento'):
                             item_pedido.hora_agendamento = hora_agendamento
                         if dados.get('protocolo'):
@@ -543,7 +543,7 @@ def api_item_detalhes(id):
             'municipio': item.municipio,
             'estado': item.estado,
             'cliente_nec_agendamento': item.cliente_nec_agendamento,
-            'data_entrega_pedido': item.data_entrega_pedido.strftime('%d/%m/%Y') if item.data_entrega_pedido else None,
+            'data_expedicao_pedido': item.data_expedicao_pedido.strftime('%d/%m/%Y') if item.data_expedicao_pedido else None,
             'valor_total': float((item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0)),
             'separacao_lote_id': item.separacao_lote_id
         }
@@ -781,7 +781,7 @@ def listar_pedidos_agrupados():
             CarteiraPrincipal.raz_social_red,
             CarteiraPrincipal.rota,
             CarteiraPrincipal.sub_rota,
-            CarteiraPrincipal.data_entrega_pedido,
+            CarteiraPrincipal.data_expedicao_pedido,
             CarteiraPrincipal.observ_ped_1,
             CarteiraPrincipal.status_pedido,
             CarteiraPrincipal.pedido_cliente,
@@ -818,7 +818,7 @@ def listar_pedidos_agrupados():
             CarteiraPrincipal.raz_social_red,
             CarteiraPrincipal.rota,
             CarteiraPrincipal.sub_rota,
-            CarteiraPrincipal.data_entrega_pedido,
+            CarteiraPrincipal.data_expedicao_pedido,
             CarteiraPrincipal.observ_ped_1,
             CarteiraPrincipal.status_pedido,
             CarteiraPrincipal.pedido_cliente,
@@ -841,15 +841,21 @@ def listar_pedidos_agrupados():
         for pedido in pedidos_agrupados:
             # Calcular valor e quantidade das separações ativas
             try:
-                # Buscar separações do pedido com status ABERTO/COTADO
+                # Contar separacao_lote_id únicos (quantidade de envios para separação)
+                qtd_separacoes = db.session.query(func.count(func.distinct(Separacao.separacao_lote_id))).join(
+                    Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                ).filter(
+                    Separacao.num_pedido == pedido.num_pedido,
+                    Pedido.status.in_(['ABERTO', 'COTADO'])
+                ).scalar() or 0
+                
+                # Buscar separações para calcular valor total
                 separacoes_ativas = db.session.query(Separacao).join(
                     Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
                 ).filter(
                     Separacao.num_pedido == pedido.num_pedido,
                     Pedido.status.in_(['ABERTO', 'COTADO'])
                 ).all()
-                
-                qtd_separacoes = len(separacoes_ativas)
                 
                 # Calcular valor total das separações (qtd * valor_unitario)
                 valor_separacoes = 0
@@ -880,7 +886,7 @@ def listar_pedidos_agrupados():
                 'raz_social_red': pedido.raz_social_red,
                 'rota': pedido.rota,
                 'sub_rota': pedido.sub_rota,
-                'data_entrega_pedido': pedido.data_entrega_pedido,
+                'data_expedicao_pedido': pedido.data_expedicao_pedido,
                 'observ_ped_1': pedido.observ_ped_1,
                 'status_pedido': pedido.status_pedido,
                 'pedido_cliente': pedido.pedido_cliente,
@@ -1034,7 +1040,7 @@ def api_separacoes_pedido(num_pedido):
         # 🔍 QUERY SIMPLES: Buscar TODAS as separações do pedido primeiro
         logger.info(f"🔍 DEBUG: Buscando separações para pedido {num_pedido}")
         
-        # 🔧 QUERY CORRIGIDA: Incluir campos que o código espera
+        # 🔧 QUERY CORRIGIDA: Buscar nome_produto da CarteiraPrincipal e status do Pedido
         separacoes = db.session.query(
             Separacao.separacao_lote_id,
             Separacao.num_pedido,
@@ -1047,18 +1053,18 @@ def api_separacoes_pedido(num_pedido):
             Separacao.expedicao,
             Separacao.agendamento,
             Separacao.protocolo,
-            # Campos que o código espera (evitar erros)
-            db.literal(None).label('embarque_numero'),
-            db.literal(None).label('data_prevista_embarque'),
-            db.literal(None).label('data_embarque'),
-            db.literal(None).label('embarque_status'),
-            db.literal(None).label('tipo_carga'),
-            db.literal(None).label('embarque_valor_total'),
-            db.literal(None).label('embarque_peso_total'),
-            db.literal(None).label('embarque_pallet_total'),
-            db.literal(None).label('transportadora_razao'),
-            db.literal(None).label('transportadora_fantasia'),
-            db.literal('Produto').label('nome_produto')
+            # BUSCAR NOME REAL DO PRODUTO da CarteiraPrincipal
+            CarteiraPrincipal.nome_produto.label('nome_produto'),
+            # BUSCAR STATUS DO PEDIDO
+            Pedido.status.label('pedido_status')
+        ).outerjoin(
+            CarteiraPrincipal, 
+            and_(
+                CarteiraPrincipal.num_pedido == Separacao.num_pedido,
+                CarteiraPrincipal.cod_produto == Separacao.cod_produto
+            )
+        ).outerjoin(
+            Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
         ).filter(
             Separacao.num_pedido == num_pedido
         ).all()
@@ -1073,23 +1079,54 @@ def api_separacoes_pedido(num_pedido):
         # 📋 CONVERTER PARA JSON
         separacoes_json = []
         for sep in separacoes:
-            # Determinar status da separação
-            status_separacao = 'CRIADA'
-            status_class = 'info'
+            # Usar status do Pedido (mais relevante que separação)
+            status_separacao = sep.pedido_status or 'ABERTO'
             
-            if sep.embarque_numero:
-                if sep.data_embarque:
-                    status_separacao = 'EMBARCADA'
-                    status_class = 'success'
-                elif sep.embarque_status == 'ativo':
-                    status_separacao = 'AGUARDANDO EMBARQUE'
-                    status_class = 'warning'
-                elif sep.embarque_status == 'cancelado':
-                    status_separacao = 'EMBARQUE CANCELADO'
-                    status_class = 'danger'
-                else:
-                    status_separacao = 'EM EMBARQUE'
-                    status_class = 'primary'
+            # Definir classe CSS baseada no status do pedido
+            status_classes = {
+                'ABERTO': 'secondary',
+                'COTADO': 'warning', 
+                'EMBARCADO': 'primary',
+                'FATURADO': 'success',
+                'NF no CD': 'danger'
+            }
+            status_class = status_classes.get(status_separacao, 'info')
+            
+            # 📊 CALCULAR ESTOQUE E PRODUÇÃO DA DATA DE EXPEDIÇÃO
+            estoque_data_expedicao = '-'
+            producao_data_expedicao = '-'
+            menor_estoque_d7 = '-'
+            
+            try:
+                from app.estoque.models import SaldoEstoque
+                from datetime import datetime, timedelta
+                
+                # Data de expedição (da separação ou hoje+1)
+                data_expedicao = sep.expedicao or (datetime.now().date() + timedelta(days=1))
+                
+                # Calcular projeção de estoque para o produto
+                resumo_estoque = SaldoEstoque.calcular_resumo_produto(sep.cod_produto)
+                
+                if resumo_estoque and resumo_estoque['projecao_29_dias']:
+                    # 📅 ESTOQUE DA DATA DE EXPEDIÇÃO
+                    estoque_expedicao = _calcular_estoque_data_especifica(
+                        resumo_estoque['projecao_29_dias'], data_expedicao
+                    )
+                    estoque_data_expedicao = f"{int(estoque_expedicao)}" if estoque_expedicao >= 0 else "RUPTURA"
+                    
+                    # 🏭 PRODUÇÃO DA DATA DE EXPEDIÇÃO  
+                    producao_expedicao = SaldoEstoque.calcular_producao_periodo(
+                        sep.cod_produto, data_expedicao, data_expedicao
+                    )
+                    producao_data_expedicao = f"{int(producao_expedicao)}" if producao_expedicao > 0 else "0"
+                    
+                    # 📉 MENOR ESTOQUE D7
+                    menor_estoque_d7 = SaldoEstoque.calcular_menor_estoque_periodo(
+                        resumo_estoque['projecao_29_dias'], sep.qtd_saldo or 0
+                    )
+                    
+            except Exception as e:
+                logger.warning(f"Erro ao calcular estoque/produção para separação {sep.separacao_lote_id}: {e}")
             
             # Calcular totais da separação
             total_itens_separacao = db.session.query(func.count(Separacao.id)).filter(
@@ -1114,6 +1151,11 @@ def api_separacoes_pedido(num_pedido):
                 'expedicao': sep.expedicao.strftime('%d/%m/%Y') if sep.expedicao else '',
                 'agendamento': sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else '',
                 'protocolo': sep.protocolo or '',
+                
+                # 📊 DADOS DE ESTOQUE/PRODUÇÃO DA DATA DE EXPEDIÇÃO
+                'menor_estoque_d7': menor_estoque_d7,
+                'estoque_data_expedicao': estoque_data_expedicao,
+                'producao_data_expedicao': producao_data_expedicao,
                 
                 # 🚫 SIMPLIFICADO: Dados do embarque (usando getattr para evitar erros)
                 'embarque': {

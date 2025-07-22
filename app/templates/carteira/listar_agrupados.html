@@ -171,34 +171,13 @@
                                         📦 Criar Separação
                                     </button>
                                     
-                                    <div class="btn-group" role="group">
-                                        <button type="button" class="btn btn-info btn-sm dropdown-toggle" data-bs-toggle="dropdown" title="Consultar Separações">
-                                            📋 Consultar
-                                        </button>
-                                        <div class="dropdown-menu">
-                                            <a class="dropdown-item" href="#" onclick="toggleSeparacoesPedido('{{ pedido.num_pedido }}')">
-                                                📦 Ver Separações
-                                            </a>
-                                            <a class="dropdown-item" href="#" onclick="calcularEstoqueD0D7('{{ pedido.num_pedido }}')">
-                                                📊 Estoque D0/D7
-                                            </a>
-                                        </div>
-                                    </div>
+                                    <button type="button" class="btn btn-info btn-sm" onclick="calcularEstoqueD0D7('{{ pedido.num_pedido }}')" title="Análise Estoque D0/D7">
+                                        📊 Estoque D0/D7
+                                    </button>
                                     
-                                    <div class="btn-group" role="group">
-                                        <button type="button" class="btn btn-warning btn-sm dropdown-toggle" data-bs-toggle="dropdown" title="Avaliar Estoques">
-                                            🔍 Avaliar
-                                        </button>
-                                        <div class="dropdown-menu">
-                                            <a class="dropdown-item" href="#" onclick="abrirModalAvaliarEstoques('{{ pedido.num_pedido }}')">
-                                                📊 Avaliar Estoques
-                                            </a>
-                                            
-                                            <a class="dropdown-item" href="#" onclick="calcularEstoqueD0D7('{{ pedido.num_pedido }}')">
-                                                📊 Estoque D0/D7
-                                            </a>
-                                        </div>
-                                    </div>
+                                    <button type="button" class="btn btn-warning btn-sm" onclick="abrirModalAvaliarEstoques('{{ pedido.num_pedido }}')" title="Avaliar Estoques (28 dias)">
+                                        🔍 Avaliar Estoques
+                                    </button>
                                     
                                     <button type="button" class="btn btn-success btn-sm" onclick="solicitarAgendamento('{{ pedido.num_pedido }}')" title="Solicitar Agendamento">
                                         🗓️ Agendar
@@ -401,9 +380,10 @@
                         <!-- Checkbox Agenda Confirmada -->
                         <div class="mb-3">
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="agenda_confirmada" name="agenda_confirmada">
+                                <input class="form-check-input" type="checkbox" id="agenda_confirmada" name="agenda_confirmada" onchange="mostrarBadgeConfirmacao(this.checked)">
                                 <label class="form-check-label" for="agenda_confirmada">
                                     <strong>Agenda Confirmada</strong>
+                                    <span id="badge-status-agenda" class="badge ms-2" style="display: none;"></span>
                                     <br><small class="text-muted">Marque se o agendamento já foi confirmado com o cliente</small>
                                 </label>
                             </div>
@@ -445,6 +425,51 @@
                 </button>
                 <button type="button" class="btn btn-primary" onclick="salvarAgendamento()">
                     <i class="fas fa-save"></i> Salvar Agendamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Criar Separação -->
+<div class="modal fade" id="modalCriarSeparacao" tabindex="-1" role="dialog" aria-labelledby="modalCriarSeparacaoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalCriarSeparacaoLabel">
+                    <i class="fas fa-boxes"></i> Criar Separação
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Criar nova separação</strong><br>
+                    Selecione os itens do pedido que deseja incluir na separação.
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th width="40"><input type="checkbox" id="selectAllSeparacao" onchange="toggleTodosItensSeparacao(this)"></th>
+                                <th>Código</th>
+                                <th>Produto</th>
+                                <th>Qtd Disponível</th>
+                                <th>Qtd Separar</th>
+                                <th>Data Expedição</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaItensSeparacao">
+                            <!-- Será preenchido via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="confirmarCriacaoSeparacao()">
+                    <i class="fas fa-check"></i> Criar Separação
                 </button>
             </div>
         </div>
@@ -1745,8 +1770,12 @@ function gerarHtmlSeparacoes(data) {
                         <th>Pallet</th>
                         <th>Peso</th>
                         <th>Menor Estoque D7</th>
-                        <th>Estoque D0</th>
-                        <th>Produção D0</th>
+                        <th>Est. Expedição</th>
+                        <th>Prod. Expedição</th>
+                        <th>Data Expedição</th>
+                        <th>Agendamento</th>
+                        <th>Protocolo</th>
+                        <th>Lote ID</th>
                         <th>Status</th>
                         <th>Ações</th>
                     </tr>
@@ -1776,9 +1805,13 @@ function gerarHtmlSeparacoes(data) {
                 <td>${(sep.valor_saldo || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</td>
                 <td>${(sep.pallet || 0).toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})} pal</td>
                 <td>${(sep.peso || 0).toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})} kg</td>
-                <td class="text-muted">-</td>
-                <td class="text-muted">-</td>
-                <td class="text-muted">-</td>
+                <td>${sep.menor_estoque_d7 || '-'}</td>
+                <td>${sep.estoque_data_expedicao || '-'}</td>
+                <td>${sep.producao_data_expedicao || '-'}</td>
+                <td><small class="text-primary">${sep.expedicao || '-'}</small></td>
+                <td><small class="text-info">${sep.agendamento || '-'}</small></td>
+                <td><small class="text-success">${sep.protocolo || '-'}</small></td>
+                <td><code class="small">${sep.separacao_lote_id || '-'}</code></td>
                 <td>
                     <span class="badge" style="background-color: ${backgroundColor}; color: ${textColor};">
                         ${sep.status}
@@ -2403,29 +2436,70 @@ function carregarDadosAgendamento(numPedido) {
     document.getElementById('agendamento-num-pedido').value = numPedido;
     
     // Carregar dados via AJAX
-    fetch(`/carteira/api/pedido/${numPedido}/itens`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
+    Promise.all([
+        fetch(`/carteira/api/pedido/${numPedido}/itens`),
+        fetch(`/carteira/api/pedido/${numPedido}/agendamento-existente`)
+    ])
+        .then(([responseItens, responseAgendamento]) => {
+            return Promise.all([responseItens.json(), responseAgendamento.json()]);
+        })
+        .then(([dataItens, dataAgendamento]) => {
+            if (dataItens.success) {
                 // Buscar informações do cliente (pegar do primeiro item)
-                const clienteInfo = data.itens.length > 0 ? data.itens[0] : null;
+                const clienteInfo = dataItens.itens.length > 0 ? dataItens.itens[0] : null;
                 
                 // Atualizar resumo com dados corretos
                 document.getElementById('agendamento-cliente').textContent = 
-                    clienteInfo ? (clienteInfo.nome_produto ? `Cliente do pedido ${numPedido}` : 'N/A') : 'N/A';
-                document.getElementById('agendamento-total-itens').textContent = data.total_itens;
+                    clienteInfo ? (clienteInfo.raz_social_red || clienteInfo.raz_social || `Cliente do pedido ${numPedido}`) : 'N/A';
+                document.getElementById('agendamento-total-itens').textContent = dataItens.total_itens;
                 document.getElementById('agendamento-valor-total').textContent = 
-                    `R$ ${data.totais.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    `R$ ${dataItens.totais.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                 document.getElementById('agendamento-peso-total').textContent = 
-                    `${Math.round(data.totais.peso).toLocaleString('pt-BR')} kg`;
+                    `${Math.round(dataItens.totais.peso).toLocaleString('pt-BR')} kg`;
+                
+                // ✅ PRÉ-PREENCHER CAMPOS com dados existentes do agendamento
+                if (dataAgendamento.success && dataAgendamento.agendamento) {
+                    const agend = dataAgendamento.agendamento;
+                    
+                    // Data de agendamento
+                    if (agend.data_agendamento) {
+                        document.getElementById('data_agendamento').value = agend.data_agendamento;
+                    }
+                    
+                    // Horário
+                    if (agend.hora_agendamento) {
+                        document.getElementById('hora_agendamento').value = agend.hora_agendamento;
+                    }
+                    
+                    // Data de expedição 
+                    if (agend.data_expedicao) {
+                        document.getElementById('data_expedicao').value = agend.data_expedicao;
+                    }
+                    
+                    // Protocolo
+                    if (agend.protocolo) {
+                        document.getElementById('protocolo_agendamento').value = agend.protocolo;
+                    }
+                    
+                    // Observações
+                    if (agend.observacoes) {
+                        document.getElementById('observacoes_agendamento').value = agend.observacoes;
+                    }
+                    
+                    // Checkbox confirmação
+                    document.getElementById('agenda_confirmada').checked = agend.agenda_confirmada || false;
+                    
+                    // ✅ MOSTRAR BADGE DE STATUS
+                    mostrarBadgeConfirmacao(agend.agenda_confirmada);
+                }
                 
                 // Carregar itens na tabela  
-                gerarTabelaAgendamento(data);
+                gerarTabelaAgendamento(dataItens);
                 
                 modalLoading.style.display = 'none';
                 modalContent.style.display = 'block';
             } else {
-                throw new Error(data.error || 'Erro ao carregar dados');
+                throw new Error(dataItens.error || 'Erro ao carregar dados');
             }
         })
         .catch(error => {
@@ -2501,10 +2575,10 @@ async function salvarAgendamento() {
         // 2. Preparar dados para API agendamento existente
         const dadosAgendamento = {
             data_agendamento: formData.get('data_agendamento'),
-            data_entrega: formData.get('data_expedicao') || null, // Campo 'data_expedicao' vira 'data_entrega'
+            data_expedicao: formData.get('data_expedicao') || null, // ✅ CORREÇÃO: Usar data_expedicao para campo expedição
             hora_agendamento: formData.get('hora_agendamento') || null,
             protocolo: formData.get('protocolo') || null,
-            observacoes: formData.get('observacoes') || null, // ✅ CORREÇÃO: Incluir observações
+            observacoes: formData.get('observacoes') || null,
             agenda_confirmada: formData.get('agenda_confirmada') === 'on' || false,
             aplicar_todos: true // ✅ SEMPRE aplicar a todos os itens do pedido
         };
@@ -3674,21 +3748,152 @@ function validarEnvioParcial() {
  * 🔧 FUNÇÕES DOS BOTÕES - IMPLEMENTADAS
  */
 function criarSeparacao(numPedido) {
-    console.log(`📦 Criar Separação pedido ${numPedido} (com pré-separações agrupadas)`);
-    abrirModalGerarSeparacao(numPedido);
-}
-
-function abrirModalGerarSeparacao(numPedido) {
-    console.log(`🔍 Gerar Separação pedido ${numPedido}`);
-    // Mostrar modal (Bootstrap 5)
-    const modalElement = document.getElementById('modalAvaliarEstoques');
+    console.log(`📦 Criar Separação pedido ${numPedido}`);
+    
+    // Abrir modal específico de criar separação
+    const modalElement = document.getElementById('modalCriarSeparacao');
     if (modalElement) {
         const modal = new bootstrap.Modal(modalElement);
         modal.show();
+        
+        // Carregar itens do pedido
+        carregarItensParaSeparacao(numPedido);
     } else {
-        console.error('Modal modalAvaliarEstoques não encontrado');
+        console.error('Modal modalCriarSeparacao não encontrado');
     }
-    carregarItensEPreSeparacoes(numPedido);
+}
+
+async function carregarItensParaSeparacao(numPedido) {
+    console.log(`📋 Carregando itens para separação do pedido ${numPedido}`);
+    
+    try {
+        const response = await fetch(`/carteira/api/pedido/${numPedido}/itens-editaveis`);
+        const data = await response.json();
+        
+        if (data.success && data.itens) {
+            gerarTabelaItensSeparacao(data.itens, numPedido);
+        } else {
+            console.error('Erro ao carregar itens:', data.error);
+        }
+    } catch (error) {
+        console.error('Erro na requisição:', error);
+    }
+}
+
+function gerarTabelaItensSeparacao(itens, numPedido) {
+    const tbody = document.getElementById('tabelaItensSeparacao');
+    if (!tbody) return;
+    
+    let html = '';
+    itens.forEach(item => {
+        const qtdDisponivel = item.qtd_saldo_disponivel || 0;
+        const dataExpedicao = item.expedicao || '';
+        
+        html += `
+            <tr data-item-id="${item.id}">
+                <td>
+                    <input type="checkbox" class="item-checkbox" ${qtdDisponivel > 0 ? '' : 'disabled'}>
+                </td>
+                <td><strong>${item.cod_produto}</strong></td>
+                <td class="text-truncate" style="max-width: 200px;" title="${item.nome_produto}">
+                    ${item.nome_produto}
+                </td>
+                <td class="text-center">
+                    <span class="${qtdDisponivel > 0 ? 'text-success' : 'text-danger'}">
+                        ${qtdDisponivel.toLocaleString('pt-BR')}
+                    </span>
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm qtd-separar" 
+                           value="${qtdDisponivel}" 
+                           min="0" max="${qtdDisponivel}"
+                           ${qtdDisponivel <= 0 ? 'disabled' : ''}>
+                </td>
+                <td>
+                    <small class="text-muted">${dataExpedicao || '-'}</small>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+    
+    // Armazenar dados globalmente
+    window.pedidoAtualSeparacao = numPedido;
+    window.itensPedidoSeparacao = itens;
+}
+
+function toggleTodosItensSeparacao(masterCheckbox) {
+    const checkboxes = document.querySelectorAll('#tabelaItensSeparacao .item-checkbox:not(:disabled)');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = masterCheckbox.checked;
+    });
+}
+
+async function confirmarCriacaoSeparacao() {
+    const numPedido = window.pedidoAtualSeparacao;
+    if (!numPedido) {
+        alert('Erro: Pedido não identificado');
+        return;
+    }
+    
+    // Coletar itens selecionados
+    const itensSelecionados = [];
+    const rows = document.querySelectorAll('#tabelaItensSeparacao tr[data-item-id]');
+    
+    rows.forEach(row => {
+        const checkbox = row.querySelector('.item-checkbox');
+        const qtdInput = row.querySelector('.qtd-separar');
+        
+        if (checkbox && checkbox.checked) {
+            const itemId = row.getAttribute('data-item-id');
+            const qtdSeparar = parseFloat(qtdInput.value) || 0;
+            
+            if (qtdSeparar > 0) {
+                itensSelecionados.push({
+                    item_id: itemId,
+                    qtd_selecionada: qtdSeparar
+                });
+            }
+        }
+    });
+    
+    if (itensSelecionados.length === 0) {
+        alert('Selecione pelo menos um item para criar a separação');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/carteira/api/pedido/${numPedido}/criar-separacao`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                itens: itensSelecionados,
+                tipo_envio: 'total'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Separação criada com sucesso!');
+            
+            // Fechar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalCriarSeparacao'));
+            if (modal) modal.hide();
+            
+            // Recarregar a página
+            window.location.reload();
+        } else {
+            alert('Erro ao criar separação: ' + (data.error || 'Erro desconhecido'));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao criar separação');
+    }
+}
 }
 
 /**
