@@ -977,6 +977,7 @@ def api_separacoes_pedido(num_pedido):
         # 🔍 QUERY SIMPLES: Buscar TODAS as separações do pedido primeiro
         logger.info(f"🔍 DEBUG: Buscando separações para pedido {num_pedido}")
         
+        # 🔧 QUERY CORRIGIDA: Incluir campos que o código espera
         separacoes = db.session.query(
             Separacao.separacao_lote_id,
             Separacao.num_pedido,
@@ -988,7 +989,15 @@ def api_separacoes_pedido(num_pedido):
             Separacao.pallet,
             Separacao.expedicao,
             Separacao.agendamento,
-            Separacao.protocolo
+            Separacao.protocolo,
+            # Campos que o código espera (evitar erros)
+            db.literal(None).label('embarque_numero'),
+            db.literal(None).label('data_prevista_embarque'),
+            db.literal(None).label('data_embarque'),
+            db.literal(None).label('embarque_status'),
+            db.literal(None).label('tipo_carga'),
+            db.literal(None).label('transportadora_razao'),
+            db.literal('Produto').label('nome_produto')
         ).filter(
             Separacao.num_pedido == num_pedido
         ).all()
@@ -2666,6 +2675,12 @@ def api_pedido_itens_editaveis(num_pedido):
             try:
                 # 📊 CALCULAR SALDO DISPONÍVEL conforme especificação
                 qtd_carteira = float(item.qtd_saldo_produto_pedido or 0)
+                
+                # 🔍 DEBUG: Log se quantidade está zerada
+                if qtd_carteira == 0:
+                    logger.warning(f"🔍 DEBUG QTD ZERADA: Pedido {num_pedido}, Produto {item.cod_produto}, qtd_saldo_produto_pedido={item.qtd_saldo_produto_pedido}, qtd_produto_pedido={getattr(item, 'qtd_produto_pedido', 'N/A')}")
+                else:
+                    logger.info(f"🔍 DEBUG QTD OK: Pedido {num_pedido}, Produto {item.cod_produto}, qtd_saldo={qtd_carteira}")
                 
                 # Somar quantidades em separações ATIVAS (via status do Pedido)
                 from app.pedidos.models import Pedido

@@ -448,7 +448,7 @@ def create_app(config_name=None):
     from app.portaria.routes import portaria_bp
     from app.api.routes import api_bp
     # from app.odoo import odoo_bp  # DESATIVADO - Movido para Carteira & Estoque
-    # from app.odoo.routes.sincronizacao_integrada import sync_integrada_bp  # DESATIVADO - Movido para Carteira & Estoque
+    from app.odoo.routes.sincronizacao_integrada import sync_integrada_bp  # REATIVADO - Necessário!
     from app.claude_ai import claude_ai_bp
     from app.permissions import permissions_bp  # ✅ Sistema de Permissões
     
@@ -481,7 +481,7 @@ def create_app(config_name=None):
     
     # 🔗 API Odoo Integration - DESATIVADO (funcionalidade integrada em Carteira & Estoque)
     # app.register_blueprint(odoo_bp)  # Movido para Carteira & Estoque
-    # app.register_blueprint(sync_integrada_bp)  # Movido para Carteira & Estoque
+    app.register_blueprint(sync_integrada_bp)  # REATIVADO - Necessário!
     
     # 🤖 Claude AI Integration
     app.register_blueprint(claude_ai_bp)
