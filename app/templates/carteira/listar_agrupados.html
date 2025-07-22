@@ -1634,21 +1634,102 @@
     }
 
     /**
-     * Divide linha no dropdown (placeholder - implementar quando necessário)
+     * Divide linha no dropdown criando pré-separação em tempo real
      */
     async function dividirLinhaDropdown(itemId, qtdUtilizada, qtdOriginal, numPedido) {
         console.log(`📊 Dividindo linha dropdown: Item ${itemId}, Qtd ${qtdUtilizada}, Original ${qtdOriginal}`);
-        // TODO: Implementar divisão de linha específica para dropdown se necessário
-        return true;
+        
+        try {
+            // Criar pré-separação com a quantidade utilizada
+            const response = await fetch(`/carteira/api/pedido/${numPedido}/criar-pre-separacao`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                body: JSON.stringify({
+                    item_id: itemId,
+                    quantidade: qtdUtilizada
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Erro HTTP: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log(`✅ Pré-separação criada: ${result.pre_separacao_id}`);
+                
+                // Recarregar itens do pedido para mostrar a divisão
+                await carregarItensPedido(numPedido);
+                
+                // Mostrar notificação de sucesso
+                showNotification(`✅ Linha dividida com sucesso! Quantidade ${qtdUtilizada} separada.`, 'success');
+                
+                return true;
+            } else {
+                throw new Error(result.error || 'Erro ao criar pré-separação');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao dividir linha:', error);
+            showNotification(`❌ Erro ao dividir linha: ${error.message}`, 'error');
+            return false;
+        }
     }
 
     /**
-     * Unifica linha no dropdown (placeholder - implementar quando necessário)  
+     * Unifica linha no dropdown removendo pré-separação
      */
     async function unificarLinhaDropdown(itemId, numPedido) {
         console.log(`🔄 Unificando linha dropdown: Item ${itemId}`);
-        // TODO: Implementar unificação específica para dropdown se necessário
-        return true;
+        
+        try {
+            // Buscar a pré-separação do item
+            const row = document.querySelector(`tr[data-item-id="${itemId}"]`);
+            const preSeparacaoId = row?.querySelector('[data-pre-separacao-id]')?.getAttribute('data-pre-separacao-id');
+            
+            if (!preSeparacaoId) {
+                console.log('Item não tem pré-separação para unificar');
+                return true;
+            }
+            
+            // Cancelar a pré-separação
+            const response = await fetch(`/carteira/api/pre-separacao/${preSeparacaoId}/cancelar`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Erro HTTP: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log(`✅ Pré-separação ${preSeparacaoId} cancelada`);
+                
+                // Recarregar itens do pedido para mostrar a unificação
+                await carregarItensPedido(numPedido);
+                
+                // Mostrar notificação de sucesso
+                showNotification(`✅ Linha unificada com sucesso! Quantidade restaurada ao original.`, 'success');
+                
+                return true;
+            } else {
+                throw new Error(result.error || 'Erro ao cancelar pré-separação');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao unificar linha:', error);
+            showNotification(`❌ Erro ao unificar linha: ${error.message}`, 'error');
+            return false;
+        }
     }
 
     // ===== FUNÇÕES ESPECÍFICAS DO DROPDOWN SEPARAÇÕES =====
@@ -5161,6 +5242,99 @@
                 notification.parentNode.removeChild(notification);
             }
         }, 5000);
+    }
+
+    /**
+     * Mostra/oculta badge de confirmação de agendamento
+     */
+    function mostrarBadgeConfirmacao(confirmado) {
+        const badge = document.getElementById('badge-status-agenda');
+        if (badge) {
+            if (confirmado) {
+                badge.style.display = 'inline-block';
+                badge.innerHTML = '<i class="fas fa-check-circle"></i> Confirmado';
+                badge.className = 'badge badge-success ms-2';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    }
+
+    /**
+     * Sugere data alternativa com estoque disponível
+     */
+    async function sugerirAlternativa(codProduto) {
+        try {
+            // Buscar o item para obter a quantidade necessária
+            const itemRow = document.querySelector(`tr[data-cod-produto="${codProduto}"]`);
+            const qtdNecessaria = parseFloat(itemRow?.querySelector('.qtd-input')?.value) || 
+                                  parseFloat(itemRow?.dataset.qtdPedido) || 0;
+            
+            // Buscar projeção de estoque para o produto
+            const response = await fetch(`/carteira/api/produto/${codProduto}/estoque-d0-d7`);
+            if (!response.ok) {
+                throw new Error('Erro ao buscar estoque');
+            }
+            
+            const data = await response.json();
+            
+            if (!data.success || !data.produto) {
+                throw new Error('Dados de estoque não disponíveis');
+            }
+            
+            const produto = data.produto;
+            const resumoEstoque = produto.estoque_info;
+            
+            // Usar dados reais da projeção
+            let datasSugeridas = [];
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            
+            // Se tem projeção detalhada
+            if (resumoEstoque && resumoEstoque.projecao_29_dias) {
+                resumoEstoque.projecao_29_dias.forEach((dia, index) => {
+                    const estoqueProjetado = dia.estoque_final || 0;
+                    
+                    // Se tem estoque suficiente para a quantidade necessária
+                    if (estoqueProjetado >= qtdNecessaria && datasSugeridas.length < 3) {
+                        const dataSugestao = new Date(hoje);
+                        dataSugestao.setDate(hoje.getDate() + index);
+                        
+                        datasSugeridas.push({
+                            data: dataSugestao.toLocaleDateString('pt-BR'),
+                            estoque_previsto: Math.floor(estoqueProjetado),
+                            producao_dia: dia.producao || 0,
+                            consumo_dia: dia.consumo || 0
+                        });
+                    }
+                });
+            }
+            
+            // Mostrar resultado
+            if (datasSugeridas.length > 0) {
+                let mensagem = `📅 DATAS ALTERNATIVAS COM ESTOQUE\n\n`;
+                mensagem += `Produto: ${codProduto} - ${produto.nome_produto || ''}\n`;
+                mensagem += `Quantidade necessária: ${qtdNecessaria.toFixed(0)} unidades\n`;
+                mensagem += `Estoque atual: ${resumoEstoque?.estoque_inicial?.toFixed(0) || 0} unidades\n\n`;
+                mensagem += `Sugestões de expedição:\n`;
+                
+                datasSugeridas.forEach((sugestao, index) => {
+                    mensagem += `\n${index + 1}. ${sugestao.data}\n`;
+                    mensagem += `   • Estoque previsto: ${sugestao.estoque_previsto} unidades\n`;
+                    if (sugestao.producao_dia > 0) {
+                        mensagem += `   • Produção no dia: +${sugestao.producao_dia} unidades\n`;
+                    }
+                });
+                
+                alert(mensagem);
+            } else {
+                alert(`⚠️ ESTOQUE INSUFICIENTE\n\nProduto: ${codProduto}\nQuantidade necessária: ${qtdNecessaria} unidades\n\nNão há previsão de estoque suficiente nos próximos 28 dias.\n\nConsidere:\n• Reduzir a quantidade\n• Negociar prazo maior\n• Buscar produto alternativo`);
+            }
+            
+        } catch (error) {
+            console.error('Erro ao sugerir alternativa:', error);
+            alert('❌ Erro ao buscar sugestões de data alternativa');
+        }
     }
 
     /**
