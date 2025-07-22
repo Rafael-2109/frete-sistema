@@ -4159,7 +4159,7 @@ def api_criar_separacao_pedido(num_pedido):
                 cnpj_cpf=carteira_item.cnpj_cpf,
                 raz_social_red=carteira_item.raz_social_red,  # ✅ ADICIONADO
                 nome_cidade=carteira_item.nome_cidade,  # ✅ ADICIONADO
-                cod_uf=carteira_item.cod_uf',  # ✅ OBRIGATÓRIO
+                cod_uf=carteira_item.cod_uf,  # ✅ OBRIGATÓRIO
                 cod_produto=carteira_item.cod_produto,
                 nome_produto=carteira_item.nome_produto,  # ✅ ADICIONADO
                 qtd_saldo=qtd_separacao,
