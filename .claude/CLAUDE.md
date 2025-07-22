@@ -2,6 +2,10 @@
 
 ## ⚠️ ATENÇÃO: Use SEMPRE os nomes EXATOS dos campos listados aqui
 
+## NÃO ALTERE FUNÇÕES QUE NÃO SÃO DO SEU CONTEXTO
+
+## SE NÃO TIVER CERTEZA, NÃO ALTERE E PERGUNTE
+
 Este arquivo contém os nomes corretos dos campos de todos os modelos para evitar erros como `data_expedicao_pedido` (❌ INCORRETO) em vez de `expedicao` (✅ CORRETO).
 
 ---

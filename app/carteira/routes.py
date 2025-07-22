@@ -1109,13 +1109,13 @@ def api_separacoes_pedido(num_pedido):
                 
                 if resumo_estoque and resumo_estoque['projecao_29_dias']:
                     # 📅 ESTOQUE DA DATA DE EXPEDIÇÃO
-                    estoque_expedicao = _calcular_estoque_data_especifica(
+                    estoque_expedicao_calc = _calcular_estoque_data_especifica(
                         resumo_estoque['projecao_29_dias'], expedicao_calc
                     )
                     estoque_expedicao = f"{int(estoque_expedicao_calc)}" if estoque_expedicao_calc >= 0 else "RUPTURA"
                     
                     # 🏭 PRODUÇÃO DA DATA DE EXPEDIÇÃO  
-                    producao_expedicao = SaldoEstoque.calcular_producao_periodo(
+                    producao_expedicao_calc = SaldoEstoque.calcular_producao_periodo(
                         sep.cod_produto, expedicao_calc, expedicao_calc
                     )
                     producao_expedicao = f"{int(producao_expedicao_calc)}" if producao_expedicao_calc > 0 else "0"
@@ -3994,21 +3994,19 @@ def api_dividir_linha_item(item_id):
         db.session.add(pre_separacao)
         db.session.flush()  # Para obter ID da pré-separação
         
-        # 🔧 STEP 3: Criar linha saldo com marcação especial
+        # 🔧 STEP 3: Criar linha saldo preservando dados originais
         novo_item = CarteiraPrincipal(
             num_pedido=item.num_pedido,
             cod_produto=item.cod_produto,
             qtd_saldo_produto_pedido=qtd_restante,
             nome_produto=f"[SALDO] {item.nome_produto}",
             preco_produto_pedido=item.preco_produto_pedido,
-            # Copiar outros campos relevantes
+            # Copiar outros campos relevantes preservando dados originais
             cnpj_cpf=item.cnpj_cpf,
             raz_social_red=item.raz_social_red,
             data_pedido=item.data_pedido,
             status_pedido=item.status_pedido,
             vendedor=item.vendedor,
-            # 🎯 MARCAÇÃO: Vincular à pré-separação para controle
-            observacoes=f"SALDO_PRE_SEP_ID:{pre_separacao.id}"
         )
         db.session.add(novo_item)
         
