@@ -29,7 +29,7 @@ sync_service = SincronizacaoIntegradaService()
 
 @sync_integrada_bp.route('/')
 @login_required
-@require_admin()
+@require_admin
 def dashboard():
     """
     Dashboard principal da sincronização integrada segura
@@ -49,7 +49,7 @@ def dashboard():
 
 @sync_integrada_bp.route('/executar', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def executar_sincronizacao_segura():
     """
     🔄 EXECUTA SINCRONIZAÇÃO INTEGRADA SEGURA

@@ -336,7 +336,7 @@ def claude_real_status():
 
 @claude_ai_bp.route('/redis-status')
 @login_required
-@require_admin()
+@require_admin
 def redis_status():
     """Dashboard de status do Redis Cache"""
     if not REDIS_DISPONIVEL:
@@ -377,7 +377,7 @@ def redis_status():
 
 @claude_ai_bp.route('/redis-clear')
 @login_required
-@require_admin()
+@require_admin
 def redis_clear():
     """Limpar cache Redis (apenas staff)"""
     if not REDIS_DISPONIVEL:
@@ -1440,7 +1440,7 @@ def api_advanced_feedback():
 
 @claude_ai_bp.route('/api/advanced-analytics')
 @login_required
-@require_admin()
+@require_admin
 def api_advanced_analytics():
     """📊 API para analytics avançadas do sistema de IA"""
     try:
@@ -1556,7 +1556,7 @@ def api_advanced_analytics():
 
 @claude_ai_bp.route('/advanced-dashboard')
 @login_required
-@require_admin()
+@require_admin
 def advanced_dashboard():
     """🎛️ Dashboard avançado para administradores"""
     return render_template('claude_ai/advanced_dashboard.html',
@@ -1634,7 +1634,7 @@ def dashboard_v4():
 
 @claude_ai_bp.route('/api/system-health-advanced')
 @login_required
-@require_admin()
+@require_admin
 def api_system_health_advanced():
     """🔍 Health check avançado do sistema de IA"""
     try:
@@ -2546,7 +2546,7 @@ def dev_ai_capabilities_v2():
 # 🚀 MODO ADMINISTRADOR LIVRE - ROTAS
 @claude_ai_bp.route('/admin/free-mode/enable', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def enable_admin_free_mode():
     """🔓 Ativar Modo Administrador Livre"""
     try:
@@ -2569,7 +2569,7 @@ def enable_admin_free_mode():
 
 @claude_ai_bp.route('/admin/free-mode/disable', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def disable_admin_free_mode():
     """🔒 Desativar Modo Administrador Livre"""
     try:
@@ -2589,7 +2589,7 @@ def disable_admin_free_mode():
 
 @claude_ai_bp.route('/admin/free-mode/status')
 @login_required
-@require_admin()
+@require_admin
 def admin_free_mode_status():
     """📊 Status do Modo Administrador Livre"""
     try:
@@ -2610,7 +2610,7 @@ def admin_free_mode_status():
 
 @claude_ai_bp.route('/admin/free-mode/experimental/<feature_name>', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def enable_experimental_feature(feature_name):
     """🧪 Ativar Funcionalidade Experimental"""
     try:
@@ -2633,7 +2633,7 @@ def enable_experimental_feature(feature_name):
 
 @claude_ai_bp.route('/admin/free-mode/data/<table_name>')
 @login_required
-@require_admin()
+@require_admin
 def get_unlimited_data(table_name):
     """🌐 Acesso Irrestrito aos Dados"""
     try:
@@ -2660,7 +2660,7 @@ def get_unlimited_data(table_name):
 
 @claude_ai_bp.route('/admin/free-mode/dashboard')
 @login_required
-@require_admin()
+@require_admin
 def admin_free_mode_dashboard():
     """🎛️ Dashboard do Modo Administrador Livre"""
     try:
@@ -2680,7 +2680,7 @@ def admin_free_mode_dashboard():
 # 🔄 INTEGRAÇÃO COM CLAUDE REAL - Modificar Claude Real para usar modo livre
 @claude_ai_bp.route('/real/free-mode', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def claude_real_free_mode():
     """🚀 Claude Real com Modo Administrador Livre"""
     try:
@@ -2741,7 +2741,7 @@ def claude_real_free_mode():
 # 🧠 MODO LIVRE VERDADEIRO - ROTAS (AUTONOMIA REAL)
 @claude_ai_bp.route('/true-free-mode/enable', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def enable_true_autonomy():
     """🧠 Ativar Verdadeira Autonomia do Claude"""
     try:
@@ -2764,7 +2764,7 @@ def enable_true_autonomy():
 
 @claude_ai_bp.route('/true-free-mode/disable', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def disable_true_autonomy():
     """🔒 Desativar Verdadeira Autonomia do Claude"""
     try:
@@ -2784,7 +2784,7 @@ def disable_true_autonomy():
 
 @claude_ai_bp.route('/true-free-mode/status')
 @login_required
-@require_admin()
+@require_admin
 def true_autonomy_status():
     """📊 Status da Verdadeira Autonomia"""
     try:
@@ -2805,7 +2805,7 @@ def true_autonomy_status():
 
 @claude_ai_bp.route('/true-free-mode/dashboard')
 @login_required
-@require_admin()
+@require_admin
 def true_autonomy_dashboard():
     """🧠 Dashboard da Verdadeira Autonomia"""
     try:
@@ -2824,7 +2824,7 @@ def true_autonomy_dashboard():
 
 @claude_ai_bp.route('/true-free-mode/query', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def claude_autonomous_query_route():
     """🧠 Claude com Autonomia Verdadeira - Decide Tudo Sozinho"""
     try:
@@ -2862,7 +2862,7 @@ def claude_autonomous_query_route():
 
 @claude_ai_bp.route('/true-free-mode/permission/<request_id>', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def approve_claude_permission(request_id):
     """✅ Aprovar/Rejeitar Solicitação de Permissão do Claude"""
     try:
@@ -2890,7 +2890,7 @@ def approve_claude_permission(request_id):
 
 @claude_ai_bp.route('/true-free-mode/permissions')
 @login_required
-@require_admin()
+@require_admin
 def list_claude_permissions():
     """📋 Listar Solicitações de Permissão Pendentes do Claude"""
     try:
@@ -2914,7 +2914,7 @@ def list_claude_permissions():
 
 @claude_ai_bp.route('/true-free-mode/data/<table_name>')
 @login_required
-@require_admin()
+@require_admin
 def claude_autonomous_data_access(table_name):
     """🗄️ Claude Acessa Dados Autonomamente"""
     try:
@@ -2940,7 +2940,7 @@ def claude_autonomous_data_access(table_name):
 
 @claude_ai_bp.route('/true-free-mode/experiment/<experiment_name>', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def claude_activate_experiment(experiment_name):
     """🧪 Claude Ativa Experimento Autonomamente"""
     try:
@@ -2963,7 +2963,7 @@ def claude_activate_experiment(experiment_name):
 
 @claude_ai_bp.route('/diagnostico-sistema-novo')
 @login_required
-@require_admin()
+@require_admin
 def diagnostico_sistema_novo():
     """🔬 Diagnóstico completo do sistema novo Claude AI"""
     try:
@@ -2991,7 +2991,7 @@ def diagnostico_sistema_novo():
 
 @claude_ai_bp.route('/api/forcar-sistema-novo', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def api_forcar_sistema_novo():
     """🚀 API para forçar ativação do sistema novo"""
     try:

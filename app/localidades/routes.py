@@ -264,7 +264,7 @@ def listar_sub_rotas():
 
 @localidades_bp.route('/rotas/importar')
 @login_required
-@require_admin()
+@require_admin
 def importar_rotas():
     """Tela para importar rotas"""
     return render_template('localidades/importar_rotas.html')
@@ -390,7 +390,7 @@ def processar_importacao_rotas():
 
 @localidades_bp.route('/sub-rotas/importar')
 @login_required
-@require_admin()
+@require_admin
 def importar_sub_rotas():
     """Tela para importar sub-rotas"""
     return render_template('localidades/importar_sub_rotas.html')

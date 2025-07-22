@@ -392,9 +392,14 @@ class MainOrchestrator:
             # Garantir formato de resposta
             if result.get('success'):
                 response_text = None
+                logger.debug(f"🔍 Estrutura do resultado: {list(result.keys())}")
                 
                 # Tentar extrair resposta de diferentes locais
-                if 'response' in result:
+                # 🎯 PRIORIDADE: Verificar response_result do ResponseProcessor
+                if 'response_result' in result:
+                    response_text = result['response_result']
+                    logger.info(f"✅ Resposta extraída diretamente do ResponseProcessor: {len(str(response_text))} caracteres")
+                elif 'response' in result:
                     response_text = result['response']
                 elif 'steps_results' in result:
                     # Procurar resposta nos resultados dos steps
@@ -420,7 +425,28 @@ class MainOrchestrator:
                         else:
                             response_text = "Processamento concluído, mas não encontrei dados específicos."
                     else:
-                        response_text = "Sistema processou a consulta mas não gerou resposta específica."
+                        # 🤖 Fallback melhorado - usar o ResponseProcessor diretamente
+                        try:
+                            if self.response_processor:
+                                response_text = self.response_processor._processar_consulta_padrao(
+                                    consulta=data.get("query", ""),
+                                    user_context=data.get("context", {})
+                                )
+                                logger.info("✅ Resposta gerada pelo fallback do ResponseProcessor")
+                            else:
+                                response_text = f"""🤖 **Sistema Ativo**
+                                
+Sua consulta foi processada mas não conseguimos gerar uma resposta específica.
+
+**🔍 Consulta recebida:** {data.get("query", "Não especificada")}
+**⚡ Status:** Sistema funcionando normalmente
+**🕒 Timestamp:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+
+**💡 Sugestão:** Tente reformular sua pergunta de forma mais específica.
+"""
+                        except Exception as e:
+                            logger.error(f"Erro no fallback: {e}")
+                            response_text = f"Sistema processou a consulta mas encontrou erro no fallback: {str(e)}"
                 
                 return {
                     'success': True,

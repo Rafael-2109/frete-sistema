@@ -46,7 +46,7 @@ PADRÕES DO SISTEMA:
 - Formulários: WTForms com FlaskForm
 - Templates: Jinja2 com herança de base.html
 - Autenticação: @login_required
-- Permissões: @require_financeiro(), @require_admin()
+- Permissões: @require_financeiro(), @require_admin
 - Logs: logger.info(), logger.error()"""
         
     def is_dev_command(self, consulta: str) -> bool:

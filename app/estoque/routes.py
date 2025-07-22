@@ -169,14 +169,14 @@ def api_estatisticas():
 
 @estoque_bp.route('/movimentacoes/importar')
 @login_required
-@require_admin()
+@require_admin
 def importar_movimentacoes():
     """Tela para importar movimentações de estoque"""
     return render_template('estoque/importar_movimentacoes.html')
 
 @estoque_bp.route('/movimentacoes/importar', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def processar_importacao_movimentacoes():
     """Processar importação de movimentações de estoque"""
     try:
@@ -397,7 +397,7 @@ def buscar_produto_api(codigo):
 
 @estoque_bp.route('/movimentacoes/nova')
 @login_required
-@require_admin()
+@require_admin
 def nova_movimentacao():
     """Redireciona para listagem onde há modal de nova movimentação"""
     # Capturar parâmetros da URL para abrir modal com dados pré-preenchidos
@@ -415,7 +415,7 @@ def nova_movimentacao():
 
 @estoque_bp.route('/movimentacoes/nova', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def processar_nova_movimentacao():
     """Processar nova movimentação manual via modal"""
     try:
@@ -500,7 +500,7 @@ def processar_nova_movimentacao():
 
 @estoque_bp.route('/movimentacoes/<int:id>/editar')
 @login_required 
-@require_admin()
+@require_admin
 def editar_movimentacao(id):
     """Carregar dados da movimentação para edição"""
     movimentacao = MovimentacaoEstoque.query.get_or_404(id)
@@ -533,7 +533,7 @@ def editar_movimentacao(id):
 
 @estoque_bp.route('/movimentacoes/<int:id>/editar', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def processar_edicao_movimentacao(id):
     """Processar edição de movimentação"""
     try:
@@ -1113,7 +1113,7 @@ def api_saldo_produto(cod_produto):
 
 @estoque_bp.route('/saldo-estoque/processar-ajuste', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def processar_ajuste_estoque():
     """Processa ajuste de estoque via modal"""
     try:

@@ -273,14 +273,14 @@ def listar_palletizacao():
 
 @producao_bp.route('/palletizacao/importar')
 @login_required
-@require_admin()
+@require_admin
 def importar_palletizacao():
     """Tela para importar cadastro de palletização"""
     return render_template('producao/importar_palletizacao.html')
 
 @producao_bp.route('/palletizacao/importar', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def processar_importacao_palletizacao():
     """Processar importação de cadastro de palletização"""
     try:
@@ -440,14 +440,14 @@ def api_estatisticas():
 
 @producao_bp.route('/programacao/importar')
 @login_required
-@require_admin()
+@require_admin
 def importar_programacao():
     """Tela para importar programação de produção"""
     return render_template('producao/importar_programacao.html')
 
 @producao_bp.route('/programacao/importar', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def processar_importacao_programacao():
     """Processar importação de programação de produção"""
     try:
@@ -783,14 +783,14 @@ def baixar_modelo_palletizacao():
 
 @producao_bp.route('/palletizacao/nova')
 @login_required
-@require_admin()
+@require_admin
 def nova_palletizacao():
     """Formulário para nova palletização"""
     return render_template('producao/nova_palletizacao.html')
 
 @producao_bp.route('/palletizacao/nova', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def processar_nova_palletizacao():
     """Processar nova palletização"""
     try:
@@ -852,7 +852,7 @@ def processar_nova_palletizacao():
 
 @producao_bp.route('/palletizacao/editar/<int:id>')
 @login_required
-@require_admin()
+@require_admin
 def editar_palletizacao(id):
     """Formulário para editar palletização"""
     palletizacao = CadastroPalletizacao.query.get_or_404(id)
@@ -860,7 +860,7 @@ def editar_palletizacao(id):
 
 @producao_bp.route('/palletizacao/editar/<int:id>', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def processar_edicao_palletizacao(id):
     """Processar edição de palletização"""
     try:
@@ -913,7 +913,7 @@ def processar_edicao_palletizacao(id):
 
 @producao_bp.route('/palletizacao/excluir/<int:id>')
 @login_required
-@require_admin()
+@require_admin
 def excluir_palletizacao(id):
     """Excluir palletização (soft delete)"""
     try:
@@ -968,7 +968,7 @@ def api_produto_palletizacao(cod_produto):
 
 @producao_bp.route('/palletizacao/api/criar', methods=['POST'])
 @login_required
-@require_admin()
+@require_admin
 def api_criar_produto_palletizacao():
     """API para criar produto no cadastro de palletização"""
     try:
