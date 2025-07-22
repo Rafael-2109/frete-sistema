@@ -301,7 +301,7 @@
                     <i class="fas fa-calendar-plus"></i> Solicitar Agendamento
                     <span id="modal-agendamento-pedido" class="badge badge-primary ml-2"></span>
                 </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
@@ -432,7 +432,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
                 <button type="button" class="btn btn-primary" onclick="salvarAgendamento()">
@@ -452,7 +452,7 @@
                     <i class="fas fa-chart-bar"></i> Análise de Estoque D0/D7
                     <span id="modal-estoque-pedido" class="badge badge-primary ml-2"></span>
                 </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
@@ -537,7 +537,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times"></i> Fechar
                 </button>
                 <button type="button" class="btn btn-primary" onclick="exportarAnaliseEstoque()">
@@ -596,7 +596,7 @@
                     <i class="fas fa-chart-bar"></i> Avaliar Estoques do Pedido (28 dias)
                     <span id="modal-num-pedido-estoques" class="badge badge-primary ml-2"></span>
                 </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
@@ -771,7 +771,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
                 <button type="button" class="btn btn-primary" id="btn-salvar-avaliacoes" onclick="salvarAvaliacoes()">
@@ -792,7 +792,7 @@
                     <i class="fas fa-boxes"></i> Separações do Pedido
                     <span id="modal-separacoes-pedido" class="badge badge-primary ml-2"></span>
                 </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
@@ -871,7 +871,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times"></i> Fechar
                 </button>
                 <button type="button" class="btn btn-primary" onclick="criarNovaSeparacao()">
@@ -891,7 +891,7 @@
                     <i class="fas fa-warehouse"></i> Estoque D0/D7 - Pedido
                     <span id="modal-estoque-pedido" class="badge badge-primary ml-2"></span>
                 </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
@@ -985,7 +985,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times"></i> Fechar
                 </button>
                 <button type="button" class="btn btn-info" onclick="exportarDadosEstoque()">
@@ -1938,12 +1938,12 @@ function gerarHtmlItens(data) {
                     }
                 </td>
                 <td>
-                    <strong>${item.cod_produto}</strong>
+                    <strong>${item.cod_produto || ''}</strong>
                     ${isPreSeparacao ? `<br><small class="text-warning"><i class="fas fa-clock"></i> Pré-separação</small>` : ''}
                 </td>
-                <td class="text-truncate" style="max-width: 200px;" title="${item.nome_produto}">
-                    ${item.nome_produto}
-                    ${isPreSeparacao && item.status ? `<br><small class="badge badge-info">${item.status}</small>` : ''}
+                <td class="text-truncate" style="max-width: 200px;" title="${item.nome_produto || ''}">
+                    ${item.nome_produto || ''}
+                    ${isPreSeparacao && item.status ? `<br><small class="badge badge-info">${item.status || ''}</small>` : ''}
                 </td>
                 <td>
                     ${isPreSeparacao ? 
@@ -3316,64 +3316,7 @@ async function carregarSeparacoesPedido(numPedido) {
 /**
  * Gera HTML da tabela de separações
  */
-function gerarHtmlSeparacoes(data) {
-    const tbody = document.getElementById('tbody-separacoes');
-    let html = '';
-    
-    data.separacoes.forEach(sep => {
-        const transportadora = sep.transportadora.razao_social || sep.transportadora.nome_fantasia || '-';
-        const embarqueInfo = sep.embarque.numero ? `#${sep.embarque.numero}` : '-';
-        
-        html += `
-            <tr>
-                <td>
-                    <strong>${sep.separacao_lote_id}</strong>
-                    <br><small class="text-muted">${sep.total_itens} itens</small>
-                </td>
-                <td>
-                    <span class="badge badge-${sep.status_class}">
-                        ${sep.status}
-                    </span>
-                </td>
-                <td>${sep.criado_em}</td>
-                <td>
-                    ${embarqueInfo}
-                    ${sep.embarque.tipo_carga ? `<br><small class="text-muted">${sep.embarque.tipo_carga}</small>` : ''}
-                </td>
-                <td>
-                    <small>${transportadora}</small>
-                </td>
-                <td>${sep.embarque.data_prevista || '-'}</td>
-                <td>${sep.embarque.data_embarque || '-'}</td>
-                <td>
-                    <strong>R$ ${sep.valor_saldo.toFixed(2)}</strong>
-                </td>
-                <td>
-                    ${sep.peso.toFixed(2)} kg
-                    <br><small class="text-muted">${sep.pallet.toFixed(2)} pal</small>
-                </td>
-                <td>
-                    <div class="btn-group-vertical btn-group-sm">
-                        <button class="btn btn-outline-primary btn-sm" 
-                                onclick="verDetalhesSeparacao('${sep.separacao_lote_id}')"
-                                title="Ver detalhes">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        ${sep.status === 'CRIADA' ? `
-                        <button class="btn btn-outline-warning btn-sm" 
-                                onclick="editarSeparacao('${sep.separacao_lote_id}')"
-                                title="Editar">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        ` : ''}
-                    </div>
-                </td>
-            </tr>
-        `;
-    });
-    
-    tbody.innerHTML = html;
-}
+// ❌ FUNÇÃO DUPLICADA REMOVIDA - causava "undefined" nos dropdowns
 
 /**
  * Atualiza resumo das separações
@@ -4008,7 +3951,12 @@ async function enviarAgrupamentosParaSeparacao(numPedido) {
             alert(detalhes);
             
             // Fechar modal
-            $('#modalAvaliarEstoques').modal('hide');
+            // Fechar modal (Bootstrap 5)
+            const modalElement = document.getElementById('modalAvaliarEstoques');
+            if (modalElement) {
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                if (modal) modal.hide();
+            }
             
             // Recarregar página para refletir alterações
             window.location.reload();
@@ -4162,9 +4110,9 @@ function gerarTabelaItensEditaveis(data) {
                            onchange="atualizarContadoresModalEditavel()"
                            ${disabled}>
                 </td>
-                <td><strong>${item.cod_produto}</strong></td>
-                <td class="text-truncate" style="max-width: 200px;" title="${item.nome_produto}">
-                    ${item.nome_produto}
+                <td><strong>${item.cod_produto || ''}</strong></td>
+                <td class="text-truncate" style="max-width: 200px;" title="${item.nome_produto || ''}">
+                    ${item.nome_produto || ''}
                 </td>
                 <td>
                     <input type="number" 

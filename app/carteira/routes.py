@@ -516,6 +516,10 @@ def api_item_detalhes(id):
     try:
         item = CarteiraPrincipal.query.get_or_404(id)
         
+        # 🔍 DEBUG: Log do saldo para investigar zeros
+        qtd_saldo = float(item.qtd_saldo_produto_pedido or 0)
+        logger.info(f"🔍 DEBUG CarteiraPrincipal ID {item.id}: cod={item.cod_produto}, qtd_saldo={qtd_saldo}, qtd_produto={item.qtd_produto_pedido}, qtd_cancelada={item.qtd_cancelada_produto_pedido}")
+        
         # 📊 DADOS BÁSICOS DO ITEM
         dados = {
             'id': item.id,
@@ -3370,12 +3374,16 @@ def api_pedido_pre_separacoes_agrupadas(num_pedido):
                     'produtos': []
                 }
             
+            # 🔍 DEBUG: Log das quantidades para investigar zeros
+            qtd_selecionada = float(pre_sep.qtd_selecionada_usuario or 0)
+            logger.info(f"🔍 DEBUG PreSeparacao ID {pre_sep.id}: cod={pre_sep.cod_produto}, qtd_selecionada={qtd_selecionada}, qtd_original={getattr(pre_sep, 'qtd_original_carteira', 'N/A')}")
+            
             # Adicionar à lista de pré-separações do agrupamento
             agrupamentos[chave_agrupamento]['pre_separacoes'].append({
                 'id': pre_sep.id,
                 'cod_produto': pre_sep.cod_produto,
                 'nome_produto': pre_sep.nome_produto,
-                'quantidade': float(pre_sep.qtd_selecionada_usuario),
+                'quantidade': qtd_selecionada,
                 'valor': float(pre_sep.valor_selecionado if hasattr(pre_sep, 'valor_selecionado') else 0),
                 'peso': float(pre_sep.peso_selecionado if hasattr(pre_sep, 'peso_selecionado') else 0),
                 'status': pre_sep.status,
