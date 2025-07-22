@@ -235,7 +235,7 @@ class PermissaoService:
             return query.filter(False)  # Seguro: sem dados em caso de erro
     
     @staticmethod
-    def obter_dados_com_filtro_usuario(model_class, usuario_id: int = None, **filtros):
+    def obter_dados_com_filtro_usuario(model_class, usuario_id: Optional[int] = None, **filtros):
         """
         Busca dados aplicando filtros automáticos de vendedor/equipe
         
@@ -280,7 +280,7 @@ class PermissaoService:
     @staticmethod
     def conceder_permissao(usuario_id: int, modulo: str, funcao: str,
                           pode_visualizar: bool = True, pode_editar: bool = False,
-                          concedida_por: int = None, observacoes: str = None) -> bool:
+                          concedida_por: Optional[int] = None, observacoes: Optional[str] = None) -> bool:
         """
         Concede uma permissão específica a um usuário
         """
@@ -377,7 +377,7 @@ class PermissaoService:
     
     @staticmethod
     def adicionar_vendedor_usuario(usuario_id: int, vendedor: str,
-                                  adicionado_por: int = None) -> bool:
+                                  adicionado_por: Optional[int] = None) -> bool:
         """
         Adiciona vendedor às autorizações do usuário
         """

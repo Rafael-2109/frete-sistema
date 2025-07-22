@@ -61,9 +61,9 @@ def require_profiles(*allowed_profiles):
         return decorated_function
     return decorator
 
-def require_admin():
+def require_admin(f):
     """Decorador específico para administradores"""
-    return require_profiles('administrador')
+    return require_profiles('administrador')(f)
 
 def require_financeiro():
     """Decorador para acesso ao financeiro"""

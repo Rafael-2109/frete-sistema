@@ -901,47 +901,6 @@ class PreSeparacaoItem(db.Model):
             query = query.filter(cls.cod_produto == cod_produto)
         return query.all()
     
-    @classmethod
-    def criar_e_salvar(cls, carteira_item, qtd_selecionada, dados_editaveis, usuario, tipo_envio, config_parcial=None):
-        """
-        Cria e salva pré-separação (MÉTODO AUSENTE IMPLEMENTADO)
-        Este método era chamado na linha 1559 do routes.py mas não existia
-        """
-        try:
-            # Validar disponibilidade
-            if float(qtd_selecionada) > float(carteira_item.qtd_saldo_produto_pedido or 0):
-                raise ValueError(f"Quantidade indisponível. Disponível: {carteira_item.qtd_saldo_produto_pedido}")            
-            # Criar pré-separação
-            pre_separacao = cls()
-            pre_separacao.num_pedido = carteira_item.num_pedido
-            pre_separacao.cod_produto = carteira_item.cod_produto
-            pre_separacao.cnpj_cliente = carteira_item.cnpj_cpf
-            pre_separacao.qtd_original_carteira = carteira_item.qtd_saldo_produto_pedido
-            pre_separacao.qtd_selecionada_usuario = qtd_selecionada
-            pre_separacao.qtd_restante_calculada = carteira_item.qtd_saldo_produto_pedido - qtd_selecionada
-            
-            # Dados editáveis
-            pre_separacao.data_expedicao_editada = dados_editaveis.get('expedicao')
-            pre_separacao.data_agendamento_editada = dados_editaveis.get('agendamento') 
-            pre_separacao.protocolo_editado = dados_editaveis.get('protocolo')
-            pre_separacao.observacoes_usuario = dados_editaveis.get('observacoes')
-            
-            # Controle
-            pre_separacao.tipo_envio = tipo_envio
-            pre_separacao.status = 'CRIADO'
-            pre_separacao.criado_por = usuario
-            pre_separacao.hash_item_original = cls._gerar_hash_item(carteira_item)
-            
-            # Salvar
-            db.session.add(pre_separacao)
-            db.session.flush()  # Para obter ID
-            
-            logger.info(f"✅ Pré-separação criada: {pre_separacao.id}")
-            return pre_separacao
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao criar pré-separação: {e}")
-            raise
 
     # ===== SISTEMA PÓS-SINCRONIZAÇÃO ODOO =====
     

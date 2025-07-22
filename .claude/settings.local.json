@@ -15,7 +15,10 @@
       "Bash(venvScripts:*)",
       "Bash(.\\venv\\Scripts\\activate)",
       "Bash(call venvScriptsactivate)",
-      "Bash(./venv/Scripts/python:*)"
+      "Bash(./venv/Scripts/python:*)",
+      "Bash(.venvScriptspython.exe test_permissions_db.py)",
+      "Bash(C:Usersrafael.nascimentoDesktopSistema Onlinefrete_sistemavenvScriptspython.exe test_permissions_db.py)",
+      "Bash(del test_permissions_db.py)"
     ],
     "deny": []
   }

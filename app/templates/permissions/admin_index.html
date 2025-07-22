@@ -243,22 +243,21 @@ let usuarioSelecionado = null;
 
 // Função para carregar dados iniciais
 function carregarDados() {
-    carregarUsuarios();
-    carregarModulos();
+    // Dados já carregados via Jinja2 no template
+    console.log('✅ Dados iniciais carregados');
 }
 
 // Inicializar eventos
 $('#usuario-select').on('change', function() {
-        const usuarioId = $(this).val();
-        if (usuarioId) {
-            usuarioSelecionado = usuarioId;
-            carregarPermissoesUsuario(usuarioId);
-            $('#permissions-area').show();
-        } else {
-            usuarioSelecionado = null;
-            $('#permissions-area').hide();
-        }
-    });
+    const usuarioId = $(this).val();
+    if (usuarioId) {
+        usuarioSelecionado = usuarioId;
+        carregarPermissoesUsuario(usuarioId);
+        $('#permissions-area').show();
+    } else {
+        usuarioSelecionado = null;
+        $('#permissions-area').hide();
+    }
 });
 
 // Carregar permissões do usuário

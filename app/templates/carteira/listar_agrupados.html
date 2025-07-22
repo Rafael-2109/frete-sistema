@@ -1905,26 +1905,26 @@ function gerarHtmlItens(data) {
                 data-item-id="${itemId}" 
                 data-pedido="${numPedido}"
                 data-tipo-item="${item.tipo_item || 'carteira'}"
-                ${isPreSeparacao ? `data-pre-separacao-id="${item.pre_separacao_id}"` : ''}
+                ${isPreSeparacao ? `data-pre-separacao-id="${item.pre_separacao_id || ''}"` : ''}
                 class="${rowClass}">
                 <td>
                     ${isPreSeparacao ? 
                         `<div class="btn-group-vertical" role="group">
                             <button type="button" 
                                     class="btn btn-sm btn-outline-primary mb-1" 
-                                    onclick="editarPreSeparacao('${item.pre_separacao_id}')"
+                                    onclick="editarPreSeparacao('${item.pre_separacao_id || ''}')"
                                     title="Editar pré-separação">
                                 <i class="fas fa-edit"></i>
                             </button>
                             <button type="button" 
                                     class="btn btn-sm btn-outline-danger mb-1" 
-                                    onclick="cancelarPreSeparacao('${item.pre_separacao_id}')"
+                                    onclick="cancelarPreSeparacao('${item.pre_separacao_id || ''}')"
                                     title="Cancelar pré-separação">
                                 <i class="fas fa-times"></i>
                             </button>
                             <button type="button" 
                                     class="btn btn-sm btn-outline-success" 
-                                    onclick="enviarPreSeparacaoParaSeparacao('${item.pre_separacao_id}')"
+                                    onclick="enviarPreSeparacaoParaSeparacao('${item.pre_separacao_id || ''}')"
                                     title="Enviar para separação">
                                 <i class="fas fa-paper-plane"></i>
                             </button>
@@ -1949,7 +1949,7 @@ function gerarHtmlItens(data) {
                     ${isPreSeparacao ? 
                         `<input type="number" 
                                 class="form-control form-control-sm qtd-pre-separacao" 
-                                data-pre-separacao-id="${item.pre_separacao_id}"
+                                data-pre-separacao-id="${item.pre_separacao_id || ''}"
                                 data-qtd-original="${item.qtd_carteira}"
                                 step="1"
                                 min="0"
@@ -1986,7 +1986,7 @@ function gerarHtmlItens(data) {
                     ${isPreSeparacao ?
                         `<input type="date" 
                                 class="form-control form-control-sm data-expedicao-pre-separacao" 
-                                data-pre-separacao-id="${item.pre_separacao_id}"
+                                data-pre-separacao-id="${item.pre_separacao_id || ''}"
                                 value="${item.expedicao || ''}"
                                 onchange="editarDataPreSeparacao(this, 'expedicao')"
                                 title="Data de expedição da pré-separação">` :
@@ -2003,7 +2003,7 @@ function gerarHtmlItens(data) {
                     ${isPreSeparacao ?
                         `<input type="date" 
                                 class="form-control form-control-sm agendamento-pre-separacao" 
-                                data-pre-separacao-id="${item.pre_separacao_id}"
+                                data-pre-separacao-id="${item.pre_separacao_id || ''}"
                                 value="${item.agendamento || ''}"
                                 onchange="editarDataPreSeparacao(this, 'agendamento')"
                                 title="Data de agendamento da pré-separação">` :
@@ -2020,7 +2020,7 @@ function gerarHtmlItens(data) {
                     ${isPreSeparacao ?
                         `<input type="text" 
                                 class="form-control form-control-sm protocolo-pre-separacao" 
-                                data-pre-separacao-id="${item.pre_separacao_id}"
+                                data-pre-separacao-id="${item.pre_separacao_id || ''}"
                                 value="${item.protocolo || ''}"
                                 placeholder="Protocolo"
                                 onchange="editarCampoPreSeparacao(this, 'protocolo')"
