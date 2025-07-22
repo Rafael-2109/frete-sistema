@@ -222,8 +222,10 @@ def listar_principal():
         status = request.args.get('status', '').strip()
         cliente = request.args.get('cliente', '').strip()
         
-        # 📊 QUERY BASE
-        query = CarteiraPrincipal.query.filter_by(ativo=True)
+        # 📊 QUERY BASE + FILTRO AUTOMÁTICO (ocultar itens fracionados)
+        query = CarteiraPrincipal.query.filter_by(ativo=True).filter(
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        )
         
         # 🔎 APLICAR FILTROS
         if num_pedido:
@@ -3135,7 +3137,14 @@ def api_editar_pre_separacao(pre_sep_id):
 @login_required
 def api_cancelar_pre_separacao(pre_sep_id):
     """
-    API para cancelar PreSeparacaoItem via dropdown
+    🎯 FLUXO COMPLETO: Cancelamento com RESTAURAÇÃO total
+    
+    PROCESSO DE RESTAURAÇÃO:
+    1. Encontra item original usando referência
+    2. Restaura quantidade original (500 unidades)
+    3. Deleta linha saldo (400 unidades)
+    4. Deleta pré-separação (100 unidades)
+    5. RESULTADO: Volta ao estado inicial!
     """
     try:
         from app.carteira.models import PreSeparacaoItem
@@ -3155,23 +3164,72 @@ def api_cancelar_pre_separacao(pre_sep_id):
                 'error': 'Não é possível cancelar pré-separação já enviada para separação'
             }), 400
         
-        # DELETAR a pré-separação ao invés de apenas marcar como cancelada
+        # 🔍 STEP 1: Encontrar item original usando observacoes_sistema
+        item_original_id = None
+        if pre_sep.observacoes_sistema and 'ITEM_ORIGINAL_ID:' in pre_sep.observacoes_sistema:
+            try:
+                item_original_id = int(pre_sep.observacoes_sistema.split('ITEM_ORIGINAL_ID:')[1])
+            except (ValueError, IndexError):
+                pass
+        
+        if not item_original_id:
+            return jsonify({
+                'success': False,
+                'error': 'Não foi possível encontrar referência do item original'
+            }), 400
+        
+        # Buscar item original
+        item_original = CarteiraPrincipal.query.get(item_original_id)
+        if not item_original:
+            return jsonify({
+                'success': False,
+                'error': f'Item original {item_original_id} não encontrado'
+            }), 404
+        
+        # 🔍 STEP 2: Encontrar linha saldo para deletar
+        linha_saldo = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.observacoes.like(f'%SALDO_PRE_SEP_ID:{pre_sep_id}%')
+        ).first()
+        
+        # 🔧 STEP 3: Extrair quantidade original das observações do item
+        qtd_original_backup = None
+        if item_original.observacoes and 'QTD_BACKUP:' in item_original.observacoes:
+            try:
+                qtd_original_backup = float(item_original.observacoes.split('QTD_BACKUP:')[1].split('|')[0])
+            except (ValueError, IndexError):
+                # Fallback: usar qtd_original_carteira da pré-separação
+                qtd_original_backup = float(pre_sep.qtd_original_carteira)
+        else:
+            qtd_original_backup = float(pre_sep.qtd_original_carteira)
+        
+        # 🔙 STEP 4: RESTAURAR item original
+        item_original.qtd_saldo_produto_pedido = qtd_original_backup
+        item_original.observacoes = None  # Limpar marcação de fracionamento
+        
+        # 🗑️ STEP 5: DELETAR linha saldo se existir
+        if linha_saldo:
+            logger.info(f"🗑️ Deletando linha saldo ID {linha_saldo.id} (qtd: {linha_saldo.qtd_saldo_produto_pedido})")
+            db.session.delete(linha_saldo)
+        
         # Guardar informações para log antes de deletar
-        info_log = f"Pré-separação deletada: ID={pre_sep.id}, Pedido={pre_sep.num_pedido}, Produto={pre_sep.cod_produto}, Qtd={pre_sep.qtd_selecionada_usuario}"
+        info_log = f"RESTAURAÇÃO COMPLETA: Pré-separação {pre_sep.id} cancelada, item {item_original_id} restaurado para {qtd_original_backup}"
         logger.info(f"{info_log} por {current_user.nome if hasattr(current_user, 'nome') else 'Sistema'}")
         
-        # DELETAR o registro
+        # 🗑️ STEP 6: DELETAR a pré-separação
         db.session.delete(pre_sep)
         db.session.commit()
         
         return jsonify({
             'success': True,
-            'message': 'Pré-separação cancelada com sucesso',
-            'pre_separacao_id': pre_sep_id
+            'message': f'Pré-separação cancelada e saldo restaurado com sucesso ({qtd_original_backup} unidades)',
+            'pre_separacao_id': pre_sep_id,
+            'item_original_id': item_original_id,
+            'qtd_restaurada': qtd_original_backup,
+            'linha_saldo_deletada': linha_saldo.id if linha_saldo else None
         })
         
     except Exception as e:
-        logger.error(f"Erro ao cancelar pré-separação {pre_sep_id}: {e}")
+        logger.error(f"❌ Erro ao cancelar/restaurar pré-separação {pre_sep_id}: {e}")
         db.session.rollback()
         return jsonify({
             'success': False,
@@ -3682,7 +3740,13 @@ def api_salvar_alteracao_item(item_id):
 @login_required
 def api_dividir_linha_item(item_id):
     """
-    API para dividir linha de item (criar PreSeparacaoItem + nova linha)
+    🎯 FLUXO COMPLETO: Divisão com controle de restauração
+    
+    PROCESSO:
+    1. Item original 500 unidades → fica OCULTO/FRACIONADO
+    2. Cria pré-separação 100 unidades (com referência ao original)
+    3. Cria linha saldo 400 unidades
+    4. Se cancelar → restaura item original 500, deleta saldo
     """
     try:
         data = request.get_json()
@@ -3702,6 +3766,13 @@ def api_dividir_linha_item(item_id):
                 'error': f'Item {item_id} não encontrado'
             }), 404
         
+        # Verificar se item já foi fracionado
+        if hasattr(item, 'fracionado') and item.fracionado:
+            return jsonify({
+                'success': False,
+                'error': 'Item já foi fracionado anteriormente'
+            }), 400
+        
         qtd_original = float(item.qtd_saldo_produto_pedido or 0)
         
         if qtd_utilizada >= qtd_original:
@@ -3712,7 +3783,15 @@ def api_dividir_linha_item(item_id):
         
         qtd_restante = qtd_original - qtd_utilizada
         
-        # Criar PreSeparacaoItem para quantidade utilizada
+        # 🔧 STEP 1: MARCAR item original como fracionado (ocultar)
+        # Adicionar campo temporário para controle
+        if not hasattr(item, '_dados_backup'):
+            item._dados_backup = {
+                'qtd_original': qtd_original,
+                'visivel': True
+            }
+        
+        # 🔧 STEP 2: Criar PreSeparacaoItem com REFERÊNCIA ao item original
         from app.carteira.models import PreSeparacaoItem
         
         pre_separacao = PreSeparacaoItem()
@@ -3728,38 +3807,53 @@ def api_dividir_linha_item(item_id):
         pre_separacao.data_expedicao_editada = item.expedicao
         pre_separacao.data_agendamento_editada = item.agendamento
         pre_separacao.protocolo_editado = item.protocolo
-        db.session.add(pre_separacao)
         
-        # Criar nova linha com saldo restante (clonar item original)
+        # 🎯 CAMPO CRÍTICO: Guardar ID do item original para restauração
+        pre_separacao.observacoes_sistema = f"ITEM_ORIGINAL_ID:{item_id}"
+        
+        db.session.add(pre_separacao)
+        db.session.flush()  # Para obter ID da pré-separação
+        
+        # 🔧 STEP 3: Criar linha saldo com marcação especial
         novo_item = CarteiraPrincipal(
             num_pedido=item.num_pedido,
             cod_produto=item.cod_produto,
             qtd_saldo_produto_pedido=qtd_restante,
-            nome_produto=item.nome_produto + ' (Saldo)',
+            nome_produto=f"[SALDO] {item.nome_produto}",
             preco_produto_pedido=item.preco_produto_pedido,
             # Copiar outros campos relevantes
             cnpj_cpf=item.cnpj_cpf,
             raz_social_red=item.raz_social_red,
             data_pedido=item.data_pedido,
             status_pedido=item.status_pedido,
-            vendedor=item.vendedor
+            vendedor=item.vendedor,
+            # 🎯 MARCAÇÃO: Vincular à pré-separação para controle
+            observacoes=f"SALDO_PRE_SEP_ID:{pre_separacao.id}"
         )
         db.session.add(novo_item)
+        
+        # 🔧 STEP 4: OCULTAR item original (marca como fracionado)
+        item.qtd_saldo_produto_pedido = 0  # Zerar para ocultar
+        item.observacoes = f"FRACIONADO_PRE_SEP_ID:{pre_separacao.id}|QTD_BACKUP:{qtd_original}"
         
         # Salvar alterações
         db.session.commit()
         
+        logger.info(f"✅ Item {item_id} fracionado: {qtd_utilizada}/{qtd_original}, pré-sep {pre_separacao.id}, saldo {novo_item.id}")
+        
         return jsonify({
             'success': True,
+            'message': f'Item fracionado com sucesso: {qtd_utilizada} de {qtd_original}',
             'pre_separacao_id': pre_separacao.id,
             'novo_item_id': novo_item.id,
+            'item_original_id': item_id,
             'qtd_utilizada': qtd_utilizada,
             'qtd_restante': qtd_restante
         })
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao dividir linha do item {item_id}: {e}")
+        logger.error(f"❌ Erro ao dividir linha do item {item_id}: {e}")
         return jsonify({
             'success': False,
             'error': f'Erro interno: {str(e)}'
