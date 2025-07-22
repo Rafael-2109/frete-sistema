@@ -3168,68 +3168,19 @@ def api_cancelar_pre_separacao(pre_sep_id):
                 'error': 'Não é possível cancelar pré-separação já enviada para separação'
             }), 400
         
-        # 🔍 STEP 1: Encontrar item original usando observacoes_sistema
-        item_original_id = None
-        if pre_sep.observacoes_sistema and 'ITEM_ORIGINAL_ID:' in pre_sep.observacoes_sistema:
-            try:
-                item_original_id = int(pre_sep.observacoes_sistema.split('ITEM_ORIGINAL_ID:')[1])
-            except (ValueError, IndexError):
-                pass
-        
-        if not item_original_id:
-            return jsonify({
-                'success': False,
-                'error': 'Não foi possível encontrar referência do item original'
-            }), 400
-        
-        # Buscar item original
-        item_original = CarteiraPrincipal.query.get(item_original_id)
-        if not item_original:
-            return jsonify({
-                'success': False,
-                'error': f'Item original {item_original_id} não encontrado'
-            }), 404
-        
-        # 🔍 STEP 2: Encontrar linha saldo para deletar
-        linha_saldo = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.observacoes.like(f'%SALDO_PRE_SEP_ID:{pre_sep_id}%')
-        ).first()
-        
-        # 🔧 STEP 3: Extrair quantidade original das observações do item
-        qtd_original_backup = None
-        if item_original.observacoes and 'QTD_BACKUP:' in item_original.observacoes:
-            try:
-                qtd_original_backup = float(item_original.observacoes.split('QTD_BACKUP:')[1].split('|')[0])
-            except (ValueError, IndexError):
-                # Fallback: usar qtd_original_carteira da pré-separação
-                qtd_original_backup = float(pre_sep.qtd_original_carteira)
-        else:
-            qtd_original_backup = float(pre_sep.qtd_original_carteira)
-        
-        # 🔙 STEP 4: RESTAURAR item original
-        item_original.qtd_saldo_produto_pedido = qtd_original_backup
-        item_original.observacoes = None  # Limpar marcação de fracionamento
-        
-        # 🗑️ STEP 5: DELETAR linha saldo se existir
-        if linha_saldo:
-            logger.info(f"🗑️ Deletando linha saldo ID {linha_saldo.id} (qtd: {linha_saldo.qtd_saldo_produto_pedido})")
-            db.session.delete(linha_saldo)
-        
+        # 🔍 STEP 1: Cancelamento simples - apenas deletar pré-separação
         # Guardar informações para log antes de deletar
-        info_log = f"RESTAURAÇÃO COMPLETA: Pré-separação {pre_sep.id} cancelada, item {item_original_id} restaurado para {qtd_original_backup}"
+        info_log = f"Pré-separação deletada: ID={pre_sep.id}, Pedido={pre_sep.num_pedido}, Produto={pre_sep.cod_produto}, Qtd={pre_sep.qtd_selecionada_usuario}"
         logger.info(f"{info_log} por {current_user.nome if hasattr(current_user, 'nome') else 'Sistema'}")
         
-        # 🗑️ STEP 6: DELETAR a pré-separação
+        # DELETAR o registro
         db.session.delete(pre_sep)
         db.session.commit()
         
         return jsonify({
             'success': True,
-            'message': f'Pré-separação cancelada e saldo restaurado com sucesso ({qtd_original_backup} unidades)',
-            'pre_separacao_id': pre_sep_id,
-            'item_original_id': item_original_id,
-            'qtd_restaurada': qtd_original_backup,
-            'linha_saldo_deletada': linha_saldo.id if linha_saldo else None
+            'message': 'Pré-separação cancelada com sucesso',
+            'pre_separacao_id': pre_sep_id
         })
         
     except Exception as e:
@@ -3816,8 +3767,7 @@ def api_dividir_linha_item(item_id):
         pre_separacao.data_agendamento_editada = item.agendamento
         pre_separacao.protocolo_editado = item.protocolo
         
-        # 🎯 CAMPO CRÍTICO: Guardar ID do item original para restauração
-        pre_separacao.observacoes_sistema = f"ITEM_ORIGINAL_ID:{item_id}"
+        # Observação removida - cancelamento simples
         
         db.session.add(pre_separacao)
         db.session.flush()  # Para obter ID da pré-separação

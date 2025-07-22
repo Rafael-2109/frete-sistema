@@ -2115,21 +2115,43 @@ async function abrirModalAvaliarEstoques(numPedido) {
     console.log(`📊 Avaliar Estoques pedido ${numPedido}`);
     numPedidoModal = numPedido;
     
-    // Configurar modal
-    document.getElementById('modal-num-pedido-estoques').textContent = numPedido;
-    document.getElementById('form-num-pedido').value = numPedido;
-    
-    // Mostrar modal (Bootstrap 5)
-    const modalElement = document.getElementById('modalAvaliarEstoques');
-    if (modalElement) {
-        const modal = new bootstrap.Modal(modalElement);
-        modal.show();
-    } else {
-        console.error('Modal modalAvaliarEstoques não encontrado');
+    try {
+        // 🔍 DEBUG: Verificar elementos
+        const modalElement = document.getElementById('modalAvaliarEstoques');
+        const numPedidoElement = document.getElementById('modal-num-pedido-estoques');
+        const formElement = document.getElementById('form-num-pedido');
+        
+        console.log('🔍 DEBUG Modal:', {
+            modalElement: !!modalElement,
+            numPedidoElement: !!numPedidoElement, 
+            formElement: !!formElement,
+            bootstrap: typeof bootstrap
+        });
+        
+        // Configurar modal se elementos existirem
+        if (numPedidoElement) numPedidoElement.textContent = numPedido;
+        if (formElement) formElement.value = numPedido;
+        
+        // Mostrar modal (Bootstrap 5)
+        if (modalElement && typeof bootstrap !== 'undefined') {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            console.log('✅ Modal aberto com sucesso');
+        } else {
+            console.error('❌ Problema:', {
+                modalElement: !!modalElement,
+                bootstrap: typeof bootstrap
+            });
+            alert('Erro: Modal ou Bootstrap não carregado corretamente');
+        }
+        
+        // Carregar dados
+        await carregarDadosModal(numPedido);
+        
+    } catch (error) {
+        console.error('❌ Erro ao abrir modal:', error);
+        alert('Erro ao abrir modal: ' + error.message);
     }
-    
-    // Carregar dados
-    await carregarDadosModal(numPedido);
 }
 
 /**
