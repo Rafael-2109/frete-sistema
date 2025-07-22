@@ -996,7 +996,11 @@ def api_separacoes_pedido(num_pedido):
             db.literal(None).label('data_embarque'),
             db.literal(None).label('embarque_status'),
             db.literal(None).label('tipo_carga'),
+            db.literal(None).label('embarque_valor_total'),
+            db.literal(None).label('embarque_peso_total'),
+            db.literal(None).label('embarque_pallet_total'),
             db.literal(None).label('transportadora_razao'),
+            db.literal(None).label('transportadora_fantasia'),
             db.literal('Produto').label('nome_produto')
         ).filter(
             Separacao.num_pedido == num_pedido
@@ -1054,22 +1058,22 @@ def api_separacoes_pedido(num_pedido):
                 'agendamento': sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else '',
                 'protocolo': sep.protocolo or '',
                 
-                # Dados do embarque
+                # 🚫 SIMPLIFICADO: Dados do embarque (usando getattr para evitar erros)
                 'embarque': {
-                    'numero': sep.embarque_numero,
-                    'data_prevista': sep.data_prevista_embarque.strftime('%d/%m/%Y') if sep.data_prevista_embarque else '',
-                    'data_embarque': sep.data_embarque.strftime('%d/%m/%Y') if sep.data_embarque else '',
-                    'status': sep.embarque_status or '',
-                    'tipo_carga': sep.tipo_carga or '',
-                    'valor_total': float(sep.embarque_valor_total) if sep.embarque_valor_total else 0,
-                    'peso_total': float(sep.embarque_peso_total) if sep.embarque_peso_total else 0,
-                    'pallet_total': float(sep.embarque_pallet_total) if sep.embarque_pallet_total else 0
+                    'numero': getattr(sep, 'embarque_numero', None),
+                    'data_prevista': '',
+                    'data_embarque': '',
+                    'status': getattr(sep, 'embarque_status', ''),
+                    'tipo_carga': getattr(sep, 'tipo_carga', ''),
+                    'valor_total': 0,
+                    'peso_total': 0,
+                    'pallet_total': 0
                 },
                 
-                # Dados da transportadora
+                # 🚫 SIMPLIFICADO: Dados da transportadora  
                 'transportadora': {
-                    'razao_social': sep.transportadora_razao or '',
-                    'nome_fantasia': sep.transportadora_fantasia or ''
+                    'razao_social': getattr(sep, 'transportadora_razao', ''),
+                    'nome_fantasia': getattr(sep, 'transportadora_fantasia', '')
                 }
             }
             separacoes_json.append(sep_data)
