@@ -444,9 +444,9 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
                 item.agendamento = data_agendamento
                 
                 # Data de entrega (novo campo)
-                if dados.get('data_expedicao'):
-                    data_expedicao = datetime.strptime(dados['data_expedicao'], '%Y-%m-%d').date()
-                    item.expedicao = data_expedicao
+                if dados.get('expedicao'):
+                    expedicao_obj = datetime.strptime(dados['expedicao'], '%Y-%m-%d').date()
+                    item.expedicao = expedicao_obj
                 
                 if dados.get('hora_agendamento'):
                     hora_agendamento = datetime.strptime(dados['hora_agendamento'], '%H:%M').time()
@@ -473,8 +473,8 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
                     # Aplicar o agendamento a todos os itens
                     for item_pedido in itens_mesmo_pedido:
                         item_pedido.agendamento = data_agendamento
-                        if dados.get('data_expedicao'):
-                            item_pedido.expedicao = data_expedicao
+                        if dados.get('expedicao'):
+                            item_pedido.expedicao = expedicao_obj
                         if dados.get('hora_agendamento'):
                             item_pedido.hora_agendamento = hora_agendamento
                         if dados.get('protocolo'):
@@ -1093,8 +1093,8 @@ def api_separacoes_pedido(num_pedido):
             status_class = status_classes.get(status_separacao, 'info')
             
             # 📊 CALCULAR ESTOQUE E PRODUÇÃO DA DATA DE EXPEDIÇÃO
-            estoque_data_expedicao = '-'
-            producao_data_expedicao = '-'
+            estoque_expedicao = '-'
+            producao_expedicao = '-'
             menor_estoque_d7 = '-'
             
             try:
@@ -1102,7 +1102,7 @@ def api_separacoes_pedido(num_pedido):
                 from datetime import datetime, timedelta
                 
                 # Data de expedição (da separação ou hoje+1)
-                data_expedicao = sep.expedicao or (datetime.now().date() + timedelta(days=1))
+                expedicao_calc = sep.expedicao or (datetime.now().date() + timedelta(days=1))
                 
                 # Calcular projeção de estoque para o produto
                 resumo_estoque = SaldoEstoque.calcular_resumo_produto(sep.cod_produto)
@@ -1110,15 +1110,15 @@ def api_separacoes_pedido(num_pedido):
                 if resumo_estoque and resumo_estoque['projecao_29_dias']:
                     # 📅 ESTOQUE DA DATA DE EXPEDIÇÃO
                     estoque_expedicao = _calcular_estoque_data_especifica(
-                        resumo_estoque['projecao_29_dias'], data_expedicao
+                        resumo_estoque['projecao_29_dias'], expedicao_calc
                     )
-                    estoque_data_expedicao = f"{int(estoque_expedicao)}" if estoque_expedicao >= 0 else "RUPTURA"
+                    estoque_expedicao = f"{int(estoque_expedicao_calc)}" if estoque_expedicao_calc >= 0 else "RUPTURA"
                     
                     # 🏭 PRODUÇÃO DA DATA DE EXPEDIÇÃO  
                     producao_expedicao = SaldoEstoque.calcular_producao_periodo(
-                        sep.cod_produto, data_expedicao, data_expedicao
+                        sep.cod_produto, expedicao_calc, expedicao_calc
                     )
-                    producao_data_expedicao = f"{int(producao_expedicao)}" if producao_expedicao > 0 else "0"
+                    producao_expedicao = f"{int(producao_expedicao_calc)}" if producao_expedicao_calc > 0 else "0"
                     
                     # 📉 MENOR ESTOQUE D7
                     menor_estoque_d7 = SaldoEstoque.calcular_menor_estoque_periodo(
@@ -1154,8 +1154,8 @@ def api_separacoes_pedido(num_pedido):
                 
                 # 📊 DADOS DE ESTOQUE/PRODUÇÃO DA DATA DE EXPEDIÇÃO
                 'menor_estoque_d7': menor_estoque_d7,
-                'estoque_data_expedicao': estoque_data_expedicao,
-                'producao_data_expedicao': producao_data_expedicao,
+                'estoque_expedicao': estoque_expedicao,
+                'producao_expedicao': producao_expedicao,
                 
                 # 🚫 SIMPLIFICADO: Dados do embarque (usando getattr para evitar erros)
                 'embarque': {
@@ -2911,8 +2911,8 @@ def api_pedido_itens_editaveis(num_pedido):
                     'peso_calculado': f"{peso_calculado:,.1f} kg".replace(',', 'X').replace('.', ',').replace('X', '.'),
                     'pallet_calculado': f"{pallet_calculado:,.1f} pal".replace(',', 'X').replace('.', ',').replace('X', '.'),
                     'menor_estoque_d7': menor_estoque_d7,
-                    'estoque_data_expedicao': estoque_d0,  # CORRIGIDO: nome mais claro
-                    'producao_data_expedicao': producao_d0,  # CORRIGIDO: nome mais claro
+                    'estoque_expedicao': estoque_d0,  # CORRIGIDO: nome mais claro
+                    'producao_expedicao': producao_d0,  # CORRIGIDO: nome mais claro
                     'proxima_data_com_estoque': proxima_data_disponivel,  # NOVO: sugestão inteligente
                     'expedicao': item.expedicao.strftime('%Y-%m-%d') if item.expedicao else '',
                     'agendamento': item.agendamento.strftime('%Y-%m-%d') if item.agendamento else '',
@@ -2988,8 +2988,8 @@ def api_pedido_itens_editaveis(num_pedido):
                     'peso_calculado': f"{peso_calculado:,.1f} kg".replace(',', 'X').replace('.', ',').replace('X', '.'),
                     'pallet_calculado': f"{pallet_calculado:,.1f} pal".replace(',', 'X').replace('.', ',').replace('X', '.'),
                     'menor_estoque_d7': menor_estoque_d7,
-                    'estoque_data_expedicao': estoque_d0,
-                    'producao_data_expedicao': producao_d0,
+                    'estoque_expedicao': estoque_d0,
+                    'producao_expedicao': producao_d0,
                     'proxima_data_estoque': proxima_data_disponivel,
                     'expedicao': pre_sep.data_expedicao_editada.strftime('%Y-%m-%d') if pre_sep.data_expedicao_editada else '',
                     'agendamento': pre_sep.data_agendamento_editada.strftime('%Y-%m-%d') if pre_sep.data_agendamento_editada else '',
@@ -4058,7 +4058,7 @@ def api_criar_separacao_pedido(num_pedido):
         
         # Validar se todos os itens têm data de expedição
         for item in itens:
-            if not item.get('data_expedicao'):
+            if not item.get('expedicao'):
                 return jsonify({
                     'success': False,
                     'error': 'Todos os itens devem ter Data de Expedição preenchida'
@@ -4073,7 +4073,7 @@ def api_criar_separacao_pedido(num_pedido):
         for item in itens:
             item_id = item.get('item_id')
             qtd_separacao = float(item.get('qtd_separacao', 0))
-            data_expedicao = item.get('data_expedicao')
+            expedicao = item.get('expedicao')
             agendamento = item.get('agendamento')
             protocolo = item.get('protocolo')
             
@@ -4087,9 +4087,9 @@ def api_criar_separacao_pedido(num_pedido):
             
             # Converter data de expedição
             try:
-                data_exp_obj = datetime.strptime(data_expedicao, '%Y-%m-%d').date() if data_expedicao else None
+                expedicao_obj = datetime.strptime(expedicao, '%Y-%m-%d').date() if expedicao else None
             except ValueError:
-                data_exp_obj = None
+                expedicao_obj = None
             
             try:
                 data_agend_obj = datetime.strptime(agendamento, '%Y-%m-%d').date() if agendamento else None
@@ -4112,7 +4112,7 @@ def api_criar_separacao_pedido(num_pedido):
                 valor_saldo=valor_separacao,
                 peso=peso_calculado,
                 pallet=pallet_calculado,
-                expedicao=data_exp_obj,
+                expedicao=expedicao_obj,
                 agendamento=data_agend_obj,
                 protocolo=protocolo,
                 cnpj_cpf=carteira_item.cnpj_cpf,  # ✅ CAMPO OBRIGATÓRIO ADICIONADO
