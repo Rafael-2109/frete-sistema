@@ -22,10 +22,14 @@ class AlertaSistemaCarteira:
         """
         try:
             from app.separacao.models import Separacao
+            from app.pedidos.models import Pedido
+            from app import db
             
-            separacoes_cotadas = Separacao.query.filter(
-                Separacao.status == 'COTADO',
-                Separacao.ativo == True
+            # CORRIGIDO: Separacao não tem campo 'status', usar Pedido.status via JOIN
+            separacoes_cotadas = db.session.query(Separacao).join(
+                Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+            ).filter(
+                Pedido.status == 'COTADO'
             ).all()
             
             if separacoes_cotadas:
@@ -59,11 +63,13 @@ class AlertaSistemaCarteira:
             from app.separacao.models import Separacao
             
             for alteracao in alteracoes_detectadas:
-                # Buscar se pedido tem separação cotada
-                separacao_cotada = Separacao.query.filter(
+                # Buscar se pedido tem separação cotada - CORRIGIDO: usar Pedido.status
+                from app.pedidos.models import Pedido
+                separacao_cotada = db.session.query(Separacao).join(
+                    Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                ).filter(
                     Separacao.num_pedido == alteracao['num_pedido'],
-                    Separacao.status == 'COTADO',
-                    Separacao.ativo == True
+                    Pedido.status == 'COTADO'
                 ).first()
                 
                 if separacao_cotada:

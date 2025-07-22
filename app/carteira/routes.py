@@ -833,25 +833,86 @@ def listar_pedidos_agrupados():
             CarteiraPrincipal.num_pedido.asc()
         ).all()
         
-        # 📊 VALIDAÇÃO: Log de resultado para debug
-        logger.info(f"Query agrupamento executada: {len(pedidos_agrupados)} pedidos encontrados")
+        # 📊 CALCULAR INFORMAÇÕES DE SEPARAÇÃO PARA CADA PEDIDO
+        from app.separacao.models import Separacao
+        from app.pedidos.models import Pedido
         
-        # Converter resultados para formato JSON para debugging
-        pedidos_debug = []
-        for pedido in pedidos_agrupados[:5]:  # Apenas primeiros 5 para debug
-            pedidos_debug.append({
+        pedidos_enriquecidos = []
+        for pedido in pedidos_agrupados:
+            # Calcular valor das separações ativas (ABERTO/COTADO)
+            valor_separacoes = db.session.query(func.coalesce(func.sum(
+                Separacao.qtd_saldo * Separacao.valor_saldo / Separacao.qtd_saldo if Separacao.qtd_saldo and Separacao.qtd_saldo > 0 else 0
+            ), 0)).join(
+                Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+            ).filter(
+                and_(
+                    Separacao.num_pedido == pedido.num_pedido,
+                    or_(
+                        Pedido.status == 'ABERTO',
+                        Pedido.status == 'COTADO'  
+                    )
+                )
+            ).scalar() or 0
+            
+            # Contar quantidade de pedidos únicos em separações
+            qtd_separacoes = db.session.query(func.count(func.distinct(Pedido.id))).join(
+                Separacao, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+            ).filter(
+                and_(
+                    Separacao.num_pedido == pedido.num_pedido,
+                    or_(
+                        Pedido.status == 'ABERTO',
+                        Pedido.status == 'COTADO'
+                    )
+                )
+            ).scalar() or 0
+            
+            # Calcular valor do saldo restante
+            valor_pedido = float(pedido.valor_total) if pedido.valor_total else 0
+            valor_saldo_restante = valor_pedido - float(valor_separacoes)
+            
+            # Determinar se está totalmente em separação
+            totalmente_separado = valor_saldo_restante <= 0.01  # Margem de 1 centavo
+            
+            # Criar objeto enriquecido
+            pedido_enriquecido = {
                 'num_pedido': pedido.num_pedido,
-                'valor_total': float(pedido.valor_total) if pedido.valor_total else 0,
+                'vendedor': pedido.vendedor,
+                'equipe_vendas': pedido.equipe_vendas,
+                'data_pedido': pedido.data_pedido,
+                'cnpj_cpf': pedido.cnpj_cpf,
+                'raz_social_red': pedido.raz_social_red,
+                'rota': pedido.rota,
+                'sub_rota': pedido.sub_rota,
+                'data_entrega_pedido': pedido.data_entrega_pedido,
+                'observ_ped_1': pedido.observ_ped_1,
+                'status_pedido': pedido.status_pedido,
+                'pedido_cliente': pedido.pedido_cliente,
+                'cod_uf': pedido.cod_uf,
+                'nome_cidade': pedido.nome_cidade,
+                'incoterm': pedido.incoterm,
+                'expedicao': pedido.expedicao,
+                'protocolo': pedido.protocolo,
+                'agendamento': pedido.agendamento,
+                'valor_total': valor_pedido,
                 'peso_total': float(pedido.peso_total) if pedido.peso_total else 0,
                 'pallet_total': float(pedido.pallet_total) if pedido.pallet_total else 0,
-                'total_itens': pedido.total_itens
-            })
+                'total_itens': pedido.total_itens,
+                # 🆕 NOVAS INFORMAÇÕES
+                'valor_separacoes': float(valor_separacoes),
+                'valor_saldo_restante': valor_saldo_restante,
+                'qtd_separacoes': qtd_separacoes,
+                'totalmente_separado': totalmente_separado
+            }
+            
+            pedidos_enriquecidos.append(pedido_enriquecido)
         
-        logger.info(f"Primeiros 5 pedidos (debug): {pedidos_debug}")
+        # 📊 VALIDAÇÃO: Log de resultado para debug
+        logger.info(f"Query agrupamento executada: {len(pedidos_enriquecidos)} pedidos encontrados")
         
         return render_template('carteira/listar_agrupados.html', 
-                             pedidos=pedidos_agrupados,
-                             total_pedidos=len(pedidos_agrupados))
+                             pedidos=pedidos_enriquecidos,
+                             total_pedidos=len(pedidos_enriquecidos))
         
     except Exception as e:
         logger.error(f"Erro ao listar pedidos agrupados: {str(e)}")
@@ -1917,14 +1978,15 @@ def _carregar_dados_itens_pedido(num_pedido):
             peso_item = qtd_saldo * peso_unit
             pallet_item = qtd_saldo * pallet_unit
             
-            # Verificar se tem separação
+            # Verificar se tem separação - CORRIGIDO: usar Pedido.status via JOIN
             from app.separacao.models import Separacao
+            from app.pedidos.models import Pedido
             tem_separacao = db.session.query(
                 db.exists().where(
                     db.and_(
                         Separacao.num_pedido == num_pedido,
-                        Separacao.cod_produto == item.cod_produto,
-                        Separacao.status == 'ativo'
+                        Separacao.cod_produto == item.cod_produto
+                        # Status vem do Pedido, não da Separacao - consulta simplificada
                     )
                 )
             ).scalar()
@@ -2721,7 +2783,7 @@ def api_pedido_itens_editaveis(num_pedido):
                     # Modelo PreSeparacaoItem não existe ainda, usar apenas separações
                     pass
                 
-                # Calcular saldo disponível
+                # Calcular saldo disponível para EXIBIÇÃO (não consumo)
                 qtd_saldo_disponivel = qtd_carteira - float(qtd_separacoes) - float(qtd_pre_separacoes)
                 
                 # Garantir que não seja negativo

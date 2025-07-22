@@ -953,10 +953,14 @@ class PreSeparacaoItem(db.Model):
             if qtd_restante > 0:
                 try:
                     from app.separacao.models import Separacao
-                    separacoes_aberto = Separacao.query.filter(
+                    from app.pedidos.models import Pedido
+                    # CORRIGIDO: Separacao não tem campo 'status', usar Pedido.status via JOIN
+                    separacoes_aberto = db.session.query(Separacao).join(
+                        Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                    ).filter(
                         Separacao.num_pedido == num_pedido,
                         Separacao.cod_produto == cod_produto,
-                        Separacao.status == 'ABERTO'
+                        Pedido.status == 'ABERTO'
                     ).all()
                     
                     for separacao in separacoes_aberto:
@@ -975,10 +979,14 @@ class PreSeparacaoItem(db.Model):
             if qtd_restante > 0:
                 try:
                     from app.separacao.models import Separacao
-                    separacoes_cotado = Separacao.query.filter(
+                    from app.pedidos.models import Pedido
+                    # CORRIGIDO: Separacao não tem campo 'status', usar Pedido.status via JOIN
+                    separacoes_cotado = db.session.query(Separacao).join(
+                        Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                    ).filter(
                         Separacao.num_pedido == num_pedido,
                         Separacao.cod_produto == cod_produto,
-                        Separacao.status == 'COTADO'
+                        Pedido.status == 'COTADO'
                     ).all()
                     
                     if separacoes_cotado:

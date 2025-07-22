@@ -58,7 +58,7 @@
                     </thead>
                     <tbody>
                         {% for pedido in pedidos %}
-                        <tr class="pedido-row" data-pedido="{{ pedido.num_pedido }}">
+                        <tr class="pedido-row{% if pedido.totalmente_separado %} table-success{% endif %}" data-pedido="{{ pedido.num_pedido }}">
                             <!-- Vendedor / Equipe / Status -->
                             <td>
                                 <strong>{{ pedido.vendedor or '' }}</strong>
@@ -140,10 +140,15 @@
                                     <i class="fas fa-chevron-right separacao-icon" id="separacao-icon-{{ pedido.num_pedido }}"></i>
                                 </button>
                                 <br>
+                                {% if pedido.totalmente_separado %}
+                                    <span class="badge badge-success">Total em Separação</span>
+                                {% else %}
+                                    <strong>{{ pedido.valor_saldo_restante|valor_br(0) }}</strong>
+                                {% endif %}
+                                <br>
                                 <span class="badge" style="background-color: #17a2b8; color: white;" id="separacoes-badge-{{ pedido.num_pedido }}">
-                                    0 separações
+                                    {{ pedido.qtd_separacoes|default(0) }} separações
                                 </span>
-                                <br><small class="text-muted">Clique para ver</small>
                             </td>
                             
                             <!-- Expedição / Agenda / Protocolo -->
@@ -1898,7 +1903,7 @@ function gerarHtmlItens(data) {
     
     data.itens.forEach(item => {
         const itemId = item.id;
-        const saldoDisponivel = item.qtd_saldo_produto_pedido || 0;
+        const saldoDisponivel = item.qtd_saldo_disponivel || 0;
         const disabled = saldoDisponivel <= 0 ? 'disabled' : '';
         const isPreSeparacao = item.tipo_item === 'pre_separacao';
         const rowClass = isPreSeparacao ? 'table-warning' : '';
@@ -1979,8 +1984,8 @@ function gerarHtmlItens(data) {
                     }
                 </td>
                 <td class="valor-calculado-dropdown">${item.valor_calculado || 'R$ 0,00'}</td>
-                <td class="peso-calculado-dropdown">${item.peso || '0 kg'}</td>
-                <td class="pallet-calculado-dropdown">${item.pallet || '0,0 pal'}</td>
+                <td class="peso-calculado-dropdown">${item.peso_calculado || '0 kg'}</td>
+                <td class="pallet-calculado-dropdown">${item.pallet_calculado || '0,0 pal'}</td>
                 <td class="menor-estoque-d7-dropdown">${item.menor_estoque_d7 || '-'}</td>
                                     <td class="estoque-d0-dropdown">${item.estoque_data_expedicao || '-'}</td>
                     <td class="producao-d0-dropdown">${item.producao_data_expedicao || '-'}</td>
@@ -4135,7 +4140,7 @@ function gerarTabelaItensEditaveis(data) {
     
     data.itens.forEach((item, index) => {
         const itemId = item.id;
-        const saldoDisponivel = item.qtd_saldo_produto_pedido || 0;
+        const saldoDisponivel = item.qtd_saldo_disponivel || 0;
         const disabled = saldoDisponivel <= 0 ? 'disabled' : '';
         
         html += `
@@ -4165,8 +4170,8 @@ function gerarTabelaItensEditaveis(data) {
                     <small class="text-muted">Máx: ${saldoDisponivel}</small>
                 </td>
                 <td class="valor-calculado">${item.valor_calculado || 'R$ 0,00'}</td>
-                <td class="peso-calculado">${item.peso || '0 kg'}</td>
-                <td class="pallet-calculado">${item.pallet || '0,0 pal'}</td>
+                <td class="peso-calculado">${item.peso_calculado || '0 kg'}</td>
+                <td class="pallet-calculado">${item.pallet_calculado || '0,0 pal'}</td>
                 <td class="menor-estoque-d7">${item.menor_estoque_d7 || '-'}</td>
                 <td class="estoque-data-expedicao">${item.estoque_data_expedicao || '-'}</td>
                 <td class="producao-data-expedicao">${item.producao_data_expedicao || '-'}</td>
