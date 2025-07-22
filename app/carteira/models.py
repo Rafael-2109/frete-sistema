@@ -789,7 +789,7 @@ class PreSeparacaoItem(db.Model):
     @classmethod
     def buscar_nao_recompostas(cls):
         """Busca pré-separações que precisam ser recompostas após Odoo"""
-        return cls.query.filter(cls.recomposto == False).all()
+        return cls.query.filter(cls.recomposto.is_(False)).all()
     
     @classmethod  
     def buscar_por_pedido(cls, num_pedido):
