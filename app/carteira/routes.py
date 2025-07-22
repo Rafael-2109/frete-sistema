@@ -1726,8 +1726,8 @@ def validar_saldo_disponivel_real(num_pedido, cod_produto, qtd_solicitada):
                 Separacao.num_pedido == num_pedido,
                 Separacao.cod_produto == cod_produto,
                 or_(
-                    Pedido.status == 'Aberto',
-                    Pedido.status == 'Cotado'
+                    Pedido.status == 'ABERTO',
+                    Pedido.status == 'COTADO'
                 )
             )
         ).scalar() or 0
@@ -2696,8 +2696,8 @@ def api_pedido_itens_editaveis(num_pedido):
                         Separacao.cod_produto == item.cod_produto,
                         or_(
                             # SEPARAÇÕES QUE AINDA CONSOMEM SALDO (via status do Pedido)
-                            Pedido.status == 'Aberto',
-                            Pedido.status == 'Cotado'
+                            Pedido.status == 'ABERTO',
+                            Pedido.status == 'COTADO'
                         )
                     )
                 ).scalar() or 0
@@ -3912,9 +3912,9 @@ def api_dividir_linha_item(item_id):
         )
         db.session.add(novo_item)
         
-        # 🔧 STEP 4: OCULTAR item original (marca como fracionado)
-        item.qtd_saldo_produto_pedido = 0  # Zerar para ocultar
-        item.observacoes = f"FRACIONADO_PRE_SEP_ID:{pre_separacao.id}|QTD_BACKUP:{qtd_original}"
+        # 🔧 ARQUITETURA CORRETA: CarteiraPrincipal não deve ser alterada
+        # Separações e pré-separações são modelos operacionais
+        # O saldo será calculado dinamicamente: carteira - pré_separações - separações_ativas
         
         # Salvar alterações
         db.session.commit()

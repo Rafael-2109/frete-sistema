@@ -494,11 +494,11 @@ def create_app(config_name=None):
     def inject_permission_helpers():
         """Injeta helpers de permissão nos templates Jinja2"""
         try:
-            from app.permissions.decorators import user_can_access, user_is_admin, user_level
+            # from app.permissions.decorators import user_can_access, user_is_admin, user_level  # Temporariamente comentado
             return {
-                'user_can_access': user_can_access,
-                'user_is_admin': user_is_admin,
-                'user_level': user_level
+                # 'user_can_access': user_can_access,
+                # 'user_is_admin': user_is_admin,
+                # 'user_level': user_level
             }
         except Exception as e:
             app.logger.error(f"Erro ao registrar helpers de permissão: {e}")
