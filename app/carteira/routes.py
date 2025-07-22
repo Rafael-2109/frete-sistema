@@ -446,7 +446,7 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
                 # Data de entrega (novo campo)
                 if dados.get('data_expedicao'):
                     data_expedicao = datetime.strptime(dados['data_expedicao'], '%Y-%m-%d').date()
-                    item.data_expedicao_pedido = data_expedicao
+                    item.expedicao = data_expedicao
                 
                 if dados.get('hora_agendamento'):
                     hora_agendamento = datetime.strptime(dados['hora_agendamento'], '%H:%M').time()
@@ -474,7 +474,7 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
                     for item_pedido in itens_mesmo_pedido:
                         item_pedido.agendamento = data_agendamento
                         if dados.get('data_expedicao'):
-                            item_pedido.data_expedicao_pedido = data_expedicao
+                            item_pedido.expedicao = data_expedicao
                         if dados.get('hora_agendamento'):
                             item_pedido.hora_agendamento = hora_agendamento
                         if dados.get('protocolo'):
@@ -543,7 +543,7 @@ def api_item_detalhes(id):
             'municipio': item.municipio,
             'estado': item.estado,
             'cliente_nec_agendamento': item.cliente_nec_agendamento,
-            'data_expedicao_pedido': item.data_expedicao_pedido.strftime('%d/%m/%Y') if item.data_expedicao_pedido else None,
+            'expedicao': item.expedicao.strftime('%d/%m/%Y') if item.expedicao else None,
             'valor_total': float((item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0)),
             'separacao_lote_id': item.separacao_lote_id
         }
@@ -781,7 +781,7 @@ def listar_pedidos_agrupados():
             CarteiraPrincipal.raz_social_red,
             CarteiraPrincipal.rota,
             CarteiraPrincipal.sub_rota,
-            CarteiraPrincipal.data_expedicao_pedido,
+            CarteiraPrincipal.expedicao,
             CarteiraPrincipal.observ_ped_1,
             CarteiraPrincipal.status_pedido,
             CarteiraPrincipal.pedido_cliente,
@@ -818,7 +818,7 @@ def listar_pedidos_agrupados():
             CarteiraPrincipal.raz_social_red,
             CarteiraPrincipal.rota,
             CarteiraPrincipal.sub_rota,
-            CarteiraPrincipal.data_expedicao_pedido,
+            CarteiraPrincipal.expedicao,
             CarteiraPrincipal.observ_ped_1,
             CarteiraPrincipal.status_pedido,
             CarteiraPrincipal.pedido_cliente,
@@ -886,7 +886,7 @@ def listar_pedidos_agrupados():
                 'raz_social_red': pedido.raz_social_red,
                 'rota': pedido.rota,
                 'sub_rota': pedido.sub_rota,
-                'data_expedicao_pedido': pedido.data_expedicao_pedido,
+                'expedicao': pedido.expedicao,
                 'observ_ped_1': pedido.observ_ped_1,
                 'status_pedido': pedido.status_pedido,
                 'pedido_cliente': pedido.pedido_cliente,

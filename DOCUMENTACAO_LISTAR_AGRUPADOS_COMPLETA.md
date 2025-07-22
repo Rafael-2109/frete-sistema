@@ -1,7 +1,8 @@
 # 📋 Documentação Completa - Template `listar_agrupados.html`
 
-**Data**: 22/07/2025  
-**Análise**: Interface de usuário, funcionalidades e modais da tela de carteira agrupada
+**Data**: 22/07/2025 - **Última Atualização**: 22/07/2025 18:30  
+**Análise**: Interface de usuário, funcionalidades e modais da tela de carteira agrupada  
+**Status**: ✅ Correções principais aplicadas - Modal Agendamento, botões e dropdowns corrigidos
 
 ---
 
@@ -26,12 +27,17 @@
 
 ### 1.2 📦 Gestão de Separações
 
-#### **Criar Nova Separação**
+#### **Criar Nova Separação** ✅ CORRIGIDO
 - **Botão**: "📦 Criar Separação"
-- **Função**: `criarSeparacao(numPedido)`
-- **Funcionalidade**: Abre modal para criar separação selecionando itens
+- **Função**: `criarSeparacao(numPedido)` ✅ **VALIDADO**
+- **Funcionalidade**: Abre modal específico para criar separação selecionando itens
 - **Endpoint**: `POST /carteira/api/pedido/{numPedido}/criar-separacao`
 - **Validação**: Todos itens devem ter data de expedição válida
+- **Modal**: `modalCriarSeparacao` ✅ **CRIADO/VALIDADO**
+- **Correções Aplicadas**: 
+  - ✅ Corrigido erro toLocaleString
+  - ✅ Abre modal correto (não modalAvaliarEstoques)
+  - ✅ Função `carregarItensParaSeparacao()` implementada
 
 #### **Ver Detalhes da Separação**
 - **Botão**: Ícone "olho" no dropdown de separações
@@ -55,12 +61,15 @@
 - **Endpoint**: `/carteira/api/pedido/{numPedido}/estoque-d0-d7`
 - **Dados**: Estoque atual, projeção 7 dias, alertas de ruptura
 
-#### **Avaliar Estoques (28 dias)**
-- **Botão**: "📊 Avaliar Estoques" (dropdown)
-- **Função**: `abrirModalAvaliarEstoques(numPedido)`
+#### **Avaliar Estoques (28 dias)** ✅ CORRIGIDO
+- **Botão**: "📊 Avaliar Estoques" (botão direto - dropdown removido)
+- **Função**: `abrirModalAvaliarEstoques(numPedido)` ✅ **VALIDADO**
 - **Funcionalidade**: Modal com projeção completa de 28 dias
 - **Endpoint**: `/carteira/api/pedido/{numPedido}/estoque-projetado-28-dias`
 - **Features**: Seleção de itens, configuração envio total/parcial
+- **Correções Aplicadas**:
+  - ✅ Convertido de dropdown para botão direto
+  - ✅ Removida redundância de interface
 
 #### **Exportar Análise de Estoque**
 - **Botão**: "Exportar" nos modais de estoque
@@ -70,12 +79,19 @@
 
 ### 1.4 🗓️ Agendamento
 
-#### **Solicitar Agendamento**
+#### **Solicitar Agendamento** ✅ CORRIGIDO
 - **Botão**: "🗓️ Agendar"
-- **Função**: `solicitarAgendamento(numPedido)`
-- **Funcionalidade**: Modal para agendar entrega do pedido
-- **Endpoint**: `POST /carteira/item/{itemId}/agendamento`
-- **Campos**: Data/hora agendamento, data expedição, protocolo, observações
+- **Função**: `solicitarAgendamento(numPedido)` ✅ **VALIDADO**
+- **Funcionalidade**: Modal para agendar entrega do pedido com dados pré-preenchidos
+- **Endpoint Principal**: `POST /carteira/item/{itemId}/agendamento`
+- **Endpoint Auxiliar**: `GET /carteira/api/pedido/{numPedido}/agendamento-existente` ✅ **CRIADO**
+- **Campos**: Data/hora agendamento, data expedição, protocolo, observações, confirmação
+- **Correções Aplicadas**:
+  - ✅ Campos pré-preenchidos com dados existentes
+  - ✅ Salvamento correto no campo `expedicao` (não `data_entrega_pedido`)
+  - ✅ Badge de confirmação visual (✅ Confirmado / ⏳ Pendente)
+  - ✅ Função `mostrarBadgeConfirmacao()` implementada
+  - ✅ API `buscar_agendamento_existente()` criada
 
 ### 1.5 ℹ️ Informações Adicionais
 
@@ -90,15 +106,20 @@
 
 ## 🎛️ 2. MODAIS DISPONÍVEIS
 
-### 2.1 📅 Modal de Agendamento (`modalAgendamento`)
+### 2.1 📅 Modal de Agendamento (`modalAgendamento`) ✅ VALIDADO
 **Acesso**: Botão "🗓️ Agendar"  
+**Função de Abertura**: `solicitarAgendamento(numPedido)` ✅ **VALIDADO**
+**Função de Carregamento**: `carregarDadosAgendamento(numPedido)` ✅ **CORRIGIDO**
+**Função de Salvamento**: `salvarAgendamento()` ✅ **CORRIGIDO**
+**Função de Badge**: `mostrarBadgeConfirmacao(confirmado)` ✅ **CRIADO**
 **Campos**:
-- Data de Agendamento (obrigatório)
-- Hora de Agendamento
-- Data de Expedição
-- Protocolo
-- Observações
-- Checkbox confirmação
+- Data de Agendamento (obrigatório) ✅ Pré-preenchido
+- Hora de Agendamento ✅ Pré-preenchido
+- Data de Expedição ✅ Pré-preenchido
+- Protocolo ✅ Pré-preenchido
+- Observações ✅ Pré-preenchido
+- Checkbox confirmação ✅ Pré-preenchido + Badge visual
+**Status**: ✅ **TOTALMENTE FUNCIONAL**
 
 ### 2.2 📊 Modal Estoque D0/D7 (`modalEstoqueD0D7`)
 **Acesso**: Menu "📊 Estoque D0/D7"  
@@ -125,45 +146,57 @@
 - Campos justificativa (quando parcial)
 - Tabela editável com ações
 
-### 2.5 📦 Modal Consultar Separações (`modalConsultarSeparacoes`)
-**Acesso**: Menu "📦 Ver Separações"  
+### 2.5 📦 Modal Criar Separação (`modalCriarSeparacao`) ✅ CRIADO/VALIDADO
+**Acesso**: Botão "📦 Criar Separação"  
+**Função**: `criarSeparacao(numPedido)` ✅ **VALIDADO**
+**Função Auxiliar**: `carregarItensParaSeparacao(numPedido)` ✅ **IMPLEMENTADO**
+**Dados**:
+- Seleção de itens do pedido para separação
+- Campos de quantidade disponível e quantidade a separar
+- Data de expedição por item
+- Validação de itens selecionados
+**Status**: ✅ **TOTALMENTE FUNCIONAL**
+
+### 2.6 📦 Modal Consultar Separações (`modalConsultarSeparacoes`) ⚠️ NÃO VALIDADO
+**Acesso**: Menu "📦 Ver Separações" (REMOVIDO - botão "Consultar" era redundante)
 **Dados**:
 - Lista de todas as separações do pedido
 - Status de cada separação
 - Ações de visualizar/editar
 - Totais e contadores
+**Status**: ❓ **PRECISAR VALIDAR SE AINDA É NECESSÁRIO**
 
 ---
 
-## ⚠️ 3. PROBLEMAS IDENTIFICADOS
+## ⚠️ 3. PROBLEMAS IDENTIFICADOS E STATUS DE CORREÇÃO
 
-### 3.1 🔄 Funcionalidades Duplicadas
+### 3.1 🔄 Funcionalidades Duplicadas ✅ PARCIALMENTE CORRIGIDAS
 
-#### **Modal EstoqueD0D7 Duplicado**
+#### **Modal EstoqueD0D7 Duplicado** ❓ PENDENTE
 - **Problema**: Modal definido **2 vezes** no HTML (linhas 455 e 894)
 - **Impacto**: Conflito de IDs, comportamento inconsistente
-- **Solução**: Remover uma das definições
+- **Solução**: Remover uma das definições ❓ **PENDENTE VALIDAÇÃO**
 
-#### **Botão "Estoque D0/D7" Duplicado**
+#### **Botão "Estoque D0/D7" Duplicado** ❓ PENDENTE
 - **Problema**: Aparece 2 vezes no mesmo dropdown (linhas 182 e 197)
 - **Impacto**: Confusão na interface
-- **Solução**: Manter apenas uma instância
+- **Solução**: Manter apenas uma instância ❓ **PENDENTE VALIDAÇÃO**
 
-#### **Funções de Estoque Similares**
-- **`calcularEstoqueD0D7()`** vs **`carregarEstoqueD0D7()`** - fazem a mesma coisa
-- **`exportarAnaliseEstoque()`** vs **`exportarDadosEstoque()`** - muito similares
-- **Solução**: Unificar funcionalidades
+#### **Funções de Estoque Similares** ❓ PRECISAM REVISÃO
+- **`calcularEstoqueD0D7()`** vs **`carregarEstoqueD0D7()`** - fazem a mesma coisa ❓ **AVALIAR UNIFICAÇÃO**
+- **`exportarAnaliseEstoque()`** vs **`exportarDadosEstoque()`** - muito similares ❓ **AVALIAR UNIFICAÇÃO**
+- **Solução**: Unificar funcionalidades ❓ **PENDENTE ANÁLISE**
 
 ### 3.2 🚫 Funcionalidades Não Acessíveis
 
-#### **Funções JavaScript Definidas mas Sem Acesso**
-- **`editarPreSeparacaoCompleta()`** - função incompleta
-- **`dividirLinhaDropdown()`** - placeholder não implementado
-- **`unificarLinhaDropdown()`** - placeholder não implementado
-- **`sugerirAlternativa(codProduto)`** - chamada mas não implementada
+#### **Funções JavaScript Definidas mas Sem Acesso** ❓ PRECISAM REVISÃO
+- **`editarPreSeparacaoCompleta()`** - função incompleta ❓ **AVALIAR SE REMOVER**
+- **`dividirLinhaDropdown()`** - placeholder não implementado ❓ **AVALIAR SE REMOVER**
+- **`unificarLinhaDropdown()`** - placeholder não implementado ❓ **AVALIAR SE REMOVER**
+- **`sugerirAlternativa(codProduto)`** - chamada mas não implementada ❓ **AVALIAR SE REMOVER**
 
-#### **Modal Sem Acesso**
-- **`modalEditarPreSeparacao`** - definido mas sem botão para abrir
+#### **Modal Sem Acesso** ❓ PRECISAM REVISÃO
+- **`modalEditarPreSeparacao`** - definido mas sem botão para abrir ❓ **AVALIAR SE REMOVER**
 
 ---
 
@@ -179,6 +212,7 @@
 | `/carteira/api/separacao/{loteId}/detalhes` | Detalhes da separação |
 | `/carteira/item/{numPedido}/endereco` | Endereço de entrega |
 | `/carteira/api/pre-separacao/{preSeparacaoId}` | Detalhes pré-separação |
+| `/carteira/api/pedido/{numPedido}/agendamento-existente` | ✅ Buscar agendamento existente ✅ **CRIADO** |
 
 ### 4.2 ✏️ Ações (POST)
 | Endpoint | Funcionalidade |
@@ -242,11 +276,17 @@
 
 ## 🚀 7. RECOMENDAÇÕES DE MELHORIAS
 
-### 7.1 🔧 Correções Urgentes
-1. **Remover modal duplicado** de EstoqueD0D7
-2. **Remover botão duplicado** de Estoque D0/D7
-3. **Implementar funções incompletas** ou removê-las
-4. **Adicionar acesso ao modal** EditarPreSeparacao ou removê-lo
+### 7.1 🔧 Correções Urgentes - STATUS ATUALIZADO
+1. **Remover modal duplicado** de EstoqueD0D7 ❓ **PENDENTE**
+2. **Remover botão duplicado** de Estoque D0/D7 ❓ **PENDENTE**
+3. **Implementar funções incompletas** ou removê-las ❓ **AVALIAR CADA FUNÇÃO**
+4. **Adicionar acesso ao modal** EditarPreSeparacao ou removê-lo ❓ **AVALIAR SE REMOVER**
+
+### 7.1.1 ✅ Correções Já Aplicadas
+1. ✅ **Modal Agendamento**: Campos pré-preenchidos, salvamento correto, badges visuais
+2. ✅ **Botão Criar Separação**: Erro toLocaleString corrigido, modal correto
+3. ✅ **Botão Consultar**: Redundância removida
+4. ✅ **Botão Avaliar**: Convertido de dropdown para botão direto
 
 ### 7.2 📊 Otimizações
 1. **Unificar funções similares** de estoque
@@ -262,4 +302,34 @@
 
 ---
 
-**📝 Nota**: Esta documentação reflete o estado atual do template em 22/07/2025. Recomenda-se revisão periódica conforme evolução do sistema.
+---
+
+## 📋 8. STATUS DE VALIDAÇÃO DAS FUNCIONALIDADES
+
+### ✅ FUNCIONALIDADES VALIDADAS E FUNCIONAIS
+1. **`togglePedidoItens(numPedido)`** - Expansão de itens ✅ **VALIDADO**
+2. **`toggleSeparacoesPedido(numPedido)`** - Expansão de separações ✅ **VALIDADO**
+3. **`criarSeparacao(numPedido)`** - Criar nova separação ✅ **CORRIGIDO/VALIDADO**
+4. **`solicitarAgendamento(numPedido)`** - Modal agendamento ✅ **CORRIGIDO/VALIDADO**
+5. **`abrirModalAvaliarEstoques(numPedido)`** - Avaliar estoques ✅ **CORRIGIDO/VALIDADO**
+6. **`abrirModalEndereco(numPedido)`** - Ver endereço ✅ **VALIDADO**
+7. **`mostrarBadgeConfirmacao(confirmado)`** - Badge agendamento ✅ **CRIADO/VALIDADO**
+
+### ❓ FUNCIONALIDADES A VALIDAR/AVALIAR
+1. **`verDetalhesSeparacao(loteId)`** - Ver detalhes separação ❓ **VALIDAR**
+2. **`editarSeparacao(loteId)`** - Editar separação ❓ **VALIDAR**
+3. **`calcularEstoqueD0D7(numPedido)`** - Estoque D0/D7 ❓ **VALIDAR**
+4. **`exportarAnaliseEstoque()`** - Export Excel ❓ **VALIDAR**
+5. **`editarPreSeparacaoCompleta()`** - Editar pré-separação ❓ **AVALIAR SE REMOVER**
+6. **`dividirLinhaDropdown()`** - Dividir linha ❓ **AVALIAR SE REMOVER**
+7. **`unificarLinhaDropdown()`** - Unificar linha ❓ **AVALIAR SE REMOVER**
+8. **`sugerirAlternativa(codProduto)`** - Sugestão alternativa ❓ **AVALIAR SE REMOVER**
+
+### 🗑️ FUNCIONALIDADES PROVAVELMENTE INÚTEIS (CANDIDATAS À REMOÇÃO)
+1. **`modalEditarPreSeparacao`** - Modal sem acesso ❓ **CANDIDATO À REMOÇÃO**
+2. **Botão "Consultar" duplicado** - Redundante ✅ **REMOVIDO**
+3. **Dropdown "Avaliar" não funcional** - Convertido para botão ✅ **CORRIGIDO**
+
+---
+
+**📝 Nota**: Esta documentação reflete o estado atual do template em 22/07/2025. ✅ **Principais correções aplicadas**: Modal Agendamento totalmente funcional, botões corrigidos, endpoints criados. ❓ **Próxima fase**: Validar funcionalidades restantes e remover código inútil.
