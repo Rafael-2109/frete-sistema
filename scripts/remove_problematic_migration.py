@@ -5,6 +5,8 @@ Script para remover migration problemática e resetar estado
 
 import os
 import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app import create_app
 from flask_migrate import stamp
 

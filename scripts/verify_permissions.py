@@ -3,9 +3,12 @@
 Script para verificar o sistema de permissões
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app import create_app, db
 from app.permissions.models import PerfilUsuario, ModuloSistema, FuncaoModulo
-import sys
 
 def main():
     print("🔍 Verificando sistema de permissões...")

@@ -3,8 +3,11 @@
 Script para adicionar campo equipe_vendas de forma segura
 """
 
-from app import create_app, db
 import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app import create_app, db
 
 def main():
     print("🔧 Iniciando correção do campo equipe_vendas...")
