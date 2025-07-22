@@ -841,30 +841,20 @@ def listar_pedidos_agrupados():
         for pedido in pedidos_agrupados:
             # Calcular valor das separações ativas (ABERTO/COTADO)
             valor_separacoes = db.session.query(func.coalesce(func.sum(
-                Separacao.qtd_saldo * Separacao.valor_saldo / Separacao.qtd_saldo if Separacao.qtd_saldo and Separacao.qtd_saldo > 0 else 0
+                Separacao.qtd_saldo * Separacao.valor_saldo / func.nullif(Separacao.qtd_saldo, 0)
             ), 0)).join(
                 Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
             ).filter(
-                and_(
-                    Separacao.num_pedido == pedido.num_pedido,
-                    or_(
-                        Pedido.status == 'ABERTO',
-                        Pedido.status == 'COTADO'  
-                    )
-                )
+                Separacao.num_pedido == pedido.num_pedido,
+                Pedido.status.in_(['ABERTO', 'COTADO'])
             ).scalar() or 0
             
-            # Contar quantidade de pedidos únicos em separações
-            qtd_separacoes = db.session.query(func.count(func.distinct(Pedido.id))).join(
-                Separacao, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+            # Contar quantidade de separações (não pedidos únicos)
+            qtd_separacoes = db.session.query(func.count(Separacao.id)).join(
+                Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
             ).filter(
-                and_(
-                    Separacao.num_pedido == pedido.num_pedido,
-                    or_(
-                        Pedido.status == 'ABERTO',
-                        Pedido.status == 'COTADO'
-                    )
-                )
+                Separacao.num_pedido == pedido.num_pedido,
+                Pedido.status.in_(['ABERTO', 'COTADO'])
             ).scalar() or 0
             
             # Calcular valor do saldo restante
