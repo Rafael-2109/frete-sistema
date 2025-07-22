@@ -344,43 +344,12 @@ def listar_principal():
         flash(f'Erro ao carregar carteira principal: {str(e)}', 'error')
         return redirect(url_for('carteira.index'))
 
-@carteira_bp.route('/item/<int:item_id>/endereco')
-@login_required
-def buscar_endereco_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
-    """API para buscar dados de endereço de um item da carteira"""
-    try:
-        inspector = inspect(db.engine)
-        if not inspector.has_table('carteira_principal'):
-            return jsonify({'error': 'Sistema não inicializado'}), 400
-            
-        item = CarteiraPrincipal.query.get_or_404(item_id)
-        
-        # Retornar dados do endereço em formato JSON
-        dados_endereco = {
-            'id': item.id,
-            'estado': item.estado,
-            'municipio': item.municipio,
-            'cnpj_endereco_ent': item.cnpj_endereco_ent,
-            'empresa_endereco_ent': item.empresa_endereco_ent,
-            'cod_uf': item.cod_uf,
-            'nome_cidade': item.nome_cidade,
-            'bairro_endereco_ent': item.bairro_endereco_ent,
-            'cep_endereco_ent': item.cep_endereco_ent,
-            'rua_endereco_ent': item.rua_endereco_ent,
-            'endereco_ent': item.endereco_ent,
-            'telefone_endereco_ent': item.telefone_endereco_ent
-        }
-        
-        return jsonify(dados_endereco)
-        
-    except Exception as e:
-        logger.error(f"Erro ao buscar endereço do item {item_id}: {str(e)}")
-        return jsonify({'error': 'Erro interno do servidor'}), 500
+# ROTA REMOVIDA: /item/<int:item_id>/endereco - Usar /item/<num_pedido>/endereco
 
-@carteira_bp.route('/item/<int:item_id>/agendamento', methods=['GET', 'POST'])
+@carteira_bp.route('/item/<int:item_id>/agendamento', methods=['POST'])
 @login_required
 def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
-    """API para buscar e salvar dados de agendamento de um item da carteira"""
+    """API para salvar dados de agendamento de um item da carteira"""
     try:
         inspector = inspect(db.engine)
         if not inspector.has_table('carteira_principal'):
@@ -388,34 +357,8 @@ def agendamento_item(item_id: int) -> Union[Response, Tuple[Response, int]]:
             
         item = CarteiraPrincipal.query.get_or_404(item_id)
         
-        if request.method == 'GET':
-            # Buscar dados de agendamento
-            from app.cadastros_agendamento.models import ContatoAgendamento
-            
-            # Buscar contato de agendamento
-            contato = ContatoAgendamento.query.filter_by(cnpj=item.cnpj_cpf).first()
-            
-            dados_agendamento = {
-                'id': item.id,
-                'num_pedido': item.num_pedido,
-                'raz_social': item.raz_social,
-                'raz_social_red': item.raz_social_red,
-                'cnpj_cpf': item.cnpj_cpf,
-                'cliente_nec_agendamento': item.cliente_nec_agendamento,
-                'agendamento': item.agendamento.strftime('%Y-%m-%d') if item.agendamento else None,
-                'hora_agendamento': item.hora_agendamento.strftime('%H:%M') if item.hora_agendamento else None,
-                'protocolo': item.protocolo,
-                'agendamento_confirmado': item.agendamento_confirmado if item.agendamento_confirmado is not None else False,
-                'contato_agendamento': {
-                    'forma': contato.forma,
-                    'contato': contato.contato,
-                    'observacao': contato.observacao
-                } if contato else None
-            }
-            
-            return jsonify(dados_agendamento)
-            
-        elif request.method == 'POST':
+        # POST apenas - GET foi removido pois não é utilizado
+        if request.method == 'POST':
             # Salvar agendamento
             from datetime import datetime, time
             
@@ -3301,6 +3244,52 @@ def api_cancelar_pre_separacao(pre_sep_id):
     except Exception as e:
         logger.error(f"❌ Erro ao cancelar/restaurar pré-separação {pre_sep_id}: {e}")
         db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@carteira_bp.route('/api/pre-separacao/<int:pre_sep_id>')
+@login_required
+def api_pre_separacao_detalhes(pre_sep_id):
+    """
+    API para obter detalhes de uma pré-separação
+    CRIADA: Rota estava faltando e sendo usada no JS linha 5687
+    """
+    try:
+        from app.carteira.models import PreSeparacaoItem
+        
+        pre_sep = PreSeparacaoItem.query.get(pre_sep_id)
+        if not pre_sep:
+            return jsonify({
+                'success': False,
+                'error': f'Pré-separação {pre_sep_id} não encontrada'
+            }), 404
+            
+        # Retornar dados da pré-separação
+        dados = {
+            'success': True,
+            'id': pre_sep.id,
+            'num_pedido': pre_sep.num_pedido,
+            'cod_produto': pre_sep.cod_produto,
+            'nome_produto': pre_sep.nome_produto,
+            'qtd_original_carteira': float(pre_sep.qtd_original_carteira or 0),
+            'qtd_selecionada_usuario': float(pre_sep.qtd_selecionada_usuario or 0),
+            'qtd_restante_calculada': float(pre_sep.qtd_restante_calculada or 0),
+            'data_expedicao_editada': pre_sep.data_expedicao_editada.strftime('%Y-%m-%d') if pre_sep.data_expedicao_editada else None,
+            'data_agendamento_editada': pre_sep.data_agendamento_editada.strftime('%Y-%m-%d') if pre_sep.data_agendamento_editada else None,
+            'protocolo_editado': pre_sep.protocolo_editado,
+            'observacoes_usuario': pre_sep.observacoes_usuario,
+            'status': pre_sep.status,
+            'criado_em': pre_sep.criado_em.strftime('%d/%m/%Y %H:%M') if pre_sep.criado_em else None,
+            'criado_por': pre_sep.criado_por
+        }
+        
+        return jsonify(dados)
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar pré-separação {pre_sep_id}: {e}")
         return jsonify({
             'success': False,
             'error': f'Erro interno: {str(e)}'
