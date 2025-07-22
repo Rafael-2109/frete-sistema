@@ -270,14 +270,28 @@
                 </div>
                 <div class="card-body">
                     <div class="list-group list-group-flush">
-                        <!-- Botão Importar Carteira removido - funcionalidade desativada -->
+                        <a href="/estoque/" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">
+                                    <i class="fas fa-sync-alt text-primary"></i> 
+                                    Sincronização com Odoo
+                                </h6>
+                                <span class="badge badge-primary badge-pill">Seguro</span>
+                            </div>
+                            <p class="mb-1">Sincronizar carteira e faturamento com sequência automática</p>
+                            <small class="text-muted">Executa Faturamento → Carteira automaticamente</small>
+                        </a>
                         
-                        <!-- Funcionalidades removidas durante limpeza do módulo carteira:
-                             - Gerar Separação
-                             - Gerar Separação Avançada  
-                             - Relatório de Vinculações
-                             - Listar Inconsistências
-                        -->
+                        <a href="/faturamento/" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">
+                                    <i class="fas fa-file-invoice text-success"></i> 
+                                    Gerenciar Faturamento
+                                </h6>
+                                <span class="badge badge-success badge-pill">Ativo</span>
+                            </div>
+                            <p class="mb-1">Acessar dashboard de faturamento e relatórios</p>
+                            <small class="text-muted">Visualizar dados importados e processar NFs</small>
                         </a>
                     </div>
                 </div>
