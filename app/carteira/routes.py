@@ -974,10 +974,25 @@ def api_separacoes_pedido(num_pedido):
         from app.pedidos.models import Pedido
         from app.transportadoras.models import Transportadora
         
-        # 📊 QUERY COMPLEXA: Separacao + Embarque + Pedido + Transportadora
+        # 🎯 QUERY CORRETA CONFORME FLUXO:
+        # 1. Buscar pedidos ABERTO/COTADO → 2. Pegar separacao_lote_id → 3. Buscar separações
+        
+        from app.pedidos.models import Pedido
+        
+        # STEP 1: Buscar separacao_lote_id de pedidos ABERTO/COTADO para este num_pedido
+        pedidos_validos = db.session.query(Pedido.separacao_lote_id).filter(
+            and_(
+                Pedido.num_pedido == num_pedido,
+                Pedido.status.in_(['ABERTO', 'COTADO']),
+                Pedido.separacao_lote_id.isnot(None)
+            )
+        ).subquery()
+        
+        # STEP 2: Buscar separações usando os separacao_lote_id válidos
         separacoes = db.session.query(
             Separacao.separacao_lote_id,
             Separacao.num_pedido,
+            Separacao.cod_produto,
             Separacao.criado_em,
             Separacao.qtd_saldo,
             Separacao.valor_saldo,
@@ -993,19 +1008,22 @@ def api_separacoes_pedido(num_pedido):
             Embarque.data_embarque,
             Embarque.status.label('embarque_status'),
             Embarque.tipo_carga,
-            Embarque.valor_total.label('embarque_valor_total'),
-            Embarque.peso_total.label('embarque_peso_total'),
-            Embarque.pallet_total.label('embarque_pallet_total'),
             
             # Dados da transportadora
             Transportadora.razao_social.label('transportadora_razao'),
-            Transportadora.razao_social.label('transportadora_fantasia'),  # CORRIGIDO: usar razao_social ao invés de nome_fantasia
             
-            # Dados do pedido
-            Pedido.valor_saldo_total.label('pedido_valor_total'),
-            Pedido.peso_total.label('pedido_peso_total'),
-            Pedido.pallet_total.label('pedido_pallet_total')
+            # Dados da carteira para cod_produto
+            CarteiraPrincipal.nome_produto
             
+        ).join(
+            pedidos_validos,
+            Separacao.separacao_lote_id == pedidos_validos.c.separacao_lote_id
+        ).outerjoin(
+            CarteiraPrincipal,
+            and_(
+                Separacao.separacao_lote_id == CarteiraPrincipal.separacao_lote_id,
+                Separacao.cod_produto == CarteiraPrincipal.cod_produto
+            )
         ).outerjoin(
             EmbarqueItem, 
             Separacao.separacao_lote_id == EmbarqueItem.separacao_lote_id
@@ -1015,17 +1033,11 @@ def api_separacoes_pedido(num_pedido):
         ).outerjoin(
             Transportadora,
             Embarque.transportadora_id == Transportadora.id
-        ).outerjoin(
-            Pedido,
-            and_(
-                Separacao.num_pedido == Pedido.num_pedido,
-                Separacao.separacao_lote_id == Pedido.separacao_lote_id
-            )
         ).filter(
-            Separacao.num_pedido == num_pedido,
-            Separacao.separacao_lote_id.isnot(None)  # Apenas separações válidas
+            Separacao.qtd_saldo > 0  # Apenas com saldo válido
         ).order_by(
-            Separacao.criado_em.desc()
+            Separacao.separacao_lote_id.asc(),
+            Separacao.cod_produto.asc()
         ).all()
         
         # 📋 CONVERTER PARA JSON
@@ -1057,12 +1069,14 @@ def api_separacoes_pedido(num_pedido):
             sep_data = {
                 'separacao_lote_id': sep.separacao_lote_id,
                 'num_pedido': sep.num_pedido,
+                'cod_produto': sep.cod_produto,
+                'nome_produto': sep.nome_produto or f'Produto {sep.cod_produto}',
                 'criado_em': sep.criado_em.strftime('%d/%m/%Y %H:%M') if sep.criado_em else '',
                 'status': status_separacao,
                 'status_class': status_class,
                 'total_itens': total_itens_separacao,
                 
-                # Dados da separação
+                # 🎯 DADOS CORRETOS DA SEPARAÇÃO
                 'qtd_saldo': float(sep.qtd_saldo) if sep.qtd_saldo else 0,
                 'valor_saldo': float(sep.valor_saldo) if sep.valor_saldo else 0,
                 'peso': float(sep.peso) if sep.peso else 0,
@@ -3269,6 +3283,135 @@ def api_enviar_pre_separacao_para_separacao(pre_sep_id):
     except Exception as e:
         logger.error(f"Erro ao enviar pré-separação {pre_sep_id} para separação: {e}")
         db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@carteira_bp.route('/api/pedido/<num_pedido>/estoque-projetado-28-dias')
+@login_required
+def api_estoque_projetado_28_dias(num_pedido):
+    """
+    🎯 API para calcular estoque projetado de 28 dias para itens do pedido
+    
+    CÁLCULO:
+    - Estoque atual
+    - Entrada prevista (produção + compras)
+    - Saída prevista (vendas + separações)
+    - Projeção para 28 dias
+    """
+    try:
+        from datetime import datetime, timedelta
+        from app.estoque.models import SaldoEstoque
+        from app.producao.models import CadastroPalletizacao
+        
+        # Buscar itens do pedido
+        itens_pedido = CarteiraPrincipal.query.filter_by(
+            num_pedido=num_pedido, 
+            ativo=True
+        ).all()
+        
+        if not itens_pedido:
+            return jsonify({
+                'success': False,
+                'error': f'Nenhum item encontrado para o pedido {num_pedido}'
+            }), 404
+        
+        # Data limite para projeção (28 dias)
+        data_limite = datetime.now() + timedelta(days=28)
+        
+        resultado = {
+            'success': True,
+            'num_pedido': num_pedido,
+            'data_consulta': datetime.now().strftime('%d/%m/%Y %H:%M'),
+            'projecao_dias': 28,
+            'data_limite': data_limite.strftime('%d/%m/%Y'),
+            'itens': []
+        }
+        
+        for item in itens_pedido:
+            try:
+                # 🎯 USAR CÁLCULO EXISTENTE DO MÓDULO ESTOQUE
+                estoque_info = SaldoEstoque.obter_resumo_produto(item.cod_produto, item.nome_produto)
+                
+                if not estoque_info:
+                    # Fallback se não houver dados de estoque
+                    estoque_info = {
+                        'estoque_inicial': 0,
+                        'previsao_ruptura': 'Sem dados',
+                        'dias_restantes': 0,
+                        'estoque_projetado_28d': 0
+                    }
+                
+                # 🎯 STATUS DA PROJEÇÃO
+                qtd_pedido = float(item.qtd_saldo_produto_pedido or 0)
+                estoque_projetado = float(estoque_info.get('estoque_projetado_28d', 0))
+                
+                status_estoque = 'SUFICIENTE'
+                status_class = 'success'
+                
+                if estoque_projetado < qtd_pedido:
+                    if estoque_projetado <= 0:
+                        status_estoque = 'RUPTURA'
+                        status_class = 'danger'
+                    else:
+                        status_estoque = 'INSUFICIENTE'
+                        status_class = 'warning'
+                
+                # 🏭 DADOS DE PALLETIZAÇÃO
+                peso_unitario = 0
+                palletizacao_info = 0
+                try:
+                    from app.producao.models import CadastroPalletizacao
+                    palletizacao = CadastroPalletizacao.query.filter_by(cod_produto=item.cod_produto).first()
+                    if palletizacao:
+                        peso_unitario = float(palletizacao.peso_bruto or 0)
+                        palletizacao_info = float(palletizacao.palletizacao or 0)
+                except Exception:
+                    pass
+                
+                item_data = {
+                    'cod_produto': item.cod_produto,
+                    'nome_produto': item.nome_produto or f'Produto {item.cod_produto}',
+                    'qtd_pedido': qtd_pedido,
+                    'estoque_atual': float(estoque_info.get('estoque_inicial', 0)),
+                    'estoque_projetado_28d': estoque_projetado,
+                    'previsao_ruptura': estoque_info.get('previsao_ruptura', 'Sem dados'),
+                    'dias_restantes': estoque_info.get('dias_restantes', 0),
+                    'diferenca': estoque_projetado - qtd_pedido,
+                    'status_estoque': status_estoque,
+                    'status_class': status_class,
+                    'peso_unitario': peso_unitario,
+                    'palletizacao': palletizacao_info,
+                    'valor_unitario': float(item.preco_produto_pedido or 0),
+                    'valor_total_pedido': qtd_pedido * float(item.preco_produto_pedido or 0)
+                }
+                
+                resultado['itens'].append(item_data)
+                
+            except Exception as e:
+                logger.error(f"Erro ao calcular estoque projetado para produto {item.cod_produto}: {e}")
+                continue
+        
+        # 📊 RESUMO GERAL
+        total_itens = len(resultado['itens'])
+        itens_suficientes = len([i for i in resultado['itens'] if i['status_estoque'] == 'SUFICIENTE'])
+        itens_insuficientes = len([i for i in resultado['itens'] if i['status_estoque'] == 'INSUFICIENTE'])  
+        itens_ruptura = len([i for i in resultado['itens'] if i['status_estoque'] == 'RUPTURA'])
+        
+        resultado['resumo'] = {
+            'total_itens': total_itens,
+            'itens_suficientes': itens_suficientes,
+            'itens_insuficientes': itens_insuficientes,
+            'itens_ruptura': itens_ruptura,
+            'percentual_disponibilidade': round((itens_suficientes / total_itens * 100) if total_itens > 0 else 0, 1)
+        }
+        
+        return jsonify(resultado)
+        
+    except Exception as e:
+        logger.error(f"Erro ao calcular estoque projetado 28 dias para pedido {num_pedido}: {e}")
         return jsonify({
             'success': False,
             'error': f'Erro interno: {str(e)}'

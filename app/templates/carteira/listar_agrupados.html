@@ -2132,17 +2132,29 @@ async function abrirModalAvaliarEstoques(numPedido) {
         if (numPedidoElement) numPedidoElement.textContent = numPedido;
         if (formElement) formElement.value = numPedido;
         
-        // Mostrar modal (Bootstrap 5)
-        if (modalElement && typeof bootstrap !== 'undefined') {
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
-            console.log('✅ Modal aberto com sucesso');
+        // 🎯 FORÇAR modal a abrir - método mais compatível
+        if (modalElement) {
+            // Tentar Bootstrap 5 primeiro
+            if (typeof bootstrap !== 'undefined') {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+                console.log('✅ Modal Bootstrap 5 aberto');
+            } 
+            // Fallback jQuery se Bootstrap 5 falhar
+            else if (typeof $ !== 'undefined') {
+                $(modalElement).modal('show');
+                console.log('✅ Modal jQuery aberto');
+            }
+            // Último recurso: CSS manual
+            else {
+                modalElement.style.display = 'block';
+                modalElement.classList.add('show');
+                modalElement.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('modal-open');
+                console.log('✅ Modal CSS manual aberto');
+            }
         } else {
-            console.error('❌ Problema:', {
-                modalElement: !!modalElement,
-                bootstrap: typeof bootstrap
-            });
-            alert('Erro: Modal ou Bootstrap não carregado corretamente');
+            alert('❌ Modal não encontrado no DOM');
         }
         
         // Carregar dados
@@ -2172,8 +2184,8 @@ async function carregarDadosModal(numPedido) {
         let data = itensPedidoCache.get(numPedido);
         
         if (!data) {
-            // Fazer requisição AJAX
-            const response = await fetch(`/carteira/api/pedido/${numPedido}/itens`);
+            // 🎯 Fazer requisição AJAX para estoque projetado 28 dias
+            const response = await fetch(`/carteira/api/pedido/${numPedido}/estoque-projetado-28-dias`);
             data = await response.json();
             
             if (!response.ok || !data.success) {
