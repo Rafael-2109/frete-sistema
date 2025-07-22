@@ -1,3 +1,10 @@
+import os
+import sys
+
+# Configurar encoding UTF-8 para Windows
+if sys.platform.startswith('win'):
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+
 from app import create_app
 
 app = create_app()

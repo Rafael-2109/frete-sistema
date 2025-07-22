@@ -669,7 +669,6 @@ def api_gerenciar_equipes(usuario_id):
 
 @permissions_bp.route('/api/logs')
 @login_required
-@require_admin()
 def api_logs_auditoria():
     """
     API: Busca logs de auditoria de permissões
