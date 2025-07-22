@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 
 @permissions_bp.route('/')
 @login_required
-@require_admin
 def index():
     """
     Página principal de administração de permissões
@@ -71,7 +70,6 @@ def index():
 
 @permissions_bp.route('/api/usuario/<int:usuario_id>/permissoes')
 @login_required
-@require_admin
 def api_permissoes_usuario(usuario_id):
     """
     API: Carrega permissões completas de um usuário
@@ -187,7 +185,6 @@ def api_permissoes_usuario(usuario_id):
 
 @permissions_bp.route('/api/permissao', methods=['POST'])
 @login_required
-@require_admin
 def api_salvar_permissao():
     """
     API: Salva uma permissão individual usuário → função
@@ -284,7 +281,6 @@ def api_salvar_permissao():
 
 @permissions_bp.route('/api/modulo/<int:modulo_id>/permissoes', methods=['POST'])
 @login_required
-@require_admin
 def api_salvar_permissoes_modulo(modulo_id):
     """
     API: Salva permissões de todas as funções de um módulo em lote
@@ -391,7 +387,6 @@ def api_salvar_permissoes_modulo(modulo_id):
 
 @permissions_bp.route('/api/usuario/<int:usuario_id>/vendedores', methods=['GET', 'POST', 'DELETE'])
 @login_required
-@require_admin
 def api_gerenciar_vendedores(usuario_id):
     """
     API: Gerencia vendedores autorizados para um usuário
@@ -534,7 +529,6 @@ def api_gerenciar_vendedores(usuario_id):
 
 @permissions_bp.route('/api/usuario/<int:usuario_id>/equipes', methods=['GET', 'POST', 'DELETE'])
 @login_required
-@require_admin
 def api_gerenciar_equipes(usuario_id):
     """
     API: Gerencia equipes de vendas autorizadas para um usuário
@@ -675,7 +669,7 @@ def api_gerenciar_equipes(usuario_id):
 
 @permissions_bp.route('/api/logs')
 @login_required
-@require_admin
+@require_admin()
 def api_logs_auditoria():
     """
     API: Busca logs de auditoria de permissões

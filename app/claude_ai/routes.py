@@ -336,7 +336,6 @@ def claude_real_status():
 
 @claude_ai_bp.route('/redis-status')
 @login_required
-@require_admin
 def redis_status():
     """Dashboard de status do Redis Cache"""
     if not REDIS_DISPONIVEL:

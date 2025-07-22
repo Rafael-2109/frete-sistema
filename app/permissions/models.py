@@ -258,13 +258,13 @@ class PermissaoUsuario(db.Model):
     def __repr__(self):
         return f'<PermissaoUsuario {self.usuario.nome} -> {self.funcao.nome_completo}>'
     
+    
     @property
     def esta_expirada(self):
         """Verifica se permissão está expirada"""
         if not self.expira_em:
             return False
-        return datetime.now() > self.expira_em
-    
+        return agora_brasil() > self.expira_em    
     @property
     def nivel_acesso(self):
         """Retorna nível de acesso como string"""
@@ -274,7 +274,7 @@ class PermissaoUsuario(db.Model):
             return 'Visualizar'
         else:
             return 'Sem Acesso'
-    
+    @property
     def to_dict(self):
         """Serializa para JSON"""
         return {

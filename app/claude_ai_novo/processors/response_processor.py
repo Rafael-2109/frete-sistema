@@ -516,7 +516,6 @@ class ResponseProcessor(ProcessorBase):
         # 🎯 CONSULTA GENÉRICA MELHORADA
         else:
             return self._processar_consulta_generica(consulta, user_context)
-    
     def _processar_consulta_entregas(self, consulta: str, user_context: Optional[Dict] = None) -> str:
         """Processamento específico para consultas sobre entregas"""
         try:
@@ -525,7 +524,7 @@ class ResponseProcessor(ProcessorBase):
                 data_provider = get_data_provider()
                 # Buscar dados de entregas/pedidos
                 dados = data_provider.get_entregas_recentes()
-                if dados:
+                if dados and isinstance(dados, (list, dict)):
                     total = len(dados)
                     return f"""📦 **Análise de Entregas**
 
@@ -553,8 +552,8 @@ Sua consulta: "{consulta}"
 **💡 Para respostas detalhadas, configure a API do Claude.**
 """
         except Exception as e:
-            return f"Erro ao processar consulta de entregas: {str(e)}"
-    
+            self.logger.error(f"Erro ao processar consulta de entregas: {e}")
+            return "⚠️ Erro ao processar consulta de entregas. Por favor, tente novamente."
     def _processar_consulta_fretes(self, consulta: str, user_context: Optional[Dict] = None) -> str:
         """Processamento específico para consultas sobre fretes"""
         return f"""💰 **Análise de Fretes**
