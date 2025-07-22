@@ -839,23 +839,29 @@ def listar_pedidos_agrupados():
         
         pedidos_enriquecidos = []
         for pedido in pedidos_agrupados:
-            # Calcular valor das separações ativas (ABERTO/COTADO)
-            valor_separacoes = db.session.query(func.coalesce(func.sum(
-                Separacao.qtd_saldo * Separacao.valor_saldo / func.nullif(Separacao.qtd_saldo, 0)
-            ), 0)).join(
-                Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
-            ).filter(
-                Separacao.num_pedido == pedido.num_pedido,
-                Pedido.status.in_(['ABERTO', 'COTADO'])
-            ).scalar() or 0
-            
-            # Contar quantidade de separações (não pedidos únicos)
-            qtd_separacoes = db.session.query(func.count(Separacao.id)).join(
-                Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
-            ).filter(
-                Separacao.num_pedido == pedido.num_pedido,
-                Pedido.status.in_(['ABERTO', 'COTADO'])
-            ).scalar() or 0
+            # Calcular valor e quantidade das separações ativas
+            try:
+                # Buscar separações do pedido com status ABERTO/COTADO
+                separacoes_ativas = db.session.query(Separacao).join(
+                    Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                ).filter(
+                    Separacao.num_pedido == pedido.num_pedido,
+                    Pedido.status.in_(['ABERTO', 'COTADO'])
+                ).all()
+                
+                qtd_separacoes = len(separacoes_ativas)
+                
+                # Calcular valor total das separações (qtd * valor_unitario)
+                valor_separacoes = 0
+                for sep in separacoes_ativas:
+                    if sep.qtd_saldo and sep.valor_saldo:
+                        valor_unit = sep.valor_saldo / sep.qtd_saldo if sep.qtd_saldo > 0 else 0
+                        valor_separacoes += sep.qtd_saldo * valor_unit
+                        
+            except Exception as e:
+                logger.warning(f"Erro ao calcular separações para {pedido.num_pedido}: {e}")
+                qtd_separacoes = 0
+                valor_separacoes = 0
             
             # Calcular valor do saldo restante
             valor_pedido = float(pedido.valor_total) if pedido.valor_total else 0
