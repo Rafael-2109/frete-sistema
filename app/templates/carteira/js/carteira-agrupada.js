@@ -330,28 +330,11 @@ function cancelarSeparacao(loteId) {
 }
 
 function criarSeparacao(numPedido) {
-    console.log(`📦 Criar separação para pedido ${numPedido}`);
-    
-    // Simular clique no botão expandir para abrir o workspace
-    const btnExpandir = document.querySelector(`[data-pedido="${numPedido}"].btn-expandir`);
-    if (btnExpandir && window.workspace) {
-        // Se já está expandido, apenas focar no workspace
-        const detalhesRow = document.getElementById(`detalhes-${numPedido}`);
-        if (detalhesRow && detalhesRow.classList.contains('show')) {
-            // Já expandido, apenas rolar para a área
-            detalhesRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else {
-            // Expandir primeiro
-            btnExpandir.click();
-            
-            // Aguardar expansão e rolar
-            setTimeout(() => {
-                const detalhesExpandido = document.getElementById(`detalhes-${numPedido}`);
-                if (detalhesExpandido) {
-                    detalhesExpandido.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            }, 500);
-        }
+    console.log(`📦 Delegando criação de separação para SeparacaoManager`);
+    if (window.separacaoManager) {
+        window.separacaoManager.criarSeparacaoCompleta(numPedido);
+    } else {
+        console.error('❌ Separação Manager não inicializado');
     }
 }
 

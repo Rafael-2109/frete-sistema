@@ -97,16 +97,31 @@
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.175);
     border: none;
     border-radius: 0.5rem;
-    z-index: 1050 !important; /* Força o dropdown ficar acima de outros elementos */
+    z-index: 1070 !important; /* Força o dropdown ficar acima de outros elementos */
+    position: fixed !important; /* Fix para evitar clipping */
 }
 
 .separacoes-container .dropdown {
-    position: relative;
-    z-index: 1000;
+    position: static; /* Remove relative que pode causar problemas */
 }
 
 .separacoes-container .dropdown-menu.show {
-    z-index: 1060 !important;
+    z-index: 1070 !important;
+    position: fixed !important;
+    transform: none !important; /* Remove transforms que podem causar problemas */
+}
+
+/* Fix para table-responsive que pode cortar dropdown */
+.table-responsive {
+    overflow: visible !important;
+}
+
+/* Fix específico para dropdowns dentro de tabelas */
+.table-responsive .dropdown-menu {
+    position: fixed !important;
+    z-index: 1070 !important;
+    margin: 0 !important;
+    transform: none !important;
 }
 
 .dropdown-header {

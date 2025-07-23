@@ -73,6 +73,26 @@ def contar_clientes_programados(cod_produto):
         return 0
 
 
+def obter_producao_hoje(cod_produto, resumo_estoque):
+    """
+    Obtém quantidade programada para produzir hoje
+    """
+    try:
+        if resumo_estoque and 'projecao_29_dias' in resumo_estoque:
+            # Primeiro dia da projeção é D0 (hoje)
+            hoje_dados = resumo_estoque['projecao_29_dias'][0]
+            return float(hoje_dados.get('producao_programada', 0))
+        
+        # Fallback: calcular diretamente do SaldoEstoque
+        hoje = datetime.now().date()
+        producao = SaldoEstoque.calcular_producao_periodo(cod_produto, hoje, hoje)
+        return float(producao)
+        
+    except Exception as e:
+        logger.error(f"Erro ao obter produção hoje para {cod_produto}: {e}")
+        return 0
+
+
 def gerar_alertas_reais(resumo_estoque, cardex_dados):
     """
     Gera alertas baseados na análise real do estoque
@@ -152,6 +172,9 @@ def processar_dados_workspace_produto(produto, resumo_estoque):
 
         # Contar clientes programados
         clientes_programados = contar_clientes_programados(produto.cod_produto)
+        
+        # Obter produção de hoje
+        producao_hoje = obter_producao_hoje(produto.cod_produto, resumo_estoque)
 
         return {
             'cod_produto': produto.cod_produto,
@@ -161,6 +184,7 @@ def processar_dados_workspace_produto(produto, resumo_estoque):
             'menor_estoque_7d': float(resumo_estoque['previsao_ruptura'] if resumo_estoque else 0),
             'estoque_data_expedicao': float(estoque_data_expedicao),
             'data_disponibilidade': data_disponibilidade,
+            'producao_hoje': float(producao_hoje),
             'producao_data_expedicao': 0,  # Será calculado no cardex
             'preco_unitario': float(produto.preco_unitario or 0),
             'peso_unitario': float(produto.peso_unitario or 0),

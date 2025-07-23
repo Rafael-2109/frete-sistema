@@ -172,17 +172,13 @@ class ModalEndereco {
                                             </div>
                                         </div>
                                         <div class="row mt-2">
-                                            <div class="col-md-4">
+                                            <div class="col-md-6">
                                                 <strong>Rota:</strong><br>
                                                 <span id="modal_rota"></span>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-6">
                                                 <strong>Sub-rota:</strong><br>
                                                 <span id="modal_sub_rota"></span>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <strong>Expedição:</strong><br>
-                                                <span id="modal_expedicao"></span>
                                             </div>
                                         </div>
                                     </div>
@@ -235,7 +231,6 @@ class ModalEndereco {
         document.getElementById('modal_equipe_vendas').textContent = data.equipe_vendas || '-';
         document.getElementById('modal_rota').textContent = data.rota || '-';
         document.getElementById('modal_sub_rota').textContent = data.sub_rota || '-';
-        document.getElementById('modal_expedicao').textContent = data.expedicao ? this.formatarData(data.expedicao) : '-';
     }
 
     // Utilitários de formatação

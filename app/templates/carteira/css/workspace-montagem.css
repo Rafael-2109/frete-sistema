@@ -24,6 +24,43 @@
     margin-bottom: 0;
 }
 
+/* 🎯 COLUNAS CALCULADAS */
+.workspace-produtos-table .valor-calculado {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.workspace-produtos-table .peso-calculado {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.workspace-produtos-table .pallet-calculado {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.workspace-produtos-table .qtd-editavel {
+    transition: all 0.3s ease;
+}
+
+.workspace-produtos-table .qtd-editavel:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Input group para quantidade com saldo */
+.workspace-produtos-table .input-group-text {
+    font-weight: 500;
+    border-left: none;
+}
+
+.workspace-produtos-table .input-group-text.text-warning {
+    background-color: #fff3cd;
+    border-color: #ffeaa7;
+    color: #856404;
+}
+
 .produto-origem {
     cursor: grab;
     transition: all 0.2s ease;

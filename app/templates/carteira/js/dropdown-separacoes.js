@@ -19,8 +19,58 @@ class DropdownSeparacoes {
         document.addEventListener('shown.bs.dropdown', (e) => {
             if (e.target.classList.contains('dropdown-separacoes')) {
                 this.onDropdownAberto(e.target);
+                this.ajustarPosicionamentoDropdown(e.target);
             }
         });
+
+        // Reposicionar dropdowns abertos quando janela redimensiona
+        window.addEventListener('resize', () => {
+            const dropdownsAbertos = document.querySelectorAll('.dropdown-menu.show');
+            dropdownsAbertos.forEach(dropdown => {
+                const button = dropdown.previousElementSibling;
+                if (button && button.classList.contains('dropdown-separacoes')) {
+                    this.ajustarPosicionamentoDropdown(button);
+                }
+            });
+        });
+
+        // Reset posicionamento quando dropdown fecha
+        document.addEventListener('hidden.bs.dropdown', (e) => {
+            if (e.target.classList.contains('dropdown-separacoes')) {
+                const dropdownMenu = e.target.nextElementSibling;
+                if (dropdownMenu) {
+                    dropdownMenu.style.position = '';
+                    dropdownMenu.style.left = '';
+                    dropdownMenu.style.top = '';
+                }
+            }
+        });
+    }
+
+    /**
+     * 🎯 AJUSTAR POSICIONAMENTO DO DROPDOWN PARA EVITAR CLIPPING
+     */
+    ajustarPosicionamentoDropdown(button) {
+        const dropdownMenu = button.nextElementSibling;
+        if (!dropdownMenu || !dropdownMenu.classList.contains('dropdown-menu')) return;
+
+        // Forçar posicionamento fixed e calcular posição
+        const buttonRect = button.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const viewportWidth = window.innerWidth;
+        
+        // Posicionar dropdown
+        dropdownMenu.style.position = 'fixed';
+        dropdownMenu.style.left = Math.min(buttonRect.left, viewportWidth - 420) + 'px';
+        
+        // Verificar se cabe abaixo ou deve abrir acima
+        if (buttonRect.bottom + 500 > viewportHeight) {
+            dropdownMenu.style.top = Math.max(10, buttonRect.top - 500) + 'px';
+        } else {
+            dropdownMenu.style.top = buttonRect.bottom + 'px';
+        }
+        
+        dropdownMenu.style.zIndex = '1070';
     }
 
     async onDropdownAberto(button) {

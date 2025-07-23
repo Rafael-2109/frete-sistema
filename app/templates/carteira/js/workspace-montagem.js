@@ -174,113 +174,11 @@ class WorkspaceMontagem {
     }
 
     renderizarTabelaProdutos(produtos) {
-        let html = `
-            <div class="table-responsive">
-                <table class="table table-sm table-hover workspace-produtos-table">
-                    <thead class="table-dark">
-                        <tr>
-                            <th width="30px"><i class="fas fa-grip-vertical"></i></th>
-                            <th>Produto</th>
-                            <th>Pedido</th>
-                            <th>Est.Hoje</th>
-                            <th>Est.7D</th>
-                            <th>Est.Exp</th>
-                            <th>Disponível</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-
-        produtos.forEach(produto => {
-            const statusDisponibilidade = this.calcularStatusDisponibilidade(produto);
-            
-            html += `
-                <tr class="produto-origem" 
-                    draggable="true" 
-                    data-produto="${produto.cod_produto}"
-                    data-qtd-pedido="${produto.qtd_pedido}">
-                    
-                    <td class="drag-handle text-center">
-                        <i class="fas fa-grip-vertical text-muted"></i>
-                    </td>
-                    
-                    <td>
-                        <div class="produto-info">
-                            <strong class="text-primary">${produto.cod_produto}</strong>
-                            <br><small class="text-muted">${produto.nome_produto || ''}</small>
-                        </div>
-                    </td>
-                    
-                    <td class="text-end">
-                        <div class="input-group input-group-sm" style="max-width: 120px;">
-                            <input type="number" 
-                                   class="form-control form-control-sm text-end qtd-editavel" 
-                                   value="${Math.floor(produto.qtd_pedido)}"
-                                   min="0"
-                                   max="${Math.floor(produto.qtd_pedido)}"
-                                   step="1"
-                                   data-produto="${produto.cod_produto}"
-                                   data-qtd-original="${Math.floor(produto.qtd_pedido)}"
-                                   onchange="workspace.atualizarQuantidadeProduto(this)"
-                                   title="Quantidade editável para separação parcial (apenas números inteiros)">
-                            <span class="input-group-text" title="De ${this.formatarQuantidade(produto.qtd_pedido)}">
-                                <i class="fas fa-edit text-primary"></i>
-                            </span>
-                        </div>
-                    </td>
-                    
-                    <td class="text-end">
-                        <span class="badge ${produto.estoque_hoje > 0 ? 'bg-success' : 'bg-danger'}"
-                              title="Estoque atual: ${this.formatarQuantidade(produto.estoque_hoje)} unidades
-Necessário para pedido: ${this.formatarQuantidade(produto.qtd_pedido)} unidades
-${produto.estoque_hoje >= produto.qtd_pedido ? '✅ Estoque suficiente' : '⚠️ Estoque insuficiente'}">
-                            ${this.formatarQuantidade(produto.estoque_hoje)}
-                        </span>
-                    </td>
-                    
-                    <td class="text-end">
-                        <span class="badge ${produto.menor_estoque_7d > 0 ? 'bg-info' : 'bg-warning'}"
-                              title="Menor estoque nos próximos 7 dias: ${this.formatarQuantidade(produto.menor_estoque_7d)} unidades
-📈 Previsão de ruptura baseada em saídas programadas
-${produto.menor_estoque_7d <= 0 ? '🚨 Possível ruptura em 7 dias' : '✅ Estoque mantido por 7 dias'}">
-                            ${this.formatarQuantidade(produto.menor_estoque_7d)}
-                        </span>
-                    </td>
-                    
-                    <td class="text-end">
-                        <span class="badge ${produto.estoque_data_expedicao > 0 ? 'bg-success' : 'bg-secondary'}"
-                              title="Estoque previsto na data de expedição: ${this.formatarQuantidade(produto.estoque_data_expedicao)} unidades
-📅 Data expedição: ${produto.data_disponibilidade || 'Não definida'}
-${produto.estoque_data_expedicao >= produto.qtd_pedido ? '✅ Disponível na expedição' : '⚠️ Insuficiente na expedição'}">
-                            ${this.formatarQuantidade(produto.estoque_data_expedicao)}
-                        </span>
-                    </td>
-                    
-                    <td>
-                        <span class="badge ${statusDisponibilidade.classe}">
-                            ${statusDisponibilidade.texto}
-                        </span>
-                    </td>
-                    
-                    <td>
-                        <button class="btn btn-sm btn-outline-info" 
-                                onclick="workspace.abrirCardex('${produto.cod_produto}')"
-                                title="Ver cardex completo">
-                            <i class="fas fa-search"></i>
-                        </button>
-                    </td>
-                </tr>
-            `;
-        });
-
-        html += `
-                    </tbody>
-                </table>
-            </div>
-        `;
-
-        return html;
+        // Delegado para WorkspaceTabela
+        if (window.workspaceTabela) {
+            return window.workspaceTabela.renderizarTabelaProdutos(produtos);
+        }
+        return `<div class="alert alert-warning">Módulo de tabela não carregado</div>`;
     }
 
     calcularStatusDisponibilidade(produto) {
@@ -305,6 +203,18 @@ ${produto.estoque_data_expedicao >= produto.qtd_pedido ? '✅ Disponível na exp
         return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     }
 
+    /**
+     * 🎯 CALCULAR SALDO DISPONÍVEL DO PRODUTO
+     * Fórmula: Qtd Pedido - Qtd em Separações - Qtd em Pré-Separações
+     */
+    calcularSaldoDisponivel(produto) {
+        // Delegado para WorkspaceQuantidades
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.calcularSaldoDisponivel(produto);
+        }
+        return { qtdEditavel: 0, qtdIndisponivel: produto.qtd_pedido || 0 };
+    }
+
     // Delegação para LoteManager
 
     gerarNovoLoteId() {
@@ -325,6 +235,49 @@ ${produto.estoque_data_expedicao >= produto.qtd_pedido ? '✅ Disponível na exp
 
     adicionarProdutoNoLote(loteId, dadosProduto) {
         this.loteManager.adicionarProdutoNoLote(loteId, dadosProduto);
+        
+        // 🎯 ATUALIZAR SALDO DISPONÍVEL NA TABELA
+        this.atualizarSaldoNaTabela(dadosProduto.codProduto);
+    }
+    
+    /**
+     * 🎯 ATUALIZAR SALDO DISPONÍVEL NA TABELA APÓS MUDANÇAS
+     */
+    atualizarSaldoNaTabela(codProduto) {
+        const dadosProduto = this.dadosProdutos.get(codProduto);
+        if (!dadosProduto) return;
+        
+        // Recalcular saldo disponível
+        const saldoDisponivel = this.calcularSaldoDisponivel(dadosProduto);
+        
+        // Encontrar input de quantidade na tabela
+        const input = document.querySelector(`input[data-produto="${codProduto}"]`);
+        if (input) {
+            // Atualizar atributos do input
+            input.dataset.qtdSaldo = Math.floor(saldoDisponivel.qtdEditavel);
+            input.max = Math.floor(saldoDisponivel.qtdEditavel);
+            
+            // Atualizar o valor se exceder o novo saldo
+            const valorAtual = parseInt(input.value) || 0;
+            if (valorAtual > saldoDisponivel.qtdEditavel) {
+                input.value = Math.floor(saldoDisponivel.qtdEditavel);
+                this.atualizarQuantidadeProduto(input);
+            }
+            
+            // Atualizar o span do saldo
+            const spanSaldo = input.nextElementSibling;
+            if (spanSaldo) {
+                spanSaldo.textContent = `/${Math.floor(saldoDisponivel.qtdEditavel)}`;
+                spanSaldo.title = `Saldo disponível: ${this.formatarQuantidade(saldoDisponivel.qtdEditavel)} de ${this.formatarQuantidade(dadosProduto.qtd_pedido)} do pedido`;
+                
+                // Visual feedback se saldo mudou
+                if (saldoDisponivel.temRestricao) {
+                    spanSaldo.classList.add('text-warning');
+                } else {
+                    spanSaldo.classList.remove('text-warning');
+                }
+            }
+        }
     }
 
     // Delegação para LoteManager (método removido - usar this.loteManager.recalcularTotaisLote)
@@ -336,67 +289,24 @@ ${produto.estoque_data_expedicao >= produto.qtd_pedido ? '✅ Disponível na exp
     }
 
     atualizarQuantidadeProduto(input) {
-        const codProduto = input.dataset.produto;
-        const qtdOriginal = parseInt(input.dataset.qtdOriginal);
-        let novaQtd = parseInt(input.value) || 0;
-        
-        // Garantir que é número inteiro
-        if (!Number.isInteger(novaQtd)) {
-            novaQtd = Math.floor(novaQtd);
-            input.value = novaQtd;
+        // Delegado para WorkspaceQuantidades
+        if (window.workspaceQuantidades) {
+            window.workspaceQuantidades.atualizarQuantidadeProduto(input);
         }
-        
-        // Validar limites
-        if (novaQtd < 0) {
-            input.value = 0;
-            return;
+    }
+    
+    atualizarColunasCalculadas(codProduto, novaQtd, dadosProduto) {
+        // Delegado para WorkspaceQuantidades
+        if (window.workspaceQuantidades) {
+            window.workspaceQuantidades.atualizarColunasCalculadas(codProduto, novaQtd, dadosProduto);
         }
-        if (novaQtd > qtdOriginal) {
-            input.value = qtdOriginal;
-            alert(`⚠️ Quantidade não pode exceder o pedido original (${qtdOriginal} unidades)`);
-            return;
-        }
-        
-        // Atualizar dados do produto
-        const dadosProduto = this.dadosProdutos.get(codProduto);
-        if (dadosProduto) {
-            dadosProduto.qtd_selecionada = novaQtd;
-            
-            // Recalcular peso e pallet proporcionalmente
-            const fatorProporcional = novaQtd / qtdOriginal;
-            dadosProduto.peso_selecionado = dadosProduto.peso_unitario * novaQtd;
-            dadosProduto.pallet_selecionado = dadosProduto.pallet_unitario * novaQtd;
-            dadosProduto.valor_selecionado = dadosProduto.preco_unitario * novaQtd;
-            
-            console.log(`✅ Quantidade atualizada: ${codProduto} = ${novaQtd}`);
-            
-            // Se produto está em algum lote, recalcular totais
-            this.recalcularTotaisLotesComProduto(codProduto);
-        }
-        
-        // Visual feedback
-        input.classList.add('bg-warning');
-        setTimeout(() => input.classList.remove('bg-warning'), 1000);
     }
     
     recalcularTotaisLotesComProduto(codProduto) {
-        this.preSeparacoes.forEach((loteData, loteId) => {
-            const produtoNoLote = loteData.produtos.find(p => p.codProduto === codProduto);
-            if (produtoNoLote) {
-                // Atualizar dados do produto no lote
-                const dadosProduto = this.dadosProdutos.get(codProduto);
-                if (dadosProduto) {
-                    produtoNoLote.qtd = dadosProduto.qtd_selecionada || dadosProduto.qtd_pedido;
-                    produtoNoLote.peso = dadosProduto.peso_selecionado || dadosProduto.peso_total;
-                    produtoNoLote.pallet = dadosProduto.pallet_selecionado || dadosProduto.pallet_total;
-                    produtoNoLote.valor = dadosProduto.valor_selecionado || dadosProduto.valor_total;
-                }
-                
-                // Recalcular totais do lote
-                this.loteManager.recalcularTotaisLote(loteId);
-                this.loteManager.atualizarCardLote(loteId);
-            }
-        });
+        // Delegado para WorkspaceQuantidades
+        if (window.workspaceQuantidades) {
+            window.workspaceQuantidades.recalcularTotaisLotesComProduto(codProduto);
+        }
     }
 
     // Delegação para ModalCardex (método removido - usar this.modalCardex.mostrarModalCardex)
@@ -424,195 +334,40 @@ ${produto.estoque_data_expedicao >= produto.qtd_pedido ? '✅ Disponível na exp
             return;
         }
 
-        // Coletar dados necessários
+        // Obter número do pedido
         const numPedido = this.obterNumeroPedido();
         if (!numPedido) {
             alert('❌ Não foi possível identificar o número do pedido.');
             return;
         }
 
-        // Solicitar dados de expedição/agendamento
-        const dadosExpedicao = await this.solicitarDadosExpedicao(loteId);
-        if (!dadosExpedicao) {
-            return; // Usuário cancelou
-        }
-
-        try {
-            // Preparar payload para a API
-            const payload = {
-                num_pedido: numPedido,
-                lotes: [{
-                    lote_id: loteId,
-                    produtos: loteData.produtos.map(produto => ({
-                        cod_produto: produto.codProduto,
-                        quantidade: produto.quantidade
-                    })),
-                    expedicao: dadosExpedicao.expedicao,
-                    agendamento: dadosExpedicao.agendamento || null,
-                    protocolo: dadosExpedicao.protocolo || null
-                }]
-            };
-
-            // Enviar para API
-            const response = await fetch('/carteira/api/workspace/gerar-separacao', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                alert(`✅ ${result.message}`);
-                
-                // Remover lote do workspace após sucesso
-                this.loteManager.removerLote(loteId);
-                
-                // Mostrar resumo
-                if (result.lotes_processados && result.lotes_processados.length > 0) {
-                    const loteInfo = result.lotes_processados[0];
-                    console.log(`📊 Separação criada:
-- Tipo: ${loteInfo.tipo_envio.toUpperCase()}
-- Produtos: ${loteInfo.total_produtos}
-- Valor: R$ ${loteInfo.total_valor.toFixed(2)}
-- Peso: ${loteInfo.total_peso.toFixed(1)} kg
-- Pallets: ${loteInfo.total_pallet.toFixed(2)}`);
-                }
-                
-            } else {
-                alert(`❌ Erro: ${result.error}`);
-            }
-
-        } catch (error) {
-            console.error('❌ Erro ao gerar separação:', error);
-            alert('❌ Erro de comunicação com o servidor');
+        // 🎯 DELEGAR PARA SEPARACAO-MANAGER (Caso 1 - Criar separação completa)
+        if (window.separacaoManager) {
+            await window.separacaoManager.criarSeparacaoCompleta(numPedido);
+            
+            // Se a separação foi criada, remover o lote local
+            this.loteManager.removerLote(loteId);
+        } else {
+            console.error('❌ Separação Manager não disponível');
+            alert('❌ Sistema de separação não está disponível');
         }
     }
 
     async confirmarSeparacao(loteId) {
-        console.log(`✅ Confirmar separação de pré-separação ${loteId}`);
+        console.log(`🔄 Confirmar separação para lote ${loteId}`);
         
-        // Solicitar dados de agendamento/protocolo
-        const dadosConfirmacao = await this.solicitarDadosConfirmacao(loteId);
-        if (!dadosConfirmacao) {
-            return; // Usuário cancelou
-        }
-
-        try {
-            // Chamar API para confirmar pré-separação como separação
-            const response = await fetch(`/carteira/api/pre-separacao/lote/${loteId}/confirmar-separacao`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    agendamento: dadosConfirmacao.agendamento,
-                    protocolo: dadosConfirmacao.protocolo
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                alert(`✅ ${result.message}`);
-                
-                // Atualizar status do lote localmente
-                const loteData = this.preSeparacoes.get(loteId);
-                if (loteData) {
-                    loteData.status = 'separacao';
-                    loteData.produtos.forEach(p => p.status = 'separacao');
-                    
-                    // Re-renderizar o card
-                    const cardElement = document.querySelector(`[data-lote-id="${loteId}"]`);
-                    if (cardElement) {
-                        cardElement.outerHTML = this.loteManager.renderizarCardPreSeparacao(loteData);
-                    }
-                }
-                
-                console.log(`📊 Separação confirmada: ${result.separacao_lote_id}`);
-                
-            } else {
-                alert(`❌ Erro: ${result.error}`);
-            }
-
-        } catch (error) {
-            console.error('❌ Erro ao confirmar separação:', error);
-            alert('❌ Erro de comunicação com o servidor');
+        // 🎯 DELEGAR PARA SEPARACAO-MANAGER (Caso 2 - Transformar pré-separação em separação)
+        if (window.separacaoManager) {
+            await window.separacaoManager.transformarLoteEmSeparacao(null, loteId);
+            
+            // Se a transformação foi bem-sucedida, remover o lote local
+            this.loteManager.removerLote(loteId);
+        } else {
+            console.error('❌ Separação Manager não disponível');
+            alert('❌ Sistema de separação não está disponível');
         }
     }
 
-    async solicitarDadosConfirmacao(loteId) {
-        return new Promise((resolve) => {
-            // Criar modal simples para dados de confirmação
-            const modal = document.createElement('div');
-            modal.className = 'modal fade';
-            modal.innerHTML = `
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">
-                                <i class="fas fa-check-circle me-2"></i>
-                                Confirmar Separação
-                            </h5>
-                        </div>
-                        <div class="modal-body">
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle me-2"></i>
-                                Transformando pré-separação em separação definitiva
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Data de Agendamento</label>
-                                <input type="date" class="form-control" id="agendamento-input">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Protocolo</label>
-                                <input type="text" class="form-control" id="protocolo-input" placeholder="Protocolo de agendamento">
-                            </div>
-                            <small class="text-muted">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Lote: ${loteId}
-                            </small>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-action="cancel">Cancelar</button>
-                            <button type="button" class="btn btn-success" data-action="confirm">
-                                <i class="fas fa-check me-1"></i>
-                                Confirmar Separação
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(modal);
-            const bsModal = new bootstrap.Modal(modal);
-            bsModal.show();
-
-            // Event listeners
-            modal.addEventListener('click', (e) => {
-                if (e.target.dataset.action === 'cancel') {
-                    bsModal.hide();
-                    resolve(null);
-                } else if (e.target.dataset.action === 'confirm') {
-                    const agendamento = document.getElementById('agendamento-input').value;
-                    const protocolo = document.getElementById('protocolo-input').value;
-
-                    bsModal.hide();
-                    resolve({
-                        agendamento: agendamento || null,
-                        protocolo: protocolo || null
-                    });
-                }
-            });
-
-            // Remover modal ao fechar
-            modal.addEventListener('hidden.bs.modal', () => {
-                modal.remove();
-            });
-        });
-    }
 
     obterNumeroPedido() {
         // Extrair número do pedido do workspace atual
@@ -620,88 +375,6 @@ ${produto.estoque_data_expedicao >= produto.qtd_pedido ? '✅ Disponível na exp
         return workspaceElement ? workspaceElement.dataset.pedido : null;
     }
 
-    async solicitarDadosExpedicao(loteId) {
-        return new Promise((resolve) => {
-            // Criar modal simples para coletar dados
-            const modal = document.createElement('div');
-            modal.className = 'modal fade';
-            modal.innerHTML = `
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">
-                                <i class="fas fa-shipping-fast me-2"></i>
-                                Dados da Separação
-                            </h5>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label">Data de Expedição <span class="text-danger">*</span></label>
-                                <input type="date" class="form-control" id="expedicao-input" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Data de Agendamento</label>
-                                <input type="date" class="form-control" id="agendamento-input">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Protocolo</label>
-                                <input type="text" class="form-control" id="protocolo-input" placeholder="Protocolo de agendamento">
-                            </div>
-                            <small class="text-muted">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Lote: ${loteId}
-                            </small>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-action="cancel">Cancelar</button>
-                            <button type="button" class="btn btn-primary" data-action="confirm">
-                                <i class="fas fa-check me-1"></i>
-                                Gerar Separação
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(modal);
-            const bsModal = new bootstrap.Modal(modal);
-            bsModal.show();
-
-            // Pré-preencher data de expedição com hoje + 1 dia
-            const amanha = new Date();
-            amanha.setDate(amanha.getDate() + 1);
-            document.getElementById('expedicao-input').value = amanha.toISOString().split('T')[0];
-
-            // Event listeners
-            modal.addEventListener('click', (e) => {
-                if (e.target.dataset.action === 'cancel') {
-                    bsModal.hide();
-                    resolve(null);
-                } else if (e.target.dataset.action === 'confirm') {
-                    const expedicao = document.getElementById('expedicao-input').value;
-                    const agendamento = document.getElementById('agendamento-input').value;
-                    const protocolo = document.getElementById('protocolo-input').value;
-
-                    if (!expedicao) {
-                        alert('❌ Data de expedição é obrigatória!');
-                        return;
-                    }
-
-                    bsModal.hide();
-                    resolve({
-                        expedicao,
-                        agendamento,
-                        protocolo
-                    });
-                }
-            });
-
-            // Remover modal ao fechar
-            modal.addEventListener('hidden.bs.modal', () => {
-                modal.remove();
-            });
-        });
-    }
 
     abrirDetalhesLote(loteId) {
         console.log(`🔍 Abrir detalhes do lote ${loteId}`);
@@ -721,6 +394,9 @@ ${produto.estoque_data_expedicao >= produto.qtd_pedido ? '✅ Disponível na exp
 
     removerProdutoDoLote(loteId, codProduto) {
         this.loteManager.removerProdutoDoLote(loteId, codProduto);
+        
+        // 🎯 ATUALIZAR SALDO DISPONÍVEL NA TABELA
+        this.atualizarSaldoNaTabela(codProduto);
     }
 
     renderizarErroWorkspace(numPedido, mensagem) {
