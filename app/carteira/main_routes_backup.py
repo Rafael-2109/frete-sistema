@@ -698,6 +698,164 @@ def _gerar_novo_lote_id():
         import time
         return f"LOTE_{int(time.time())}"
 
+# Função listar_pedidos_agrupados removida - agora está em routes/agrupados.py
+# Mantém apenas a nova implementação para evitar conflitos de endpoints
+        
+        # Import necessário para join
+        from app.producao.models import CadastroPalletizacao
+        
+        # 📊 QUERY AGRUPADA conforme CARTEIRA.csv
+        # Campos agregados: valor_total, peso_total, pallet_total
+        pedidos_agrupados = db.session.query(
+            # Campos base do agrupamento
+            CarteiraPrincipal.num_pedido,
+            CarteiraPrincipal.vendedor,
+            CarteiraPrincipal.equipe_vendas,
+            CarteiraPrincipal.data_pedido,
+            CarteiraPrincipal.cnpj_cpf,
+            CarteiraPrincipal.raz_social_red,
+            CarteiraPrincipal.rota,
+            CarteiraPrincipal.sub_rota,
+            CarteiraPrincipal.expedicao,
+            CarteiraPrincipal.observ_ped_1,
+            CarteiraPrincipal.status_pedido,
+            CarteiraPrincipal.pedido_cliente,
+            CarteiraPrincipal.cod_uf,
+            CarteiraPrincipal.nome_cidade,
+            CarteiraPrincipal.incoterm,
+            CarteiraPrincipal.expedicao,
+            CarteiraPrincipal.protocolo,
+            CarteiraPrincipal.agendamento,
+            
+            # Agregações conforme CSV
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * 
+                    CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * 
+                    CadastroPalletizacao.peso_bruto).label('peso_total'),
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido / 
+                    CadastroPalletizacao.palletizacao).label('pallet_total'),
+            func.count(CarteiraPrincipal.id).label('total_itens')
+            
+        ).outerjoin(
+            CadastroPalletizacao,
+            and_(
+                CarteiraPrincipal.cod_produto == CadastroPalletizacao.cod_produto,
+                CadastroPalletizacao.ativo == True
+            )
+        ).filter(
+            CarteiraPrincipal.ativo == True
+        ).group_by(
+            CarteiraPrincipal.num_pedido,
+            CarteiraPrincipal.vendedor,
+            CarteiraPrincipal.equipe_vendas,
+            CarteiraPrincipal.data_pedido,
+            CarteiraPrincipal.cnpj_cpf,
+            CarteiraPrincipal.raz_social_red,
+            CarteiraPrincipal.rota,
+            CarteiraPrincipal.sub_rota,
+            CarteiraPrincipal.expedicao,
+            CarteiraPrincipal.observ_ped_1,
+            CarteiraPrincipal.status_pedido,
+            CarteiraPrincipal.pedido_cliente,
+            CarteiraPrincipal.cod_uf,
+            CarteiraPrincipal.nome_cidade,
+            CarteiraPrincipal.incoterm,
+            CarteiraPrincipal.expedicao,
+            CarteiraPrincipal.protocolo,
+            CarteiraPrincipal.agendamento
+        ).order_by(
+            CarteiraPrincipal.expedicao.asc().nullslast(),
+            CarteiraPrincipal.num_pedido.asc()
+        ).all()
+        
+        # 📊 CALCULAR INFORMAÇÕES DE SEPARAÇÃO PARA CADA PEDIDO
+        from app.separacao.models import Separacao
+        from app.pedidos.models import Pedido
+        
+        pedidos_enriquecidos = []
+        for pedido in pedidos_agrupados:
+            # Calcular valor e quantidade das separações ativas
+            try:
+                # Contar separacao_lote_id únicos (quantidade de envios para separação)
+                qtd_separacoes = db.session.query(func.count(func.distinct(Separacao.separacao_lote_id))).join(
+                    Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                ).filter(
+                    Separacao.num_pedido == pedido.num_pedido,
+                    Pedido.status.in_(['ABERTO', 'COTADO'])
+                ).scalar() or 0
+                
+                # Buscar separações para calcular valor total
+                separacoes_ativas = db.session.query(Separacao).join(
+                    Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                ).filter(
+                    Separacao.num_pedido == pedido.num_pedido,
+                    Pedido.status.in_(['ABERTO', 'COTADO'])
+                ).all()
+                
+                # Calcular valor total das separações (qtd * valor_unitario)
+                valor_separacoes = 0
+                for sep in separacoes_ativas:
+                    if sep.qtd_saldo and sep.valor_saldo:
+                        valor_unit = sep.valor_saldo / sep.qtd_saldo if sep.qtd_saldo > 0 else 0
+                        valor_separacoes += sep.qtd_saldo * valor_unit
+                        
+            except Exception as e:
+                logger.warning(f"Erro ao calcular separações para {pedido.num_pedido}: {e}")
+                qtd_separacoes = 0
+                valor_separacoes = 0
+            
+            # Calcular valor do saldo restante
+            valor_pedido = float(pedido.valor_total) if pedido.valor_total else 0
+            valor_saldo_restante = valor_pedido - float(valor_separacoes)
+            
+            # Determinar se está totalmente em separação
+            totalmente_separado = valor_saldo_restante <= 0.01  # Margem de 1 centavo
+            
+            # Criar objeto enriquecido
+            pedido_enriquecido = {
+                'num_pedido': pedido.num_pedido,
+                'vendedor': pedido.vendedor,
+                'equipe_vendas': pedido.equipe_vendas,
+                'data_pedido': pedido.data_pedido,
+                'cnpj_cpf': pedido.cnpj_cpf,
+                'raz_social_red': pedido.raz_social_red,
+                'rota': pedido.rota,
+                'sub_rota': pedido.sub_rota,
+                'expedicao': pedido.expedicao,
+                'observ_ped_1': pedido.observ_ped_1,
+                'status_pedido': pedido.status_pedido,
+                'pedido_cliente': pedido.pedido_cliente,
+                'cod_uf': pedido.cod_uf,
+                'nome_cidade': pedido.nome_cidade,
+                'incoterm': pedido.incoterm,
+                'expedicao': pedido.expedicao,
+                'protocolo': pedido.protocolo,
+                'agendamento': pedido.agendamento,
+                'valor_total': valor_pedido,
+                'peso_total': float(pedido.peso_total) if pedido.peso_total else 0,
+                'pallet_total': float(pedido.pallet_total) if pedido.pallet_total else 0,
+                'total_itens': pedido.total_itens,
+                # 🆕 NOVAS INFORMAÇÕES
+                'valor_separacoes': float(valor_separacoes),
+                'valor_saldo_restante': valor_saldo_restante,
+                'qtd_separacoes': qtd_separacoes,
+                'totalmente_separado': totalmente_separado
+            }
+            
+            pedidos_enriquecidos.append(pedido_enriquecido)
+        
+        # 📊 VALIDAÇÃO: Log de resultado para debug
+        logger.info(f"Query agrupamento executada: {len(pedidos_enriquecidos)} pedidos encontrados")
+        
+        return render_template('carteira/listar_agrupados.html', 
+                             pedidos=pedidos_enriquecidos,
+                             total_pedidos=len(pedidos_enriquecidos))
+        
+    except Exception as e:
+        logger.error(f"Erro ao listar pedidos agrupados: {str(e)}")
+        flash(f'Erro ao carregar pedidos agrupados: {str(e)}', 'error')
+        return render_template('carteira/listar_agrupados.html', pedidos=None)
+
 @carteira_bp.route('/api/pedido/<num_pedido>/itens')
 @login_required
 def api_itens_pedido(num_pedido):
