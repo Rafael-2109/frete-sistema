@@ -65,9 +65,14 @@ def importar_vinculos():
     )
 
 # Confirmação da Importação
-@vinculos_bp.route('/confirmar_importacao', methods=['POST'])
+@vinculos_bp.route('/confirmar_importacao', methods=['GET', 'POST'])
 @login_required
 def confirmar_importacao_vinculos():
+    # Tratar GET - redirecionar com mensagem
+    if request.method == 'GET':
+        flash("Acesse através do processo de importação.", "warning")
+        return redirect(url_for('vinculos.importar_vinculos'))
+    
     dados_validos = session.get('vinculos_validos', [])
 
     if not dados_validos:
@@ -77,11 +82,16 @@ def confirmar_importacao_vinculos():
     total_importados = 0
 
     for linha in dados_validos:
+        # Validar e limpar campo UF
+        uf_value = linha.get('uf', '').strip()
+        if uf_value in ['', 'nan', 'NaN', 'null', 'None'] or len(uf_value) > 2:
+            continue  # Pular linha com UF inválida
+            
         novo = CidadeAtendida(
             cidade_id=linha['cidade_id'],
             transportadora_id=linha['transportadora_id'],
             codigo_ibge=linha['codigo_ibge'],
-            uf=linha['uf'],
+            uf=uf_value,
             nome_tabela=linha['nome_tabela'].upper(),  # ✅ NORMALIZADO PARA MAIÚSCULA
             lead_time=linha['lead_time']
         )
