@@ -73,10 +73,10 @@ def _encontrar_proxima_data_com_estoque(projecao_29_dias, qtd_necessaria):
             if estoque_final >= qtd_necessaria:
                 data_disponivel = data_hoje + timedelta(days=i)
                 return data_disponivel.strftime('%d/%m/%Y')
-        
+
         # Se não encontrou em 29 dias, retornar informação
         return "Sem estoque em 29 dias"
-        
+    
     except Exception as e:
         logger.warning(f"Erro ao encontrar próxima data com estoque: {e}")
         return None
@@ -101,8 +101,10 @@ def _buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade):
         logger.warning(f"Erro ao buscar sub-rota para {cod_uf}/{nome_cidade}: {e}")
         return None
 
+
 # 📦 Blueprint da carteira (seguindo padrão dos outros módulos)
 carteira_bp = Blueprint('carteira', __name__, url_prefix='/carteira')
+
 
 @carteira_bp.route('/')
 @login_required

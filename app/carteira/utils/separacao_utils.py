@@ -7,7 +7,7 @@ from datetime import datetime
 from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.producao.models import CadastroPalletizacao
-from app.rotas.models import CadastroRota, CadastroSubRota
+from app.localidades.models import CadastroRota, CadastroSubRota
 import logging
 import re
 

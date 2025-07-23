@@ -1,0 +1,23 @@
+[flake8]
+ignore = 
+    E501,    # line too long
+    E302,    # expected 2 blank lines
+    E303,    # too many blank lines
+    E712,    # comparison to True/False
+    E128,    # continuation line under-indented
+    W293,    # blank line contains whitespace
+    W291,    # trailing whitespace
+    W292,    # no newline at end of file
+    F401,    # imported but unused
+    F811,    # redefinition of unused
+    F841,    # local variable assigned but never used
+    F601     # dictionary key repeated
+
+max-line-length = 120
+exclude = 
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    migrations,
+    node_modules

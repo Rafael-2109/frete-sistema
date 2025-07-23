@@ -14,9 +14,9 @@ from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
 from app.utils.timezone import agora_brasil
 from app.carteira.utils.separacao_utils import (
-    determinar_tipo_envio, 
-    calcular_peso_pallet_produto, 
-    buscar_rota_por_uf, 
+    determinar_tipo_envio,
+    calcular_peso_pallet_produto,
+    buscar_rota_por_uf,
     buscar_sub_rota_por_uf_cidade
 )
 from app.carteira.utils.workspace_utils import (
@@ -98,8 +98,6 @@ def workspace_pedido_real(num_pedido):
             'success': False,
             'error': f'Erro interno: {str(e)}'
         }), 500
-
-
 
 
 @carteira_bp.route('/api/workspace/gerar-separacao', methods=['POST'])
