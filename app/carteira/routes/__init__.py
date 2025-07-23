@@ -3,13 +3,11 @@ Módulo de rotas da carteira organizadas por funcionalidade
 Padrão de nomenclatura: {funcionalidade}_api.py para APIs, {funcionalidade}.py para views
 """
 
-from flask import Blueprint
-
-# Criação do blueprint principal
-carteira_bp = Blueprint('carteira', __name__, url_prefix='/carteira')
+# Importar o blueprint principal que já contém as rotas básicas (incluindo index)
+from app.carteira.routes import carteira_bp
 
 # Importação das rotas organizadas
-# Views principais
+# Views principais  
 from .agrupados import *
 
 # APIs padronizadas
