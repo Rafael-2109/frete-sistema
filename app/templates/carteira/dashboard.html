@@ -17,9 +17,9 @@
             <a href="{{ url_for('carteira.listar_principal') }}" class="btn btn-outline-primary mr-2">
                 <i class="fas fa-list"></i> Ver Carteira
             </a>
-            <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}" class="btn btn-warning">
-                <i class="fas fa-layer-group"></i> Carteira Agrupada
-                <span class="badge badge-light ml-1">NOVO</span>
+            <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}" class="btn btn-success">
+                <i class="fas fa-boxes"></i> Workspace de Montagem
+                <span class="badge badge-light ml-1">v2.0</span>
             </a>
         </div>
     </div>
@@ -328,6 +328,74 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- Seção do Workspace de Montagem -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow border-left-success">
+                <div class="card-header py-3 bg-gradient-success">
+                    <h6 class="m-0 font-weight-bold text-white">
+                        <i class="fas fa-boxes"></i> Workspace de Montagem de Carga - v2.0
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <p class="text-muted mb-3">
+                                Sistema avançado de pré-separação com interface drag & drop, 
+                                permitindo montagem inteligente de cargas com controle total de estoque.
+                            </p>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <h6 class="font-weight-bold text-success">✨ Principais Funcionalidades</h6>
+                                    <ul class="list-unstyled text-sm">
+                                        <li><i class="fas fa-check-circle text-success me-2"></i> Drag & Drop intuitivo</li>
+                                        <li><i class="fas fa-check-circle text-success me-2"></i> Pré-separações persistentes</li>
+                                        <li><i class="fas fa-check-circle text-success me-2"></i> Validação de estoque em tempo real</li>
+                                        <li><i class="fas fa-check-circle text-success me-2"></i> Cardex D0-D28 integrado</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="font-weight-bold text-info">🎯 Benefícios</h6>
+                                    <ul class="list-unstyled text-sm">
+                                        <li><i class="fas fa-arrow-up text-info me-2"></i> Agilidade na separação</li>
+                                        <li><i class="fas fa-shield-alt text-info me-2"></i> Controle de rastreabilidade</li>
+                                        <li><i class="fas fa-chart-line text-info me-2"></i> Otimização de cargas</li>
+                                        <li><i class="fas fa-clock text-info me-2"></i> Redução de tempo operacional</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}" class="btn btn-success">
+                                    <i class="fas fa-boxes"></i> Acessar Workspace
+                                </a>
+                                <a href="/static/DOCUMENTACAO_MODULO_CARTEIRA.md" target="_blank" class="btn btn-outline-info">
+                                    <i class="fas fa-book"></i> Documentação
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="workspace-preview p-3">
+                                <i class="fas fa-desktop fa-4x text-success mb-3"></i>
+                                <h6 class="font-weight-bold text-success">Interface Moderna</h6>
+                                <p class="text-muted small">
+                                    Sistema modular com arquitetura JavaScript ES6+, 
+                                    APIs RESTful e interface responsiva.
+                                </p>
+                                <div class="badge-container">
+                                    <span class="badge badge-success">Drag & Drop</span>
+                                    <span class="badge badge-info">APIs REST</span>
+                                    <span class="badge badge-warning">Bootstrap 5</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <style>

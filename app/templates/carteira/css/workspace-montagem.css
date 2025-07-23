@@ -1,0 +1,469 @@
+/* 🎯 WORKSPACE DE MONTAGEM DE CARGA */
+
+.workspace-montagem {
+    border-radius: 0.5rem;
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+    margin: 1rem 0;
+}
+
+.workspace-header {
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+}
+
+.workspace-resumo {
+    font-size: 0.9rem;
+}
+
+/* 📋 TABELA DE PRODUTOS */
+.workspace-produtos {
+    border-left: 1px solid #dee2e6;
+    border-right: 1px solid #dee2e6;
+}
+
+.workspace-produtos-table {
+    margin-bottom: 0;
+}
+
+.produto-origem {
+    cursor: grab;
+    transition: all 0.2s ease;
+}
+
+.produto-origem:hover {
+    background-color: rgba(0, 123, 255, 0.1) !important;
+    transform: translateY(-1px);
+}
+
+.produto-origem.dragging {
+    opacity: 0.5;
+    transform: rotate(2deg);
+}
+
+.drag-handle {
+    cursor: grab;
+    color: #6c757d;
+}
+
+.drag-handle:hover {
+    color: #007bff;
+}
+
+.produto-info strong {
+    font-size: 0.9rem;
+}
+
+.produto-info small {
+    font-size: 0.8rem;
+}
+
+/* 📦 ÁREA DE LOTES */
+.workspace-lotes {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0 0 0.5rem 0.5rem;
+    min-height: 300px;
+}
+
+.lotes-container {
+    min-height: 250px;
+}
+
+/* 🎯 CARDS DE LOTE */
+.lote-card {
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+    min-height: 250px;
+}
+
+.lote-card:hover {
+    border-color: #007bff;
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 123, 255, 0.15);
+}
+
+.lote-card.drag-over {
+    border-color: #28a745 !important;
+    background-color: rgba(40, 167, 69, 0.1);
+    transform: scale(1.02);
+}
+
+.lote-card .card-header {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    border: none;
+    color: white;
+}
+
+.lote-placeholder {
+    border: 2px dashed #6c757d;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.lote-placeholder:hover {
+    border-color: #007bff;
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.lote-placeholder.drag-over {
+    border-color: #28a745 !important;
+    background-color: rgba(40, 167, 69, 0.1);
+    transform: scale(1.05);
+}
+
+/* 📋 PRODUTOS NO LOTE */
+.produto-lote {
+    padding: 0.25rem 0.5rem;
+    background: #f8f9fa;
+    border-radius: 0.25rem;
+    border-left: 3px solid #007bff;
+}
+
+.produto-lote:hover {
+    background: #e9ecef;
+}
+
+.produto-lote small {
+    line-height: 1.2;
+}
+
+/* 📊 TOTAIS DO LOTE */
+.totais-lote {
+    background: linear-gradient(135deg, #f8f9fc 0%, #fff 100%);
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+}
+
+.totais-lote strong {
+    font-size: 0.95rem;
+}
+
+.totais-lote small {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+/* 🎨 BADGES DE STATUS */
+.workspace-produtos-table .badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* 🎯 DRAG & DROP FEEDBACK */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.drag-over {
+    animation: pulse 0.5s ease-in-out;
+}
+
+/* 📱 RESPONSIVIDADE */
+@media (max-width: 768px) {
+    .workspace-header .row {
+        text-align: center;
+    }
+    
+    .workspace-resumo {
+        margin-top: 0.5rem;
+    }
+    
+    .workspace-produtos-table {
+        font-size: 0.85rem;
+    }
+    
+    .lote-card {
+        margin-bottom: 1rem;
+    }
+    
+    .produto-origem {
+        cursor: default; /* Desabilitar drag em mobile */
+    }
+}
+
+@media (max-width: 576px) {
+    .workspace-produtos-table th:nth-child(4),
+    .workspace-produtos-table th:nth-child(5),
+    .workspace-produtos-table td:nth-child(4),
+    .workspace-produtos-table td:nth-child(5) {
+        display: none; /* Ocultar colunas extras em telas pequenas */
+    }
+    
+    .workspace-montagem {
+        margin: 0.5rem 0;
+    }
+    
+    .workspace-header {
+        padding: 1rem !important;
+    }
+    
+    .workspace-produtos,
+    .workspace-lotes {
+        padding: 1rem !important;
+    }
+}
+
+/* 🎯 ESTADOS ESPECIAIS */
+.lote-card.sem-produtos {
+    opacity: 0.8;
+}
+
+.lote-card.com-estoque .card-header {
+    background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%) !important;
+}
+
+.lote-card.sem-estoque .card-header {
+    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%) !important;
+    color: #212529 !important;
+}
+
+/* 🎨 ANIMAÇÕES */
+.lote-card {
+    animation: slideInUp 0.3s ease-out;
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.produto-lote {
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* 🎯 SCROLLBAR CUSTOMIZADA */
+.workspace-montagem {
+    scrollbar-width: thin;
+    scrollbar-color: #007bff #f1f1f1;
+}
+
+.workspace-montagem::-webkit-scrollbar {
+    width: 6px;
+}
+
+.workspace-montagem::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.workspace-montagem::-webkit-scrollbar-thumb {
+    background: #007bff;
+    border-radius: 3px;
+}
+
+.workspace-montagem::-webkit-scrollbar-thumb:hover {
+    background: #0056b3;
+}
+
+/* 📊 MODAL DE CARDEX */
+#modal-cardex .modal-dialog {
+    max-width: 90vw;
+}
+
+#modal-cardex .modal-header {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+}
+
+.produto-cardex-header {
+    background: linear-gradient(135deg, #f8f9fc 0%, #fff 100%);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    border: 1px solid #e9ecef;
+}
+
+.cardex-resumo {
+    text-align: center;
+}
+
+.cardex-resumo-visual .stat-card {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.cardex-resumo-visual .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+}
+
+.cardex-tabela {
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.cardex-tabela table {
+    margin-bottom: 0;
+}
+
+.cardex-tabela thead th {
+    border-bottom: 2px solid #495057;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.cardex-tabela tbody td {
+    font-size: 0.9rem;
+    vertical-align: middle;
+}
+
+.cardex-tabela .table-striped > tbody > tr:nth-of-type(odd) > td {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Status das linhas */
+.cardex-tabela .table-danger {
+    background-color: rgba(220, 53, 69, 0.1) !important;
+}
+
+.cardex-tabela .table-warning {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+}
+
+/* Alertas do cardex */
+.cardex-alertas {
+    background: #f8f9fa;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    border: 1px solid #e9ecef;
+}
+
+.cardex-alertas .list-group-item {
+    border: none;
+    border-left: 4px solid transparent;
+    margin-bottom: 0.5rem;
+    border-radius: 0.375rem;
+}
+
+.cardex-alertas .list-group-item-danger {
+    border-left-color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.cardex-alertas .list-group-item-warning {
+    border-left-color: #ffc107;
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
+.cardex-alertas .list-group-item-info {
+    border-left-color: #0dcaf0;
+    background-color: rgba(13, 202, 240, 0.1);
+}
+
+/* Badges especiais do cardex */
+.cardex-tabela .badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Responsividade do modal */
+@media (max-width: 768px) {
+    #modal-cardex .modal-dialog {
+        max-width: 95vw;
+        margin: 0.5rem;
+    }
+    
+    .cardex-resumo-visual .col-3 {
+        margin-bottom: 1rem;
+    }
+    
+    .cardex-tabela {
+        font-size: 0.8rem;
+    }
+    
+    .cardex-tabela th:nth-child(3),
+    .cardex-tabela th:nth-child(4),
+    .cardex-tabela td:nth-child(3),
+    .cardex-tabela td:nth-child(4) {
+        display: none; /* Ocultar colunas em mobile */
+    }
+}
+
+@media (max-width: 576px) {
+    .cardex-resumo-visual .row {
+        flex-direction: column;
+    }
+    
+    .cardex-resumo-visual .col-3 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+    
+    .produto-cardex-header .row {
+        text-align: center;
+    }
+    
+    .cardex-resumo {
+        margin-top: 1rem;
+    }
+}
+
+/* Animações do modal */
+#modal-cardex .modal-content {
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.stat-card {
+    animation: statCardFadeIn 0.5s ease-out;
+}
+
+@keyframes statCardFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Scrollbar da tabela */
+.cardex-tabela .table-responsive::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+.cardex-tabela .table-responsive::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.cardex-tabela .table-responsive::-webkit-scrollbar-thumb {
+    background: #007bff;
+    border-radius: 4px;
+}
+
+.cardex-tabela .table-responsive::-webkit-scrollbar-thumb:hover {
+    background: #0056b3;
+}

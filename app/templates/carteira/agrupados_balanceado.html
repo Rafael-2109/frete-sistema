@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+
+{% block title %}Carteira Agrupada{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header da Página -->
+    <header class="page-header">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h3 mb-0 text-gray-800">
+                    <i class="fas fa-layer-group text-primary me-2"></i>
+                    Carteira Agrupada por Pedidos
+                </h1>
+                {% if total_pedidos %}
+                <small class="text-muted">{{ total_pedidos }} pedidos encontrados</small>
+                {% endif %}
+            </div>
+            
+            <div class="btn-toolbar" role="toolbar">
+                <div class="btn-group me-2" role="group">
+                    <a href="{{ url_for('sync_integrada.dashboard') }}" class="btn btn-success btn-sm">
+                        <i class="fas fa-sync me-1"></i> Sincronizar
+                    </a>
+                    <a href="{{ url_for('carteira.listar_principal') }}" class="btn btn-info btn-sm">
+                        <i class="fas fa-list me-1"></i> Lista Detalhada
+                    </a>
+                </div>
+                <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-arrow-left me-1"></i> Voltar
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Filtros e Controles -->
+    <section class="filters-section mb-4">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">
+                                <i class="fas fa-search"></i>
+                            </span>
+                            <input type="text" class="form-control" id="filtro-busca" 
+                                   placeholder="Buscar por pedido, cliente, vendedor...">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="row">
+                            <div class="col-6">
+                                <select class="form-select form-select-sm" id="filtro-status">
+                                    <option value="">Todos os status</option>
+                                    <option value="pendente">Pendente</option>
+                                    <option value="parcial">Parcial</option>
+                                    <option value="completo">Completo</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <select class="form-select form-select-sm" id="filtro-vendedor">
+                                    <option value="">Todos vendedores</option>
+                                    <!-- Será populado via JavaScript -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 text-end">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary" id="expandir-todos">
+                                <i class="fas fa-expand-arrows-alt me-1"></i> Expandir Todos
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="colapsar-todos">
+                                <i class="fas fa-compress-arrows-alt me-1"></i> Colapsar Todos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tabela Principal -->
+    <section class="table-section">
+        {% if pedidos %}
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-table me-2"></i>
+                    Pedidos Agrupados
+                    <span class="badge bg-light text-dark ms-2">{{ total_pedidos }}</span>
+                </h6>
+            </div>
+            
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0" id="tabela-carteira">
+                        <thead class="table-light">
+                            <tr>
+                                <th width="30px"><i class="fas fa-chevron-right text-muted"></i></th>
+                                <th>Vendedor</th>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Destino</th>
+                                <th>Expedição</th>
+                                <th>Informações</th>
+                                <th>Saldo</th>
+                                <th width="200px">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pedido in pedidos %}
+                            <!-- Linha Principal do Pedido -->
+                            <tr class="pedido-row {{ 'table-success' if pedido.totalmente_separado else '' }}" 
+                                data-pedido="{{ pedido.num_pedido }}"
+                                data-status="{{ 'completo' if pedido.totalmente_separado else ('parcial' if pedido.qtd_separacoes > 0 else 'pendente') }}"
+                                data-vendedor="{{ pedido.vendedor or '' }}"
+                                data-filtro="{{ (pedido.num_pedido + ' ' + (pedido.raz_social_red or '') + ' ' + (pedido.vendedor or ''))|lower }}">
+                                
+                                <!-- Botão Expandir -->
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-link p-0 btn-expandir" 
+                                            data-pedido="{{ pedido.num_pedido }}"
+                                            title="Expandir/Colapsar detalhes">
+                                        <i class="fas fa-chevron-right text-muted expand-icon"></i>
+                                    </button>
+                                </td>
+
+                                <!-- Vendedor -->
+                                <td>
+                                    <div class="vendedor-info">
+                                        <strong class="text-primary">{{ pedido.vendedor or '-' }}</strong>
+                                        {% if pedido.equipe_vendas %}
+                                        <br><small class="text-muted">{{ pedido.equipe_vendas }}</small>
+                                        {% endif %}
+                                        {% if pedido.status_pedido %}
+                                        <br><span class="badge bg-secondary text-white">{{ pedido.status_pedido }}</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <!-- Pedido -->
+                                <td>
+                                    <div class="pedido-info">
+                                        <strong class="text-dark">{{ pedido.num_pedido }}</strong>
+                                        {% if pedido.data_pedido %}
+                                        <br><small class="text-muted">{{ pedido.data_pedido.strftime('%d/%m/%Y') }}</small>
+                                        {% endif %}
+                                        {% if pedido.pedido_cliente %}
+                                        <br><small class="text-info">PC: {{ pedido.pedido_cliente }}</small>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <!-- Cliente -->
+                                <td>
+                                    <div class="cliente-info">
+                                        <strong class="text-dark">{{ pedido.raz_social_red or '-' }}</strong>
+                                        {% if pedido.cnpj_cpf %}
+                                        <br><small class="text-muted">{{ pedido.cnpj_cpf }}</small>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <!-- Destino -->
+                                <td>
+                                    <div class="destino-info">
+                                        {% if pedido.nome_cidade and pedido.cod_uf %}
+                                        <strong class="text-primary">{{ pedido.nome_cidade }}/{{ pedido.cod_uf }}</strong>
+                                        {% endif %}
+                                        {% if pedido.rota %}
+                                        <br><span class="badge bg-info text-white">{{ pedido.rota }}</span>
+                                        {% endif %}
+                                        {% if pedido.sub_rota %}
+                                        <br><small class="text-muted">{{ pedido.sub_rota }}</small>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <!-- Expedição -->
+                                <td>
+                                    <div class="expedicao-info">
+                                        {% if pedido.expedicao %}
+                                        <strong class="text-success">{{ pedido.expedicao.strftime('%d/%m/%Y') }}</strong>
+                                        {% else %}
+                                        <span class="text-warning">Não definida</span>
+                                        {% endif %}
+                                        
+                                        {% if pedido.agendamento %}
+                                        <br><small class="text-info">
+                                            <i class="fas fa-calendar-check me-1"></i>
+                                            {{ pedido.agendamento.strftime('%d/%m/%Y') }}
+                                        </small>
+                                        <!-- ✅ CORREÇÃO 1: Flags de Agendamento -->
+                                        {% if pedido.agendamento_confirmado %}
+                                        <br><span class="badge bg-success text-white">Confirmada</span>
+                                        {% else %}
+                                        <br><span class="badge bg-warning text-dark">Ag. Aprovação</span>
+                                        {% endif %}
+                                        {% endif %}
+                                        
+                                        {% if pedido.protocolo %}
+                                        <br><small class="text-success">
+                                            <i class="fas fa-clipboard-check me-1"></i>
+                                            {{ pedido.protocolo }}
+                                        </small>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <!-- ✅ CORREÇÃO 2: Informações (sem texto branco) -->
+                                <td>
+                                    <div class="valores-info text-end">
+                                        <strong class="text-success">R$ {{ "%.2f"|format(pedido.valor_total or 0) }}</strong>
+                                        <br><small class="text-muted">{{ "%.1f"|format(pedido.peso_total or 0) }} kg</small>
+                                        <br><small class="text-muted">{{ "%.2f"|format(pedido.pallet_total or 0) }} plt</small>
+                                        <br><span class="badge bg-primary text-white">{{ pedido.total_itens }} itens</span>
+                                    </div>
+                                </td>
+
+                                <!-- ✅ CORREÇÃO 3: Saldo (sem texto branco) -->
+                                <td>
+                                    <div class="separacoes-container">
+                                        <div class="dropdown">
+                                            <button class="btn btn-outline-primary btn-sm dropdown-toggle dropdown-separacoes" 
+                                                    type="button"
+                                                    data-pedido="{{ pedido.num_pedido }}"
+                                                    data-bs-toggle="dropdown"
+                                                    aria-expanded="false"
+                                                    title="Ver separações do pedido">
+                                                <i class="fas fa-boxes me-1"></i>
+                                                <span class="contador-separacoes">{{ pedido.qtd_separacoes or 0 }}</span>
+                                                separações
+                                            </button>
+                                            
+                                            <div class="dropdown-menu dropdown-menu-end dropdown-separacoes-content" 
+                                                 style="min-width: 400px; max-height: 500px; overflow-y: auto;">
+                                                <div class="dropdown-header">
+                                                    <strong>Separações do Pedido {{ pedido.num_pedido }}</strong>
+                                                </div>
+                                                <div class="dropdown-body p-3" id="separacoes-content-{{ pedido.num_pedido }}">
+                                                    <div class="text-center text-muted">
+                                                        <i class="fas fa-spinner fa-spin me-2"></i>
+                                                        Carregando separações...
+                                                    </div>
+                                                </div>
+                                                <div class="dropdown-divider"></div>
+                                                <div class="dropdown-footer p-2">
+                                                    <button class="btn btn-sm btn-primary w-100" 
+                                                            onclick="criarSeparacao('{{ pedido.num_pedido }}')">
+                                                        <i class="fas fa-plus me-1"></i> Nova Separação
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Status visual das separações -->
+                                        {% if pedido.totalmente_separado %}
+                                        <br><span class="badge bg-success text-white mt-1">Completo</span>
+                                        {% elif pedido.qtd_separacoes > 0 %}
+                                        <br><span class="badge bg-warning text-dark mt-1">Parcial</span>
+                                        {% else %}
+                                        <br><span class="badge bg-secondary text-white mt-1">Pendente</span>
+                                        {% endif %}
+                                        
+                                        <!-- Total em separação com texto visível -->
+                                        {% if pedido.valor_saldo_restante %}
+                                        <br><small class="text-dark"><strong>Total em separação:</strong></small>
+                                        <br><span class="badge bg-info text-white">R$ {{ "%.2f"|format(pedido.valor_saldo_restante) }}</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <!-- Ações -->
+                                <td>
+                                    <div class="btn-group-vertical btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-primary btn-sm" 
+                                                data-pedido="{{ pedido.num_pedido }}"
+                                                onclick="criarSeparacao('{{ pedido.num_pedido }}')"
+                                                title="Criar nova separação">
+                                            <i class="fas fa-plus me-1"></i> Separação
+                                        </button>
+                                        
+                                        <button type="button" class="btn btn-info btn-sm"
+                                                data-pedido="{{ pedido.num_pedido }}"
+                                                onclick="avaliarEstoques('{{ pedido.num_pedido }}')"
+                                                title="Avaliar estoques do pedido">
+                                            <i class="fas fa-chart-line me-1"></i> Estoques
+                                        </button>
+                                        
+                                        <button type="button" class="btn btn-success btn-sm"
+                                                data-pedido="{{ pedido.num_pedido }}"
+                                                onclick="solicitarAgendamento('{{ pedido.num_pedido }}')"
+                                                title="Solicitar agendamento">
+                                            <i class="fas fa-calendar-plus me-1"></i> Agendar
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- Linha de detalhes expandida (oculta por padrão) -->
+                            <tr class="detalhes-row collapse" id="detalhes-{{ pedido.num_pedido }}">
+                                <td colspan="9">
+                                    <div class="detalhes-content bg-light p-3 rounded">
+                                        <div class="loading-detalhes text-center" id="loading-{{ pedido.num_pedido }}">
+                                            <i class="fas fa-spinner fa-spin me-2"></i>
+                                            Carregando detalhes do pedido...
+                                        </div>
+                                        <div class="content-detalhes" id="content-{{ pedido.num_pedido }}" style="display: none;">
+                                            <!-- Conteúdo será carregado via AJAX -->
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- Estado vazio -->
+        <div class="empty-state text-center py-5">
+            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+            <h4 class="text-muted">Nenhum pedido encontrado</h4>
+            <p class="text-muted">Não há pedidos na carteira para exibir no momento.</p>
+            <a href="{{ url_for('carteira.index') }}" class="btn btn-primary">
+                <i class="fas fa-arrow-left me-1"></i> Voltar ao Dashboard
+            </a>
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+{% include 'carteira/css/agrupados.css' %}
+{% include 'carteira/css/workspace-montagem.css' %}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<!-- Módulos JavaScript incluídos -->
+<script>
+{% include 'carteira/js/dropdown-separacoes.js' %}
+</script>
+
+<script>
+{% include 'carteira/js/carteira-agrupada.js' %}
+</script>
+
+<!-- Módulos do Workspace -->
+<script>
+{% include 'carteira/js/drag-drop-handler.js' %}
+</script>
+
+<script>
+{% include 'carteira/js/modal-cardex.js' %}
+</script>
+
+<script>
+{% include 'carteira/js/modal-agendamento.js' %}
+</script>
+
+<script>
+{% include 'carteira/js/modal-endereco.js' %}
+</script>
+
+<script>
+{% include 'carteira/js/pre-separacao-manager.js' %}
+</script>
+
+<script>
+{% include 'carteira/js/lote-manager.js' %}
+</script>
+
+<script>
+{% include 'carteira/js/workspace-montagem.js' %}
+</script>
+
+<!-- Inicialização -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar controladores
+    window.carteiraAgrupada = new CarteiraAgrupada();
+    window.workspace = new WorkspaceMontagem();
+    window.modalCardex = new ModalCardex();
+    window.modalAgendamento = new ModalAgendamento();
+    window.modalEndereco = new ModalEndereco();
+    console.log('✅ Template balanceado carregado com todos os módulos');
+});
+</script>
+{% endblock %}

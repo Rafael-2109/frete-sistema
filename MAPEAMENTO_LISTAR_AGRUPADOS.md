@@ -868,3 +868,53 @@ const CarteiraService = {
 **Problema**: `gerarTabelaEstoque()` é apenas um alias para compatibilidade
 **Impacto**: Confusão na manutenção
 **Correção**: Remover alias e usar nome único
+
+
+1- Chama a odoo/routes/sincronizacao_integrada.py    │
+│   que chama                                            │
+│   odoo/services/sincronizacao_integrada_service.py     │
+│   que por sua vez chama primeiro                       │
+│   faturamento_service.py para importar os dados do     │
+│   faturamento do Odoo, verifica se a NF está           │
+│   registrada na movimentação de estoque, caso esteja   │
+│   verifica se o status da nf é "Cancelado", se for     │
+│   ele apaga a movimentação de estoque, se estiver      │
+│   registrado e a nf não estiver como "Cancelado" não   │
+│   faz nada pois é uma nf já sincronizada, agora se     │
+│   não estiver como "Cancelado" e não estiver           │
+│   registrada na movimentação de estoque, verifica      │
+│   através de EmbarqueItem.erro_validacao em            │
+│   validar_nf_cliente se está como                      │
+│   item_embarque.erro_validacao=None, se não estiver    │
+│   valida através de                                    │
+│   faturamento/services/processar_faturamento.py        │
+│   ProcessadorFaturamento para vincular a nf correta    │
+│   no EmbarqueItem e gravar a movimentação de estoque,  │
+│   depois disso atualiza o FaturamentoProduto e         │
+│   consolida as atualizações em                         │
+│   RelatorioFaturmanentoImportado.\\                    │
+│   Dessa parte acima o problema que vi até agora é que  │
+│   as movimentações de estoque não estão todas sendo    │
+│   gravadas, eu vi apenas algumas pouquissimas, pode    │
+│   ser que esteja gravando apenas o que não encontrou   │
+│   em EmbarqueItem, o que no caso está errado conforme  │
+│   descrevi acima.\                                     │
+│                                                        │
+│   Depois roda o carteira_service.py para importar a    │
+│   carteira do Odoo, substitui a CarteiraPrincipal, e   │
+│   depois recompõe as informações operacionais através  │
+│   da PreSeparacaoItem, para casos que haja aumento     │
+│   de pedido, deverá ver se há uma separação com        │
+│   tipo_envio total, se houver e estiver com status     │
+│   "ABERTO", atualiza a Separacao, caso esteja          │
+│   "COTADO" deverá gerar um alerta através de           │
+│   carteira/alert_system.py (nem cheguei nessa parte    │
+│   pra te confirmar se funciona), agora se houver uma   │
+│   alteração no pedido que diminua a qtd, deverá        │
+│   reduzir essa qtd "diminuida" através de uma          │
+│   sequencia descrita em carteira/models.py apartir     │
+│   das linhas 905.\                                     │
+│   \    
+
+
+

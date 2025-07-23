@@ -9,7 +9,7 @@
 ## 📋 **CORREÇÕES CRÍTICAS IDENTIFICADAS**
 
 ### **1. Editabilidade da Separacao**
-- **✅ CORREÇÃO:** Separacao É editável quando `status` ou `status_calculado = "Aberto"`
+- **✅ CORREÇÃO:** Separacao É editável quando `status` ou `status_calculado = "ABERTO"`
 - **❌ ERRO DOCUMENTAÇÃO:** Anteriormente documentado como "sempre definitiva"
 - **🔍 VERIFICAÇÃO NECESSÁRIA:** Campo `status_calculado` não encontrado no modelo atual
 

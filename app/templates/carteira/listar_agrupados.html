@@ -176,12 +176,6 @@
                                         📦 Criar Separação
                                     </button>
 
-                                    <button type="button" class="btn btn-info btn-sm"
-                                        onclick="calcularEstoqueD0D7('{{ pedido.num_pedido }}')"
-                                        title="Análise Estoque D0/D7">
-                                        📊 Estoque D0/D7
-                                    </button>
-
                                     <button type="button" class="btn btn-warning btn-sm"
                                         onclick="abrirModalAvaliarEstoques('{{ pedido.num_pedido }}')"
                                         title="Avaliar Estoques (28 dias)">
@@ -496,111 +490,6 @@
     </div>
 </div>
 
-<!-- Modal Estoque D0/D7 -->
-<div class="modal fade" id="modalEstoqueD0D7" tabindex="-1" role="dialog" aria-labelledby="modalEstoqueD0D7Label"
-    aria-hidden="true">
-    <div class="modal-dialog modal-xl" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalEstoqueD0D7Label">
-                    <i class="fas fa-chart-bar"></i> Análise de Estoque D0/D7
-                    <span id="modal-estoque-pedido" class="badge badge-primary ml-2"></span>
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <!-- Loading state -->
-                <div id="modal-estoque-loading" class="text-center p-4">
-                    <i class="fas fa-spinner fa-spin fa-2x"></i>
-                    <p class="mt-2">Calculando projeção de estoque...</p>
-                </div>
-
-                <!-- Content -->
-                <div id="modal-estoque-content" style="display: none;">
-                    <!-- Resumo de alertas -->
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <div class="card border-danger">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
-                                    <h5 class="mt-2">D0 - Ruptura Hoje</h5>
-                                    <h3 class="text-danger" id="resumo-problemas-d0">0</h3>
-                                    <small class="text-muted">Itens com falta hoje</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="card border-warning">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-clock fa-2x text-warning"></i>
-                                    <h5 class="mt-2">D1-D7 - Ruptura 7 dias</h5>
-                                    <h3 class="text-warning" id="resumo-problemas-d7">0</h3>
-                                    <small class="text-muted">Itens com falta próximos 7 dias</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="card border-success">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-check-circle fa-2x text-success"></i>
-                                    <h5 class="mt-2">Estoque OK</h5>
-                                    <h3 class="text-success" id="resumo-estoque-ok">0</h3>
-                                    <small class="text-muted">Itens com estoque adequado</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Legenda -->
-                    <div class="alert alert-info">
-                        <strong>📊 Legenda:</strong>
-                        <span class="badge badge-danger ml-2">CRÍTICO</span> Ruptura hoje (D0)
-                        <span class="badge badge-warning ml-2">BAIXO</span> Estoque baixo (≤10)
-                        <span class="badge badge-info ml-2">NORMAL</span> Estoque adequado
-                        <span class="badge badge-success ml-2">ALTO</span> Estoque alto (>50)
-                    </div>
-
-                    <!-- Tabela de itens -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h6 class="mb-0">Análise Detalhada por Item</h6>
-                        </div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table table-sm table-striped mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th>Código</th>
-                                            <th>Produto</th>
-                                            <th>Qtd Pedido</th>
-                                            <th>Estoque D0</th>
-                                            <th>Estoque D7</th>
-                                            <th>Status</th>
-                                            <th>Ação</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="estoque-tbody-itens">
-                                        <!-- Itens serão carregados via AJAX -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times"></i> Fechar
-                </button>
-                <button type="button" class="btn btn-primary" onclick="exportarAnaliseEstoque()">
-                    <i class="fas fa-download"></i> Exportar Análise
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Modal para Detalhes do Endereço - CÓPIA EXATA DA CARTEIRA PRINCIPAL -->
 <div class="modal fade" id="modalEndereco" tabindex="-1" role="dialog">
@@ -844,215 +733,14 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
-                <button type="button" class="btn btn-primary" id="btn-salvar-avaliacoes" onclick="salvarAvaliacoes()">
-                    <i class="fas fa-save"></i> Salvar Avaliações
-                </button>
+                <!-- Botão removido - avaliações devem ser automáticas -->
             </div>
         </div>
     </div>
 </div>
 
 
-<!-- Modal Consultar Separações -->
-<div class="modal fade" id="modalConsultarSeparacoes" tabindex="-1" role="dialog"
-    aria-labelledby="modalConsultarSeparacoesLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalConsultarSeparacoesLabel">
-                    <i class="fas fa-boxes"></i> Separações do Pedido
-                    <span id="modal-separacoes-pedido" class="badge badge-primary ml-2"></span>
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <!-- Loading state -->
-                <div id="modal-separacoes-loading" class="text-center p-4">
-                    <i class="fas fa-spinner fa-spin fa-2x"></i>
-                    <p class="mt-2">Carregando separações...</p>
-                </div>
 
-                <!-- Error state -->
-                <div id="modal-separacoes-error" class="alert alert-danger" style="display: none;">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span id="modal-separacoes-error-message"></span>
-                    <button class="btn btn-sm btn-outline-danger ml-2" onclick="recarregarModalSeparacoes()">
-                        <i class="fas fa-redo"></i> Tentar novamente
-                    </button>
-                </div>
-
-                <!-- Empty state -->
-                <div id="modal-separacoes-empty" class="text-center p-5" style="display: none;">
-                    <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">Nenhuma separação encontrada</h5>
-                    <p class="text-muted">Este pedido ainda não possui separações criadas.</p>
-                </div>
-
-                <!-- Content -->
-                <div id="modal-separacoes-content" style="display: none;">
-                    <!-- Resumo das separações -->
-                    <div class="card mb-3">
-                        <div class="card-header bg-info text-white">
-                            <h6 class="mb-0">
-                                <i class="fas fa-chart-bar"></i> Resumo das Separações
-                            </h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <strong>Total de Separações:</strong>
-                                    <span id="resumo-total-separacoes" class="badge badge-info">0</span>
-                                </div>
-                                <div class="col-md-4">
-                                    <strong>Embarcadas:</strong>
-                                    <span id="resumo-separacoes-embarcadas" class="badge badge-success">0</span>
-                                </div>
-                                <div class="col-md-4">
-                                    <strong>Pendentes:</strong>
-                                    <span id="resumo-separacoes-pendentes" class="badge badge-warning">0</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Lista de separações -->
-                    <div class="table-responsive">
-                        <table class="table table-striped" id="tabela-separacoes">
-                            <thead class="thead-dark">
-                                <tr>
-                                    <th>Lote ID</th>
-                                    <th>Status</th>
-                                    <th>Criada em</th>
-                                    <th>Embarque</th>
-                                    <th>Transportadora</th>
-                                    <th>Prev. Embarque</th>
-                                    <th>Data Embarque</th>
-                                    <th>Valor</th>
-                                    <th>Peso</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tbody-separacoes">
-                                <!-- Será preenchido via JavaScript -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times"></i> Fechar
-                </button>
-                <button type="button" class="btn btn-primary" onclick="criarNovaSeparacao()">
-                    <i class="fas fa-plus"></i> Nova Separação
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-            <div class="modal-body">
-                <!-- Loading state -->
-                <div id="modal-estoque-loading" class="text-center p-4">
-                    <i class="fas fa-spinner fa-spin fa-2x"></i>
-                    <p class="mt-2">Calculando estoque D0/D7...</p>
-                </div>
-
-                <!-- Error state -->
-                <div id="modal-estoque-error" class="alert alert-danger" style="display: none;">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span id="modal-estoque-error-message"></span>
-                    <button class="btn btn-sm btn-outline-danger ml-2" onclick="recarregarModalEstoque()">
-                        <i class="fas fa-redo"></i> Tentar novamente
-                    </button>
-                </div>
-
-                <!-- Content -->
-                <div id="modal-estoque-content" style="display: none;">
-                    <!-- Resumo das estatísticas -->
-                    <div class="card mb-3">
-                        <div class="card-header bg-warning text-dark">
-                            <h6 class="mb-0">
-                                <i class="fas fa-chart-pie"></i> Resumo do Estoque
-                                <small class="float-right" id="estoque-data-calculo"></small>
-                            </h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <strong>Total de Produtos:</strong>
-                                    <span id="resumo-total-produtos" class="badge badge-info">0</span>
-                                </div>
-                                <div class="col-md-3">
-                                    <strong>Ruptura D0:</strong>
-                                    <span id="resumo-ruptura-d0" class="badge badge-danger">0</span>
-                                </div>
-                                <div class="col-md-3">
-                                    <strong>Problemas D7:</strong>
-                                    <span id="resumo-problemas-d7" class="badge badge-warning">0</span>
-                                </div>
-                                <div class="col-md-3">
-                                    <strong>Menor Estoque:</strong>
-                                    <span id="resumo-menor-estoque" class="badge badge-secondary">0</span>
-                                </div>
-                            </div>
-                            <div class="row mt-2" id="alerta-ruptura" style="display: none;">
-                                <div class="col-12">
-                                    <div class="alert alert-danger mb-0">
-                                        <i class="fas fa-exclamation-triangle"></i>
-                                        <strong>ATENÇÃO:</strong> Ruptura prevista em
-                                        <span id="dias-ruptura"></span> dias!
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Legenda -->
-                    <div class="alert alert-info">
-                        <strong>📊 Legenda:</strong>
-                        <span class="badge badge-success ml-2">NORMAL</span> Estoque OK
-                        <span class="badge badge-warning ml-2">BAIXO</span> Estoque baixo (≤10)
-                        <span class="badge badge-danger ml-2">RUPTURA</span> Sem estoque (≤0)
-                        <span class="badge badge-secondary ml-2">SEM_DADOS</span> Produto sem dados
-                    </div>
-
-                    <!-- Tabela de produtos -->
-                    <div class="table-responsive">
-                        <table class="table table-striped" id="tabela-estoque-produtos">
-                            <thead class="thead-dark">
-                                <tr>
-                                    <th>Código</th>
-                                    <th>Produto</th>
-                                    <th>Qtd Pedido</th>
-                                    <th>Estoque D0</th>
-                                    <th>Status D0</th>
-                                    <th>Menor D7</th>
-                                    <th>Status D7</th>
-                                    <th>Suficiente?</th>
-                                    <th>Projeção</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tbody-estoque-produtos">
-                                <!-- Será preenchido via JavaScript -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times"></i> Fechar
-                </button>
-                <button type="button" class="btn btn-info" onclick="exportarDadosEstoque()">
-                    <i class="fas fa-download"></i> Exportar Dados
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- JavaScript para expandir/colapsar itens -->
 <script>
@@ -1269,8 +957,22 @@
         let palletTotal = 0;
 
         if (itemOriginal && itemOriginal.qtd_saldo_produto_pedido > 0) {
-            const pesoOriginal = parseFloat(itemOriginal.peso?.replace(/[kg\s]/g, '')?.replace(',', '.') || 0);
-            const palletOriginal = parseFloat(itemOriginal.pallet?.replace(/[pal\s]/g, '')?.replace(',', '.') || 0);
+            // Garantir que peso e pallet sejam tratados corretamente
+            let pesoOriginal = 0;
+            let palletOriginal = 0;
+
+            // Verificar se é string ou número
+            if (typeof itemOriginal.peso === 'string') {
+                pesoOriginal = parseFloat(itemOriginal.peso.replace(/[kg\s]/g, '').replace(',', '.') || 0);
+            } else {
+                pesoOriginal = parseFloat(itemOriginal.peso || 0);
+            }
+
+            if (typeof itemOriginal.pallet === 'string') {
+                palletOriginal = parseFloat(itemOriginal.pallet.replace(/[pal\s]/g, '').replace(',', '.') || 0);
+            } else {
+                palletOriginal = parseFloat(itemOriginal.pallet || 0);
+            }
 
             const proporcao = qtdNova / itemOriginal.qtd_saldo_produto_pedido;
             pesoTotal = pesoOriginal * proporcao;
@@ -1308,21 +1010,33 @@
             return;
         }
 
+        // Primeiro recalcular valores para mostrar imediatamente
+        recalcularValoresDropdown(input);
+
         // Se quantidade menor que original, dividir linha (criar PreSeparacaoItem)
         if (qtdNova > 0 && qtdNova < qtdOriginal) {
-            await dividirLinhaDropdown(itemId, qtdNova, qtdOriginal, numPedido);
+            // NÃO salvar antes de dividir para evitar conflito
+            const sucesso = await dividirLinhaDropdown(itemId, qtdNova, qtdOriginal, numPedido);
+            if (sucesso) {
+                // Divisão bem-sucedida, não precisa salvar novamente
+                atualizarContadoresDropdown(numPedido);
+                return;
+            }
         }
 
         // Se quantidade zero, unificar linha
         if (qtdNova === 0) {
-            await unificarLinhaDropdown(itemId, numPedido);
+            const sucesso = await unificarLinhaDropdown(itemId, numPedido);
+            if (sucesso) {
+                atualizarContadoresDropdown(numPedido);
+                return;
+            }
         }
 
-        // Recalcular valores automáticos
-        recalcularValoresDropdown(input);
-
-        // Salvar automaticamente
-        await salvarAlteracaoAutomatica(itemId, 'quantidade', qtdNova);
+        // Salvar apenas se não houve divisão/unificação
+        if (qtdNova === qtdOriginal) {
+            await salvarAlteracaoAutomatica(itemId, 'quantidade', qtdNova);
+        }
 
         // Atualizar contadores
         atualizarContadoresDropdown(numPedido);
@@ -1638,7 +1352,7 @@
      */
     async function dividirLinhaDropdown(itemId, qtdUtilizada, qtdOriginal, numPedido) {
         console.log(`📊 Dividindo linha dropdown: Item ${itemId}, Qtd ${qtdUtilizada}, Original ${qtdOriginal}`);
-        
+
         try {
             // Criar pré-separação com a quantidade utilizada
             const response = await fetch(`/carteira/api/pedido/${numPedido}/criar-pre-separacao`, {
@@ -1658,21 +1372,25 @@
             }
 
             const result = await response.json();
-            
+
             if (result.success) {
                 console.log(`✅ Pré-separação criada: ${result.pre_separacao_id}`);
-                
-                // Recarregar itens do pedido para mostrar a divisão
-                await carregarItensPedido(numPedido);
-                
+
+                // Adicionar nova linha dinamicamente ao invés de recarregar tudo
+                adicionarLinhaPreSeparacaoDropdown(numPedido, itemId, result.pre_separacao_id, qtdUtilizada, qtdOriginal);
+
+                // Atualizar a linha original para mostrar quantidade restante
+                const qtdRestante = qtdOriginal - qtdUtilizada;
+                atualizarLinhaOriginalDropdown(numPedido, itemId, qtdRestante);
+
                 // Mostrar notificação de sucesso
                 showNotification(`✅ Linha dividida com sucesso! Quantidade ${qtdUtilizada} separada.`, 'success');
-                
+
                 return true;
             } else {
                 throw new Error(result.error || 'Erro ao criar pré-separação');
             }
-            
+
         } catch (error) {
             console.error('❌ Erro ao dividir linha:', error);
             showNotification(`❌ Erro ao dividir linha: ${error.message}`, 'error');
@@ -1681,50 +1399,245 @@
     }
 
     /**
+     * Adiciona linha de pré-separação dinamicamente no dropdown
+     */
+    function adicionarLinhaPreSeparacaoDropdown(numPedido, itemIdOriginal, preSeparacaoId, qtdPreSeparacao, qtdOriginal) {
+        const rowOriginal = document.getElementById(`row-dropdown-${numPedido}-${itemIdOriginal}`);
+        if (!rowOriginal) return;
+
+        // Buscar dados do item original
+        const dadosCache = itensPedidoCache.get(numPedido);
+        const itemOriginal = dadosCache?.itens?.find(item => item.id.toString() === itemIdOriginal.toString());
+        if (!itemOriginal) return;
+
+        // Criar nova linha para pré-separação
+        const novaLinha = document.createElement('tr');
+        novaLinha.id = `row-dropdown-${numPedido}-pre-${preSeparacaoId}`;
+        novaLinha.className = 'table-warning';
+        novaLinha.setAttribute('data-item-id', itemIdOriginal);
+        novaLinha.setAttribute('data-pedido', numPedido);
+        novaLinha.setAttribute('data-tipo-item', 'pre_separacao');
+        novaLinha.setAttribute('data-pre-separacao-id', preSeparacaoId);
+
+        // Calcular valores proporcionais
+        const proporcao = qtdPreSeparacao / qtdOriginal;
+        const valorTotal = (itemOriginal.preco_unitario || 0) * qtdPreSeparacao;
+        const pesoTotal = (parseFloat(itemOriginal.peso || 0) * proporcao).toFixed(1);
+        const palletTotal = (parseFloat(itemOriginal.pallet || 0) * proporcao).toFixed(1);
+
+        novaLinha.innerHTML = `
+            <td>
+                <div class="btn-group-vertical" role="group">
+                    <button type="button" 
+                            class="btn btn-sm btn-outline-primary mb-1" 
+                            onclick="editarPreSeparacao('${preSeparacaoId}')"
+                            title="Editar pré-separação">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button type="button" 
+                            class="btn btn-sm btn-outline-danger mb-1" 
+                            onclick="cancelarPreSeparacao('${preSeparacaoId}')"
+                            title="Cancelar pré-separação">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <button type="button" 
+                            class="btn btn-sm btn-outline-success" 
+                            onclick="enviarPreSeparacaoParaSeparacao('${preSeparacaoId}')"
+                            title="Enviar para separação">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </td>
+            <td>
+                <strong>${itemOriginal.cod_produto || ''}</strong>
+                <br><small class="text-warning"><i class="fas fa-clock"></i> Pré-separação</small>
+            </td>
+            <td class="text-truncate" style="max-width: 200px;" title="${itemOriginal.nome_produto || ''}">
+                ${itemOriginal.nome_produto || ''}
+                <br><small class="badge badge-info">Pendente</small>
+            </td>
+            <td>
+                <input type="number" 
+                       class="form-control form-control-sm qtd-pre-separacao" 
+                       data-pre-separacao-id="${preSeparacaoId}"
+                       data-qtd-original="${qtdOriginal}"
+                       step="1"
+                       min="0"
+                       max="${qtdOriginal}"
+                       value="${qtdPreSeparacao}"
+                       onchange="editarQuantidadePreSeparacao(this)"
+                       title="Quantidade editável da pré-separação">
+                <small class="text-muted">Pré-sep: ${qtdPreSeparacao} de ${qtdOriginal}</small>
+            </td>
+            <td class="valor-calculado-dropdown">R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+            <td class="peso-calculado-dropdown">${pesoTotal} kg</td>
+            <td class="pallet-calculado-dropdown">${palletTotal} pal</td>
+            <td class="menor-estoque-d7-dropdown">${itemOriginal.menor_estoque_d7 || '-'}</td>
+            <td class="estoque-d0-dropdown">${itemOriginal.estoque_expedicao || '-'}</td>
+            <td class="producao-d0-dropdown">${itemOriginal.producao_expedicao || '-'}</td>
+            <td class="proxima-data-estoque">${itemOriginal.proxima_data_estoque || '-'}</td>
+            <td>
+                <input type="date" 
+                       class="form-control form-control-sm data-expedicao-pre-separacao" 
+                       data-pre-separacao-id="${preSeparacaoId}"
+                       value="${itemOriginal.expedicao || ''}"
+                       onchange="editarDataPreSeparacao(this, 'data_expedicao_editada')"
+                       title="Data de expedição editável da pré-separação">
+            </td>
+            <td>
+                <input type="date" 
+                       class="form-control form-control-sm data-agendamento-pre-separacao" 
+                       data-pre-separacao-id="${preSeparacaoId}"
+                       value="${itemOriginal.agendamento || ''}"
+                       onchange="editarDataPreSeparacao(this, 'data_agendamento_editada')"
+                       title="Data de agendamento editável da pré-separação">
+            </td>
+            <td>
+                <input type="text" 
+                       class="form-control form-control-sm protocolo-pre-separacao" 
+                       data-pre-separacao-id="${preSeparacaoId}"
+                       value="${itemOriginal.protocolo || ''}"
+                       onchange="editarCampoPreSeparacao(this, 'protocolo_editado')"
+                       placeholder="Protocolo"
+                       title="Protocolo editável da pré-separação">
+            </td>
+        `;
+
+        // Inserir após a linha original
+        rowOriginal.parentNode.insertBefore(novaLinha, rowOriginal.nextSibling);
+
+        // Atualizar totais
+        recalcularTotaisDropdown(numPedido);
+    }
+
+    /**
+     * Atualiza linha original após divisão
+     */
+    function atualizarLinhaOriginalDropdown(numPedido, itemId, qtdRestante) {
+        const rowOriginal = document.getElementById(`row-dropdown-${numPedido}-${itemId}`);
+        if (!rowOriginal) return;
+
+        // Desabilitar checkbox e inputs se quantidade zerou
+        if (qtdRestante === 0) {
+            const checkbox = rowOriginal.querySelector('.item-checkbox-dropdown');
+            if (checkbox) {
+                checkbox.checked = false;
+                checkbox.disabled = true;
+            }
+
+            const inputs = rowOriginal.querySelectorAll('input');
+            inputs.forEach(input => input.disabled = true);
+
+            rowOriginal.classList.add('table-secondary', 'text-muted');
+        }
+
+        // Atualizar display da quantidade máxima
+        const qtdInput = rowOriginal.querySelector('.qtd-dropdown');
+        if (qtdInput) {
+            qtdInput.setAttribute('data-qtd-original', qtdRestante);
+            qtdInput.setAttribute('max', qtdRestante);
+            qtdInput.value = qtdRestante;
+
+            const smallText = qtdInput.nextElementSibling;
+            if (smallText) {
+                smallText.textContent = `Máx: ${qtdRestante}`;
+            }
+        }
+
+        // Recalcular valores
+        recalcularValoresDropdown(qtdInput);
+    }
+
+    /**
      * Unifica linha no dropdown removendo pré-separação
      */
     async function unificarLinhaDropdown(itemId, numPedido) {
         console.log(`🔄 Unificando linha dropdown: Item ${itemId}`);
-        
+
         try {
-            // Buscar a pré-separação do item
-            const row = document.querySelector(`tr[data-item-id="${itemId}"]`);
-            const preSeparacaoId = row?.querySelector('[data-pre-separacao-id]')?.getAttribute('data-pre-separacao-id');
-            
-            if (!preSeparacaoId) {
+            // Buscar todas as linhas de pré-separação do item
+            const linhasPreSeparacao = document.querySelectorAll(`tr[data-item-id="${itemId}"][data-tipo-item="pre_separacao"]`);
+
+            if (linhasPreSeparacao.length === 0) {
                 console.log('Item não tem pré-separação para unificar');
                 return true;
             }
-            
-            // Cancelar a pré-separação
-            const response = await fetch(`/carteira/api/pre-separacao/${preSeparacaoId}/cancelar`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+
+            // Cancelar todas as pré-separações do item
+            for (const linha of linhasPreSeparacao) {
+                const preSeparacaoId = linha.getAttribute('data-pre-separacao-id');
+                if (!preSeparacaoId) continue;
+
+                const response = await fetch(`/carteira/api/pre-separacao/${preSeparacaoId}/cancelar`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
                 }
-            });
 
-            if (!response.ok) {
-                throw new Error(`Erro HTTP: ${response.status}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    console.log(`✅ Pré-separação ${preSeparacaoId} cancelada`);
+
+                    // Remover linha da pré-separação do DOM
+                    linha.remove();
+
+                    // Buscar dados originais do cache
+                    const dadosCache = itensPedidoCache.get(numPedido);
+                    const itemOriginal = dadosCache?.itens?.find(item => item.id.toString() === itemId.toString());
+
+                    if (itemOriginal) {
+                        // Restaurar quantidade original na linha principal
+                        const rowOriginal = document.getElementById(`row-dropdown-${numPedido}-${itemId}`);
+                        if (rowOriginal) {
+                            // Reabilitar inputs
+                            const checkbox = rowOriginal.querySelector('.item-checkbox-dropdown');
+                            if (checkbox) checkbox.disabled = false;
+
+                            const inputs = rowOriginal.querySelectorAll('input');
+                            inputs.forEach(input => input.disabled = false);
+
+                            // Remover classes de desabilitado
+                            rowOriginal.classList.remove('table-secondary', 'text-muted');
+
+                            // Restaurar quantidade original
+                            const qtdInput = rowOriginal.querySelector('.qtd-dropdown');
+                            if (qtdInput) {
+                                const qtdOriginalTotal = parseFloat(itemOriginal.qtd_saldo_produto_pedido || 0);
+                                qtdInput.setAttribute('data-qtd-original', qtdOriginalTotal);
+                                qtdInput.setAttribute('max', qtdOriginalTotal);
+                                qtdInput.value = qtdOriginalTotal;
+
+                                const smallText = qtdInput.nextElementSibling;
+                                if (smallText) {
+                                    smallText.textContent = `Máx: ${qtdOriginalTotal}`;
+                                }
+
+                                // Recalcular valores com quantidade total
+                                recalcularValoresDropdown(qtdInput);
+                            }
+                        }
+                    }
+                } else {
+                    throw new Error(result.error || 'Erro ao cancelar pré-separação');
+                }
             }
 
-            const result = await response.json();
-            
-            if (result.success) {
-                console.log(`✅ Pré-separação ${preSeparacaoId} cancelada`);
-                
-                // Recarregar itens do pedido para mostrar a unificação
-                await carregarItensPedido(numPedido);
-                
-                // Mostrar notificação de sucesso
-                showNotification(`✅ Linha unificada com sucesso! Quantidade restaurada ao original.`, 'success');
-                
-                return true;
-            } else {
-                throw new Error(result.error || 'Erro ao cancelar pré-separação');
-            }
-            
+            // Atualizar totais e contadores
+            recalcularTotaisDropdown(numPedido);
+            atualizarContadoresDropdown(numPedido);
+
+            // Mostrar notificação de sucesso
+            showNotification(`✅ Linha unificada com sucesso! Quantidade restaurada ao original.`, 'success');
+
+            return true;
+
         } catch (error) {
             console.error('❌ Erro ao unificar linha:', error);
             showNotification(`❌ Erro ao unificar linha: ${error.message}`, 'error');
@@ -2872,9 +2785,7 @@
                 </td>
                 <td>
                     <div class="btn-group-vertical btn-group-sm">
-                        <button class="btn btn-sm btn-outline-primary" onclick="verDetalhesEstoque('${item.cod_produto}')" title="Ver projeção completa">
-                            <i class="fas fa-chart-line"></i>
-                        </button>
+                        <!-- Botão removido - verDetalhesEstoque não implementado -->
                         ${item.estoque_expedicao < item.qtd_pedido ? `
                         <button class="btn btn-sm btn-outline-warning" onclick="sugerirAlternativa('${item.cod_produto}')" title="Sugerir alternativa">
                             <i class="fas fa-lightbulb"></i>
@@ -2894,43 +2805,7 @@
         gerarTabelaEstoqueReal(itens);
     }
 
-    /**
-     * Ver detalhes de estoque de um produto
-     */
-    async function verDetalhesEstoque(codProduto) {
-        console.log(`📊 Visualizando detalhes do produto: ${codProduto}`);
-        
-        try {
-            // Por enquanto, redirecionar para exportação de detalhes
-            // TODO: Implementar modal de visualização detalhada
-            const response = await fetch(`/carteira/api/export-excel/produto-detalhes/${codProduto}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `produto_${codProduto}_detalhes.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            showNotification(`✅ Detalhes do produto ${codProduto} exportados com sucesso!`, 'success');
-            
-        } catch (error) {
-            console.error('❌ Erro ao exportar detalhes:', error);
-            showNotification('❌ Erro ao exportar detalhes do produto', 'error');
-        }
-    }
+    // Função verDetalhesEstoque removida - apenas placeholder com TODO
 
     async function exportarAnaliseEstoque() {
         if (!numPedidoEstoque) {
@@ -2974,7 +2849,7 @@
         }
     }
 
-    // FUNÇÃO DUPLICADA REMOVIDA - verDetalhesEstoque já está implementada acima
+    // Função verDetalhesEstoque removida
 
 
 
@@ -3057,10 +2932,11 @@
         badge.className = countSelecionados > 0 ? 'badge badge-success ml-2' : 'badge badge-warning ml-2';
     }
 
-    /**
-     * Salva avaliações dos itens selecionados via API
-     * 🎯 ETAPA 2: IMPLEMENTAÇÃO COM TIPO DE ENVIO (ATUALIZADA)
+    /*
+     * Função salvarAvaliacoes removida - avaliações devem ser automáticas
+     * Código comentado para referência histórica
      */
+    /*
     async function salvarAvaliacoes() {
         if (!numPedidoModal || !dadosModalAtual) {
             alert('Erro: Dados do modal não carregados');
@@ -3193,6 +3069,7 @@
             btnSalvar.disabled = false;
         }
     }
+    */
 
     /**
      * Recarrega dados do modal
@@ -3205,26 +3082,6 @@
         }
     }
 
-    /**
-     * Calcula e exibe estoque D0/D7 de um pedido
-     * Implementação: Fase 3.2 - Integração Estoque D0/D7
-     */
-    async function calcularEstoqueD0D7(numPedido) {
-        // Configurar modal
-        document.getElementById('modal-estoque-pedido').textContent = numPedido;
-
-        // Mostrar modal (Bootstrap 5)
-        const modalElement = document.getElementById('modalEstoqueD0D7');
-        if (modalElement) {
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
-        } else {
-            console.error('Modal modalEstoqueD0D7 não encontrado');
-        }
-
-        // Carregar dados
-        await carregarDadosEstoque(numPedido);
-    }
 
     // Variáveis globais para estoque
     let dadosEstoqueAtual = null;
@@ -3352,19 +3209,34 @@
     function atualizarResumoEstoque(data) {
         const stats = data.estatisticas;
 
-        document.getElementById('estoque-data-calculo').textContent = data.data_calculo;
-        document.getElementById('resumo-total-produtos').textContent = stats.total_produtos;
-        document.getElementById('resumo-ruptura-d0').textContent = stats.produtos_ruptura_d0;
-        document.getElementById('resumo-problemas-d7').textContent = stats.produtos_ruptura_d7;
-        document.getElementById('resumo-menor-estoque').textContent = stats.menor_estoque_geral.toFixed(3);
+        // Verificar elementos antes de atualizar
+        const dataCalculo = document.getElementById('estoque-data-calculo');
+        if (dataCalculo) dataCalculo.textContent = data.data_calculo;
+
+        const totalProdutos = document.getElementById('resumo-total-produtos');
+        if (totalProdutos) totalProdutos.textContent = stats.total_produtos;
+
+        const rupturaD0 = document.getElementById('resumo-ruptura-d0');
+        if (rupturaD0) rupturaD0.textContent = stats.produtos_ruptura_d0;
+
+        const problemasD7 = document.getElementById('resumo-problemas-d7');
+        if (problemasD7) problemasD7.textContent = stats.produtos_ruptura_d7;
+
+        const menorEstoque = document.getElementById('resumo-menor-estoque');
+        if (menorEstoque && stats.menor_estoque_geral !== undefined) {
+            menorEstoque.textContent = stats.menor_estoque_geral.toFixed(3);
+        }
 
         // Alerta de ruptura
         const alertaRuptura = document.getElementById('alerta-ruptura');
-        if (stats.dia_ruptura_mais_proximo !== null) {
-            document.getElementById('dias-ruptura').textContent = stats.dia_ruptura_mais_proximo;
-            alertaRuptura.style.display = 'block';
-        } else {
-            alertaRuptura.style.display = 'none';
+        if (alertaRuptura) {
+            if (stats.dia_ruptura_mais_proximo !== null) {
+                const diasRuptura = document.getElementById('dias-ruptura');
+                if (diasRuptura) diasRuptura.textContent = stats.dia_ruptura_mais_proximo;
+                alertaRuptura.style.display = 'block';
+            } else {
+                alertaRuptura.style.display = 'none';
+            }
         }
     }
 
@@ -3407,58 +3279,9 @@
         }
     }
 
-    /**
-     * 🔧 P1.2: SISTEMA EXCEL/EXPORTAÇÕES - Exportar dados completos de estoque
-     * Funcionalidade real conectada à API /api/export-excel/estoque-dados
-     */
-    async function exportarDadosEstoque() {
-        if (!numPedidoEstoque) {
-            alert('⚠️ Nenhum pedido selecionado para exportação de dados');
-            return;
-        }
-
-        if (!dadosEstoqueAtual || !dadosEstoqueAtual.produtos) {
-            alert('⚠️ Dados de estoque não carregados. Carregue a análise primeiro.');
-            return;
-        }
-
-        console.log(`📊 Exportando dados completos de estoque para pedido ${numPedidoEstoque}...`);
-
-        try {
-            // Mostrar loading
-            const response = await fetch(`/carteira/api/export-excel/estoque-dados/${numPedidoEstoque}`, {
-                method: 'GET',
-                headers: {
-                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                }
-            });
-
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Erro ao gerar arquivo Excel');
-            }
-
-            // ✅ SUCESSO - Mostrar resultado detalhado e forçar download
-            console.log('✅ Dados exportados com sucesso:', data);
-
-            const valorTotal = data.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-            alert(`✅ **DADOS DE ESTOQUE EXPORTADOS!**\n\n📊 Arquivo: ${data.filename}\n📦 Produtos: ${data.total_produtos}\n💰 Valor Total: R$ ${valorTotal}\n\n🔄 Download iniciando automaticamente...`);
-
-            // Forçar download do arquivo
-            const link = document.createElement('a');
-            link.href = data.url;
-            link.download = data.filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-        } catch (error) {
-            console.error('❌ Erro ao exportar dados:', error);
-            alert(`❌ **ERRO AO EXPORTAR DADOS**\n\nDetalhes: ${error.message}\n\n🔧 Verifique sua conexão e tente novamente.`);
-        }
-    }
+    // 🗑️ FUNÇÃO ÓRFÃ REMOVIDA: exportarDadosEstoque()
+    // Esta função nunca era chamada (sem botões ou eventos associados)
+    // Funcionalidade de exportação já está disponível via exportarAnaliseEstoque()
 
     /**
      * Consulta separações de um pedido
@@ -3563,7 +3386,6 @@
 
     /**
      * 🔧 P2.1: Ver detalhes completos de uma separação (IMPLEMENTAÇÃO REAL)
-     * Conecta à API /api/separacao/<lote_id>/detalhes
      */
     async function verDetalhesSeparacao(loteId) {
         console.log(`📊 Carregando detalhes da separação: ${loteId}`);
@@ -4473,12 +4295,14 @@
                     <input type="number" 
                            class="form-control form-control-sm qtd-editavel" 
                            data-item-id="${itemId}"
+                           data-pedido="${numPedidoEditavel}"
                            data-qtd-original="${saldoDisponivel}"
+                           data-preco-unitario="${item.preco_unitario || 0}"
                            step="1"
                            min="0"
                            max="${saldoDisponivel}"
                            value="${saldoDisponivel}"
-                           onchange="processarAlteracaoQuantidade(this)"
+                           onchange="processarAlteracaoQuantidadeDropdown(this)"
                            ${disabled}>
                     <small class="text-muted">Máx: ${saldoDisponivel}</small>
                 </td>
@@ -4498,25 +4322,28 @@
                     <input type="date" 
                            class="form-control form-control-sm data-expedicao" 
                            data-item-id="${itemId}"
+                           data-pedido="${numPedidoEditavel}"
                            value="${item.expedicao || ''}"
-                           onchange="processarAlteracaoDataExpedicao(this)"
+                           onchange="processarAlteracaoDataExpedicaoDropdown(this)"
                            ${disabled}>
                 </td>
                 <td>
                     <input type="date" 
                            class="form-control form-control-sm agendamento" 
                            data-item-id="${itemId}"
+                           data-pedido="${numPedidoEditavel}"
                            value="${item.agendamento || ''}"
-                           onchange="processarAlteracaoAgendamento(this)"
+                           onchange="processarAlteracaoAgendamentoDropdown(this)"
                            ${disabled}>
                 </td>
                 <td>
                     <input type="text" 
                            class="form-control form-control-sm protocolo" 
                            data-item-id="${itemId}"
+                           data-pedido="${numPedidoEditavel}"
                            value="${item.protocolo || ''}"
                            placeholder="Protocolo"
-                           onchange="processarAlteracaoProtocolo(this)"
+                           onchange="processarAlteracaoProtocoloDropdown(this)"
                            ${disabled}>
                 </td>
             </tr>
@@ -4526,57 +4353,6 @@
         tbody.innerHTML = html;
     }
 
-    /**
-     * Processa alteração de quantidade (Implementa lógica de divisão de linhas)
-     */
-    async function processarAlteracaoQuantidade(input) {
-        const itemId = input.getAttribute('data-item-id');
-        const qtdOriginal = parseFloat(input.getAttribute('data-qtd-original'));
-        const qtdNova = parseFloat(input.value) || 0;
-
-        if (qtdNova < 0 || qtdNova > qtdOriginal) {
-            alert('⚠️ Quantidade inválida');
-            input.value = qtdOriginal;
-            return;
-        }
-
-        // Se quantidade zero, remover divisão (unificar)
-        if (qtdNova === 0) {
-            await unificarLinhaItem(itemId);
-            return;
-        }
-
-        // Se quantidade menor que original, dividir linha
-        if (qtdNova < qtdOriginal) {
-            await dividirLinhaItem(itemId, qtdNova, qtdOriginal);
-        }
-
-        // Recalcular valores automáticos
-        recalcularValoresItem(itemId, qtdNova);
-
-        // Salvar automaticamente
-        await salvarAlteracaoAutomatica(itemId, 'quantidade', qtdNova);
-
-        // Atualizar contadores
-        atualizarContadoresModalEditavel();
-    }
-
-    /**
-     * Divide linha do item quando quantidade é alterada
-     */
-    async function dividirLinhaItem(itemId, qtdUtilizada, qtdOriginal) {
-        const qtdRestante = qtdOriginal - qtdUtilizada;
-
-        if (qtdRestante <= 0) return;
-
-        // Criar PreSeparacaoItem com quantidade utilizada
-        await criarPreSeparacaoItem(itemId, qtdUtilizada);
-
-        // Criar nova linha com quantidade restante
-        await criarNovaLinhaItem(itemId, qtdRestante);
-
-        console.log(`📊 Linha dividida: ${qtdUtilizada} + ${qtdRestante} = ${qtdOriginal}`);
-    }
 
     /**
      * Cria nova linha com saldo restante
@@ -4953,8 +4729,10 @@
     }
 
     /**
+     * REMOVIDO - DUPLICAÇÃO: Usar unificarLinhaDropdown
      * Unifica linha quando quantidade é zerada (remove divisão)
      */
+    /* COMENTADO - DUPLICAÇÃO
     async function unificarLinhaItem(itemId) {
         console.log(`🔄 Unificando linha do item ${itemId}`);
 
@@ -4993,6 +4771,7 @@
             console.log(`✅ Item ${itemId} unificado, quantidade restaurada`);
         }
     }
+    */
 
     /**
      * Cria PreSeparacaoItem via API
@@ -5270,39 +5049,39 @@
         try {
             // Buscar o item para obter a quantidade necessária
             const itemRow = document.querySelector(`tr[data-cod-produto="${codProduto}"]`);
-            const qtdNecessaria = parseFloat(itemRow?.querySelector('.qtd-input')?.value) || 
-                                  parseFloat(itemRow?.dataset.qtdPedido) || 0;
-            
+            const qtdNecessaria = parseFloat(itemRow?.querySelector('.qtd-input')?.value) ||
+                parseFloat(itemRow?.dataset.qtdPedido) || 0;
+
             // Buscar projeção de estoque para o produto
             const response = await fetch(`/carteira/api/produto/${codProduto}/estoque-d0-d7`);
             if (!response.ok) {
                 throw new Error('Erro ao buscar estoque');
             }
-            
+
             const data = await response.json();
-            
+
             if (!data.success || !data.produto) {
                 throw new Error('Dados de estoque não disponíveis');
             }
-            
+
             const produto = data.produto;
             const resumoEstoque = produto.estoque_info;
-            
+
             // Usar dados reais da projeção
             let datasSugeridas = [];
             const hoje = new Date();
             hoje.setHours(0, 0, 0, 0);
-            
+
             // Se tem projeção detalhada
             if (resumoEstoque && resumoEstoque.projecao_29_dias) {
                 resumoEstoque.projecao_29_dias.forEach((dia, index) => {
                     const estoqueProjetado = dia.estoque_final || 0;
-                    
+
                     // Se tem estoque suficiente para a quantidade necessária
                     if (estoqueProjetado >= qtdNecessaria && datasSugeridas.length < 3) {
                         const dataSugestao = new Date(hoje);
                         dataSugestao.setDate(hoje.getDate() + index);
-                        
+
                         datasSugeridas.push({
                             data: dataSugestao.toLocaleDateString('pt-BR'),
                             estoque_previsto: Math.floor(estoqueProjetado),
@@ -5312,7 +5091,7 @@
                     }
                 });
             }
-            
+
             // Mostrar resultado
             if (datasSugeridas.length > 0) {
                 let mensagem = `📅 DATAS ALTERNATIVAS COM ESTOQUE\n\n`;
@@ -5320,7 +5099,7 @@
                 mensagem += `Quantidade necessária: ${qtdNecessaria.toFixed(0)} unidades\n`;
                 mensagem += `Estoque atual: ${resumoEstoque?.estoque_inicial?.toFixed(0) || 0} unidades\n\n`;
                 mensagem += `Sugestões de expedição:\n`;
-                
+
                 datasSugeridas.forEach((sugestao, index) => {
                     mensagem += `\n${index + 1}. ${sugestao.data}\n`;
                     mensagem += `   • Estoque previsto: ${sugestao.estoque_previsto} unidades\n`;
@@ -5328,12 +5107,12 @@
                         mensagem += `   • Produção no dia: +${sugestao.producao_dia} unidades\n`;
                     }
                 });
-                
+
                 alert(mensagem);
             } else {
                 alert(`⚠️ ESTOQUE INSUFICIENTE\n\nProduto: ${codProduto}\nQuantidade necessária: ${qtdNecessaria} unidades\n\nNão há previsão de estoque suficiente nos próximos 28 dias.\n\nConsidere:\n• Reduzir a quantidade\n• Negociar prazo maior\n• Buscar produto alternativo`);
             }
-            
+
         } catch (error) {
             console.error('Erro ao sugerir alternativa:', error);
             alert('❌ Erro ao buscar sugestões de data alternativa');
