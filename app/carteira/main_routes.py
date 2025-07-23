@@ -20,6 +20,7 @@ import os
 from werkzeug.utils import secure_filename
 import random
 import time
+from .utils.separacao_utils import calcular_peso_pallet_produto
 
 logger = logging.getLogger(__name__)
 
@@ -1441,44 +1442,7 @@ def buscar_pre_separacoes_pedido(num_pedido):
         return []
 
 
-def calcular_peso_pallet_produto(cod_produto, quantidade):
-    """
-    Calcula peso e pallet usando CadastroPalletizacao
-    
-    Args:
-        cod_produto (str): Código do produto
-        quantidade (float): Quantidade do produto
-        
-    Returns:
-        tuple: (peso_total, pallet_total)
-    """
-    try:
-        from app.producao.models import CadastroPalletizacao
-        
-        palletizacao = CadastroPalletizacao.query.filter_by(
-            cod_produto=cod_produto, 
-            ativo=True
-        ).first()
-        
-        if palletizacao:
-            # Calcular peso total
-            peso = float(quantidade) * float(palletizacao.peso_bruto or 0)
-            
-            # Calcular pallet total
-            if palletizacao.palletizacao and palletizacao.palletizacao > 0:
-                pallet = float(quantidade) / float(palletizacao.palletizacao)
-            else:
-                pallet = 0
-                
-            logger.debug(f"✅ Cálculo {cod_produto}: Qtd={quantidade}, Peso={peso:.2f}kg, Pallet={pallet:.2f}")
-            return peso, pallet
-        else:
-            logger.warning(f"⚠️ Produto {cod_produto} sem cadastro de palletização")
-            return 0, 0
-            
-    except Exception as e:
-        logger.error(f"❌ Erro ao calcular peso/pallet {cod_produto}: {e}")
-        return 0, 0
+# Função calcular_peso_pallet_produto removida - usar a versão de utils/separacao_utils.py
 
 
 def validar_saldo_disponivel_real(num_pedido, cod_produto, qtd_solicitada):
