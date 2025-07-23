@@ -30,6 +30,7 @@ class DragDropHandler {
     configurarDropZones(workspaceElement) {
         workspaceElement.querySelectorAll('.lote-card, .lote-placeholder').forEach(card => {
             card.addEventListener('dragover', (e) => this.onDragOver(e));
+            card.addEventListener('dragleave', (e) => this.onDragLeave(e));
             card.addEventListener('drop', (e) => this.onDrop(e));
         });
     }
@@ -39,13 +40,23 @@ class DragDropHandler {
         const codProduto = row.dataset.produto;
         const qtdPedido = row.dataset.qtdPedido;
         
+        // Buscar quantidade editável atual
+        const inputQtd = row.querySelector('.qtd-editavel');
+        const qtdAtual = inputQtd ? parseInt(inputQtd.value) : parseInt(qtdPedido);
+        
+        if (qtdAtual <= 0) {
+            e.preventDefault();
+            alert('⚠️ Não é possível arrastar produto com quantidade zero');
+            return;
+        }
+        
         e.dataTransfer.setData('text/plain', JSON.stringify({
             codProduto,
-            qtdPedido: parseFloat(qtdPedido)
+            qtdPedido: qtdAtual // Usar quantidade editada (inteiro)
         }));
         
         row.classList.add('dragging');
-        console.log(`🔄 Iniciando drag do produto ${codProduto}`);
+        console.log(`🔄 Iniciando drag do produto ${codProduto} (qtd: ${qtdAtual})`);
     }
 
     onDragEnd(e) {
@@ -54,7 +65,16 @@ class DragDropHandler {
 
     onDragOver(e) {
         e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move'; // Mostra cursor de permitido
         e.currentTarget.classList.add('drag-over');
+    }
+
+    onDragLeave(e) {
+        // Só remove se realmente saiu da zona (não de um elemento filho)
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+            e.currentTarget.classList.remove('drag-over');
+        }
     }
 
     onDrop(e) {
@@ -83,6 +103,7 @@ class DragDropHandler {
     // Reconfigurar drop zones após criar novos lotes
     reconfigurarDropZone(loteCard) {
         loteCard.addEventListener('dragover', (e) => this.onDragOver(e));
+        loteCard.addEventListener('dragleave', (e) => this.onDragLeave(e));
         loteCard.addEventListener('drop', (e) => this.onDrop(e));
     }
 }

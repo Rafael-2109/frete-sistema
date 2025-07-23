@@ -314,7 +314,7 @@ class SaldoEstoque:
                 # 📤 SAÍDAS do dia (todas as fontes com expedição = data_calculo)
                 saida_dia = SaldoEstoque._calcular_saidas_completas(cod_produto, data_calculo)
                 
-                # 🏭 PRODUÇÃO programada para o dia (fica disponível AMANHÃ - Just-in-Time)
+                # 🏭 PRODUÇÃO programada para o dia
                 producao_dia = SaldoEstoque.calcular_producao_periodo(cod_produto, data_calculo, data_calculo)
                 
                 # 📊 LÓGICA SEQUENCIAL CORRETA
@@ -322,13 +322,12 @@ class SaldoEstoque:
                     # D0: Estoque atual
                     estoque_inicial_dia = estoque_atual
                 else:
-                    # D+1: EST FINAL D0 + PROD D0 (Just-in-Time!)
-                    estoque_final_anterior = projecao[dia-1]['estoque_final']
-                    producao_anterior = projecao[dia-1]['producao_programada']
-                    estoque_inicial_dia = estoque_final_anterior + producao_anterior
+                    # D+1: EST FINAL anterior vira EST INICIAL do próximo dia
+                    estoque_inicial_dia = projecao[dia-1]['estoque_final']
                 
-                # EST FINAL = EST INICIAL - SAÍDA (produção NÃO entra no mesmo dia)
-                estoque_final_dia = estoque_inicial_dia - saida_dia
+                # ✅ CORREÇÃO: EST FINAL = EST INICIAL - SAÍDA + PRODUÇÃO DO MESMO DIA
+                # A produção deve aparecer no Est. Final do próprio dia
+                estoque_final_dia = estoque_inicial_dia - saida_dia + producao_dia
                 
                 # Dados do dia
                 dia_dados = {
@@ -337,7 +336,7 @@ class SaldoEstoque:
                     'data_formatada': data_calculo.strftime('%d/%m'),
                     'estoque_inicial': estoque_inicial_dia,
                     'saida_prevista': saida_dia,
-                    'producao_programada': producao_dia,  # Fica disponível amanhã
+                    'producao_programada': producao_dia,  # Entra no Est. Final do mesmo dia
                     'estoque_final': estoque_final_dia
                 }
                 
@@ -402,8 +401,7 @@ class SaldoEstoque:
     def _calcular_saidas_completas(cod_produto, data_expedicao):
         """
         Calcula TODAS as saídas previstas para uma data específica
-        ✅ NOVA IMPLEMENTAÇÃO: SAÍDA = Separacao + PreSeparacaoItem (expedição = data)
-        ❌ CarteiraPrincipal removida (não tem campo expedição na nova lógica)
+        ✅ CORRIGIDO: SAÍDA = CarteiraPrincipal + Separacao + PreSeparacaoItem
         """
         try:
             # Buscar todos os códigos relacionados (considerando unificação)
@@ -412,28 +410,62 @@ class SaldoEstoque:
             total_saida = 0
             
             for codigo in codigos_relacionados:
-                # 📦 1. SEPARAÇÕES já efetivadas (app.separacao.models)
+                # 📦 1. CARTEIRA PRINCIPAL - Pedidos agrupados com data de expedição
+                try:
+                    from app.carteira.models import CarteiraPrincipal
+                    pedidos_carteira = CarteiraPrincipal.query.filter(
+                        CarteiraPrincipal.cod_produto == str(codigo),
+                        CarteiraPrincipal.expedicao == data_expedicao,  # Campo existe conforme CLAUDE.md
+                        CarteiraPrincipal.ativo == True,
+                        CarteiraPrincipal.separacao_lote_id.is_(None)  # Ainda não separado
+                    ).all()
+                    
+                    for item in pedidos_carteira:
+                        if item.qtd_saldo_produto_pedido and item.qtd_saldo_produto_pedido > 0:
+                            total_saida += float(item.qtd_saldo_produto_pedido)
+                except Exception as e:
+                    logger.debug(f"CarteiraPrincipal não encontrada ou erro: {e}")
+                
+                # 📦 2. SEPARAÇÕES já efetivadas - com data OU status ABERTO/COTADO
                 try:
                     from app.separacao.models import Separacao
-                    separacoes = Separacao.query.filter(
+                    from app.pedidos.models import Pedido
+                    
+                    # Separações com data de expedição específica
+                    separacoes_data = Separacao.query.filter(
                         Separacao.cod_produto == str(codigo),
-                        Separacao.expedicao == data_expedicao,  # Data de expedição correta
+                        Separacao.expedicao == data_expedicao,
                         Separacao.ativo == True
                     ).all()
                     
-                    for sep in separacoes:
+                    for sep in separacoes_data:
                         if sep.qtd_saldo and sep.qtd_saldo > 0:
                             total_saida += float(sep.qtd_saldo)
+                    
+                    # ✅ CORREÇÃO: Separações com status ABERTO/COTADO (mesmo sem data)
+                    if data_expedicao == datetime.now().date():  # Apenas para D0
+                        separacoes_status = Separacao.query.join(
+                            Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                        ).filter(
+                            Separacao.cod_produto == str(codigo),
+                            Pedido.status.in_(['ABERTO', 'COTADO']),
+                            Separacao.expedicao.is_(None)  # Sem data definida
+                        ).all()
+                        
+                        for sep in separacoes_status:
+                            if sep.qtd_saldo and sep.qtd_saldo > 0:
+                                total_saida += float(sep.qtd_saldo)
+                                
                 except Exception as e:
                     logger.debug(f"Separacao não encontrada ou erro: {e}")
                 
-                # ✅ 2. PRÉ-SEPARAÇÃO ITENS (principal fonte de saídas futuras)
+                # ✅ 3. PRÉ-SEPARAÇÃO ITENS (principal fonte de saídas futuras)
                 try:
                     from app.carteira.models import PreSeparacaoItem
                     pre_separacoes = PreSeparacaoItem.query.filter(
                         PreSeparacaoItem.cod_produto == str(codigo),
-                        PreSeparacaoItem.data_expedicao_editada == data_expedicao,  # Data de expedição obrigatória
-                        PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])  # Apenas ativas
+                        PreSeparacaoItem.data_expedicao_editada == data_expedicao,
+                        PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
                     ).all()
                     
                     for pre_sep in pre_separacoes:
@@ -441,10 +473,6 @@ class SaldoEstoque:
                             total_saida += float(pre_sep.qtd_selecionada_usuario)
                 except Exception as e:
                     logger.debug(f"PreSeparacaoItem não encontrada ou erro: {e}")
-                
-                # ❌ CARTEIRA PRINCIPAL REMOVIDA DO CÁLCULO
-                # NOVA REGRA: CarteiraPrincipal NÃO tem campo expedição
-                # Apenas PreSeparacao + Separacao participam do cálculo de estoque futuro
             
             return total_saida
             

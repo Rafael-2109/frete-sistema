@@ -97,6 +97,16 @@
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.175);
     border: none;
     border-radius: 0.5rem;
+    z-index: 1050 !important; /* Força o dropdown ficar acima de outros elementos */
+}
+
+.separacoes-container .dropdown {
+    position: relative;
+    z-index: 1000;
+}
+
+.separacoes-container .dropdown-menu.show {
+    z-index: 1060 !important;
 }
 
 .dropdown-header {

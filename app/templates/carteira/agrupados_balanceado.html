@@ -176,6 +176,14 @@
                                         {% if pedido.sub_rota %}
                                         <br><small class="text-muted">{{ pedido.sub_rota }}</small>
                                         {% endif %}
+                                        
+                                        <!-- Botão Incoterm/Endereço -->
+                                        <br><button class="btn btn-outline-primary btn-sm mt-1" 
+                                                   onclick="modalEndereco.abrirModalEndereco('{{ pedido.num_pedido }}')"
+                                                   title="Ver endereço de entrega e dados do cliente">
+                                            <i class="fas fa-map-marker-alt me-1"></i>
+                                            Incoterm
+                                        </button>
                                     </div>
                                 </td>
 
@@ -213,9 +221,9 @@
                                 <!-- ✅ CORREÇÃO 2: Informações (sem texto branco) -->
                                 <td>
                                     <div class="valores-info text-end">
-                                        <strong class="text-success">R$ {{ "%.2f"|format(pedido.valor_total or 0) }}</strong>
-                                        <br><small class="text-muted">{{ "%.1f"|format(pedido.peso_total or 0) }} kg</small>
-                                        <br><small class="text-muted">{{ "%.2f"|format(pedido.pallet_total or 0) }} plt</small>
+                                        <strong class="text-success">{{ pedido.valor_total|moeda_carteira }}</strong>
+                                        <br><small class="text-muted">{{ pedido.peso_total|peso_carteira }}</small>
+                                        <br><small class="text-muted">{{ pedido.pallet_total|pallet_carteira }}</small>
                                         <br><span class="badge bg-primary text-white">{{ pedido.total_itens }} itens</span>
                                     </div>
                                 </td>

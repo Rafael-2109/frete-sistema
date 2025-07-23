@@ -94,15 +94,23 @@ class ModalAgendamento {
                                     </div>
                                 </div>
 
-                                <!-- Dados de agendamento -->
+                                <!-- Dados de expedição e agendamento -->
                                 <div class="row">
-                                    <div class="col-md-6">
+                                    <div class="col-md-4">
                                         <div class="mb-3">
-                                            <label for="data-agendamento" class="form-label">Data do Agendamento <span class="text-danger">*</span></label>
-                                            <input type="date" class="form-control" id="data-agendamento" required>
+                                            <label for="data-expedicao" class="form-label">Data de Expedição <span class="text-danger">*</span></label>
+                                            <input type="date" class="form-control" id="data-expedicao" required>
+                                            <div class="form-text">Data prevista para expedição do pedido</div>
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="data-agendamento" class="form-label">Data do Agendamento</label>
+                                            <input type="date" class="form-control" id="data-agendamento">
+                                            <div class="form-text">Data agendada com cliente</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
                                         <div class="mb-3">
                                             <label for="hora-agendamento" class="form-label">Hora do Agendamento</label>
                                             <input type="time" class="form-control" id="hora-agendamento">
@@ -192,7 +200,10 @@ class ModalAgendamento {
             document.getElementById('agendamento-valor-total').textContent = this.formatarMoeda(data.valor_total || 0);
             document.getElementById('agendamento-total-itens').textContent = data.total_itens || '0';
 
-            // Preencher campos se já tiver agendamento
+            // Preencher campos de expedição e agendamento
+            if (data.expedicao) {
+                document.getElementById('data-expedicao').value = data.expedicao;
+            }
             if (data.agendamento) {
                 document.getElementById('data-agendamento').value = data.agendamento;
             }
@@ -248,18 +259,20 @@ class ModalAgendamento {
 
     async salvarAgendamento() {
         const numPedido = document.getElementById('agendamento-num-pedido').value;
+        const dataExpedicao = document.getElementById('data-expedicao').value;
         const dataAgendamento = document.getElementById('data-agendamento').value;
         const horaAgendamento = document.getElementById('hora-agendamento').value;
         const protocolo = document.getElementById('protocolo-agendamento').value;
         const confirmado = document.getElementById('agendamento-confirmado').checked;
 
-        if (!dataAgendamento) {
-            alert('❌ Data do agendamento é obrigatória!');
+        if (!dataExpedicao) {
+            alert('❌ Data de expedição é obrigatória!');
             return;
         }
 
         try {
             const payload = {
+                data_expedicao: dataExpedicao,
                 data_agendamento: dataAgendamento,
                 hora_agendamento: horaAgendamento,
                 protocolo: protocolo,

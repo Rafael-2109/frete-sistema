@@ -213,7 +213,21 @@ class WorkspaceMontagem {
                     </td>
                     
                     <td class="text-end">
-                        <strong>${this.formatarQuantidade(produto.qtd_pedido)}</strong>
+                        <div class="input-group input-group-sm" style="max-width: 120px;">
+                            <input type="number" 
+                                   class="form-control form-control-sm text-end qtd-editavel" 
+                                   value="${Math.floor(produto.qtd_pedido)}"
+                                   min="0"
+                                   max="${Math.floor(produto.qtd_pedido)}"
+                                   step="1"
+                                   data-produto="${produto.cod_produto}"
+                                   data-qtd-original="${Math.floor(produto.qtd_pedido)}"
+                                   onchange="workspace.atualizarQuantidadeProduto(this)"
+                                   title="Quantidade editável para separação parcial (apenas números inteiros)">
+                            <span class="input-group-text" title="De ${this.formatarQuantidade(produto.qtd_pedido)}">
+                                <i class="fas fa-edit text-primary"></i>
+                            </span>
+                        </div>
                     </td>
                     
                     <td class="text-end">
@@ -319,6 +333,70 @@ ${produto.estoque_data_expedicao >= produto.qtd_pedido ? '✅ Disponível na exp
 
     async abrirCardex(codProduto) {
         await this.modalCardex.abrirCardex(codProduto, this.dadosProdutos);
+    }
+
+    atualizarQuantidadeProduto(input) {
+        const codProduto = input.dataset.produto;
+        const qtdOriginal = parseInt(input.dataset.qtdOriginal);
+        let novaQtd = parseInt(input.value) || 0;
+        
+        // Garantir que é número inteiro
+        if (!Number.isInteger(novaQtd)) {
+            novaQtd = Math.floor(novaQtd);
+            input.value = novaQtd;
+        }
+        
+        // Validar limites
+        if (novaQtd < 0) {
+            input.value = 0;
+            return;
+        }
+        if (novaQtd > qtdOriginal) {
+            input.value = qtdOriginal;
+            alert(`⚠️ Quantidade não pode exceder o pedido original (${qtdOriginal} unidades)`);
+            return;
+        }
+        
+        // Atualizar dados do produto
+        const dadosProduto = this.dadosProdutos.get(codProduto);
+        if (dadosProduto) {
+            dadosProduto.qtd_selecionada = novaQtd;
+            
+            // Recalcular peso e pallet proporcionalmente
+            const fatorProporcional = novaQtd / qtdOriginal;
+            dadosProduto.peso_selecionado = dadosProduto.peso_unitario * novaQtd;
+            dadosProduto.pallet_selecionado = dadosProduto.pallet_unitario * novaQtd;
+            dadosProduto.valor_selecionado = dadosProduto.preco_unitario * novaQtd;
+            
+            console.log(`✅ Quantidade atualizada: ${codProduto} = ${novaQtd}`);
+            
+            // Se produto está em algum lote, recalcular totais
+            this.recalcularTotaisLotesComProduto(codProduto);
+        }
+        
+        // Visual feedback
+        input.classList.add('bg-warning');
+        setTimeout(() => input.classList.remove('bg-warning'), 1000);
+    }
+    
+    recalcularTotaisLotesComProduto(codProduto) {
+        this.preSeparacoes.forEach((loteData, loteId) => {
+            const produtoNoLote = loteData.produtos.find(p => p.codProduto === codProduto);
+            if (produtoNoLote) {
+                // Atualizar dados do produto no lote
+                const dadosProduto = this.dadosProdutos.get(codProduto);
+                if (dadosProduto) {
+                    produtoNoLote.qtd = dadosProduto.qtd_selecionada || dadosProduto.qtd_pedido;
+                    produtoNoLote.peso = dadosProduto.peso_selecionado || dadosProduto.peso_total;
+                    produtoNoLote.pallet = dadosProduto.pallet_selecionado || dadosProduto.pallet_total;
+                    produtoNoLote.valor = dadosProduto.valor_selecionado || dadosProduto.valor_total;
+                }
+                
+                // Recalcular totais do lote
+                this.loteManager.recalcularTotaisLote(loteId);
+                this.loteManager.atualizarCardLote(loteId);
+            }
+        });
     }
 
     // Delegação para ModalCardex (método removido - usar this.modalCardex.mostrarModalCardex)
@@ -678,10 +756,8 @@ ${produto.estoque_data_expedicao >= produto.qtd_pedido ? '✅ Disponível na exp
 
     formatarQuantidade(qtd) {
         if (!qtd) return '0';
-        return parseFloat(qtd).toLocaleString('pt-BR', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
-        });
+        // Para quantidades, sempre mostrar como inteiro
+        return Math.floor(qtd).toLocaleString('pt-BR');
     }
 
     formatarPeso(peso) {

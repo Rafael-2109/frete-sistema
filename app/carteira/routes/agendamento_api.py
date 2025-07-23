@@ -33,6 +33,7 @@ def obter_info_agendamento(num_pedido):
             CarteiraPrincipal.cod_uf.label('uf'),
             CarteiraPrincipal.vendedor,
             CarteiraPrincipal.equipe_vendas,
+            CarteiraPrincipal.expedicao,
             CarteiraPrincipal.agendamento,
             CarteiraPrincipal.hora_agendamento,
             CarteiraPrincipal.protocolo,
@@ -49,6 +50,7 @@ def obter_info_agendamento(num_pedido):
             CarteiraPrincipal.cod_uf,
             CarteiraPrincipal.vendedor,
             CarteiraPrincipal.equipe_vendas,
+            CarteiraPrincipal.expedicao,
             CarteiraPrincipal.agendamento,
             CarteiraPrincipal.hora_agendamento,
             CarteiraPrincipal.protocolo,
@@ -92,6 +94,7 @@ def obter_info_agendamento(num_pedido):
             'equipe_vendas': pedido_info.equipe_vendas or '',
             'valor_total': float(pedido_info.valor_total or 0),
             'total_itens': pedido_info.total_itens or 0,
+            'expedicao': pedido_info.expedicao.isoformat() if pedido_info.expedicao else None,
             'agendamento': pedido_info.agendamento.isoformat() if pedido_info.agendamento else None,
             'hora_agendamento': pedido_info.hora_agendamento.strftime('%H:%M') if pedido_info.hora_agendamento else None,
             'protocolo': pedido_info.protocolo or '',
@@ -116,25 +119,36 @@ def salvar_agendamento(num_pedido):
     """
     try:
         data = request.get_json()
+        data_expedicao = data.get('data_expedicao')
         data_agendamento = data.get('data_agendamento')
         hora_agendamento = data.get('hora_agendamento')
         protocolo = data.get('protocolo')
         confirmado = data.get('confirmado', False)
 
-        if not data_agendamento:
+        if not data_expedicao:
             return jsonify({
                 'success': False,
-                'error': 'Data de agendamento é obrigatória'
+                'error': 'Data de expedição é obrigatória'
             }), 400
 
         # Converter datas
         try:
-            data_agend_obj = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
+            data_exp_obj = datetime.strptime(data_expedicao, '%Y-%m-%d').date()
         except ValueError:
             return jsonify({
                 'success': False,
-                'error': 'Formato de data inválido'
+                'error': 'Formato de data de expedição inválido'
             }), 400
+
+        data_agend_obj = None
+        if data_agendamento:
+            try:
+                data_agend_obj = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'error': 'Formato de data de agendamento inválido'
+                }), 400
 
         hora_agend_obj = None
         if hora_agendamento:
@@ -148,6 +162,7 @@ def salvar_agendamento(num_pedido):
             CarteiraPrincipal.num_pedido == num_pedido,
             CarteiraPrincipal.ativo == True
         ).update({
+            'expedicao': data_exp_obj,
             'agendamento': data_agend_obj,
             'hora_agendamento': hora_agend_obj,
             'protocolo': protocolo,
@@ -163,6 +178,7 @@ def salvar_agendamento(num_pedido):
         # Atualizar também na tabela Pedido se existir
         pedido = Pedido.query.filter_by(num_pedido=num_pedido).first()
         if pedido:
+            pedido.expedicao = data_exp_obj
             pedido.agendamento = data_agend_obj
             pedido.protocolo = protocolo
 
@@ -170,7 +186,8 @@ def salvar_agendamento(num_pedido):
 
         return jsonify({
             'success': True,
-            'message': f'Agendamento salvo com sucesso! {itens_atualizados} itens atualizados.',
+            'message': f'Expedição e agendamento salvos com sucesso! {itens_atualizados} itens atualizados.',
+            'data_expedicao': data_expedicao,
             'data_agendamento': data_agendamento,
             'confirmado': confirmado
         })

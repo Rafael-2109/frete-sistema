@@ -370,6 +370,12 @@ def create_app(config_name=None):
     app.jinja_env.filters['peso_br'] = formatar_peso_brasileiro
     app.jinja_env.filters['pallet_br'] = formatar_pallet_brasileiro
     
+    # ✅ CARTEIRA: Filtros específicos da carteira
+    from app.carteira.utils.formatters import formatar_moeda, formatar_peso, formatar_pallet
+    app.jinja_env.filters['moeda_carteira'] = formatar_moeda
+    app.jinja_env.filters['peso_carteira'] = formatar_peso
+    app.jinja_env.filters['pallet_carteira'] = formatar_pallet
+    
     # ✅ NOVO: Registrar filtros de arquivo
     try:
         from app.utils.template_filters import register_template_filters

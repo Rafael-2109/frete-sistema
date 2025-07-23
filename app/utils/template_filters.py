@@ -1,5 +1,6 @@
 from flask import current_app
 from app.utils.file_storage import get_file_storage
+import locale
 
 def file_url(file_path):
     """
