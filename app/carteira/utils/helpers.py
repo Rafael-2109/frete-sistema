@@ -2,42 +2,12 @@
 Funções auxiliares da carteira
 """
 
-from app.localidades.models import CadastroRota, CadastroSubRota
+# Removidos imports não utilizados após limpeza de funções duplicadas
 from datetime import datetime, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
 
-
-def buscar_rota_por_uf(cod_uf):
-    """Busca rota principal baseada no cod_uf"""
-    if not cod_uf:
-        return None
-    try:
-        rota = CadastroRota.query.filter_by(cod_uf=cod_uf, ativa=True).first()
-        return rota.rota if rota else None
-    except Exception:
-        return None
-
-
-def buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade):
-    """
-    Busca sub-rota baseada no cod_uf + nome_cidade
-    ✅ CORREÇÃO: Usa ILIKE para busca com acentos
-    """
-    if not cod_uf or not nome_cidade:
-        return None
-    try:
-        # ✅ CORREÇÃO: ILIKE para resolver problema de acentos
-        sub_rota = CadastroSubRota.query.filter(
-            CadastroSubRota.cod_uf == cod_uf,
-            CadastroSubRota.nome_cidade.ilike(f'%{nome_cidade}%'),
-            CadastroSubRota.ativa == True
-        ).first()
-        return sub_rota.sub_rota if sub_rota else None
-    except Exception as e:
-        logger.warning(f"Erro ao buscar sub-rota para {cod_uf}/{nome_cidade}: {e}")
-        return None
 
 
 def calcular_estoque_data_especifica(projecao_29_dias, data_target):
