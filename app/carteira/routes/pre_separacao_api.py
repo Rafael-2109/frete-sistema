@@ -8,7 +8,7 @@ from flask_login import login_required
 from datetime import datetime
 from app import db
 from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
-from app.utils.data_brasil import agora_brasil
+from app.utils.timezone import agora_brasil
 from app.carteira.utils.separacao_utils import (
     calcular_peso_pallet_produto,
     gerar_separacao_workspace_interno

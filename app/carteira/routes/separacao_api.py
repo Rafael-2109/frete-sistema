@@ -9,7 +9,7 @@ from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
-from app.utils.data_brasil import agora_brasil
+from app.utils.timezone import agora_brasil
 from app.carteira.utils.separacao_utils import (
     calcular_peso_pallet_produto,
     buscar_rota_por_uf,

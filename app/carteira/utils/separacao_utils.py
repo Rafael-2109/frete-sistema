@@ -182,7 +182,7 @@ def gerar_separacao_workspace_interno(num_pedido, lote_id, produtos, expedicao, 
     try:
         from app.separacao.models import Separacao
         from app.pedidos.models import Pedido
-        from app.utils.data_brasil import agora_brasil
+        from app.utils.timezone import agora_brasil
         
         # Buscar informações dos produtos na carteira
         produtos_carteira = {}
