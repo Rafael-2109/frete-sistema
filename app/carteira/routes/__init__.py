@@ -4,7 +4,7 @@ Padrão de nomenclatura: {funcionalidade}_api.py para APIs, {funcionalidade}.py 
 """
 
 # Importar o blueprint principal que já contém as rotas básicas (incluindo index)
-from app.carteira.routes import carteira_bp
+from app.carteira.main_routes import carteira_bp
 
 # Importação das rotas organizadas
 # Views principais  
