@@ -11,11 +11,8 @@ carteira_bp = Blueprint('carteira', __name__, url_prefix='/carteira')
 # Importação das rotas organizadas
 # Views principais
 from .agrupados import *
-from .principais import *
 
 # APIs padronizadas
-from .itens_api import *
-from .pedidos_api import *
 from .agendamento_api import *
 from .workspace_api import *
 from .endereco_api import *
