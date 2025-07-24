@@ -19,7 +19,7 @@ from .multi_agent_system import get_multi_agent_system, MultiAgentSystem
 from .human_in_loop_learning import get_human_learning_system, capture_user_feedback
 from .sistema_real_data import get_sistema_real_data
 from .conversation_context import get_conversation_context
-from .lifelong_learning import _get_db_session
+from app.claude_ai_novo.utils.flask_fallback import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -660,20 +660,20 @@ class AdvancedAIIntegration:
                         updated_at = :created_at
                 """)
                 
-                _get_db_session().execute(query, {
+                get_db().execute(query, {
                     'session_id': session_id,
                     'created_at': datetime.now(),
                     'user_id': getattr(current_user, 'id', None),
                     'metadata': json_metadata
                 })
                 
-                _get_db_session().commit()
+                get_db().commit()
                 
                 logger.info(f"💾 Metadata avançada armazenada: {session_id}")
                 
             except Exception as e:
                 logger.error(f"❌ Erro ao armazenar metadata: {e}")
-                _get_db_session().rollback()
+                get_db().rollback()
     
     async def _build_advanced_response(self, multi_agent_result: Dict[str, Any],
                                      semantic_result: Dict[str, Any],
@@ -748,18 +748,18 @@ class AdvancedAIIntegration:
                 }
             }, default=str)
             
-            _get_db_session().execute(update_query, {
+            get_db().execute(update_query, {
                 'session_id': session_id,
                 'feedback_data': feedback_data
             })
             
-            _get_db_session().commit()
+            get_db().commit()
             
             logger.info(f"💡 Feedback avançado capturado: {feedback_id}")
             
         except Exception as e:
             logger.error(f"❌ Erro ao atualizar feedback: {e}")
-            _get_db_session().rollback()
+            get_db().rollback()
         
         return feedback_id
     
@@ -779,7 +779,7 @@ class AdvancedAIIntegration:
             """)
             
             cutoff_date = datetime.now() - timedelta(days=days)
-            result = _get_db_session().execute(analytics_query, {'cutoff_date': cutoff_date})
+            result = get_db().execute(analytics_query, {'cutoff_date': cutoff_date})
             
             sessions_data = []
             for row in result:

@@ -110,7 +110,7 @@ class MapeamentoSemantico:
         """
         try:
             # Tentar usar os readers do sistema novo
-            from ..claude_ai_novo.semantic.readers import ReadmeReader
+            from ..claude_ai_novo.scanning.readme_scanner import ReadmeReader
             
             readme_reader = ReadmeReader()
             if readme_reader.esta_disponivel():
@@ -157,7 +157,7 @@ class MapeamentoSemantico:
         
         try:
             # Tentar usar DatabaseReader do sistema novo
-            from ..claude_ai_novo.semantic.readers import DatabaseReader
+            from ..claude_ai_novo.scanning.database_scanner import DatabaseReader
             
             db_reader = DatabaseReader()
             if db_reader.esta_disponivel():
@@ -199,7 +199,7 @@ class MapeamentoSemantico:
         
         try:
             # Importar readers do sistema novo
-            from ..claude_ai_novo.semantic.readers import ReadmeReader, DatabaseReader
+            from ..claude_ai_novo.scanning import ReadmeReader, DatabaseReader
             
             readme_reader = ReadmeReader()
             db_reader = DatabaseReader()

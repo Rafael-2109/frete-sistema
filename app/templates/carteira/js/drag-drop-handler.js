@@ -74,11 +74,14 @@ class DragDropHandler {
             // Adicionar classe para styling
             tr.classList.add('draggable-produto');
             
-            // Configurar handle visual
+            // Configurar visual de drag em toda a linha
+            tr.style.cursor = 'move';
+            tr.title = 'Clique e arraste para mover este produto';
+            
+            // Configurar handle visual se existir
             const handle = tr.querySelector('.drag-handle');
             if (handle) {
                 handle.style.cursor = 'move';
-                handle.title = 'Clique e arraste para mover este produto';
             }
             
             // Validar dados necessários
@@ -109,14 +112,7 @@ class DragDropHandler {
         const produtoTr = e.target.closest('.produto-origem[draggable="true"]');
         if (!produtoTr) return;
         
-        // Verificar se o drag iniciou pelo handle
-        const handle = e.target.closest('.drag-handle');
-        if (!handle) {
-            e.preventDefault();
-            return;
-        }
-        
-        // Processar drag start
+        // Processar drag start sem restrição de handle
         this.processDragStart(e, produtoTr);
     }
     

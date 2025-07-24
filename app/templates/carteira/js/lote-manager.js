@@ -366,14 +366,49 @@ class LoteManager {
         }
     }
 
-    removerLote(loteId) {
+    async removerLote(loteId) {
         if (confirm(`Tem certeza que deseja remover o lote ${loteId}?`)) {
-            this.workspace.preSeparacoes.delete(loteId);
-            const cardElement = document.querySelector(`[data-lote-id="${loteId}"]`).closest('.col-md-4');
-            if (cardElement) {
-                cardElement.remove();
+            try {
+                const loteData = this.workspace.preSeparacoes.get(loteId);
+                
+                if (loteData && loteData.produtos && loteData.produtos.length > 0) {
+                    // Remover cada produto da pré-separação via API
+                    for (const produto of loteData.produtos) {
+                        if (produto.preSeparacaoId) {
+                            console.log(`🗑️ Removendo produto ${produto.codProduto} (ID: ${produto.preSeparacaoId})`);
+                            
+                            const response = await fetch(`/carteira/api/pre-separacao/${produto.preSeparacaoId}/remover`, {
+                                method: 'DELETE',
+                                headers: {
+                                    'X-CSRFToken': this.getCSRFToken()
+                                }
+                            });
+                            
+                            const result = await response.json();
+                            
+                            if (!result.success) {
+                                throw new Error(result.error || 'Erro ao remover pré-separação');
+                            }
+                        }
+                    }
+                }
+                
+                // Remover do Map local
+                this.workspace.preSeparacoes.delete(loteId);
+                
+                // Remover o card visual
+                const cardElement = document.querySelector(`[data-lote-id="${loteId}"]`).closest('.col-md-4');
+                if (cardElement) {
+                    cardElement.remove();
+                }
+                
+                console.log(`✅ Lote ${loteId} removido completamente`);
+                this.workspace.mostrarToast('Lote removido com sucesso!', 'success');
+                
+            } catch (error) {
+                console.error('❌ Erro ao remover lote:', error);
+                this.workspace.mostrarToast(`Erro ao remover lote: ${error.message}`, 'error');
             }
-            console.log(`🗑️ Lote ${loteId} removido`);
         }
     }
 

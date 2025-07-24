@@ -12,6 +12,7 @@
 /* Garantir que elementos draggable funcionem */
 .produto-origem[draggable="true"] {
     -webkit-user-drag: element;
+    -webkit-user-select: none;
     user-select: none;
     transition: all 0.2s ease;
     position: relative;
