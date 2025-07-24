@@ -17,7 +17,6 @@ from app.embarques.models import EmbarqueItem
 from app.carteira.models import FaturamentoParcialJustificativa
 
 logger = logging.getLogger(__name__)
-
 class ProcessadorFaturamento:
     """
     Processa faturamento conforme regras do processo_atual.md
@@ -32,23 +31,49 @@ class ProcessadorFaturamento:
             'caso1_direto': 0,
             'caso2_parcial': 0,
             'caso3_cancelado': 0,
-            'erros': []
+            'erros': [],
+            'detalhes_processamento': []
         }
         
         try:
             # Buscar NFs não processadas (sem movimentação)
             nfs_pendentes = self._buscar_nfs_pendentes()
+            logger.info(f"📊 Total de NFs para processar: {len(nfs_pendentes)}")
             
             for nf in nfs_pendentes:
                 try:
+                    logger.info(f"🔄 Processando NF {nf.numero_nf} - Origem/Pedido: {nf.origem}")
                     caso = self._processar_nf(nf, usuario)
                     resultado['processadas'] += 1
                     resultado[f'caso{caso}'] += 1
+                    
+                    # Adicionar detalhes para debug
+                    if caso == 1:
+                        tipo = "DIRETO"
+                    elif caso == 2:
+                        tipo = "PARCIAL"
+                    elif caso == 3:
+                        tipo = "CANCELADO"
+                    else:
+                        tipo = "DESCONHECIDO"
+                    
+                    resultado['detalhes_processamento'].append({
+                        'nf': nf.numero_nf,
+                        'origem': nf.origem,
+                        'caso': caso,
+                        'tipo': tipo
+                    })
+                    
                 except Exception as e:
+                    import traceback
+                    erro_completo = traceback.format_exc()
+                    logger.error(f"❌ Erro ao processar NF {nf.numero_nf}: {str(e)}")
+                    logger.error(f"Traceback completo:\n{erro_completo}")
                     resultado['erros'].append(f"NF {nf.numero_nf}: {str(e)}")
                     continue
             
             db.session.commit()
+            logger.info(f"✅ Processamento concluído: {resultado['processadas']} NFs processadas")
             
         except Exception as e:
             db.session.rollback()
@@ -58,38 +83,55 @@ class ProcessadorFaturamento:
     
     def _buscar_nfs_pendentes(self) -> List[RelatorioFaturamentoImportado]:
         """
-        ✅ OTIMIZADO: Busca apenas NFs que têm produtos E não foram processadas
+        ✅ CORRIGIDO: Busca NFs não processadas OU processadas como "Sem Separação" para reprocessamento
         """
-        # Buscar NFs que têm movimentação de estoque
-        nfs_processadas_query = db.session.query(MovimentacaoEstoque.observacao)\
+        # Buscar NFs que têm movimentação "Sem Separação" (candidatas a reprocessamento)
+        nfs_sem_separacao_query = db.session.query(MovimentacaoEstoque.observacao)\
             .filter(MovimentacaoEstoque.tipo_movimentacao == 'FATURAMENTO')\
-            .filter(MovimentacaoEstoque.observacao.like('%Baixa automática NF%'))\
+            .filter(MovimentacaoEstoque.observacao.like('%Sem Separação%'))\
             .all()
         
-        # Extrair números de NF de forma mais robusta
-        nfs_processadas = set()
-        for (obs,) in nfs_processadas_query:
+        # Extrair números de NF processadas como "Sem Separação"
+        nfs_sem_separacao = set()
+        for (obs,) in nfs_sem_separacao_query:
             if obs and 'Baixa automática NF' in obs:
-                # Busca padrão mais específico
                 import re
                 match = re.search(r'Baixa automática NF (\d+)', obs)
                 if match:
-                    nfs_processadas.add(match.group(1))
+                    nfs_sem_separacao.add(match.group(1))
         
-        # ✅ OTIMIZAÇÃO: Buscar apenas NFs que TÊM produtos em FaturamentoProduto
+        # Buscar NFs que já foram processadas COM separação (não reprocessar)
+        nfs_com_separacao_query = db.session.query(MovimentacaoEstoque.observacao)\
+            .filter(MovimentacaoEstoque.tipo_movimentacao == 'FATURAMENTO')\
+            .filter(MovimentacaoEstoque.observacao.like('%lote separação%'))\
+            .filter(~MovimentacaoEstoque.observacao.like('%Sem Separação%'))\
+            .all()
+        
+        # Extrair números de NF já processadas com separação
+        nfs_ja_processadas_com_separacao = set()
+        for (obs,) in nfs_com_separacao_query:
+            if obs and 'Baixa automática NF' in obs:
+                import re
+                match = re.search(r'Baixa automática NF (\d+)', obs)
+                if match:
+                    nfs_ja_processadas_com_separacao.add(match.group(1))
+        
         # Subquery para NFs que têm produtos
         nfs_com_produtos = db.session.query(FaturamentoProduto.numero_nf).distinct().subquery()
         
-        # Buscar NFs ativas, com produtos, não processadas
+        # Buscar NFs ativas que:
+        # 1. Nunca foram processadas OU
+        # 2. Foram processadas como "Sem Separação" (candidatas a reprocessamento)
+        # 3. Mas NÃO foram processadas com separação
         todas_nfs = RelatorioFaturamentoImportado.query.filter(
             RelatorioFaturamentoImportado.ativo == True,
             RelatorioFaturamentoImportado.numero_nf.in_(
                 db.session.query(nfs_com_produtos.c.numero_nf)
             ),
-            ~RelatorioFaturamentoImportado.numero_nf.in_(nfs_processadas)
+            ~RelatorioFaturamentoImportado.numero_nf.in_(nfs_ja_processadas_com_separacao)
         ).all()
         
-        logger.info(f"📊 Busca otimizada: {len(todas_nfs)} NFs pendentes (apenas com produtos)")
+        logger.info(f"📊 Busca corrigida: {len(todas_nfs)} NFs pendentes (incluindo {len(nfs_sem_separacao)} 'Sem Separação' para reprocessamento)")
         
         return todas_nfs
     
@@ -97,6 +139,12 @@ class ProcessadorFaturamento:
         """
         Processa uma NF específica e retorna o caso (1, 2 ou 3)
         """
+        # Verificar se NF já foi processada como "Sem Separação"
+        movimentacao_sem_separacao = MovimentacaoEstoque.query.filter(
+            MovimentacaoEstoque.observacao.like(f'%NF {nf.numero_nf}%'),
+            MovimentacaoEstoque.observacao.like('%Sem Separação%')
+        ).first()
+        
         # Verificar status no FaturamentoProduto
         produto_cancelado = FaturamentoProduto.query.filter_by(
             numero_nf=nf.numero_nf,
@@ -139,19 +187,36 @@ class ProcessadorFaturamento:
         separacoes = self._buscar_separacoes_pedido(nf.origem)  # origem = num_pedido
         
         if not separacoes:
+            # Se já foi processada como "Sem Separação", não precisa reprocessar
+            if movimentacao_sem_separacao:
+                logger.info(f"ℹ️ NF {nf.numero_nf} já processada como 'Sem Separação' - mantendo")
+                return 1
             # Sem separação - gravar como "Sem Separação"
             self._criar_movimentacao_sem_separacao(nf, usuario)
             return 1
         
+        # Se encontrou separações e havia movimentação "Sem Separação", deletar a antiga
+        if movimentacao_sem_separacao and separacoes:
+            logger.info(f"♾️ Reprocessando NF {nf.numero_nf}: encontrada separação para NF anteriormente 'Sem Separação'")
+            # Deletar todas as movimentações antigas "Sem Separação" desta NF
+            MovimentacaoEstoque.query.filter(
+                MovimentacaoEstoque.observacao.like(f'%NF {nf.numero_nf}%'),
+                MovimentacaoEstoque.observacao.like('%Sem Separação%')
+            ).delete()
+            db.session.commit()
+        
         # Verificar match com separações
+        logger.info(f"🔍 Vinculando NF {nf.numero_nf} com {len(separacoes)} separações encontradas")
         lote_vinculado, divergencia = self._vincular_com_separacao(nf, separacoes)
         
         if divergencia:
             # Caso 2: Separação != NF
+            logger.info(f"⚠️ NF {nf.numero_nf} - Caso 2: Divergência detectada no lote {lote_vinculado}")
             self._processar_caso2_divergencia(nf, lote_vinculado, divergencia, usuario)
             return 2
         else:
             # Caso 1: Separação = NF
+            logger.info(f"✅ NF {nf.numero_nf} - Caso 1: Processamento direto no lote {lote_vinculado}")
             self._processar_caso1_direto(nf, lote_vinculado, usuario)
             return 1
     
@@ -263,27 +328,37 @@ class ProcessadorFaturamento:
         """
         ✅ CORRIGIDO: Garantir faturamento negativo e criar produtos se não existirem
         """
-        produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
-        
-        for produto in produtos:
-            # ✅ VERIFICAR SE PRODUTO EXISTE EM PALLETIZAÇÃO
-            self._garantir_produto_existe(produto.cod_produto, produto.nome_produto)
+        try:
+            produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
+            logger.info(f"📦 Processando {len(produtos)} produtos da NF {nf.numero_nf} para lote {lote_id}")
             
-            movimentacao = MovimentacaoEstoque()
-            movimentacao.cod_produto = produto.cod_produto
-            movimentacao.nome_produto = produto.nome_produto
-            movimentacao.tipo_movimentacao = 'FATURAMENTO'
-            movimentacao.local_movimentacao = 'VENDA'
-            # ✅ CORRIGIDO: Data sem vínculo direto na movimentação (usar data atual)
-            movimentacao.data_movimentacao = datetime.now().date()
-            # ✅ GARANTIDO: Sempre negativo para faturamento
-            movimentacao.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
-            movimentacao.observacao = f"Baixa automática NF {nf.numero_nf} - lote separação {lote_id}"
-            movimentacao.criado_por = usuario
-            db.session.add(movimentacao)
-        
-        # Atualizar EmbarqueItem com a NF
-        self._atualizar_embarque_item(nf.numero_nf, lote_id)
+            for produto in produtos:
+                try:
+                    # ✅ VERIFICAR SE PRODUTO EXISTE EM PALLETIZAÇÃO
+                    self._garantir_produto_existe(produto.cod_produto, produto.nome_produto)
+                    
+                    movimentacao = MovimentacaoEstoque()
+                    movimentacao.cod_produto = produto.cod_produto
+                    movimentacao.nome_produto = produto.nome_produto
+                    movimentacao.tipo_movimentacao = 'FATURAMENTO'
+                    movimentacao.local_movimentacao = 'VENDA'
+                    # ✅ CORRIGIDO: Data sem vínculo direto na movimentação (usar data atual)
+                    movimentacao.data_movimentacao = datetime.now().date()
+                    # ✅ GARANTIDO: Sempre negativo para faturamento
+                    movimentacao.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
+                    movimentacao.observacao = f"Baixa automática NF {nf.numero_nf} - lote separação {lote_id}"
+                    movimentacao.criado_por = usuario
+                    db.session.add(movimentacao)
+                    logger.info(f"✅ Movimentação criada: Produto {produto.cod_produto}, Qtd: {movimentacao.qtd_movimentacao}")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao criar movimentação para produto {produto.cod_produto}: {str(e)}")
+                    raise
+            
+            # Atualizar EmbarqueItem com a NF
+            self._atualizar_embarque_item(nf.numero_nf, lote_id)
+        except Exception as e:
+            logger.error(f"❌ Erro em _processar_caso1_direto para NF {nf.numero_nf}: {str(e)}")
+            raise
     
     def _garantir_produto_existe(self, cod_produto: str, nome_produto: str):
         """
