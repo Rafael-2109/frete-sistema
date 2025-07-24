@@ -147,7 +147,6 @@ class ModalAgendamento {
                                                         <th>Produto</th>
                                                         <th>Quantidade</th>
                                                         <th>Valor</th>
-                                                        <th>Expedição</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody id="agendamento-tbody-itens">
@@ -245,11 +244,6 @@ class ModalAgendamento {
                     </td>
                     <td class="text-end">${this.formatarQuantidade(item.quantidade)}</td>
                     <td class="text-end">${this.formatarMoeda(item.valor_total)}</td>
-                    <td class="text-center">
-                        ${item.expedicao ? 
-                            `<span class="badge bg-success">${this.formatarData(item.expedicao)}</span>` : 
-                            '<span class="badge bg-secondary">Não definida</span>'}
-                    </td>
                 </tr>
             `;
         });

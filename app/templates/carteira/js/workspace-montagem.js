@@ -83,8 +83,11 @@ class WorkspaceMontagem {
                 await this.renderizarLotesExistentes(numPedido, preSeparacoesData.lotes);
             }
 
-            // Configurar drag & drop
-            this.dragDropHandler.configurarDragDrop(numPedido);
+            // Configurar drag & drop após um pequeno delay para garantir que o DOM está pronto
+            setTimeout(() => {
+                console.log('🎯 Inicializando drag & drop...');
+                this.dragDropHandler.configurarDragDrop(numPedido);
+            }, 100);
 
         } catch (error) {
             console.error(`❌ Erro ao carregar workspace:`, error);

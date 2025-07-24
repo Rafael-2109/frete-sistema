@@ -145,41 +145,51 @@ class UnificacaoCodigos(db.Model):
     def get_todos_codigos_relacionados(cls, codigo_produto):
         """
         Retorna todos os códigos relacionados ao código informado
-        Usado para estatísticas e consolidação
+        SEMPRE inclui o próprio código, mesmo sem unificação
         """
         try:
-            codigo_produto = int(codigo_produto)
-            codigos_relacionados = set([codigo_produto])
+            # Garantir que sempre inclui o próprio código (como string)
+            codigo_original = str(codigo_produto)
+            codigos_relacionados = set([codigo_original])
             
-            # Busca códigos que apontam para este (este é destino)
-            origens = cls.query.filter_by(
-                codigo_destino=codigo_produto,
-                ativo=True
-            ).all()
-            
-            for origem in origens:
-                codigos_relacionados.add(origem.codigo_origem)
-            
-            # Busca para onde este código aponta (este é origem)
-            destino = cls.query.filter_by(
-                codigo_origem=codigo_produto,
-                ativo=True
-            ).first()
-            
-            if destino:
-                codigos_relacionados.add(destino.codigo_destino)
-                # Busca outros códigos que também apontam para o mesmo destino
-                outros_origens = cls.query.filter_by(
-                    codigo_destino=destino.codigo_destino,
+            # Tentar converter para int para busca na tabela de unificação
+            try:
+                codigo_int = int(codigo_produto)
+                
+                # Busca códigos que apontam para este (este é destino)
+                origens = cls.query.filter_by(
+                    codigo_destino=codigo_int,
                     ativo=True
                 ).all()
-                for outro in outros_origens:
-                    codigos_relacionados.add(outro.codigo_origem)
+                
+                for origem in origens:
+                    codigos_relacionados.add(str(origem.codigo_origem))
+                
+                # Busca para onde este código aponta (este é origem)
+                destino = cls.query.filter_by(
+                    codigo_origem=codigo_int,
+                    ativo=True
+                ).first()
+                
+                if destino:
+                    codigos_relacionados.add(str(destino.codigo_destino))
+                    # Busca outros códigos que também apontam para o mesmo destino
+                    outros_origens = cls.query.filter_by(
+                        codigo_destino=destino.codigo_destino,
+                        ativo=True
+                    ).all()
+                    for outro in outros_origens:
+                        codigos_relacionados.add(str(outro.codigo_origem))
+                        
+            except (ValueError, TypeError):
+                # Se não conseguir converter para int, ignora unificação mas mantém o código original
+                pass
             
             return list(codigos_relacionados)
             
-        except (ValueError, TypeError):
-            return [codigo_produto]
+        except Exception:
+            # Em caso de qualquer erro, sempre retorna pelo menos o código original
+            return [str(codigo_produto)]
 
     def ativar(self, usuario=None, motivo=None):
         """Ativa a unificação"""
@@ -294,11 +304,13 @@ class SaldoEstoque:
         """
         Calcula projeção completa de estoque para 29 dias (D0 até D+28)
         IMPLEMENTA LÓGICA JUST-IN-TIME CORRETA:
-        - EST INICIAL D0 = estoque atual
-        - SAÍDA D0 = Separacao + CarteiraPrincipal + PreSeparacaoItem (expedição D0)
-        - EST FINAL D0 = EST INICIAL D0 - SAÍDA D0
+        - EST INICIAL D0 = estoque atual (MovimentacaoEstoque)
+        - SAÍDA D0 = Separacao + PreSeparacaoItem (expedição D0)
+        - EST FINAL D0 = EST INICIAL D0 - SAÍDA D0 + PROD D0
         - PROD D0 = ProgramacaoProducao (data_programacao D0)
-        - EST INICIAL D+1 = EST FINAL D0 + PROD D0 (Just-in-Time!)
+        - EST INICIAL D+1 = EST FINAL D0 (Just-in-Time!)
+        
+        ❌ CarteiraPrincipal NÃO participa do cálculo de saídas
         """
         try:
             projecao = []
@@ -401,7 +413,8 @@ class SaldoEstoque:
     def _calcular_saidas_completas(cod_produto, data_expedicao):
         """
         Calcula TODAS as saídas previstas para uma data específica
-        ✅ CORRIGIDO: SAÍDA = CarteiraPrincipal + Separacao + PreSeparacaoItem
+        ✅ CORRIGIDO: SAÍDA = Separacao + PreSeparacaoItem (SEM CarteiraPrincipal)
+        CarteiraPrincipal não participa do cálculo - apenas Separacao e PreSeparacaoItem
         """
         try:
             # Buscar todos os códigos relacionados (considerando unificação)
@@ -410,56 +423,30 @@ class SaldoEstoque:
             total_saida = 0
             
             for codigo in codigos_relacionados:
-                # 📦 1. CARTEIRA PRINCIPAL - Pedidos agrupados com data de expedição
-                try:
-                    from app.carteira.models import CarteiraPrincipal
-                    pedidos_carteira = CarteiraPrincipal.query.filter(
-                        CarteiraPrincipal.cod_produto == str(codigo),
-                        CarteiraPrincipal.expedicao == data_expedicao,  # Campo existe conforme CLAUDE.md
-                        CarteiraPrincipal.ativo == True,
-                        CarteiraPrincipal.separacao_lote_id.is_(None)  # Ainda não separado
-                    ).all()
-                    
-                    for item in pedidos_carteira:
-                        if item.qtd_saldo_produto_pedido and item.qtd_saldo_produto_pedido > 0:
-                            total_saida += float(item.qtd_saldo_produto_pedido)
-                except Exception as e:
-                    logger.debug(f"CarteiraPrincipal não encontrada ou erro: {e}")
-                
-                # 📦 2. SEPARAÇÕES já efetivadas - com data OU status ABERTO/COTADO
+                # 📦 1. SEPARAÇÕES já efetivadas
+                # ✅ CORRETO: Linkar Separacao com Pedido pelo separacao_lote_id
+                # Data expedição e status estão na tabela Pedido, não Separacao
                 try:
                     from app.separacao.models import Separacao
                     from app.pedidos.models import Pedido
                     
-                    # Separações com data de expedição específica
-                    separacoes_data = Separacao.query.filter(
+                    # Buscar separações linkadas com pedidos
+                    separacoes = Separacao.query.join(
+                        Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                    ).filter(
                         Separacao.cod_produto == str(codigo),
-                        Separacao.expedicao == data_expedicao,
-                        Separacao.ativo == True
+                        Pedido.expedicao == data_expedicao,  # Data vem do Pedido
+                        Pedido.status.in_(['ABERTO', 'COTADO'])  # Status vem do Pedido
                     ).all()
                     
-                    for sep in separacoes_data:
+                    for sep in separacoes:
                         if sep.qtd_saldo and sep.qtd_saldo > 0:
                             total_saida += float(sep.qtd_saldo)
-                    
-                    # ✅ CORREÇÃO: Separações com status ABERTO/COTADO (mesmo sem data)
-                    if data_expedicao == datetime.now().date():  # Apenas para D0
-                        separacoes_status = Separacao.query.join(
-                            Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
-                        ).filter(
-                            Separacao.cod_produto == str(codigo),
-                            Pedido.status.in_(['ABERTO', 'COTADO']),
-                            Separacao.expedicao.is_(None)  # Sem data definida
-                        ).all()
-                        
-                        for sep in separacoes_status:
-                            if sep.qtd_saldo and sep.qtd_saldo > 0:
-                                total_saida += float(sep.qtd_saldo)
                                 
                 except Exception as e:
-                    logger.debug(f"Separacao não encontrada ou erro: {e}")
+                    logger.debug(f"Erro ao buscar Separacao para {codigo}: {e}")
                 
-                # ✅ 3. PRÉ-SEPARAÇÃO ITENS (principal fonte de saídas futuras)
+                # 📦 2. PRÉ-SEPARAÇÕES planejadas
                 try:
                     from app.carteira.models import PreSeparacaoItem
                     pre_separacoes = PreSeparacaoItem.query.filter(
@@ -471,8 +458,9 @@ class SaldoEstoque:
                     for pre_sep in pre_separacoes:
                         if pre_sep.qtd_selecionada_usuario and pre_sep.qtd_selecionada_usuario > 0:
                             total_saida += float(pre_sep.qtd_selecionada_usuario)
+                            
                 except Exception as e:
-                    logger.debug(f"PreSeparacaoItem não encontrada ou erro: {e}")
+                    logger.debug(f"Erro ao buscar PreSeparacaoItem para {codigo}: {e}")
             
             return total_saida
             
