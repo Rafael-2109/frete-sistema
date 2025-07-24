@@ -328,37 +328,39 @@ class ProcessadorFaturamento:
         """
         ✅ CORRIGIDO: Garantir faturamento negativo e criar produtos se não existirem
         """
-        try:
-            produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
-            logger.info(f"📦 Processando {len(produtos)} produtos da NF {nf.numero_nf} para lote {lote_id}")
-            
-            for produto in produtos:
+        produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
+        logger.info(f"📦 Processando {len(produtos)} produtos da NF {nf.numero_nf} para lote {lote_id}")
+        
+        for produto in produtos:
+            try:
+                # Tentar garantir que produto existe, mas não falhar se der erro
                 try:
-                    # ✅ VERIFICAR SE PRODUTO EXISTE EM PALLETIZAÇÃO
                     self._garantir_produto_existe(produto.cod_produto, produto.nome_produto)
-                    
-                    movimentacao = MovimentacaoEstoque()
-                    movimentacao.cod_produto = produto.cod_produto
-                    movimentacao.nome_produto = produto.nome_produto
-                    movimentacao.tipo_movimentacao = 'FATURAMENTO'
-                    movimentacao.local_movimentacao = 'VENDA'
-                    # ✅ CORRIGIDO: Data sem vínculo direto na movimentação (usar data atual)
-                    movimentacao.data_movimentacao = datetime.now().date()
-                    # ✅ GARANTIDO: Sempre negativo para faturamento
-                    movimentacao.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
-                    movimentacao.observacao = f"Baixa automática NF {nf.numero_nf} - lote separação {lote_id}"
-                    movimentacao.criado_por = usuario
-                    db.session.add(movimentacao)
-                    logger.info(f"✅ Movimentação criada: Produto {produto.cod_produto}, Qtd: {movimentacao.qtd_movimentacao}")
                 except Exception as e:
-                    logger.error(f"❌ Erro ao criar movimentação para produto {produto.cod_produto}: {str(e)}")
-                    raise
-            
-            # Atualizar EmbarqueItem com a NF
+                    logger.warning(f"⚠️ Não foi possível verificar/criar produto {produto.cod_produto}: {str(e)}")
+                
+                movimentacao = MovimentacaoEstoque()
+                movimentacao.cod_produto = produto.cod_produto
+                movimentacao.nome_produto = produto.nome_produto
+                movimentacao.tipo_movimentacao = 'FATURAMENTO'
+                movimentacao.local_movimentacao = 'VENDA'
+                movimentacao.data_movimentacao = datetime.now().date()
+                movimentacao.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
+                movimentacao.observacao = f"Baixa automática NF {nf.numero_nf} - lote separação {lote_id}"
+                movimentacao.criado_por = usuario
+                db.session.add(movimentacao)
+                logger.info(f"✅ Movimentação criada: Produto {produto.cod_produto}, Qtd: {movimentacao.qtd_movimentacao}")
+            except Exception as e:
+                logger.error(f"❌ Erro ao criar movimentação para produto {produto.cod_produto}: {str(e)}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                raise
+        
+        # Atualizar EmbarqueItem com a NF (não deve falhar a movimentação se der erro aqui)
+        try:
             self._atualizar_embarque_item(nf.numero_nf, lote_id)
         except Exception as e:
-            logger.error(f"❌ Erro em _processar_caso1_direto para NF {nf.numero_nf}: {str(e)}")
-            raise
+            logger.warning(f"⚠️ Erro ao atualizar EmbarqueItem: {str(e)}")
     
     def _garantir_produto_existe(self, cod_produto: str, nome_produto: str):
         """
