@@ -1,5 +1,10 @@
 import os
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv  # type: ignore
+except Exception:  # pragma: no cover - allow running without optional dependency
+    def load_dotenv(*_args, **_kwargs):
+        """Fallback when python-dotenv is not installed."""
+        return None
 
 load_dotenv()
 

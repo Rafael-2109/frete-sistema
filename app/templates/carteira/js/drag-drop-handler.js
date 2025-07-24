@@ -30,28 +30,28 @@ class DragDropHandler {
     }
 
     configurarDragProducts(workspaceElement) {
-        // Procurar elementos draggable (agora são divs, não tr)
+        // Procurar elementos draggable (são TR na tabela)
         const produtos = workspaceElement.querySelectorAll('.produto-origem[draggable="true"]');
         console.log(`🎯 Configurando ${produtos.length} produtos para drag`);
         
-        produtos.forEach((div, index) => {
+        produtos.forEach((tr, index) => {
             // Garantir que seja draggable
-            div.setAttribute('draggable', 'true');
+            tr.setAttribute('draggable', 'true');
             
             // Remover event listeners existentes para evitar duplicação
-            const newDiv = div.cloneNode(true);
-            div.parentNode.replaceChild(newDiv, div);
+            const newTr = tr.cloneNode(true);
+            tr.parentNode.replaceChild(newTr, tr);
             
             // Adicionar novos event listeners
-            newDiv.addEventListener('dragstart', (e) => this.onDragStart(e));
-            newDiv.addEventListener('dragend', (e) => this.onDragEnd(e));
+            newTr.addEventListener('dragstart', (e) => this.onDragStart(e));
+            newTr.addEventListener('dragend', (e) => this.onDragEnd(e));
             
             // Adicionar estilo visual para indicar que é arrastável
-            newDiv.style.cursor = 'move';
+            newTr.style.cursor = 'move';
             
             // Verificar se tem dados necessários
-            const codProduto = newDiv.dataset.produto;
-            const qtdPedido = newDiv.dataset.qtdPedido;
+            const codProduto = newTr.dataset.produto;
+            const qtdPedido = newTr.dataset.qtdPedido;
             
             if (!codProduto || !qtdPedido) {
                 console.warn(`⚠️ Produto ${index} sem dados necessários:`, { codProduto, qtdPedido });
@@ -86,9 +86,9 @@ class DragDropHandler {
     onDragStart(e) {
         console.log('🎯 onDragStart chamado!', e.currentTarget);
         
-        const div = e.currentTarget;
-        const codProduto = div.dataset.produto;
-        const qtdPedido = div.dataset.qtdPedido;
+        const tr = e.currentTarget;
+        const codProduto = tr.dataset.produto;
+        const qtdPedido = tr.dataset.qtdPedido;
         
         console.log('📋 Dados do produto para drag:', { codProduto, qtdPedido });
         
@@ -99,8 +99,8 @@ class DragDropHandler {
             return;
         }
         
-        // Buscar quantidade editável atual dentro do div
-        const inputQtd = div.querySelector('.qtd-editavel');
+        // Buscar quantidade editável atual dentro do TR
+        const inputQtd = tr.querySelector('.qtd-editavel');
         const qtdAtual = inputQtd ? parseInt(inputQtd.value) : parseInt(qtdPedido);
         
         console.log('📊 Quantidade para drag:', { inputValue: inputQtd?.value, qtdAtual, qtdPedido });
@@ -121,16 +121,16 @@ class DragDropHandler {
         e.dataTransfer.effectAllowed = 'move';
         
         // Adicionar classe visual de arraste
-        div.classList.add('dragging');
-        div.style.opacity = '0.5';
+        tr.classList.add('dragging');
+        tr.style.opacity = '0.5';
         
         console.log(`✅ Drag iniciado com sucesso:`, dadosDrag);
     }
 
     onDragEnd(e) {
-        const div = e.currentTarget;
-        div.classList.remove('dragging');
-        div.style.opacity = '1';
+        const tr = e.currentTarget;
+        tr.classList.remove('dragging');
+        tr.style.opacity = '1';
     }
 
     onDragOver(e) {

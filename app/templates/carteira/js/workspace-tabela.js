@@ -44,100 +44,98 @@ class WorkspaceTabela {
             const producaoHoje = produto.producao_hoje || 0;
             
             html += `
-                <tr data-produto-row="${produto.cod_produto}">
-                    <td colspan="11" style="padding: 0;">
-                        <div class="produto-origem" 
-                             draggable="true" 
-                             data-produto="${produto.cod_produto}"
-                             data-qtd-pedido="${produto.qtd_pedido}"
-                             style="display: flex; align-items: center; padding: 0.5rem; cursor: move;">
-                            
-                            <div class="drag-handle text-center" style="width: 30px; flex-shrink: 0;">
-                                <i class="fas fa-grip-vertical text-muted"></i>
-                            </div>
-                            
-                            <div class="produto-info" style="flex: 1; padding: 0 10px;">
-                                <strong class="text-primary">${produto.cod_produto}</strong>
-                                <br><small class="text-muted">${produto.nome_produto || ''}</small>
-                            </div>
-                            
-                            <div class="qtd-container" style="width: 150px; padding: 0 10px;">
-                                <div class="input-group input-group-sm">
-                                    <input type="number" 
-                                           class="form-control form-control-sm text-end qtd-editavel" 
-                                           value="${Math.floor(saldoDisponivel.qtdEditavel)}"
-                                           min="0"
-                                           max="${Math.floor(saldoDisponivel.qtdEditavel)}"
-                                           step="1"
-                                           data-produto="${produto.cod_produto}"
-                                           data-qtd-original="${Math.floor(produto.qtd_pedido)}"
-                                           data-qtd-saldo="${Math.floor(saldoDisponivel.qtdEditavel)}"
-                                           onchange="workspace.atualizarQuantidadeProduto(this)"
-                                           title="Quantidade editável para separação parcial (apenas números inteiros)">
-                                    <span class="input-group-text text-xs" 
-                                          title="Saldo disponível: ${this.formatarQuantidade(saldoDisponivel.qtdEditavel)} de ${this.formatarQuantidade(produto.qtd_pedido)} do pedido"
-                                          style="font-size: 0.7rem;">
-                                        /${Math.floor(saldoDisponivel.qtdEditavel)}
-                                    </span>
-                                </div>
-                            
-                            <div class="valor-container text-end" style="width: 120px; padding: 0 10px;" id="valor-${produto.cod_produto}">
-                                <strong class="text-success valor-calculada">${this.formatarMoeda(saldoDisponivel.qtdEditavel * (produto.preco_unitario || 0))}</strong>
-                                <br><small class="text-muted">Unit: ${this.formatarMoeda(produto.preco_unitario || 0)}</small>
-                            </div>
-                            
-                            <div class="peso-container text-end" style="width: 100px; padding: 0 10px;" id="peso-${produto.cod_produto}">
-                                <strong class="text-info peso-calculado">${this.formatarPeso(saldoDisponivel.qtdEditavel * (produto.peso_unitario || 0))}</strong>
-                                <br><small class="text-muted">Unit: ${this.formatarPeso(produto.peso_unitario || 0)}</small>
-                            </div>
-                            
-                            <div class="pallet-container text-end" style="width: 100px; padding: 0 10px;" id="pallet-${produto.cod_produto}">
-                                <strong class="text-warning pallet-calculado">${this.formatarPallet(saldoDisponivel.qtdEditavel / (produto.palletizacao || 1))}</strong>
-                                <br><small class="text-muted">PLT: ${this.formatarPallet(produto.palletizacao || 1)}</small>
-                            </div>
-                            
-                            <div class="estoque-hoje text-center" style="width: 80px; padding: 0 10px;">
-                                <span class="badge ${this.getEstoqueHojeBadgeClass(produto.estoque_hoje)}"
-                                      title="Estoque disponível hoje">
-                                    ${this.formatarQuantidade(produto.estoque_hoje || 0)}
-                                </span>
-                            </div>
-                            
-                            <div class="estoque-min text-center" style="width: 80px; padding: 0 10px;">
-                                <span class="badge ${this.getEstoqueMinimoBadgeClass(produto.menor_estoque_7d)}"
-                                      title="Menor estoque projetado nos próximos 7 dias">
-                                    ${this.formatarQuantidade(produto.menor_estoque_7d || 0)}
-                                </span>
-                            </div>
-                            
-                            <div class="producao-hoje text-center" style="width: 80px; padding: 0 10px;">
-                                <span class="badge ${this.getProducaoHojeBadgeClass(producaoHoje)}"
-                                      title="Quantidade programada para produzir hoje">
-                                    ${this.formatarQuantidade(producaoHoje)}
-                                </span>
-                            </div>
-                            
-                            <div class="disponibilidade" style="width: 100px; padding: 0 10px;">
-                                <span class="badge ${statusDisponibilidade.class}" title="${statusDisponibilidade.tooltip}">
-                                    ${statusDisponibilidade.texto}
-                                </span>
-                                <br><small class="text-muted">${statusDisponibilidade.detalhes}</small>
-                            </div>
-                            
-                            <div class="acoes" style="width: 120px; padding: 0 10px;">
-                                <div class="btn-group-vertical btn-group-sm">
-                                    <button class="btn btn-outline-info btn-xs mb-1" 
-                                            onclick="workspace.abrirCardex('${produto.cod_produto}')"
-                                            title="Ver projeção de estoque D+0 a D+28">
-                                        <i class="fas fa-chart-line me-1"></i>Cardex
-                                    </button>
-                                    <button class="btn btn-outline-secondary btn-xs" 
-                                            onclick="workspace.resetarQuantidadeProduto('${produto.cod_produto}')"
-                                            title="Restaurar quantidade original do pedido">
-                                        <i class="fas fa-undo me-1"></i>Reset
-                                    </button>
-                                </div>
-                            </div>
+                <tr class="produto-origem" 
+                    draggable="true" 
+                    data-produto="${produto.cod_produto}"
+                    data-qtd-pedido="${produto.qtd_pedido}">
+                    
+                    <td class="drag-handle text-center">
+                        <i class="fas fa-grip-vertical text-muted"></i>
+                    </td>
+                    
+                    <td>
+                        <div class="produto-info">
+                            <strong class="text-primary">${produto.cod_produto}</strong>
+                            <br><small class="text-muted">${produto.nome_produto || ''}</small>
+                        </div>
+                    </td>
+                    
+                    <td class="text-end">
+                        <div class="input-group input-group-sm" style="max-width: 140px;">
+                            <input type="number" 
+                                   class="form-control form-control-sm text-end qtd-editavel" 
+                                   value="${Math.floor(saldoDisponivel.qtdEditavel)}"
+                                   min="0"
+                                   max="${Math.floor(saldoDisponivel.qtdEditavel)}"
+                                   step="1"
+                                   data-produto="${produto.cod_produto}"
+                                   data-qtd-original="${Math.floor(produto.qtd_pedido)}"
+                                   data-qtd-saldo="${Math.floor(saldoDisponivel.qtdEditavel)}"
+                                   onchange="workspace.atualizarQuantidadeProduto(this)"
+                                   title="Quantidade editável para separação parcial (apenas números inteiros)">
+                            <span class="input-group-text text-xs" 
+                                  title="Saldo disponível: ${this.formatarQuantidade(saldoDisponivel.qtdEditavel)} de ${this.formatarQuantidade(produto.qtd_pedido)} do pedido"
+                                  style="font-size: 0.7rem;">
+                                /${Math.floor(saldoDisponivel.qtdEditavel)}
+                            </span>
+                        </div>
+                    </td>
+                    
+                    <td class="text-end" id="valor-${produto.cod_produto}">
+                        <strong class="text-success valor-calculada">${this.formatarMoeda(saldoDisponivel.qtdEditavel * (produto.preco_unitario || 0))}</strong>
+                        <br><small class="text-muted">Unit: ${this.formatarMoeda(produto.preco_unitario || 0)}</small>
+                    </td>
+                    
+                    <td class="text-end" id="peso-${produto.cod_produto}">
+                        <strong class="text-info peso-calculado">${this.formatarPeso(saldoDisponivel.qtdEditavel * (produto.peso_unitario || 0))}</strong>
+                        <br><small class="text-muted">Unit: ${this.formatarPeso(produto.peso_unitario || 0)}</small>
+                    </td>
+                    
+                    <td class="text-end" id="pallet-${produto.cod_produto}">
+                        <strong class="text-warning pallet-calculado">${this.formatarPallet(saldoDisponivel.qtdEditavel / (produto.palletizacao || 1))}</strong>
+                        <br><small class="text-muted">PLT: ${this.formatarPallet(produto.palletizacao || 1)}</small>
+                    </td>
+                    
+                    <td class="text-center">
+                        <span class="badge ${this.getEstoqueHojeBadgeClass(produto.estoque_hoje)}"
+                              title="Estoque disponível hoje">
+                            ${this.formatarQuantidade(produto.estoque_hoje || 0)}
+                        </span>
+                    </td>
+                    
+                    <td class="text-center">
+                        <span class="badge ${this.getEstoqueMinimoBadgeClass(produto.menor_estoque_7d)}"
+                              title="Menor estoque projetado nos próximos 7 dias">
+                            ${this.formatarQuantidade(produto.menor_estoque_7d || 0)}
+                        </span>
+                    </td>
+                    
+                    <td class="text-center">
+                        <span class="badge ${this.getProducaoHojeBadgeClass(producaoHoje)}"
+                              title="Quantidade programada para produzir hoje">
+                            ${this.formatarQuantidade(producaoHoje)}
+                        </span>
+                    </td>
+                    
+                    <td>
+                        <span class="badge ${statusDisponibilidade.class}" title="${statusDisponibilidade.tooltip}">
+                            ${statusDisponibilidade.texto}
+                        </span>
+                        <br><small class="text-muted">${statusDisponibilidade.detalhes}</small>
+                    </td>
+                    
+                    <td>
+                        <div class="btn-group-vertical btn-group-sm">
+                            <button class="btn btn-outline-info btn-xs mb-1" 
+                                    onclick="workspace.abrirCardex('${produto.cod_produto}')"
+                                    title="Ver projeção de estoque D+0 a D+28">
+                                <i class="fas fa-chart-line me-1"></i>Cardex
+                            </button>
+                            <button class="btn btn-outline-secondary btn-xs" 
+                                    onclick="workspace.resetarQuantidadeProduto('${produto.cod_produto}')"
+                                    title="Restaurar quantidade original do pedido">
+                                <i class="fas fa-undo me-1"></i>Reset
+                            </button>
                         </div>
                     </td>
                 </tr>

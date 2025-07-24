@@ -1,5 +1,21 @@
-from dotenv import load_dotenv
-from flask_session import Session
+try:
+    from dotenv import load_dotenv  # type: ignore
+except Exception:  # pragma: no cover - fallback when python-dotenv is missing
+    def load_dotenv(*_args, **_kwargs):
+        """Fallback no-op when python-dotenv is unavailable."""
+        return None
+try:
+    from flask_session import Session  # type: ignore
+except Exception:  # pragma: no cover - allow running without Flask-Session
+    class Session:
+        """Minimal stub when Flask-Session isn't installed."""
+
+        def __init__(self, app=None):
+            if app is not None:
+                self.init_app(app)
+
+        def init_app(self, _app):
+            pass
 import os
 from flask import Flask, request, g
 from flask_sqlalchemy import SQLAlchemy
