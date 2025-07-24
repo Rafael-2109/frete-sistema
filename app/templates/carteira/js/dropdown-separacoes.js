@@ -70,7 +70,7 @@ class DropdownSeparacoes {
             dropdownMenu.style.top = buttonRect.bottom + 'px';
         }
         
-        dropdownMenu.style.zIndex = '1070';
+        dropdownMenu.style.zIndex = '1200';
     }
 
     async onDropdownAberto(button) {
@@ -109,10 +109,11 @@ class DropdownSeparacoes {
             // 🎯 RENDERIZAR POR LOTES (NOVO DESIGN)
             this.renderizarSeparacoesPorLote(dropdownContent, data);
 
-            // Atualizar contador no botão
+            // Atualizar contador no botão (qtd de lotes únicos, não itens)
             const contador = button.querySelector('.contador-separacoes');
             if (contador) {
-                contador.textContent = data.total_separacoes || 0;
+                const qtdLotes = Object.keys(this.agruparPorLote(data.separacoes)).length;
+                contador.textContent = qtdLotes;
             }
 
         } catch (error) {
@@ -331,19 +332,35 @@ class DropdownSeparacoes {
      * 🎯 NOVO: Criar resumo geral
      */
     criarResumoGeral(data) {
+        const lotes = this.agruparPorLote(data.separacoes);
+        const totalLotes = Object.keys(lotes).length;
+        
+        // Contar lotes embarcados/pendentes
+        let lotesEmbarcados = 0;
+        let lotesPendentes = 0;
+        
+        Object.values(lotes).forEach(separacoesDoLote => {
+            const primeiraSeperacao = separacoesDoLote[0];
+            if (primeiraSeperacao.status === 'EMBARCADO') {
+                lotesEmbarcados++;
+            } else {
+                lotesPendentes++;
+            }
+        });
+        
         return `
             <div class="separacoes-resumo mt-3 pt-3 border-top">
                 <div class="row text-center">
                     <div class="col-4">
-                        <strong class="text-primary">${data.total_separacoes || 0}</strong>
+                        <strong class="text-primary">${totalLotes}</strong>
                         <br><small class="text-muted">Total Lotes</small>
                     </div>
                     <div class="col-4">
-                        <strong class="text-success">${data.separacoes_embarcadas || 0}</strong>
-                        <br><small class="text-muted">Embarcadas</small>
+                        <strong class="text-success">${lotesEmbarcados}</strong>
+                        <br><small class="text-muted">Embarcados</small>
                     </div>
                     <div class="col-4">
-                        <strong class="text-warning">${data.separacoes_pendentes || 0}</strong>
+                        <strong class="text-warning">${lotesPendentes}</strong>
                         <br><small class="text-muted">Pendentes</small>
                     </div>
                 </div>

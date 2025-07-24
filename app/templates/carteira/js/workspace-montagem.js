@@ -165,7 +165,7 @@ class WorkspaceMontagem {
                     <div class="lotes-container row" id="lotes-container-${numPedido}">
                         <!-- Lotes serão criados dinamicamente -->
                         <div class="col-md-4">
-                            <div class="card lote-placeholder border-dashed text-center p-4">
+                            <div class="card lote-placeholder border-dashed text-center p-4" data-lote-id="placeholder">
                                 <i class="fas fa-plus fa-2x text-muted mb-2"></i>
                                 <p class="text-muted mb-0">Clique em "Novo Lote" ou arraste produtos aqui</p>
                             </div>

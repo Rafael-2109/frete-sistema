@@ -130,7 +130,7 @@ class WorkspaceTabela {
                     <td>
                         <div class="btn-group-vertical btn-group-sm">
                             <button class="btn btn-outline-info btn-xs mb-1" 
-                                    onclick="workspace.modalCardex.abrirModalCardex('${produto.cod_produto}')"
+                                    onclick="workspace.abrirCardex('${produto.cod_produto}')"
                                     title="Ver projeção de estoque D+0 a D+28">
                                 <i class="fas fa-chart-line me-1"></i>Cardex
                             </button>
@@ -239,21 +239,40 @@ class WorkspaceTabela {
 
     calcularSaldoDisponivel(produto) {
         try {
-            const qtdPedido = produto.qtd_pedido || 0;
-            const estoqueHoje = produto.estoque_hoje || 0;
+            const qtdPedido = produto.qtd_pedido || produto.qtd_produto_pedido || 0;
+            const qtdSeparacoes = produto.qtd_separacoes || 0;
+            const qtdPreSeparacoes = produto.qtd_pre_separacoes || 0;
             
-            // Quantidade editável é o menor entre qtd pedido e estoque disponível
-            const qtdEditavel = Math.min(qtdPedido, Math.max(0, estoqueHoje));
+            // Calcular também baseado nos lotes locais (workspace atual)
+            let qtdPreSeparacoesLocal = 0;
+            if (window.workspace && window.workspace.preSeparacoes) {
+                window.workspace.preSeparacoes.forEach(loteData => {
+                    const produtoNoLote = loteData.produtos.find(p => p.codProduto === produto.cod_produto);
+                    if (produtoNoLote) {
+                        qtdPreSeparacoesLocal += produtoNoLote.qtd || 0;
+                    }
+                });
+            }
+            
+            // Usar o maior valor entre API e local
+            const qtdPreSeparacoesTotal = Math.max(qtdPreSeparacoes, qtdPreSeparacoesLocal);
+            
+            // Saldo disponível = Qtd Pedido - (Separações + Pré-Separações)
+            const qtdEditavel = qtdPedido - qtdSeparacoes - qtdPreSeparacoesTotal;
             
             return {
-                qtdEditavel: qtdEditavel,
-                qtdIndisponivel: Math.max(0, qtdPedido - estoqueHoje)
+                qtdEditavel: Math.max(0, qtdEditavel), // Nunca negativo
+                qtdSeparacoes: qtdSeparacoes,
+                qtdPreSeparacoes: qtdPreSeparacoesTotal,
+                qtdIndisponivel: Math.max(0, -qtdEditavel)
             };
         } catch (error) {
             console.error('Erro ao calcular saldo disponível:', error);
             return {
-                qtdEditavel: 0,
-                qtdIndisponivel: produto.qtd_pedido || 0
+                qtdEditavel: produto.qtd_pedido || produto.qtd_produto_pedido || 0,
+                qtdSeparacoes: 0,
+                qtdPreSeparacoes: 0,
+                qtdIndisponivel: 0
             };
         }
     }

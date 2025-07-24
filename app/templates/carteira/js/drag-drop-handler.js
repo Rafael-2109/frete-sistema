@@ -140,7 +140,8 @@ class DragDropHandler {
         
         console.log('📦 Drop detectado!', {
             target: e.currentTarget.className,
-            isPlaceholder: e.currentTarget.classList.contains('lote-placeholder')
+            isPlaceholder: e.currentTarget.classList.contains('lote-placeholder'),
+            loteId: e.currentTarget.dataset.loteId
         });
         
         try {
@@ -181,6 +182,11 @@ class DragDropHandler {
                     qtdPedido: data.qtdPedido
                 });
                 
+                // Reconfigurar drag & drop após criar novo lote
+                setTimeout(() => {
+                    this.reconfigurarTudo(numPedido);
+                }, 100);
+                
             } else if (loteId) {
                 console.log(`📦 Drop no lote existente: ${loteId}`);
                 await this.workspace.adicionarProdutoNoLote(loteId, {
@@ -189,6 +195,7 @@ class DragDropHandler {
                 });
             } else {
                 console.warn('⚠️ Drop zone sem lote_id definido');
+                alert('⚠️ Erro: Drop zone não configurada corretamente');
             }
             
         } catch (error) {
