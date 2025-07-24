@@ -12,7 +12,18 @@ class CarteiraAgrupada {
     init() {
         this.setupEventListeners();
         this.initDropdownSeparacoes();
+        this.initWorkspace();
         console.log('✅ Carteira Agrupada inicializada');
+    }
+    
+    initWorkspace() {
+        // Garantir que o workspace seja criado globalmente
+        if (!window.workspace && window.WorkspaceMontagem) {
+            window.workspace = new window.WorkspaceMontagem();
+            console.log('✅ Workspace global criado');
+        } else if (!window.WorkspaceMontagem) {
+            console.error('❌ WorkspaceMontagem não encontrado - verifique se o script foi carregado');
+        }
     }
 
     setupEventListeners() {

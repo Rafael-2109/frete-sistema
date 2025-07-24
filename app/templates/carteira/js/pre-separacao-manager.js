@@ -34,6 +34,7 @@ class PreSeparacaoManager {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
                 },
                 body: JSON.stringify({
                     num_pedido: numPedido,
@@ -92,7 +93,10 @@ class PreSeparacaoManager {
     async removerPreSeparacao(preSeparacaoId) {
         try {
             const response = await fetch(`/carteira/api/pre-separacao/${preSeparacaoId}/remover`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': this.getCSRFToken()
+                }
             });
 
             const result = await response.json();
@@ -266,6 +270,34 @@ class PreSeparacaoManager {
 
     gerarLoteIdPreSeparacao(dataExpedicao) {
         return `PRE-${dataExpedicao}`;
+    }
+    
+    /**
+     * Obter CSRF Token de forma consistente
+     */
+    getCSRFToken() {
+        // Tentar várias formas de obter o CSRF token
+        // 1. Cookie
+        const cookieValue = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('csrftoken='))
+            ?.split('=')[1];
+            
+        if (cookieValue) return cookieValue;
+        
+        // 2. Meta tag
+        const metaToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        if (metaToken) return metaToken;
+        
+        // 3. Input hidden em formulários
+        const inputToken = document.querySelector('input[name="csrf_token"]')?.value;
+        if (inputToken) return inputToken;
+        
+        // 4. Window global
+        if (window.csrfToken) return window.csrfToken;
+        
+        console.warn('⚠️ CSRF Token não encontrado');
+        return '';
     }
 }
 

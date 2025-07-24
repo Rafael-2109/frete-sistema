@@ -17,3 +17,4 @@ from .endereco_api import *
 from .separacao_api import *
 from .pre_separacao_api import *
 from .cardex_api import *
+from .detalhes_api import *

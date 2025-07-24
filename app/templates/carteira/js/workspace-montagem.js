@@ -83,11 +83,16 @@ class WorkspaceMontagem {
                 await this.renderizarLotesExistentes(numPedido, preSeparacoesData.lotes);
             }
 
-            // Configurar drag & drop após um pequeno delay para garantir que o DOM está pronto
-            setTimeout(() => {
+            // Configurar drag & drop usando requestAnimationFrame para garantir renderização
+            requestAnimationFrame(() => {
                 console.log('🎯 Inicializando drag & drop...');
                 this.dragDropHandler.configurarDragDrop(numPedido);
-            }, 100);
+                
+                // Verificar se elementos foram marcados corretamente
+                const produtos = document.querySelectorAll(`.workspace-montagem[data-pedido="${numPedido}"] .produto-origem`);
+                const dropZones = document.querySelectorAll(`.workspace-montagem[data-pedido="${numPedido}"] .drop-zone`);
+                console.log(`✅ Configuração completa: ${produtos.length} produtos, ${dropZones.length} drop zones`);
+            });
 
         } catch (error) {
             console.error(`❌ Erro ao carregar workspace:`, error);

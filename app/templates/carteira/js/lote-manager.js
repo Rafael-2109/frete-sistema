@@ -257,12 +257,16 @@ class LoteManager {
 
     async adicionarProdutoNoLote(loteId, dadosProduto) {
         try {
+            // Obter data de expedição (usar amanhã como padrão)
+            const dataExpedicao = dadosProduto.dataExpedicao || this.obterDataExpedicaoDefault();
+            
             // 🎯 USAR PreSeparacaoManager para manter consistência
             const resultado = await this.workspace.preSeparacaoManager.salvarPreSeparacao(
                 this.workspace.obterNumeroPedido(),
                 dadosProduto.codProduto,
                 loteId,
-                dadosProduto.qtdPedido
+                dadosProduto.qtdPedido,
+                dataExpedicao  // ✅ Passando data de expedição
             );
 
             if (!resultado.success) {
@@ -389,7 +393,7 @@ class LoteManager {
             const response = await fetch(`/carteira/api/pre-separacao/${produto.preSeparacaoId}/remover`, {
                 method: 'DELETE',
                 headers: {
-                    'X-CSRFToken': window.csrfToken || document.querySelector('meta[name="csrf-token"]').content
+                    'X-CSRFToken': this.getCSRFToken()
                 }
             });
 
@@ -442,6 +446,30 @@ class LoteManager {
     formatarPallet(pallet) {
         if (!pallet) return '0 plt';
         return `${parseFloat(pallet).toFixed(2)} plt`;
+    }
+    
+    /**
+     * Obter CSRF Token de forma consistente
+     */
+    getCSRFToken() {
+        // Usar o mesmo método do PreSeparacaoManager
+        const cookieValue = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('csrftoken='))
+            ?.split('=')[1];
+            
+        if (cookieValue) return cookieValue;
+        
+        const metaToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        if (metaToken) return metaToken;
+        
+        const inputToken = document.querySelector('input[name="csrf_token"]')?.value;
+        if (inputToken) return inputToken;
+        
+        if (window.csrfToken) return window.csrfToken;
+        
+        console.warn('⚠️ CSRF Token não encontrado');
+        return '';
     }
 }
 
