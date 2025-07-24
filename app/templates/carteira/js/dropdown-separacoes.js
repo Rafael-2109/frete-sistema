@@ -59,15 +59,15 @@ class DropdownSeparacoes {
         const viewportHeight = window.innerHeight;
         const viewportWidth = window.innerWidth;
         
-        // Posicionar dropdown
-        dropdownMenu.style.position = 'fixed';
-        dropdownMenu.style.left = Math.min(buttonRect.left, viewportWidth - 420) + 'px';
+        // Posicionar dropdown com prioridade para sobrepor regras CSS
+        dropdownMenu.style.setProperty('position', 'fixed', 'important');
+        dropdownMenu.style.setProperty('left', Math.min(buttonRect.left, viewportWidth - 420) + 'px', 'important');
         
         // Verificar se cabe abaixo ou deve abrir acima
         if (buttonRect.bottom + 500 > viewportHeight) {
-            dropdownMenu.style.top = Math.max(10, buttonRect.top - 500) + 'px';
+            dropdownMenu.style.setProperty('top', Math.max(10, buttonRect.top - 500) + 'px', 'important');
         } else {
-            dropdownMenu.style.top = buttonRect.bottom + 'px';
+            dropdownMenu.style.setProperty('top', buttonRect.bottom + 'px', 'important');
         }
         
         dropdownMenu.style.zIndex = '1200';

@@ -149,15 +149,14 @@ class DragDropHandler {
     }
 
     onDragOver(e) {
-        // Só processar se for uma operação de drag válida
-        if (e.dataTransfer.types.includes('text/plain')) {
-            e.preventDefault(); // Só prevenir se for nosso drag
-            e.dataTransfer.dropEffect = 'move';
-            e.currentTarget.classList.add('drag-over');
-        }
+        console.log('🌀 onDragOver chamado em:', e.currentTarget?.className);
+        e.preventDefault(); // Sempre permitir drop
+        e.dataTransfer.dropEffect = 'copy'; // Usa 'copy' para compatibilidade
+        e.currentTarget?.classList.add('drag-over');
     }
 
     onDragLeave(e) {
+        console.log('🌀 onDragLeave chamado em:', e.currentTarget?.className);
         // Só remove se realmente saiu da zona (não de um elemento filho)
         if (!e.currentTarget.contains(e.relatedTarget)) {
             e.currentTarget.classList.remove('drag-over');
@@ -165,27 +164,18 @@ class DragDropHandler {
     }
 
     async onDrop(e) {
-        // Só processar se for uma operação de drag válida
-        if (!e.dataTransfer.types.includes('text/plain')) {
+        console.log('📦 onDrop chamado em:', e.currentTarget?.className);
+        e.preventDefault();
+        e.currentTarget?.classList.remove('drag-over');
+
+        console.log('📦 Drop detectado!', { target: e.currentTarget?.className, isPlaceholder: e.currentTarget?.classList.contains('lote-placeholder'), loteId: e.currentTarget?.dataset.loteId });
+        const dataTransfer = e.dataTransfer.getData('text/plain');
+        if (!dataTransfer || !dataTransfer.includes('codProduto')) {
+            console.warn('⚠️ Dados de drag inválidos ou ausentes:', dataTransfer);
             return;
         }
 
-        e.preventDefault();
-        e.currentTarget.classList.remove('drag-over');
-
-        console.log('📦 Drop detectado!', {
-            target: e.currentTarget.className,
-            isPlaceholder: e.currentTarget.classList.contains('lote-placeholder'),
-            loteId: e.currentTarget.dataset.loteId
-        });
-
         try {
-            const dataTransfer = e.dataTransfer.getData('text/plain');
-            if (!dataTransfer) {
-                console.error('❌ Dados do drag não encontrados');
-                return;
-            }
-
             const data = JSON.parse(dataTransfer);
             console.log('📋 Dados do produto:', data);
 
@@ -217,10 +207,13 @@ class DragDropHandler {
                     qtdPedido: data.qtdPedido
                 });
 
-                // Reconfigurar drag & drop após criar novo lote
-                setTimeout(() => {
-                    this.reconfigurarTudo(numPedido);
-                }, 100);
+                // Reconfigurar imediatamente só o novo drop zone
+                const newLoteCard = document.querySelector(`[data-lote-id="${novoLoteId}"]`);
+                if (newLoteCard) {
+                    this.reconfigurarDropZone(newLoteCard);
+                } else {
+                    console.error(`❌ Novo lote card não encontrado para ${novoLoteId}`);
+                }
 
             } else if (loteId) {
                 console.log(`📦 Drop no lote existente: ${loteId}`);

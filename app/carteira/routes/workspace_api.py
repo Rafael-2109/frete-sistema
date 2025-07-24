@@ -2,34 +2,34 @@
 APIs reais para o workspace de montagem de carga
 """
 
+import logging
+from datetime import datetime, timedelta
+
 from flask import jsonify, request
 from flask_login import login_required
-from sqlalchemy import func, and_
-from datetime import datetime, timedelta
+from sqlalchemy import and_, func
+
 from app import db
 from app.carteira.models import CarteiraPrincipal
-from app.producao.models import CadastroPalletizacao
-from app.estoque.models import SaldoEstoque
-from app.separacao.models import Separacao
-from app.pedidos.models import Pedido
-from app.utils.timezone import agora_brasil
 from app.carteira.utils.separacao_utils import (
-    determinar_tipo_envio,
-    calcular_peso_pallet_produto,
     buscar_rota_por_uf,
-    buscar_sub_rota_por_uf_cidade
+    buscar_sub_rota_por_uf_cidade,
+    calcular_peso_pallet_produto,
+    determinar_tipo_envio,
 )
-from app.carteira.utils.workspace_utils import (
-    processar_dados_workspace_produto
-)
-import logging
+from app.carteira.utils.workspace_utils import processar_dados_workspace_produto
+from app.estoque.models import SaldoEstoque
+from app.pedidos.models import Pedido
+from app.producao.models import CadastroPalletizacao
+from app.separacao.models import Separacao
+from app.utils.timezone import agora_brasil
 
 from . import carteira_bp
 
 logger = logging.getLogger(__name__)
 
 
-@carteira_bp.route('/api/pedido/<num_pedido>/workspace')
+@carteira_bp.route("/api/pedido/<num_pedido>/workspace")
 @login_required
 def workspace_pedido_real(num_pedido):
     """
@@ -38,33 +38,32 @@ def workspace_pedido_real(num_pedido):
     """
     try:
         # Buscar produtos do pedido na carteira
-        produtos_carteira = db.session.query(
-            CarteiraPrincipal.cod_produto,
-            CarteiraPrincipal.nome_produto,
-            CarteiraPrincipal.qtd_saldo_produto_pedido.label('qtd_pedido'),
-            CarteiraPrincipal.preco_produto_pedido.label('preco_unitario'),
-            CarteiraPrincipal.expedicao,
-            # Dados de palletização
-            CadastroPalletizacao.peso_bruto.label('peso_unitario'),
-            CadastroPalletizacao.palletizacao,
-            # Dados básicos (estoque será calculado via SaldoEstoque)
-            CarteiraPrincipal.estoque.label('estoque_hoje')
-        ).outerjoin(
-            CadastroPalletizacao,
-            and_(
-                CarteiraPrincipal.cod_produto == CadastroPalletizacao.cod_produto,
-                CadastroPalletizacao.ativo == True
+        produtos_carteira = (
+            db.session.query(
+                CarteiraPrincipal.cod_produto,
+                CarteiraPrincipal.nome_produto,
+                CarteiraPrincipal.qtd_saldo_produto_pedido.label("qtd_pedido"),
+                CarteiraPrincipal.preco_produto_pedido.label("preco_unitario"),
+                CarteiraPrincipal.expedicao,
+                # Dados de palletização
+                CadastroPalletizacao.peso_bruto.label("peso_unitario"),
+                CadastroPalletizacao.palletizacao,
+                # Dados básicos (estoque será calculado via SaldoEstoque)
+                CarteiraPrincipal.estoque.label("estoque_hoje"),
             )
-        ).filter(
-            CarteiraPrincipal.num_pedido == num_pedido,
-            CarteiraPrincipal.ativo == True
-        ).all()
+            .outerjoin(
+                CadastroPalletizacao,
+                and_(
+                    CarteiraPrincipal.cod_produto == CadastroPalletizacao.cod_produto,
+                    CadastroPalletizacao.ativo == True,
+                ),
+            )
+            .filter(CarteiraPrincipal.num_pedido == num_pedido, CarteiraPrincipal.ativo == True)
+            .all()
+        )
 
         if not produtos_carteira:
-            return jsonify({
-                'success': False,
-                'error': f'Pedido {num_pedido} não encontrado ou sem itens ativos'
-            }), 404
+            return jsonify({"success": False, "error": f"Pedido {num_pedido} não encontrado ou sem itens ativos"}), 404
 
         # Processar produtos e calcular dados complementares
         produtos_processados = []
@@ -72,29 +71,25 @@ def workspace_pedido_real(num_pedido):
 
         for produto in produtos_carteira:
             # Obter resumo completo do produto usando SaldoEstoque
-            resumo_estoque = SaldoEstoque.obter_resumo_produto(
-                produto.cod_produto, 
-                produto.nome_produto
-            )
+            resumo_estoque = SaldoEstoque.obter_resumo_produto(produto.cod_produto, produto.nome_produto)
 
             # Processar dados do produto usando função utilitária
             produto_data = processar_dados_workspace_produto(produto, resumo_estoque)
-            
+
             if produto_data:
                 produtos_processados.append(produto_data)
-                valor_total += produto_data['qtd_pedido'] * produto_data['preco_unitario']
+                valor_total += produto_data["qtd_pedido"] * produto_data["preco_unitario"]
 
-        return jsonify({
-            'success': True,
-            'num_pedido': num_pedido,
-            'valor_total': valor_total,
-            'produtos': produtos_processados,
-            'total_produtos': len(produtos_processados)
-        })
+        return jsonify(
+            {
+                "success": True,
+                "num_pedido": num_pedido,
+                "valor_total": valor_total,
+                "produtos": produtos_processados,
+                "total_produtos": len(produtos_processados),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Erro ao buscar workspace do pedido {num_pedido}: {e}")
-        return jsonify({
-            'success': False,
-            'error': f'Erro interno: {str(e)}'
-        }), 500
+        return jsonify({"success": False, "error": f"Erro interno: {str(e)}"}), 500
