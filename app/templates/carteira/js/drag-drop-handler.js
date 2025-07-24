@@ -30,24 +30,33 @@ class DragDropHandler {
     }
 
     configurarDragProducts(workspaceElement) {
-        const produtos = workspaceElement.querySelectorAll('.produto-origem');
+        // Procurar elementos draggable (agora são divs, não tr)
+        const produtos = workspaceElement.querySelectorAll('.produto-origem[draggable="true"]');
         console.log(`🎯 Configurando ${produtos.length} produtos para drag`);
         
-        produtos.forEach((row, index) => {
+        produtos.forEach((div, index) => {
+            // Garantir que seja draggable
+            div.setAttribute('draggable', 'true');
+            
             // Remover event listeners existentes para evitar duplicação
-            row.removeEventListener('dragstart', this.onDragStart);
-            row.removeEventListener('dragend', this.onDragEnd);
+            const newDiv = div.cloneNode(true);
+            div.parentNode.replaceChild(newDiv, div);
             
             // Adicionar novos event listeners
-            row.addEventListener('dragstart', (e) => this.onDragStart(e));
-            row.addEventListener('dragend', (e) => this.onDragEnd(e));
+            newDiv.addEventListener('dragstart', (e) => this.onDragStart(e));
+            newDiv.addEventListener('dragend', (e) => this.onDragEnd(e));
+            
+            // Adicionar estilo visual para indicar que é arrastável
+            newDiv.style.cursor = 'move';
             
             // Verificar se tem dados necessários
-            const codProduto = row.dataset.produto;
-            const qtdPedido = row.dataset.qtdPedido;
+            const codProduto = newDiv.dataset.produto;
+            const qtdPedido = newDiv.dataset.qtdPedido;
             
             if (!codProduto || !qtdPedido) {
                 console.warn(`⚠️ Produto ${index} sem dados necessários:`, { codProduto, qtdPedido });
+            } else {
+                console.log(`✅ Produto ${index} configurado:`, { codProduto, qtdPedido });
             }
         });
     }
@@ -77,9 +86,9 @@ class DragDropHandler {
     onDragStart(e) {
         console.log('🎯 onDragStart chamado!', e.currentTarget);
         
-        const row = e.currentTarget;
-        const codProduto = row.dataset.produto;
-        const qtdPedido = row.dataset.qtdPedido;
+        const div = e.currentTarget;
+        const codProduto = div.dataset.produto;
+        const qtdPedido = div.dataset.qtdPedido;
         
         console.log('📋 Dados do produto para drag:', { codProduto, qtdPedido });
         
@@ -90,8 +99,8 @@ class DragDropHandler {
             return;
         }
         
-        // Buscar quantidade editável atual
-        const inputQtd = row.querySelector('.qtd-editavel');
+        // Buscar quantidade editável atual dentro do div
+        const inputQtd = div.querySelector('.qtd-editavel');
         const qtdAtual = inputQtd ? parseInt(inputQtd.value) : parseInt(qtdPedido);
         
         console.log('📊 Quantidade para drag:', { inputValue: inputQtd?.value, qtdAtual, qtdPedido });
@@ -111,19 +120,26 @@ class DragDropHandler {
         e.dataTransfer.setData('text/plain', JSON.stringify(dadosDrag));
         e.dataTransfer.effectAllowed = 'move';
         
-        row.classList.add('dragging');
+        // Adicionar classe visual de arraste
+        div.classList.add('dragging');
+        div.style.opacity = '0.5';
+        
         console.log(`✅ Drag iniciado com sucesso:`, dadosDrag);
     }
 
     onDragEnd(e) {
-        e.currentTarget.classList.remove('dragging');
+        const div = e.currentTarget;
+        div.classList.remove('dragging');
+        div.style.opacity = '1';
     }
 
     onDragOver(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = 'move'; // Mostra cursor de permitido
-        e.currentTarget.classList.add('drag-over');
+        // Só processar se for uma operação de drag válida
+        if (e.dataTransfer.types.includes('text/plain')) {
+            e.preventDefault(); // Só prevenir se for nosso drag
+            e.dataTransfer.dropEffect = 'move';
+            e.currentTarget.classList.add('drag-over');
+        }
     }
 
     onDragLeave(e) {
@@ -134,8 +150,12 @@ class DragDropHandler {
     }
 
     async onDrop(e) {
+        // Só processar se for uma operação de drag válida
+        if (!e.dataTransfer.types.includes('text/plain')) {
+            return;
+        }
+        
         e.preventDefault();
-        e.stopPropagation();
         e.currentTarget.classList.remove('drag-over');
         
         console.log('📦 Drop detectado!', {

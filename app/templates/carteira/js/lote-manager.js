@@ -287,11 +287,11 @@ class LoteManager {
                 // Adicionar novo produto com dados da API
                 loteData.produtos.push({
                     codProduto: dadosProduto.codProduto,
-                    quantidade: result.dados.quantidade,
-                    valor: result.dados.valor,
-                    peso: result.dados.peso,
-                    pallet: result.dados.pallet,
-                    preSeparacaoId: result.pre_separacao_id,
+                    quantidade: resultado.dados.quantidade,
+                    valor: resultado.dados.valor,
+                    peso: resultado.dados.peso,
+                    pallet: resultado.dados.pallet,
+                    preSeparacaoId: resultado.pre_separacao_id,
                     loteId: loteId,
                     status: 'pre_separacao'
                 });
@@ -306,7 +306,12 @@ class LoteManager {
             // Re-renderizar o lote
             this.atualizarCardLote(loteId);
             
-            console.log(`✅ Produto ${dadosProduto.codProduto} persistido no lote ${loteId} (ID: ${result.pre_separacao_id})`);
+            console.log(`✅ Produto ${dadosProduto.codProduto} persistido no lote ${loteId} (ID: ${resultado.pre_separacao_id})`);
+            
+            // IMPORTANTE: Atualizar saldo na tabela de origem
+            if (window.workspaceQuantidades) {
+                window.workspaceQuantidades.atualizarSaldoAposAdicao(dadosProduto.codProduto, resultado.dados.quantidade);
+            }
 
         } catch (error) {
             console.error('❌ Erro ao adicionar produto ao lote:', error);
@@ -383,10 +388,21 @@ class LoteManager {
 
             // 🎯 REMOVER do backend via API
             const response = await fetch(`/carteira/api/pre-separacao/${produto.preSeparacaoId}/remover`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': window.csrfToken || document.querySelector('meta[name="csrf-token"]').content
+                }
             });
 
-            const result = await response.json();
+            // Verificar se a resposta é JSON válida
+            let result;
+            try {
+                const text = await response.text();
+                result = text ? JSON.parse(text) : { success: response.ok };
+            } catch (e) {
+                console.error('❌ Erro ao processar resposta:', e);
+                result = { success: false, error: 'Resposta inválida do servidor' };
+            }
 
             if (!result.success) {
                 throw new Error(result.error || 'Erro ao remover pré-separação');
@@ -398,6 +414,11 @@ class LoteManager {
             this.atualizarCardLote(loteId);
             
             console.log(`🗑️ Produto ${codProduto} removido do lote ${loteId} (ID: ${produto.preSeparacaoId})`);
+            
+            // IMPORTANTE: Atualizar saldo na tabela de origem após remover
+            if (window.workspaceQuantidades) {
+                window.workspaceQuantidades.atualizarSaldoAposRemocao(codProduto, produto.quantidade);
+            }
 
         } catch (error) {
             console.error('❌ Erro ao remover produto do lote:', error);

@@ -231,6 +231,36 @@ class WorkspaceMontagem {
     criarLote(numPedido, loteId) {
         this.loteManager.criarLote(numPedido, loteId);
     }
+    
+    removerProdutoDoLote(loteId, codProduto) {
+        this.loteManager.removerProdutoDoLote(loteId, codProduto);
+    }
+    
+    obterNumeroPedido() {
+        // Buscar o número do pedido do workspace ativo
+        const workspaceElement = document.querySelector('.workspace-montagem[data-pedido]');
+        return workspaceElement ? workspaceElement.dataset.pedido : null;
+    }
+    
+    resetarQuantidadeProduto(codProduto) {
+        const input = document.querySelector(`input[data-produto="${codProduto}"]`);
+        if (input) {
+            const qtdOriginal = parseInt(input.dataset.qtdOriginal) || 0;
+            input.value = qtdOriginal;
+            input.dataset.qtdSaldo = qtdOriginal;
+            
+            // Atualizar span
+            const spanSaldo = input.nextElementSibling;
+            if (spanSaldo) {
+                spanSaldo.textContent = `/${qtdOriginal}`;
+            }
+            
+            // Atualizar valores calculados
+            if (window.workspaceQuantidades) {
+                window.workspaceQuantidades.atualizarQuantidadeProduto(input);
+            }
+        }
+    }
 
     // Delegação para LoteManager (método removido - usar this.loteManager.renderizarCardLote)
 

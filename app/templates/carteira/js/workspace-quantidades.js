@@ -47,6 +47,73 @@ class WorkspaceQuantidades {
     }
 
     /**
+     * 🎯 ATUALIZAR SALDO APÓS ADICIONAR AO LOTE
+     */
+    atualizarSaldoAposAdicao(codProduto, quantidadeAdicionada) {
+        const input = document.querySelector(`input[data-produto="${codProduto}"]`);
+        if (input) {
+            const saldoAtual = parseInt(input.dataset.qtdSaldo) || 0;
+            const novoSaldo = Math.max(0, saldoAtual - quantidadeAdicionada);
+            
+            // Atualizar dataset
+            input.dataset.qtdSaldo = novoSaldo;
+            input.max = novoSaldo;
+            
+            // Se o valor atual é maior que o novo saldo, ajustar
+            if (parseInt(input.value) > novoSaldo) {
+                input.value = novoSaldo;
+            }
+            
+            // Atualizar o span de saldo
+            const spanSaldo = input.nextElementSibling;
+            if (spanSaldo && spanSaldo.classList.contains('input-group-text')) {
+                spanSaldo.textContent = `/${novoSaldo}`;
+                
+                // Adicionar feedback visual
+                spanSaldo.classList.add('text-warning');
+                setTimeout(() => {
+                    spanSaldo.classList.remove('text-warning');
+                }, 1000);
+            }
+            
+            // Atualizar valores calculados
+            this.atualizarQuantidadeProduto(input);
+            
+            console.log(`✅ Saldo atualizado: ${codProduto} = ${novoSaldo} (removido ${quantidadeAdicionada})`);
+        }
+    }
+    
+    /**
+     * 🎯 ATUALIZAR SALDO APÓS REMOVER DO LOTE
+     */
+    atualizarSaldoAposRemocao(codProduto, quantidadeRemovida) {
+        const input = document.querySelector(`input[data-produto="${codProduto}"]`);
+        if (input) {
+            const saldoAtual = parseInt(input.dataset.qtdSaldo) || 0;
+            const qtdOriginal = parseInt(input.dataset.qtdOriginal) || 0;
+            const novoSaldo = Math.min(qtdOriginal, saldoAtual + quantidadeRemovida);
+            
+            // Atualizar dataset
+            input.dataset.qtdSaldo = novoSaldo;
+            input.max = novoSaldo;
+            
+            // Atualizar o span de saldo
+            const spanSaldo = input.nextElementSibling;
+            if (spanSaldo && spanSaldo.classList.contains('input-group-text')) {
+                spanSaldo.textContent = `/${novoSaldo}`;
+                
+                // Adicionar feedback visual
+                spanSaldo.classList.add('text-success');
+                setTimeout(() => {
+                    spanSaldo.classList.remove('text-success');
+                }, 1000);
+            }
+            
+            console.log(`✅ Saldo restaurado: ${codProduto} = ${novoSaldo} (devolvido ${quantidadeRemovida})`);
+        }
+    }
+    
+    /**
      * 🎯 ATUALIZAR QUANTIDADE DE PRODUTO NA TABELA
      */
     atualizarQuantidadeProduto(input) {

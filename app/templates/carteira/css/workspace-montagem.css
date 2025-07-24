@@ -4,6 +4,31 @@
     border-radius: 0.5rem;
     box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
     margin: 1rem 0;
+    /* Garantir que não seja coberto por outros elementos */
+    position: relative;
+    z-index: 1;
+}
+
+/* Garantir que elementos draggable funcionem */
+.produto-origem[draggable="true"] {
+    -webkit-user-drag: element;
+    user-select: none;
+    transition: all 0.2s ease;
+}
+
+.produto-origem.dragging {
+    opacity: 0.5 !important;
+    cursor: grabbing !important;
+}
+
+/* Garantir visibilidade dos lotes */
+.workspace-lotes {
+    min-height: 300px;
+    background-color: #f8f9fa;
+}
+
+.lotes-container {
+    min-height: 250px;
 }
 
 .workspace-header {
