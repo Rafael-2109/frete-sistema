@@ -1,3 +1,12 @@
+# CLAUDE.md - Referência de Modelos e Campos
+
+## ⚠️ ATENÇÃO: Use SEMPRE os nomes EXATOS dos campos listados aqui
+
+## SE NÃO TIVER CERTEZA, NÃO ALTERE E PERGUNTE
+
+Este arquivo contém os nomes corretos dos campos de todos os modelos para evitar erros como `data_expedicao_pedido` (❌ INCORRETO) em vez de `expedicao` (✅ CORRETO).
+
+
 # 📋 MAPEAMENTO DE CAMPOS DOS MODELOS - REFERÊNCIA PARA CLAUDE AI
 
 **Objetivo**: Evitar erros de nomes de campos ao desenvolver funcionalidades  
@@ -425,3 +434,20 @@ query = db.session.query(Separacao).join(
 ---
 
 **📝 Nota**: Este arquivo deve ser consultado SEMPRE antes de trabalhar com campos dos modelos. Manter atualizado conforme evolução do sistema.
+
+
+### ❌ ARQUIVOS OBSOLETOS DA CARTEIRA DE PEDIDOS:
+
+- app/carteira/main_routes.py - Carteira de pedidos antiga
+- app/templates/carteira/listar_agrupados.py - template da Carteira de pedidos antigo
+
+### ✅ ARQUIVOS CORRETOS DA CARTEIRA DE PEDIDOS:
+
+- app/carteira/routes/
+- app/carteira/services/
+- app/carteira/utils/
+
+- app/templates/carteira/css/
+- app/templates/carteira/js/
+- app/templates/carteira/agrupados_balanceado.html
+- app/templates/carteira/dashboard.html

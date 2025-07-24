@@ -119,7 +119,7 @@ class WorkspaceMontagem {
 
             // Configurar drop zone
             const newCard = loteCard.querySelector('.lote-card');
-            this.dragDropHandler.reconfigurarDropZone(newCard);
+            this.dragDropHandler.reconfigurarTudo(this.numPedido);
         }
 
         console.log(`✅ Renderizados ${lotes.length} lotes de pré-separação`);

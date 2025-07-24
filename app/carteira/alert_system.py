@@ -7,7 +7,7 @@ Gerencia alertas relacionados a separações cotadas e outras situações críti
 
 from datetime import datetime
 from app.utils.logging_config import logger
-
+from app import db
 
 class AlertaSistemaCarteira:
     """

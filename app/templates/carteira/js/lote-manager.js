@@ -52,7 +52,7 @@ class LoteManager {
 
         // Configurar drop zone no novo lote
         const newCard = loteCard.querySelector('.lote-card');
-        this.workspace.dragDropHandler.reconfigurarDropZone(newCard);
+        this.workspace.dragDropHandler.reconfigurarTudo(numPedido);
 
         console.log(`✅ Lote criado: ${loteId}`);
     }
@@ -362,7 +362,7 @@ class LoteManager {
             
             // Reconfigurar eventos no novo elemento
             const newCard = document.querySelector(`[data-lote-id="${loteId}"]`);
-            this.workspace.dragDropHandler.reconfigurarDropZone(newCard);
+            this.workspace.dragDropHandler.reconfigurarTudo(this.workspace.obterNumeroPedido());
         }
     }
 

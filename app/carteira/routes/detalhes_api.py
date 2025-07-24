@@ -52,7 +52,7 @@ def detalhes_pedido(num_pedido):
                 'peso_unitario': float(item.peso or 0),
                 'peso_total': peso_item,
                 'estoque_hoje': float(item.estoque or 0),
-                'data_disponibilidade': item.data_disponibilidade.isoformat() if item.data_disponibilidade else None,
+                'data_disponibilidade': None,  # Campo não existe no modelo - seria calculado dinamicamente
                 'separacao_lote_id': item.separacao_lote_id,
                 'expedicao': item.expedicao.isoformat() if item.expedicao else None,
                 'agendamento': item.agendamento.isoformat() if item.agendamento else None,
