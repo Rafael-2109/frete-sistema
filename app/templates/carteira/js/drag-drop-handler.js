@@ -30,29 +30,33 @@ class DragDropHandler {
     }
 
     configurarDragProducts(workspaceElement) {
-        // Procurar elementos draggable (são TR na tabela)
-        const produtos = workspaceElement.querySelectorAll('.produto-origem[draggable="true"]');
-        console.log(`🎯 Configurando ${produtos.length} produtos para drag`);
-        
+        // Procurar TRs dos produtos
+        const produtos = workspaceElement.querySelectorAll('.produto-origem');
+        console.log(`🎯 Configurando ${produtos.length} produtos para drag (via drag-handle)`);
+
         produtos.forEach((tr, index) => {
-            // Garantir que seja draggable
-            tr.setAttribute('draggable', 'true');
-            
-            // Remover event listeners existentes para evitar duplicação
-            const newTr = tr.cloneNode(true);
-            tr.parentNode.replaceChild(newTr, tr);
-            
-            // Adicionar novos event listeners
-            newTr.addEventListener('dragstart', (e) => this.onDragStart(e));
-            newTr.addEventListener('dragend', (e) => this.onDragEnd(e));
-            
-            // Adicionar estilo visual para indicar que é arrastável
-            newTr.style.cursor = 'move';
-            
-            // Verificar se tem dados necessários
-            const codProduto = newTr.dataset.produto;
-            const qtdPedido = newTr.dataset.qtdPedido;
-            
+            // Procurar célula/ícone de handle
+            const handle = tr.querySelector('.drag-handle');
+            if (!handle) {
+                console.warn(`⚠️ Produto ${index} sem .drag-handle encontrado para drag`);
+                return;
+            }
+
+            // Tornar somente o handle arrastável
+            handle.setAttribute('draggable', 'true');
+            handle.style.cursor = 'move';
+
+            // Remover listeners existentes substituindo o handle por um clone
+            const newHandle = handle.cloneNode(true);
+            handle.parentNode.replaceChild(newHandle, handle);
+
+            // Anexar novos listeners ao handle
+            newHandle.addEventListener('dragstart', (e) => this.onDragStart(e));
+            newHandle.addEventListener('dragend', (e) => this.onDragEnd(e));
+
+            // Dados de debug
+            const codProduto = tr.dataset.produto;
+            const qtdPedido = tr.dataset.qtdPedido;
             if (!codProduto || !qtdPedido) {
                 console.warn(`⚠️ Produto ${index} sem dados necessários:`, { codProduto, qtdPedido });
             } else {
@@ -64,18 +68,18 @@ class DragDropHandler {
     configurarDropZones(workspaceElement) {
         const dropZones = workspaceElement.querySelectorAll('.lote-card, .lote-placeholder');
         console.log(`🎯 Configurando ${dropZones.length} drop zones`);
-        
+
         dropZones.forEach((card, index) => {
             // Remover event listeners existentes para evitar duplicação
             card.removeEventListener('dragover', this.onDragOver);
             card.removeEventListener('dragleave', this.onDragLeave);
             card.removeEventListener('drop', this.onDrop);
-            
+
             // Adicionar novos event listeners
             card.addEventListener('dragover', (e) => this.onDragOver(e));
             card.addEventListener('dragleave', (e) => this.onDragLeave(e));
             card.addEventListener('drop', (e) => this.onDrop(e));
-            
+
             // Log para debug
             const isPlaceholder = card.classList.contains('lote-placeholder');
             const loteId = card.dataset.loteId;
@@ -85,50 +89,56 @@ class DragDropHandler {
 
     onDragStart(e) {
         console.log('🎯 onDragStart chamado!', e.currentTarget);
-        
-        const tr = e.currentTarget;
+
+        // Agora currentTarget é o .drag-handle → precisamos achar o <tr>
+        const tr = e.currentTarget.closest('.produto-origem');
+        if (!tr) {
+            console.error('❌ Não foi possível encontrar linha do produto a partir do handle');
+            return;
+        }
+
         const codProduto = tr.dataset.produto;
         const qtdPedido = tr.dataset.qtdPedido;
-        
+
         console.log('📋 Dados do produto para drag:', { codProduto, qtdPedido });
-        
+
         if (!codProduto || !qtdPedido) {
             console.error('❌ Dados do produto incompletos', { codProduto, qtdPedido });
             e.preventDefault();
             alert('❌ Erro: Dados do produto incompletos');
             return;
         }
-        
+
         // Buscar quantidade editável atual dentro do TR
         const inputQtd = tr.querySelector('.qtd-editavel');
         const qtdAtual = inputQtd ? parseInt(inputQtd.value) : parseInt(qtdPedido);
-        
+
         console.log('📊 Quantidade para drag:', { inputValue: inputQtd?.value, qtdAtual, qtdPedido });
-        
+
         if (isNaN(qtdAtual) || qtdAtual <= 0) {
             console.warn('⚠️ Quantidade inválida ou zero');
             e.preventDefault();
             alert('⚠️ Não é possível arrastar produto com quantidade zero ou inválida');
             return;
         }
-        
+
         const dadosDrag = {
             codProduto,
             qtdPedido: qtdAtual
         };
-        
+
         e.dataTransfer.setData('text/plain', JSON.stringify(dadosDrag));
         e.dataTransfer.effectAllowed = 'move';
-        
+
         // Adicionar classe visual de arraste
         tr.classList.add('dragging');
         tr.style.opacity = '0.5';
-        
+
         console.log(`✅ Drag iniciado com sucesso:`, dadosDrag);
     }
 
     onDragEnd(e) {
-        const tr = e.currentTarget;
+        const tr = e.currentTarget.closest('.produto-origem') || e.currentTarget;
         tr.classList.remove('dragging');
         tr.style.opacity = '1';
     }
@@ -154,59 +164,59 @@ class DragDropHandler {
         if (!e.dataTransfer.types.includes('text/plain')) {
             return;
         }
-        
+
         e.preventDefault();
         e.currentTarget.classList.remove('drag-over');
-        
+
         console.log('📦 Drop detectado!', {
             target: e.currentTarget.className,
             isPlaceholder: e.currentTarget.classList.contains('lote-placeholder'),
             loteId: e.currentTarget.dataset.loteId
         });
-        
+
         try {
             const dataTransfer = e.dataTransfer.getData('text/plain');
             if (!dataTransfer) {
                 console.error('❌ Dados do drag não encontrados');
                 return;
             }
-            
+
             const data = JSON.parse(dataTransfer);
             console.log('📋 Dados do produto:', data);
-            
+
             const loteId = e.currentTarget.dataset.loteId;
-            
+
             // Se dropou no placeholder, criar novo lote automaticamente
             if (e.currentTarget.classList.contains('lote-placeholder')) {
                 console.log('🎯 Drop no placeholder - criando novo lote');
-                
+
                 const workspaceElement = e.currentTarget.closest('.workspace-montagem');
                 const numPedido = workspaceElement ? workspaceElement.dataset.pedido : null;
-                
+
                 if (!numPedido) {
                     console.error('❌ Número do pedido não encontrado');
                     alert('❌ Erro: Não foi possível identificar o pedido');
                     return;
                 }
-                
+
                 // Gerar novo lote e adicionar produto
                 const novoLoteId = this.workspace.gerarNovoLoteId();
                 console.log(`✨ Criando lote ${novoLoteId} para pedido ${numPedido}`);
-                
+
                 // Criar lote primeiro
                 await this.workspace.criarLote(numPedido, novoLoteId);
-                
+
                 // Depois adicionar produto
                 await this.workspace.adicionarProdutoNoLote(novoLoteId, {
                     codProduto: data.codProduto,
                     qtdPedido: data.qtdPedido
                 });
-                
+
                 // Reconfigurar drag & drop após criar novo lote
                 setTimeout(() => {
                     this.reconfigurarTudo(numPedido);
                 }, 100);
-                
+
             } else if (loteId) {
                 console.log(`📦 Drop no lote existente: ${loteId}`);
                 await this.workspace.adicionarProdutoNoLote(loteId, {
@@ -217,7 +227,7 @@ class DragDropHandler {
                 console.warn('⚠️ Drop zone sem lote_id definido');
                 alert('⚠️ Erro: Drop zone não configurada corretamente');
             }
-            
+
         } catch (error) {
             console.error('❌ Erro no drop:', error);
             alert(`❌ Erro ao adicionar produto: ${error.message}`);
@@ -230,14 +240,14 @@ class DragDropHandler {
             console.warn('⚠️ Tentativa de reconfigurar drop zone em elemento nulo');
             return;
         }
-        
+
         console.log('🔧 Reconfigurando drop zone para:', loteCard.dataset.loteId || 'elemento sem ID');
-        
+
         // Remover event listeners existentes
         loteCard.removeEventListener('dragover', this.onDragOver);
         loteCard.removeEventListener('dragleave', this.onDragLeave);
         loteCard.removeEventListener('drop', this.onDrop);
-        
+
         // Adicionar novos event listeners
         loteCard.addEventListener('dragover', (e) => this.onDragOver(e));
         loteCard.addEventListener('dragleave', (e) => this.onDragLeave(e));
@@ -255,17 +265,17 @@ class DragDropHandler {
 window.DragDropHandler = DragDropHandler;
 
 // Função global para debug do drag & drop
-window.debugDragDrop = function(numPedido) {
+window.debugDragDrop = function (numPedido) {
     const workspace = window.workspace;
     if (!workspace || !workspace.dragDropHandler) {
         console.error('❌ Workspace ou DragDropHandler não encontrado');
         return;
     }
-    
+
     console.log('🔍 DEBUG DRAG & DROP');
     console.log('- Workspace:', !!workspace);
     console.log('- DragDropHandler:', !!workspace.dragDropHandler);
-    
+
     if (numPedido) {
         console.log(`- Reconfigurando para pedido: ${numPedido}`);
         workspace.dragDropHandler.reconfigurarTudo(numPedido);
