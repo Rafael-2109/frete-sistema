@@ -170,10 +170,9 @@ class ProcessadorFaturamento:
                 db.session.commit()
             else:
                 # Verificar se bate CNPJ e pedido
-                embarque = embarque_item_existente.embarque
-                
-                if (embarque.cnpj_cliente == nf.cnpj_cliente and 
-                    embarque_item_existente.num_pedido == nf.origem):
+                # CNPJ está no EmbarqueItem, não no Embarque
+                if (embarque_item_existente.cnpj_cliente == nf.cnpj_cliente and 
+                    embarque_item_existente.pedido == nf.origem):
                     # Vinculação já está correta - apenas criar movimentação
                     lote_id = embarque_item_existente.separacao_lote_id or 'EMBARQUE_DIRETO'
                     self._processar_caso1_direto(nf, lote_id, usuario)
@@ -354,7 +353,7 @@ class ProcessadorFaturamento:
                 logger.error(f"❌ Erro ao criar movimentação para produto {produto.cod_produto}: {str(e)}")
                 import traceback
                 logger.error(f"Traceback: {traceback.format_exc()}")
-                raise
+                # Não propagar o erro - continuar com próximo produto
         
         # Atualizar EmbarqueItem com a NF (não deve falhar a movimentação se der erro aqui)
         try:
@@ -382,12 +381,14 @@ class ProcessadorFaturamento:
                 novo_produto.palletizacao = 1  # Valor padrão para evitar divisão por zero
                 
                 db.session.add(novo_produto)
+                db.session.flush()  # Forçar gravação imediata
                 logger.info(f"✅ Produto {cod_produto} criado em Palletização")
                 
         except ImportError:
             logger.warning(f"⚠️ Módulo Palletização não disponível para criar produto {cod_produto}")
         except Exception as e:
             logger.error(f"❌ Erro ao criar produto {cod_produto} em Palletização: {e}")
+            # Não propagar o erro - apenas registrar
     
     def _processar_caso2_divergencia(self, nf: RelatorioFaturamentoImportado,
                                     lote_id: str, divergencia: bool, usuario: str):
@@ -494,7 +495,7 @@ class ProcessadorFaturamento:
         inconsistencia.qtd_faturada = qtd_total
         inconsistencia.observacao_resolucao = f"""
         NF {nf.numero_nf} está vinculada ao embarque {embarque_item.embarque_id} mas:
-        - CNPJ NF: {nf.cnpj_cliente} vs CNPJ Embarque: {embarque_item.embarque.cnpj_cliente if embarque_item.embarque else 'EMBARQUE_DELETADO'}
+        - CNPJ NF: {nf.cnpj_cliente} vs CNPJ Item: {embarque_item.cnpj_cliente}
         - Pedido NF: {nf.origem} vs Pedido Item: {embarque_item.pedido}
         Lote separação: {embarque_item.separacao_lote_id}
         """
