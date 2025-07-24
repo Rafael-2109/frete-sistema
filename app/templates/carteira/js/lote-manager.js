@@ -63,7 +63,7 @@ class LoteManager {
 
         return `
             <div class="card lote-card h-100" data-lote-id="${loteId}">
-                <div class="card-header bg-gradient-primary text-white">
+                <div class="card-header bg-gradient-primary text-black">
                     <h6 class="mb-0">
                         <i class="fas fa-box me-2"></i>
                         PRÉ-SEPARAÇÃO
@@ -112,11 +112,11 @@ class LoteManager {
                                 onclick="workspace.abrirDetalhesLote('${loteId}')">
                             <i class="fas fa-search me-1"></i>
                         </button>
+                        <button class="btn btn-outline-danger btn-sm" 
+                                onclick="workspace.removerLote('${loteId}')">
+                            <i class="fas fa-trash me-1"></i> Remover Lote
+                        </button>
                     </div>
-                    <button class="btn btn-outline-danger btn-sm w-100 mt-1" 
-                            onclick="workspace.removerLote('${loteId}')">
-                        <i class="fas fa-trash me-1"></i> Remover Lote
-                    </button>
                 </div>
             </div>
         `;
@@ -128,7 +128,7 @@ class LoteManager {
 
         return `
             <div class="card lote-card h-100" data-lote-id="${loteData.lote_id}">
-                <div class="card-header ${isPre ? 'bg-warning' : 'bg-success'} text-white">
+                <div class="card-header ${isPre ? 'bg-warning' : 'bg-success'} text-black">
                     <h6 class="mb-0">
                         <i class="fas fa-${isPre ? 'clock' : 'check'} me-2"></i>
                         ${isPre ? 'PRÉ-SEPARAÇÃO' : 'SEPARAÇÃO'}
@@ -192,12 +192,11 @@ class LoteManager {
                                     onclick="workspace.abrirDetalhesLote('${loteData.lote_id}')">
                                 <i class="fas fa-search me-1"></i>
                             </button>
-                        </div>
-                        <button class="btn btn-outline-danger btn-sm w-100 mt-1" 
-                                onclick="workspace.removerLote('${loteData.lote_id}')">
-                            <i class="fas fa-trash me-1"></i> Remover Pré-Separação
-                        </button>
-                    ` : `
+                            <button class="btn btn-outline-danger btn-sm w-100 mt-1" 
+                                    onclick="workspace.removerLote('${loteData.lote_id}')">
+                                <i class="fas fa-trash me-1"></i> Remover Pré-Separação
+                            </button>
+                    ` : `</div>
                         <div class="btn-group w-100">
                             <button class="btn btn-outline-primary btn-sm" 
                                     onclick="workspace.editarSeparacao('${loteData.lote_id}')">

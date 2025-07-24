@@ -67,6 +67,8 @@
 /* 🎯 ANIMAÇÕES DE HOVER */
 .pedido-row {
     transition: all 0.2s ease;
+    /* Novo: garante stacking-context para o dropdown ficar acima */
+    position: relative;
 }
 
 .pedido-row:hover {
@@ -97,18 +99,23 @@
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.175);
     border: none;
     border-radius: 0.5rem;
-    z-index: 1070 !important; /* Força o dropdown ficar acima de outros elementos */
-    position: fixed !important; /* Fix para evitar clipping */
+    z-index: 1070 !important;
+    /* Força o dropdown ficar acima de outros elementos */
+    position: absolute !important;
+    /* Mantém alinhamento relativo ao botão */
 }
 
 .separacoes-container .dropdown {
-    position: static; /* Remove relative que pode causar problemas */
+    position: static;
+    /* Remove relative que pode causar problemas */
 }
 
 .separacoes-container .dropdown-menu.show {
     z-index: 1070 !important;
-    position: fixed !important;
-    transform: none !important; /* Remove transforms que podem causar problemas */
+    position: absolute !important;
+    /* Alinhamento correto ao botão */
+    transform: none !important;
+    /* Remove transforms que podem causar problemas */
 }
 
 /* Fix para table-responsive que pode cortar dropdown */
@@ -118,7 +125,7 @@
 
 /* Fix específico para dropdowns dentro de tabelas */
 .table-responsive .dropdown-menu {
-    position: fixed !important;
+    position: absolute !important;
     z-index: 1070 !important;
     margin: 0 !important;
     transform: none !important;
@@ -146,8 +153,15 @@
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* 🎯 RESPONSIVIDADE */
@@ -156,11 +170,11 @@
         flex-direction: column;
         text-align: center;
     }
-    
+
     .lote-acoes {
         margin-top: 0.5rem;
     }
-    
+
     .totais-lote .row {
         font-size: 0.875rem;
     }
@@ -198,6 +212,7 @@
 .text-truncate-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -211,6 +226,11 @@
 }
 
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }

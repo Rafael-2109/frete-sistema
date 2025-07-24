@@ -32,31 +32,38 @@ class DragDropHandler {
     configurarDragProducts(workspaceElement) {
         // Procurar TRs dos produtos
         const produtos = workspaceElement.querySelectorAll('.produto-origem');
-        console.log(`🎯 Configurando ${produtos.length} produtos para drag (via drag-handle)`);
+        console.log(`🎯 Configurando ${produtos.length} produtos para drag (tr é draggable, mas só inicia via handle)`);
 
         produtos.forEach((tr, index) => {
-            // Procurar célula/ícone de handle
-            const handle = tr.querySelector('.drag-handle');
-            if (!handle) {
-                console.warn(`⚠️ Produto ${index} sem .drag-handle encontrado para drag`);
-                return;
+            // Garantir que a linha inteira seja draggable
+            tr.setAttribute('draggable', 'true');
+
+            // Remover listeners antigos substituindo o TR por clone
+            const newTr = tr.cloneNode(true);
+            tr.parentNode.replaceChild(newTr, tr);
+
+            // Listener dragstart na linha
+            newTr.addEventListener('dragstart', (e) => {
+                // Permitir drag APENAS se o ponto de clique foi o handle
+                if (!e.target.closest('.drag-handle')) {
+                    // Clique fora do handle ⇒ cancelar drag
+                    e.preventDefault();
+                    return;
+                }
+                this.onDragStart(e);
+            });
+
+            newTr.addEventListener('dragend', (e) => this.onDragEnd(e));
+
+            // Ajustar cursores
+            const handle = newTr.querySelector('.drag-handle');
+            if (handle) {
+                handle.style.cursor = 'move';
             }
 
-            // Tornar somente o handle arrastável
-            handle.setAttribute('draggable', 'true');
-            handle.style.cursor = 'move';
-
-            // Remover listeners existentes substituindo o handle por um clone
-            const newHandle = handle.cloneNode(true);
-            handle.parentNode.replaceChild(newHandle, handle);
-
-            // Anexar novos listeners ao handle
-            newHandle.addEventListener('dragstart', (e) => this.onDragStart(e));
-            newHandle.addEventListener('dragend', (e) => this.onDragEnd(e));
-
             // Dados de debug
-            const codProduto = tr.dataset.produto;
-            const qtdPedido = tr.dataset.qtdPedido;
+            const codProduto = newTr.dataset.produto;
+            const qtdPedido = newTr.dataset.qtdPedido;
             if (!codProduto || !qtdPedido) {
                 console.warn(`⚠️ Produto ${index} sem dados necessários:`, { codProduto, qtdPedido });
             } else {
@@ -88,12 +95,10 @@ class DragDropHandler {
     }
 
     onDragStart(e) {
-        console.log('🎯 onDragStart chamado!', e.currentTarget);
-
-        // Agora currentTarget é o .drag-handle → precisamos achar o <tr>
-        const tr = e.currentTarget.closest('.produto-origem');
+        const tr = e.currentTarget.tagName === 'TR' ? e.currentTarget : e.currentTarget.closest('.produto-origem');
+        console.log('🎯 onDragStart chamado!', tr);
         if (!tr) {
-            console.error('❌ Não foi possível encontrar linha do produto a partir do handle');
+            console.error('❌ Não foi possível encontrar linha do produto para arrastar');
             return;
         }
 
