@@ -3,6 +3,32 @@
 <div class="container mt-4">
     <h3 class="mb-4">{{ 'Editar Tabela de Frete' if tabela else 'Cadastrar Tabela de Frete' }}</h3>
 
+    <!-- Mensagens Flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Erros de Validação do Formulário -->
+    {% if form.errors %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <strong>Erro ao salvar tabela:</strong>
+            <ul class="mb-0">
+                {% for field, errors in form.errors.items() %}
+                    {% for error in errors %}
+                        <li>{{ form[field].label.text }}: {{ error }}</li>
+                    {% endfor %}
+                {% endfor %}
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endif %}
 
     <div class="card p-4 shadow-sm">
         <form method="POST">
@@ -10,7 +36,10 @@
             <div class="row mb-3">
                 <div class="col-md-6">
                     {{ form.transportadora.label(class="form-label") }}
-                    {{ form.transportadora(class="form-select") }}
+                    {{ form.transportadora(class="form-select" + (" is-invalid" if form.transportadora.errors else "")) }}
+                    {% if form.transportadora.errors %}
+                        <div class="invalid-feedback">{{ form.transportadora.errors[0] }}</div>
+                    {% endif %}
                 </div>
                 <div class="col-md-2">
                     {{ form.uf_origem.label(class="form-label") }}
@@ -22,7 +51,10 @@
                 </div>
                 <div class="col-md-2">
                     {{ form.nome_tabela.label(class="form-label") }}
-                    {{ form.nome_tabela(class="form-control") }}
+                    {{ form.nome_tabela(class="form-control" + (" is-invalid" if form.nome_tabela.errors else "")) }}
+                    {% if form.nome_tabela.errors %}
+                        <div class="invalid-feedback">{{ form.nome_tabela.errors[0] }}</div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -33,7 +65,10 @@
                 </div>
                 <div class="col-md-4">
                     {{ form.modalidade.label(class="form-label") }}
-                    {{ form.modalidade(class="form-control") }}
+                    {{ form.modalidade(class="form-select" + (" is-invalid" if form.modalidade.errors else "")) }}
+                    {% if form.modalidade.errors %}
+                        <div class="invalid-feedback">{{ form.modalidade.errors[0] }}</div>
+                    {% endif %}
                 </div>
                 <div class="col-md-4 d-flex align-items-end">
                     <div class="form-check">
@@ -128,4 +163,60 @@
         </table>
       </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Debug do formulário
+    const form = document.querySelector('form');
+    const submitBtn = document.querySelector('button[type="submit"]');
+    
+    form.addEventListener('submit', function(e) {
+        console.log('Formulário sendo enviado...');
+        
+        // Verificar campos obrigatórios
+        const requiredFields = ['transportadora', 'uf_origem', 'uf_destino', 'nome_tabela', 'tipo_carga', 'modalidade'];
+        let hasError = false;
+        
+        requiredFields.forEach(fieldName => {
+            const field = document.getElementById(fieldName);
+            if (field && !field.value) {
+                console.error(`Campo obrigatório vazio: ${fieldName}`);
+                field.classList.add('is-invalid');
+                hasError = true;
+            }
+        });
+        
+        if (hasError) {
+            console.error('Formulário tem campos obrigatórios vazios');
+        }
+        
+        // Mostrar indicador de carregamento
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvando...';
+        }
+    });
+    
+    // Limpar erro ao digitar
+    document.querySelectorAll('.form-control, .form-select').forEach(field => {
+        field.addEventListener('input', function() {
+            this.classList.remove('is-invalid');
+        });
+        field.addEventListener('change', function() {
+            this.classList.remove('is-invalid');
+        });
+    });
+    
+    // Log dos valores atuais
+    console.log('Valores atuais do formulário:');
+    console.log('Transportadora:', document.getElementById('transportadora')?.value);
+    console.log('UF Origem:', document.getElementById('uf_origem')?.value);
+    console.log('UF Destino:', document.getElementById('uf_destino')?.value);
+    console.log('Nome Tabela:', document.getElementById('nome_tabela')?.value);
+    console.log('Tipo Carga:', document.getElementById('tipo_carga')?.value);
+    console.log('Modalidade:', document.getElementById('modalidade')?.value);
+});
+</script>
 {% endblock %}

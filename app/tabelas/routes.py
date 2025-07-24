@@ -20,61 +20,77 @@ tabelas_bp = Blueprint('tabelas', __name__, url_prefix='/tabelas')
 @tabelas_bp.route('/tabelas_frete', methods=['GET', 'POST'])
 @login_required
 def cadastrar_tabela_frete():
+    # Primeiro definir as choices
+    transportadoras = [(t.id, t.razao_social) for t in Transportadora.query.all()]
+    
     form = TabelaFreteForm()
-    form.transportadora.choices = [(t.id, t.razao_social) for t in Transportadora.query.all()]
+    # Definir choices ANTES de qualquer validação
+    form.transportadora.choices = transportadoras
     form.uf_origem.choices = UF_LIST
     form.uf_destino.choices = UF_LIST
 
+    if request.method == 'POST':
+        print(f"DEBUG: POST recebido")
+        print(f"DEBUG: form.data ANTES da validação: {form.data}")
+        print(f"DEBUG: form.validate(): {form.validate()}")
+        print(f"DEBUG: form.errors APÓS validação: {form.errors}")
+        print(f"DEBUG: form.transportadora.choices: {form.transportadora.choices[:3]}...")  # Primeiras 3 para não poluir log
+
     if form.validate_on_submit():
-        nova = TabelaFrete(
-            transportadora_id=form.transportadora.data,
-            uf_origem=form.uf_origem.data,
-            uf_destino=form.uf_destino.data,
-            nome_tabela=form.nome_tabela.data.upper(),
-            tipo_carga=form.tipo_carga.data,
-            modalidade=form.modalidade.data.upper(),
-            valor_kg=float_or_none(form.valor_kg.data),
-            frete_minimo_peso=float_or_none(form.frete_minimo_peso.data),
-            percentual_valor=float_or_none(form.percentual_valor.data),
-            frete_minimo_valor=float_or_none(form.frete_minimo_valor.data),
-            percentual_gris=float_or_none(form.percentual_gris.data),
-            percentual_adv=float_or_none(form.percentual_adv.data),
-            percentual_rca=float_or_none(form.percentual_rca.data),
-            pedagio_por_100kg=float_or_none(form.pedagio_por_100kg.data),
-            valor_despacho=float_or_none(form.valor_despacho.data),
-            valor_cte=float_or_none(form.valor_cte.data),
-            valor_tas=float_or_none(form.valor_tas.data),
-            icms_incluso=form.icms_incluso.data,
-            criado_por=current_user.nome
-        )
-        db.session.add(nova)
+        try:
+            nova = TabelaFrete(
+                transportadora_id=form.transportadora.data,
+                uf_origem=form.uf_origem.data,
+                uf_destino=form.uf_destino.data,
+                nome_tabela=form.nome_tabela.data.upper(),
+                tipo_carga=form.tipo_carga.data,
+                modalidade=form.modalidade.data.upper() if form.modalidade.data else '',
+                valor_kg=float_or_none(form.valor_kg.data),
+                frete_minimo_peso=float_or_none(form.frete_minimo_peso.data),
+                percentual_valor=float_or_none(form.percentual_valor.data),
+                frete_minimo_valor=float_or_none(form.frete_minimo_valor.data),
+                percentual_gris=float_or_none(form.percentual_gris.data),
+                percentual_adv=float_or_none(form.percentual_adv.data),
+                percentual_rca=float_or_none(form.percentual_rca.data),
+                pedagio_por_100kg=float_or_none(form.pedagio_por_100kg.data),
+                valor_despacho=float_or_none(form.valor_despacho.data),
+                valor_cte=float_or_none(form.valor_cte.data),
+                valor_tas=float_or_none(form.valor_tas.data),
+                icms_incluso=form.icms_incluso.data,
+                criado_por=current_user.nome
+            )
+            db.session.add(nova)
 
-        historico = HistoricoTabelaFrete(
-            transportadora_id=form.transportadora.data,
-            uf_origem=form.uf_origem.data,
-            uf_destino=form.uf_destino.data,
-            nome_tabela=form.nome_tabela.data.upper(),
-            tipo_carga=form.tipo_carga.data,
-            modalidade=form.modalidade.data.upper(),
-            valor_kg=float_or_none(form.valor_kg.data),
-            frete_minimo_peso=float_or_none(form.frete_minimo_peso.data),
-            percentual_valor=float_or_none(form.percentual_valor.data),
-            frete_minimo_valor=float_or_none(form.frete_minimo_valor.data),
-            percentual_gris=float_or_none(form.percentual_gris.data),
-            percentual_adv=float_or_none(form.percentual_adv.data),
-            percentual_rca=float_or_none(form.percentual_rca.data),
-            pedagio_por_100kg=float_or_none(form.pedagio_por_100kg.data),
-            valor_despacho=float_or_none(form.valor_despacho.data),
-            valor_cte=float_or_none(form.valor_cte.data),
-            valor_tas=float_or_none(form.valor_tas.data),
-            icms_incluso=form.icms_incluso.data,
-            criado_por=current_user.nome
-        )
-        db.session.add(historico)
+            historico = HistoricoTabelaFrete(
+                transportadora_id=form.transportadora.data,
+                uf_origem=form.uf_origem.data,
+                uf_destino=form.uf_destino.data,
+                nome_tabela=form.nome_tabela.data.upper(),
+                tipo_carga=form.tipo_carga.data,
+                modalidade=form.modalidade.data.upper() if form.modalidade.data else '',
+                valor_kg=float_or_none(form.valor_kg.data),
+                frete_minimo_peso=float_or_none(form.frete_minimo_peso.data),
+                percentual_valor=float_or_none(form.percentual_valor.data),
+                frete_minimo_valor=float_or_none(form.frete_minimo_valor.data),
+                percentual_gris=float_or_none(form.percentual_gris.data),
+                percentual_adv=float_or_none(form.percentual_adv.data),
+                percentual_rca=float_or_none(form.percentual_rca.data),
+                pedagio_por_100kg=float_or_none(form.pedagio_por_100kg.data),
+                valor_despacho=float_or_none(form.valor_despacho.data),
+                valor_cte=float_or_none(form.valor_cte.data),
+                valor_tas=float_or_none(form.valor_tas.data),
+                icms_incluso=form.icms_incluso.data,
+                criado_por=current_user.nome
+            )
+            db.session.add(historico)
 
-        db.session.commit()
-        flash('Tabela de frete cadastrada com sucesso!', 'success')
-        return redirect(url_for('tabelas.cadastrar_tabela_frete'))
+            db.session.commit()
+            flash('Tabela de frete cadastrada com sucesso!', 'success')
+            return redirect(url_for('tabelas.cadastrar_tabela_frete'))
+        except Exception as e:
+            db.session.rollback()
+            print(f"DEBUG: Erro ao salvar tabela: {str(e)}")
+            flash(f'Erro ao salvar tabela de frete: {str(e)}', 'error')
 
     tabelas = TabelaFrete.query.all()
     return render_template('tabelas/tabelas_frete.html', form=form, tabelas=tabelas)
@@ -645,12 +661,22 @@ def editar_tabela_frete(tabela_id):
 
     if request.method == 'POST':
         form = TabelaFreteForm()
+        # Setar o ID para validação customizada funcionar corretamente na edição
+        form.id.data = str(tabela_id)
     else:
         form = TabelaFreteForm(obj=tabela)
+        form.id.data = str(tabela_id)
 
+    # Sempre definir as choices ANTES da validação
     form.transportadora.choices = [(t.id, t.razao_social) for t in Transportadora.query.all()]
     form.uf_origem.choices = UF_LIST
     form.uf_destino.choices = UF_LIST
+    
+    # Debug
+    if request.method == 'POST':
+        logger.info(f"📋 POST recebido para edição - form.validate(): {form.validate()}")
+        logger.info(f"📋 form.errors: {form.errors}")
+        logger.info(f"📋 form.data: {form.data}")
 
     if form.validate_on_submit():
         try:

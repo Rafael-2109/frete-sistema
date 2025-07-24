@@ -317,3 +317,20 @@ class MovimentacaoEstoque(db.Model):
 - `separacao_lote_id` (em Pedido, Separacao, EmbarqueItem)
 - `qtd_saldo_produto_pedido` (em CarteiraPrincipal)
 - `Pedido.status` (para status de separações via JOIN)
+
+
+### ❌ ARQUIVOS OBSOLETOS DA CARTEIRA DE PEDIDOS:
+
+- app/carteira/main_routes.py - Carteira de pedidos antiga
+- app/templates/carteira/listar_agrupados.py - template da Carteira de pedidos antigo
+
+### ✅ ARQUIVOS CORRETOS DA CARTEIRA DE PEDIDOS:
+
+- app/carteira/routes/
+- app/carteira/services/
+- app/carteira/utils/
+
+- app/templates/carteira/css/
+- app/templates/carteira/js/
+- app/templates/carteira/agrupados_balanceado.html
+- app/templates/carteira/dashboard.html
