@@ -8,8 +8,6 @@ class DragDropHandler {
         this.workspace = workspace;
         this.draggedElement = null;
         this.draggedData = null;
-        this.isDragging = false; // Flag para evitar eventos duplicados
-        this.isProcessingDrop = false; // Flag para evitar drops duplicados
         this.init();
     }
 
@@ -40,6 +38,11 @@ class DragDropHandler {
         document.addEventListener('drop', this.handleDrop.bind(this), true);
         
         console.log('🎯 Event delegation configurado globalmente');
+        
+        // Debug: verificar se eventos estão sendo capturados
+        document.addEventListener('dragstart', (e) => {
+            console.log('🔍 DRAGSTART GLOBAL (capture):', e.target);
+        }, true);
     }
 
     configurarDragDrop(numPedido) {
@@ -111,8 +114,8 @@ class DragDropHandler {
      */
     handleDragStart(e) {
         // Verificar se é um elemento draggable válido
-        const produtoTr = e.target.closest('.produto-origem[draggable="true"]');
-        if (!produtoTr) return;
+        const produtoTr = e.target.closest('.produto-origem');
+        if (!produtoTr || produtoTr.getAttribute('draggable') !== 'true') return;
         
         // Processar drag start sem restrição de handle
         this.processDragStart(e, produtoTr);
@@ -156,14 +159,7 @@ class DragDropHandler {
      * 🎯 PROCESSAR DRAG START
      */
     processDragStart(e, produtoTr) {
-        // Evitar múltiplos drags simultâneos
-        if (this.isDragging) {
-            e.preventDefault();
-            return;
-        }
-        
         console.log('🎯 Iniciando drag do produto');
-        this.isDragging = true;
         
         const codProduto = produtoTr.dataset.produto;
         const qtdPedido = produtoTr.dataset.qtdPedido;
@@ -229,7 +225,6 @@ class DragDropHandler {
         // Limpar estado
         this.draggedElement = null;
         this.draggedData = null;
-        this.isDragging = false; // Resetar flag
         
         // Remover ghost image se existir
         const ghost = document.getElementById('drag-ghost-image');
@@ -282,14 +277,7 @@ class DragDropHandler {
      * 🎯 PROCESSAR DROP
      */
     async processDrop(e, dropZone) {
-        // Evitar processamento duplicado de drops
-        if (this.isProcessingDrop) {
-            console.warn('⚠️ Drop já em processamento, ignorando...');
-            return;
-        }
-        
         console.log('📦 Processando drop');
-        this.isProcessingDrop = true;
         
         // Limpar visual feedback
         dropZone.classList.remove('drag-over');
@@ -297,7 +285,6 @@ class DragDropHandler {
         // Usar dados armazenados ao invés de dataTransfer (mais confiável)
         if (!this.draggedData) {
             console.warn('⚠️ Nenhum dado de drag encontrado');
-            this.isProcessingDrop = false; // Resetar flag
             return;
         }
         
@@ -320,9 +307,6 @@ class DragDropHandler {
         } catch (error) {
             console.error('❌ Erro no drop:', error);
             this.mostrarFeedback(`Erro ao adicionar produto: ${error.message}`, 'error');
-        } finally {
-            // Sempre resetar a flag no final
-            this.isProcessingDrop = false;
         }
     }
     
@@ -418,14 +402,28 @@ window.debugDragDrop = function (numPedido) {
         return;
     }
 
+    const handler = workspace.dragDropHandler;
     console.log('🔍 DEBUG DRAG & DROP');
     console.log('- Workspace:', !!workspace);
-    console.log('- DragDropHandler:', !!workspace.dragDropHandler);
+    console.log('- DragDropHandler:', !!handler);
+    console.log('- draggedData:', handler.draggedData);
+    console.log('- draggedElement:', handler.draggedElement);
 
     if (numPedido) {
         console.log(`- Reconfigurando para pedido: ${numPedido}`);
         workspace.dragDropHandler.reconfigurarTudo(numPedido);
     }
+    
+    // Verificar elementos draggable
+    const draggables = document.querySelectorAll('.produto-origem[draggable="true"]');
+    console.log(`- Elementos draggable encontrados: ${draggables.length}`);
+    
+    // Verificar quantidades
+    draggables.forEach((el, i) => {
+        const input = el.querySelector('.qtd-editavel');
+        const qtd = input ? input.value : 'N/A';
+        console.log(`  Produto ${i}: ${el.dataset.produto} - Qtd: ${qtd}`);
+    });
 };
 
 // CSS para animações do toast
