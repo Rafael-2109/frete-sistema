@@ -22,7 +22,10 @@ class WorkspaceTabela {
                 <table class="table table-sm table-hover workspace-produtos-table">
                     <thead class="table-dark">
                         <tr>
-                            <th width="30px"><i class="fas fa-grip-vertical"></i></th>
+                            <th width="30px">
+                                <input type="checkbox" class="form-check-input" id="select-all-produtos" 
+                                       title="Selecionar todos os produtos">
+                            </th>
                             <th>Produto</th>
                             <th>Qtd/Saldo</th>
                             <th>Valor</th>
@@ -48,8 +51,10 @@ class WorkspaceTabela {
                     data-produto="${produto.cod_produto}"
                     data-qtd-pedido="${produto.qtd_pedido}">
                     
-                    <td class="drag-handle text-center">
-                        <i class="fas fa-grip-vertical text-muted"></i>
+                    <td class="text-center">
+                        <input type="checkbox" class="form-check-input produto-checkbox" 
+                               data-produto="${produto.cod_produto}"
+                               title="Selecionar este produto">
                     </td>
                     
                     <td>

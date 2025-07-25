@@ -65,6 +65,10 @@ def workspace_pedido_real(num_pedido):
         if not produtos_carteira:
             return jsonify({"success": False, "error": f"Pedido {num_pedido} não encontrado ou sem itens ativos"}), 404
 
+        # Buscar status do pedido
+        pedido = Pedido.query.filter_by(num_pedido=num_pedido).first()
+        status_pedido = pedido.status if pedido else 'ABERTO'
+        
         # Processar produtos e calcular dados complementares
         produtos_processados = []
         valor_total = 0
@@ -84,6 +88,7 @@ def workspace_pedido_real(num_pedido):
             {
                 "success": True,
                 "num_pedido": num_pedido,
+                "status_pedido": status_pedido,
                 "valor_total": valor_total,
                 "produtos": produtos_processados,
                 "total_produtos": len(produtos_processados),

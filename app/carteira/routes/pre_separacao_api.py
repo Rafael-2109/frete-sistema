@@ -72,13 +72,25 @@ def salvar_pre_separacao():
         ).first()
 
         if pre_separacao_existente:
+            # Somar quantidade à existente
+            nova_quantidade = float(pre_separacao_existente.qtd_selecionada_usuario) + float(qtd_selecionada)
+            
+            # Verificar se não excede o saldo disponível
+            if nova_quantidade > float(item_carteira.qtd_saldo_produto_pedido):
+                return jsonify({
+                    'success': False,
+                    'error': f'Quantidade total ({nova_quantidade}) excede o saldo disponível ({item_carteira.qtd_saldo_produto_pedido})'
+                }), 400
+            
             # Atualizar quantidade existente (somar)
-            pre_separacao_existente.qtd_selecionada_usuario = float(qtd_selecionada)
+            pre_separacao_existente.qtd_selecionada_usuario = nova_quantidade
             pre_separacao_existente.qtd_restante_calculada = (
-                float(item_carteira.qtd_saldo_produto_pedido) - float(qtd_selecionada)
+                float(item_carteira.qtd_saldo_produto_pedido) - nova_quantidade
             )
+            # Recalcular valor total
+            pre_separacao_existente.valor_original_item = float(item_carteira.preco_produto_pedido or 0) * nova_quantidade
             pre_separacao = pre_separacao_existente
-            acao = 'atualizada'
+            acao = 'atualizada (quantidade somada)'
         else:
             # Criar nova pré-separação
             pre_separacao = PreSeparacaoItem(

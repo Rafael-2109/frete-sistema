@@ -60,6 +60,11 @@ class LoteManager {
     renderizarCardLote(loteId) {
         const loteData = this.workspace.preSeparacoes.get(loteId);
         const temProdutos = loteData.produtos.length > 0;
+        
+        // Obter status do pedido atual
+        const numPedido = this.workspace.obterNumeroPedido();
+        const statusPedido = this.workspace.statusPedido || 'ABERTO';
+        const mostrarBotaoAdicionar = ['ABERTO', 'COTADO'].includes(statusPedido);
 
         return `
             <div class="card lote-card h-100" data-lote-id="${loteId}">
@@ -67,6 +72,9 @@ class LoteManager {
                     <h6 class="mb-0">
                         <i class="fas fa-box me-2"></i>
                         PRÉ-SEPARAÇÃO
+                        <small class="text-muted ms-2" title="Alterações são salvas automaticamente">
+                            <i class="fas fa-save"></i> Auto-save
+                        </small>
                     </h6>
                     <small>${loteId}</small>
                 </div>
@@ -74,7 +82,7 @@ class LoteManager {
                 <div class="card-body">
                     <div class="produtos-lote mb-3">
                         ${temProdutos ? this.renderizarProdutosDoLote(loteData.produtos) : 
-                          '<p class="text-muted text-center"><i class="fas fa-arrow-down me-2"></i>Arraste produtos aqui</p>'}
+                          '<p class="text-muted text-center"><i class="fas fa-hand-pointer me-2"></i>Selecione produtos e clique em "Adicionar Selecionados"</p>'}
                     </div>
                     
                     ${temProdutos ? `
@@ -102,20 +110,28 @@ class LoteManager {
                 </div>
                 
                 <div class="card-footer">
-                    <div class="btn-group w-100">
-                        <button class="btn btn-primary btn-sm" 
-                                onclick="workspace.gerarSeparacao('${loteId}')"
-                                ${!temProdutos ? 'disabled' : ''}>
-                            <i class="fas fa-play me-1"></i> Gerar Separação
-                        </button>
-                        <button class="btn btn-info btn-sm" 
-                                onclick="workspace.abrirDetalhesLote('${loteId}')">
-                            <i class="fas fa-search me-1"></i>
-                        </button>
-                        <button class="btn btn-outline-danger btn-sm" 
-                                onclick="workspace.removerLote('${loteId}')">
-                            <i class="fas fa-trash me-1"></i> Remover Lote
-                        </button>
+                    <div class="btn-group-vertical w-100">
+                        ${mostrarBotaoAdicionar ? `
+                            <button class="btn btn-success btn-sm mb-1" 
+                                    onclick="workspace.adicionarProdutosSelecionados('${loteId}')">
+                                <i class="fas fa-plus-circle me-1"></i> Adicionar Selecionados
+                            </button>
+                        ` : ''}
+                        <div class="btn-group w-100">
+                            <button class="btn btn-primary btn-sm" 
+                                    onclick="workspace.gerarSeparacao('${loteId}')"
+                                    ${!temProdutos ? 'disabled' : ''}>
+                                <i class="fas fa-play me-1"></i> Gerar Separação
+                            </button>
+                            <button class="btn btn-info btn-sm" 
+                                    onclick="workspace.abrirDetalhesLote('${loteId}')">
+                                <i class="fas fa-search me-1"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" 
+                                    onclick="workspace.removerLote('${loteId}')">
+                                <i class="fas fa-trash me-1"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -125,6 +141,11 @@ class LoteManager {
     renderizarCardPreSeparacao(loteData) {
         const temProdutos = loteData.produtos.length > 0;
         const isPre = loteData.status === 'pre_separacao';
+        
+        // Obter status do pedido atual
+        const numPedido = this.workspace.obterNumeroPedido();
+        const statusPedido = this.workspace.statusPedido || 'ABERTO';
+        const mostrarBotaoAdicionar = ['ABERTO', 'COTADO'].includes(statusPedido) && isPre;
 
         return `
             <div class="card lote-card h-100" data-lote-id="${loteData.lote_id}">
@@ -182,20 +203,29 @@ class LoteManager {
                 
                 <div class="card-footer">
                     ${isPre ? `
-                        <div class="btn-group w-100">
-                            <button class="btn btn-success btn-sm" 
-                                    onclick="workspace.confirmarSeparacao('${loteData.lote_id}')"
-                                    ${!temProdutos ? 'disabled' : ''}>
-                                <i class="fas fa-check me-1"></i> Confirmar Separação
-                            </button>
-                            <button class="btn btn-info btn-sm" 
-                                    onclick="workspace.abrirDetalhesLote('${loteData.lote_id}')">
-                                <i class="fas fa-search me-1"></i>
-                            </button>
-                            <button class="btn btn-outline-danger btn-sm w-100 mt-1" 
-                                    onclick="workspace.removerLote('${loteData.lote_id}')">
-                                <i class="fas fa-trash me-1"></i> Remover Pré-Separação
-                            </button>
+                        <div class="btn-group-vertical w-100">
+                            ${mostrarBotaoAdicionar ? `
+                                <button class="btn btn-success btn-sm mb-1" 
+                                        onclick="workspace.adicionarProdutosSelecionados('${loteData.lote_id}')">
+                                    <i class="fas fa-plus-circle me-1"></i> Adicionar Selecionados
+                                </button>
+                            ` : ''}
+                            <div class="btn-group w-100">
+                                <button class="btn btn-primary btn-sm" 
+                                        onclick="workspace.confirmarSeparacao('${loteData.lote_id}')"
+                                        ${!temProdutos ? 'disabled' : ''}>
+                                    <i class="fas fa-check me-1"></i> Confirmar
+                                </button>
+                                <button class="btn btn-info btn-sm" 
+                                        onclick="workspace.abrirDetalhesLote('${loteData.lote_id}')">
+                                    <i class="fas fa-search me-1"></i>
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm" 
+                                        onclick="workspace.removerLote('${loteData.lote_id}')">
+                                    <i class="fas fa-trash me-1"></i>
+                                </button>
+                            </div>
+                        </div>
                     ` : `</div>
                         <div class="btn-group w-100">
                             <button class="btn btn-outline-primary btn-sm" 
@@ -225,7 +255,7 @@ class LoteManager {
                         <span class="badge bg-info text-white">${this.formatarMoeda(produto.valor)}</span>
                         <button class="btn btn-sm btn-outline-danger ms-1" 
                                 onclick="workspace.removerProdutoDoLote('${produto.loteId || produto.lote_id}', '${produto.cod_produto || produto.codProduto}')"
-                                title="Remover produto da pré-separação">
+                                title="Remover produto da pré-separação (salva automaticamente)">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -246,7 +276,8 @@ class LoteManager {
                         <br><small class="text-muted">${produto.quantidade}un (${estoqueData})</small>
                     </div>
                     <button class="btn btn-sm btn-outline-danger" 
-                            onclick="workspace.removerProdutoDoLote('${produto.loteId}', '${produto.codProduto}')">
+                            onclick="workspace.removerProdutoDoLote('${produto.loteId}', '${produto.codProduto}')"
+                            title="Remover produto (salva automaticamente)">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -282,9 +313,18 @@ class LoteManager {
             const produtoExistente = loteData.produtos.find(p => p.codProduto === dadosProduto.codProduto);
             
             if (produtoExistente) {
-                // Atualizar dados do produto existente
-                produtoExistente.quantidade = resultado.dados.quantidade;
+                // Somar quantidade ao produto existente
+                produtoExistente.quantidade = resultado.dados.quantidade; // Já vem somado da API
+                produtoExistente.valor = resultado.dados.valor;
+                produtoExistente.peso = resultado.dados.peso;
+                produtoExistente.pallet = resultado.dados.pallet;
                 produtoExistente.preSeparacaoId = resultado.pre_separacao_id;
+                
+                // Mostrar feedback específico
+                this.workspace.mostrarFeedback(
+                    `Quantidade do produto ${dadosProduto.codProduto} atualizada para ${resultado.dados.quantidade}`,
+                    'success'
+                );
             } else {
                 // Adicionar novo produto com dados da API
                 loteData.produtos.push({

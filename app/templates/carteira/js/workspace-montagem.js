@@ -11,7 +11,6 @@ class WorkspaceMontagem {
         this.dadosProdutos = new Map(); // codProduto -> dados completos
         
         // Inicializar módulos
-        this.dragDropHandler = new DragDropHandler(this);
         this.loteManager = new LoteManager(this);
         this.modalCardex = new ModalCardex();
         this.preSeparacaoManager = new PreSeparacaoManager(this);
@@ -47,10 +46,13 @@ class WorkspaceMontagem {
                 throw new Error(workspaceData.error || 'Erro ao carregar workspace');
             }
 
-            // Armazenar dados dos produtos
+            // Armazenar dados dos produtos e status do pedido
             workspaceData.produtos.forEach(produto => {
                 this.dadosProdutos.set(produto.cod_produto, produto);
             });
+            
+            // Armazenar status do pedido
+            this.statusPedido = workspaceData.status_pedido || 'ABERTO';
 
             // Carregar pré-separações existentes usando o manager
             const preSeparacoesData = await this.preSeparacaoManager.carregarPreSeparacoes(numPedido);
@@ -93,15 +95,10 @@ class WorkspaceMontagem {
                 await this.renderizarLotesExistentes(numPedido, preSeparacoesData.lotes);
             }
 
-            // Configurar drag & drop usando requestAnimationFrame para garantir renderização
+            // Configurar checkboxes e adição de produtos
             requestAnimationFrame(() => {
-                console.log('🎯 Inicializando drag & drop...');
-                this.dragDropHandler.configurarDragDrop(numPedido);
-                
-                // Verificar se elementos foram marcados corretamente
-                const produtos = document.querySelectorAll(`.workspace-montagem[data-pedido="${numPedido}"] .produto-origem`);
-                const dropZones = document.querySelectorAll(`.workspace-montagem[data-pedido="${numPedido}"] .drop-zone`);
-                console.log(`✅ Configuração completa: ${produtos.length} produtos, ${dropZones.length} drop zones`);
+                console.log('🎯 Inicializando sistema de seleção...');
+                this.configurarCheckboxes(numPedido);
             });
 
         } catch (error) {
@@ -146,7 +143,7 @@ class WorkspaceMontagem {
                                 <i class="fas fa-boxes me-2"></i>
                                 Workspace de Montagem - Pedido ${numPedido}
                             </h5>
-                            <small>Arraste os produtos para os lotes de pré-separação</small>
+                            <small>Selecione os produtos e clique em "Adicionar" no lote desejado</small>
                         </div>
                         <div class="col-md-4 text-end">
                             <div class="workspace-resumo">
@@ -370,6 +367,195 @@ class WorkspaceMontagem {
 
     criarNovoLote(numPedido) {
         this.loteManager.criarNovoLote(numPedido);
+    }
+
+    /**
+     * 🎯 CONFIGURAR CHECKBOXES
+     */
+    configurarCheckboxes(numPedido) {
+        const workspaceElement = document.querySelector(`.workspace-montagem[data-pedido="${numPedido}"]`);
+        if (!workspaceElement) return;
+
+        // Checkbox selecionar todos
+        const selectAll = workspaceElement.querySelector('#select-all-produtos');
+        if (selectAll) {
+            selectAll.addEventListener('change', (e) => {
+                const checkboxes = workspaceElement.querySelectorAll('.produto-checkbox');
+                checkboxes.forEach(cb => {
+                    cb.checked = e.target.checked;
+                    this.toggleProdutoSelecionado(cb.dataset.produto, cb.checked);
+                });
+            });
+        }
+
+        // Checkboxes individuais
+        const checkboxes = workspaceElement.querySelectorAll('.produto-checkbox');
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                this.toggleProdutoSelecionado(e.target.dataset.produto, e.target.checked);
+                this.atualizarSelectAll(workspaceElement);
+            });
+        });
+
+        console.log(`✅ Configurados ${checkboxes.length} checkboxes`);
+    }
+
+    /**
+     * 🎯 TOGGLE PRODUTO SELECIONADO
+     */
+    toggleProdutoSelecionado(codProduto, selecionado) {
+        if (selecionado) {
+            this.produtosSelecionados.add(codProduto);
+        } else {
+            this.produtosSelecionados.delete(codProduto);
+        }
+        
+        // Adicionar/remover classe visual
+        const tr = document.querySelector(`tr[data-produto="${codProduto}"]`);
+        if (tr) {
+            tr.classList.toggle('selected', selecionado);
+        }
+        
+        console.log(`Produtos selecionados: ${this.produtosSelecionados.size}`);
+    }
+
+    /**
+     * 🎯 ATUALIZAR SELECT ALL
+     */
+    atualizarSelectAll(workspaceElement) {
+        const selectAll = workspaceElement.querySelector('#select-all-produtos');
+        const checkboxes = workspaceElement.querySelectorAll('.produto-checkbox');
+        const checkedBoxes = workspaceElement.querySelectorAll('.produto-checkbox:checked');
+        
+        if (selectAll) {
+            selectAll.checked = checkboxes.length > 0 && checkboxes.length === checkedBoxes.length;
+            selectAll.indeterminate = checkedBoxes.length > 0 && checkedBoxes.length < checkboxes.length;
+        }
+    }
+
+    /**
+     * 🎯 ADICIONAR PRODUTOS SELECIONADOS AO LOTE
+     */
+    async adicionarProdutosSelecionados(loteId) {
+        if (this.produtosSelecionados.size === 0) {
+            this.mostrarFeedback('Selecione pelo menos um produto', 'warning');
+            return;
+        }
+
+        try {
+            const produtosParaAdicionar = [];
+            
+            // Coletar dados dos produtos selecionados
+            this.produtosSelecionados.forEach(codProduto => {
+                const produtoData = this.dadosProdutos.get(codProduto);
+                const inputQtd = document.querySelector(`.qtd-editavel[data-produto="${codProduto}"]`);
+                const quantidade = inputQtd ? parseInt(inputQtd.value) : 0;
+                
+                if (produtoData && quantidade > 0) {
+                    produtosParaAdicionar.push({
+                        codProduto,
+                        qtdPedido: quantidade,
+                        nomeProduto: produtoData.nome_produto || codProduto
+                    });
+                }
+            });
+
+            if (produtosParaAdicionar.length === 0) {
+                this.mostrarFeedback('Nenhum produto válido selecionado ou quantidades zeradas', 'warning');
+                return;
+            }
+
+            // Adicionar produtos ao lote
+            let produtosAdicionados = 0;
+            let produtosAtualizados = 0;
+            
+            for (const produto of produtosParaAdicionar) {
+                const loteData = this.preSeparacoes.get(loteId);
+                const produtoExistente = loteData?.produtos.find(p => p.codProduto === produto.codProduto);
+                
+                await this.adicionarProdutoNoLote(loteId, produto);
+                
+                if (produtoExistente) {
+                    produtosAtualizados++;
+                } else {
+                    produtosAdicionados++;
+                }
+            }
+
+            // Limpar seleção
+            this.limparSelecao();
+            
+            // Feedback mais detalhado
+            let mensagem = '';
+            if (produtosAdicionados > 0 && produtosAtualizados > 0) {
+                mensagem = `${produtosAdicionados} produtos adicionados e ${produtosAtualizados} atualizados no lote!`;
+            } else if (produtosAdicionados > 0) {
+                mensagem = `${produtosAdicionados} produtos adicionados ao lote!`;
+            } else {
+                mensagem = `${produtosAtualizados} produtos atualizados no lote!`;
+            }
+            
+            this.mostrarFeedback(mensagem, 'success');
+            
+        } catch (error) {
+            console.error('❌ Erro ao adicionar produtos:', error);
+            this.mostrarFeedback(`Erro ao adicionar produtos: ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * 🎯 LIMPAR SELEÇÃO
+     */
+    limparSelecao() {
+        // Desmarcar todos os checkboxes
+        document.querySelectorAll('.produto-checkbox').forEach(cb => {
+            cb.checked = false;
+        });
+        
+        // Remover classe selected das linhas
+        document.querySelectorAll('.produto-origem.selected').forEach(tr => {
+            tr.classList.remove('selected');
+        });
+        
+        // Limpar conjunto de selecionados
+        this.produtosSelecionados.clear();
+        
+        // Atualizar select all
+        const selectAll = document.querySelector('#select-all-produtos');
+        if (selectAll) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+        }
+    }
+
+    /**
+     * 🎯 MOSTRAR FEEDBACK VISUAL
+     */
+    mostrarFeedback(mensagem, tipo = 'info') {
+        // Criar toast notification
+        const toast = document.createElement('div');
+        toast.className = `toast-feedback toast-${tipo}`;
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${tipo === 'success' ? '#28a745' : tipo === 'error' ? '#dc3545' : '#ffc107'};
+            color: white;
+            padding: 12px 24px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 10000;
+            animation: slideIn 0.3s ease;
+        `;
+        
+        toast.textContent = mensagem;
+        document.body.appendChild(toast);
+        
+        // Remover após 3 segundos
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
     }
 
     criarLote(numPedido, loteId) {

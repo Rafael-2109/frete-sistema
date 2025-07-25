@@ -9,36 +9,19 @@
     z-index: 1;
 }
 
-/* Garantir que elementos draggable funcionem */
-.produto-origem[draggable="true"] {
-    -webkit-user-drag: element;
-    -webkit-user-select: none;
-    user-select: none;
+/* Estilos para seleção de produtos */
+.produto-origem {
     transition: all 0.2s ease;
     position: relative;
 }
 
-.produto-origem[draggable="true"]:hover {
+.produto-origem:hover {
     background-color: rgba(0, 123, 255, 0.05) !important;
 }
 
-.produto-origem.dragging {
-    opacity: 0.4 !important;
-    cursor: grabbing !important;
+.produto-origem.selected {
     background-color: #e3f2fd !important;
-    transform: scale(0.98);
     box-shadow: inset 0 0 0 2px #1976d2;
-}
-
-/* Desabilitar drag em produtos sem dados */
-.produto-origem.drag-disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-.produto-origem.drag-disabled .drag-handle {
-    cursor: not-allowed !important;
-    opacity: 0.4;
 }
 
 /* Garantir visibilidade dos lotes */
@@ -106,35 +89,6 @@
     color: #856404;
 }
 
-.produto-origem {
-    cursor: grab;
-    transition: all 0.2s ease;
-}
-
-.produto-origem:hover {
-    background-color: rgba(0, 123, 255, 0.1) !important;
-    transform: translateY(-1px);
-}
-
-.produto-origem.dragging {
-    opacity: 0.5;
-    transform: rotate(2deg);
-}
-
-.drag-handle {
-    cursor: grab;
-    color: #6c757d;
-    transition: all 0.2s ease;
-}
-
-.drag-handle:hover {
-    color: #007bff;
-    transform: scale(1.2);
-}
-
-.drag-handle:active {
-    cursor: grabbing;
-}
 
 .produto-info strong {
     font-size: 0.9rem;
@@ -174,28 +128,6 @@
     box-shadow: 0 0.25rem 0.5rem rgba(0, 123, 255, 0.15);
 }
 
-.lote-card.drag-over {
-    border-color: #28a745 !important;
-    background-color: rgba(40, 167, 69, 0.1);
-    transform: scale(1.02);
-    box-shadow: 0 0.5rem 1rem rgba(40, 167, 69, 0.2);
-    border-style: solid;
-}
-
-.lote-card.drag-over::before {
-    content: '✓ Solte aqui';
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: #28a745;
-    color: white;
-    padding: 4px 12px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    animation: pulse 1s infinite;
-    z-index: 10;
-}
 
 @keyframes pulse {
     0% { opacity: 1; transform: scale(1); }
@@ -222,32 +154,6 @@
     background-color: rgba(0, 123, 255, 0.05);
 }
 
-.lote-placeholder.drag-over {
-    border-color: #007bff !important;
-    background-color: rgba(0, 123, 255, 0.1) !important;
-    transform: scale(1.02);
-    border-style: solid;
-}
-
-.lote-placeholder.drag-over::before {
-    content: '+ Criar novo lote';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #007bff;
-    color: white;
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-weight: 600;
-    animation: pulse 1s infinite;
-}
-
-.lote-placeholder.drag-over {
-    border-color: #28a745 !important;
-    background-color: rgba(40, 167, 69, 0.1);
-    transform: scale(1.05);
-}
 
 /* 📋 PRODUTOS NO LOTE */
 .produto-lote {
@@ -287,16 +193,6 @@
     padding: 0.25rem 0.5rem;
 }
 
-/* 🎯 DRAG & DROP FEEDBACK */
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-}
-
-.drag-over {
-    animation: pulse 0.5s ease-in-out;
-}
 
 /* 📱 RESPONSIVIDADE */
 @media (max-width: 768px) {
@@ -316,9 +212,6 @@
         margin-bottom: 1rem;
     }
     
-    .produto-origem {
-        cursor: default; /* Desabilitar drag em mobile */
-    }
 }
 
 @media (max-width: 576px) {
@@ -605,4 +498,14 @@
 
 .cardex-tabela .table-responsive::-webkit-scrollbar-thumb:hover {
     background: #0056b3;
+}
+
+/* 🎯 ANIMAÇÕES DE FEEDBACK */
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
 }
