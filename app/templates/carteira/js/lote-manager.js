@@ -223,12 +223,11 @@ class LoteManager {
                     </div>
                     <div class="produto-acoes">
                         <span class="badge bg-info text-white">${this.formatarMoeda(produto.valor)}</span>
-                        ${produto.status === 'pre_separacao' ? `
-                            <button class="btn btn-sm btn-outline-danger ms-1" 
-                                    onclick="workspace.removerProdutoDoLote('${produto.loteId}', '${produto.cod_produto}')">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        ` : ''}
+                        <button class="btn btn-sm btn-outline-danger ms-1" 
+                                onclick="workspace.removerProdutoDoLote('${produto.loteId || produto.lote_id}', '${produto.cod_produto || produto.codProduto}')"
+                                title="Remover produto da pré-separação">
+                            <i class="fas fa-times"></i>
+                        </button>
                     </div>
                 </div>
             `;

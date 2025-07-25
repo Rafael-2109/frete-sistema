@@ -6,6 +6,7 @@
 class WorkspaceMontagem {
     constructor() {
         this.preSeparacoes = new Map(); // loteId -> {produtos: [], totais: {}}
+        this.separacoesConfirmadas = []; // array de separações confirmadas
         this.produtosSelecionados = new Set();
         this.dadosProdutos = new Map(); // codProduto -> dados completos
         
@@ -64,6 +65,15 @@ class WorkspaceMontagem {
                 });
                 
                 console.log(`✅ Carregadas ${preSeparacoesData.lotes.length} pré-separações existentes`);
+            }
+
+            // Carregar separações confirmadas
+            const separacoesResponse = await fetch(`/carteira/api/pedido/${numPedido}/separacoes-completas`);
+            const separacoesData = await separacoesResponse.json();
+            
+            if (separacoesData.success && separacoesData.separacoes) {
+                this.separacoesConfirmadas = separacoesData.separacoes;
+                console.log(`✅ Carregadas ${separacoesData.separacoes.length} separações confirmadas`);
             }
 
             // Renderizar workspace no container de detalhes
@@ -156,6 +166,19 @@ class WorkspaceMontagem {
                     ${this.renderizarTabelaProdutos(data.produtos)}
                 </div>
 
+                <!-- Área de Separações Confirmadas -->
+                ${this.separacoesConfirmadas && this.separacoesConfirmadas.length > 0 ? `
+                <div class="workspace-separacoes-confirmadas p-3 bg-light">
+                    <h6 class="mb-3">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        Separações Confirmadas
+                    </h6>
+                    <div class="separacoes-confirmadas-container row" id="separacoes-confirmadas-${numPedido}">
+                        ${this.renderizarSeparacoesConfirmadas()}
+                    </div>
+                </div>
+                ` : ''}
+
                 <!-- Área de Lotes (Destino) -->
                 <div class="workspace-lotes p-3">
                     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -187,6 +210,122 @@ class WorkspaceMontagem {
             return window.workspaceTabela.renderizarTabelaProdutos(produtos);
         }
         return `<div class="alert alert-warning">Módulo de tabela não carregado</div>`;
+    }
+
+    renderizarSeparacoesConfirmadas() {
+        return this.separacoesConfirmadas.map(separacao => {
+            const statusClass = this.getStatusClass(separacao.status);
+            
+            return `
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100 border-${statusClass}">
+                        <div class="card-header bg-${statusClass} bg-opacity-10">
+                            <h6 class="mb-0">
+                                <i class="fas fa-check me-2"></i>
+                                Separação Confirmada
+                            </h6>
+                            <small>${separacao.separacao_lote_id}</small>
+                            <span class="badge bg-${statusClass} float-end">${separacao.status}</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="info-separacao mb-2">
+                                <small><strong>Expedição:</strong> ${this.formatarData(separacao.expedicao)}</small><br>
+                                <small><strong>Agendamento:</strong> ${separacao.agendamento ? this.formatarData(separacao.agendamento) : '-'}</small><br>
+                                <small><strong>Protocolo:</strong> ${separacao.protocolo || '-'}</small>
+                            </div>
+                            
+                            <div class="produtos-separacao">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <h6 class="small mb-0">Produtos (${separacao.produtos.length}):</h6>
+                                    ${separacao.produtos.length > 3 ? `
+                                        <button class="btn btn-link btn-sm p-0" onclick="workspace.toggleProdutosSeparacao('${separacao.separacao_lote_id}')">
+                                            <small id="btn-toggle-${separacao.separacao_lote_id}">Ver todos</small>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                                <div id="produtos-resumo-${separacao.separacao_lote_id}">
+                                    ${separacao.produtos.slice(0, 3).map(p => `
+                                        <small class="d-block">• ${p.cod_produto} - ${this.formatarQuantidade(p.qtd_saldo)}un</small>
+                                    `).join('')}
+                                    ${separacao.produtos.length > 3 ? `<small class="text-muted">... e mais ${separacao.produtos.length - 3} produtos</small>` : ''}
+                                </div>
+                                <div id="produtos-completo-${separacao.separacao_lote_id}" style="display: none;">
+                                    <div class="table-responsive mt-2">
+                                        <table class="table table-sm table-hover">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Código</th>
+                                                    <th>Produto</th>
+                                                    <th class="text-end">Qtd</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${separacao.produtos.map(p => `
+                                                    <tr>
+                                                        <td><small>${p.cod_produto}</small></td>
+                                                        <td><small>${p.nome_produto || '-'}</small></td>
+                                                        <td class="text-end"><small>${this.formatarQuantidade(p.qtd_saldo)}</small></td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="totais-separacao border-top pt-2 mt-2">
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <small class="text-success">${this.formatarMoeda(separacao.valor_total)}</small>
+                                        <br><small class="text-muted">Valor</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <small class="text-info">${this.formatarPeso(separacao.peso_total)}</small>
+                                        <br><small class="text-muted">Peso</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <small class="text-warning">${this.formatarPallet(separacao.pallet_total)}</small>
+                                        <br><small class="text-muted">Pallet</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            ${separacao.status === 'COTADO' && separacao.embarque ? `
+                                <div class="alert alert-info p-2 mt-2 mb-0">
+                                    <small>
+                                        <strong>Embarque #${separacao.embarque.numero || '-'}</strong><br>
+                                        ${separacao.embarque.transportadora || 'Sem transportadora'}<br>
+                                        Prev: ${separacao.embarque.data_prevista_embarque ? this.formatarData(separacao.embarque.data_prevista_embarque) : '-'}
+                                    </small>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    getStatusClass(status) {
+        const statusMap = {
+            'ABERTO': 'warning',
+            'FATURADO': 'info',
+            'COTADO': 'primary',
+            'EMBARCADO': 'success',
+            'NF no CD': 'secondary'
+        };
+        return statusMap[status] || 'secondary';
+    }
+
+    formatarQuantidade(qtd) {
+        if (!qtd) return '0';
+        return parseFloat(qtd).toFixed(0);
+    }
+
+    formatarData(data) {
+        if (!data) return '-';
+        const d = new Date(data + 'T00:00:00');
+        return d.toLocaleDateString('pt-BR');
     }
 
     calcularStatusDisponibilidade(produto) {
@@ -274,8 +413,8 @@ class WorkspaceMontagem {
     adicionarProdutoNoLote(loteId, dadosProduto) {
         this.loteManager.adicionarProdutoNoLote(loteId, dadosProduto);
         
-        // 🎯 ATUALIZAR SALDO DISPONÍVEL NA TABELA
-        this.atualizarSaldoNaTabela(dadosProduto.codProduto);
+        // Não atualizar aqui - o loteManager já faz isso
+        // this.atualizarSaldoNaTabela(dadosProduto.codProduto);
     }
     
     /**
@@ -482,6 +621,24 @@ class WorkspaceMontagem {
     formatarPallet(pallet) {
         if (!pallet) return '0 plt';
         return `${parseFloat(pallet).toFixed(2)} plt`;
+    }
+
+    toggleProdutosSeparacao(loteId) {
+        const resumo = document.getElementById(`produtos-resumo-${loteId}`);
+        const completo = document.getElementById(`produtos-completo-${loteId}`);
+        const btnToggle = document.getElementById(`btn-toggle-${loteId}`);
+        
+        if (resumo && completo && btnToggle) {
+            if (completo.style.display === 'none') {
+                resumo.style.display = 'none';
+                completo.style.display = 'block';
+                btnToggle.textContent = 'Ver menos';
+            } else {
+                resumo.style.display = 'block';
+                completo.style.display = 'none';
+                btnToggle.textContent = 'Ver todos';
+            }
+        }
     }
 }
 

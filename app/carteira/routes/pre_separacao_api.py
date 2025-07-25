@@ -63,11 +63,11 @@ def salvar_pre_separacao():
                 'error': 'Formato de data inválido'
             }), 400
 
-        # Verificar se já existe pré-separação para este produto no lote
+        # Verificar se já existe pré-separação para este produto no mesmo lote
         pre_separacao_existente = PreSeparacaoItem.query.filter(
             PreSeparacaoItem.num_pedido == num_pedido,
             PreSeparacaoItem.cod_produto == cod_produto,
-            PreSeparacaoItem.data_expedicao_editada == data_expedicao_obj,
+            PreSeparacaoItem.separacao_lote_id == lote_id,  # Verificar pelo lote_id específico
             PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
         ).first()
 
@@ -94,6 +94,7 @@ def salvar_pre_separacao():
                 data_agendamento_editada=None,
                 protocolo_editado=data.get('protocolo_editado'),
                 observacoes_usuario=data.get('observacoes_usuario'),
+                separacao_lote_id=lote_id,  # Adicionar o lote_id
                 status='CRIADO',
                 tipo_envio='parcial' if float(qtd_selecionada) < float(item_carteira.qtd_saldo_produto_pedido) else 'total',
                 data_criacao=agora_brasil(),

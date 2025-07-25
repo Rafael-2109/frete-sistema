@@ -18,3 +18,4 @@ from .separacao_api import *
 from .pre_separacao_api import *
 from .cardex_api import *
 from .detalhes_api import *
+from .separacoes_api import *

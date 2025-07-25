@@ -259,38 +259,15 @@
                                 <!-- ✅ CORREÇÃO 3: Saldo (sem texto branco) -->
                                 <td>
                                     <div class="separacoes-container">
-                                        <div class="dropdown">
-                                            <button class="btn btn-outline-primary btn-sm dropdown-toggle dropdown-separacoes" 
-                                                    type="button"
-                                                    data-pedido="{{ pedido.num_pedido }}"
-                                                    data-bs-toggle="dropdown"
-                                                    aria-expanded="false"
-                                                    title="Ver separações do pedido">
-                                                <i class="fas fa-boxes me-1"></i>
-                                                <span class="contador-separacoes">{{ pedido.qtd_separacoes or 0 }}</span>
-                                                separações
-                                            </button>
-                                            
-                                            <div class="dropdown-menu dropdown-menu-end dropdown-separacoes-content" 
-                                                 style="min-width: 400px; max-height: 500px; overflow-y: auto;">
-                                                <div class="dropdown-header">
-                                                    <strong>Separações do Pedido {{ pedido.num_pedido }}</strong>
-                                                </div>
-                                                <div class="dropdown-body p-3" id="separacoes-content-{{ pedido.num_pedido }}">
-                                                    <div class="text-center text-muted">
-                                                        <i class="fas fa-spinner fa-spin me-2"></i>
-                                                        Carregando separações...
-                                                    </div>
-                                                </div>
-                                                <div class="dropdown-divider"></div>
-                                                <div class="dropdown-footer p-2">
-                                                    <button class="btn btn-sm btn-primary w-100" 
-                                                            onclick="criarSeparacao('{{ pedido.num_pedido }}')">
-                                                        <i class="fas fa-plus me-1"></i> Nova Separação
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <button class="btn btn-outline-primary btn-sm btn-separacoes" 
+                                                type="button"
+                                                data-pedido="{{ pedido.num_pedido }}"
+                                                onclick="abrirModalSeparacoes('{{ pedido.num_pedido }}')"
+                                                title="Ver separações do pedido">
+                                            <i class="fas fa-boxes me-1"></i>
+                                            <span class="contador-separacoes">{{ pedido.qtd_separacoes or 0 }}</span>
+                                            separações
+                                        </button>
                                         
                                         <!-- Status visual das separações -->
                                         {% if pedido.totalmente_separado %}
@@ -406,6 +383,10 @@
 </script>
 
 <script>
+{% include 'carteira/js/modal-separacoes.js' %}
+</script>
+
+<script>
 {% include 'carteira/js/pre-separacao-manager.js' %}
 </script>
 
@@ -444,4 +425,35 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ Template balanceado carregado com todos os módulos');
 });
 </script>
+
+<!-- Modal de Separações -->
+<div class="modal fade" id="modalSeparacoes" tabindex="-1" aria-labelledby="modalSeparacoesLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalSeparacoesLabel">
+                    <i class="fas fa-boxes me-2"></i>
+                    Separações do Pedido <span id="modal-pedido-numero"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-separacoes-loading" class="text-center p-4">
+                    <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+                    <p class="mt-2">Carregando separações...</p>
+                </div>
+                <div id="modal-separacoes-content" style="display: none;">
+                    <!-- Conteúdo será carregado dinamicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="criarSeparacao(document.getElementById('modal-pedido-numero').textContent)">
+                    <i class="fas fa-plus me-1"></i> Nova Separação
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}

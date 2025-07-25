@@ -8,6 +8,8 @@ class DragDropHandler {
         this.workspace = workspace;
         this.draggedElement = null;
         this.draggedData = null;
+        this.isDragging = false; // Flag para evitar eventos duplicados
+        this.isProcessingDrop = false; // Flag para evitar drops duplicados
         this.init();
     }
 
@@ -154,7 +156,14 @@ class DragDropHandler {
      * 🎯 PROCESSAR DRAG START
      */
     processDragStart(e, produtoTr) {
+        // Evitar múltiplos drags simultâneos
+        if (this.isDragging) {
+            e.preventDefault();
+            return;
+        }
+        
         console.log('🎯 Iniciando drag do produto');
+        this.isDragging = true;
         
         const codProduto = produtoTr.dataset.produto;
         const qtdPedido = produtoTr.dataset.qtdPedido;
@@ -220,6 +229,7 @@ class DragDropHandler {
         // Limpar estado
         this.draggedElement = null;
         this.draggedData = null;
+        this.isDragging = false; // Resetar flag
         
         // Remover ghost image se existir
         const ghost = document.getElementById('drag-ghost-image');
@@ -272,7 +282,14 @@ class DragDropHandler {
      * 🎯 PROCESSAR DROP
      */
     async processDrop(e, dropZone) {
+        // Evitar processamento duplicado de drops
+        if (this.isProcessingDrop) {
+            console.warn('⚠️ Drop já em processamento, ignorando...');
+            return;
+        }
+        
         console.log('📦 Processando drop');
+        this.isProcessingDrop = true;
         
         // Limpar visual feedback
         dropZone.classList.remove('drag-over');
@@ -280,6 +297,7 @@ class DragDropHandler {
         // Usar dados armazenados ao invés de dataTransfer (mais confiável)
         if (!this.draggedData) {
             console.warn('⚠️ Nenhum dado de drag encontrado');
+            this.isProcessingDrop = false; // Resetar flag
             return;
         }
         
@@ -302,6 +320,9 @@ class DragDropHandler {
         } catch (error) {
             console.error('❌ Erro no drop:', error);
             this.mostrarFeedback(`Erro ao adicionar produto: ${error.message}`, 'error');
+        } finally {
+            // Sempre resetar a flag no final
+            this.isProcessingDrop = false;
         }
     }
     

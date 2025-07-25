@@ -27,22 +27,37 @@ class WorkspaceQuantidades {
             window.workspace.preSeparacoes.forEach(loteData => {
                 const produtoNoLote = loteData.produtos.find(p => p.codProduto === produto.cod_produto);
                 if (produtoNoLote) {
-                    qtdPreSeparacoesLocal += produtoNoLote.qtd || 0;
+                    qtdPreSeparacoesLocal += produtoNoLote.quantidade || 0;
                 }
             });
         }
         
-        // Usar o maior valor entre API e local
+        // Calcular separações confirmadas locais
+        let qtdSeparacoesConfirmadas = 0;
+        if (window.workspace && window.workspace.separacoesConfirmadas) {
+            window.workspace.separacoesConfirmadas.forEach(separacao => {
+                const produtoNaSeparacao = separacao.produtos.find(p => p.cod_produto === produto.cod_produto);
+                if (produtoNaSeparacao) {
+                    qtdSeparacoesConfirmadas += produtoNaSeparacao.qtd_saldo || 0;
+                }
+            });
+        }
+        
+        // Usar o maior valor entre API e local para pré-separações
         const qtdPreSeparacoesTotal = Math.max(qtdPreSeparacoes, qtdPreSeparacoesLocal);
         
+        // Usar o maior valor entre API e local para separações
+        const qtdSeparacoesTotal = Math.max(qtdSeparacoes, qtdSeparacoesConfirmadas);
+        
         // Saldo disponível = Qtd Pedido - (Separações + Pré-Separações)
-        const qtdEditavel = qtdPedido - qtdSeparacoes - qtdPreSeparacoesTotal;
+        const qtdEditavel = qtdPedido - qtdSeparacoesTotal - qtdPreSeparacoesTotal;
         
         return {
             qtdEditavel: Math.max(0, qtdEditavel), // Nunca negativo
-            qtdSeparacoes: qtdSeparacoes,
+            qtdSeparacoes: qtdSeparacoesTotal,
             qtdPreSeparacoes: qtdPreSeparacoesTotal,
-            qtdIndisponivel: Math.max(0, -qtdEditavel) // Se negativo, é indisponível
+            qtdIndisponivel: Math.max(0, -qtdEditavel), // Se negativo, é indisponível
+            temRestricao: qtdSeparacoesTotal > 0 || qtdPreSeparacoesTotal > 0
         };
     }
 
