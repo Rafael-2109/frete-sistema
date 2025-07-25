@@ -45,7 +45,6 @@ class WorkspaceTabela {
             
             html += `
                 <tr class="produto-origem" 
-                    draggable="true" 
                     data-produto="${produto.cod_produto}"
                     data-qtd-pedido="${produto.qtd_pedido}">
                     

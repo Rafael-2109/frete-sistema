@@ -413,7 +413,11 @@
 <!-- Inicialização -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar controladores
+    // Inicializar módulos auxiliares primeiro
+    window.workspaceTabela = new WorkspaceTabela();
+    window.workspaceQuantidades = new WorkspaceQuantidades();
+    
+    // Inicializar controladores principais
     window.carteiraAgrupada = new CarteiraAgrupada();
     window.workspace = new WorkspaceMontagem();
     window.modalCardex = new ModalCardex();
@@ -421,8 +425,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.modalEndereco = new ModalEndereco();
     window.modalSeparacoes = new ModalSeparacoes();
     window.separacaoManager = new SeparacaoManager();
-    window.workspaceTabela = new WorkspaceTabela();
-    window.workspaceQuantidades = new WorkspaceQuantidades();
+    
     console.log('✅ Template balanceado carregado com todos os módulos');
 });
 </script>
