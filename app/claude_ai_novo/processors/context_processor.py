@@ -10,14 +10,33 @@ from datetime import datetime, timedelta, date
 # Imports específicos com fallbacks
 try:
     from flask_login import current_user
+    FLASK_LOGIN_AVAILABLE = True
+except ImportError:
+    from unittest.mock import Mock
+    current_user = Mock()
+    FLASK_LOGIN_AVAILABLE = False
+
+try:
     from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
+except ImportError:
+    get_db = lambda: None
+    get_model = lambda name: None
+
+try:
     from sqlalchemy import func, and_, or_, text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    func = and_ = or_ = text = None
+    SQLALCHEMY_AVAILABLE = False
+
+# Verificar Flask
+try:
+    from flask import current_app
     FLASK_AVAILABLE = True
 except ImportError:
     # Fallbacks para execução standalone
-    current_user = None
+    current_app = None
     db = None
-    func = and_ = or_ = text = None
     FLASK_AVAILABLE = False
 
 # Models com fallbacks

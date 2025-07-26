@@ -10,7 +10,12 @@ Módulo responsável por analisar dados reais das tabelas:
 
 import logging
 from typing import Dict, List, Any, Optional, Union
-from sqlalchemy import text, func
+try:
+    from sqlalchemy import text, func
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    text, func = None
+    SQLALCHEMY_AVAILABLE = False
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 

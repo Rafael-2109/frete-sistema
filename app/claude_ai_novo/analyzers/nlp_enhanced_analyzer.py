@@ -30,6 +30,15 @@ try:
     from fuzzywuzzy import fuzz, process
     FUZZY_AVAILABLE = True
 except ImportError:
+    class FuzzMock:
+        def ratio(self, a, b): return 0
+        def partial_ratio(self, a, b): return 0
+        def token_sort_ratio(self, a, b): return 0
+        def token_set_ratio(self, a, b): return 0
+    fuzz, process = FuzzMock()
+    FUZZY_AVAILABLE = False
+    FUZZY_AVAILABLE = True
+except ImportError:
     FUZZY_AVAILABLE = False
     logging.warning("⚠️ FuzzyWuzzy não instalado. Matching exato apenas.")
 

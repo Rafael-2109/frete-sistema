@@ -1,0 +1,22 @@
+# Dependências específicas para o Claude AI Novo
+
+# API do Claude (Anthropic)
+anthropic>=0.18.0
+
+# Processamento de linguagem natural
+fuzzywuzzy>=0.18.0
+python-Levenshtein>=0.12.0
+
+# Manipulação de planilhas Excel
+openpyxl>=3.1.0
+
+# Monitoramento e health checks
+psutil>=5.9.0
+
+# Análise de dados (opcional)
+# spacy>=3.5.0
+# nltk>=3.8.0
+
+# Otimizações de performance (opcional)
+# numpy>=1.24.0
+# pandas>=2.0.0

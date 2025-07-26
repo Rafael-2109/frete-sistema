@@ -50,9 +50,8 @@ class LoteManager {
         
         container.appendChild(loteCard);
 
-        // Configurar drop zone no novo lote
+        // Drag & drop removido - usando checkboxes
         const newCard = loteCard.querySelector('.lote-card');
-        this.workspace.dragDropHandler.reconfigurarTudo(numPedido);
 
         console.log(`✅ Lote criado: ${loteId}`);
     }
@@ -81,7 +80,7 @@ class LoteManager {
                 
                 <div class="card-body">
                     <div class="produtos-lote mb-3">
-                        ${temProdutos ? this.renderizarProdutosDoLote(loteData.produtos) : 
+                        ${temProdutos ? this.renderizarProdutosDoLote(loteData.produtos, loteId) : 
                           '<p class="text-muted text-center"><i class="fas fa-hand-pointer me-2"></i>Selecione produtos e clique em "Adicionar Selecionados"</p>'}
                     </div>
                     
@@ -164,7 +163,7 @@ class LoteManager {
                 
                 <div class="card-body">
                     <div class="produtos-lote mb-3">
-                        ${temProdutos ? this.renderizarProdutosDaPreSeparacao(loteData.produtos) : 
+                        ${temProdutos ? this.renderizarProdutosDaPreSeparacao(loteData.produtos, loteData.lote_id) : 
                           '<p class="text-muted text-center"><i class="fas fa-inbox me-2"></i>Nenhum produto</p>'}
                     </div>
                     
@@ -243,7 +242,7 @@ class LoteManager {
         `;
     }
 
-    renderizarProdutosDaPreSeparacao(produtos) {
+    renderizarProdutosDaPreSeparacao(produtos, loteId) {
         return produtos.map(produto => {
             return `
                 <div class="produto-lote d-flex justify-content-between align-items-center mb-1">
@@ -254,7 +253,7 @@ class LoteManager {
                     <div class="produto-acoes">
                         <span class="badge bg-info text-white">${this.formatarMoeda(produto.valor)}</span>
                         <button class="btn btn-sm btn-outline-danger ms-1" 
-                                onclick="workspace.removerProdutoDoLote('${produto.loteId || produto.lote_id}', '${produto.cod_produto || produto.codProduto}')"
+                                onclick="workspace.removerProdutoDoLote('${produto.loteId || produto.lote_id || loteId}', '${produto.cod_produto || produto.codProduto}')"
                                 title="Remover produto da pré-separação (salva automaticamente)">
                             <i class="fas fa-times"></i>
                         </button>
@@ -264,7 +263,7 @@ class LoteManager {
         }).join('');
     }
 
-    renderizarProdutosDoLote(produtos) {
+    renderizarProdutosDoLote(produtos, loteId) {
         return produtos.map(produto => {
             const dadosProduto = this.workspace.dadosProdutos.get(produto.codProduto);
             const estoqueData = dadosProduto ? dadosProduto.estoque_data_expedicao : 0;
@@ -276,7 +275,7 @@ class LoteManager {
                         <br><small class="text-muted">${produto.quantidade}un (${estoqueData})</small>
                     </div>
                     <button class="btn btn-sm btn-outline-danger" 
-                            onclick="workspace.removerProdutoDoLote('${produto.loteId}', '${produto.codProduto}')"
+                            onclick="workspace.removerProdutoDoLote('${produto.loteId || loteId}', '${produto.codProduto}')"
                             title="Remover produto (salva automaticamente)">
                         <i class="fas fa-times"></i>
                     </button>
@@ -352,7 +351,7 @@ class LoteManager {
             
             // IMPORTANTE: Atualizar saldo na tabela de origem
             if (window.workspaceQuantidades) {
-                window.workspaceQuantidades.atualizarSaldoAposAdicao(dadosProduto.codProduto, resultado.dados.quantidade);
+                window.workspaceQuantidades.atualizarSaldoAposAdicao(dadosProduto.codProduto, dadosProduto.qtdPedido);
             }
 
         } catch (error) {
@@ -377,18 +376,10 @@ class LoteManager {
         let pallet = 0;
 
         loteData.produtos.forEach(produto => {
-            const dadosProduto = this.workspace.dadosProdutos.get(produto.codProduto);
-            if (dadosProduto) {
-                // Valor = QTD * Preço Unitário
-                valor += produto.quantidade * (dadosProduto.preco_unitario || 0);
-                
-                // Peso = QTD * peso_bruto (peso_unitario)
-                peso += produto.quantidade * (dadosProduto.peso_unitario || 0);
-                
-                // Pallet = QTD / palletizacao
-                const palletizacao = dadosProduto.palletizacao || 1;
-                pallet += produto.quantidade / palletizacao;
-            }
+            // Usar valores já calculados pela API
+            valor += produto.valor || 0;
+            peso += produto.peso || 0;
+            pallet += produto.pallet || 0;
         });
 
         loteData.totais = { valor, peso, pallet };
@@ -401,7 +392,7 @@ class LoteManager {
             
             // Reconfigurar eventos no novo elemento
             const newCard = document.querySelector(`[data-lote-id="${loteId}"]`);
-            this.workspace.dragDropHandler.reconfigurarTudo(this.workspace.obterNumeroPedido());
+            // Drag & drop removido - usando checkboxes
         }
     }
 

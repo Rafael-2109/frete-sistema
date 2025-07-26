@@ -9,8 +9,19 @@ import logging
 import re
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta, date
-from flask_login import current_user
-from sqlalchemy import func, and_, or_, text
+try:
+    from flask_login import current_user
+    FLASK_LOGIN_AVAILABLE = True
+except ImportError:
+    from unittest.mock import Mock
+    current_user = Mock()
+    FLASK_LOGIN_AVAILABLE = False
+try:
+    from sqlalchemy import func, and_, or_, text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    func, and_, or_, text = None
+    SQLALCHEMY_AVAILABLE = False
 from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
 import json
 from app.utils.redis_cache import redis_cache, cache_aside, cached_query

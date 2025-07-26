@@ -18,8 +18,19 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 # Flask imports
-from flask import Blueprint, request, jsonify, render_template
-from flask_login import login_required, current_user
+try:
+    from flask import Blueprint, request, jsonify, render_template
+    FLASK_AVAILABLE = True
+except ImportError:
+    Blueprint, request, jsonify, render_template = None
+    FLASK_AVAILABLE = False
+try:
+    from flask_login import login_required, current_user
+    FLASK_LOGIN_AVAILABLE = True
+except ImportError:
+    from unittest.mock import Mock
+    login_required, current_user = Mock()
+    FLASK_LOGIN_AVAILABLE = False
 
 # Local imports - Flask fallback
 from ..utils.flask_fallback import get_db

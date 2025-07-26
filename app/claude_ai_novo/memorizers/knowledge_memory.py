@@ -16,7 +16,21 @@ import json
 import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-from flask import current_app
+
+try:
+    from flask import current_app
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_app = None
+    FLASK_AVAILABLE = False
+
+try:
+    from sqlalchemy import text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    text = None
+    SQLALCHEMY_AVAILABLE = False
+
 from app.claude_ai_novo.utils.flask_fallback import get_db
 
 logger = logging.getLogger(__name__)
@@ -54,8 +68,6 @@ class KnowledgeMemory:
         """
         try:
             with current_app.app_context():
-                from sqlalchemy import text
-                
                 # Extrair termos usados para o cliente
                 termos = self._extrair_termos_cliente(consulta, cliente)
                 mapeamentos_criados = []
@@ -140,7 +152,6 @@ class KnowledgeMemory:
             
             with current_app.app_context():
                 from app.claude_ai_novo.utils.flask_fallback import get_db
-                from sqlalchemy import text
                 
                 # Verificar se já existe
                 existe = self.db.session.execute(
@@ -206,7 +217,6 @@ class KnowledgeMemory:
         try:
             with current_app.app_context():
                 from app.claude_ai_novo.utils.flask_fallback import get_db
-                from sqlalchemy import text
                 
                 grupos = self.db.session.execute(
                     text("""
@@ -261,7 +271,6 @@ class KnowledgeMemory:
         try:
             with current_app.app_context():
                 from app.claude_ai_novo.utils.flask_fallback import get_db
-                from sqlalchemy import text
                 
                 mapeamentos = self.db.session.execute(
                     text("""
@@ -302,7 +311,6 @@ class KnowledgeMemory:
         try:
             with current_app.app_context():
                 from app.claude_ai_novo.utils.flask_fallback import get_db
-                from sqlalchemy import text
                 
                 stats = {}
                 
@@ -463,7 +471,6 @@ class KnowledgeMemory:
             # Verificar disponibilidade do Flask context
             flask_disponivel = False
             try:
-                from flask import current_app
                 flask_disponivel = current_app is not None
             except:
                 flask_disponivel = False
@@ -552,10 +559,8 @@ class KnowledgeMemory:
             True se banco está acessível, False caso contrário
         """
         try:
-            from flask import current_app
             with current_app.app_context():
                 from app.claude_ai_novo.utils.flask_fallback import get_db
-                from sqlalchemy import text
                 
                 # Teste simples de conexão
                 result = self.db.session.execute(text("SELECT 1")).scalar()

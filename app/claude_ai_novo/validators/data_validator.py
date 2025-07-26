@@ -8,7 +8,12 @@ import anthropic
 import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta, date
-from sqlalchemy import or_
+try:
+    from sqlalchemy import or_
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    or_ = None
+    SQLALCHEMY_AVAILABLE = False
 # Flask fallback para execução standalone
 try:
     from app.claude_ai_novo.utils.flask_fallback import get_model, get_db, get_current_user
@@ -25,7 +30,16 @@ try:
     
 except ImportError:
     # Fallback se dependências não disponíveis
+try:
     from unittest.mock import Mock
+except ImportError:
+    class Mock:
+        def __init__(self, *args, **kwargs):
+            pass
+        def __call__(self, *args, **kwargs):
+            return self
+        def __getattr__(self, name):
+            return self
     db = Mock()
     current_user = Mock()
     Pedido = Embarque = EmbarqueItem = EntregaMonitorada = Mock
@@ -35,7 +49,12 @@ except ImportError:
     get_ml_models_system = get_system_alerts = Mock()
     ClaudeAIConfig = AdvancedConfig = ai_logger = AILogger = Mock()
 
-from sqlalchemy import func, and_, or_, text
+try:
+    from sqlalchemy import func, and_, or_, text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    func, and_, or_, text = None
+    SQLALCHEMY_AVAILABLE = False
 from datetime import datetime, timedelta, date
 import json
 import re

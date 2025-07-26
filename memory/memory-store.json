@@ -1,0 +1,10 @@
+{
+  "default": [
+    {
+      "key": "projeto",
+      "value": "Sistema de Fretes Flask com PostgreSQL",
+      "namespace": "default",
+      "timestamp": 1753481229909
+    }
+  ]
+}

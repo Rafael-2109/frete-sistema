@@ -7,7 +7,12 @@ Suporta múltiplas formas de conexão (Flask, direta, etc.).
 
 import logging
 from typing import Optional, Any
-from sqlalchemy import create_engine, inspect, text
+try:
+    from sqlalchemy import create_engine, inspect, text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    create_engine, inspect, text = None
+    SQLALCHEMY_AVAILABLE = False
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm.session import Session

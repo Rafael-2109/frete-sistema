@@ -18,8 +18,19 @@ from pathlib import Path
 
 # Third-party imports
 import anthropic
-from flask_login import current_user
-from sqlalchemy import func, and_, or_, text
+try:
+    from flask_login import current_user
+    FLASK_LOGIN_AVAILABLE = True
+except ImportError:
+    from unittest.mock import Mock
+    current_user = Mock()
+    FLASK_LOGIN_AVAILABLE = False
+try:
+    from sqlalchemy import func, and_, or_, text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    func, and_, or_, text = None
+    SQLALCHEMY_AVAILABLE = False
 
 # Local imports
 from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
@@ -211,9 +222,12 @@ class BaseCommand:
         """Busca resultado em cache"""
         try:
             if hasattr(intelligent_cache, 'get'):
-                return intelligent_cache.get(cache_key)
+                if REDIS_AVAILABLE and intelligent_cache:
+                return
+            intelligent_cache.get(cache_key)
             elif hasattr(redis_cache, 'get'):
-                return redis_cache.get(cache_key)
+                return if REDIS_AVAILABLE and redis_cache:
+            redis_cache.get(cache_key)
         except Exception as e:
             self.logger.warning(f"Erro ao buscar cache: {e}")
         return None
@@ -222,15 +236,19 @@ class BaseCommand:
         """Armazena resultado em cache"""
         try:
             if hasattr(intelligent_cache, 'set'):
-                # intelligent_cache.set com categoria e ttl corretos
+                # if REDIS_AVAILABLE and intelligent_cache:
+            intelligent_cache.set com categoria e ttl corretos
                 try:
-                    intelligent_cache.set(cache_key, data, "command_cache", ttl)
+                    if REDIS_AVAILABLE and intelligent_cache:
+            intelligent_cache.set(cache_key, data, "command_cache", ttl)
                 except TypeError:
                     # Fallback se a interface for diferente
-                    intelligent_cache.set(cache_key, data)
+                    if REDIS_AVAILABLE and intelligent_cache:
+            intelligent_cache.set(cache_key, data)
                 return True
             elif hasattr(redis_cache, 'set'):
-                redis_cache.set(cache_key, data, ttl)
+                if REDIS_AVAILABLE and redis_cache:
+            redis_cache.set(cache_key, data, ttl)
                 return True
         except Exception as e:
             self.logger.warning(f"Erro ao salvar cache: {e}")

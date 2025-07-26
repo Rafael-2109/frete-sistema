@@ -9,7 +9,12 @@ Especializações: Métricas IA, Padrões de Uso, Performance Temporal, Insights
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple
-from sqlalchemy import text
+try:
+    from sqlalchemy import text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    text = None
+    SQLALCHEMY_AVAILABLE = False
 from sqlalchemy.exc import SQLAlchemyError
 from collections import defaultdict
 import statistics

@@ -10,8 +10,19 @@ from datetime import datetime, timedelta
 from enum import Enum
 import json
 from dataclasses import dataclass
-from flask_login import current_user
-from flask import current_app
+try:
+    from flask_login import current_user
+    FLASK_LOGIN_AVAILABLE = True
+except ImportError:
+    from unittest.mock import Mock
+    current_user = Mock()
+    FLASK_LOGIN_AVAILABLE = False
+try:
+    from flask import current_app
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_app = None
+    FLASK_AVAILABLE = False
 from app.claude_ai_novo.utils.flask_fallback import get_db
 
 

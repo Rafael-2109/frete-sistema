@@ -11,7 +11,8 @@ from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
 from app.utils.timezone import agora_brasil
 from app.carteira.utils.separacao_utils import (
     calcular_peso_pallet_produto,
-    gerar_separacao_workspace_interno
+    gerar_separacao_workspace_interno,
+    gerar_novo_lote_id
 )
 import logging
 
@@ -31,14 +32,18 @@ def salvar_pre_separacao():
         data = request.get_json()
         num_pedido = data.get('num_pedido')
         cod_produto = data.get('cod_produto')
-        lote_id = data.get('lote_id')
+        separacao_lote_id = data.get('lote_id')  # Pode vir como 'lote_id' do frontend
         qtd_selecionada = data.get('qtd_selecionada_usuario')
         data_expedicao = data.get('data_expedicao_editada')
 
-        if not all([num_pedido, cod_produto, lote_id, qtd_selecionada, data_expedicao]):
+        # Se não foi fornecido separacao_lote_id, gerar um novo
+        if not separacao_lote_id:
+            separacao_lote_id = gerar_novo_lote_id()
+
+        if not all([num_pedido, cod_produto, qtd_selecionada, data_expedicao]):
             return jsonify({
                 'success': False,
-                'error': 'Dados obrigatórios: num_pedido, cod_produto, lote_id, qtd_selecionada_usuario, data_expedicao_editada'
+                'error': 'Dados obrigatórios: num_pedido, cod_produto, qtd_selecionada_usuario, data_expedicao_editada'
             }), 400
 
         # Buscar item da carteira para dados base
@@ -67,7 +72,7 @@ def salvar_pre_separacao():
         pre_separacao_existente = PreSeparacaoItem.query.filter(
             PreSeparacaoItem.num_pedido == num_pedido,
             PreSeparacaoItem.cod_produto == cod_produto,
-            PreSeparacaoItem.separacao_lote_id == lote_id,  # Verificar pelo lote_id específico
+            PreSeparacaoItem.separacao_lote_id == separacao_lote_id,  # Verificar pelo lote específico
             PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
         ).first()
 
@@ -106,7 +111,7 @@ def salvar_pre_separacao():
                 data_agendamento_editada=None,
                 protocolo_editado=data.get('protocolo_editado'),
                 observacoes_usuario=data.get('observacoes_usuario'),
-                separacao_lote_id=lote_id,  # Adicionar o lote_id
+                separacao_lote_id=separacao_lote_id,  # Adicionar o lote_id
                 status='CRIADO',
                 tipo_envio='parcial' if float(qtd_selecionada) < float(item_carteira.qtd_saldo_produto_pedido) else 'total',
                 data_criacao=agora_brasil(),
@@ -117,17 +122,18 @@ def salvar_pre_separacao():
 
         db.session.commit()
 
-        # Calcular peso e pallet para resposta
-        peso_calculado, pallet_calculado = calcular_peso_pallet_produto(cod_produto, float(qtd_selecionada))
+        # Calcular peso e pallet para resposta usando a quantidade total final
+        quantidade_final = float(pre_separacao.qtd_selecionada_usuario)
+        peso_calculado, pallet_calculado = calcular_peso_pallet_produto(cod_produto, quantidade_final)
 
         return jsonify({
             'success': True,
             'message': f'Pré-separação {acao} com sucesso',
             'pre_separacao_id': pre_separacao.id,
-            'lote_id': lote_id,
+            'lote_id': separacao_lote_id,
             'dados': {
                 'cod_produto': cod_produto,
-                'quantidade': float(qtd_selecionada),
+                'quantidade': quantidade_final,
                 'valor': float(pre_separacao.valor_original_item or 0),
                 'peso': peso_calculado,
                 'pallet': pallet_calculado,
@@ -158,15 +164,15 @@ def listar_pre_separacoes(num_pedido):
             PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
         ).all()
 
-        # Agrupar por data de expedição (simulando lotes)
+        # Agrupar por separacao_lote_id
         lotes = {}
         for pre_sep in pre_separacoes:
-            lote_key = pre_sep.data_expedicao_editada.isoformat()
+            lote_key = pre_sep.separacao_lote_id
             
             if lote_key not in lotes:
                 lotes[lote_key] = {
-                    'lote_id': f"PRE-{lote_key}",
-                    'data_expedicao': lote_key,
+                    'lote_id': lote_key,
+                    'data_expedicao': pre_sep.data_expedicao_editada.isoformat() if pre_sep.data_expedicao_editada else None,
                     'status': 'pre_separacao',
                     'produtos': [],
                     'totais': {'valor': 0, 'peso': 0, 'pallet': 0}

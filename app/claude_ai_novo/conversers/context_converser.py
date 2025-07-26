@@ -75,9 +75,11 @@ class ConversationContext:
                 context_history = context_history[-self.max_messages:]
             
             # Salvar no Redis se disponível
-            if self.redis_cache and self.redis_cache.disponivel:
+            if self.redis_cache and REDIS_AVAILABLE:
+            redis_cache.disponivel:
                 context_key = self._get_context_key(user_id)
-                success = self.redis_cache.set(context_key, context_history, self.context_ttl)
+                success = self.if REDIS_AVAILABLE and redis_cache:
+            redis_cache.set(context_key, context_history, self.context_ttl)
                 if success:
                     logger.debug(f"✅ Contexto salvo no Redis para usuário {user_id}")
                     return True
@@ -109,9 +111,11 @@ class ConversationContext:
         """
         try:
             # Tentar Redis primeiro
-            if self.redis_cache and self.redis_cache.disponivel:
+            if self.redis_cache and REDIS_AVAILABLE:
+            redis_cache.disponivel:
                 context_key = self._get_context_key(user_id)
-                context_data = self.redis_cache.get(context_key)
+                context_data = self.if REDIS_AVAILABLE and redis_cache:
+            redis_cache.get(context_key)
                 
                 if context_data:
                     logger.debug(f"🎯 Contexto recuperado do Redis para usuário {user_id}")
@@ -245,9 +249,11 @@ class ConversationContext:
         """
         try:
             # Limpar do Redis
-            if self.redis_cache and self.redis_cache.disponivel:
+            if self.redis_cache and REDIS_AVAILABLE:
+            redis_cache.disponivel:
                 context_key = self._get_context_key(user_id)
-                self.redis_cache.delete(context_key)
+                self.if REDIS_AVAILABLE and redis_cache:
+            redis_cache.delete(context_key)
                 logger.info(f"🗑️ Contexto Redis limpo para usuário {user_id}")
             
             # Limpar da memória
@@ -299,7 +305,8 @@ class ConversationContext:
                 'assistant_messages': len(assistant_messages),
                 'last_interaction': last_message['timestamp'] if last_message else None,
                 'clientes_mencionados': clientes_mencionados,
-                'storage_type': 'redis' if (self.redis_cache and self.redis_cache.disponivel) else 'memory'
+                'storage_type': 'redis' if (self.redis_cache and self.if REDIS_AVAILABLE and redis_cache:
+            redis_cache.disponivel) else 'memory'
             }
             
         except Exception as e:

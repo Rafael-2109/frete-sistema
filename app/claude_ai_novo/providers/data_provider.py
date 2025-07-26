@@ -13,28 +13,158 @@ from datetime import datetime, timedelta, date
 # Flask fallback para execução standalone
 try:
     from app.claude_ai_novo.utils.flask_fallback import get_model, get_db, get_current_user
-    from app.utils.redis_cache import redis_cache, cache_aside, cached_query
-    from app.utils.grupo_empresarial import GrupoEmpresarialDetector, detectar_grupo_empresarial
-    from app.utils.ml_models_real import get_ml_models_system
-    from app.claude_ai_novo.config import ClaudeAIConfig, AdvancedConfig
-    from app.utils.api_helper import get_system_alerts
-    from app.utils.ai_logging import ai_logger, AILogger
-    from app.utils.redis_cache import intelligent_cache
-    from app.financeiro.models import PendenciaFinanceiraNF
-    
+    FLASK_FALLBACK_AVAILABLE = True
 except ImportError:
-    # Fallback se dependências não disponíveis
-    from unittest.mock import Mock
-    db = Mock()
-    current_user = Mock()
-    Pedido = Embarque = EmbarqueItem = EntregaMonitorada = Mock
-    RelatorioFaturamentoImportado = Transportadora = Frete = Mock
-    redis_cache = cache_aside = cached_query = Mock()
-    GrupoEmpresarialDetector = detectar_grupo_empresarial = Mock()
-    get_ml_models_system = get_system_alerts = Mock()
-    ClaudeAIConfig = AdvancedConfig = ai_logger = AILogger = Mock()
+    # Fallback quando não há Flask
+    try:
+        from unittest.mock import Mock
+    except ImportError:
+        class Mock:
+            def __init__(self, *args, **kwargs):
+                pass
+            def __call__(self, *args, **kwargs):
+                return self
+            def __getattr__(self, name):
+                return self
+    get_model = get_db = get_current_user = Mock
+    FLASK_FALLBACK_AVAILABLE = False
 
-from sqlalchemy import func, and_, or_, text
+try:
+    from app.utils.redis_cache import redis_cache, cache_aside, cached_query, intelligent_cache
+    REDIS_AVAILABLE = True
+except ImportError:
+    # Fallback quando não há Redis
+    try:
+        from unittest.mock import Mock
+    except ImportError:
+        class Mock:
+            def __init__(self, *args, **kwargs):
+                pass
+        def __call__(self, *args, **kwargs):
+            return self
+        def __getattr__(self, name):
+            return self
+    redis_cache = cache_aside = cached_query = intelligent_cache = Mock()
+    REDIS_AVAILABLE = False
+
+try:
+    from app.utils.grupo_empresarial import GrupoEmpresarialDetector, detectar_grupo_empresarial
+    GRUPO_AVAILABLE = True
+except ImportError:
+    # Fallback quando não há Redis
+    try:
+        from unittest.mock import Mock
+    except ImportError:
+        class Mock:
+            def __init__(self, *args, **kwargs):
+                pass
+        def __call__(self, *args, **kwargs):
+            return self
+        def __getattr__(self, name):
+            return self
+    GrupoEmpresarialDetector = detectar_grupo_empresarial = Mock()
+    GRUPO_AVAILABLE = False
+
+try:
+    from app.utils.ml_models_real import get_ml_models_system
+    ML_MODELS_AVAILABLE = True
+except ImportError:
+    # Fallback quando não há Redis
+    try:
+        from unittest.mock import Mock
+    except ImportError:
+        class Mock:
+            def __init__(self, *args, **kwargs):
+                pass
+        def __call__(self, *args, **kwargs):
+            return self
+        def __getattr__(self, name):
+            return self
+    get_ml_models_system = Mock()
+    ML_MODELS_AVAILABLE = False
+
+try:
+    from app.claude_ai_novo.config import ClaudeAIConfig, AdvancedConfig
+    CONFIG_AVAILABLE = True
+except ImportError:
+    # Fallback quando não há Redis
+    try:
+        from unittest.mock import Mock
+    except ImportError:
+        class Mock:
+            def __init__(self, *args, **kwargs):
+                pass
+        def __call__(self, *args, **kwargs):
+            return self
+        def __getattr__(self, name):
+            return self
+    ClaudeAIConfig = AdvancedConfig = Mock()
+    CONFIG_AVAILABLE = False
+
+try:
+    from app.utils.api_helper import get_system_alerts
+    API_HELPER_AVAILABLE = True
+except ImportError:
+    # Fallback quando não há Redis
+    try:
+        from unittest.mock import Mock
+    except ImportError:
+        class Mock:
+            def __init__(self, *args, **kwargs):
+                pass
+        def __call__(self, *args, **kwargs):
+            return self
+        def __getattr__(self, name):
+            return self
+    get_system_alerts = Mock()
+    API_HELPER_AVAILABLE = False
+
+try:
+    from app.utils.ai_logging import ai_logger, AILogger
+    AI_LOGGING_AVAILABLE = True
+except ImportError:
+    # Fallback quando não há Redis
+    try:
+        from unittest.mock import Mock
+    except ImportError:
+        class Mock:
+            def __init__(self, *args, **kwargs):
+                pass
+        def __call__(self, *args, **kwargs):
+            return self
+        def __getattr__(self, name):
+            return self
+    ai_logger = AILogger = Mock()
+    AI_LOGGING_AVAILABLE = False
+
+try:
+    from app.financeiro.models import PendenciaFinanceiraNF
+    FINANCEIRO_AVAILABLE = True
+except ImportError:
+    # Fallback quando não há Redis
+    try:
+        from unittest.mock import Mock
+    except ImportError:
+        class Mock:
+            def __init__(self, *args, **kwargs):
+                pass
+        def __call__(self, *args, **kwargs):
+            return self
+        def __getattr__(self, name):
+            return self
+    PendenciaFinanceiraNF = Mock
+    FINANCEIRO_AVAILABLE = False
+
+try:
+    from sqlalchemy import func, and_, or_, text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    func, and_, or_, text = None
+    SQLALCHEMY_AVAILABLE = False
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    func = and_ = or_ = text = None
+    SQLALCHEMY_AVAILABLE = False
 import json
 import re
 import time
@@ -54,36 +184,148 @@ class DataProvider:
     @property
     def db(self):
         """Obtém db com fallback"""
-        return get_db()
+        if FLASK_FALLBACK_AVAILABLE:
+            return get_db()
+        else:
+            # Fallback
+            try:
+                from unittest.mock import Mock
+            except ImportError:
+                class Mock:
+                    def __init__(self, *args, **kwargs):
+                        pass
+                    def __call__(self, *args, **kwargs):
+                        return self
+                    def __getattr__(self, name):
+                        return self
+            return Mock()
     
     @property
     def Pedido(self):
-        return get_model("Pedido")
-    
+        if FLASK_FALLBACK_AVAILABLE:
+            return get_model("Pedido")
+        else:
+            # Fallback
+            try:
+                from unittest.mock import Mock
+            except ImportError:
+                class Mock:
+                    def __init__(self, *args, **kwargs):
+                        pass
+                    def __call__(self, *args, **kwargs):
+                        return self
+                    def __getattr__(self, name):
+                        return self
+            return Mock
+
     @property
     def Embarque(self):
-        return get_model("Embarque")
-    
+        if FLASK_FALLBACK_AVAILABLE:
+            return get_model("Embarque")
+        else:
+            # Fallback
+            try:
+                from unittest.mock import Mock
+            except ImportError:
+                class Mock:
+                    def __init__(self, *args, **kwargs):
+                        pass
+                    def __call__(self, *args, **kwargs):
+                        return self
+                    def __getattr__(self, name):
+                        return self
+            return Mock
+
     @property
     def EmbarqueItem(self):
-        return get_model("EmbarqueItem")
-    
+        if FLASK_FALLBACK_AVAILABLE:
+            return get_model("EmbarqueItem")
+        else:
+            # Fallback
+            try:
+                from unittest.mock import Mock
+            except ImportError:
+                class Mock:
+                    def __init__(self, *args, **kwargs):
+                        pass
+                    def __call__(self, *args, **kwargs):
+                        return self
+                    def __getattr__(self, name):
+                        return self
+            return Mock
+
     @property
     def EntregaMonitorada(self):
-        return get_model("EntregaMonitorada")
-    
+        if FLASK_FALLBACK_AVAILABLE:
+            return get_model("EntregaMonitorada")
+        else:
+            # Fallback
+            try:
+                from unittest.mock import Mock
+            except ImportError:
+                class Mock:
+                    def __init__(self, *args, **kwargs):
+                        pass
+                    def __call__(self, *args, **kwargs):
+                        return self
+                    def __getattr__(self, name):
+                        return self
+            return Mock
+
     @property
     def RelatorioFaturamentoImportado(self):
-        return get_model("RelatorioFaturamentoImportado")
-    
+        if FLASK_FALLBACK_AVAILABLE:
+            return get_model("RelatorioFaturamentoImportado")
+        else:
+            # Fallback
+            try:
+                from unittest.mock import Mock
+            except ImportError:
+                class Mock:
+                    def __init__(self, *args, **kwargs):
+                        pass
+                    def __call__(self, *args, **kwargs):
+                        return self
+                    def __getattr__(self, name):
+                        return self
+            return Mock
+
     @property
     def Transportadora(self):
-        return get_model("Transportadora")
-    
+        if FLASK_FALLBACK_AVAILABLE:
+            return get_model("Transportadora")
+        else:
+            # Fallback
+            try:
+                from unittest.mock import Mock
+            except ImportError:
+                class Mock:
+                    def __init__(self, *args, **kwargs):
+                        pass
+                    def __call__(self, *args, **kwargs):
+                        return self
+                    def __getattr__(self, name):
+                        return self
+            return Mock
+
     @property
     def Frete(self):
-        return get_model("Frete")
-    
+        if FLASK_FALLBACK_AVAILABLE:
+            return get_model("Frete")
+        else:
+            # Fallback
+            try:
+                from unittest.mock import Mock
+            except ImportError:
+                class Mock:
+                    def __init__(self, *args, **kwargs):
+                        pass
+                    def __call__(self, *args, **kwargs):
+                        return self
+                    def __getattr__(self, name):
+                        return self
+            return Mock
+
     def __init__(self, loader=None):
         """Inicializa o provedor de dados com LoaderManager opcional"""
         self.cache_timeout = 300  # 5 minutos

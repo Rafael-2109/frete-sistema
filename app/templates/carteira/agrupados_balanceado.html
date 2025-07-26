@@ -410,9 +410,9 @@
 <!-- Inicialização -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar módulos auxiliares primeiro
-    window.workspaceTabela = new WorkspaceTabela();
+    // Inicializar módulos auxiliares primeiro (ordem importante!)
     window.workspaceQuantidades = new WorkspaceQuantidades();
+    window.workspaceTabela = new WorkspaceTabela();
     
     // Inicializar controladores principais
     window.carteiraAgrupada = new CarteiraAgrupada();

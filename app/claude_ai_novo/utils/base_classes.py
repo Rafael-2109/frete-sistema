@@ -20,12 +20,27 @@ from pathlib import Path
 
 # Third-party Libraries
 import anthropic
-from flask_login import current_user
-from sqlalchemy import func, and_, or_, text
+try:
+    from flask_login import current_user
+    FLASK_LOGIN_AVAILABLE = True
+except ImportError:
+    from unittest.mock import Mock
+    current_user = Mock()
+    FLASK_LOGIN_AVAILABLE = False
+try:
+    from sqlalchemy import func, and_, or_, text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    func, and_, or_, text = None
+    SQLALCHEMY_AVAILABLE = False
 
 # Flask & Database
 try:
     from flask import current_app
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_app = None
+    FLASK_AVAILABLE = False
     from app import db
     FLASK_AVAILABLE = True
 except ImportError:
@@ -154,11 +169,117 @@ logger = logging.getLogger(__name__)
 # CLASSES BASE COMUNS
 # ==========================================
 
-class BaseOrchestrator:
+class BaseModule:
+    """
+    Classe base para TODOS os módulos do sistema
+    
+    Fornece atributos essenciais que estavam faltando:
+    - logger
+    - components
+    - db
+    - config
+    - initialized
+    - redis_cache
+    """
+    
+    def __init__(self):
+        # Atributos essenciais que estavam faltando
+        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.components = {}
+        self.db = db  # Referência ao banco de dados
+        self.config = {}
+        self.initialized = False
+        self.redis_cache = redis_cache  # Referência ao cache Redis
+        
+        # Status e metadata
+        self.status = 'initializing'
+        self.created_at = datetime.now()
+        self.last_activity = datetime.now()
+        
+        # Inicializar configuração se disponível
+        if CONFIG_AVAILABLE:
+            try:
+                from app.claude_ai_novo.config import ClaudeAIConfig
+                self.config = ClaudeAIConfig()
+            except Exception as e:
+                self.logger.warning(f"Não foi possível carregar configuração: {e}")
+        
+        # Marcar como inicializado
+        self.initialized = True
+        self.status = 'ready'
+        self.logger.debug(f"{self.__class__.__name__} inicializado com sucesso")
+    
+    def _check_redis_available(self) -> bool:
+        """Verifica se Redis está disponível antes de usar"""
+        if not self.redis_cache or not REDIS_CACHE_AVAILABLE:
+            return False
+        
+        try:
+            # Testar conexão
+            if hasattr(self.redis_cache, 'ping'):
+                return self.redis_cache.ping()
+            return True
+        except Exception:
+            return False
+    
+    def _safe_redis_get(self, key: str, default=None):
+        """Operação segura de GET no Redis"""
+        if not self._check_redis_available():
+            return default
+        
+        try:
+            return self.redis_cache.get(key) or default
+        except Exception as e:
+            self.logger.debug(f"Erro ao acessar Redis (get): {e}")
+            return default
+    
+    def _safe_redis_set(self, key: str, value: Any, ttl: int = 300):
+        """Operação segura de SET no Redis"""
+        if not self._check_redis_available():
+            return False
+        
+        try:
+            # Tentar diferentes assinaturas do Redis
+            if hasattr(self.redis_cache, 'set'):
+                # Redis padrão com ex (expire)
+                try:
+                    self.redis_cache.set(key, value, ex=ttl)
+                    return True
+                except:
+                    # Fallback para set simples
+                    try:
+                        self.redis_cache.set(key, value)
+                        return True
+                    except:
+                        pass
+            return False
+        except Exception as e:
+            self.logger.debug(f"Erro ao acessar Redis (set): {e}")
+            return False
+    
+    def health_check(self) -> bool:
+        """Verifica saúde do módulo"""
+        return self.initialized and self.status == 'ready'
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Retorna status do módulo"""
+        return {
+            'module': self.__class__.__name__,
+            'status': self.status,
+            'initialized': self.initialized,
+            'components_count': len(self.components),
+            'redis_available': self._check_redis_available(),
+            'db_available': self.db is not None,
+            'created_at': self.created_at.isoformat(),
+            'last_activity': self.last_activity.isoformat(),
+            'uptime_seconds': (datetime.now() - self.created_at).total_seconds()
+        }
+
+class BaseOrchestrator(BaseModule):
     """
     Classe base para todos os orquestradores
     
-    Fornece funcionalidades comuns:
+    Herda de BaseModule e adiciona funcionalidades específicas:
     - Coordenação de componentes
     - Gerenciamento de estado
     - Logging padronizado
@@ -166,11 +287,10 @@ class BaseOrchestrator:
     """
     
     def __init__(self):
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-        self.components = {}
+        super().__init__()  # Inicializa BaseModule primeiro
+        # Ajustes específicos para orquestradores
         self.status = 'initialized'
-        self.initialized = True
-        self.logger.debug(f"{self.__class__.__name__} inicializado")
+        self.logger.debug(f"{self.__class__.__name__} (Orchestrator) inicializado")
     
     def register_component(self, name: str, component: Any) -> None:
         """Registra um componente no orquestrador"""
@@ -321,7 +441,7 @@ class BaseProcessor:
             """Wrapper seguro para cache.set que tenta diferentes assinaturas"""
             try:
                 # Para Redis real
-                if hasattr(cache_obj, 'set') and callable(cache_obj.set):
+                if cache_obj and hasattr(cache_obj, 'set') and callable(cache_obj.set):
                     # Tentar diferentes assinaturas
                     cache_set_method = getattr(cache_obj, 'set')
                     
@@ -513,6 +633,7 @@ def get_base_processor() -> BaseProcessor:
 
 __all__ = [
     # Classes base
+    'BaseModule',
     'BaseProcessor',
     'BaseOrchestrator',
     

@@ -16,7 +16,12 @@ import json
 import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-from flask import current_app
+try:
+    from flask import current_app
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_app = None
+    FLASK_AVAILABLE = False
 
 # Local imports - Flask fallback
 from app.claude_ai_novo.utils.flask_fallback import get_db
@@ -285,7 +290,15 @@ class LearningCore:
                         satisfacao = 0.7  # Sugestão indica espaço para melhorar
                 
                 # Salvar métrica
-                from sqlalchemy import text
+        except Exception as e:
+            logger.error(f'Erro: {e}')
+            pass
+try:
+    from sqlalchemy import text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    text = None
+    SQLALCHEMY_AVAILABLE = False
                 self.db.session.execute(
                     text("""
                         INSERT INTO ai_learning_metrics
@@ -320,7 +333,15 @@ class LearningCore:
         """
         try:
             with current_app.app_context():
-                from sqlalchemy import text
+        except Exception as e:
+            logger.error(f'Erro: {e}')
+            pass
+try:
+    from sqlalchemy import text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    text = None
+    SQLALCHEMY_AVAILABLE = False
                 
                 self.db.session.execute(
                     text("""

@@ -124,9 +124,8 @@ class WorkspaceMontagem {
             loteCard.innerHTML = this.loteManager.renderizarCardPreSeparacao(lote);
             container.appendChild(loteCard);
 
-            // Configurar drop zone
+            // Drag & drop removido - usando checkboxes
             const newCard = loteCard.querySelector('.lote-card');
-            this.dragDropHandler.reconfigurarTudo(this.numPedido);
         }
 
         console.log(`✅ Renderizados ${lotes.length} lotes de pré-separação`);

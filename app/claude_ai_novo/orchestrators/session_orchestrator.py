@@ -1039,6 +1039,70 @@ class SessionOrchestrator:
             'intent': 'geral',
             'source': 'session_orchestrator_fallback'
         }
+    
+    async def process_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Processa uma consulta usando o contexto da sessão.
+        
+        Este método foi adicionado para corrigir o erro no OrchestratorManager
+        que espera este método existir no SessionOrchestrator.
+        
+        Args:
+            query: A consulta a ser processada
+            context: Contexto adicional da consulta
+            
+        Returns:
+            Dict com o resultado do processamento
+        """
+        # Obter sessão do contexto ou criar uma nova
+        session_id = None
+        user_id = None
+        
+        if context:
+            session_id = context.get('session_id')
+            user_id = context.get('user_id')
+        
+        # Se não tem sessão, criar uma temporária
+        if not session_id:
+            current_user = get_current_user()
+            user_id = user_id or (current_user.id if current_user and hasattr(current_user, 'id') else None)
+            
+            session_context = self.create_session(
+                user_id=user_id,
+                priority=SessionPriority.NORMAL,
+                metadata={'query': query, 'auto_created': True}
+            )
+            session_id = session_context.session_id
+        
+        # Processar usando o workflow de sessão
+        try:
+            result = await self.execute_session_workflow(
+                session_id=session_id,
+                workflow_type='intelligent_query',
+                workflow_data={
+                    'query': query,
+                    'context': context or {},
+                    'timestamp': datetime.now().isoformat()
+                }
+            )
+            
+            # Completar sessão se foi criada automaticamente
+            if session_id in self.active_sessions:
+                session = self.active_sessions[session_id]
+                if session.metadata.get('auto_created'):
+                    self.complete_session(session_id, result)
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao processar query na sessão: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'query': query,
+                'session_id': session_id,
+                'source': 'session_orchestrator_error'
+            }
 
 
 # Instância global para conveniência

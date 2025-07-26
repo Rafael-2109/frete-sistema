@@ -1,0 +1,51 @@
+{
+  "name": "frete-sistema-rest-api",
+  "version": "1.0.0",
+  "description": "REST API for freight management system",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.js",
+    "format": "prettier --write src/**/*.js"
+  },
+  "keywords": ["rest", "api", "express", "freight", "logistics"],
+  "author": "API Developer",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "helmet": "^7.1.0",
+    "compression": "^1.7.4",
+    "express-validator": "^7.0.1",
+    "express-rate-limit": "^7.1.5",
+    "morgan": "^1.10.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "sequelize": "^6.35.2",
+    "pg": "^8.11.3",
+    "pg-hstore": "^2.3.4",
+    "joi": "^17.11.0",
+    "winston": "^3.11.0",
+    "express-winston": "^4.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "eslint": "^8.56.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.29.1",
+    "prettier": "^3.1.1",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.11",
+    "sequelize-cli": "^6.6.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

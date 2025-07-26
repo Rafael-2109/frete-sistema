@@ -10,7 +10,12 @@ import json
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Union
-from sqlalchemy import text, func
+try:
+    from sqlalchemy import text, func
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    text, func = None
+    SQLALCHEMY_AVAILABLE = False
 from sqlalchemy.exc import SQLAlchemyError
 
 # Imports internos com fallbacks robustos

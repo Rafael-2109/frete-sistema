@@ -1,0 +1,9 @@
+multi_agent_enabled	true	Sistema multi-agente	t	2025-06-25 00:58:43.535916	2025-06-25 00:58:43.535916
+human_learning_enabled	true	Aprendizado humano	t	2025-06-25 00:58:43.535916	2025-06-25 00:58:43.535916
+semantic_loop_max_iterations	3	Max iteracoes	t	2025-06-25 00:58:43.535916	2025-06-25 00:58:43.535916
+metacognitive_threshold	0.7	Threshold metacognitiva	t	2025-06-25 00:58:43.535916	2025-06-25 00:58:43.535916
+auto_tagging_enabled	true	Auto-tagging	t	2025-06-25 00:58:43.535916	2025-06-25 00:58:43.535916
+advanced_analytics_retention_days	90	Retencao analytics	t	2025-06-25 00:58:43.535916	2025-06-25 00:58:43.535916
+\.
+
+

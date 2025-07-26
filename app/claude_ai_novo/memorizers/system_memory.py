@@ -18,7 +18,17 @@ try:
     from app.utils.redis_cache import redis_cache, REDIS_DISPONIVEL
     from app.claude_ai_novo.config import ClaudeAIConfig, AdvancedConfig
 except ImportError:
-    from unittest.mock import Mock
+    # Fallback quando não há Flask
+    try:
+        from unittest.mock import Mock
+    except ImportError:
+        class Mock:
+            def __init__(self, *args, **kwargs):
+                pass
+            def __call__(self, *args, **kwargs):
+                return self
+            def __getattr__(self, name):
+                return self
     redis_cache = Mock()
     REDIS_DISPONIVEL = False
     ClaudeAIConfig = AdvancedConfig = Mock()
@@ -68,7 +78,8 @@ class SystemMemory:
             # Tentar armazenar no Redis primeiro
             if REDIS_DISPONIVEL:
                 key = f"system_memory:config:{config_key}"
-                redis_cache.set(key, config_data, ttl=self.memory_timeout)
+                if redis_cache:
+                    redis_cache.set(key, config_data, ttl=self.memory_timeout)
                 self.logger.info(f"✅ Configuração armazenada no Redis: {config_key}")
                 return True
             else:
@@ -98,7 +109,9 @@ class SystemMemory:
             # Tentar recuperar do Redis primeiro
             if REDIS_DISPONIVEL:
                 key = f"system_memory:config:{config_key}"
-                config_data = redis_cache.get(key)
+                config_data = None
+                if redis_cache:
+                    config_data = redis_cache.get(key)
                 if config_data:
                     self.logger.info(f"✅ Configuração recuperada do Redis: {config_key}")
                     return config_data.get('value')
@@ -147,7 +160,8 @@ class SystemMemory:
             # Tentar armazenar no Redis
             if REDIS_DISPONIVEL:
                 key = f"system_memory:component:{component_name}"
-                redis_cache.set(key, state_data, ttl=self.memory_timeout)
+                if redis_cache:
+                    redis_cache.set(key, state_data, ttl=self.memory_timeout)
                 self.logger.info(f"✅ Estado do componente armazenado: {component_name}")
                 return True
             else:
@@ -177,7 +191,9 @@ class SystemMemory:
             # Tentar recuperar do Redis primeiro
             if REDIS_DISPONIVEL:
                 key = f"system_memory:component:{component_name}"
-                state_data = redis_cache.get(key)
+                state_data = None
+                if redis_cache:
+                    state_data = redis_cache.get(key)
                 if state_data:
                     self.logger.info(f"✅ Estado do componente recuperado do Redis: {component_name}")
                     return state_data.get('state')
@@ -238,7 +254,8 @@ class SystemMemory:
             # Tentar armazenar no Redis
             if REDIS_DISPONIVEL:
                 key = f"system_memory:performance:{metric_name}"
-                redis_cache.set(key, metric_data, ttl=self.memory_timeout)
+                if redis_cache:
+                    redis_cache.set(key, metric_data, ttl=self.memory_timeout)
                 self.logger.info(f"✅ Métrica de desempenho armazenada: {metric_name}")
                 return True
             else:

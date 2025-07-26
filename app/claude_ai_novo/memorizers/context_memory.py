@@ -16,13 +16,30 @@ import json
 try:
     from app.utils.redis_cache import redis_cache, REDIS_DISPONIVEL
     from app.claude_ai_novo.utils.flask_fallback import get_current_user
-    from flask_login import current_user as flask_current_user
-    current_user = get_current_user() or flask_current_user
 except ImportError:
-    from unittest.mock import Mock
-    redis_cache = Mock()
+    redis_cache = None
     REDIS_DISPONIVEL = False
-    current_user = Mock()
+    get_current_user = lambda: None
+
+try:
+    from flask_login import current_user as flask_current_user
+    FLASK_LOGIN_AVAILABLE = True
+    current_user = flask_current_user
+except ImportError:
+    try:
+        from unittest.mock import Mock
+    except ImportError:
+        class Mock:
+            def __init__(self, *args, **kwargs):
+                pass
+            def __call__(self, *args, **kwargs):
+                return self
+            def __getattr__(self, name):
+                return self
+    
+    flask_current_user = Mock()
+    FLASK_LOGIN_AVAILABLE = False
+    current_user = get_current_user() if get_current_user else flask_current_user
 
 # Configurar logger
 logger = logging.getLogger(__name__)
@@ -65,9 +82,10 @@ class ContextMemory:
             # Tentar armazenar no Redis primeiro
             if REDIS_DISPONIVEL:
                 key = f"context_memory:{session_id}"
-                redis_cache.set(key, context, ttl=self.memory_timeout)
-                self.logger.info(f"✅ Contexto armazenado no Redis: {session_id}")
-                return True
+                if redis_cache:
+                    redis_cache.set(key, context, ttl=self.memory_timeout)
+                    self.logger.info(f"✅ Contexto armazenado no Redis: {session_id}")
+                    return True
             else:
                 # Fallback para cache local
                 self.local_cache[session_id] = {
@@ -95,7 +113,7 @@ class ContextMemory:
             # Tentar recuperar do Redis primeiro
             if REDIS_DISPONIVEL:
                 key = f"context_memory:{session_id}"
-                context = redis_cache.get(key)
+                context = redis_cache.get(key) if redis_cache else None
                 if context:
                     self.logger.info(f"✅ Contexto recuperado do Redis: {session_id}")
                     return context
@@ -192,7 +210,8 @@ class ContextMemory:
             # Limpar do Redis
             if REDIS_DISPONIVEL:
                 key = f"context_memory:{session_id}"
-                redis_cache.delete(key)
+                if REDIS_AVAILABLE and redis_cache:
+                    redis_cache.delete(key)
             
             # Limpar do cache local
             if session_id in self.local_cache:

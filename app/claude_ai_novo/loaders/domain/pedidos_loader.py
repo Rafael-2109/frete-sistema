@@ -5,8 +5,18 @@ Micro-loader especializado para carregamento de dados de pedidos
 
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
-from sqlalchemy import func, and_, or_
-from flask import current_app
+try:
+    from sqlalchemy import func, and_, or_
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    func, and_, or_ = None
+    SQLALCHEMY_AVAILABLE = False
+try:
+    from flask import current_app
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_app = None
+    FLASK_AVAILABLE = False
 from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
 from app.pedidos.models import Pedido
 # from app.[a-z]+.models import .*Pedido - Usando flask_fallback

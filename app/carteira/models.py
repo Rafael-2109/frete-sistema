@@ -587,6 +587,7 @@ class PreSeparacaoItem(db.Model):
     
     # Campos principais
     id = db.Column(db.Integer, primary_key=True)
+    separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # ID do lote de pré-separação
     num_pedido = db.Column(db.String(50), nullable=False, index=True)
     cod_produto = db.Column(db.String(50), nullable=False, index=True) 
     cnpj_cliente = db.Column(db.String(20), index=True)

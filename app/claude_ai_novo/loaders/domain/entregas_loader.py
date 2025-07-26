@@ -5,8 +5,18 @@ Micro-loader especializado para carregamento de dados de entregas
 
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
-from sqlalchemy import func, and_, or_
-from flask import current_app
+try:
+    from sqlalchemy import func, and_, or_
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    func, and_, or_ = None
+    SQLALCHEMY_AVAILABLE = False
+try:
+    from flask import current_app
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_app = None
+    FLASK_AVAILABLE = False
 from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
 from app.monitoramento.models import EntregaMonitorada
 from app.utils.grupo_empresarial import detectar_grupo_empresarial
@@ -50,7 +60,11 @@ class EntregasLoader:
             
             # Se falhar, tentar com app context
             try:
-                from flask import current_app
+    from flask import current_app
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_app = None
+    FLASK_AVAILABLE = False
                 if current_app and current_app.app_context:
                     with current_app.app_context():
                         return self._load_with_context(filters)
@@ -116,7 +130,11 @@ class EntregasLoader:
             
             # Método 1: Tentar current_app primeiro
             try:
-                from flask import current_app
+    from flask import current_app
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_app = None
+    FLASK_AVAILABLE = False
                 # Verificar se current_app realmente funciona
                 current_app.config  # Isso vai falhar se não há contexto
                 app = current_app
@@ -145,7 +163,12 @@ class EntregasLoader:
                     # Verificar se já estamos em contexto ou precisamos criar um
                     try:
                         # Se current_app já funciona, estamos em contexto
-                        from flask import current_app
+try:
+    from flask import current_app
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_app = None
+    FLASK_AVAILABLE = False
                         current_app.config
                         self.logger.info("🎯 Já estamos em Flask context - carregando dados REAIS")
                         return self._load_with_app_context(filters)
@@ -182,7 +205,11 @@ class EntregasLoader:
             
             # Verificar se db session está ativa
             try:
-                from sqlalchemy import text
+    from sqlalchemy import text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    text = None
+    SQLALCHEMY_AVAILABLE = False
                 db.session.execute(text('SELECT 1'))
                 self.logger.info("✅ Sessão do banco de dados ativa")
             except Exception as e:

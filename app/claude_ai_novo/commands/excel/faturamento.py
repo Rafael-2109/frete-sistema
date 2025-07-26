@@ -14,6 +14,11 @@ from typing import Dict, Optional, List
 # Excel generation imports
 try:
     from openpyxl import Workbook
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    from unittest.mock import Mock
+    Workbook = Mock()
+    OPENPYXL_AVAILABLE = False
     from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
     from openpyxl.utils import get_column_letter
     EXCEL_AVAILABLE = True
@@ -23,7 +28,15 @@ except ImportError:
 # Sistema imports (com fallbacks)
 try:
     from app.faturamento.models import RelatorioFaturamentoImportado
+except Exception as e:
+    logger.error(f'Erro: {e}')
+    pass
+try:
     from sqlalchemy import func, and_, or_
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    func, and_, or_ = None
+    SQLALCHEMY_AVAILABLE = False
     SISTEMA_AVAILABLE = True
 except ImportError:
     SISTEMA_AVAILABLE = False

@@ -11,9 +11,26 @@ o sistema é executado fora do contexto Flask.
 
 import logging
 from typing import Dict, List, Any, Optional, Union
-from unittest.mock import Mock, MagicMock
+try:
+    from unittest.mock import Mock
+except ImportError:
+    class Mock:
+        def __init__(self, *args, **kwargs):
+            pass
+        def __call__(self, *args, **kwargs):
+            return self
+        def __getattr__(self, name):
+            return self
 
 logger = logging.getLogger(__name__)
+
+# Variáveis globais para indicar disponibilidade do Flask
+try:
+    from flask import Flask
+    FLASK_AVAILABLE = True
+except ImportError:
+    Flask = None
+    FLASK_AVAILABLE = False
 
 class FlaskFallback:
     """
@@ -34,7 +51,6 @@ class FlaskFallback:
         try:
             # Tentar importar Flask
             import flask
-            from flask import Flask
             self.available = True
             logger.info("✅ Flask disponível - usando versão real")
             

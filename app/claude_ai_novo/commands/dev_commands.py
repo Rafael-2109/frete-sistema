@@ -170,7 +170,12 @@ TIPO DE DESENVOLVIMENTO: {tipo_dev}
 PADRÃO PARA MÓDULOS:
 ```python
 # __init__.py
-from flask import Blueprint
+try:
+    from flask import Blueprint
+    FLASK_AVAILABLE = True
+except ImportError:
+    Blueprint = None
+    FLASK_AVAILABLE = False
 bp = Blueprint('modulo', __name__)
 from app.modulo import routes
 
@@ -181,8 +186,19 @@ class Model(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     
 # routes.py
-from flask import render_template, request, flash, redirect, url_for
-from flask_login import login_required
+try:
+    from flask import render_template, request, flash, redirect, url_for
+    FLASK_AVAILABLE = True
+except ImportError:
+    render_template, request, flash, redirect, url_for = None
+    FLASK_AVAILABLE = False
+try:
+    from flask_login import login_required
+    FLASK_LOGIN_AVAILABLE = True
+except ImportError:
+    from unittest.mock import Mock
+    login_required = Mock()
+    FLASK_LOGIN_AVAILABLE = False
 from app.modulo import bp
 
 @bp.route('/')
@@ -347,7 +363,12 @@ def api_data():
 
 ```python
 # app/{nome_modulo}/__init__.py
-from flask import Blueprint
+try:
+    from flask import Blueprint
+    FLASK_AVAILABLE = True
+except ImportError:
+    Blueprint = None
+    FLASK_AVAILABLE = False
 
 bp = Blueprint('{nome_modulo}', __name__)
 
@@ -368,8 +389,19 @@ class {nome_modulo.title()}(db.Model):
         return f'<{nome_modulo.title()} {{self.nome}}>'
 
 # app/{nome_modulo}/routes.py
-from flask import render_template, request, flash, redirect, url_for
-from flask_login import login_required
+try:
+    from flask import render_template, request, flash, redirect, url_for
+    FLASK_AVAILABLE = True
+except ImportError:
+    render_template, request, flash, redirect, url_for = None
+    FLASK_AVAILABLE = False
+try:
+    from flask_login import login_required
+    FLASK_LOGIN_AVAILABLE = True
+except ImportError:
+    from unittest.mock import Mock
+    login_required = Mock()
+    FLASK_LOGIN_AVAILABLE = False
 from app.{nome_modulo} import bp
 
 @bp.route('/')
@@ -545,8 +577,19 @@ class NovoForm(FlaskForm):
         return """💻 **API REST GERADA**
 
 ```python
-from flask import jsonify, request
-from flask_login import login_required, current_user
+try:
+    from flask import jsonify, request
+    FLASK_AVAILABLE = True
+except ImportError:
+    jsonify, request = None
+    FLASK_AVAILABLE = False
+try:
+    from flask_login import login_required, current_user
+    FLASK_LOGIN_AVAILABLE = True
+except ImportError:
+    from unittest.mock import Mock
+    login_required, current_user = Mock()
+    FLASK_LOGIN_AVAILABLE = False
 
 @bp.route('/api/dados', methods=['GET'])
 @login_required

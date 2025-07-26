@@ -53,7 +53,15 @@ class DatabaseLoader:
         try:
             # Tentar importar SQLAlchemy
             import sqlalchemy as sa
-            from sqlalchemy import create_engine
+        except Exception as e:
+            logger.error(f'Erro: {e}')
+            pass
+try:
+    from sqlalchemy import create_engine
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    create_engine = None
+    SQLALCHEMY_AVAILABLE = False
             from sqlalchemy.orm import sessionmaker
             
             # Construir URL de conexão

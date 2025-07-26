@@ -17,7 +17,13 @@ import ast
 import logging
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from sqlalchemy import inspect as sql_inspect
+try:
+    from sqlalchemy import inspect as sql_inspect
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    inspect as sql_inspect
+    sql_inspect = None
+    SQLALCHEMY_AVAILABLE = False
 from app.claude_ai_novo.utils.flask_fallback import get_db
 
 logger = logging.getLogger(__name__)

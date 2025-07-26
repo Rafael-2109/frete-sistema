@@ -23,8 +23,13 @@ class FlaskContextWrapper(BaseProcessor):
         try:
             if self._flask_available:
                 from flask import current_app
-                self._app_config = current_app.config
-                self.logger.debug("Contexto Flask inicializado")
+                # Verificar se estamos em contexto Flask
+                if hasattr(current_app, 'config'):
+                    self._context_active = True
+                    self._app = current_app._get_current_object()
+                    self.logger.info("✅ Contexto Flask ativo")
+                    self._app_config = current_app.config
+                    self.logger.debug("Contexto Flask inicializado")
             else:
                 self._app_config = {}
                 self.logger.warning("Flask não disponível - usando fallback")

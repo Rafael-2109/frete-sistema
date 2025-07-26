@@ -16,7 +16,12 @@ import json
 import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-from flask import current_app
+try:
+    from flask import current_app
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_app = None
+    FLASK_AVAILABLE = False
 from app.claude_ai_novo.utils.flask_fallback import get_db
 
 logger = logging.getLogger(__name__)
@@ -268,7 +273,15 @@ class PatternLearner:
         try:
             with current_app.app_context():
                 from app.claude_ai_novo.utils.flask_fallback import get_db
-                from sqlalchemy import text
+        except Exception as e:
+            logger.error(f'Erro: {e}')
+            pass
+try:
+    from sqlalchemy import text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    text = None
+    SQLALCHEMY_AVAILABLE = False
                 
                 # Verificar se já existe
                 existe = self.db.session.execute(
@@ -337,7 +350,15 @@ class PatternLearner:
         try:
             with current_app.app_context():
                 from app.claude_ai_novo.utils.flask_fallback import get_db
-                from sqlalchemy import text
+        except Exception as e:
+            logger.error(f'Erro: {e}')
+            pass
+try:
+    from sqlalchemy import text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    text = None
+    SQLALCHEMY_AVAILABLE = False
                 
                 padroes = self.db.session.execute(
                     text("""

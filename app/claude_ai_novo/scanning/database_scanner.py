@@ -14,8 +14,19 @@ Responsabilidades:
 
 import logging
 from typing import Dict, List, Any, Optional
-from sqlalchemy import inspect as sql_inspect, text
-from flask import current_app
+try:
+    from sqlalchemy import inspect as sql_inspect, text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    inspect as sql_inspect
+    text = None
+    SQLALCHEMY_AVAILABLE = False
+try:
+    from flask import current_app
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_app = None
+    FLASK_AVAILABLE = False
 from datetime import datetime
 from app.claude_ai_novo.utils.flask_fallback import get_db
 

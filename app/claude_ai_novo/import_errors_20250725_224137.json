@@ -1,0 +1,266 @@
+{
+  "total_files": 150,
+  "files_with_errors": 9,
+  "total_imports": 1878,
+  "broken_imports": 14,
+  "errors": [
+    {
+      "file": "teste_integracao_completa_todos_modulos.py",
+      "line": 222,
+      "import": "from orchestrators.main_orchestrator import get_main_orchestrator",
+      "error": "No module named 'orchestrators'",
+      "error_type": "ImportError",
+      "module": "orchestrators.main_orchestrator",
+      "name": "get_main_orchestrator"
+    },
+    {
+      "file": "teste_integracao_completa_todos_modulos.py",
+      "line": 266,
+      "import": "from orchestrators.session_orchestrator import get_session_orchestrator",
+      "error": "No module named 'orchestrators'",
+      "error_type": "ImportError",
+      "module": "orchestrators.session_orchestrator",
+      "name": "get_session_orchestrator"
+    },
+    {
+      "file": "teste_integracao_completa_todos_modulos.py",
+      "line": 310,
+      "import": "from orchestrators.main_orchestrator import get_main_orchestrator",
+      "error": "No module named 'orchestrators'",
+      "error_type": "ImportError",
+      "module": "orchestrators.main_orchestrator",
+      "name": "get_main_orchestrator"
+    },
+    {
+      "file": "system_dependencies.py",
+      "line": 94,
+      "import": "from app import models",
+      "error": "Module 'app' has no attribute 'models'",
+      "error_type": "AttributeError",
+      "module": "app",
+      "name": "models"
+    },
+    {
+      "file": "system_dependencies.py",
+      "line": 100,
+      "import": "from app.auth import models as auth_models",
+      "error": "Module 'app.auth' has no attribute 'models'",
+      "error_type": "AttributeError",
+      "module": "app.auth",
+      "name": "models"
+    },
+    {
+      "file": "analyzers/performance_analyzer.py",
+      "line": 23,
+      "import": "from utils.flask_fallback import get_db",
+      "error": "No module named 'utils'",
+      "error_type": "ImportError",
+      "module": "utils.flask_fallback",
+      "name": "get_db"
+    },
+    {
+      "file": "utils/legacy_compatibility.py",
+      "line": 17,
+      "import": "from app.claude_ai_novo.integration.external_api_integration import ExternalAPIIntegration",
+      "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+      "error_type": "ImportError",
+      "module": "app.claude_ai_novo.integration.external_api_integration",
+      "name": "ExternalAPIIntegration"
+    },
+    {
+      "file": "utils/legacy_compatibility.py",
+      "line": 17,
+      "import": "from app.claude_ai_novo.integration.external_api_integration import get_external_api_integration",
+      "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+      "error_type": "ImportError",
+      "module": "app.claude_ai_novo.integration.external_api_integration",
+      "name": "get_external_api_integration"
+    },
+    {
+      "file": "utils/legacy_compatibility.py",
+      "line": 17,
+      "import": "from app.claude_ai_novo.integration.external_api_integration import processar_com_claude_real",
+      "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+      "error_type": "ImportError",
+      "module": "app.claude_ai_novo.integration.external_api_integration",
+      "name": "processar_com_claude_real"
+    },
+    {
+      "file": "integration/external_api_integration.py",
+      "line": 29,
+      "import": "from ..processors.response_processor import generate_api_fallback_response",
+      "error": "Module 'app.claude_ai_novo.processors.response_processor' has no attribute 'generate_api_fallback_response'",
+      "error_type": "AttributeError",
+      "module": "..processors.response_processor",
+      "name": "generate_api_fallback_response"
+    },
+    {
+      "file": "integration/standalone_integration.py",
+      "line": 92,
+      "import": "from .external_api_integration import get_external_api_integration",
+      "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+      "error_type": "ImportError",
+      "module": ".external_api_integration",
+      "name": "get_external_api_integration"
+    },
+    {
+      "file": "integration/web_integration.py",
+      "line": 92,
+      "import": "from .external_api_integration import get_external_api_integration",
+      "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+      "error_type": "ImportError",
+      "module": ".external_api_integration",
+      "name": "get_external_api_integration"
+    },
+    {
+      "file": "config/advanced_config.py",
+      "line": 89,
+      "import": "from ..integration.external_api_integration import ClaudeAPIClient",
+      "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+      "error_type": "ImportError",
+      "module": "..integration.external_api_integration",
+      "name": "ClaudeAPIClient"
+    },
+    {
+      "file": "validators/data_validator.py",
+      "line": 217,
+      "import": "from app.claude_ai_novo.integration.external_api_integration import get_claude_integration",
+      "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+      "error_type": "ImportError",
+      "module": "app.claude_ai_novo.integration.external_api_integration",
+      "name": "get_claude_integration"
+    }
+  ],
+  "summary": {
+    "ImportError": [
+      {
+        "file": "teste_integracao_completa_todos_modulos.py",
+        "line": 222,
+        "import": "from orchestrators.main_orchestrator import get_main_orchestrator",
+        "error": "No module named 'orchestrators'",
+        "error_type": "ImportError",
+        "module": "orchestrators.main_orchestrator",
+        "name": "get_main_orchestrator"
+      },
+      {
+        "file": "teste_integracao_completa_todos_modulos.py",
+        "line": 266,
+        "import": "from orchestrators.session_orchestrator import get_session_orchestrator",
+        "error": "No module named 'orchestrators'",
+        "error_type": "ImportError",
+        "module": "orchestrators.session_orchestrator",
+        "name": "get_session_orchestrator"
+      },
+      {
+        "file": "teste_integracao_completa_todos_modulos.py",
+        "line": 310,
+        "import": "from orchestrators.main_orchestrator import get_main_orchestrator",
+        "error": "No module named 'orchestrators'",
+        "error_type": "ImportError",
+        "module": "orchestrators.main_orchestrator",
+        "name": "get_main_orchestrator"
+      },
+      {
+        "file": "analyzers/performance_analyzer.py",
+        "line": 23,
+        "import": "from utils.flask_fallback import get_db",
+        "error": "No module named 'utils'",
+        "error_type": "ImportError",
+        "module": "utils.flask_fallback",
+        "name": "get_db"
+      },
+      {
+        "file": "utils/legacy_compatibility.py",
+        "line": 17,
+        "import": "from app.claude_ai_novo.integration.external_api_integration import ExternalAPIIntegration",
+        "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+        "error_type": "ImportError",
+        "module": "app.claude_ai_novo.integration.external_api_integration",
+        "name": "ExternalAPIIntegration"
+      },
+      {
+        "file": "utils/legacy_compatibility.py",
+        "line": 17,
+        "import": "from app.claude_ai_novo.integration.external_api_integration import get_external_api_integration",
+        "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+        "error_type": "ImportError",
+        "module": "app.claude_ai_novo.integration.external_api_integration",
+        "name": "get_external_api_integration"
+      },
+      {
+        "file": "utils/legacy_compatibility.py",
+        "line": 17,
+        "import": "from app.claude_ai_novo.integration.external_api_integration import processar_com_claude_real",
+        "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+        "error_type": "ImportError",
+        "module": "app.claude_ai_novo.integration.external_api_integration",
+        "name": "processar_com_claude_real"
+      },
+      {
+        "file": "integration/standalone_integration.py",
+        "line": 92,
+        "import": "from .external_api_integration import get_external_api_integration",
+        "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+        "error_type": "ImportError",
+        "module": ".external_api_integration",
+        "name": "get_external_api_integration"
+      },
+      {
+        "file": "integration/web_integration.py",
+        "line": 92,
+        "import": "from .external_api_integration import get_external_api_integration",
+        "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+        "error_type": "ImportError",
+        "module": ".external_api_integration",
+        "name": "get_external_api_integration"
+      },
+      {
+        "file": "config/advanced_config.py",
+        "line": 89,
+        "import": "from ..integration.external_api_integration import ClaudeAPIClient",
+        "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+        "error_type": "ImportError",
+        "module": "..integration.external_api_integration",
+        "name": "ClaudeAPIClient"
+      },
+      {
+        "file": "validators/data_validator.py",
+        "line": 217,
+        "import": "from app.claude_ai_novo.integration.external_api_integration import get_claude_integration",
+        "error": "cannot import name 'generate_api_fallback_response' from 'app.claude_ai_novo.processors.response_processor' (/home/rafaelnascimento/projetos/frete_sistema/app/claude_ai_novo/processors/response_processor.py)",
+        "error_type": "ImportError",
+        "module": "app.claude_ai_novo.integration.external_api_integration",
+        "name": "get_claude_integration"
+      }
+    ],
+    "AttributeError": [
+      {
+        "file": "system_dependencies.py",
+        "line": 94,
+        "import": "from app import models",
+        "error": "Module 'app' has no attribute 'models'",
+        "error_type": "AttributeError",
+        "module": "app",
+        "name": "models"
+      },
+      {
+        "file": "system_dependencies.py",
+        "line": 100,
+        "import": "from app.auth import models as auth_models",
+        "error": "Module 'app.auth' has no attribute 'models'",
+        "error_type": "AttributeError",
+        "module": "app.auth",
+        "name": "models"
+      },
+      {
+        "file": "integration/external_api_integration.py",
+        "line": 29,
+        "import": "from ..processors.response_processor import generate_api_fallback_response",
+        "error": "Module 'app.claude_ai_novo.processors.response_processor' has no attribute 'generate_api_fallback_response'",
+        "error_type": "AttributeError",
+        "module": "..processors.response_processor",
+        "name": "generate_api_fallback_response"
+      }
+    ]
+  }
+}

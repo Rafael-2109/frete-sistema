@@ -1,0 +1,17 @@
+1	intencao	todas	{"intencao": "listar"}	0.5	1	0.5	2025-07-04 23:08:29.272003	2025-07-04 23:08:29.272003	sistema
+2	intencao	qual	{"intencao": "consultar"}	0.8999999999999999	5	0.5	2025-07-06 01:03:39.72107	2025-07-06 04:19:15.831812	sistema
+5	intencao	status	{"intencao": "consultar"}	0.5	1	0.5	2025-07-06 10:09:01.983686	2025-07-06 10:09:01.983686	sistema
+4	intencao	como está	{"intencao": "consultar"}	0.6	2	0.5	2025-07-06 10:04:45.777835	2025-07-06 11:57:49.001564	sistema
+6	intencao	mostre	{"intencao": "listar"}	0.5	1	0.5	2025-07-06 11:59:37.405764	2025-07-06 11:59:37.405764	sistema
+8	intencao	compare	{"intencao": "comparar"}	0.6	2	0.5	2025-07-06 12:04:27.871938	2025-07-06 12:09:59.207913	sistema
+3	intencao	quais são	{"intencao": "listar"}	0.6	2	0.5	2025-07-06 10:01:45.353032	2025-07-06 16:37:01.347759	sistema
+9	intencao	todos	{"intencao": "listar"}	0.5	1	0.5	2025-07-06 19:02:34.715446	2025-07-06 19:02:34.715446	sistema
+7	periodo	últimos 30 dias	{"periodo_dias": 30}	0.7999999999999999	4	0.5	2025-07-06 12:04:27.86756	2025-07-06 21:02:01.452246	sistema
+12	estrutura_pergunta	onde	{"estrutura": "interrogativa", "tipo_pergunta": "localizacao"}	0.6	1	0.5	2025-07-11 12:46:22.119042	2025-07-11 12:46:22.119042	pattern_learner
+13	entidade_cliente	grupo	{"termo_usado": "grupo", "cliente_oficial": "Grupo Atacadão (Todas as Lojas)"}	0.9	1	0.5	2025-07-11 12:47:41.802284	2025-07-11 12:47:41.802284	pattern_learner
+14	estrutura_pergunta	?	{"estrutura": "interrogativa", "tipo_pergunta": "generica"}	0.6	1	0.5	2025-07-11 12:47:41.805931	2025-07-11 12:47:41.805931	pattern_learner
+10	entidade_cliente	atacadão	{"termo_usado": "atacadão", "cliente_oficial": "Grupo Atacadão (Todas as Lojas)"}	1	5	0.5	2025-07-11 12:19:05.106032	2025-07-11 16:30:43.312607	pattern_learner
+11	estrutura_pergunta	como	{"estrutura": "interrogativa", "tipo_pergunta": "processo"}	0.8999999999999999	4	0.5	2025-07-11 12:19:05.111246	2025-07-11 16:30:43.31591	pattern_learner
+\.
+
+

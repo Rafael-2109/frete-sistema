@@ -239,44 +239,24 @@ class WorkspaceTabela {
     }
 
     calcularSaldoDisponivel(produto) {
+        // Delegar para o WorkspaceQuantidades se disponível
+        if (window.workspaceQuantidades) {
+            return window.workspaceQuantidades.calcularSaldoDisponivel(produto);
+        }
+        
+        // Fallback caso WorkspaceQuantidades não esteja disponível
         try {
             const qtdPedido = produto.qtd_pedido || produto.qtd_produto_pedido || 0;
             const qtdSeparacoes = produto.qtd_separacoes || 0;
             const qtdPreSeparacoes = produto.qtd_pre_separacoes || 0;
             
-            // Calcular também baseado nos lotes locais (workspace atual)
-            let qtdPreSeparacoesLocal = 0;
-            if (window.workspace && window.workspace.preSeparacoes) {
-                window.workspace.preSeparacoes.forEach(loteData => {
-                    const produtoNoLote = loteData.produtos.find(p => p.codProduto === produto.cod_produto);
-                    if (produtoNoLote) {
-                        qtdPreSeparacoesLocal += produtoNoLote.quantidade || 0;
-                    }
-                });
-            }
-            
-            // Calcular separações confirmadas locais
-            let qtdSeparacoesConfirmadas = 0;
-            if (window.workspace && window.workspace.separacoesConfirmadas) {
-                window.workspace.separacoesConfirmadas.forEach(separacao => {
-                    const produtoNaSeparacao = separacao.produtos.find(p => p.cod_produto === produto.cod_produto);
-                    if (produtoNaSeparacao) {
-                        qtdSeparacoesConfirmadas += produtoNaSeparacao.qtd_saldo || 0;
-                    }
-                });
-            }
-            
-            // Usar o maior valor entre API e local
-            const qtdPreSeparacoesTotal = Math.max(qtdPreSeparacoes, qtdPreSeparacoesLocal);
-            const qtdSeparacoesTotal = Math.max(qtdSeparacoes, qtdSeparacoesConfirmadas);
-            
             // Saldo disponível = Qtd Pedido - (Separações + Pré-Separações)
-            const qtdEditavel = qtdPedido - qtdSeparacoesTotal - qtdPreSeparacoesTotal;
+            const qtdEditavel = qtdPedido - qtdSeparacoes - qtdPreSeparacoes;
             
             return {
                 qtdEditavel: Math.max(0, qtdEditavel), // Nunca negativo
                 qtdSeparacoes: qtdSeparacoes,
-                qtdPreSeparacoes: qtdPreSeparacoesTotal,
+                qtdPreSeparacoes: qtdPreSeparacoes,
                 qtdIndisponivel: Math.max(0, -qtdEditavel)
             };
         } catch (error) {

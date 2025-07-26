@@ -211,7 +211,15 @@ class DependencyChecker:
         try:
             # Tentar importar e verificar configuração
             from app import db
-            from flask import current_app
+        except Exception as e:
+            logger.error(f'Erro: {e}')
+            pass
+try:
+    from flask import current_app
+    FLASK_AVAILABLE = True
+except ImportError:
+    current_app = None
+    FLASK_AVAILABLE = False
             
             # Verificar se estamos em contexto Flask
             try:

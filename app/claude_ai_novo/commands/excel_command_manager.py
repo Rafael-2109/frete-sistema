@@ -239,7 +239,12 @@ class ExcelOrchestrator(BaseCommand):
         """Gera Excel geral com dados de múltiplos módulos"""
         
         try:
-            from openpyxl import Workbook
+    from openpyxl import Workbook
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    from unittest.mock import Mock
+    Workbook = Mock()
+    OPENPYXL_AVAILABLE = False
             from openpyxl.styles import Font, PatternFill
         except ImportError:
             return self._fallback_sem_openpyxl()

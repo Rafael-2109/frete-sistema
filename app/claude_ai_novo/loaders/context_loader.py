@@ -12,8 +12,19 @@ import time
 import asyncio
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta, date
-from flask_login import current_user
-from sqlalchemy import func, and_, or_, text
+try:
+    from flask_login import current_user
+    FLASK_LOGIN_AVAILABLE = True
+except ImportError:
+    from unittest.mock import Mock
+    current_user = Mock()
+    FLASK_LOGIN_AVAILABLE = False
+try:
+    from sqlalchemy import func, and_, or_, text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    func, and_, or_, text = None
+    SQLALCHEMY_AVAILABLE = False
 from app.claude_ai_novo.utils.flask_fallback import get_db, get_model
 from app.monitoramento.models import EntregaMonitorada
 from app.pedidos.models import Pedido
@@ -273,19 +284,21 @@ class ContextLoader:
         
         # CACHE-ASIDE PATTERN: Verificar se dados estão no Redis
         if REDIS_DISPONIVEL:
-            chave_cache = redis_cache._gerar_chave(
-                "contexto_inteligente",
-                cliente=analise.get("cliente_especifico"),
-                periodo_dias=analise.get("periodo_dias", 30),
-                foco_dados=analise.get("foco_dados", []),
-                filtro_geografico=analise.get("filtro_geografico")
-            )
-            
-            # Tentar buscar do cache primeiro (Cache Hit)
-            dados_cache = redis_cache.get(chave_cache)
-            if dados_cache:
-                logger.info("🎯 CACHE HIT: Contexto inteligente carregado do Redis")
-                return dados_cache
+            chave_cache = None
+            if REDIS_AVAILABLE and redis_cache:
+                chave_cache = redis_cache._gerar_chave(
+                    "contexto_inteligente",
+                    cliente=analise.get("cliente_especifico"),
+                    periodo_dias=analise.get("periodo_dias", 30),
+                    foco_dados=analise.get("foco_dados", []),
+                    filtro_geografico=analise.get("filtro_geografico")
+                )
+                
+                # Tentar buscar do cache primeiro (Cache Hit)
+                dados_cache = redis_cache.get(chave_cache)
+                if dados_cache:
+                    logger.info("🎯 CACHE HIT: Contexto inteligente carregado do Redis")
+                    return dados_cache
         
         # CACHE MISS: Carregar dados do banco de dados
         logger.info("💨 CACHE MISS: Carregando contexto do banco de dados")
@@ -355,10 +368,12 @@ class ContextLoader:
                         elif dominio_item == "entregas":
                             # Carregar entregas com cache Redis se disponível
                             if REDIS_DISPONIVEL:
-                                entregas_cache = redis_cache.cache_entregas_cliente(
-                                    cliente=analise.get("cliente_especifico", ""),
-                                    periodo_dias=analise.get("periodo_dias", 30)
-                                )
+                                entregas_cache = None
+                                if REDIS_AVAILABLE and redis_cache:
+                                    entregas_cache = redis_cache.cache_entregas_cliente(
+                                        cliente=analise.get("cliente_especifico", ""),
+                                        periodo_dias=analise.get("periodo_dias", 30)
+                                    )
                                 if entregas_cache:
                                     contexto["dados_especificos"]["entregas"] = entregas_cache
                                     contexto["registros_carregados"] += entregas_cache.get("total_registros", 0)
@@ -426,10 +441,12 @@ class ContextLoader:
                 else:
                     # Domínio "entregas" ou padrão - usar cache específico para entregas se disponível
                     if REDIS_DISPONIVEL:
-                        entregas_cache = redis_cache.cache_entregas_cliente(
-                            cliente=analise.get("cliente_especifico", ""),
-                            periodo_dias=analise.get("periodo_dias", 30)
-                        )
+                        entregas_cache = None
+                        if REDIS_AVAILABLE and redis_cache:
+                            entregas_cache = redis_cache.cache_entregas_cliente(
+                                cliente=analise.get("cliente_especifico", ""),
+                                periodo_dias=analise.get("periodo_dias", 30)
+                            )
                         if entregas_cache:
                             contexto["dados_especificos"]["entregas"] = entregas_cache
                             contexto["registros_carregados"] += entregas_cache.get("total_registros", 0)
@@ -441,12 +458,13 @@ class ContextLoader:
                             contexto["registros_carregados"] += dados_entregas.get("total_registros", 0)
                             
                             # Salvar no cache Redis
-                            redis_cache.cache_entregas_cliente(
-                                cliente=analise.get("cliente_especifico", ""),
-                                periodo_dias=analise.get("periodo_dias", 30),
-                                entregas=dados_entregas,
-                                ttl=120  # 2 minutos para entregas
-                            )
+                            if REDIS_AVAILABLE and redis_cache:
+                                redis_cache.cache_entregas_cliente(
+                                    cliente=analise.get("cliente_especifico", ""),
+                                    periodo_dias=analise.get("periodo_dias", 30),
+                                    entregas=dados_entregas,
+                                    ttl=120  # 2 minutos para entregas
+                                )
                             logger.info("💾 Entregas salvas no Redis cache")
                     else:
                         # Redis não disponível - carregar diretamente do banco
@@ -468,19 +486,22 @@ class ContextLoader:
             
             # ESTATÍSTICAS GERAIS COM REDIS CACHE
             if REDIS_DISPONIVEL:
-                estatisticas = redis_cache.cache_estatisticas_cliente(
-                    cliente=analise.get("cliente_especifico", "geral"),
-                    periodo_dias=analise.get("periodo_dias", 30)
-                )
+                estatisticas = None
+                if REDIS_AVAILABLE and redis_cache:
+                    estatisticas = redis_cache.cache_estatisticas_cliente(
+                        cliente=analise.get("cliente_especifico", "geral"),
+                        periodo_dias=analise.get("periodo_dias", 30)
+                    )
                 if not estatisticas:
                     # Cache miss - calcular e salvar
                     estatisticas = self._calcular_estatisticas_especificas(analise, filtros_usuario)
-                    redis_cache.cache_estatisticas_cliente(
-                        cliente=analise.get("cliente_especifico", "geral"),
-                        periodo_dias=analise.get("periodo_dias", 30),
-                        dados=estatisticas,
-                        ttl=180  # 3 minutos para estatísticas
-                    )
+                    if REDIS_AVAILABLE and redis_cache:
+                        redis_cache.cache_estatisticas_cliente(
+                            cliente=analise.get("cliente_especifico", "geral"),
+                            periodo_dias=analise.get("periodo_dias", 30),
+                            dados=estatisticas,
+                            ttl=180  # 3 minutos para estatísticas
+                        )
                     logger.info("💾 Estatísticas salvas no Redis cache")
                 else:
                     logger.info("🎯 CACHE HIT: Estatísticas carregadas do Redis")
@@ -506,7 +527,8 @@ class ContextLoader:
             
             # Salvar contexto completo no Redis para próximas consultas similares
             if REDIS_DISPONIVEL:
-                redis_cache.set(chave_cache, contexto, ttl=300)  # 5 minutos
+                if REDIS_AVAILABLE and redis_cache:
+                    redis_cache.set(chave_cache, contexto, ttl=300)  # 5 minutos
                 logger.info("💾 Contexto completo salvo no Redis cache")
             
             return contexto

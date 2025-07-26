@@ -20,7 +20,12 @@ import asyncio
 from typing import Dict, Optional, Any, List, cast
 from datetime import datetime
 import json
-from sqlalchemy import text
+try:
+    from sqlalchemy import text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    text = None
+    SQLALCHEMY_AVAILABLE = False
 
 # Imports internos
 from app.claude_ai_novo.utils.flask_fallback import get_db

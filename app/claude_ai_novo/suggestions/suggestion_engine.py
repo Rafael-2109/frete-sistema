@@ -186,7 +186,9 @@ class SuggestionsEngine:
             # Tentar buscar do cache Redis com validação robusta
             if self._is_redis_available():
                 try:
-                    cached_suggestions = self.redis_cache.get(cache_key)
+                    cached_suggestions = None
+            if REDIS_AVAILABLE and self.redis_cache:
+            redis_cache.get(cache_key)
                     if cached_suggestions and isinstance(cached_suggestions, list):
                         logger.debug(f"🎯 Sugestões carregadas do cache para usuário {user_context.get('username', 'unknown')}")
                         return cached_suggestions
@@ -199,7 +201,8 @@ class SuggestionsEngine:
             # Salvar no cache com validação
             if self._is_redis_available() and isinstance(suggestions, list):
                 try:
-                    self.redis_cache.set(cache_key, suggestions, ttl=self.cache_ttl)
+                    self.if REDIS_AVAILABLE and redis_cache:
+            redis_cache.set(cache_key, suggestions, ttl=self.cache_ttl)
                     logger.debug(f"💾 Sugestões salvas no cache para usuário {user_context.get('username', 'unknown')}")
                 except Exception as redis_error:
                     logger.warning(f"⚠️ Erro ao salvar no Redis: {redis_error}")
@@ -220,7 +223,8 @@ class SuggestionsEngine:
                 hasattr(self.redis_cache, 'disponivel') and 
                 hasattr(self.redis_cache, 'get') and 
                 hasattr(self.redis_cache, 'set') and
-                self.redis_cache.disponivel
+                self.if REDIS_AVAILABLE and redis_cache:
+            redis_cache.disponivel
             )
         except Exception:
             return False

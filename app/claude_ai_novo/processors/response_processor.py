@@ -6,26 +6,40 @@ ResponseProcessor - Processamento especializado de respostas
 # Imports da base comum
 from app.claude_ai_novo.processors.base import (
     ProcessorBase,
-    logging, datetime, timedelta, date,
+    logging,
     format_response
 )
 
 # Imports específicos
 from typing import Dict, List, Optional, Any
-import anthropic
+from datetime import datetime, timedelta, date
 import json
 import asyncio
 import time
 
+# Import do Anthropic com fallback
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    anthropic = None
+    ANTHROPIC_AVAILABLE = False
+
 # Imports com fallback seguro
 try:
     from flask_login import current_user
-    from sqlalchemy import func, and_, or_, text
-    FLASK_AVAILABLE = True
+    FLASK_LOGIN_AVAILABLE = True
 except ImportError:
-    current_user = None
+    from unittest.mock import Mock
+    current_user = Mock()
+    FLASK_LOGIN_AVAILABLE = False
+
+try:
+    from sqlalchemy import func, and_, or_, text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
     func = and_ = or_ = text = None
-    FLASK_AVAILABLE = False
+    SQLALCHEMY_AVAILABLE = False
 
 # Import do DataProvider
 try:
@@ -33,6 +47,7 @@ try:
     DATA_PROVIDER_AVAILABLE = True
 except ImportError:
     DATA_PROVIDER_AVAILABLE = False
+    get_data_provider = None
 
 # Utilitários
 try:
@@ -40,6 +55,7 @@ try:
     UTILS_AVAILABLE = True
 except ImportError:
     UTILS_AVAILABLE = False
+    get_responseutils = None
 
 # Fallbacks para formatação de respostas
 def format_response_advanced(content, source="ResponseProcessor", metadata=None):
@@ -83,6 +99,7 @@ try:
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
+    ClaudeAIConfig = None
 
 # Models
 try:
@@ -96,6 +113,9 @@ try:
     CONFIG_LOCAL_AVAILABLE = True
 except ImportError:
     CONFIG_LOCAL_AVAILABLE = False
+    if not CONFIG_AVAILABLE:
+        ClaudeAIConfig = None
+    AdvancedConfig = None
 
 class ResponseProcessor(ProcessorBase):
     """Classe para processamento especializado de respostas"""
@@ -135,7 +155,6 @@ class ResponseProcessor(ProcessorBase):
                 filters['cliente'] = analise['cliente_especifico']
                 
             if analise.get('periodo_dias'):
-                from datetime import datetime, timedelta
                 filters['data_inicio'] = datetime.now() - timedelta(days=analise['periodo_dias'])
                 filters['data_fim'] = datetime.now()
                 
@@ -154,7 +173,11 @@ class ResponseProcessor(ProcessorBase):
         """Inicializa cliente Anthropic se configurado"""
         
         try:
-            if CONFIG_LOCAL_AVAILABLE:
+            if not ANTHROPIC_AVAILABLE:
+                self.logger.warning("Anthropic não disponível - modo simulado")
+                return
+                
+            if CONFIG_LOCAL_AVAILABLE and ClaudeAIConfig:
                 config = ClaudeAIConfig()
                 api_key = config.get_anthropic_api_key()
                 
@@ -731,3 +754,22 @@ def get_response_processor():
 
 # Alias para compatibilidade
 get_responseprocessor = get_response_processor
+
+def generate_api_fallback_response(error_msg: str = None) -> Dict[str, Any]:
+    """
+    Gera resposta padrão para fallback de API
+    
+    Args:
+        error_msg: Mensagem de erro opcional
+        
+    Returns:
+        Dict com resposta padrão formatada
+    """
+    return {
+        "success": False,
+        "data": None,
+        "error": error_msg or "API temporariamente indisponível",
+        "message": "Por favor, tente novamente em alguns instantes",
+        "timestamp": datetime.now().isoformat(),
+        "fallback": True
+    }
