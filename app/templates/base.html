@@ -291,11 +291,22 @@
             <li><a class="dropdown-item" href="{{ url_for('auth.listar_usuarios') }}">
               <i class="fas fa-users"></i> Todos os Usuários
             </a></li>
+            
+            {% if current_user.perfil_nome == 'admin' %}
             <li><hr class="dropdown-divider"></li>
             <li><h6 class="dropdown-header">🔒 Sistema de Permissões</h6></li>
-            <li><a class="dropdown-item" href="{{ url_for('permissions.index') }}">
-              <i class="fas fa-shield-alt text-primary"></i> Gerenciar Permissões
+            <li><a class="dropdown-item" href="{{ url_for('permissions.hierarchical') }}">
+              <i class="fas fa-sitemap text-success"></i> Permissões Hierárquicas
+              <span class="badge bg-success ms-2">NOVO</span>
             </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('permissions.admin') }}">
+              <i class="fas fa-shield-alt text-primary"></i> Admin de Permissões
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('permissions.index') }}">
+              <i class="fas fa-key text-secondary"></i> Gerenciar Permissões
+            </a></li>
+            {% endif %}
+            
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="{{ url_for('auth.registro') }}" target="_blank">
               <i class="fas fa-external-link-alt"></i> Link de Registro Público

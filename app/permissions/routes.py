@@ -1,727 +1,591 @@
 """
-Rotas para Administração de Permissões Granulares
-================================================
+Permission System Routes
+=======================
 
-Interface web para gestão completa de permissões:
-- Visualização hierárquica módulo → função
-- Gestão de múltiplos vendedores/equipes por usuário
-- Controle granular visualizar/editar
-- Log de auditoria em tempo real
+Flask routes for the permission management UI and additional API endpoints.
 """
 
-from flask import render_template, request, jsonify, flash, redirect, url_for
+from flask import Blueprint, render_template, jsonify, request
 from flask_login import login_required, current_user
-from datetime import datetime
-import logging
-
-from app import db
-from app.permissions import permissions_bp
+from app.permissions.decorators import require_permission
 from app.permissions.models import (
     PerfilUsuario, ModuloSistema, FuncaoModulo, PermissaoUsuario,
-    UsuarioVendedor, UsuarioEquipeVendas, LogPermissao
+    UsuarioVendedor, UsuarioEquipeVendas, LogPermissao,
+    PermissionCategory, PermissionModule, PermissionSubModule,
+    UserPermission, PermissionTemplate
 )
 from app.auth.models import Usuario
-from app.utils.auth_decorators import require_admin
-from app.permissions.services import PermissaoService
+from app import db
+import logging
 
 logger = logging.getLogger(__name__)
 
+# Import blueprint from __init__.py to avoid duplication
+from . import permissions_bp
+
 # ============================================================================
-# PÁGINA PRINCIPAL DE ADMINISTRAÇÃO
+# UI ROUTES
 # ============================================================================
 
 @permissions_bp.route('/')
 @login_required
 def index():
-    """
-    Página principal de administração de permissões
-    Interface hierárquica para gestão completa
-    """
+    """Main permission page - redirects to appropriate view"""
+    if current_user.perfil_nome == 'admin':
+        return admin_index()
+    else:
+        # Regular users see their own permissions
+        return render_template('permissions/user_permissions.html', 
+                             usuario=current_user)
+
+@permissions_bp.route('/admin')
+@login_required
+@require_permission('admin.permissions')
+def admin_index():
+    """Main permission administration page (legacy)"""
     try:
-        # Carregar dados para interface
-        usuarios = Usuario.query.filter_by(status='ativo').order_by(Usuario.nome).all()
-        modulos = ModuloSistema.query.filter_by(ativo=True).order_by(ModuloSistema.ordem).all()
-        perfis = PerfilUsuario.query.filter_by(ativo=True).order_by(PerfilUsuario.nivel_hierarquico.desc()).all()
-        
-        # Estatísticas gerais
+        # Get statistics
         stats = {
             'total_usuarios': Usuario.query.filter_by(status='ativo').count(),
             'total_permissoes': PermissaoUsuario.query.filter_by(ativo=True).count(),
             'total_modulos': ModuloSistema.query.filter_by(ativo=True).count(),
-            'total_funcoes': FuncaoModulo.query.filter_by(ativo=True).count(),
+            'total_funcoes': FuncaoModulo.query.filter_by(ativo=True).count()
         }
         
-        return render_template(
-            'permissions/admin_index.html',
-            usuarios=usuarios,
-            modulos=modulos,
-            perfis=perfis,
-            stats=stats
-        )
+        # Get users and profiles
+        usuarios = Usuario.query.filter_by(status='ativo').order_by(Usuario.nome).all()
+        perfis = PerfilUsuario.query.filter_by(ativo=True).order_by(PerfilUsuario.nome).all()
         
+        return render_template('permissions/admin_index.html',
+                             stats=stats,
+                             usuarios=usuarios,
+                             perfis=perfis)
     except Exception as e:
-        logger.error(f"Erro ao carregar página de administração: {e}")
-        flash('Erro ao carregar página de administração', 'error')
-        return redirect(url_for('main.dashboard'))
+        logger.error(f"Error loading admin index: {e}")
+        return render_template('error.html', error="Erro ao carregar página de permissões"), 500
 
-# ============================================================================
-# API: CARREGAR PERMISSÕES DE USUÁRIO
-# ============================================================================
-
-@permissions_bp.route('/api/usuario/<int:usuario_id>/permissoes')
+@permissions_bp.route('/hierarchical')
 @login_required
-def api_permissoes_usuario(usuario_id):
-    """
-    API: Carrega permissões completas de um usuário
-    Retorna estrutura hierárquica módulo → função → permissões
-    """
+@require_permission('admin.permissions')
+def hierarchical_admin():
+    """New hierarchical permission management interface"""
     try:
+        return render_template('permissions/hierarchical_admin.html')
+    except Exception as e:
+        logger.error(f"Error loading hierarchical admin: {e}")
+        return render_template('error.html', error="Erro ao carregar interface de permissões"), 500
+
+
+# ============================================================================
+# API ROUTES (Additional to permissions.api)
+# ============================================================================
+
+@permissions_bp.route('/api/users', methods=['GET'])
+@login_required
+@require_permission('usuarios.listar')
+def api_list_users():
+    """List all active users for the permission manager"""
+    try:
+        users = Usuario.query.filter_by(status='ativo').order_by(Usuario.nome).all()
+        
+        users_data = []
+        for user in users:
+            # Count permissions
+            permission_count = UserPermission.query.filter_by(
+                user_id=user.id,
+                active=True
+            ).count()
+            
+            users_data.append({
+                'id': user.id,
+                'nome': user.nome,
+                'email': user.email,
+                'perfil': user.perfil,
+                'permission_count': permission_count,
+                'vendor_count': UsuarioVendedor.query.filter_by(
+                    usuario_id=user.id,
+                    ativo=True
+                ).count(),
+                'team_count': UsuarioEquipeVendas.query.filter_by(
+                    usuario_id=user.id,
+                    ativo=True
+                ).count()
+            })
+        
+        return jsonify({
+            'success': True,
+            'users': users_data,
+            'total': len(users_data)
+        })
+    except Exception as e:
+        logger.error(f"Error listing users: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Erro ao listar usuários'
+        }), 500
+
+@permissions_bp.route('/api/usuario/<int:usuario_id>/permissoes', methods=['GET'])
+@login_required
+def api_get_user_permissions_legacy(usuario_id):
+    """Legacy endpoint for getting user permissions"""
+    try:
+        # Check authorization
+        if not (current_user.is_admin or current_user.id == usuario_id):
+            return jsonify({
+                'success': False,
+                'message': 'Acesso negado'
+            }), 403
+        
         usuario = Usuario.query.get_or_404(usuario_id)
         
-        # Carregar estrutura completa
-        resultado = {
-            'usuario': {
-                'id': usuario.id,
-                'nome': usuario.nome,
-                'email': usuario.email,
-                'perfil': usuario.perfil
-            },
-            'modulos': [],
-            'vendedores': [],
-            'equipes_vendas': [],
-            'estatisticas': {}
-        }
+        # Get vendors
+        vendedores = UsuarioVendedor.query.filter_by(
+            usuario_id=usuario_id,
+            ativo=True
+        ).all()
         
-        # Carregar módulos e funções com permissões
+        vendedores_data = [{
+            'id': v.id,
+            'vendedor': v.vendedor,
+            'adicionado_em': v.adicionado_em.isoformat() if v.adicionado_em else None
+        } for v in vendedores]
+        
+        # Get teams
+        equipes = UsuarioEquipeVendas.query.filter_by(
+            usuario_id=usuario_id,
+            ativo=True
+        ).all()
+        
+        equipes_data = [{
+            'id': e.id,
+            'equipe_vendas': e.equipe_vendas,
+            'adicionado_em': e.adicionado_em.isoformat() if e.adicionado_em else None
+        } for e in equipes]
+        
+        # Get modules and permissions (legacy format)
         modulos = ModuloSistema.query.filter_by(ativo=True).order_by(ModuloSistema.ordem).all()
+        modulos_data = []
         
         for modulo in modulos:
-            modulo_data = {
-                'id': modulo.id,
-                'nome': modulo.nome,
-                'nome_exibicao': modulo.nome_exibicao,
-                'icone': modulo.icone,
-                'cor': modulo.cor,
-                'funcoes': []
-            }
-            
-            # Carregar funções do módulo
-            funcoes = FuncaoModulo.query.filter_by(
-                modulo_id=modulo.id, ativo=True
-            ).order_by(FuncaoModulo.ordem).all()
-            
-            for funcao in funcoes:
-                # Buscar permissão existente
+            funcoes_data = []
+            for funcao in modulo.funcoes.filter_by(ativo=True).order_by(FuncaoModulo.ordem):
                 permissao = PermissaoUsuario.query.filter_by(
                     usuario_id=usuario_id,
                     funcao_id=funcao.id,
                     ativo=True
                 ).first()
                 
-                funcao_data = {
+                funcoes_data.append({
                     'id': funcao.id,
                     'nome': funcao.nome,
                     'nome_exibicao': funcao.nome_exibicao,
-                    'nivel_critico': funcao.nivel_critico,
+                    'nivel_critico': funcao.nivel_critico.lower() if funcao.nivel_critico else 'normal',
                     'permissao': {
                         'id': permissao.id if permissao else None,
                         'pode_visualizar': permissao.pode_visualizar if permissao else False,
-                        'pode_editar': permissao.pode_editar if permissao else False,
-                        'concedida_em': permissao.concedida_em.isoformat() if permissao else None
+                        'pode_editar': permissao.pode_editar if permissao else False
                     }
-                }
-                
-                modulo_data['funcoes'].append(funcao_data)
+                })
             
-            resultado['modulos'].append(modulo_data)
-        
-        # Carregar vendedores autorizados
-        vendedores = UsuarioVendedor.query.filter_by(
-            usuario_id=usuario_id, ativo=True
-        ).all()
-        
-        resultado['vendedores'] = [{
-            'id': v.id,
-            'vendedor': v.vendedor,
-            'adicionado_em': v.adicionado_em.isoformat(),
-            'observacoes': v.observacoes
-        } for v in vendedores]
-        
-        # Carregar equipes autorizadas
-        equipes = UsuarioEquipeVendas.query.filter_by(
-            usuario_id=usuario_id, ativo=True
-        ).all()
-        
-        resultado['equipes_vendas'] = [{
-            'id': e.id,
-            'equipe_vendas': e.equipe_vendas,
-            'adicionado_em': e.adicionado_em.isoformat(),
-            'observacoes': e.observacoes
-        } for e in equipes]
-        
-        # Estatísticas do usuário
-        resultado['estatisticas'] = {
-            'total_permissoes': PermissaoUsuario.query.filter_by(usuario_id=usuario_id, ativo=True).count(),
-            'total_vendedores': len(resultado['vendedores']),
-            'total_equipes': len(resultado['equipes_vendas']),
-            'ultimo_login': usuario.ultimo_login.isoformat() if usuario.ultimo_login else None
-        }
+            modulos_data.append({
+                'id': modulo.id,
+                'nome': modulo.nome,
+                'nome_exibicao': modulo.nome_exibicao,
+                'icone': modulo.icone,
+                'cor': modulo.cor,
+                'funcoes': funcoes_data
+            })
         
         return jsonify({
             'success': True,
-            'data': resultado
+            'data': {
+                'usuario': {
+                    'id': usuario.id,
+                    'nome': usuario.nome,
+                    'email': usuario.email,
+                    'perfil': usuario.perfil
+                },
+                'vendedores': vendedores_data,
+                'equipes_vendas': equipes_data,
+                'modulos': modulos_data
+            }
         })
         
     except Exception as e:
-        logger.error(f"Erro ao carregar permissões do usuário {usuario_id}: {e}")
+        logger.error(f"Error getting user permissions: {e}")
         return jsonify({
             'success': False,
-            'message': f'Erro interno: {str(e)}'
+            'message': 'Erro ao buscar permissões'
         }), 500
-
-# ============================================================================
-# API: SALVAR PERMISSÃO INDIVIDUAL
-# ============================================================================
 
 @permissions_bp.route('/api/permissao', methods=['POST'])
 @login_required
-def api_salvar_permissao():
-    """
-    API: Salva uma permissão individual usuário → função
-    Permite controle granular visualizar/editar
-    """
+@require_permission('usuarios.permissoes')
+def api_save_permission():
+    """Save individual permission (legacy)"""
     try:
         data = request.get_json()
         
-        # Validar dados obrigatórios
-        required_fields = ['usuario_id', 'funcao_id', 'pode_visualizar', 'pode_editar']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({
-                    'success': False,
-                    'message': f'Campo obrigatório: {field}'
-                }), 400
+        usuario_id = data.get('usuario_id')
+        funcao_id = data.get('funcao_id')
+        pode_visualizar = data.get('pode_visualizar', False)
+        pode_editar = data.get('pode_editar', False)
         
-        # Validar se usuário e função existem
-        usuario = Usuario.query.get(data['usuario_id'])
-        if not usuario:
+        # Validate
+        if not usuario_id or not funcao_id:
             return jsonify({
                 'success': False,
-                'message': 'Usuário não encontrado'
-            }), 404
+                'message': 'Dados inválidos'
+            }), 400
         
-        funcao = FuncaoModulo.query.get(data['funcao_id'])
-        if not funcao:
-            return jsonify({
-                'success': False,
-                'message': 'Função não encontrada'
-            }), 404
-        
-        # Buscar permissão existente
+        # Get or create permission
         permissao = PermissaoUsuario.query.filter_by(
-            usuario_id=data['usuario_id'],
-            funcao_id=data['funcao_id']
+            usuario_id=usuario_id,
+            funcao_id=funcao_id
         ).first()
         
-        # Criar ou atualizar permissão
-        if permissao:
-            # Atualizar existente
-            permissao.pode_visualizar = bool(data['pode_visualizar'])
-            permissao.pode_editar = bool(data['pode_editar'])
-            permissao.observacoes = data.get('observacoes')
-            permissao.ativo = True
-            acao = 'ATUALIZADA'
-        else:
-            # Criar nova
+        if not permissao:
             permissao = PermissaoUsuario(
-                usuario_id=data['usuario_id'],
-                funcao_id=data['funcao_id'],
-                pode_visualizar=bool(data['pode_visualizar']),
-                pode_editar=bool(data['pode_editar']),
-                concedida_por=current_user.id,
-                observacoes=data.get('observacoes')
+                usuario_id=usuario_id,
+                funcao_id=funcao_id,
+                concedida_por=current_user.id
             )
             db.session.add(permissao)
-            acao = 'CONCEDIDA'
+        
+        # Update values
+        permissao.pode_visualizar = pode_visualizar
+        permissao.pode_editar = pode_editar
+        permissao.ativo = True
         
         db.session.commit()
         
-        # Registrar no log de auditoria
+        # Log action
         LogPermissao.registrar(
-            usuario_id=data['usuario_id'],
-            acao=f'PERMISSAO_{acao}',
-            funcao_id=data['funcao_id'],
-            detalhes=f"Visualizar: {data['pode_visualizar']}, Editar: {data['pode_editar']}",
-            ip_origem=request.environ.get('REMOTE_ADDR'),
+            usuario_id=usuario_id,
+            acao='PERMISSAO_ALTERADA',
+            funcao_id=funcao_id,
+            detalhes=f"Visualizar: {pode_visualizar}, Editar: {pode_editar}",
+            ip_origem=request.remote_addr,
             user_agent=request.headers.get('User-Agent')
         )
         
         return jsonify({
             'success': True,
-            'message': f'Permissão {acao.lower()} com sucesso',
-            'data': {
-                'id': permissao.id,
-                'pode_visualizar': permissao.pode_visualizar,
-                'pode_editar': permissao.pode_editar,
-                'nivel_acesso': permissao.nivel_acesso
-            }
+            'message': 'Permissão salva com sucesso'
         })
         
     except Exception as e:
-        logger.error(f"Erro ao salvar permissão: {e}")
+        logger.error(f"Error saving permission: {e}")
         db.session.rollback()
         return jsonify({
             'success': False,
-            'message': f'Erro interno: {str(e)}'
+            'message': 'Erro ao salvar permissão'
         }), 500
-
-# ============================================================================
-# API: SALVAR PERMISSÕES DE MÓDULO (EM LOTE)
-# ============================================================================
 
 @permissions_bp.route('/api/modulo/<int:modulo_id>/permissoes', methods=['POST'])
 @login_required
-def api_salvar_permissoes_modulo(modulo_id):
-    """
-    API: Salva permissões de todas as funções de um módulo em lote
-    Permite aplicar visualizar/editar a todas as funções rapidamente
-    """
+@require_permission('usuarios.permissoes')
+def api_save_module_permissions(modulo_id):
+    """Save all permissions for a module (legacy)"""
     try:
         data = request.get_json()
+        usuario_id = data.get('usuario_id')
+        pode_visualizar = data.get('pode_visualizar', False)
+        pode_editar = data.get('pode_editar', False)
         
-        # Validar dados
-        if 'usuario_id' not in data:
-            return jsonify({
-                'success': False,
-                'message': 'Campo obrigatório: usuario_id'
-            }), 400
+        # Get module and its functions
+        modulo = ModuloSistema.query.get_or_404(modulo_id)
         
-        # Validar se usuário e módulo existem
-        usuario = Usuario.query.get(data['usuario_id'])
-        if not usuario:
-            return jsonify({
-                'success': False,
-                'message': 'Usuário não encontrado'
-            }), 404
-        
-        modulo = ModuloSistema.query.get(modulo_id)
-        if not modulo:
-            return jsonify({
-                'success': False,
-                'message': 'Módulo não encontrado'
-            }), 404
-        
-        # Buscar todas as funções do módulo
-        funcoes = FuncaoModulo.query.filter_by(
-            modulo_id=modulo_id, ativo=True
-        ).all()
-        
-        if not funcoes:
-            return jsonify({
-                'success': False,
-                'message': 'Nenhuma função encontrada no módulo'
-            }), 404
-        
-        # Aplicar permissões a todas as funções
-        permissoes_atualizadas = 0
-        permissoes_criadas = 0
-        
-        for funcao in funcoes:
-            # Buscar permissão existente
+        for funcao in modulo.funcoes.filter_by(ativo=True):
             permissao = PermissaoUsuario.query.filter_by(
-                usuario_id=data['usuario_id'],
+                usuario_id=usuario_id,
                 funcao_id=funcao.id
             ).first()
             
-            if permissao:
-                # Atualizar existente
-                permissao.pode_visualizar = bool(data.get('pode_visualizar', False))
-                permissao.pode_editar = bool(data.get('pode_editar', False))
-                permissao.ativo = True
-                permissoes_atualizadas += 1
-            else:
-                # Criar nova
+            if not permissao:
                 permissao = PermissaoUsuario(
-                    usuario_id=data['usuario_id'],
+                    usuario_id=usuario_id,
                     funcao_id=funcao.id,
-                    pode_visualizar=bool(data.get('pode_visualizar', False)),
-                    pode_editar=bool(data.get('pode_editar', False)),
                     concedida_por=current_user.id
                 )
                 db.session.add(permissao)
-                permissoes_criadas += 1
+            
+            permissao.pode_visualizar = pode_visualizar
+            permissao.pode_editar = pode_editar
+            permissao.ativo = True
         
         db.session.commit()
         
-        # Registrar no log de auditoria
+        # Log action
         LogPermissao.registrar(
-            usuario_id=data['usuario_id'],
-            acao='MODULO_CONFIGURADO',
-            detalhes=f"Módulo: {modulo.nome}, Visualizar: {data.get('pode_visualizar')}, Editar: {data.get('pode_editar')}, Funções: {len(funcoes)}",
-            ip_origem=request.environ.get('REMOTE_ADDR'),
+            usuario_id=usuario_id,
+            acao='MODULO_PERMISSOES_ALTERADAS',
+            detalhes=f"Módulo: {modulo.nome}, Visualizar: {pode_visualizar}, Editar: {pode_editar}",
+            ip_origem=request.remote_addr,
             user_agent=request.headers.get('User-Agent')
         )
         
         return jsonify({
             'success': True,
-            'message': f'Permissões aplicadas: {permissoes_criadas} criadas, {permissoes_atualizadas} atualizadas',
-            'data': {
-                'modulo': modulo.nome,
-                'funcoes_afetadas': len(funcoes),
-                'permissoes_criadas': permissoes_criadas,
-                'permissoes_atualizadas': permissoes_atualizadas
-            }
+            'message': f'Permissões do módulo {modulo.nome_exibicao} atualizadas'
         })
         
     except Exception as e:
-        logger.error(f"Erro ao salvar permissões do módulo {modulo_id}: {e}")
+        logger.error(f"Error saving module permissions: {e}")
         db.session.rollback()
         return jsonify({
             'success': False,
-            'message': f'Erro interno: {str(e)}'
+            'message': 'Erro ao salvar permissões do módulo'
         }), 500
 
-# ============================================================================
-# API: GERENCIAR VENDEDORES DE USUÁRIO
-# ============================================================================
-
-@permissions_bp.route('/api/usuario/<int:usuario_id>/vendedores', methods=['GET', 'POST', 'DELETE'])
+@permissions_bp.route('/api/logs', methods=['GET'])
 @login_required
-def api_gerenciar_vendedores(usuario_id):
-    """
-    API: Gerencia vendedores autorizados para um usuário
-    GET: Lista vendedores autorizados
-    POST: Adiciona novo vendedor
-    DELETE: Remove vendedor (via query param vendedor_id)
-    """
+@require_permission('admin.logs')
+def api_get_logs():
+    """Get permission logs"""
     try:
-        usuario = Usuario.query.get_or_404(usuario_id)
+        usuario_id = request.args.get('usuario_id', type=int)
+        limite = request.args.get('limite', 50, type=int)
         
-        if request.method == 'GET':
-            # Listar vendedores autorizados
-            vendedores = UsuarioVendedor.query.filter_by(
-                usuario_id=usuario_id, ativo=True
-            ).all()
-            
-            # Buscar todos os vendedores disponíveis no sistema
-            from app.faturamento.models import RelatorioFaturamentoImportado
-            vendedores_sistema = db.session.query(RelatorioFaturamentoImportado.vendedor)\
-                .filter(RelatorioFaturamentoImportado.vendedor.isnot(None))\
-                .distinct().all()
-            vendedores_disponiveis = [v[0] for v in vendedores_sistema if v[0]]
-            
-            return jsonify({
-                'success': True,
-                'data': {
-                    'vendedores_autorizados': [{
-                        'id': v.id,
-                        'vendedor': v.vendedor,
-                        'adicionado_em': v.adicionado_em.isoformat()
-                    } for v in vendedores],
-                    'vendedores_disponiveis': sorted(vendedores_disponiveis)
-                }
-            })
-        
-        elif request.method == 'POST':
-            # Adicionar novo vendedor
-            data = request.get_json()
-            
-            if 'vendedor' not in data:
-                return jsonify({
-                    'success': False,
-                    'message': 'Campo obrigatório: vendedor'
-                }), 400
-            
-            # Verificar se já existe
-            vendedor_existente = UsuarioVendedor.query.filter_by(
-                usuario_id=usuario_id,
-                vendedor=data['vendedor']
-            ).first()
-            
-            if vendedor_existente:
-                if vendedor_existente.ativo:
-                    return jsonify({
-                        'success': False,
-                        'message': 'Vendedor já autorizado para este usuário'
-                    }), 400
-                else:
-                    # Reativar vendedor
-                    vendedor_existente.ativo = True
-                    vendedor_existente.adicionado_por = current_user.id
-                    vendedor_existente.adicionado_em = datetime.now()
-            else:
-                # Criar novo
-                vendedor_existente = UsuarioVendedor(
-                    usuario_id=usuario_id,
-                    vendedor=data['vendedor'],
-                    adicionado_por=current_user.id,
-                    observacoes=data.get('observacoes')
-                )
-                db.session.add(vendedor_existente)
-            
-            db.session.commit()
-            
-            # Registrar no log
-            LogPermissao.registrar(
-                usuario_id=usuario_id,
-                acao='VENDEDOR_ADICIONADO',
-                detalhes=f"Vendedor: {data['vendedor']}",
-                ip_origem=request.environ.get('REMOTE_ADDR')
-            )
-            
-            return jsonify({
-                'success': True,
-                'message': 'Vendedor adicionado com sucesso',
-                'data': {
-                    'id': vendedor_existente.id,
-                    'vendedor': vendedor_existente.vendedor
-                }
-            })
-        
-        elif request.method == 'DELETE':
-            # Remover vendedor
-            vendedor_id = request.args.get('vendedor_id')
-            if not vendedor_id:
-                return jsonify({
-                    'success': False,
-                    'message': 'Parâmetro obrigatório: vendedor_id'
-                }), 400
-            
-            vendedor = UsuarioVendedor.query.filter_by(
-                id=vendedor_id,
-                usuario_id=usuario_id
-            ).first()
-            
-            if not vendedor:
-                return jsonify({
-                    'success': False,
-                    'message': 'Vendedor não encontrado'
-                }), 404
-            
-            # Soft delete
-            vendedor.ativo = False
-            db.session.commit()
-            
-            # Registrar no log
-            LogPermissao.registrar(
-                usuario_id=usuario_id,
-                acao='VENDEDOR_REMOVIDO',
-                detalhes=f"Vendedor: {vendedor.vendedor}",
-                ip_origem=request.environ.get('REMOTE_ADDR')
-            )
-            
-            return jsonify({
-                'success': True,
-                'message': 'Vendedor removido com sucesso'
-            })
-        
-    except Exception as e:
-        logger.error(f"Erro ao gerenciar vendedores do usuário {usuario_id}: {e}")
-        db.session.rollback()
-        return jsonify({
-            'success': False,
-            'message': f'Erro interno: {str(e)}'
-        }), 500
-
-# ============================================================================
-# API: GERENCIAR EQUIPES DE VENDAS DE USUÁRIO
-# ============================================================================
-
-@permissions_bp.route('/api/usuario/<int:usuario_id>/equipes', methods=['GET', 'POST', 'DELETE'])
-@login_required
-def api_gerenciar_equipes(usuario_id):
-    """
-    API: Gerencia equipes de vendas autorizadas para um usuário
-    Mesmo padrão da API de vendedores
-    """
-    try:
-        usuario = Usuario.query.get_or_404(usuario_id)
-        
-        if request.method == 'GET':
-            # Listar equipes autorizadas
-            equipes = UsuarioEquipeVendas.query.filter_by(
-                usuario_id=usuario_id, ativo=True
-            ).all()
-            
-            # Buscar todas as equipes disponíveis no sistema
-            from app.carteira.models import CarteiraPrincipal
-            equipes_sistema = db.session.query(CarteiraPrincipal.equipe_vendas)\
-                .filter(CarteiraPrincipal.equipe_vendas.isnot(None))\
-                .distinct().all()
-            equipes_disponiveis = [e[0] for e in equipes_sistema if e[0]]
-            
-            return jsonify({
-                'success': True,
-                'data': {
-                    'equipes_autorizadas': [{
-                        'id': e.id,
-                        'equipe_vendas': e.equipe_vendas,
-                        'adicionado_em': e.adicionado_em.isoformat()
-                    } for e in equipes],
-                    'equipes_disponiveis': sorted(equipes_disponiveis)
-                }
-            })
-        
-        elif request.method == 'POST':
-            # Adicionar nova equipe
-            data = request.get_json()
-            
-            if 'equipe_vendas' not in data:
-                return jsonify({
-                    'success': False,
-                    'message': 'Campo obrigatório: equipe_vendas'
-                }), 400
-            
-            # Verificar se já existe
-            equipe_existente = UsuarioEquipeVendas.query.filter_by(
-                usuario_id=usuario_id,
-                equipe_vendas=data['equipe_vendas']
-            ).first()
-            
-            if equipe_existente:
-                if equipe_existente.ativo:
-                    return jsonify({
-                        'success': False,
-                        'message': 'Equipe já autorizada para este usuário'
-                    }), 400
-                else:
-                    # Reativar equipe
-                    equipe_existente.ativo = True
-                    equipe_existente.adicionado_por = current_user.id
-                    equipe_existente.adicionado_em = datetime.now()
-            else:
-                # Criar nova
-                equipe_existente = UsuarioEquipeVendas(
-                    usuario_id=usuario_id,
-                    equipe_vendas=data['equipe_vendas'],
-                    adicionado_por=current_user.id,
-                    observacoes=data.get('observacoes')
-                )
-                db.session.add(equipe_existente)
-            
-            db.session.commit()
-            
-            # Registrar no log
-            LogPermissao.registrar(
-                usuario_id=usuario_id,
-                acao='EQUIPE_ADICIONADA',
-                detalhes=f"Equipe: {data['equipe_vendas']}",
-                ip_origem=request.environ.get('REMOTE_ADDR')
-            )
-            
-            return jsonify({
-                'success': True,
-                'message': 'Equipe adicionada com sucesso',
-                'data': {
-                    'id': equipe_existente.id,
-                    'equipe_vendas': equipe_existente.equipe_vendas
-                }
-            })
-        
-        elif request.method == 'DELETE':
-            # Remover equipe
-            equipe_id = request.args.get('equipe_id')
-            if not equipe_id:
-                return jsonify({
-                    'success': False,
-                    'message': 'Parâmetro obrigatório: equipe_id'
-                }), 400
-            
-            equipe = UsuarioEquipeVendas.query.filter_by(
-                id=equipe_id,
-                usuario_id=usuario_id
-            ).first()
-            
-            if not equipe:
-                return jsonify({
-                    'success': False,
-                    'message': 'Equipe não encontrada'
-                }), 404
-            
-            # Soft delete
-            equipe.ativo = False
-            db.session.commit()
-            
-            # Registrar no log
-            LogPermissao.registrar(
-                usuario_id=usuario_id,
-                acao='EQUIPE_REMOVIDA',
-                detalhes=f"Equipe: {equipe.equipe_vendas}",
-                ip_origem=request.environ.get('REMOTE_ADDR')
-            )
-            
-            return jsonify({
-                'success': True,
-                'message': 'Equipe removida com sucesso'
-            })
-        
-    except Exception as e:
-        logger.error(f"Erro ao gerenciar equipes do usuário {usuario_id}: {e}")
-        db.session.rollback()
-        return jsonify({
-            'success': False,
-            'message': f'Erro interno: {str(e)}'
-        }), 500
-
-# ============================================================================
-# API: LOG DE AUDITORIA
-# ============================================================================
-
-@permissions_bp.route('/api/logs')
-@login_required
-def api_logs_auditoria():
-    """
-    API: Busca logs de auditoria de permissões
-    Suporte a filtros por usuário, ação, período
-    """
-    try:
-        # Parâmetros de filtro
-        usuario_id = request.args.get('usuario_id')
-        acao = request.args.get('acao')
-        dias = int(request.args.get('dias', 7))
-        limite = int(request.args.get('limite', 50))
-        
-        # Construir query
         query = LogPermissao.query
         
         if usuario_id:
             query = query.filter_by(usuario_id=usuario_id)
         
-        if acao:
-            query = query.filter(LogPermissao.acao.like(f'%{acao}%'))
-        
-        # Filtro por período
-        from datetime import datetime, timedelta
-        data_inicio = datetime.now() - timedelta(days=dias)
-        query = query.filter(LogPermissao.timestamp >= data_inicio)
-        
-        # Ordenar e limitar
         logs = query.order_by(LogPermissao.timestamp.desc()).limit(limite).all()
+        
+        logs_data = []
+        for log in logs:
+            log_data = {
+                'id': log.id,
+                'timestamp': log.timestamp.isoformat() if log.timestamp else None,
+                'acao': log.acao,
+                'detalhes': log.detalhes,
+                'resultado': log.resultado,
+                'funcao': None
+            }
+            
+            if log.funcao:
+                log_data['funcao'] = f"{log.funcao.modulo.nome}.{log.funcao.nome}"
+            
+            logs_data.append(log_data)
         
         return jsonify({
             'success': True,
-            'data': [{
-                'id': log.id,
-                'usuario': log.usuario.nome if log.usuario else 'Sistema',
-                'acao': log.acao,
-                'funcao': log.funcao.nome_completo if log.funcao else None,
-                'detalhes': log.detalhes,
-                'resultado': log.resultado,
-                'timestamp': log.timestamp.isoformat(),
-                'ip_origem': log.ip_origem
-            } for log in logs],
-            'total': len(logs),
-            'filtros': {
-                'usuario_id': usuario_id,
-                'acao': acao,
-                'dias': dias,
-                'limite': limite
+            'data': logs_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting logs: {e}")
+        return jsonify({
+            'success': False,
+            'message': 'Erro ao buscar logs'
+        }), 500
+
+# Additional vendor/team endpoints for legacy support
+@permissions_bp.route('/api/usuario/<int:usuario_id>/vendedores', methods=['GET'])
+@login_required
+def api_get_user_vendors_legacy(usuario_id):
+    """Get user vendors with available options (legacy)"""
+    try:
+        # Get current vendors
+        vendedores = UsuarioVendedor.query.filter_by(
+            usuario_id=usuario_id,
+            ativo=True
+        ).all()
+        
+        vendedores_autorizados = [{
+            'id': v.id,
+            'vendedor': v.vendedor
+        } for v in vendedores]
+        
+        # Get all available vendors
+        from app.faturamento.models import RelatorioFaturamentoImportado
+        todos_vendedores = db.session.query(
+            RelatorioFaturamentoImportado.vendedor
+        ).filter(
+            RelatorioFaturamentoImportado.vendedor.isnot(None)
+        ).distinct().all()
+        
+        vendedores_disponiveis = [
+            v[0] for v in todos_vendedores 
+            if v[0] and v[0] not in [va['vendedor'] for va in vendedores_autorizados]
+        ]
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'vendedores_autorizados': vendedores_autorizados,
+                'vendedores_disponiveis': sorted(vendedores_disponiveis)
             }
         })
         
     except Exception as e:
-        logger.error(f"Erro ao buscar logs de auditoria: {e}")
+        logger.error(f"Error getting vendors: {e}")
         return jsonify({
             'success': False,
-            'message': f'Erro interno: {str(e)}'
-        }), 500 
+            'message': 'Erro ao buscar vendedores'
+        }), 500
+
+@permissions_bp.route('/api/usuario/<int:usuario_id>/vendedores', methods=['POST'])
+@login_required
+@require_permission('usuarios.permissoes')
+def api_add_vendor_legacy(usuario_id):
+    """Add vendor to user (legacy)"""
+    try:
+        data = request.get_json()
+        vendedor = data.get('vendedor')
+        observacoes = data.get('observacoes')
+        
+        if not vendedor:
+            return jsonify({
+                'success': False,
+                'message': 'Vendedor é obrigatório'
+            }), 400
+        
+        # Check if already exists
+        existing = UsuarioVendedor.query.filter_by(
+            usuario_id=usuario_id,
+            vendedor=vendedor
+        ).first()
+        
+        if existing:
+            if existing.ativo:
+                return jsonify({
+                    'success': False,
+                    'message': 'Vendedor já autorizado'
+                }), 409
+            else:
+                # Reactivate
+                existing.ativo = True
+                existing.adicionado_por = current_user.id
+                existing.observacoes = observacoes
+        else:
+            # Create new
+            novo = UsuarioVendedor(
+                usuario_id=usuario_id,
+                vendedor=vendedor,
+                adicionado_por=current_user.id,
+                observacoes=observacoes
+            )
+            db.session.add(novo)
+        
+        db.session.commit()
+        
+        # Log action
+        LogPermissao.registrar(
+            usuario_id=usuario_id,
+            acao='VENDEDOR_ADICIONADO',
+            detalhes=f"Vendedor: {vendedor}",
+            ip_origem=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Vendedor adicionado com sucesso'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error adding vendor: {e}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': 'Erro ao adicionar vendedor'
+        }), 500
+
+@permissions_bp.route('/api/usuario/<int:usuario_id>/vendedores', methods=['DELETE'])
+@login_required
+@require_permission('usuarios.permissoes')
+def api_remove_vendor_legacy(usuario_id):
+    """Remove vendor from user (legacy)"""
+    try:
+        vendedor_id = request.args.get('vendedor_id', type=int)
+        
+        if not vendedor_id:
+            return jsonify({
+                'success': False,
+                'message': 'ID do vendedor é obrigatório'
+            }), 400
+        
+        vendedor = UsuarioVendedor.query.filter_by(
+            id=vendedor_id,
+            usuario_id=usuario_id
+        ).first()
+        
+        if not vendedor:
+            return jsonify({
+                'success': False,
+                'message': 'Vendedor não encontrado'
+            }), 404
+        
+        # Soft delete
+        vendedor.ativo = False
+        db.session.commit()
+        
+        # Log action
+        LogPermissao.registrar(
+            usuario_id=usuario_id,
+            acao='VENDEDOR_REMOVIDO',
+            detalhes=f"Vendedor: {vendedor.vendedor}",
+            ip_origem=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Vendedor removido com sucesso'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error removing vendor: {e}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': 'Erro ao remover vendedor'
+        }), 500
+
+# Similar endpoints for teams...
+@permissions_bp.route('/api/usuario/<int:usuario_id>/equipes', methods=['GET'])
+@login_required
+def api_get_user_teams_legacy(usuario_id):
+    """Get user teams with available options (legacy)"""
+    try:
+        # Get current teams
+        equipes = UsuarioEquipeVendas.query.filter_by(
+            usuario_id=usuario_id,
+            ativo=True
+        ).all()
+        
+        equipes_autorizadas = [{
+            'id': e.id,
+            'equipe_vendas': e.equipe_vendas
+        } for e in equipes]
+        
+        # Get all available teams
+        from app.faturamento.models import RelatorioFaturamentoImportado
+        todas_equipes = db.session.query(
+            RelatorioFaturamentoImportado.equipe_vendas
+        ).filter(
+            RelatorioFaturamentoImportado.equipe_vendas.isnot(None)
+        ).distinct().all()
+        
+        equipes_disponiveis = [
+            e[0] for e in todas_equipes 
+            if e[0] and e[0] not in [ea['equipe_vendas'] for ea in equipes_autorizadas]
+        ]
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'equipes_autorizadas': equipes_autorizadas,
+                'equipes_disponiveis': sorted(equipes_disponiveis)
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting teams: {e}")
+        return jsonify({
+            'success': False,
+            'message': 'Erro ao buscar equipes'
+        }), 500

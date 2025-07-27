@@ -1,0 +1,411 @@
+/**
+ * Permission Manager Styles
+ * Modern, responsive styling for the hierarchical permission management system
+ */
+
+/* Variables */
+:root {
+    --pm-primary: #0d6efd;
+    --pm-secondary: #6c757d;
+    --pm-success: #198754;
+    --pm-danger: #dc3545;
+    --pm-warning: #ffc107;
+    --pm-info: #0dcaf0;
+    --pm-light: #f8f9fa;
+    --pm-dark: #212529;
+    --pm-border: #dee2e6;
+    --pm-shadow: rgba(0, 0, 0, 0.1);
+    --pm-hover: rgba(13, 110, 253, 0.1);
+    --pm-custom-override: #e7f3ff;
+    --pm-inherited: rgba(108, 117, 125, 0.1);
+}
+
+/* Animation */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+/* Permission Tree Styles */
+.permission-tree {
+    background: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 0 0 1px var(--pm-border);
+}
+
+.permission-tree::-webkit-scrollbar {
+    width: 8px;
+}
+
+.permission-tree::-webkit-scrollbar-track {
+    background: var(--pm-light);
+    border-radius: 4px;
+}
+
+.permission-tree::-webkit-scrollbar-thumb {
+    background: var(--pm-secondary);
+    border-radius: 4px;
+}
+
+.permission-tree::-webkit-scrollbar-thumb:hover {
+    background: var(--pm-dark);
+}
+
+/* Permission Items */
+.permission-category {
+    border-bottom: 1px solid var(--pm-border);
+    animation: slideIn 0.3s ease;
+}
+
+.permission-category:last-child {
+    border-bottom: none;
+}
+
+.permission-module {
+    border-left: 3px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.permission-module:hover {
+    border-left-color: var(--pm-primary);
+}
+
+.permission-submodule {
+    font-size: 0.95rem;
+}
+
+/* Permission Headers */
+.permission-header {
+    align-items: center;
+    border-radius: 0.375rem;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.permission-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--pm-hover);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.permission-header:hover::before {
+    opacity: 1;
+}
+
+.permission-header > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Toggle Icons */
+.permission-toggle {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+
+.permission-toggle:hover {
+    transform: scale(1.2);
+}
+
+.permission-toggle i {
+    font-size: 0.75rem;
+    color: var(--pm-secondary);
+}
+
+/* Permission Icons */
+.permission-icon {
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Permission Actions */
+.permission-actions {
+    display: flex;
+    gap: 1.5rem;
+    padding: 0 0.5rem;
+}
+
+.permission-actions .form-check {
+    margin: 0;
+}
+
+.permission-actions .form-check-label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.permission-actions .form-check-label i {
+    font-size: 0.875rem;
+}
+
+/* Checkbox Styling */
+.permission-checkbox {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.permission-checkbox:checked {
+    background-color: var(--pm-primary);
+    border-color: var(--pm-primary);
+}
+
+.permission-checkbox:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* State Indicators */
+.custom-override {
+    background-color: var(--pm-custom-override) !important;
+    border-left: 3px solid var(--pm-info);
+}
+
+.inherited-permission {
+    background-color: var(--pm-inherited);
+}
+
+.inherited-permission .permission-actions {
+    opacity: 0.7;
+}
+
+/* User Cards */
+.user-card {
+    background: white;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.user-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--pm-primary);
+    transform: translateX(-3px);
+    transition: transform 0.2s;
+}
+
+.user-card:hover {
+    transform: translateX(2px);
+}
+
+.user-card:hover::after {
+    transform: translateX(0);
+}
+
+.user-card.selected {
+    background: var(--pm-light);
+}
+
+.user-card.selected::after {
+    transform: translateX(0);
+}
+
+/* Statistics Cards */
+.stat-card {
+    background: linear-gradient(135deg, var(--pm-light) 0%, white 100%);
+    border: 1px solid var(--pm-border);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, var(--pm-primary) 0%, transparent 70%);
+    opacity: 0.05;
+    transition: opacity 0.3s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px var(--pm-shadow);
+}
+
+.stat-card:hover::before {
+    opacity: 0.1;
+}
+
+.stat-card h3 {
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--pm-primary) 0%, var(--pm-info) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Search Highlight */
+.search-highlight {
+    background-color: var(--pm-warning);
+    color: var(--pm-dark);
+    padding: 2px 4px;
+    border-radius: 2px;
+    font-weight: 600;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    backdrop-filter: blur(2px);
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.loading-overlay .spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* Audit Log */
+.audit-entry {
+    transition: background-color 0.2s;
+    position: relative;
+    padding-left: 1rem;
+}
+
+.audit-entry::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 4px;
+    background: var(--pm-secondary);
+    border-radius: 50%;
+}
+
+.audit-entry:hover {
+    background-color: var(--pm-light);
+}
+
+/* Modals */
+.modal-header {
+    background: var(--pm-light);
+    border-bottom: 2px solid var(--pm-border);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .permission-actions {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    
+    .permission-module {
+        margin-left: 1rem;
+    }
+    
+    .permission-submodule {
+        margin-left: 2rem;
+    }
+    
+    .stat-card {
+        margin-bottom: 1rem;
+    }
+    
+    .permission-tree {
+        max-height: 400px;
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --pm-light: #343a40;
+        --pm-dark: #f8f9fa;
+        --pm-border: #495057;
+        --pm-custom-override: #1a3a52;
+        --pm-inherited: rgba(248, 249, 250, 0.1);
+    }
+    
+    .permission-tree,
+    .user-card,
+    .modal-content {
+        background: #212529;
+        color: #f8f9fa;
+    }
+    
+    .permission-header:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+    
+    .stat-card {
+        background: linear-gradient(135deg, #343a40 0%, #212529 100%);
+    }
+}
+
+/* Accessibility */
+.permission-checkbox:focus {
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.permission-header:focus-within {
+    outline: 2px solid var(--pm-primary);
+    outline-offset: 2px;
+}
+
+/* Print Styles */
+@media print {
+    .permission-actions button,
+    .loading-overlay,
+    .modal {
+        display: none !important;
+    }
+    
+    .permission-tree {
+        max-height: none;
+        border: 1px solid #000;
+    }
+    
+    .permission-category,
+    .permission-module,
+    .permission-submodule {
+        page-break-inside: avoid;
+    }
+}

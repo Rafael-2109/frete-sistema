@@ -15,6 +15,7 @@ from datetime import datetime
 from app.utils.timezone import agora_brasil
 from sqlalchemy import Index, UniqueConstraint
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,7 @@ class FuncaoModulo(db.Model):
     @classmethod
     def get_or_create_default_functions(cls):
         """Cria funções padrão para cada módulo"""
-        from . import ModuloSistema
+        # Não precisa importar ModuloSistema, já está no mesmo arquivo
         
         # Mapear funções por módulo
         funcoes_padrao = {
@@ -293,7 +294,58 @@ class PermissaoUsuario(db.Model):
         }
 
 # ============================================================================
-# 5. MÚLTIPLOS VENDEDORES POR USUÁRIO
+# 5. VENDEDORES E EQUIPES (ENTIDADES)
+# ============================================================================
+
+class Vendedor(db.Model):
+    """
+    Cadastro de vendedores do sistema
+    """
+    __tablename__ = 'vendedor'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(50), unique=True, nullable=False)  # Código único do vendedor
+    nome = db.Column(db.String(100), nullable=False)
+    razao_social = db.Column(db.String(200), nullable=True)
+    cnpj_cpf = db.Column(db.String(18), nullable=True)
+    email = db.Column(db.String(120), nullable=True)
+    telefone = db.Column(db.String(20), nullable=True)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    
+    # Relacionamentos
+    usuarios = db.relationship('UsuarioVendedor', backref='vendedor_obj', lazy='dynamic')
+    permissoes = db.relationship('PermissaoVendedor', backref='vendedor_obj', lazy='dynamic', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<Vendedor {self.codigo} - {self.nome}>'
+
+class EquipeVendas(db.Model):
+    """
+    Cadastro de equipes de vendas
+    """
+    __tablename__ = 'equipe_vendas'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(50), unique=True, nullable=False)  # Código único da equipe
+    nome = db.Column(db.String(100), nullable=False)
+    descricao = db.Column(db.String(255), nullable=True)
+    gerente_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    
+    # Relacionamentos
+    gerente = db.relationship('Usuario', foreign_keys=[gerente_id], backref='equipes_gerenciadas')
+    usuarios = db.relationship('UsuarioEquipeVendas', backref='equipe_obj', lazy='dynamic')
+    permissoes = db.relationship('PermissaoEquipe', backref='equipe_obj', lazy='dynamic', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<EquipeVendas {self.codigo} - {self.nome}>'
+
+# ============================================================================
+# 6. MÚLTIPLOS VENDEDORES POR USUÁRIO
 # ============================================================================
 
 class UsuarioVendedor(db.Model):
@@ -305,44 +357,45 @@ class UsuarioVendedor(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
-    vendedor = db.Column(db.String(100), nullable=False)  # Nome do vendedor
+    vendedor_id = db.Column(db.Integer, db.ForeignKey('vendedor.id'), nullable=False)
+    tipo_acesso = db.Column(db.String(20), default='visualizar')  # visualizar, editar, total
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     adicionado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     adicionado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     observacoes = db.Column(db.String(255), nullable=True)
     
     # Relacionamentos
-    usuario = db.relationship('Usuario', foreign_keys=[usuario_id], backref='vendedores_autorizados')
+    usuario = db.relationship('Usuario', foreign_keys=[usuario_id], backref='vendedores_associados')
     adicionado_por_user = db.relationship('Usuario', foreign_keys=[adicionado_por])
     
     # Índices
     __table_args__ = (
-        UniqueConstraint('usuario_id', 'vendedor', name='uq_usuario_vendedor'),
+        UniqueConstraint('usuario_id', 'vendedor_id', name='uq_usuario_vendedor'),
         Index('idx_usuario_vendedor_ativo', 'usuario_id', 'ativo'),
-        Index('idx_vendedor_lookup', 'vendedor', 'ativo'),
+        Index('idx_vendedor_lookup', 'vendedor_id', 'ativo'),
     )
     
     def __repr__(self):
-        return f'<UsuarioVendedor {self.usuario.nome} -> {self.vendedor}>'
+        return f'<UsuarioVendedor {self.usuario.nome} -> {self.vendedor_obj.nome}>'
     
     @classmethod
     def get_vendedores_usuario(cls, usuario_id):
         """Retorna lista de vendedores autorizados para o usuário"""
-        return [uv.vendedor for uv in cls.query.filter_by(
+        return [uv.vendedor_obj for uv in cls.query.filter_by(
             usuario_id=usuario_id, ativo=True
-        ).all()]
+        ).join(Vendedor).filter(Vendedor.ativo == True).all()]
     
     @classmethod
-    def usuario_tem_vendedor(cls, usuario_id, vendedor):
+    def usuario_tem_vendedor(cls, usuario_id, vendedor_id):
         """Verifica se usuário tem acesso a vendedor específico"""
         return cls.query.filter_by(
             usuario_id=usuario_id, 
-            vendedor=vendedor, 
+            vendedor_id=vendedor_id, 
             ativo=True
         ).first() is not None
 
 # ============================================================================
-# 6. MÚLTIPLAS EQUIPES DE VENDAS POR USUÁRIO
+# 7. MÚLTIPLAS EQUIPES DE VENDAS POR USUÁRIO
 # ============================================================================
 
 class UsuarioEquipeVendas(db.Model):
@@ -354,44 +407,108 @@ class UsuarioEquipeVendas(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
-    equipe_vendas = db.Column(db.String(100), nullable=False)  # Nome da equipe
+    equipe_id = db.Column(db.Integer, db.ForeignKey('equipe_vendas.id'), nullable=False)
+    cargo_equipe = db.Column(db.String(50), nullable=True)  # Cargo do usuário na equipe
+    tipo_acesso = db.Column(db.String(20), default='membro')  # membro, supervisor, gerente
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     adicionado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     adicionado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     observacoes = db.Column(db.String(255), nullable=True)
     
     # Relacionamentos
-    usuario = db.relationship('Usuario', foreign_keys=[usuario_id], backref='equipes_autorizadas')
+    usuario = db.relationship('Usuario', foreign_keys=[usuario_id], backref='equipes_associadas')
     adicionado_por_user = db.relationship('Usuario', foreign_keys=[adicionado_por])
     
     # Índices
     __table_args__ = (
-        UniqueConstraint('usuario_id', 'equipe_vendas', name='uq_usuario_equipe'),
+        UniqueConstraint('usuario_id', 'equipe_id', name='uq_usuario_equipe'),
         Index('idx_usuario_equipe_ativo', 'usuario_id', 'ativo'),
-        Index('idx_equipe_lookup', 'equipe_vendas', 'ativo'),
+        Index('idx_equipe_lookup', 'equipe_id', 'ativo'),
     )
     
     def __repr__(self):
-        return f'<UsuarioEquipeVendas {self.usuario.nome} -> {self.equipe_vendas}>'
+        return f'<UsuarioEquipeVendas {self.usuario.nome} -> {self.equipe_obj.nome}>'
     
     @classmethod
     def get_equipes_usuario(cls, usuario_id):
         """Retorna lista de equipes autorizadas para o usuário"""
-        return [ue.equipe_vendas for ue in cls.query.filter_by(
+        return [ue.equipe_obj for ue in cls.query.filter_by(
             usuario_id=usuario_id, ativo=True
-        ).all()]
+        ).join(EquipeVendas).filter(EquipeVendas.ativo == True).all()]
     
     @classmethod
-    def usuario_tem_equipe(cls, usuario_id, equipe_vendas):
+    def usuario_tem_equipe(cls, usuario_id, equipe_id):
         """Verifica se usuário tem acesso a equipe específica"""
         return cls.query.filter_by(
             usuario_id=usuario_id, 
-            equipe_vendas=equipe_vendas, 
+            equipe_id=equipe_id, 
             ativo=True
         ).first() is not None
 
 # ============================================================================
-# 7. LOG DE AUDITORIA
+# 8. PERMISSÕES POR VENDEDOR E EQUIPE
+# ============================================================================
+
+class PermissaoVendedor(db.Model):
+    """
+    Permissões atribuídas a nível de vendedor
+    Todos os usuários do vendedor herdam essas permissões
+    """
+    __tablename__ = 'permissao_vendedor'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    vendedor_id = db.Column(db.Integer, db.ForeignKey('vendedor.id'), nullable=False)
+    funcao_id = db.Column(db.Integer, db.ForeignKey('funcao_modulo.id'), nullable=False)
+    pode_visualizar = db.Column(db.Boolean, default=False, nullable=False)
+    pode_editar = db.Column(db.Boolean, default=False, nullable=False)
+    concedida_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    concedida_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # Relacionamentos
+    funcao = db.relationship('FuncaoModulo', backref='permissoes_vendedor')
+    concedente = db.relationship('Usuario')
+    
+    # Índices
+    __table_args__ = (
+        UniqueConstraint('vendedor_id', 'funcao_id', name='uq_permissao_vendedor_funcao'),
+        Index('idx_permissao_vendedor_ativo', 'vendedor_id', 'ativo'),
+    )
+    
+    def __repr__(self):
+        return f'<PermissaoVendedor {self.vendedor_obj.nome} -> {self.funcao.nome_completo}>'
+
+class PermissaoEquipe(db.Model):
+    """
+    Permissões atribuídas a nível de equipe
+    Todos os usuários da equipe herdam essas permissões
+    """
+    __tablename__ = 'permissao_equipe'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    equipe_id = db.Column(db.Integer, db.ForeignKey('equipe_vendas.id'), nullable=False)
+    funcao_id = db.Column(db.Integer, db.ForeignKey('funcao_modulo.id'), nullable=False)
+    pode_visualizar = db.Column(db.Boolean, default=False, nullable=False)
+    pode_editar = db.Column(db.Boolean, default=False, nullable=False)
+    concedida_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    concedida_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # Relacionamentos
+    funcao = db.relationship('FuncaoModulo', backref='permissoes_equipe')
+    concedente = db.relationship('Usuario')
+    
+    # Índices
+    __table_args__ = (
+        UniqueConstraint('equipe_id', 'funcao_id', name='uq_permissao_equipe_funcao'),
+        Index('idx_permissao_equipe_ativo', 'equipe_id', 'ativo'),
+    )
+    
+    def __repr__(self):
+        return f'<PermissaoEquipe {self.equipe_obj.nome} -> {self.funcao.nome_completo}>'
+
+# ============================================================================
+# 9. LOG DE AUDITORIA
 # ============================================================================
 
 class LogPermissao(db.Model):
@@ -468,7 +585,7 @@ class LogPermissao(db.Model):
         ).order_by(cls.timestamp.desc()).limit(limite).all()
 
 # ============================================================================
-# 8. FUNÇÕES AUXILIARES PARA INICIALIZAÇÃO
+# 10. FUNÇÕES AUXILIARES PARA INICIALIZAÇÃO
 # ============================================================================
 
 def inicializar_dados_padrao():
@@ -497,4 +614,354 @@ def inicializar_dados_padrao():
     except Exception as e:
         logger.error(f"❌ Erro na inicialização: {e}")
         db.session.rollback()
-        return False 
+        return False
+
+# ============================================================================
+# 11. LEGACY SUBMODULE MODEL (for compatibility)
+# ============================================================================
+
+class SubModule(db.Model):
+    """
+    Legacy SubModule model for backward compatibility
+    Maps to PermissionSubModule in new system
+    """
+    __tablename__ = 'submodule'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    modulo_id = db.Column(db.Integer, db.ForeignKey('modulo_sistema.id'), nullable=False)
+    nome = db.Column(db.String(50), nullable=False)
+    nome_exibicao = db.Column(db.String(100), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # This is a compatibility model that maps to PermissionSubModule
+    def __repr__(self):
+        return f'<SubModule {self.nome}>'
+
+# ============================================================================
+# 12. HIERARCHICAL PERMISSION MODELS (NEW)
+# ============================================================================
+
+class PermissionCategory(db.Model):
+    """
+    Permission categories (highest level)
+    Groups related modules together
+    """
+    __tablename__ = 'permission_category'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(50), unique=True, nullable=False)  # Changed from 'name' to 'nome'
+    nome_exibicao = db.Column(db.String(100), nullable=False)     # Changed from 'display_name' to 'nome_exibicao'
+    descricao = db.Column(db.String(255), nullable=True)          # Changed from 'description' to 'descricao'
+    icone = db.Column(db.String(50), default='folder')            # Changed from 'icon' to 'icone'
+    cor = db.Column(db.String(7), default='#007bff')              # Changed from 'color' to 'cor'
+    ordem = db.Column(db.Integer, default=0)                      # Changed from 'order_index' to 'ordem'
+    ativo = db.Column(db.Boolean, default=True, nullable=False)   # Changed from 'active' to 'ativo'
+    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)  # Changed from 'created_at' to 'criado_em'
+    criado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)  # Changed from 'created_by' to 'criado_por'
+    
+    # Relationships
+    modules = db.relationship('PermissionModule', backref='category', lazy='dynamic', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<PermissionCategory {self.nome}>'
+
+class PermissionModule(db.Model):
+    """
+    Permission modules within categories
+    """
+    __tablename__ = 'permission_module'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    category_id = db.Column(db.Integer, db.ForeignKey('permission_category.id'), nullable=False)
+    name = db.Column(db.String(50), nullable=False)
+    display_name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    icon = db.Column(db.String(50), default='file')
+    color = db.Column(db.String(7), default='#6c757d')
+    order_index = db.Column(db.Integer, default=0)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    
+    # Relationships
+    submodules = db.relationship('PermissionSubModule', backref='module', lazy='dynamic', cascade='all, delete-orphan')
+    
+    # Indexes
+    __table_args__ = (
+        UniqueConstraint('category_id', 'name', name='uq_module_category_name'),
+        Index('idx_module_category', 'category_id', 'active'),
+    )
+    
+    def __repr__(self):
+        return f'<PermissionModule {self.category.name}.{self.name}>'
+
+class PermissionSubModule(db.Model):
+    """
+    Permission submodules (most granular level)
+    """
+    __tablename__ = 'permission_submodule'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    module_id = db.Column(db.Integer, db.ForeignKey('permission_module.id'), nullable=False)
+    name = db.Column(db.String(50), nullable=False)
+    display_name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    route_pattern = db.Column(db.String(200), nullable=True)
+    critical_level = db.Column(db.String(10), default='NORMAL')  # LOW, NORMAL, HIGH, CRITICAL
+    order_index = db.Column(db.Integer, default=0)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    
+    # Indexes
+    __table_args__ = (
+        UniqueConstraint('module_id', 'name', name='uq_submodule_module_name'),
+        Index('idx_submodule_module', 'module_id', 'active'),
+    )
+    
+    def __repr__(self):
+        return f'<PermissionSubModule {self.module.name}.{self.name}>'
+
+class UserPermission(db.Model):
+    """
+    User permissions for hierarchical entities
+    """
+    __tablename__ = 'user_permission'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    entity_type = db.Column(db.String(20), nullable=False)  # CATEGORY, MODULE, SUBMODULE
+    entity_id = db.Column(db.Integer, nullable=False)
+    can_view = db.Column(db.Boolean, default=False, nullable=False)
+    can_edit = db.Column(db.Boolean, default=False, nullable=False)
+    can_delete = db.Column(db.Boolean, default=False, nullable=False)
+    can_export = db.Column(db.Boolean, default=False, nullable=False)
+    custom_override = db.Column(db.Boolean, default=False, nullable=False)
+    granted_by = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    granted_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    reason = db.Column(db.String(255), nullable=True)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # Relationships
+    user = db.relationship('Usuario', foreign_keys=[user_id], backref='hierarchical_permissions')
+    granted_by_user = db.relationship('Usuario', foreign_keys=[granted_by])
+    
+    # Indexes
+    __table_args__ = (
+        UniqueConstraint('user_id', 'entity_type', 'entity_id', name='uq_user_entity_permission'),
+        Index('idx_user_permission_active', 'user_id', 'active'),
+        Index('idx_entity_permission', 'entity_type', 'entity_id', 'active'),
+    )
+    
+    def __repr__(self):
+        return f'<UserPermission {self.user_id} -> {self.entity_type}:{self.entity_id}>'
+    
+    @property
+    def is_expired(self):
+        """Check if permission is expired"""
+        if not self.expires_at:
+            return False
+        return agora_brasil() > self.expires_at
+
+class PermissionTemplate(db.Model):
+    """
+    Permission templates for easy assignment
+    """
+    __tablename__ = 'permission_template'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    code = db.Column(db.String(50), unique=True, nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    category = db.Column(db.String(50), default='custom')  # roles, departments, custom
+    template_data = db.Column(db.Text, nullable=False)  # JSON with permissions
+    is_system = db.Column(db.Boolean, default=False, nullable=False)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    updated_at = db.Column(db.DateTime, onupdate=agora_brasil)
+    
+    def __repr__(self):
+        return f'<PermissionTemplate {self.name}>'
+    
+    def get_permissions(self):
+        """Get parsed permissions from template"""
+        import json
+        try:
+            return json.loads(self.template_data)
+        except:
+            return {}
+
+class BatchPermissionOperation(db.Model):
+    """
+    Track batch permission operations for audit and rollback
+    """
+    __tablename__ = 'batch_permission_operation'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    operation_type = db.Column(db.String(20), nullable=False)  # GRANT, REVOKE, COPY, UPDATE, MIGRATION
+    description = db.Column(db.String(255), nullable=True)
+    executed_by = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    status = db.Column(db.String(20), default='PENDING')  # PENDING, IN_PROGRESS, COMPLETED, COMPLETED_WITH_ERRORS, FAILED
+    affected_users = db.Column(db.Integer, default=0)
+    affected_permissions = db.Column(db.Integer, default=0)
+    details = db.Column(db.JSON, nullable=True)  # JSON with operation details
+    error_details = db.Column(db.Text, nullable=True)
+    
+    # Relationships
+    executor = db.relationship('Usuario', backref='batch_operations_executed')
+    
+    def __repr__(self):
+        return f'<BatchPermissionOperation {self.operation_type} - {self.status}>'
+
+
+class PermissionCache(db.Model):
+    """
+    Database-backed cache for permission lookups
+    """
+    __tablename__ = 'permission_cache'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    cache_key = db.Column(db.String(255), unique=True, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    permission_data = db.Column(db.JSON, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    
+    # Indexes
+    __table_args__ = (
+        Index('idx_cache_user', 'user_id'),
+        Index('idx_cache_expires', 'expires_at'),
+    )
+    
+    def __repr__(self):
+        return f'<PermissionCache {self.cache_key}>'
+
+
+def criar_templates_padrao():
+    """Cria templates de permissão padrão para cada perfil"""
+    templates_config = {
+        'vendedor': {
+            'nome': 'Template Vendedor',
+            'descricao': 'Permissões padrão para vendedores',
+            'permissions': {
+                'carteira': {
+                    'listar': 'visualizar',
+                    'visualizar': 'visualizar'
+                },
+                'monitoramento': {
+                    'listar': 'visualizar',
+                    'visualizar': 'visualizar'
+                }
+            }
+        },
+        'gerente_comercial': {
+            'nome': 'Template Gerente Comercial',
+            'descricao': 'Permissões padrão para gerentes comerciais',
+            'permissions': {
+                'faturamento': {
+                    'listar': 'editar',
+                    'visualizar': 'editar',
+                    'editar': 'editar',
+                    'exportar': 'editar'
+                },
+                'carteira': {
+                    'listar': 'editar',
+                    'visualizar': 'editar',
+                    'gerar_separacao': 'editar',
+                    'baixar_faturamento': 'editar'
+                },
+                'monitoramento': {
+                    'listar': 'editar',
+                    'visualizar': 'editar',
+                    'agendar': 'editar'
+                },
+                'usuarios': {
+                    'listar': 'visualizar',
+                    'aprovar': 'editar'
+                }
+            }
+        },
+        'financeiro': {
+            'nome': 'Template Financeiro',
+            'descricao': 'Permissões padrão para equipe financeira',
+            'permissions': {
+                'faturamento': {
+                    'listar': 'editar',
+                    'visualizar': 'editar',
+                    'editar': 'editar',
+                    'importar': 'editar',
+                    'exportar': 'editar'
+                },
+                'financeiro': {
+                    'lancamento_freteiros': 'editar',
+                    'aprovar_faturas': 'editar',
+                    'relatorios': 'editar'
+                },
+                'monitoramento': {
+                    'pendencias_financeiras': 'editar'
+                }
+            }
+        },
+        'logistica': {
+            'nome': 'Template Logística',
+            'descricao': 'Permissões padrão para equipe de logística',
+            'permissions': {
+                'embarques': {
+                    'listar': 'editar',
+                    'criar': 'editar',
+                    'editar': 'editar',
+                    'finalizar': 'editar'
+                },
+                'portaria': {
+                    'dashboard': 'editar',
+                    'registrar_movimento': 'editar',
+                    'historico': 'visualizar'
+                },
+                'monitoramento': {
+                    'listar': 'editar',
+                    'visualizar': 'editar',
+                    'upload_canhotos': 'editar'
+                }
+            }
+        },
+        'portaria': {
+            'nome': 'Template Portaria',
+            'descricao': 'Permissões padrão para equipe de portaria',
+            'permissions': {
+                'portaria': {
+                    'dashboard': 'visualizar',
+                    'registrar_movimento': 'editar',
+                    'historico': 'visualizar'
+                },
+                'embarques': {
+                    'listar': 'visualizar',
+                    'visualizar': 'visualizar'
+                }
+            }
+        }
+    }
+    
+    for perfil_nome, config in templates_config.items():
+        # Buscar perfil
+        perfil = PerfilUsuario.query.filter_by(nome=perfil_nome).first()
+        if not perfil:
+            continue
+        
+        # Verificar se template já existe
+        if PermissionTemplate.query.filter_by(nome=config['nome']).first():
+            continue
+        
+        # Criar template
+        template = PermissionTemplate(
+            nome=config['nome'],
+            descricao=config['descricao'],
+            perfil_id=perfil.id,
+            permissions_json=json.dumps(config['permissions'])
+        )
+        db.session.add(template)
+    
+    db.session.commit() 

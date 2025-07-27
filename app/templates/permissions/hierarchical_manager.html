@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}Gerenciador Hierárquico de Permissões{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-sitemap"></i> Gerenciador Hierárquico de Permissões
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- User Selection and Actions -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label for="userSelect" class="form-label">Selecione o Usuário</label>
+                            <select class="form-select" id="userSelect">
+                                <option value="">-- Selecione um usuário --</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label d-block">Ações Rápidas</label>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-warning" id="btnScanModules" title="Auto-detectar módulos do sistema">
+                                    <i class="fas fa-search"></i> Escanear Módulos
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" id="btnApplyTemplate">
+                                    <i class="fas fa-file-import"></i> Aplicar Template
+                                </button>
+                                <button type="button" class="btn btn-outline-success" id="btnSavePermissions">
+                                    <i class="fas fa-save"></i> Salvar Permissões
+                                </button>
+                                <button type="button" class="btn btn-outline-info" id="btnExpandAll">
+                                    <i class="fas fa-expand"></i> Expandir Tudo
+                                </button>
+                                <button type="button" class="btn btn-outline-info" id="btnCollapseAll">
+                                    <i class="fas fa-compress"></i> Colapsar Tudo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User Info and Stats -->
+                    <div id="userInfoSection" style="display: none;">
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <div class="card border-primary">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-title">Perfil</h6>
+                                        <p class="card-text" id="userProfile">-</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card border-info">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-title">Vendedores</h6>
+                                        <p class="card-text" id="userVendorCount">0</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card border-success">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-title">Equipes</h6>
+                                        <p class="card-text" id="userTeamCount">0</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card border-warning">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-title">Permissões Ativas</h6>
+                                        <p class="card-text" id="userPermissionCount">0</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vendor and Team Management -->
+                    <div id="vendorTeamSection" style="display: none;">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-user-tie"></i> Vendedores
+                                            <button class="btn btn-sm btn-primary float-end" id="btnAddVendor">
+                                                <i class="fas fa-plus"></i> Adicionar
+                                            </button>
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="vendorsList" class="list-group">
+                                            <!-- Vendors will be loaded here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-users"></i> Equipes de Vendas
+                                            <button class="btn btn-sm btn-primary float-end" id="btnAddTeam">
+                                                <i class="fas fa-plus"></i> Adicionar
+                                            </button>
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="teamsList" class="list-group">
+                                            <!-- Teams will be loaded here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Permission Tree -->
+                    <div id="permissionTreeSection" style="display: none;">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-shield-alt"></i> Árvore de Permissões
+                                    <span class="badge bg-info float-end" id="selectedCountBadge">0 selecionadas</span>
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <!-- Batch Actions -->
+                                <div class="mb-3">
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="checkbox" id="selectAllPermissions">
+                                        <label class="form-check-label" for="selectAllPermissions">
+                                            Selecionar Todas
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline ms-4">
+                                        <input class="form-check-input" type="radio" name="batchAction" id="batchView" value="view">
+                                        <label class="form-check-label" for="batchView">
+                                            Visualizar
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="batchAction" id="batchEdit" value="edit">
+                                        <label class="form-check-label" for="batchEdit">
+                                            Editar
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="batchAction" id="batchNone" value="none" checked>
+                                        <label class="form-check-label" for="batchNone">
+                                            Nenhuma
+                                        </label>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-primary ms-3" id="btnApplyBatch">
+                                        Aplicar em Lote
+                                    </button>
+                                </div>
+
+                                <!-- Permission Tree Container -->
+                                <div id="permissionTree" class="permission-tree">
+                                    <!-- Tree will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Loading Spinner -->
+                    <div id="loadingSpinner" class="text-center" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <p class="mt-2">Carregando permissões...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template Selection Modal -->
+<div class="modal fade" id="templateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Aplicar Template de Permissões</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label for="templateSelect" class="form-label">Selecione um Template</label>
+                <select class="form-select" id="templateSelect">
+                    <option value="">-- Selecione --</option>
+                </select>
+                <div class="alert alert-info mt-3" id="templateDescription" style="display: none;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmTemplate">Aplicar Template</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vendor/Team Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addModalTitle">Adicionar</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addForm">
+                    <div class="mb-3">
+                        <label for="addSelect" class="form-label" id="addSelectLabel">Selecione</label>
+                        <select class="form-select" id="addSelect" required>
+                            <option value="">-- Selecione --</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="addObservations" class="form-label">Observações</label>
+                        <textarea class="form-control" id="addObservations" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmAdd">Adicionar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success/Error Messages -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="successToast" class="toast" role="alert">
+        <div class="toast-header bg-success text-white">
+            <strong class="me-auto">Sucesso</strong>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="successMessage">
+            Operação realizada com sucesso!
+        </div>
+    </div>
+    <div id="errorToast" class="toast" role="alert">
+        <div class="toast-header bg-danger text-white">
+            <strong class="me-auto">Erro</strong>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="errorMessage">
+            Erro ao processar operação.
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/permission-hierarchical.css') }}">
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="{{ url_for('static', filename='js/permission-hierarchical.js') }}"></script>
+{% endblock %}

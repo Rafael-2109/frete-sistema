@@ -472,7 +472,7 @@ def create_app(config_name=None):
     # from app.odoo import odoo_bp  # DESATIVADO - Movido para Carteira & Estoque
     from app.odoo.routes.sincronizacao_integrada import sync_integrada_bp  # REATIVADO - Necessário!
     from app.claude_ai import claude_ai_bp
-    from app.permissions import permissions_bp  # ✅ Sistema de Permissões
+    # Sistema de Permissões será inicializado depois
     
     # 📦 Importando blueprints dos módulos de carteira (seguindo padrão existente)
     from app.carteira.routes import carteira_bp
@@ -509,7 +509,8 @@ def create_app(config_name=None):
     app.register_blueprint(claude_ai_bp)
     
     # 🔐 Sistema de Permissões
-    app.register_blueprint(permissions_bp)
+    from app.permissions import init_app as init_permissions
+    init_permissions(app)
     
     # 🎭 Registrar helpers de permissão nos templates
     @app.context_processor

@@ -531,4 +531,139 @@ class PermissaoService:
             
         except Exception as e:
             logger.error(f"Erro ao validar consistência: {e}")
-            return {'status': 'ERRO', 'erro': str(e)} 
+            return {'status': 'ERRO', 'erro': str(e)}
+    
+    @staticmethod
+    def apply_template_to_user(template_id: int, user_id: int, 
+                              override_existing: bool = False,
+                              apply_vendors: bool = True,
+                              apply_teams: bool = True,
+                              reason: str = '',
+                              applied_by: int = None) -> bool:
+        """
+        Apply a permission template to a user
+        
+        Args:
+            template_id: ID of the template to apply
+            user_id: ID of the user to apply template to
+            override_existing: Whether to override existing permissions
+            apply_vendors: Whether to apply vendor associations
+            apply_teams: Whether to apply team associations
+            reason: Reason for applying template
+            applied_by: ID of the user applying the template
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            from app.permissions.models import PermissionTemplate, UserPermission
+            import json
+            
+            # Get template
+            template = PermissionTemplate.query.get(template_id)
+            if not template or not template.active:
+                logger.error(f"Template {template_id} not found or inactive")
+                return False
+            
+            # Get user
+            user = Usuario.query.get(user_id)
+            if not user:
+                logger.error(f"User {user_id} not found")
+                return False
+            
+            # Parse template data
+            template_data = template.get_permissions()
+            permissions = template_data.get('permissions', [])
+            
+            # Apply permissions
+            for perm_data in permissions:
+                entity_type = perm_data.get('type', '').upper()
+                entity_id = perm_data.get('id')
+                
+                if not entity_type or not entity_id:
+                    continue
+                
+                # Check if permission already exists
+                existing_perm = UserPermission.query.filter_by(
+                    user_id=user_id,
+                    entity_type=entity_type,
+                    entity_id=entity_id
+                ).first()
+                
+                if existing_perm and not override_existing:
+                    continue  # Skip if exists and not overriding
+                
+                if existing_perm:
+                    # Update existing
+                    existing_perm.can_view = perm_data.get('can_view', False)
+                    existing_perm.can_edit = perm_data.get('can_edit', False)
+                    existing_perm.can_delete = perm_data.get('can_delete', False)
+                    existing_perm.can_export = perm_data.get('can_export', False)
+                    existing_perm.reason = reason
+                    existing_perm.active = True
+                else:
+                    # Create new
+                    new_perm = UserPermission(
+                        user_id=user_id,
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        can_view=perm_data.get('can_view', False),
+                        can_edit=perm_data.get('can_edit', False),
+                        can_delete=perm_data.get('can_delete', False),
+                        can_export=perm_data.get('can_export', False),
+                        granted_by=applied_by,
+                        reason=reason
+                    )
+                    db.session.add(new_perm)
+            
+            # Apply vendors if requested
+            if apply_vendors:
+                vendors = template_data.get('vendors', [])
+                for vendor in vendors:
+                    PermissaoService.adicionar_vendedor_usuario(
+                        usuario_id=user_id,
+                        vendedor=vendor,
+                        adicionado_por=applied_by
+                    )
+            
+            # Apply teams if requested
+            if apply_teams:
+                teams = template_data.get('teams', [])
+                for team in teams:
+                    # Similar to vendors, but for teams
+                    existing_team = UsuarioEquipeVendas.query.filter_by(
+                        usuario_id=user_id,
+                        equipe_vendas=team
+                    ).first()
+                    
+                    if not existing_team:
+                        new_team = UsuarioEquipeVendas(
+                            usuario_id=user_id,
+                            equipe_vendas=team,
+                            adicionado_por=applied_by
+                        )
+                        db.session.add(new_team)
+                    elif not existing_team.ativo:
+                        existing_team.ativo = True
+                        existing_team.adicionado_por = applied_by
+            
+            db.session.commit()
+            
+            # Log action
+            LogPermissao.registrar(
+                usuario_id=user_id,
+                acao='TEMPLATE_APPLIED',
+                detalhes=json.dumps({
+                    'template_id': template_id,
+                    'template_name': template.name,
+                    'applied_by': applied_by,
+                    'reason': reason
+                })
+            )
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error applying template {template_id} to user {user_id}: {e}")
+            db.session.rollback()
+            return False 

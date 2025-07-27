@@ -1,0 +1,324 @@
+/**
+ * Hierarchical Permission Manager Styles
+ */
+
+/* Permission Tree Styles */
+.permission-tree {
+    max-height: 600px;
+    overflow-y: auto;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}
+
+.permission-node {
+    margin-bottom: 5px;
+    background-color: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.permission-node:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.permission-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    cursor: default;
+}
+
+.toggle-icon {
+    cursor: pointer;
+    margin-right: 10px;
+    color: #6c757d;
+    transition: transform 0.2s ease;
+    font-size: 12px;
+}
+
+.toggle-icon:hover {
+    color: #495057;
+}
+
+.permission-checkboxes {
+    margin-right: 20px;
+    display: flex;
+    gap: 15px;
+}
+
+.permission-name {
+    flex-grow: 1;
+    font-weight: 500;
+}
+
+.permission-children {
+    padding-left: 30px;
+    padding-bottom: 10px;
+}
+
+/* Node Type Specific Styles */
+.category-node {
+    border-left: 4px solid #007bff;
+}
+
+.category-node .permission-header {
+    background-color: #f0f7ff;
+}
+
+.module-node {
+    border-left: 4px solid #28a745;
+}
+
+.module-node .permission-header {
+    background-color: #f3fdf5;
+}
+
+.submodule-node {
+    border-left: 4px solid #6c757d;
+}
+
+.submodule-node .permission-header {
+    background-color: #f8f9fa;
+    padding: 8px 15px;
+}
+
+/* Critical Level Styles */
+.submodule-node.critical {
+    border-left-color: #dc3545;
+}
+
+.submodule-node.critical .permission-header {
+    background-color: #fff5f5;
+}
+
+.submodule-node.high {
+    border-left-color: #ffc107;
+}
+
+.submodule-node.high .permission-header {
+    background-color: #fffbf0;
+}
+
+/* Checkbox Styles */
+.permission-checkboxes .form-check {
+    margin-bottom: 0;
+}
+
+.permission-checkboxes .form-check-label {
+    font-size: 14px;
+    font-weight: normal;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.permission-checkboxes .form-check-input {
+    cursor: pointer;
+}
+
+.permission-checkboxes .form-check-input:indeterminate {
+    background-color: #6c757d;
+    border-color: #6c757d;
+}
+
+/* User Info Cards */
+.card.border-primary {
+    border-width: 2px;
+}
+
+.card.border-info {
+    border-width: 2px;
+}
+
+.card.border-success {
+    border-width: 2px;
+}
+
+.card.border-warning {
+    border-width: 2px;
+}
+
+/* Vendor/Team Lists */
+.list-group-item {
+    padding: 10px 15px;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa;
+}
+
+/* Loading Spinner */
+#loadingSpinner {
+    padding: 50px;
+}
+
+/* Badges */
+.badge {
+    font-weight: normal;
+    padding: 4px 8px;
+}
+
+/* Action Buttons */
+.btn-group .btn {
+    padding: 6px 12px;
+}
+
+/* Modal Styles */
+.modal-body .form-label {
+    font-weight: 500;
+}
+
+/* Toast Styles */
+.toast {
+    min-width: 300px;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .permission-children {
+        padding-left: 15px;
+    }
+    
+    .permission-checkboxes {
+        flex-direction: column;
+        gap: 5px;
+        margin-right: 10px;
+    }
+    
+    .permission-header {
+        flex-wrap: wrap;
+    }
+    
+    .permission-name {
+        width: 100%;
+        margin-top: 10px;
+    }
+}
+
+/* Scrollbar Styles */
+.permission-tree::-webkit-scrollbar {
+    width: 8px;
+}
+
+.permission-tree::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.permission-tree::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.permission-tree::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Animation for expand/collapse */
+.permission-children {
+    overflow: hidden;
+}
+
+/* Batch Action Section */
+.form-check-inline {
+    margin-right: 1rem;
+}
+
+/* Selected Count Badge */
+#selectedCountBadge {
+    font-size: 12px;
+    padding: 4px 8px;
+}
+
+/* Card Headers */
+.card-header h6 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Icon Colors */
+.fa-folder {
+    opacity: 0.8;
+}
+
+.fa-file {
+    opacity: 0.7;
+}
+
+.fa-check-circle {
+    color: #28a745;
+    opacity: 0.6;
+}
+
+/* Hover Effects */
+.btn-sm:hover {
+    transform: translateY(-1px);
+}
+
+.toggle-icon:active {
+    transform: scale(0.95);
+}
+
+/* Empty State */
+.text-muted {
+    font-style: italic;
+    padding: 20px;
+    text-align: center;
+}
+
+/* Permission Stats Cards */
+.card-body h6 {
+    color: #495057;
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.card-body p {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 0;
+}
+
+/* Form Controls */
+.form-select {
+    border-color: #ced4da;
+}
+
+.form-select:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+/* Button States */
+.btn-outline-primary:hover {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.btn-outline-success:hover {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.btn-outline-info:hover {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+}
+
+/* Print Styles */
+@media print {
+    .btn-group,
+    .btn,
+    .form-check,
+    .toast {
+        display: none !important;
+    }
+    
+    .permission-node {
+        page-break-inside: avoid;
+    }
+}

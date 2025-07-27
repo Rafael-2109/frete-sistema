@@ -15,7 +15,7 @@ from app import db
 from app.localidades.forms import CidadeForm
 from app.localidades.models import Cidade, CadastroRota, CadastroSubRota
 from app.utils.auth_decorators import require_admin
-from app.permissions.decorators import require_permission, require_admin_new
+from app.permissions.decorators_simple import require_permission, require_admin_new
 from app.utils.timezone import agora_brasil
 
 localidades_bp = Blueprint('localidades', __name__, url_prefix='/localidades')
