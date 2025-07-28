@@ -20,7 +20,7 @@ class WorkspaceQuantidades {
         const qtdPedido = produto.qtd_pedido || 0;
         const qtdSeparacoes = produto.qtd_separacoes || 0; // Vindas da API
         const qtdPreSeparacoes = produto.qtd_pre_separacoes || 0; // Vindas da API
-        
+
         // Calcular também baseado nos lotes locais (workspace atual)
         let qtdPreSeparacoesLocal = 0;
         if (window.workspace && window.workspace.preSeparacoes) {
@@ -31,7 +31,7 @@ class WorkspaceQuantidades {
                 }
             });
         }
-        
+
         // Calcular separações confirmadas locais
         let qtdSeparacoesConfirmadas = 0;
         if (window.workspace && window.workspace.separacoesConfirmadas) {
@@ -42,16 +42,16 @@ class WorkspaceQuantidades {
                 }
             });
         }
-        
+
         // Usar o maior valor entre API e local para pré-separações
         const qtdPreSeparacoesTotal = Math.max(qtdPreSeparacoes, qtdPreSeparacoesLocal);
-        
+
         // Usar o maior valor entre API e local para separações
         const qtdSeparacoesTotal = Math.max(qtdSeparacoes, qtdSeparacoesConfirmadas);
-        
+
         // Saldo disponível = Qtd Pedido - (Separações + Pré-Separações)
         const qtdEditavel = qtdPedido - qtdSeparacoesTotal - qtdPreSeparacoesTotal;
-        
+
         return {
             qtdEditavel: Math.max(0, qtdEditavel), // Nunca negativo
             qtdSeparacoes: qtdSeparacoesTotal,
@@ -65,42 +65,71 @@ class WorkspaceQuantidades {
      * 🎯 ATUALIZAR SALDO APÓS ADICIONAR AO LOTE
      */
     atualizarSaldoAposAdicao(codProduto, quantidadeAdicionada) {
+        console.log(`🔍 DEBUG atualizarSaldoAposAdicao - Início`);
+        console.log(`   - codProduto: ${codProduto}`);
+        console.log(`   - quantidadeAdicionada: ${quantidadeAdicionada}`);
+        
         const input = document.querySelector(`input[data-produto="${codProduto}"]`);
         if (input) {
+            console.log(`   - Valor atual do input: ${input.value}`);
+            console.log(`   - qtdOriginal: ${input.dataset.qtdOriginal}`);
+            console.log(`   - qtdSaldo atual: ${input.dataset.qtdSaldo}`);
+            
             // Buscar dados do produto no workspace
             const dadosProduto = window.workspace?.dadosProdutos?.get(codProduto);
             if (dadosProduto) {
+                console.log(`   - Dados do produto encontrados`);
+                console.log(`   - qtd_pedido: ${dadosProduto.qtd_pedido}`);
+                
                 // Recalcular saldo completo considerando todas as pré-separações
                 const saldoCalculado = this.calcularSaldoDisponivel(dadosProduto);
                 const novoSaldo = Math.floor(saldoCalculado.qtdEditavel);
                 
+                console.log(`   - Saldo calculado:`);
+                console.log(`     - qtdEditavel: ${saldoCalculado.qtdEditavel}`);
+                console.log(`     - qtdPreSeparacoes: ${saldoCalculado.qtdPreSeparacoes}`);
+                console.log(`     - qtdSeparacoes: ${saldoCalculado.qtdSeparacoes}`);
+                console.log(`   - Novo saldo (novoSaldo): ${novoSaldo}`);
+
                 // Atualizar dataset
                 input.dataset.qtdSaldo = novoSaldo;
                 input.max = novoSaldo;
                 
+                console.log(`   - Atualizando input.value de ${input.value} para ${novoSaldo}`);
+
                 // Atualizar o valor editável para o novo saldo
                 input.value = novoSaldo;
                 
+                console.log(`   - Input.value após atualização: ${input.value}`);
+
                 // Atualizar o span de saldo
                 const spanSaldo = input.nextElementSibling;
                 if (spanSaldo && spanSaldo.classList.contains('input-group-text')) {
                     spanSaldo.textContent = `/${novoSaldo}`;
-                    
+
                     // Adicionar feedback visual
                     spanSaldo.classList.add('text-warning');
                     setTimeout(() => {
                         spanSaldo.classList.remove('text-warning');
                     }, 1000);
                 }
-                
+
                 // Atualizar valores calculados
+                console.log(`   - Chamando atualizarQuantidadeProduto`);
                 this.atualizarQuantidadeProduto(input);
                 
+                console.log(`   - Input.value após atualizarQuantidadeProduto: ${input.value}`);
+
                 console.log(`✅ Saldo atualizado: ${codProduto} = ${novoSaldo} (removido ${quantidadeAdicionada})`);
+            } else {
+                console.log(`   ❌ Dados do produto NÃO encontrados`);
             }
+        } else {
+            console.log(`   ❌ Input NÃO encontrado`);
         }
+        console.log(`🔍 DEBUG atualizarSaldoAposAdicao - Fim`);
     }
-    
+
     /**
      * 🎯 ATUALIZAR SALDO APÓS REMOVER DO LOTE
      */
@@ -110,27 +139,27 @@ class WorkspaceQuantidades {
             const saldoAtual = parseInt(input.dataset.qtdSaldo) || 0;
             const qtdOriginal = parseInt(input.dataset.qtdOriginal) || 0;
             const novoSaldo = Math.min(qtdOriginal, saldoAtual + quantidadeRemovida);
-            
+
             // Atualizar dataset
             input.dataset.qtdSaldo = novoSaldo;
             input.max = novoSaldo;
-            
+
             // Atualizar o span de saldo
             const spanSaldo = input.nextElementSibling;
             if (spanSaldo && spanSaldo.classList.contains('input-group-text')) {
                 spanSaldo.textContent = `/${novoSaldo}`;
-                
+
                 // Adicionar feedback visual
                 spanSaldo.classList.add('text-success');
                 setTimeout(() => {
                     spanSaldo.classList.remove('text-success');
                 }, 1000);
             }
-            
+
             console.log(`✅ Saldo restaurado: ${codProduto} = ${novoSaldo} (devolvido ${quantidadeRemovida})`);
         }
     }
-    
+
     /**
      * 🎯 ATUALIZAR QUANTIDADE DE PRODUTO NA TABELA
      */
@@ -140,36 +169,36 @@ class WorkspaceQuantidades {
             const novaQtd = parseInt(input.value) || 0;
             const qtdOriginal = parseInt(input.dataset.qtdOriginal) || 0;
             const qtdSaldo = parseInt(input.dataset.qtdSaldo) || 0;
-            
+
             // Validar limites
             if (novaQtd < 0) {
                 input.value = 0;
                 return;
             }
-            
+
             if (novaQtd > qtdSaldo) {
                 input.value = qtdSaldo;
                 alert(`Quantidade máxima disponível: ${qtdSaldo}`);
                 return;
             }
-            
+
             // Buscar dados do produto
-            const dadosProduto = window.workspace ? 
+            const dadosProduto = window.workspace ?
                 window.workspace.dadosProdutos.get(codProduto) : null;
-            
+
             if (!dadosProduto) {
                 console.error('Dados do produto não encontrados:', codProduto);
                 return;
             }
-            
+
             // Atualizar colunas calculadas na tabela
             this.atualizarColunasCalculadas(codProduto, novaQtd, dadosProduto);
-            
+
             // Recalcular totais dos lotes que contêm este produto
             this.recalcularTotaisLotesComProduto(codProduto);
-            
+
             console.log(`✅ Quantidade atualizada: ${codProduto} = ${novaQtd}`);
-            
+
         } catch (error) {
             console.error('Erro ao atualizar quantidade:', error);
         }
@@ -189,7 +218,7 @@ class WorkspaceQuantidades {
                     valorCalculadoElement.textContent = this.formatarMoeda(valorCalculado);
                 }
             }
-            
+
             // Atualizar peso
             const pesoElement = document.getElementById(`peso-${codProduto}`);
             if (pesoElement) {
@@ -199,7 +228,7 @@ class WorkspaceQuantidades {
                     pesoCalculadoElement.textContent = this.formatarPeso(pesoCalculado);
                 }
             }
-            
+
             // Atualizar pallet
             const palletElement = document.getElementById(`pallet-${codProduto}`);
             if (palletElement) {
@@ -209,7 +238,7 @@ class WorkspaceQuantidades {
                     palletCalculadoElement.textContent = this.formatarPallet(palletCalculado);
                 }
             }
-            
+
         } catch (error) {
             console.error('Erro ao atualizar colunas calculadas:', error);
         }
@@ -221,7 +250,7 @@ class WorkspaceQuantidades {
     recalcularTotaisLotesComProduto(codProduto) {
         try {
             if (!window.workspace || !window.workspaceLotes) return;
-            
+
             // Encontrar lotes que contêm este produto
             window.workspace.preSeparacoes.forEach((loteData, loteId) => {
                 const produtoNoLote = loteData.produtos.find(p => p.codProduto === codProduto);
@@ -232,7 +261,7 @@ class WorkspaceQuantidades {
                     }
                 }
             });
-            
+
         } catch (error) {
             console.error('Erro ao recalcular totais dos lotes:', error);
         }
@@ -247,7 +276,7 @@ class WorkspaceQuantidades {
             if (input) {
                 const qtdOriginal = parseInt(input.dataset.qtdOriginal) || 0;
                 input.value = qtdOriginal;
-                
+
                 // Disparar evento de mudança
                 const event = new Event('change', { bubbles: true });
                 input.dispatchEvent(event);
@@ -264,14 +293,14 @@ class WorkspaceQuantidades {
         if (produto.estoque_hoje >= produto.qtd_pedido) {
             return { classe: 'bg-success', texto: 'Hoje' };
         }
-        
+
         if (produto.data_disponibilidade) {
             const diasAte = this.calcularDiasAte(produto.data_disponibilidade);
             if (diasAte <= 7) {
                 return { classe: 'bg-warning', texto: `${diasAte}d` };
             }
         }
-        
+
         return { classe: 'bg-danger', texto: 'Sem est.' };
     }
 

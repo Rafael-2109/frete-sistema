@@ -10,7 +10,7 @@ from flask_login import login_required
 from sqlalchemy import and_, func
 
 from app import db
-from app.carteira.models import CarteiraPrincipal
+from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
 from app.carteira.utils.separacao_utils import (
     buscar_rota_por_uf,
     buscar_sub_rota_por_uf_cidade,
@@ -81,6 +81,28 @@ def workspace_pedido_real(num_pedido):
             produto_data = processar_dados_workspace_produto(produto, resumo_estoque)
 
             if produto_data:
+                # Calcular quantidade em pré-separações ativas
+                qtd_pre_separacoes = db.session.query(
+                    func.coalesce(func.sum(PreSeparacaoItem.qtd_selecionada_usuario), 0)
+                ).filter(
+                    PreSeparacaoItem.num_pedido == num_pedido,
+                    PreSeparacaoItem.cod_produto == produto.cod_produto,
+                    PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
+                ).scalar()
+                
+                # Calcular quantidade em separações confirmadas
+                qtd_separacoes = db.session.query(
+                    func.coalesce(func.sum(Separacao.qtd_saldo), 0)
+                ).filter(
+                    Separacao.num_pedido == num_pedido,
+                    Separacao.cod_produto == produto.cod_produto,
+                    Separacao.situacao_atual != 'CANCELADO'
+                ).scalar()
+                
+                # Adicionar as quantidades aos dados do produto
+                produto_data['qtd_pre_separacoes'] = float(qtd_pre_separacoes or 0)
+                produto_data['qtd_separacoes'] = float(qtd_separacoes or 0)
+                
                 produtos_processados.append(produto_data)
                 valor_total += produto_data["qtd_pedido"] * produto_data["preco_unitario"]
 

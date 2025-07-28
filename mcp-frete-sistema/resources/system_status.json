@@ -1,0 +1,209 @@
+{
+  "resource": {
+    "uri": "frete://status/system",
+    "name": "Sistema de Frete - Status Geral",
+    "description": "Real-time status and health information about the freight system",
+    "mimeType": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "system": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "const": "Sistema de Frete" },
+            "version": { "type": "string" },
+            "environment": {
+              "type": "string",
+              "enum": ["development", "staging", "production"]
+            },
+            "uptime": {
+              "type": "object",
+              "properties": {
+                "seconds": { "type": "integer" },
+                "formatted": { "type": "string" }
+              }
+            },
+            "timestamp": { "type": "string", "format": "date-time" }
+          }
+        },
+        "health": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["healthy", "degraded", "unhealthy", "critical"]
+            },
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "checks": {
+              "type": "object",
+              "properties": {
+                "database": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "latency": { "type": "number" },
+                    "connections": {
+                      "type": "object",
+                      "properties": {
+                        "active": { "type": "integer" },
+                        "idle": { "type": "integer" },
+                        "max": { "type": "integer" }
+                      }
+                    }
+                  }
+                },
+                "cache": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "hitRate": { "type": "number" },
+                    "memory": {
+                      "type": "object",
+                      "properties": {
+                        "used": { "type": "integer" },
+                        "total": { "type": "integer" }
+                      }
+                    }
+                  }
+                },
+                "api": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "responseTime": { "type": "number" },
+                    "errorRate": { "type": "number" }
+                  }
+                },
+                "integrations": {
+                  "type": "object",
+                  "properties": {
+                    "claude": {
+                      "type": "object",
+                      "properties": {
+                        "status": { "type": "string" },
+                        "configured": { "type": "boolean" },
+                        "lastCheck": { "type": "string", "format": "date-time" }
+                      }
+                    },
+                    "external": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" },
+                          "status": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "modules": {
+          "type": "object",
+          "properties": {
+            "orchestrators": {
+              "type": "object",
+              "properties": {
+                "total": { "type": "integer" },
+                "active": { "type": "integer" },
+                "list": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": { "type": "string" },
+                      "status": { "type": "string" },
+                      "lastActivity": { "type": "string", "format": "date-time" }
+                    }
+                  }
+                }
+              }
+            },
+            "processors": {
+              "type": "object",
+              "properties": {
+                "total": { "type": "integer" },
+                "active": { "type": "integer" },
+                "throughput": { "type": "number" }
+              }
+            },
+            "analyzers": {
+              "type": "object",
+              "properties": {
+                "total": { "type": "integer" },
+                "active": { "type": "integer" },
+                "accuracy": { "type": "number" }
+              }
+            }
+          }
+        },
+        "performance": {
+          "type": "object",
+          "properties": {
+            "requests": {
+              "type": "object",
+              "properties": {
+                "total": { "type": "integer" },
+                "rate": { "type": "number" },
+                "errors": { "type": "integer" },
+                "avgResponseTime": { "type": "number" }
+              }
+            },
+            "resources": {
+              "type": "object",
+              "properties": {
+                "cpu": {
+                  "type": "object",
+                  "properties": {
+                    "usage": { "type": "number" },
+                    "cores": { "type": "integer" }
+                  }
+                },
+                "memory": {
+                  "type": "object",
+                  "properties": {
+                    "used": { "type": "integer" },
+                    "total": { "type": "integer" },
+                    "percentage": { "type": "number" }
+                  }
+                },
+                "disk": {
+                  "type": "object",
+                  "properties": {
+                    "used": { "type": "integer" },
+                    "total": { "type": "integer" },
+                    "percentage": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "alerts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "level": {
+                "type": "string",
+                "enum": ["info", "warning", "error", "critical"]
+              },
+              "component": { "type": "string" },
+              "message": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "resolved": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

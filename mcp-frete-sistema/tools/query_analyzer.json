@@ -1,0 +1,213 @@
+{
+  "tool": {
+    "name": "frete_query_analyzer",
+    "description": "Analyzes natural language queries about the freight system, detecting intent, domain, entities, and temporal context",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Natural language query from user",
+          "minLength": 1,
+          "maxLength": 5000
+        },
+        "context": {
+          "type": "object",
+          "description": "Optional conversation context",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Current session identifier"
+            },
+            "previousQueries": {
+              "type": "array",
+              "description": "Previous queries in conversation",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "query": { "type": "string" },
+                  "timestamp": { "type": "string", "format": "date-time" },
+                  "domain": { "type": "string" }
+                }
+              },
+              "maxItems": 10
+            },
+            "userProfile": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": ["admin", "operator", "driver", "customer", "manager"]
+                },
+                "preferences": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "deepAnalysis": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable semantic and metacognitive analysis"
+            },
+            "extractEntities": {
+              "type": "boolean",
+              "default": true,
+              "description": "Extract named entities from query"
+            },
+            "detectTemporal": {
+              "type": "boolean",
+              "default": true,
+              "description": "Detect temporal references"
+            }
+          }
+        }
+      },
+      "required": ["query"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "analysis": {
+          "type": "object",
+          "properties": {
+            "intent": {
+              "type": "object",
+              "properties": {
+                "primary": {
+                  "type": "string",
+                  "enum": ["query", "create", "update", "delete", "report", "monitor", "help"]
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "subIntents": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            },
+            "domain": {
+              "type": "object",
+              "properties": {
+                "primary": {
+                  "type": "string",
+                  "enum": ["fretes", "pedidos", "entregas", "embarques", "financeiro", "transportadoras", "monitoramento", "multi-domain"]
+                },
+                "secondary": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              }
+            },
+            "entities": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["order_id", "freight_id", "customer", "driver", "vehicle", "route", "date", "value", "status"]
+                  },
+                  "value": { "type": "string" },
+                  "normalized": { "type": "string" },
+                  "position": {
+                    "type": "object",
+                    "properties": {
+                      "start": { "type": "integer" },
+                      "end": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            },
+            "temporal": {
+              "type": "object",
+              "properties": {
+                "detected": { "type": "boolean" },
+                "references": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": ["absolute", "relative", "range", "recurring"]
+                      },
+                      "value": { "type": "string" },
+                      "startDate": { "type": "string", "format": "date-time" },
+                      "endDate": { "type": "string", "format": "date-time" }
+                    }
+                  }
+                }
+              }
+            },
+            "semantic": {
+              "type": "object",
+              "properties": {
+                "keywords": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "concepts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "concept": { "type": "string" },
+                      "relevance": { "type": "number" }
+                    }
+                  }
+                },
+                "sentiment": {
+                  "type": "string",
+                  "enum": ["positive", "neutral", "negative", "urgent"]
+                }
+              }
+            },
+            "suggestions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["clarification", "refinement", "alternative", "expansion"]
+                  },
+                  "suggestion": { "type": "string" },
+                  "reason": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "processingTime": { "type": "number" },
+            "complexity": {
+              "type": "string",
+              "enum": ["simple", "moderate", "complex"]
+            },
+            "requiresAuth": { "type": "boolean" },
+            "suggestedTools": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

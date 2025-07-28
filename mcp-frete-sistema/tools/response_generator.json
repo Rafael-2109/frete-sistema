@@ -1,0 +1,237 @@
+{
+  "tool": {
+    "name": "frete_response_generator",
+    "description": "Generates optimized, contextual responses based on analysis results and data from the freight system",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "analysis": {
+          "type": "object",
+          "description": "Query analysis results from query_analyzer",
+          "properties": {
+            "intent": { "type": "object" },
+            "domain": { "type": "object" },
+            "entities": { "type": "array" },
+            "temporal": { "type": "object" },
+            "semantic": { "type": "object" }
+          },
+          "required": ["intent", "domain"]
+        },
+        "data": {
+          "type": "object",
+          "description": "Data retrieved from data_loader",
+          "properties": {
+            "results": { "type": "array" },
+            "metadata": { "type": "object" },
+            "aggregations": { "type": "object" },
+            "enrichments": { "type": "object" }
+          }
+        },
+        "context": {
+          "type": "object",
+          "description": "Current context from context_manager",
+          "properties": {
+            "user": { "type": "object" },
+            "conversation": { "type": "object" },
+            "preferences": { "type": "object" }
+          }
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "format": {
+              "type": "string",
+              "enum": ["text", "markdown", "html", "json", "table", "chart"],
+              "default": "text"
+            },
+            "style": {
+              "type": "string",
+              "enum": ["formal", "conversational", "technical", "executive"],
+              "default": "conversational"
+            },
+            "length": {
+              "type": "string",
+              "enum": ["brief", "normal", "detailed", "comprehensive"],
+              "default": "normal"
+            },
+            "includeInsights": {
+              "type": "boolean",
+              "default": true
+            },
+            "includeRecommendations": {
+              "type": "boolean",
+              "default": true
+            },
+            "includeVisualizations": {
+              "type": "boolean",
+              "default": false
+            },
+            "language": {
+              "type": "string",
+              "enum": ["pt-BR", "en-US", "es-ES"],
+              "default": "pt-BR"
+            }
+          }
+        },
+        "templates": {
+          "type": "object",
+          "description": "Custom response templates",
+          "properties": {
+            "header": { "type": "string" },
+            "body": { "type": "string" },
+            "footer": { "type": "string" },
+            "error": { "type": "string" }
+          }
+        }
+      },
+      "required": ["analysis", "data"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "response": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string",
+              "description": "Main response content"
+            },
+            "format": {
+              "type": "string",
+              "enum": ["text", "markdown", "html", "json", "table", "chart"]
+            },
+            "sections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["summary", "data", "insights", "recommendations", "actions", "warnings"]
+                  },
+                  "title": { "type": "string" },
+                  "content": { "type": "string" },
+                  "priority": {
+                    "type": "string",
+                    "enum": ["high", "medium", "low"]
+                  },
+                  "metadata": { "type": "object" }
+                }
+              }
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "summary": {
+                  "type": "object",
+                  "properties": {
+                    "total": { "type": "integer" },
+                    "highlights": { "type": "array" },
+                    "metrics": { "type": "object" }
+                  }
+                },
+                "details": { "type": "array" },
+                "visualizations": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": ["chart", "table", "map", "timeline"]
+                      },
+                      "config": { "type": "object" },
+                      "data": { "type": "array" }
+                    }
+                  }
+                }
+              }
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["button", "link", "command", "suggestion"]
+                  },
+                  "label": { "type": "string" },
+                  "action": { "type": "string" },
+                  "params": { "type": "object" },
+                  "icon": { "type": "string" }
+                }
+              }
+            },
+            "metadata": {
+              "type": "object",
+              "properties": {
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "sources": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "processingTime": { "type": "number" },
+                "tokens": {
+                  "type": "object",
+                  "properties": {
+                    "input": { "type": "integer" },
+                    "output": { "type": "integer" }
+                  }
+                },
+                "cache": {
+                  "type": "object",
+                  "properties": {
+                    "hit": { "type": "boolean" },
+                    "key": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "followUp": {
+          "type": "object",
+          "properties": {
+            "suggestions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": { "type": "string" },
+                  "intent": { "type": "string" },
+                  "relevance": { "type": "number" }
+                }
+              }
+            },
+            "relatedTopics": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "topic": { "type": "string" },
+                  "query": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "userMessage": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

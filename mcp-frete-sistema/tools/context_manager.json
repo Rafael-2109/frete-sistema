@@ -1,0 +1,211 @@
+{
+  "tool": {
+    "name": "frete_context_manager",
+    "description": "Manages conversational context, session state, and user preferences for the freight system",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["get", "set", "update", "clear", "merge", "analyze"],
+          "description": "Action to perform on context"
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Unique session identifier",
+          "pattern": "^[a-zA-Z0-9-_]+$"
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["session", "user", "global", "domain"],
+          "default": "session",
+          "description": "Context scope level"
+        },
+        "data": {
+          "type": "object",
+          "description": "Context data to set or update",
+          "properties": {
+            "conversation": {
+              "type": "object",
+              "properties": {
+                "history": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "role": {
+                        "type": "string",
+                        "enum": ["user", "assistant", "system"]
+                      },
+                      "content": { "type": "string" },
+                      "timestamp": { "type": "string", "format": "date-time" },
+                      "metadata": { "type": "object" }
+                    }
+                  }
+                },
+                "currentTopic": { "type": "string" },
+                "activeFilters": { "type": "object" },
+                "preferences": { "type": "object" }
+              }
+            },
+            "user": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "role": { "type": "string" },
+                "permissions": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "preferences": {
+                  "type": "object",
+                  "properties": {
+                    "language": { "type": "string" },
+                    "timezone": { "type": "string" },
+                    "dateFormat": { "type": "string" },
+                    "defaultDomain": { "type": "string" }
+                  }
+                }
+              }
+            },
+            "domain": {
+              "type": "object",
+              "properties": {
+                "current": { "type": "string" },
+                "history": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "domain": { "type": "string" },
+                      "timestamp": { "type": "string", "format": "date-time" },
+                      "queries": { "type": "integer" }
+                    }
+                  }
+                },
+                "cache": { "type": "object" }
+              }
+            },
+            "workflow": {
+              "type": "object",
+              "properties": {
+                "current": { "type": "string" },
+                "step": { "type": "integer" },
+                "data": { "type": "object" },
+                "history": { "type": "array" }
+              }
+            },
+            "memory": {
+              "type": "object",
+              "properties": {
+                "shortTerm": { "type": "array" },
+                "longTerm": { "type": "object" },
+                "insights": { "type": "array" }
+              }
+            }
+          }
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "persist": {
+              "type": "boolean",
+              "default": true,
+              "description": "Persist context to storage"
+            },
+            "ttl": {
+              "type": "integer",
+              "description": "Time to live in seconds",
+              "minimum": 0
+            },
+            "encrypt": {
+              "type": "boolean",
+              "default": false,
+              "description": "Encrypt sensitive data"
+            },
+            "compress": {
+              "type": "boolean",
+              "default": false,
+              "description": "Compress large context data"
+            }
+          }
+        }
+      },
+      "required": ["action", "sessionId"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "boolean" },
+        "action": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "context": {
+          "type": "object",
+          "properties": {
+            "conversation": { "type": "object" },
+            "user": { "type": "object" },
+            "domain": { "type": "object" },
+            "workflow": { "type": "object" },
+            "memory": { "type": "object" },
+            "metadata": {
+              "type": "object",
+              "properties": {
+                "created": { "type": "string", "format": "date-time" },
+                "updated": { "type": "string", "format": "date-time" },
+                "version": { "type": "integer" },
+                "size": { "type": "integer" }
+              }
+            }
+          }
+        },
+        "analysis": {
+          "type": "object",
+          "properties": {
+            "patterns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string" },
+                  "frequency": { "type": "integer" },
+                  "significance": { "type": "number" }
+                }
+              }
+            },
+            "insights": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string" },
+                  "message": { "type": "string" },
+                  "confidence": { "type": "number" }
+                }
+              }
+            },
+            "recommendations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "action": { "type": "string" },
+                  "reason": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -45,7 +45,7 @@ class WorkspaceTabela {
             const statusDisponibilidade = this.calcularStatusDisponibilidade(produto);
             const saldoDisponivel = this.calcularSaldoDisponivel(produto);
             const producaoHoje = produto.producao_hoje || 0;
-            
+
             html += `
                 <tr class="produto-origem" 
                     data-produto="${produto.cod_produto}"
@@ -166,10 +166,10 @@ class WorkspaceTabela {
                 const hoje = produto.resumo_estoque.projecao_29_dias[0]; // D0
                 return hoje ? hoje.producao_programada || 0 : 0;
             }
-            
+
             // Fallback: retornar 0 se não houver dados
             return 0;
-            
+
         } catch (error) {
             console.error('Erro ao obter produção hoje:', error);
             return 0;
@@ -205,7 +205,7 @@ class WorkspaceTabela {
         try {
             const qtdPedido = produto.qtd_pedido || 0;
             const estoqueHoje = produto.estoque_hoje || 0;
-            
+
             if (estoqueHoje >= qtdPedido) {
                 return {
                     class: 'bg-success text-white',
@@ -243,16 +243,16 @@ class WorkspaceTabela {
         if (window.workspaceQuantidades) {
             return window.workspaceQuantidades.calcularSaldoDisponivel(produto);
         }
-        
+
         // Fallback caso WorkspaceQuantidades não esteja disponível
         try {
             const qtdPedido = produto.qtd_pedido || produto.qtd_produto_pedido || 0;
             const qtdSeparacoes = produto.qtd_separacoes || 0;
             const qtdPreSeparacoes = produto.qtd_pre_separacoes || 0;
-            
+
             // Saldo disponível = Qtd Pedido - (Separações + Pré-Separações)
             const qtdEditavel = qtdPedido - qtdSeparacoes - qtdPreSeparacoes;
-            
+
             return {
                 qtdEditavel: Math.max(0, qtdEditavel), // Nunca negativo
                 qtdSeparacoes: qtdSeparacoes,

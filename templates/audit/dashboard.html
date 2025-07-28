@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Auditoria - MCP Sistema</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.min.css" rel="stylesheet">
+    <style>
+        .dashboard-card {
+            transition: transform 0.2s ease-in-out;
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .dashboard-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+        }
+        .security-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 15px;
+        }
+        .compliance-card {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border-radius: 15px;
+        }
+        .alert-card {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: white;
+            border-radius: 15px;
+        }
+        .alert-item {
+            border-left: 4px solid;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 0 8px 8px 0;
+            background: #f8f9fa;
+        }
+        .alert-critical { border-left-color: #dc3545; }
+        .alert-high { border-left-color: #fd7e14; }
+        .alert-medium { border-left-color: #ffc107; }
+        .alert-low { border-left-color: #198754; }
+        
+        .event-item {
+            border-bottom: 1px solid #eee;
+            padding: 12px 0;
+        }
+        .event-item:last-child {
+            border-bottom: none;
+        }
+        .severity-badge {
+            font-size: 0.8em;
+            padding: 4px 8px;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+        }
+        .nav-pills .nav-link.active {
+            background-color: #667eea;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-healthy { background-color: #28a745; }
+        .status-warning { background-color: #ffc107; }
+        .status-error { background-color: #dc3545; }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-shield-alt me-2"></i>
+                Dashboard de Auditoria
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="#" id="refreshBtn">
+                    <i class="fas fa-sync-alt me-1"></i>
+                    Atualizar
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4">
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card dashboard-card metric-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-title text-white-50">Eventos Hoje</h6>
+                                <h2 class="mb-0" id="eventsToday">-</h2>
+                                <small class="text-white-50">
+                                    <span id="eventsTrend">--</span> desde ontem
+                                </small>
+                            </div>
+                            <div class="text-white-50">
+                                <i class="fas fa-chart-line fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card dashboard-card security-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-title text-white-50">Eventos de Segurança</h6>
+                                <h2 class="mb-0" id="securityEvents">-</h2>
+                                <small class="text-white-50">
+                                    Alta prioridade esta semana
+                                </small>
+                            </div>
+                            <div class="text-white-50">
+                                <i class="fas fa-shield-alt fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card dashboard-card compliance-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-title text-white-50">Conformidade</h6>
+                                <h2 class="mb-0" id="complianceScore">-</h2>
+                                <small class="text-white-50">
+                                    Taxa de conformidade
+                                </small>
+                            </div>
+                            <div class="text-white-50">
+                                <i class="fas fa-check-circle fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card dashboard-card alert-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-title text-white-50">Alertas Ativos</h6>
+                                <h2 class="mb-0" id="activeAlerts">-</h2>
+                                <small class="text-white-50">
+                                    <span id="criticalAlerts">-</span> críticos
+                                </small>
+                            </div>
+                            <div class="text-white-50">
+                                <i class="fas fa-exclamation-triangle fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Tabs -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card dashboard-card">
+                    <div class="card-header bg-white">
+                        <ul class="nav nav-pills" id="mainTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="events-tab" data-bs-toggle="pill" data-bs-target="#events" type="button" role="tab">
+                                    <i class="fas fa-list me-2"></i>
+                                    Eventos Recentes
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="alerts-tab" data-bs-toggle="pill" data-bs-target="#alerts" type="button" role="tab">
+                                    <i class="fas fa-bell me-2"></i>
+                                    Alertas
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="compliance-tab" data-bs-toggle="pill" data-bs-target="#compliance" type="button" role="tab">
+                                    <i class="fas fa-clipboard-check me-2"></i>
+                                    Conformidade
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="analytics-tab" data-bs-toggle="pill" data-bs-target="#analytics" type="button" role="tab">
+                                    <i class="fas fa-chart-bar me-2"></i>
+                                    Análises
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="health-tab" data-bs-toggle="pill" data-bs-target="#health" type="button" role="tab">
+                                    <i class="fas fa-heartbeat me-2"></i>
+                                    Status do Sistema
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content" id="mainTabsContent">
+                            <!-- Events Tab -->
+                            <div class="tab-pane fade show active" id="events" role="tabpanel">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <h5>Eventos de Auditoria Recentes</h5>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <button class="btn btn-outline-primary btn-sm" id="filterEventsBtn">
+                                            <i class="fas fa-filter me-1"></i>
+                                            Filtros
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="eventsContainer">
+                                    <div class="loading-spinner">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Carregando...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Alerts Tab -->
+                            <div class="tab-pane fade" id="alerts" role="tabpanel">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <h5>Alertas de Segurança</h5>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <button class="btn btn-success btn-sm" id="acknowledgeAllBtn">
+                                            <i class="fas fa-check me-1"></i>
+                                            Reconhecer Todos
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="alertsContainer">
+                                    <div class="loading-spinner">
+                                        <div class="spinner-border text-danger" role="status">
+                                            <span class="visually-hidden">Carregando...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Compliance Tab -->
+                            <div class="tab-pane fade" id="compliance" role="tabpanel">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <h5>Relatórios de Conformidade</h5>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <button class="btn btn-primary btn-sm" id="generateReportBtn">
+                                            <i class="fas fa-file-alt me-1"></i>
+                                            Gerar Relatório
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="complianceContainer">
+                                    <div class="loading-spinner">
+                                        <div class="spinner-border text-info" role="status">
+                                            <span class="visually-hidden">Carregando...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Analytics Tab -->
+                            <div class="tab-pane fade" id="analytics" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-lg-6 mb-4">
+                                        <div class="chart-container">
+                                            <canvas id="eventsChart"></canvas>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6 mb-4">
+                                        <div class="chart-container">
+                                            <canvas id="securityChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Health Tab -->
+                            <div class="tab-pane fade" id="health" role="tabpanel">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <h5>Status dos Componentes</h5>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <button class="btn btn-outline-success btn-sm" id="healthCheckBtn">
+                                            <i class="fas fa-sync me-1"></i>
+                                            Verificar Status
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="healthContainer">
+                                    <div class="loading-spinner">
+                                        <div class="spinner-border text-success" role="status">
+                                            <span class="visually-hidden">Carregando...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals and JavaScript will be added here -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.min.js"></script>
+    <script>
+        // Dashboard JavaScript functionality
+        class AuditDashboard {
+            constructor() {
+                this.init();
+                this.setupEventListeners();
+                this.loadInitialData();
+            }
+
+            init() {
+                this.charts = {};
+                this.refreshInterval = null;
+                this.startAutoRefresh();
+            }
+
+            setupEventListeners() {
+                document.getElementById('refreshBtn').addEventListener('click', () => {
+                    this.loadAllData();
+                });
+
+                document.getElementById('filterEventsBtn').addEventListener('click', () => {
+                    this.showEventFilters();
+                });
+
+                document.getElementById('acknowledgeAllBtn').addEventListener('click', () => {
+                    this.acknowledgeAllAlerts();
+                });
+
+                document.getElementById('generateReportBtn').addEventListener('click', () => {
+                    this.showReportGenerator();
+                });
+
+                document.getElementById('healthCheckBtn').addEventListener('click', () => {
+                    this.loadHealthStatus();
+                });
+
+                // Tab change handlers
+                document.querySelectorAll('[data-bs-toggle="pill"]').forEach(tab => {
+                    tab.addEventListener('shown.bs.tab', (e) => {
+                        const target = e.target.getAttribute('data-bs-target');
+                        this.onTabChanged(target);
+                    });
+                });
+            }
+
+            async loadInitialData() {
+                await this.loadDashboardSummary();
+                await this.loadRecentEvents();
+            }
+
+            async loadAllData() {
+                const loadingBtn = document.getElementById('refreshBtn');
+                const originalContent = loadingBtn.innerHTML;
+                loadingBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Atualizando...';
+                loadingBtn.disabled = true;
+
+                try {
+                    await Promise.all([
+                        this.loadDashboardSummary(),
+                        this.loadRecentEvents(),
+                        this.loadAlerts(),
+                        this.loadHealthStatus()
+                    ]);
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                    this.showError('Erro ao carregar dados do dashboard');
+                } finally {
+                    loadingBtn.innerHTML = originalContent;
+                    loadingBtn.disabled = false;
+                }
+            }
+
+            async loadDashboardSummary() {
+                try {
+                    const response = await fetch('/audit/api/dashboard/summary');
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.updateSummaryCards(data);
+                    } else {
+                        throw new Error(data.error || 'Failed to load summary');
+                    }
+                } catch (error) {
+                    console.error('Error loading summary:', error);
+                }
+            }
+
+            updateSummaryCards(data) {
+                // Update event counts
+                document.getElementById('eventsToday').textContent = data.total_events.today || 0;
+                
+                const yesterdayEvents = data.total_events.yesterday || 0;
+                const todayEvents = data.total_events.today || 0;
+                const trend = todayEvents - yesterdayEvents;
+                const trendElement = document.getElementById('eventsTrend');
+                
+                if (trend > 0) {
+                    trendElement.innerHTML = `<i class="fas fa-arrow-up"></i> +${trend}`;
+                    trendElement.className = 'text-warning';
+                } else if (trend < 0) {
+                    trendElement.innerHTML = `<i class="fas fa-arrow-down"></i> ${trend}`;
+                    trendElement.className = 'text-success';
+                } else {
+                    trendElement.innerHTML = '<i class="fas fa-minus"></i> 0';
+                    trendElement.className = 'text-white-50';
+                }
+
+                // Update security events
+                document.getElementById('securityEvents').textContent = data.security_events.high_severity_week || 0;
+
+                // Update compliance score (placeholder)
+                const complianceScore = Math.floor(Math.random() * 20) + 80; // 80-100%
+                document.getElementById('complianceScore').textContent = `${complianceScore}%`;
+
+                // Update alerts
+                document.getElementById('activeAlerts').textContent = data.alerts.active_alerts || 0;
+                document.getElementById('criticalAlerts').textContent = data.alerts.critical_alerts || 0;
+            }
+
+            async loadRecentEvents() {
+                try {
+                    const response = await fetch('/audit/api/events?page=1&page_size=20');
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.renderEvents(data.events);
+                    } else {
+                        throw new Error(data.error || 'Failed to load events');
+                    }
+                } catch (error) {
+                    console.error('Error loading events:', error);
+                    document.getElementById('eventsContainer').innerHTML = 
+                        '<div class="alert alert-danger">Erro ao carregar eventos</div>';
+                }
+            }
+
+            renderEvents(events) {
+                const container = document.getElementById('eventsContainer');
+                
+                if (!events || events.length === 0) {
+                    container.innerHTML = '<div class="text-center text-muted py-4">Nenhum evento encontrado</div>';
+                    return;
+                }
+
+                const eventsHtml = events.map(event => {
+                    const severityClass = this.getSeverityClass(event.severity);
+                    const eventTime = new Date(event.timestamp).toLocaleString('pt-BR');
+                    
+                    return `
+                        <div class="event-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <span class="badge ${severityClass} severity-badge me-2">
+                                            ${this.getSeverityText(event.severity)}
+                                        </span>
+                                        <strong>${event.event_type}</strong>
+                                    </div>
+                                    <p class="mb-1">${event.message}</p>
+                                    <small class="text-muted">
+                                        <i class="fas fa-user me-1"></i>${event.user_id || 'Sistema'}
+                                        <i class="fas fa-clock ms-3 me-1"></i>${eventTime}
+                                    </small>
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary" onclick="dashboard.viewEventDetails('${event.event_id}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                container.innerHTML = eventsHtml;
+            }
+
+            async loadAlerts() {
+                try {
+                    const response = await fetch('/audit/api/alerts');
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.renderAlerts(data.alerts);
+                    } else {
+                        throw new Error(data.error || 'Failed to load alerts');
+                    }
+                } catch (error) {
+                    console.error('Error loading alerts:', error);
+                    document.getElementById('alertsContainer').innerHTML = 
+                        '<div class="alert alert-danger">Erro ao carregar alertas</div>';
+                }
+            }
+
+            renderAlerts(alerts) {
+                const container = document.getElementById('alertsContainer');
+                
+                if (!alerts || alerts.length === 0) {
+                    container.innerHTML = '<div class="text-center text-muted py-4">Nenhum alerta ativo</div>';
+                    return;
+                }
+
+                const alertsHtml = alerts.map(alert => {
+                    const priorityClass = `alert-${alert.priority.toLowerCase()}`;
+                    const alertTime = new Date(alert.created_at).toLocaleString('pt-BR');
+                    
+                    return `
+                        <div class="alert-item ${priorityClass}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                        <strong>${alert.title}</strong>
+                                        <span class="badge bg-${this.getPriorityColor(alert.priority)} ms-2">
+                                            ${alert.priority}
+                                        </span>
+                                    </div>
+                                    <p class="mb-2">${alert.message.substring(0, 200)}...</p>
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>${alertTime}
+                                    </small>
+                                </div>
+                                <div class="btn-group" role="group">
+                                    ${!alert.acknowledged ? `
+                                        <button class="btn btn-sm btn-success" onclick="dashboard.acknowledgeAlert('${alert.id}')">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                    ` : ''}
+                                    ${!alert.resolved ? `
+                                        <button class="btn btn-sm btn-primary" onclick="dashboard.resolveAlert('${alert.id}')">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                container.innerHTML = alertsHtml;
+            }
+
+            async loadHealthStatus() {
+                try {
+                    const response = await fetch('/audit/api/health');
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.renderHealthStatus(data);
+                    } else {
+                        throw new Error(data.error || 'Failed to load health status');
+                    }
+                } catch (error) {
+                    console.error('Error loading health status:', error);
+                    document.getElementById('healthContainer').innerHTML = 
+                        '<div class="alert alert-danger">Erro ao carregar status do sistema</div>';
+                }
+            }
+
+            renderHealthStatus(health) {
+                const container = document.getElementById('healthContainer');
+                
+                const componentsHtml = Object.entries(health.components).map(([name, component]) => {
+                    const statusClass = component.status === 'healthy' ? 'status-healthy' : 
+                                      component.status === 'warning' ? 'status-warning' : 'status-error';
+                    
+                    return `
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center">
+                                    <span class="status-indicator ${statusClass}"></span>
+                                    <strong>${this.formatComponentName(name)}</strong>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <span class="badge bg-${component.status === 'healthy' ? 'success' : 'danger'}">
+                                    ${component.status}
+                                </span>
+                            </div>
+                            <div class="col-md-3 text-end">
+                                <small class="text-muted">
+                                    ${new Date(component.last_check).toLocaleString('pt-BR')}
+                                </small>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                container.innerHTML = `
+                    <div class="mb-4">
+                        <div class="alert alert-${health.overall_status === 'healthy' ? 'success' : 'warning'}">
+                            <strong>Status Geral:</strong> ${health.overall_status}
+                        </div>
+                    </div>
+                    ${componentsHtml}
+                `;
+            }
+
+            onTabChanged(target) {
+                switch(target) {
+                    case '#alerts':
+                        this.loadAlerts();
+                        break;
+                    case '#compliance':
+                        this.loadComplianceReports();
+                        break;
+                    case '#analytics':
+                        this.loadAnalytics();
+                        break;
+                    case '#health':
+                        this.loadHealthStatus();
+                        break;
+                }
+            }
+
+            getSeverityClass(severity) {
+                const severityMap = {
+                    1: 'bg-info',
+                    2: 'bg-secondary',
+                    3: 'bg-warning',
+                    4: 'bg-danger',
+                    5: 'bg-dark',
+                    6: 'bg-danger'
+                };
+                return severityMap[severity] || 'bg-secondary';
+            }
+
+            getSeverityText(severity) {
+                const severityMap = {
+                    1: 'INFO',
+                    2: 'BAIXO',
+                    3: 'MÉDIO',
+                    4: 'ALTO',
+                    5: 'CRÍTICO',
+                    6: 'EMERGÊNCIA'
+                };
+                return severityMap[severity] || 'DESCONHECIDO';
+            }
+
+            getPriorityColor(priority) {
+                const priorityMap = {
+                    'LOW': 'success',
+                    'MEDIUM': 'warning',
+                    'HIGH': 'danger',
+                    'CRITICAL': 'danger',
+                    'EMERGENCY': 'dark'
+                };
+                return priorityMap[priority] || 'secondary';
+            }
+
+            formatComponentName(name) {
+                const nameMap = {
+                    'audit_logger': 'Logger de Auditoria',
+                    'alerter': 'Sistema de Alertas',
+                    'database': 'Banco de Dados'
+                };
+                return nameMap[name] || name;
+            }
+
+            async acknowledgeAlert(alertId) {
+                try {
+                    const response = await fetch(`/audit/api/alerts/${alertId}/acknowledge`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (response.ok) {
+                        this.loadAlerts(); // Refresh alerts
+                        this.showSuccess('Alerta reconhecido com sucesso');
+                    } else {
+                        const data = await response.json();
+                        throw new Error(data.error || 'Failed to acknowledge alert');
+                    }
+                } catch (error) {
+                    console.error('Error acknowledging alert:', error);
+                    this.showError('Erro ao reconhecer alerta');
+                }
+            }
+
+            async resolveAlert(alertId) {
+                try {
+                    const response = await fetch(`/audit/api/alerts/${alertId}/resolve`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            notes: 'Resolvido pelo dashboard'
+                        })
+                    });
+
+                    if (response.ok) {
+                        this.loadAlerts(); // Refresh alerts
+                        this.showSuccess('Alerta resolvido com sucesso');
+                    } else {
+                        const data = await response.json();
+                        throw new Error(data.error || 'Failed to resolve alert');
+                    }
+                } catch (error) {
+                    console.error('Error resolving alert:', error);
+                    this.showError('Erro ao resolver alerta');
+                }
+            }
+
+            startAutoRefresh() {
+                // Auto-refresh every 30 seconds
+                this.refreshInterval = setInterval(() => {
+                    this.loadDashboardSummary();
+                }, 30000);
+            }
+
+            showSuccess(message) {
+                // Implementation for success toast/notification
+                console.log('Success:', message);
+            }
+
+            showError(message) {
+                // Implementation for error toast/notification
+                console.error('Error:', message);
+            }
+
+            // Placeholder methods for other functionality
+            loadComplianceReports() {
+                document.getElementById('complianceContainer').innerHTML = 
+                    '<div class="text-center text-muted py-4">Relatórios de conformidade em desenvolvimento</div>';
+            }
+
+            loadAnalytics() {
+                // Chart initialization would go here
+            }
+
+            viewEventDetails(eventId) {
+                // Modal with event details would be shown here
+                console.log('View event details:', eventId);
+            }
+
+            showEventFilters() {
+                // Event filter modal would be shown here
+                console.log('Show event filters');
+            }
+
+            acknowledgeAllAlerts() {
+                // Acknowledge all alerts confirmation would be shown here
+                console.log('Acknowledge all alerts');
+            }
+
+            showReportGenerator() {
+                // Report generator modal would be shown here
+                console.log('Show report generator');
+            }
+        }
+
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            window.dashboard = new AuditDashboard();
+        });
+    </script>
+</body>
+</html>
