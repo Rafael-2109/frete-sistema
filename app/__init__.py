@@ -29,6 +29,26 @@ from sqlalchemy import text
 # 🔄 Carrega as variáveis de ambiente do .env
 load_dotenv()
 
+# 🔧 Fix para "Unknown PG numeric type: 1082" no Render
+# Este fix registra o tipo DATE do PostgreSQL globalmente
+try:
+    import psycopg2
+    from psycopg2 import extensions
+    
+    # Registrar tipo DATE (OID 1082) globalmente
+    if 1082 not in extensions.string_types:
+        DATE = extensions.new_type((1082,), "DATE", extensions.UNICODE)
+        extensions.register_type(DATE)
+        
+        # Registrar DATEARRAY também (OID 1182)
+        DATEARRAY = extensions.new_array_type((1182,), "DATEARRAY", DATE)
+        extensions.register_type(DATEARRAY)
+        
+        print("✅ Fix aplicado: Tipo DATE do PostgreSQL registrado globalmente")
+except Exception:
+    # Ignorar se não estiver usando PostgreSQL ou psycopg2 não estiver instalado
+    pass
+
 # 🔧 Inicializações globais
 db = SQLAlchemy()
 login_manager = LoginManager()

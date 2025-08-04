@@ -1850,5 +1850,3 @@ def api_pedido_agendamento_existente(num_pedido):
 
 # REMOVIDO: Rotas de Carteira Não-Odoo movidas para views_nao_odoo.py
 # REMOVIDO: Registro de blueprints movido para __init__.py
-
- 
