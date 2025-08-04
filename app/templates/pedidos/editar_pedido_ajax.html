@@ -20,7 +20,7 @@
                 <div class="col-md-6">
                     <strong>Cidade:</strong> {{ pedido.nome_cidade or 'N/A' }}<br>
                     <strong>UF:</strong> {{ pedido.cod_uf or 'N/A' }}<br>
-                    <strong>Valor:</strong> {{ pedido.valor_saldo_total|valor_br(0) if pedido.valor_saldo_total else 'N/A' }}
+                    <strong>Valor:</strong> {{ pedido.valor_saldo_total|valor_br if pedido.valor_saldo_total else 'N/A' }}
                 </div>
             </div>
         </div>

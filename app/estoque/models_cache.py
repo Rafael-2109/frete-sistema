@@ -191,23 +191,39 @@ class SaldoEstoqueCache(db.Model):
                 logger.info("📦 Mapeando códigos unificados...")
                 for produto in produtos:
                     try:
-                        codigo_principal = UnificacaoCodigos.get_codigo_principal(int(produto.cod_produto))
-                        if codigo_principal:
-                            codigo_principal = str(codigo_principal)
-                            if codigo_principal not in produtos_unificados:
-                                produtos_unificados[codigo_principal] = {
-                                    'codigos': set(),
-                                    'nome': produto.nome_produto
-                                }
-                            produtos_unificados[codigo_principal]['codigos'].add(produto.cod_produto)
+                        # Buscar todos os códigos relacionados (incluindo o próprio)
+                        codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(produto.cod_produto)
+                        
+                        # Usar o menor código como principal (ou o próprio se não houver relacionados)
+                        if codigos_relacionados and len(codigos_relacionados) > 1:
+                            # Converter para int para ordenar e pegar o menor
+                            codigos_int = []
+                            for cod in codigos_relacionados:
+                                try:
+                                    codigos_int.append(int(cod))
+                                except (ValueError, TypeError):
+                                    pass
+                            
+                            if codigos_int:
+                                codigo_principal = str(min(codigos_int))
+                            else:
+                                codigo_principal = produto.cod_produto
                         else:
-                            # Produto sem unificação
-                            produtos_unificados[produto.cod_produto] = {
-                                'codigos': {produto.cod_produto},
+                            codigo_principal = produto.cod_produto
+                        
+                        # Adicionar ao mapeamento
+                        if codigo_principal not in produtos_unificados:
+                            produtos_unificados[codigo_principal] = {
+                                'codigos': set(),
                                 'nome': produto.nome_produto
                             }
-                    except (ValueError, TypeError):
-                        # Código inválido, tratar como individual
+                        
+                        # Adicionar todos os códigos relacionados
+                        produtos_unificados[codigo_principal]['codigos'].update(codigos_relacionados)
+                        
+                    except Exception as e:
+                        # Em caso de erro, tratar como individual
+                        logger.debug(f"Erro ao processar unificação para {produto.cod_produto}: {e}")
                         produtos_unificados[produto.cod_produto] = {
                             'codigos': {produto.cod_produto},
                             'nome': produto.nome_produto
