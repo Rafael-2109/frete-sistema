@@ -34,14 +34,15 @@
     <section class="filters-section mb-4">
         <div class="card">
             <div class="card-body py-2">
-                <div class="row align-items-center">
+                <!-- Linha superior com busca e selects -->
+                <div class="row align-items-center mb-2">
                     <div class="col-md-4">
                         <div class="input-group input-group-sm">
                             <span class="input-group-text">
                                 <i class="fas fa-search"></i>
                             </span>
                             <input type="text" class="form-control" id="filtro-busca" 
-                                   placeholder="Buscar por pedido, cliente, vendedor...">
+                                   placeholder="Buscar pedido, cliente, CNPJ, equipe vendas...">
                         </div>
                     </div>
                     
@@ -56,8 +57,8 @@
                                 </select>
                             </div>
                             <div class="col-6">
-                                <select class="form-select form-select-sm" id="filtro-vendedor">
-                                    <option value="">Todos vendedores</option>
+                                <select class="form-select form-select-sm" id="filtro-equipe">
+                                    <option value="">Todas equipes</option>
                                     <!-- Será populado via JavaScript -->
                                 </select>
                             </div>
@@ -71,6 +72,66 @@
                             </button>
                             <button type="button" class="btn btn-outline-secondary" id="colapsar-todos">
                                 <i class="fas fa-compress-arrows-alt me-1"></i> Colapsar Todos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Badges de Rotas + Incoterms -->
+                <div class="badges-filtros-container">
+                    <div class="d-flex align-items-center mb-2">
+                        <span class="text-muted small me-2">Rotas/Incoterms:</span>
+                        <div class="badges-rotas-wrapper">
+                            <!-- Primeira linha de badges (7 badges) -->
+                            <div class="badges-linha mb-1">
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="SP">SP</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="RJ">RJ</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="MG">MG</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="ES">ES</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="SUL">SUL</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="MS-MT">MS-MT</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="DF-GO-TO">DF-GO-TO</span>
+                            </div>
+                            <!-- Segunda linha de badges (7 badges) -->
+                            <div class="badges-linha">
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="BA">BA</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="NE">NE</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="NE2">NE2</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="NO">NO</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="MARIT.">MARIT.</span>
+                                <span class="badge badge-filtro badge-incoterm bg-warning text-dark" data-tipo="incoterm" data-valor="FOB">FOB</span>
+                                <span class="badge badge-filtro badge-incoterm bg-danger text-white" data-tipo="incoterm" data-valor="RED">RED</span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-rotas" style="display:none;">
+                            <i class="fas fa-times"></i> Limpar
+                        </button>
+                    </div>
+
+                    <!-- Badges de Subrotas SP (condicional) -->
+                    <div class="subrotas-sp-container" style="display:none;">
+                        <div class="d-flex align-items-center">
+                            <span class="text-muted small me-2">Subrotas SP:</span>
+                            <div class="badges-subrotas-wrapper">
+                                <!-- Primeira linha (subrotas com LITORAL) -->
+                                <div class="badges-linha mb-1">
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="LITORAL - A">Litoral - A</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="LITORAL - B">Litoral - B</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="LITORAL - C">Litoral - C</span>
+                                </div>
+                                <!-- Segunda linha (outras subrotas) -->
+                                <div class="badges-linha">
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="A">A</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="ABC">ABC</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="B">B</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="C">C</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="D">D</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="E">E</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="SP">SP</span>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-subrotas" style="display:none;">
+                                <i class="fas fa-times"></i> Limpar
                             </button>
                         </div>
                     </div>
@@ -115,7 +176,12 @@
                                 data-pedido="{{ pedido.num_pedido }}"
                                 data-status="{{ 'completo' if pedido.totalmente_separado else ('parcial' if pedido.qtd_separacoes > 0 else 'pendente') }}"
                                 data-vendedor="{{ pedido.vendedor or '' }}"
-                                data-filtro="{{ (pedido.num_pedido + ' ' + (pedido.raz_social_red or '') + ' ' + (pedido.vendedor or ''))|lower }}">
+                                data-equipe="{{ pedido.equipe_vendas or '' }}"
+                                data-rota="{{ pedido.rota or '' }}"
+                                data-subrota="{{ pedido.sub_rota or '' }}"
+                                data-incoterm="{{ pedido.incoterm or 'CIF' }}"
+                                data-uf="{{ pedido.cod_uf or '' }}"
+                                data-filtro="{{ (pedido.num_pedido + ' ' + (pedido.raz_social_red or '') + ' ' + (pedido.cnpj_cpf or '') + ' ' + (pedido.equipe_vendas or ''))|lower }}">
                                 
                                 <!-- Botão Expandir -->
                                 <td class="text-center">
@@ -168,19 +234,23 @@
                                         {% if pedido.nome_cidade and pedido.cod_uf %}
                                         <strong class="text-primary">{{ pedido.nome_cidade }}/{{ pedido.cod_uf }}</strong>
                                         {% endif %}
-                                        {% if pedido.rota %}
+                                        {% if pedido.incoterm == 'FOB' %}
+                                        <br><span class="badge bg-warning text-dark">FOB</span>
+                                        {% elif pedido.incoterm == 'RED' %}
+                                        <br><span class="badge bg-danger text-white">RED</span>
+                                        {% elif pedido.rota %}
                                         <br><span class="badge bg-info text-white">{{ pedido.rota }}</span>
                                         {% endif %}
                                         {% if pedido.sub_rota %}
                                         <br><small class="text-muted">{{ pedido.sub_rota }}</small>
                                         {% endif %}
                                         
-                                        <!-- Botão Incoterm/Endereço -->
+                                        <!-- Botão Endereço -->
                                         <br><button class="btn btn-outline-primary btn-sm mt-1" 
                                                    onclick="modalEndereco.abrirModalEndereco('{{ pedido.num_pedido }}')"
                                                    title="Ver endereço de entrega e dados do cliente">
                                             <i class="fas fa-map-marker-alt me-1"></i>
-                                            Incoterm
+                                            Endereço
                                         </button>
                                     </div>
                                 </td>

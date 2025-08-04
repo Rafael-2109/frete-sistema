@@ -31,7 +31,26 @@ class AgrupamentoService:
                 pedido_enriquecido = self._enriquecer_pedido_com_separacoes(pedido)
                 pedidos_enriquecidos.append(pedido_enriquecido)
             
-            return pedidos_enriquecidos
+            # Ordenar após enriquecimento para usar rotas calculadas
+            def get_rota_para_ordenacao(pedido):
+                """Retorna a rota considerando incoterm FOB/RED como rota especial"""
+                incoterm = pedido.get('incoterm', 'CIF')
+                if incoterm == 'FOB':
+                    return 'FOB'
+                elif incoterm == 'RED':
+                    return 'RED'
+                else:
+                    return pedido.get('rota') or 'ZZZZZ'
+            
+            pedidos_ordenados = sorted(pedidos_enriquecidos, 
+                key=lambda p: (
+                    get_rota_para_ordenacao(p),     # 1º Rota/Incoterm (nulls no final)
+                    p.get('sub_rota') or 'ZZZZZ',  # 2º Sub-rota (nulls no final)
+                    p.get('cnpj_cpf') or 'ZZZZZ'   # 3º CNPJ (nulls no final)
+                )
+            )
+            
+            return pedidos_ordenados
             
         except Exception as e:
             logger.error(f"Erro ao obter pedidos agrupados: {e}")
@@ -99,8 +118,9 @@ class AgrupamentoService:
             CarteiraPrincipal.agendamento,
             CarteiraPrincipal.agendamento_confirmado
         ).order_by(
-            CarteiraPrincipal.expedicao.asc().nullslast(),
-            CarteiraPrincipal.num_pedido.asc()
+            CarteiraPrincipal.rota.asc().nullslast(),      # 1º Rota: menor para maior (A-Z)
+            CarteiraPrincipal.sub_rota.asc().nullslast(),  # 2º Sub-rota: menor para maior (A-Z)
+            CarteiraPrincipal.cnpj_cpf.asc().nullslast()   # 3º CNPJ: menor para maior (0-9)
         ).all()
     
     def _enriquecer_pedido_com_separacoes(self, pedido):

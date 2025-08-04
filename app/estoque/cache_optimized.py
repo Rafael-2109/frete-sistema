@@ -33,7 +33,7 @@ def lock_produto(cod_produto):
         lock = _locks_por_produto[cod_produto]
     
     # Tentar adquirir o lock com timeout
-    acquired = lock.acquire(timeout=10)  # Timeout de 10 segundos
+    acquired = lock.acquire(timeout=15)  # Timeout de 15 segundos
     if not acquired:
         logger.warning(f"⚠️ Timeout ao tentar lock para produto {cod_produto}")
         yield False

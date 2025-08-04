@@ -6,6 +6,12 @@
 class CarteiraAgrupada {
     constructor() {
         this.dropdownSeparacoes = null;
+        this.filtrosAtivos = {
+            rotas: new Set(),
+            incoterms: new Set(),
+            subrotas: new Set()
+        };
+        this.maxFiltrosAtivos = 3; // Máximo de badges selecionados simultaneamente
         this.init();
     }
 
@@ -13,6 +19,7 @@ class CarteiraAgrupada {
         this.setupEventListeners();
         this.initDropdownSeparacoes();
         this.initWorkspace();
+        this.initBadgesFiltros();
         console.log('✅ Carteira Agrupada inicializada');
     }
     
@@ -40,7 +47,7 @@ class CarteiraAgrupada {
     setupFiltros() {
         const filtroBusca = document.getElementById('filtro-busca');
         const filtroStatus = document.getElementById('filtro-status');
-        const filtroVendedor = document.getElementById('filtro-vendedor');
+        const filtroEquipe = document.getElementById('filtro-equipe');
 
         if (filtroBusca) {
             filtroBusca.addEventListener('input', () => this.aplicarFiltros());
@@ -50,10 +57,155 @@ class CarteiraAgrupada {
             filtroStatus.addEventListener('change', () => this.aplicarFiltros());
         }
 
-        if (filtroVendedor) {
-            filtroVendedor.addEventListener('change', () => this.aplicarFiltros());
-            this.popularFiltroVendedores();
+        if (filtroEquipe) {
+            filtroEquipe.addEventListener('change', () => this.aplicarFiltros());
+            this.popularFiltroEquipes();
         }
+    }
+
+    initBadgesFiltros() {
+        // Event listeners para badges
+        document.querySelectorAll('.badge-filtro').forEach(badge => {
+            badge.addEventListener('click', (e) => this.toggleBadgeFiltro(e.target));
+        });
+
+        // Botões de limpar
+        const limparRotas = document.getElementById('limpar-rotas');
+        const limparSubrotas = document.getElementById('limpar-subrotas');
+
+        if (limparRotas) {
+            limparRotas.addEventListener('click', () => this.limparFiltrosRotas());
+        }
+
+        if (limparSubrotas) {
+            limparSubrotas.addEventListener('click', () => this.limparFiltrosSubrotas());
+        }
+    }
+
+    toggleBadgeFiltro(badge) {
+        const tipo = badge.dataset.tipo;
+        const valor = badge.dataset.valor;
+        
+        // Verificar limite de filtros ativos
+        const totalAtivos = this.filtrosAtivos.rotas.size + 
+                          this.filtrosAtivos.incoterms.size + 
+                          this.filtrosAtivos.subrotas.size;
+        
+        const isActive = badge.classList.contains('active');
+        
+        if (!isActive && totalAtivos >= this.maxFiltrosAtivos) {
+            // Mostrar mensagem de limite
+            this.mostrarAlerta('Você pode selecionar no máximo 3 filtros simultaneamente');
+            return;
+        }
+
+        // Toggle do badge
+        badge.classList.toggle('active');
+        
+        // Atualizar filtros ativos
+        if (tipo === 'rota') {
+            if (isActive) {
+                this.filtrosAtivos.rotas.delete(valor);
+            } else {
+                this.filtrosAtivos.rotas.add(valor);
+            }
+        } else if (tipo === 'incoterm') {
+            if (isActive) {
+                this.filtrosAtivos.incoterms.delete(valor);
+            } else {
+                this.filtrosAtivos.incoterms.add(valor);
+            }
+        } else if (tipo === 'subrota') {
+            if (isActive) {
+                this.filtrosAtivos.subrotas.delete(valor);
+            } else {
+                this.filtrosAtivos.subrotas.add(valor);
+            }
+        }
+
+        // Mostrar/ocultar botões de limpar
+        this.atualizarBotoesLimpar();
+        
+        // Aplicar filtros
+        this.aplicarFiltros();
+        
+        // Verificar e mostrar subrotas SP se necessário
+        this.verificarSubrotasSP();
+    }
+
+    verificarSubrotasSP() {
+        const container = document.querySelector('.subrotas-sp-container');
+        if (!container) return;
+
+        // Mostrar subrotas se houver pedidos de SP visíveis
+        const pedidosSP = document.querySelectorAll('.pedido-row:not([style*="display: none"])');
+        let temSP = false;
+
+        pedidosSP.forEach(pedido => {
+            if (pedido.dataset.uf === 'SP') {
+                temSP = true;
+            }
+        });
+
+        container.style.display = temSP ? 'block' : 'none';
+    }
+
+    atualizarBotoesLimpar() {
+        const limparRotas = document.getElementById('limpar-rotas');
+        const limparSubrotas = document.getElementById('limpar-subrotas');
+
+        if (limparRotas) {
+            const temFiltrosRotas = this.filtrosAtivos.rotas.size > 0 || this.filtrosAtivos.incoterms.size > 0;
+            limparRotas.style.display = temFiltrosRotas ? 'inline-block' : 'none';
+        }
+
+        if (limparSubrotas) {
+            limparSubrotas.style.display = this.filtrosAtivos.subrotas.size > 0 ? 'inline-block' : 'none';
+        }
+    }
+
+    limparFiltrosRotas() {
+        // Limpar badges de rotas e incoterms
+        document.querySelectorAll('.badge-rota.active, .badge-incoterm.active').forEach(badge => {
+            badge.classList.remove('active');
+        });
+        
+        this.filtrosAtivos.rotas.clear();
+        this.filtrosAtivos.incoterms.clear();
+        
+        this.atualizarBotoesLimpar();
+        this.aplicarFiltros();
+    }
+
+    limparFiltrosSubrotas() {
+        // Limpar badges de subrotas
+        document.querySelectorAll('.badge-subrota.active').forEach(badge => {
+            badge.classList.remove('active');
+        });
+        
+        this.filtrosAtivos.subrotas.clear();
+        
+        this.atualizarBotoesLimpar();
+        this.aplicarFiltros();
+    }
+
+    mostrarAlerta(mensagem) {
+        // Criar alerta temporário
+        const alerta = document.createElement('div');
+        alerta.className = 'alert alert-warning alert-dismissible fade show position-fixed';
+        alerta.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 350px;';
+        alerta.innerHTML = `
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            ${mensagem}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(alerta);
+        
+        // Remover após 3 segundos
+        setTimeout(() => {
+            alerta.remove();
+        }, 3000);
     }
 
     setupExpandirColapsar() {
@@ -91,7 +243,7 @@ class CarteiraAgrupada {
     aplicarFiltros() {
         const termoBusca = document.getElementById('filtro-busca')?.value.toLowerCase() || '';
         const statusSelecionado = document.getElementById('filtro-status')?.value || '';
-        const vendedorSelecionado = document.getElementById('filtro-vendedor')?.value || '';
+        const equipeSelecionada = document.getElementById('filtro-equipe')?.value || '';
 
         const linhasPedidos = document.querySelectorAll('.pedido-row');
         let totalVisiveis = 0;
@@ -99,13 +251,49 @@ class CarteiraAgrupada {
         linhasPedidos.forEach(linha => {
             const textoFiltro = linha.dataset.filtro || '';
             const status = linha.dataset.status || '';
-            const vendedor = linha.dataset.vendedor || '';
-
+            const equipe = linha.dataset.equipe || '';
+            const rota = linha.dataset.rota || '';
+            const subrota = linha.dataset.subrota || '';
+            const incoterm = linha.dataset.incoterm || 'CIF';
+            
+            // Aplicar filtros básicos
             const matchBusca = !termoBusca || textoFiltro.includes(termoBusca);
             const matchStatus = !statusSelecionado || status === statusSelecionado;
-            const matchVendedor = !vendedorSelecionado || vendedor === vendedorSelecionado;
+            const matchEquipe = !equipeSelecionada || equipe === equipeSelecionada;
 
-            const mostrar = matchBusca && matchStatus && matchVendedor;
+            let matchBadges = true;
+            
+            // Filtros de badges (rotas/incoterms)
+            if (this.filtrosAtivos.rotas.size > 0 || this.filtrosAtivos.incoterms.size > 0) {
+                matchBadges = false;
+                
+                // Verificar incoterms FOB e RED primeiro
+                if (this.filtrosAtivos.incoterms.has('FOB') && incoterm === 'FOB') {
+                    matchBadges = true;
+                } else if (this.filtrosAtivos.incoterms.has('RED') && incoterm === 'RED') {
+                    matchBadges = true;
+                } 
+                // Se o pedido é CIF, verificar rotas
+                else if (incoterm === 'CIF' && this.filtrosAtivos.rotas.size > 0) {
+                    if (this.filtrosAtivos.rotas.has(rota)) {
+                        matchBadges = true;
+                    }
+                }
+            }
+            
+            // Filtros de subrotas (apenas para SP)
+            let matchSubrotas = true;
+            if (this.filtrosAtivos.subrotas.size > 0) {
+                // Se tem filtro de subrota ativo, só mostra pedidos de SP que tenham a subrota selecionada
+                if (linha.dataset.uf === 'SP') {
+                    matchSubrotas = this.filtrosAtivos.subrotas.has(subrota);
+                } else {
+                    // Se não é SP, não mostra quando há filtro de subrota ativo
+                    matchSubrotas = false;
+                }
+            }
+
+            const mostrar = matchBusca && matchStatus && matchEquipe && matchBadges && matchSubrotas;
             
             linha.style.display = mostrar ? '' : 'none';
             
@@ -120,26 +308,37 @@ class CarteiraAgrupada {
         });
 
         console.log(`🔍 Filtros aplicados: ${totalVisiveis} pedidos visíveis`);
+        
+        // Verificar e mostrar/ocultar subrotas SP
+        this.verificarSubrotasSP();
     }
 
-    popularFiltroVendedores() {
-        const filtroVendedor = document.getElementById('filtro-vendedor');
-        if (!filtroVendedor) return;
+    popularFiltroEquipes() {
+        const filtroEquipe = document.getElementById('filtro-equipe');
+        if (!filtroEquipe) return;
 
-        const vendedores = new Set();
+        const equipes = new Set();
         document.querySelectorAll('.pedido-row').forEach(linha => {
-            const vendedor = linha.dataset.vendedor;
-            if (vendedor) vendedores.add(vendedor);
+            const equipe = linha.dataset.equipe;
+            if (equipe) equipes.add(equipe);
         });
 
         // Limpar e popular
-        filtroVendedor.innerHTML = '<option value="">Todos vendedores</option>';
-        [...vendedores].sort().forEach(vendedor => {
+        filtroEquipe.innerHTML = '<option value="">Todas equipes</option>';
+        [...equipes].sort().forEach(equipe => {
             const option = document.createElement('option');
-            option.value = vendedor;
-            option.textContent = vendedor;
-            filtroVendedor.appendChild(option);
+            option.value = equipe;
+            option.textContent = equipe;
+            filtroEquipe.appendChild(option);
         });
+    }
+
+    atualizarContador(totalVisiveis) {
+        // Atualizar contador de pedidos visíveis se existir
+        const contador = document.querySelector('.contador-pedidos');
+        if (contador) {
+            contador.textContent = `${totalVisiveis} pedidos`;
+        }
     }
 
     // 🎯 EXPANDIR/COLAPSAR

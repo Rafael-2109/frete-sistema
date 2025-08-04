@@ -1,3 +1,79 @@
+/* 🎯 ESTILOS PARA BADGES DE FILTROS */
+.badges-filtros-container {
+    padding: 0.5rem 0;
+}
+
+.badges-linha {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.badge-filtro {
+    cursor: pointer;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    user-select: none;
+}
+
+.badge-rota:hover {
+    filter: brightness(0.9);
+    transform: translateY(-1px);
+}
+
+.badge-rota.active {
+    background-color: #0d47a1 !important;
+    color: white !important;
+    border-color: #0d47a1;
+    box-shadow: 0 2px 4px rgba(25, 118, 210, 0.5);
+}
+
+.badge-incoterm {
+    font-weight: 600;
+}
+
+.badge-incoterm:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.1);
+}
+
+.badge-incoterm.active {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+.badge-subrota {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.55rem;
+}
+
+.badge-subrota:hover {
+    background-color: #495057 !important;
+    color: white !important;
+}
+
+.badge-subrota.active {
+    background-color: #343a40 !important;
+    color: white !important;
+    box-shadow: 0 2px 4px rgba(52, 58, 64, 0.3);
+}
+
+.subrotas-sp-container {
+    border-top: 1px solid #dee2e6;
+    padding-top: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+/* Indicador de filtros ativos */
+.badge-filtro.active::after {
+    content: '✓';
+    margin-left: 0.25rem;
+    font-weight: bold;
+}
+
 /* 🎯 ESTILOS PARA OS CARDS DE LOTE */
 .lote-card {
     border: 2px solid #e3e6f0;

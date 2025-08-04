@@ -502,23 +502,23 @@ def reverter_separacao(lote_id):
             for sep in separacoes:
                 # Criar nova pré-separação baseada na separação
                 nova_pre_sep = PreSeparacaoItem(
+                    separacao_lote_id=lote_id,
                     num_pedido=sep.num_pedido,
                     cod_produto=sep.cod_produto,
                     nome_produto=sep.nome_produto,
-                    cnpj_cpf=sep.cnpj_cpf,
-                    cliente=sep.cliente,
-                    cidade=sep.cidade,
-                    estado=sep.estado,
-                    vendedor=sep.vendedor,
-                    qtd_saldo_produto_pedido=sep.qtd_saldo,
+                    cnpj_cliente=sep.cnpj_cpf,
+                    qtd_original_carteira=sep.qtd_saldo,  # Usando qtd da separação como original
                     qtd_selecionada_usuario=sep.qtd_saldo,
-                    data_expedicao_editada=pedido.expedicao,
+                    qtd_restante_calculada=0,  # Zero pois foi tudo selecionado
+                    valor_original_item=sep.valor_saldo,
+                    peso_original_item=sep.peso,
+                    data_expedicao_editada=pedido.expedicao if pedido.expedicao else datetime.now().date(),
                     data_agendamento_editada=pedido.agendamento,
                     protocolo_editado=pedido.protocolo,
-                    tipo_envio=sep.tipo_envio,
+                    tipo_envio=sep.tipo_envio or 'total',
                     status='CRIADO',
-                    created_by=current_user.username if current_user.is_authenticated else 'Sistema',
-                    created_at=datetime.now()
+                    data_criacao=agora_brasil(),
+                    criado_por=current_user.nome if current_user.is_authenticated else 'Sistema'
                 )
                 db.session.add(nova_pre_sep)
                 pre_separacoes.append(nova_pre_sep)
@@ -532,9 +532,11 @@ def reverter_separacao(lote_id):
         # Remover separações
         for sep in separacoes:
             db.session.delete(sep)
+        logger.info(f"Removendo {len(separacoes)} separações do lote {lote_id}")
             
         # Remover pedido (cancelar)
         db.session.delete(pedido)
+        logger.info(f"Removendo pedido {pedido.num_pedido} com lote {lote_id}")
                 
         db.session.commit()
         
