@@ -15,13 +15,11 @@ from datetime import datetime
 financeiro_bp = Blueprint('financeiro', __name__, url_prefix='/financeiro')
 cadastros_agendamento_bp = Blueprint('cadastros_agendamento', __name__, url_prefix='/cadastros-agendamento')
 
-import os
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, '..', '..', 'uploads', 'financeiro')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-from app.financeiro.forms import UploadExcelForm
 
 @financeiro_bp.route('/importar-pendencias', methods=['GET', 'POST'])
 @login_required
@@ -70,7 +68,6 @@ def baixar_modelo_pendencias():
 
 
 
-from flask import jsonify
 
 @financeiro_bp.route('/pendencias/<numero_nf>/responder', methods=['POST'])
 def responder_pendencia(numero_nf):
@@ -115,13 +112,13 @@ def consultar_pendencias():
     query = PendenciaFinanceiraNF.query.join(EntregaMonitorada, PendenciaFinanceiraNF.numero_nf == EntregaMonitorada.numero_nf)
 
     if filtro == 'respondidas':
-        query = query.filter(PendenciaFinanceiraNF.respondida_em != None)
+        query = query.filter(PendenciaFinanceiraNF.respondida_em.isnot(None))
     elif filtro == 'pendentes':
-        query = query.filter(PendenciaFinanceiraNF.respondida_em == None)
+        query = query.filter(PendenciaFinanceiraNF.respondida_em.is_(None))
 
     pendencias = query.all()
     total = PendenciaFinanceiraNF.query.count()
-    respondidas = PendenciaFinanceiraNF.query.filter(PendenciaFinanceiraNF.respondida_em != None).count()
+    respondidas = PendenciaFinanceiraNF.query.filter(PendenciaFinanceiraNF.respondida_em.isnot(None)).count()
     pendentes = total - respondidas
 
     return render_template('financeiro/consultar_pendencias.html', pendencias=pendencias,
@@ -166,4 +163,3 @@ def excluir_todas_pendencias():
     db.session.commit()
     flash('Todas as pendências foram excluídas com sucesso.', 'success')
     return redirect(url_for('financeiro.consultar_pendencias'))
-

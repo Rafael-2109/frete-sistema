@@ -181,8 +181,7 @@ def adicionar_log(id):
             descricao=form_log.descricao.data,
             tipo=form_log.tipo.data,
             lembrete_para=form_log.lembrete_para.data,
-            criado_em=datetime.utcnow(),
-            criado_por=current_user.nome
+            data_hora=datetime.utcnow(),
         )
         db.session.add(log)
         db.session.commit()
