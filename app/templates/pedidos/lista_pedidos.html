@@ -653,7 +653,7 @@
                 
                 <td class="text-end">
                   {% if p.valor_saldo_total %}
-                    <strong>{{ p.valor_saldo_total|valor_br(0) }}</strong>
+                    <strong>{{ p.valor_saldo_total|valor_br }}</strong>
                   {% else %}
                     <span class="text-muted">-</span>
                   {% endif %}
@@ -663,7 +663,7 @@
                   {% if p.peso_total %}
                     {{ p.peso_total|numero_br(0) }} kg
                     {% if p.pallet_total %}
-                      <br><small class="text-muted">{{ p.pallet_total|numero_br(1) }} pal</small>
+                      <br><small class="text-muted">{{ p.pallet_total|numero_br }} pal</small>
                     {% endif %}
                   {% else %}
                     <span class="text-muted">-</span>

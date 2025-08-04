@@ -304,3 +304,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+psql $DATABASE_URL -c "ALTER TABLE permission_module RENAME COLUMN name TO nome;"
