@@ -137,51 +137,41 @@ class Usuario(db.Model, UserMixin):
             return True
         
         # Importar modelos aqui para evitar importação circular
-        from app.permissions.models import ModuloSistema, SubModule, FuncaoModulo, PermissaoUsuario
+        from app.permissions.models import PermissionModule, PermissionSubModule, UserPermission
         
         # Buscar módulo
-        modulo_obj = ModuloSistema.query.filter_by(nome=modulo, ativo=True).first()
+        modulo_obj = PermissionModule.query.filter_by(nome=modulo, ativo=True).first()
         if not modulo_obj:
             return False
         
         # Se não especificou função, verificar se tem alguma permissão no módulo
         if not funcao:
-            return PermissaoUsuario.query.join(FuncaoModulo).filter(
-                PermissaoUsuario.usuario_id == self.id,
-                PermissaoUsuario.ativo == True,
-                PermissaoUsuario.pode_visualizar == True,
-                FuncaoModulo.modulo_id == modulo_obj.id,
-                FuncaoModulo.ativo == True
+            return UserPermission.query.join(PermissionSubModule).filter(
+                UserPermission.user_id == self.id,
+                UserPermission.ativo == True,
+                UserPermission.can_view == True,
+                PermissionSubModule.module_id == modulo_obj.id,
+                PermissionSubModule.ativo == True
             ).first() is not None
         
-        # Buscar função específica
-        query = FuncaoModulo.query.filter_by(
-            modulo_id=modulo_obj.id,
+        # Buscar submódulo específico
+        submodulo_obj = PermissionSubModule.query.filter_by(
+            module_id=modulo_obj.id,
             nome=funcao,
-            ativo=True
-        )
-        
-        if submodulo:
-            submodulo_obj = SubModule.query.filter_by(
-                modulo_id=modulo_obj.id,
-                nome=submodulo,
-                ativo=True
-            ).first()
-            if submodulo_obj:
-                query = query.filter_by(submodulo_id=submodulo_obj.id)
-        
-        funcao_obj = query.first()
-        if not funcao_obj:
-            return False
-        
-        # Verificar permissão
-        permissao = PermissaoUsuario.query.filter_by(
-            usuario_id=self.id,
-            funcao_id=funcao_obj.id,
             ativo=True
         ).first()
         
-        return permissao and permissao.pode_visualizar and not permissao.esta_expirada
+        if not submodulo_obj:
+            return False
+        
+        # Verificar permissão
+        permissao = UserPermission.query.filter_by(
+            user_id=self.id,
+            submodule_id=submodulo_obj.id,
+            ativo=True
+        ).first()
+        
+        return permissao and permissao.can_view
     
     def pode_editar(self, modulo, funcao=None, submodulo=None):
         """Verifica se usuário pode editar no módulo/função"""
@@ -190,106 +180,96 @@ class Usuario(db.Model, UserMixin):
             return True
         
         # Importar modelos aqui para evitar importação circular
-        from app.permissions.models import ModuloSistema, SubModule, FuncaoModulo, PermissaoUsuario
+        from app.permissions.models import PermissionModule, PermissionSubModule, UserPermission
         
         # Buscar módulo
-        modulo_obj = ModuloSistema.query.filter_by(nome=modulo, ativo=True).first()
+        modulo_obj = PermissionModule.query.filter_by(nome=modulo, ativo=True).first()
         if not modulo_obj:
             return False
         
         # Se não especificou função, verificar se pode editar em alguma função do módulo
         if not funcao:
-            return PermissaoUsuario.query.join(FuncaoModulo).filter(
-                PermissaoUsuario.usuario_id == self.id,
-                PermissaoUsuario.ativo == True,
-                PermissaoUsuario.pode_editar == True,
-                FuncaoModulo.modulo_id == modulo_obj.id,
-                FuncaoModulo.ativo == True
+            return UserPermission.query.join(PermissionSubModule).filter(
+                UserPermission.user_id == self.id,
+                UserPermission.ativo == True,
+                UserPermission.can_edit == True,
+                PermissionSubModule.module_id == modulo_obj.id,
+                PermissionSubModule.ativo == True
             ).first() is not None
         
-        # Buscar função específica
-        query = FuncaoModulo.query.filter_by(
-            modulo_id=modulo_obj.id,
+        # Buscar submódulo específico
+        submodulo_obj = PermissionSubModule.query.filter_by(
+            module_id=modulo_obj.id,
             nome=funcao,
-            ativo=True
-        )
-        
-        if submodulo:
-            submodulo_obj = SubModule.query.filter_by(
-                modulo_id=modulo_obj.id,
-                nome=submodulo,
-                ativo=True
-            ).first()
-            if submodulo_obj:
-                query = query.filter_by(submodulo_id=submodulo_obj.id)
-        
-        funcao_obj = query.first()
-        if not funcao_obj:
-            return False
-        
-        # Verificar permissão
-        permissao = PermissaoUsuario.query.filter_by(
-            usuario_id=self.id,
-            funcao_id=funcao_obj.id,
             ativo=True
         ).first()
         
-        return permissao and permissao.pode_editar and not permissao.esta_expirada
+        if not submodulo_obj:
+            return False
+        
+        # Verificar permissão
+        permissao = UserPermission.query.filter_by(
+            user_id=self.id,
+            submodule_id=submodulo_obj.id,
+            ativo=True
+        ).first()
+        
+        return permissao and permissao.can_edit
     
     def get_modulos_permitidos(self):
         """Retorna lista de módulos que o usuário tem acesso"""
-        from app.permissions.models import ModuloSistema, FuncaoModulo, PermissaoUsuario
+        from app.permissions.models import PermissionModule, PermissionSubModule, UserPermission
         
         if self.perfil == 'administrador':
-            return ModuloSistema.query.filter_by(ativo=True).order_by(ModuloSistema.ordem).all()
+            return PermissionModule.query.filter_by(ativo=True).order_by(PermissionModule.ordem).all()
         
         # Buscar módulos através das permissões
-        modulos_ids = db.session.query(FuncaoModulo.modulo_id).join(
-            PermissaoUsuario
+        modulos_ids = db.session.query(PermissionSubModule.module_id).join(
+            UserPermission
         ).filter(
-            PermissaoUsuario.usuario_id == self.id,
-            PermissaoUsuario.ativo == True,
-            PermissaoUsuario.pode_visualizar == True,
-            FuncaoModulo.ativo == True
+            UserPermission.user_id == self.id,
+            UserPermission.ativo == True,
+            UserPermission.can_view == True,
+            PermissionSubModule.ativo == True
         ).distinct().subquery()
         
-        return ModuloSistema.query.filter(
-            ModuloSistema.id.in_(modulos_ids),
-            ModuloSistema.ativo == True
-        ).order_by(ModuloSistema.ordem).all()
+        return PermissionModule.query.filter(
+            PermissionModule.id.in_(modulos_ids),
+            PermissionModule.ativo == True
+        ).order_by(PermissionModule.ordem).all()
     
     def get_permissoes_modulo(self, modulo_nome):
         """Retorna todas as permissões do usuário em um módulo"""
-        from app.permissions.models import ModuloSistema, FuncaoModulo, PermissaoUsuario
+        from app.permissions.models import PermissionModule, PermissionSubModule, UserPermission
         
-        modulo = ModuloSistema.query.filter_by(nome=modulo_nome, ativo=True).first()
+        modulo = PermissionModule.query.filter_by(nome=modulo_nome, ativo=True).first()
         if not modulo:
             return []
         
         if self.perfil == 'administrador':
             # Admin tem todas as permissões
-            funcoes = FuncaoModulo.query.filter_by(modulo_id=modulo.id, ativo=True).all()
+            submodulos = PermissionSubModule.query.filter_by(module_id=modulo.id, ativo=True).all()
             return [{
-                'funcao': f.nome,
-                'nome_exibicao': f.nome_exibicao,
+                'funcao': s.nome,
+                'nome_exibicao': s.nome_exibicao,
                 'pode_visualizar': True,
                 'pode_editar': True
-            } for f in funcoes]
+            } for s in submodulos]
         
         # Buscar permissões do usuário
-        permissoes = PermissaoUsuario.query.join(FuncaoModulo).filter(
-            PermissaoUsuario.usuario_id == self.id,
-            PermissaoUsuario.ativo == True,
-            FuncaoModulo.modulo_id == modulo.id,
-            FuncaoModulo.ativo == True
+        permissoes = UserPermission.query.join(PermissionSubModule).filter(
+            UserPermission.user_id == self.id,
+            UserPermission.ativo == True,
+            PermissionSubModule.module_id == modulo.id,
+            PermissionSubModule.ativo == True
         ).all()
         
         return [{
-            'funcao': p.funcao.nome,
-            'nome_exibicao': p.funcao.nome_exibicao,
-            'pode_visualizar': p.pode_visualizar,
-            'pode_editar': p.pode_editar
-        } for p in permissoes if not p.esta_expirada]
+            'funcao': p.submodule.nome,
+            'nome_exibicao': p.submodule.nome_exibicao,
+            'pode_visualizar': p.can_view,
+            'pode_editar': p.can_edit
+        } for p in permissoes]
     
     def aplicar_template_permissao(self, template_id, concedente_id=None):
         """Aplica um template de permissão ao usuário"""
@@ -303,13 +283,13 @@ class Usuario(db.Model, UserMixin):
     
     def get_vendedores_autorizados(self):
         """Retorna lista de vendedores autorizados para o usuário"""
-        from app.permissions.models import UsuarioVendedor
-        return UsuarioVendedor.get_vendedores_usuario(self.id)
+        from app.permissions.models import UserVendedor
+        return UserVendedor.get_vendedores_usuario(self.id)
     
     def get_equipes_autorizadas(self):
         """Retorna lista de equipes autorizadas para o usuário"""
-        from app.permissions.models import UsuarioEquipeVendas
-        return UsuarioEquipeVendas.get_equipes_usuario(self.id)
+        from app.permissions.models import UserEquipe
+        return UserEquipe.get_equipes_usuario(self.id)
     
     # ====== MÉTODOS DE COMPATIBILIDADE (mantém funcionamento antigo) ======
     

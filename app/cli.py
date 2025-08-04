@@ -40,6 +40,91 @@ def limpar_cache_localizacao():
     LocalizacaoService.limpar_cache()
     print("✅ Cache de localização limpo!")
 
+@click.command('inicializar-cache-estoque')
+@with_appcontext
+def inicializar_cache_estoque():
+    """Inicializa ou recria o cache de saldo de estoque (considerando códigos unificados)."""
+    from app.estoque.models_cache import SaldoEstoqueCache, ProjecaoEstoqueCache
+    
+    print("=" * 60)
+    print("INICIALIZAÇÃO DO CACHE DE SALDO DE ESTOQUE")
+    print("=" * 60)
+    
+    # Perguntar confirmação em produção
+    import os
+    if os.getenv('FLASK_ENV') == 'production' or os.getenv('DATABASE_URL'):
+        if not click.confirm('⚠️  ATENÇÃO: Você está em PRODUÇÃO. Deseja recriar todo o cache?'):
+            print("❌ Operação cancelada.")
+            return
+    
+    print("\n1. Criando cache de saldo de estoque...")
+    print("   📦 Considerando códigos unificados")
+    print("   🔄 Isso pode demorar alguns minutos...")
+    
+    sucesso = SaldoEstoqueCache.inicializar_cache_completo()
+    
+    if not sucesso:
+        print("❌ Erro ao inicializar cache de saldo")
+        return
+    
+    # Contar registros criados
+    total_cache = SaldoEstoqueCache.query.count()
+    print(f"✅ {total_cache} produtos no cache de saldo")
+    
+    # Atualizar projeções para produtos críticos (opcional)
+    if click.confirm('\n2. Deseja calcular projeções para produtos críticos?'):
+        print("   Calculando projeções...")
+        produtos_criticos = SaldoEstoqueCache.query.filter(
+            SaldoEstoqueCache.status_ruptura.in_(['CRÍTICO', 'ATENÇÃO'])
+        ).limit(50).all()
+        
+        for i, produto in enumerate(produtos_criticos, 1):
+            ProjecaoEstoqueCache.atualizar_projecao(produto.cod_produto)
+            if i % 10 == 0:
+                print(f"   Processadas {i}/{len(produtos_criticos)} projeções...")
+        
+        print(f"✅ Projeções calculadas para {len(produtos_criticos)} produtos")
+    
+    # Estatísticas finais
+    print("\n3. Estatísticas do cache:")
+    criticos = SaldoEstoqueCache.query.filter_by(status_ruptura='CRÍTICO').count()
+    atencao = SaldoEstoqueCache.query.filter_by(status_ruptura='ATENÇÃO').count()
+    ok = SaldoEstoqueCache.query.filter_by(status_ruptura='OK').count()
+    
+    print(f"  - Produtos CRÍTICOS: {criticos}")
+    print(f"  - Produtos ATENÇÃO: {atencao}")
+    print(f"  - Produtos OK: {ok}")
+    
+    print("\n" + "=" * 60)
+    print("✅ CACHE INICIALIZADO COM SUCESSO!")
+    print("=" * 60)
+
+@click.command('atualizar-cache-estoque')
+@click.option('--produto', help='Código do produto específico para atualizar')
+@with_appcontext
+def atualizar_cache_estoque(produto):
+    """Atualiza o cache de estoque (produto específico ou todos)."""
+    from app.estoque.models_cache import SaldoEstoqueCache, ProjecaoEstoqueCache
+    
+    if produto:
+        print(f"🔄 Atualizando cache para produto {produto}...")
+        cache = SaldoEstoqueCache.query.filter_by(cod_produto=str(produto)).first()
+        if cache:
+            SaldoEstoqueCache.atualizar_carteira(produto)
+            ProjecaoEstoqueCache.atualizar_projecao(produto)
+            print(f"✅ Cache atualizado para {produto}")
+        else:
+            print(f"❌ Produto {produto} não encontrado no cache")
+    else:
+        print("🔄 Atualizando cache de todos os produtos...")
+        produtos = SaldoEstoqueCache.query.all()
+        total = len(produtos)
+        for i, p in enumerate(produtos, 1):
+            SaldoEstoqueCache.atualizar_carteira(p.cod_produto)
+            if i % 50 == 0:
+                print(f"   Processados {i}/{total} produtos...")
+        print(f"✅ Cache atualizado para {total} produtos")
+
 @click.command('validar-localizacao')
 @with_appcontext 
 def validar_localizacao():
@@ -209,14 +294,6 @@ def corrigir_vinculos_grupo():
         db.session.rollback()
         print(f"❌ Erro ao salvar: {str(e)}")
 
-
-# FUNÇÃO REMOVIDA: criar_vinculos_faltantes()
-# 
-# Esta função foi removida porque criava vínculos automaticamente,
-# o que é incorreto do ponto de vista de negócio.
-# 
-# Vínculos representam quais cidades cada transportadora REALMENTE atende,
-# e isso deve ser definido manualmente através da importação de vínculos.
 
 @click.command()
 @click.argument('arquivo_excel')

@@ -1,0 +1,34 @@
+# MCP Backup System Cron Schedule
+# This file is managed by the backup scheduler
+# Do not edit manually - use backup_scheduler.sh install/uninstall
+
+# Environment variables
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+BACKUP_CONFIG=/app/config/backup_config.json
+
+# Full backup every Sunday at 2 AM
+0 2 * * 0 /app/scripts/backup_scheduler.sh run full >> /app/logs/backup_cron.log 2>&1
+
+# Incremental backup Monday-Saturday at 2 AM
+0 2 * * 1-6 /app/scripts/backup_scheduler.sh run incremental >> /app/logs/backup_cron.log 2>&1
+
+# Verify backups daily at 6 AM
+0 6 * * * /app/scripts/backup_scheduler.sh verify >> /app/logs/backup_cron.log 2>&1
+
+# Cleanup old backups weekly on Sunday at 4 AM
+0 4 * * 0 /app/scripts/backup_scheduler.sh cleanup >> /app/logs/backup_cron.log 2>&1
+
+# Monitor backup health every hour
+0 * * * * /app/scripts/backup_scheduler.sh monitor >> /app/logs/backup_cron.log 2>&1
+
+# Recovery drill monthly on the 15th at 3 AM
+0 3 15 * * python /app/scripts/restore_test.py --drill >> /app/logs/recovery_drill.log 2>&1
+
+# Quick restore test every week on Sunday at 5 AM
+0 5 * * 0 python /app/scripts/restore_test.py --test latest >> /app/logs/restore_test.log 2>&1
+
+# Log rotation daily at midnight
+0 0 * * * find /app/logs -name "*.log" -mtime +30 -delete
+
+# Empty line required at end

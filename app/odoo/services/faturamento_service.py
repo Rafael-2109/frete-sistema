@@ -11,11 +11,10 @@ Baseado no mapeamento_faturamento.csv e usando FaturamentoMapper hardcoded.
 import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-from sqlalchemy import and_, or_, func
-from sqlalchemy.orm import sessionmaker
 
-from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
+from app.faturamento.models import RelatorioFaturamentoImportado, FaturamentoProduto
 from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.safe_connection import get_safe_odoo_connection
 from app.odoo.utils.faturamento_mapper import FaturamentoMapper
 from app import db
 
@@ -30,7 +29,8 @@ class FaturamentoService:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.mapper = FaturamentoMapper()
-        self.connection = get_odoo_connection()
+        # Usar conexão segura que trata erros de campos automaticamente
+        self.connection = get_safe_odoo_connection()
 
     
     def _processar_dados_faturamento_com_multiplas_queries(self, dados_odoo_brutos: List[Dict]) -> List[Dict]:
@@ -98,10 +98,11 @@ class FaturamentoService:
             # 2️⃣ BUSCAR TODAS AS FATURAS (1 query)
             campos_fatura = [
                 'id', 'name', 'invoice_origin', 'state', 'invoice_user_id', 'invoice_incoterm_id',
-                'l10n_br_numero_nota_fiscal', 'date', 'l10n_br_cnpj', 'invoice_partner_display_name'
+                'l10n_br_numero_nota_fiscal', 'date', 'l10n_br_cnpj', 'invoice_partner_display_name',
+                'team_id'  # Campo da equipe de vendas
             ]
             
-            logger.info("🔍 Query 1/5: Buscando faturas...")
+            logger.info("🔍 Query 1/6: Buscando faturas...")
             faturas = self.connection.search_read(
                 'account.move',
                 [('id', 'in', list(move_ids))],
@@ -113,7 +114,7 @@ class FaturamentoService:
                 'id', 'name', 'l10n_br_cnpj', 'l10n_br_municipio_id', 'state_id', 'user_id'
             ]
             
-            logger.info(f"🔍 Query 2/5: Buscando {len(partner_ids)} clientes...")
+            logger.info(f"🔍 Query 2/6: Buscando {len(partner_ids)} clientes...")
             clientes = self.connection.search_read(
                 'res.partner',
                 [('id', 'in', list(partner_ids))],
@@ -123,7 +124,7 @@ class FaturamentoService:
             # 4️⃣ BUSCAR TODOS OS PRODUTOS (1 query)
             campos_produto = ['id', 'name', 'code', 'weight', 'product_tmpl_id']  # Adicionar template_id
             
-            logger.info(f"🔍 Query 3/5: Buscando {len(product_ids)} produtos...")
+            logger.info(f"🔍 Query 3/6: Buscando {len(product_ids)} produtos...")
             produtos = self.connection.search_read(
                 'product.product',
                 [('id', 'in', list(product_ids))],
@@ -155,7 +156,7 @@ class FaturamentoService:
             
             municipios = []
             if municipio_ids:
-                logger.info(f"🔍 Query 4/5: Buscando {len(municipio_ids)} municípios...")
+                logger.info(f"🔍 Query 5/6: Buscando {len(municipio_ids)} municípios...")
                 municipios = self.connection.search_read(
                     'l10n_br_ciel_it_account.res.municipio',
                     [('id', 'in', list(municipio_ids))],
@@ -178,7 +179,7 @@ class FaturamentoService:
             
             usuarios = []
             if user_ids:
-                logger.info(f"🔍 Query 5/5: Buscando {len(user_ids)} vendedores...")
+                logger.info(f"🔍 Query 6/6: Buscando {len(user_ids)} vendedores...")
                 usuarios = self.connection.search_read(
                     'res.users',
                     [('id', 'in', list(user_ids))],
@@ -404,7 +405,6 @@ class FaturamentoService:
         """
         try:
             import time
-            from app.faturamento.models import FaturamentoProduto
             from app import db
             
             start_time = time.time()
@@ -546,7 +546,7 @@ class FaturamentoService:
                     
                     # Contar movimentações criadas (estimativa: casos 1+2)
                     stats_estoque['movimentacoes_criadas'] = (
-                        resultado_processamento.get('caso1_direto', 0) + 
+                        resultado_processamento.get('caso1_direto', 0) +
                         resultado_processamento.get('caso2_parcial', 0)
                     )
                     
@@ -685,7 +685,7 @@ class FaturamentoService:
                 'sincronizacoes': stats_sincronizacao
             }
             
-            logger.info(f"✅ SINCRONIZAÇÃO INCREMENTAL COMPLETA CONCLUÍDA:")
+            logger.info(f"   ✅ SINCRONIZAÇÃO INCREMENTAL COMPLETA CONCLUÍDA:")
             logger.info(f"   ➕ {contador_novos} novos registros inseridos")
             logger.info(f"   ✏️ {contador_atualizados} registros atualizados")
             logger.info(f"   📋 {stats_sincronizacao['relatorios_consolidados']} relatórios consolidados")
@@ -763,7 +763,7 @@ class FaturamentoService:
             if limite and limite > 0:
                 # Dashboard/consulta rápida - limite baixo
                 dados_odoo_brutos = self.connection.search_read(
-                    'account.move.line', domain, campos_basicos, limit=limite*2
+                    'account.move.line', domain, campos_basicos, limit=limite * 2
                 )
             else:
                 # ⚡ SINCRONIZAÇÃO LIMITADA para evitar timeouts
@@ -771,9 +771,9 @@ class FaturamentoService:
                 max_records = 20000  # Máximo 20000 registros para evitar timeout
                 
                 dados_odoo_brutos = self.connection.search_read(
-                    'account.move.line', 
-                    domain, 
-                    campos_basicos, 
+                    'account.move.line',
+                    domain,
+                    campos_basicos,
                     limit=max_records
                 )
                 
@@ -831,17 +831,6 @@ class FaturamentoService:
             limite=0  # Sem limite para compatibilidade
         )
     
-    def sincronizar_faturamento_completo(self) -> Dict[str, Any]:
-        """
-        🔄 MÉTODO DE COMPATIBILIDADE - Usa novo método incremental
-        
-        AVISO: Este método DELETE ALL + INSERT ALL foi substituído pelo método incremental
-        """
-        logger.warning("⚠️ Método obsoleto 'sincronizar_faturamento_completo' usado - migre para 'sincronizar_faturamento_incremental'")
-        
-        # Redirecionar para método incremental otimizado
-        return self.sincronizar_faturamento_incremental()
-
     # ============================================
     # 🛠️ MÉTODOS AUXILIARES E DE PROCESSAMENTO
     # ============================================
@@ -972,6 +961,7 @@ class FaturamentoService:
                 
                 # 🏢 DADOS COMERCIAIS
                 'vendedor': vendedor_nome,
+                'equipe_vendas': extrair_relacao(fatura.get('team_id', ''), 1) if fatura.get('team_id') else '',
                 'incoterm': incoterm_codigo,
                 
                 # 📦 DADOS DO PRODUTO
@@ -1152,7 +1142,6 @@ class FaturamentoService:
         """
         try:
             import psutil
-            import time
             
             logger.info(f"📊 Calculando performance para {total_nfs} NFs...")
             
@@ -1213,4 +1202,4 @@ class FaturamentoService:
             
         except Exception as e:
             logger.error(f"Erro no cálculo de performance: {e}")
-            return {'erro': str(e)} 
+            return {'erro': str(e)}

@@ -218,13 +218,41 @@ def gerar_separacao_completa_pedido(num_pedido):
                 'error': 'Nenhuma separação foi criada. Verifique se há produtos com quantidade válida.'
             }), 400
 
-        # Atualizar pedido na tabela pedidos
-        pedido = Pedido.query.filter_by(num_pedido=num_pedido).first()
-        if pedido:
-            pedido.separacao_lote_id = lote_id
-            pedido.expedicao = expedicao_obj
-            pedido.agendamento = agendamento_obj
-            pedido.protocolo = protocolo
+        # SEMPRE criar um novo pedido para este lote de separação
+        # Buscar dados do primeiro item para popular o pedido
+        primeiro_item = separacoes_criadas[0]
+        
+        # Verificar se já existe um pedido com este lote (não deveria)
+        pedido_existente = Pedido.query.filter_by(
+            separacao_lote_id=lote_id
+        ).first()
+        
+        if pedido_existente:
+            # Se por algum motivo já existe, remover
+            db.session.delete(pedido_existente)
+        
+        # Criar novo pedido
+        novo_pedido = Pedido(
+            separacao_lote_id=lote_id,
+            num_pedido=num_pedido,
+            data_pedido=primeiro_item.data_pedido,
+            cnpj_cpf=primeiro_item.cnpj_cpf,
+            raz_social_red=primeiro_item.raz_social_red,
+            nome_cidade=primeiro_item.nome_cidade,
+            cod_uf=primeiro_item.cod_uf,
+            valor_saldo_total=valor_total_separacao,
+            pallet_total=pallet_total_separacao,
+            peso_total=peso_total_separacao,
+            rota=primeiro_item.rota,
+            sub_rota=primeiro_item.sub_rota,
+            observ_ped_1=primeiro_item.observ_ped_1,
+            expedicao=expedicao_obj,
+            agendamento=agendamento_obj,
+            protocolo=protocolo,
+            status='ABERTO'  # Sempre começa como ABERTO
+        )
+        
+        db.session.add(novo_pedido)
 
         # Commit das mudanças
         db.session.commit()
@@ -264,160 +292,153 @@ def transformar_lote_em_separacao(lote_id):
     Usado pelo botão "Transformar em Separação" no workspace
     """
     try:
-        # Verificar se é um lote de pré-separação (formato: PRE-YYYY-MM-DD)
-        if lote_id.startswith('PRE-'):
-            # Extrair data de expedição do lote_id
-            data_expedicao_str = lote_id.replace('PRE-', '')
-            try:
-                data_expedicao_obj = datetime.strptime(data_expedicao_str, '%Y-%m-%d').date()
-            except ValueError:
-                return jsonify({
-                    'success': False,
-                    'error': 'Formato de lote inválido'
-                }), 400
+        # Buscar pré-separações pelo separacao_lote_id
+        pre_separacoes = PreSeparacaoItem.query.filter(
+            PreSeparacaoItem.separacao_lote_id == lote_id,
+            PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
+        ).all()
 
-            # Buscar pré-separações do lote
-            pre_separacoes = PreSeparacaoItem.query.filter(
-                PreSeparacaoItem.data_expedicao_editada == data_expedicao_obj,
-                PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
-            ).all()
-
-            if not pre_separacoes:
-                return jsonify({
-                    'success': False,
-                    'error': 'Nenhuma pré-separação encontrada para este lote'
-                }), 404
-
-            # Verificar se é lote completo (todos os produtos do pedido)
-            num_pedido = pre_separacoes[0].num_pedido
-            
-            # Buscar produtos totais do pedido
-            produtos_totais = db.session.query(CarteiraPrincipal).filter(
-                CarteiraPrincipal.num_pedido == num_pedido,
-                CarteiraPrincipal.ativo == True
-            ).all()
-
-            # Verificar se tipo_envio é 'total' para pelo menos uma pré-separação
-            tem_envio_total = any(ps.tipo_envio == 'total' for ps in pre_separacoes)
-            
-            if not tem_envio_total:
-                return jsonify({
-                    'success': False,
-                    'error': 'Este lote contém apenas envios parciais. Use o botão "Criar Separação Completa" para produtos completos.'
-                }), 400
-
-            # Gerar novo lote_id para separação
-            novo_lote_id = gerar_novo_lote_id()
-
-            # Criar separações
-            separacoes_criadas = []
-            valor_total = 0
-            peso_total = 0
-            pallet_total = 0
-
-            for pre_sep in pre_separacoes:
-                quantidade = float(pre_sep.qtd_selecionada_usuario)
-                
-                # Buscar dados completos do item na carteira
-                item_carteira = db.session.query(CarteiraPrincipal).filter(
-                    CarteiraPrincipal.num_pedido == pre_sep.num_pedido,
-                    CarteiraPrincipal.cod_produto == pre_sep.cod_produto,
-                    CarteiraPrincipal.ativo == True
-                ).first()
-
-                if not item_carteira:
-                    continue
-
-                # Calcular valores
-                preco_unitario = float(item_carteira.preco_produto_pedido or 0)
-                valor_separacao = quantidade * preco_unitario
-                
-                # Calcular peso e pallet
-                peso_calculado, pallet_calculado = calcular_peso_pallet_produto(
-                    pre_sep.cod_produto, quantidade
-                )
-                
-                # Buscar rota e sub-rota
-                rota_calculada = buscar_rota_por_uf(item_carteira.cod_uf or 'SP')
-                sub_rota_calculada = buscar_sub_rota_por_uf_cidade(
-                    item_carteira.cod_uf or '', 
-                    item_carteira.nome_cidade or ''
-                )
-
-                # Criar separação
-                separacao = Separacao(
-                    separacao_lote_id=novo_lote_id,
-                    num_pedido=pre_sep.num_pedido,
-                    data_pedido=item_carteira.data_pedido,
-                    cnpj_cpf=item_carteira.cnpj_cpf,
-                    raz_social_red=item_carteira.raz_social_red,
-                    nome_cidade=item_carteira.nome_cidade,
-                    cod_uf=item_carteira.cod_uf,
-                    cod_produto=pre_sep.cod_produto,
-                    nome_produto=pre_sep.nome_produto,
-                    qtd_saldo=quantidade,
-                    valor_saldo=valor_separacao,
-                    peso=peso_calculado,
-                    pallet=pallet_calculado,
-                    rota=rota_calculada,
-                    sub_rota=sub_rota_calculada,
-                    observ_ped_1=item_carteira.observ_ped_1,
-                    roteirizacao=None,
-                    expedicao=pre_sep.data_expedicao_editada,
-                    agendamento=pre_sep.data_agendamento_editada,
-                    protocolo=pre_sep.protocolo_editado,
-                    tipo_envio=pre_sep.tipo_envio,
-                    criado_em=agora_brasil()
-                )
-                
-                db.session.add(separacao)
-                separacoes_criadas.append(separacao)
-                
-                # Acumular totais
-                valor_total += valor_separacao
-                peso_total += peso_calculado
-                pallet_total += pallet_calculado
-
-                # Marcar pré-separação como processada
-                pre_sep.status = 'ENVIADO_SEPARACAO'
-
-            if not separacoes_criadas:
-                return jsonify({
-                    'success': False,
-                    'error': 'Nenhuma separação foi criada'
-                }), 400
-
-            # Atualizar pedido na tabela pedidos
-            pedido = Pedido.query.filter_by(num_pedido=num_pedido).first()
-            if pedido:
-                pedido.separacao_lote_id = novo_lote_id
-                pedido.expedicao = data_expedicao_obj
-                if pre_separacoes[0].data_agendamento_editada:
-                    pedido.agendamento = pre_separacoes[0].data_agendamento_editada
-                if pre_separacoes[0].protocolo_editado:
-                    pedido.protocolo = pre_separacoes[0].protocolo_editado
-
-            # Commit das mudanças
-            db.session.commit()
-
-            return jsonify({
-                'success': True,
-                'message': f'Lote transformado em separação com sucesso! {len(separacoes_criadas)} produtos processados.',
-                'lote_id': novo_lote_id,
-                'separacoes_criadas': len(separacoes_criadas),
-                'pre_separacoes_processadas': len(pre_separacoes),
-                'totais': {
-                    'valor': valor_total,
-                    'peso': peso_total,
-                    'pallet': pallet_total
-                }
-            })
-
-        else:
+        if not pre_separacoes:
             return jsonify({
                 'success': False,
-                'error': 'Lote não é uma pré-separação válida'
+                'error': 'Nenhuma pré-separação encontrada para este lote'
+            }), 404
+
+        # Verificar se é lote completo (todos os produtos do pedido)
+        num_pedido = pre_separacoes[0].num_pedido
+        
+        # MANTER O MESMO lote_id da pré-separação
+        # NÃO gerar novo, para manter rastreabilidade
+        separacao_lote_id = lote_id  # Usar o mesmo ID
+
+        # Criar separações
+        separacoes_criadas = []
+        valor_total = 0
+        peso_total = 0
+        pallet_total = 0
+
+        for pre_sep in pre_separacoes:
+            quantidade = float(pre_sep.qtd_selecionada_usuario)
+            
+            # Buscar item da carteira para dados adicionais
+            item_carteira = CarteiraPrincipal.query.filter_by(
+                num_pedido=num_pedido,
+                cod_produto=pre_sep.cod_produto
+            ).first()
+
+            if not item_carteira:
+                continue
+
+            # Calcular valores
+            valor_unitario = float(item_carteira.preco_produto_pedido or 0)
+            valor_separacao = quantidade * valor_unitario
+            
+            # Calcular peso e pallet usando a função utilitária
+            peso_calculado, pallet_calculado = calcular_peso_pallet_produto(
+                pre_sep.cod_produto, quantidade
+            )
+            
+            # Calcular rota e sub-rota
+            rota_calculada = buscar_rota_por_uf(item_carteira.cod_uf or 'SP')
+            sub_rota_calculada = buscar_sub_rota_por_uf_cidade(
+                item_carteira.cod_uf or '', 
+                item_carteira.nome_cidade or ''
+            )
+
+            # Criar separação
+            separacao = Separacao(
+                separacao_lote_id=separacao_lote_id,
+                num_pedido=pre_sep.num_pedido,
+                data_pedido=item_carteira.data_pedido,
+                cnpj_cpf=item_carteira.cnpj_cpf,
+                raz_social_red=item_carteira.raz_social_red,
+                nome_cidade=item_carteira.nome_cidade,
+                cod_uf=item_carteira.cod_uf,
+                cod_produto=pre_sep.cod_produto,
+                nome_produto=pre_sep.nome_produto,
+                qtd_saldo=quantidade,
+                valor_saldo=valor_separacao,
+                peso=peso_calculado,
+                pallet=pallet_calculado,
+                rota=rota_calculada,
+                sub_rota=sub_rota_calculada,
+                observ_ped_1=item_carteira.observ_ped_1,
+                roteirizacao=None,
+                expedicao=pre_sep.data_expedicao_editada,
+                agendamento=pre_sep.data_agendamento_editada,
+                protocolo=pre_sep.protocolo_editado,
+                tipo_envio=pre_sep.tipo_envio,
+                criado_em=agora_brasil()
+            )
+            
+            db.session.add(separacao)
+            separacoes_criadas.append(separacao)
+            
+            # Acumular totais
+            valor_total += valor_separacao
+            peso_total += peso_calculado
+            pallet_total += pallet_calculado
+
+            # Marcar pré-separação como processada
+            pre_sep.status = 'ENVIADO_SEPARACAO'
+
+        if not separacoes_criadas:
+            return jsonify({
+                'success': False,
+                'error': 'Nenhuma separação foi criada'
             }), 400
+
+        # SEMPRE criar um novo pedido para este lote de separação
+        # Buscar dados do primeiro item para popular o pedido
+        primeiro_item = separacoes_criadas[0]
+        
+        # Verificar se já existe um pedido com este lote (não deveria)
+        pedido_existente = Pedido.query.filter_by(
+            separacao_lote_id=separacao_lote_id
+        ).first()
+        
+        if pedido_existente:
+            # Se por algum motivo já existe, remover
+            db.session.delete(pedido_existente)
+        
+        # Criar novo pedido
+        novo_pedido = Pedido(
+            separacao_lote_id=separacao_lote_id,
+            num_pedido=num_pedido,
+            data_pedido=primeiro_item.data_pedido,
+            cnpj_cpf=primeiro_item.cnpj_cpf,
+            raz_social_red=primeiro_item.raz_social_red,
+            nome_cidade=primeiro_item.nome_cidade,
+            cod_uf=primeiro_item.cod_uf,
+            valor_saldo_total=valor_total,
+            pallet_total=pallet_total,
+            peso_total=peso_total,
+            rota=primeiro_item.rota,
+            sub_rota=primeiro_item.sub_rota,
+            observ_ped_1=primeiro_item.observ_ped_1,
+            expedicao=pre_separacoes[0].data_expedicao_editada,
+            agendamento=pre_separacoes[0].data_agendamento_editada,
+            protocolo=pre_separacoes[0].protocolo_editado,
+            status='ABERTO'  # Sempre começa como ABERTO
+        )
+        
+        db.session.add(novo_pedido)
+
+        # Commit das mudanças
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Lote transformado em separação com sucesso! {len(separacoes_criadas)} produtos processados.',
+            'lote_id': separacao_lote_id,
+            'separacoes_criadas': len(separacoes_criadas),
+            'pre_separacoes_processadas': len(pre_separacoes),
+            'totais': {
+                'valor': valor_total,
+                'peso': peso_total,
+                'pallet': pallet_total
+            }
+        })
 
     except Exception as e:
         db.session.rollback()
@@ -426,3 +447,199 @@ def transformar_lote_em_separacao(lote_id):
             'success': False,
             'error': f'Erro interno: {str(e)}'
         }), 500
+
+
+@carteira_bp.route('/api/separacao/<lote_id>/reverter', methods=['POST'])
+@login_required
+def reverter_separacao(lote_id):
+    """
+    API para reverter separação com status ABERTO para pré-separação
+    """
+    try:
+        # Buscar o pedido associado a este lote
+        pedido = Pedido.query.filter_by(
+            separacao_lote_id=lote_id
+        ).first()
+        
+        if not pedido:
+            return jsonify({
+                'success': False,
+                'error': 'Pedido não encontrado para este lote'
+            }), 404
+            
+        # Verificar se o status é ABERTO
+        if pedido.status != 'ABERTO':
+            return jsonify({
+                'success': False,
+                'error': f'Apenas separações com status ABERTO podem ser revertidas. Status atual: {pedido.status}'
+            }), 400
+        
+        # Buscar separações com este lote_id
+        separacoes = Separacao.query.filter(
+            Separacao.separacao_lote_id == lote_id
+        ).all()
+        
+        if not separacoes:
+            return jsonify({
+                'success': False,
+                'error': 'Separações não encontradas'
+            }), 404
+        
+        # Buscar pré-separações correspondentes
+        pre_separacoes = PreSeparacaoItem.query.filter(
+            PreSeparacaoItem.separacao_lote_id == lote_id,
+            PreSeparacaoItem.status == 'ENVIADO_SEPARACAO'
+        ).all()
+        
+        if not pre_separacoes:
+            return jsonify({
+                'success': False,
+                'error': 'Pré-separações originais não encontradas'
+            }), 404
+            
+        # Reverter status das pré-separações
+        for pre_sep in pre_separacoes:
+            pre_sep.status = 'CRIADO'
+            
+        # Remover separações
+        for sep in separacoes:
+            db.session.delete(sep)
+            
+        # Remover pedido (cancelar)
+        db.session.delete(pedido)
+                
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Separação revertida com sucesso! {len(pre_separacoes)} itens voltaram para pré-separação.',
+            'pre_separacoes_revertidas': len(pre_separacoes),
+            'separacoes_removidas': len(separacoes)
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao reverter separação {lote_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@carteira_bp.route('/api/separacao/<lote_id>/atualizar-datas', methods=['POST'])
+@login_required
+def atualizar_datas_separacao(lote_id):
+    """
+    Atualiza datas de expedição, agendamento e protocolo de uma separação com status ABERTO
+    """
+    try:
+        data = request.get_json()
+        data_expedicao = data.get('expedicao')
+        data_agendamento = data.get('agendamento')
+        protocolo = data.get('protocolo')
+        
+        if not data_expedicao:
+            return jsonify({
+                'success': False,
+                'error': 'Data de expedição é obrigatória'
+            }), 400
+            
+        # Buscar todas as separações do lote PRIMEIRO
+        separacoes = Separacao.query.filter(
+            Separacao.separacao_lote_id == lote_id
+        ).all()
+        
+        if not separacoes:
+            return jsonify({
+                'success': False,
+                'error': 'Separações não encontradas'
+            }), 404
+            
+        # Buscar o pedido associado
+        pedido = Pedido.query.filter_by(
+            separacao_lote_id=lote_id
+        ).first()
+        
+        # Se não existe pedido, criar um baseado nas separações
+        if not pedido:
+            logger.warning(f"Pedido não encontrado para lote {lote_id}. Criando novo pedido.")
+            
+            # Usar primeira separação para dados base
+            primeira_sep = separacoes[0]
+            
+            # Calcular totais
+            valor_total = sum(float(s.valor_saldo or 0) for s in separacoes)
+            peso_total = sum(float(s.peso or 0) for s in separacoes)
+            pallet_total = sum(float(s.pallet or 0) for s in separacoes)
+            
+            # Se rota/sub_rota estão vazias na separação, recalcular
+            rota = primeira_sep.rota
+            sub_rota = primeira_sep.sub_rota
+            
+            if not rota:
+                rota = buscar_rota_por_uf(primeira_sep.cod_uf or '')
+            if not sub_rota:
+                sub_rota = buscar_sub_rota_por_uf_cidade(
+                    primeira_sep.cod_uf or '', 
+                    primeira_sep.nome_cidade or ''
+                )
+            
+            # Criar novo pedido
+            pedido = Pedido(
+                separacao_lote_id=lote_id,
+                num_pedido=primeira_sep.num_pedido,
+                data_pedido=primeira_sep.data_pedido,
+                cnpj_cpf=primeira_sep.cnpj_cpf,
+                raz_social_red=primeira_sep.raz_social_red,
+                nome_cidade=primeira_sep.nome_cidade,
+                cod_uf=primeira_sep.cod_uf,
+                valor_saldo_total=valor_total,
+                pallet_total=pallet_total,
+                peso_total=peso_total,
+                rota=rota,
+                sub_rota=sub_rota,
+                observ_ped_1=primeira_sep.observ_ped_1,
+                expedicao=primeira_sep.expedicao,
+                agendamento=primeira_sep.agendamento,
+                protocolo=primeira_sep.protocolo,
+                status='ABERTO'
+            )
+            db.session.add(pedido)
+            
+        # Verificar se o status é ABERTO
+        if pedido.status != 'ABERTO':
+            return jsonify({
+                'success': False,
+                'error': f'Apenas separações com status ABERTO podem ser editadas. Status atual: {pedido.status}'
+            }), 400
+        
+        # Converter datas
+        from datetime import datetime
+        data_expedicao_obj = datetime.strptime(data_expedicao, '%Y-%m-%d').date()
+        data_agendamento_obj = None
+        if data_agendamento:
+            data_agendamento_obj = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
+            
+        # Atualizar todas as separações do lote
+        for sep in separacoes:
+            sep.expedicao = data_expedicao_obj
+            sep.agendamento = data_agendamento_obj
+            sep.protocolo = protocolo
+            
+        # Atualizar também o pedido
+        pedido.expedicao = data_expedicao_obj
+        pedido.agendamento = data_agendamento_obj
+        pedido.protocolo = protocolo
+            
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'{len(separacoes)} itens atualizados com sucesso',
+            'itens_atualizados': len(separacoes)
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar datas da separação: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

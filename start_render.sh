@@ -41,6 +41,13 @@ export NO_EMOJI_LOGS=true
 echo " Executando migrações..."
 python -m flask db upgrade || echo " Migrações não executadas (pode ser normal)"
 
+if [ "$MCP_ENABLED" = "true" ]; then
+    echo "Iniciando MCP em background..."
+    cd app/mcp_sistema && uvicorn main:app --host 0.0.0.0 --port 8000 &
+    cd ../..
+    sleep 5
+fi
+
 # Iniciar aplicação
 echo " Iniciando aplicação..."
 exec gunicorn --bind 0.0.0.0:$PORT \

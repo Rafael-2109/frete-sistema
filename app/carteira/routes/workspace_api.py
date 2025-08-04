@@ -93,10 +93,13 @@ def workspace_pedido_real(num_pedido):
                 # Calcular quantidade em separações confirmadas
                 qtd_separacoes = db.session.query(
                     func.coalesce(func.sum(Separacao.qtd_saldo), 0)
+                ).join(
+                    Pedido,
+                    Separacao.separacao_lote_id == Pedido.separacao_lote_id
                 ).filter(
                     Separacao.num_pedido == num_pedido,
                     Separacao.cod_produto == produto.cod_produto,
-                    Separacao.situacao_atual != 'CANCELADO'
+                    Pedido.status.in_(['ABERTO', 'COTADO'])
                 ).scalar()
                 
                 # Adicionar as quantidades aos dados do produto

@@ -1,0 +1,3 @@
+"""
+MCP Sistema test package
+"""

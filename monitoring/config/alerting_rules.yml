@@ -1,0 +1,226 @@
+# Prometheus alerting rules for MCP Frete Sistema
+
+groups:
+  # System alerts
+  - name: system_alerts
+    interval: 30s
+    rules:
+      - alert: HighCPUUsage
+        expr: mcp_system_cpu_usage_percent > 90
+        for: 5m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+      
+      - alert: HighMemoryUsage
+        expr: mcp_system_memory_usage_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}% on {{ $labels.instance }}"
+      
+      - alert: CriticalMemoryUsage
+        expr: mcp_system_memory_usage_percent > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical memory usage detected"
+          description: "Memory usage is {{ $value }}% on {{ $labels.instance }}"
+      
+      - alert: HighDiskUsage
+        expr: mcp_system_disk_usage_percent > 90
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High disk usage detected"
+          description: "Disk usage is {{ $value }}% on {{ $labels.mountpoint }}"
+  
+  # API alerts
+  - name: api_alerts
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: rate(mcp_api_errors_total[5m]) / rate(mcp_api_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API error rate"
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.endpoint }}"
+      
+      - alert: CriticalErrorRate
+        expr: rate(mcp_api_errors_total[5m]) / rate(mcp_api_requests_total[5m]) > 0.10
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Critical API error rate"
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.endpoint }}"
+      
+      - alert: SlowAPIResponse
+        expr: histogram_quantile(0.95, mcp_api_request_duration_seconds) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Slow API response times"
+          description: "95th percentile response time is {{ $value }}s for {{ $labels.endpoint }}"
+      
+      - alert: HighAPITraffic
+        expr: sum(rate(mcp_api_requests_total[5m])) > 1000
+        for: 5m
+        labels:
+          severity: info
+          component: api
+        annotations:
+          summary: "High API traffic"
+          description: "API receiving {{ $value }} requests per second"
+  
+  # Database alerts
+  - name: database_alerts
+    interval: 30s
+    rules:
+      - alert: HighDatabaseConnections
+        expr: mcp_database_connections_total > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High number of database connections"
+          description: "Database has {{ $value }} active connections"
+      
+      - alert: DatabaseConnectionsExhausted
+        expr: mcp_database_connections_total > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connections nearly exhausted"
+          description: "Database has {{ $value }} active connections"
+      
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, mcp_database_query_duration_seconds) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile query time is {{ $value }}s"
+      
+      - alert: DatabaseSizeGrowing
+        expr: rate(mcp_database_size_bytes[1h]) > 1073741824  # 1GB/hour
+        for: 30m
+        labels:
+          severity: info
+          component: database
+        annotations:
+          summary: "Database size growing rapidly"
+          description: "Database is growing at {{ $value | humanizeBytes }}/hour"
+  
+  # Cache alerts
+  - name: cache_alerts
+    interval: 30s
+    rules:
+      - alert: LowCacheHitRate
+        expr: mcp_cache_hit_rate_percent < 80
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value }}%"
+      
+      - alert: CriticalCacheHitRate
+        expr: mcp_cache_hit_rate_percent < 60
+        for: 5m
+        labels:
+          severity: critical
+          component: cache
+        annotations:
+          summary: "Critical cache hit rate"
+          description: "Cache hit rate is {{ $value }}%"
+      
+      - alert: HighCacheMemoryUsage
+        expr: mcp_cache_memory_used_bytes / 1073741824 > 4  # 4GB
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "High cache memory usage"
+          description: "Cache is using {{ $value | humanizeBytes }} of memory"
+  
+  # Business alerts
+  - name: business_alerts
+    interval: 60s
+    rules:
+      - alert: NoOrdersReceived
+        expr: increase(mcp_orders_created_total[1h]) == 0
+        for: 2h
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "No orders received"
+          description: "No new orders have been created in the last 2 hours"
+      
+      - alert: HighOrderFailureRate
+        expr: rate(mcp_orders_created_total{status="failed"}[1h]) / rate(mcp_orders_created_total[1h]) > 0.1
+        for: 30m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "High order failure rate"
+          description: "Order failure rate is {{ $value | humanizePercentage }}"
+      
+      - alert: LowActiveUsers
+        expr: mcp_active_users < 10
+        for: 30m
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "Low number of active users"
+          description: "Only {{ $value }} active users in the system"
+  
+  # Process alerts
+  - name: process_alerts
+    interval: 30s
+    rules:
+      - alert: HighProcessMemory
+        expr: mcp_process_memory_rss_bytes / 1073741824 > 2  # 2GB
+        for: 10m
+        labels:
+          severity: warning
+          component: process
+        annotations:
+          summary: "High process memory usage"
+          description: "Process is using {{ $value | humanizeBytes }} of memory"
+      
+      - alert: TooManyFileDescriptors
+        expr: mcp_process_open_fds > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: process
+        annotations:
+          summary: "Too many open file descriptors"
+          description: "Process has {{ $value }} open file descriptors"

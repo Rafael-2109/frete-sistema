@@ -3,6 +3,7 @@ Utilitários específicos para o workspace de montagem
 """
 
 from datetime import datetime, timedelta
+from app.utils.timezone import agora_brasil
 from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.estoque.models import SaldoEstoque
@@ -39,7 +40,7 @@ def calcular_data_disponibilidade_real(projecao_29_dias, qtd_necessaria):
     """
     try:
         if not projecao_29_dias:
-            return datetime.now().date().isoformat()
+            return agora_brasil().date().isoformat()
 
         # Verificar cada dia da projeção
         for dia_info in projecao_29_dias:
@@ -51,7 +52,7 @@ def calcular_data_disponibilidade_real(projecao_29_dias, qtd_necessaria):
 
     except Exception as e:
         logger.error(f"Erro ao calcular data disponibilidade: {e}")
-        return datetime.now().date().isoformat()
+        return agora_brasil().date().isoformat()
 
 
 def contar_clientes_programados(cod_produto):
@@ -84,7 +85,7 @@ def obter_producao_hoje(cod_produto, resumo_estoque):
             return float(hoje_dados.get('producao_programada', 0))
         
         # Fallback: calcular diretamente do SaldoEstoque
-        hoje = datetime.now().date()
+        hoje = agora_brasil().date()
         producao = SaldoEstoque.calcular_producao_periodo(cod_produto, hoje, hoje)
         return float(producao)
         
@@ -129,7 +130,7 @@ def gerar_alertas_reais(resumo_estoque, cardex_dados):
                 })
 
         # Verificar excesso de estoque
-        estoques_altos = [i for i, dia in enumerate(cardex_dados) if dia['estoque_final'] > 1000]
+        estoques_altos = [i for i, dia in enumerate(cardex_dados) if dia['estoque_final'] > 5000]
         if estoques_altos:
             dia_maior_estoque = max(estoques_altos, key=lambda i: cardex_dados[i]['estoque_final'])
             maior_estoque = cardex_dados[dia_maior_estoque]['estoque_final']
@@ -168,7 +169,7 @@ def processar_dados_workspace_produto(produto, resumo_estoque):
         else:
             # Fallback se não conseguir calcular
             estoque_data_expedicao = float(produto.estoque_hoje or 0)
-            data_disponibilidade = datetime.now().date().isoformat()
+            data_disponibilidade = agora_brasil().date().isoformat()
 
         # Contar clientes programados
         clientes_programados = contar_clientes_programados(produto.cod_produto)

@@ -14,7 +14,7 @@ class ModalCardex {
 
     async abrirCardex(codProduto, dadosProdutos) {
         console.log(`🔍 Abrindo cardex para produto ${codProduto}`);
-        
+
         try {
             // Buscar dados do cardex
             const response = await fetch(`/carteira/api/produto/${codProduto}/cardex`);
@@ -170,10 +170,17 @@ class ModalCardex {
     }
 
     renderizarLinhasCardex(cardex) {
+        console.log('🔍 DEBUG Cardex - Primeiro dia:', cardex[0]);
+        console.log('   - Data original:', cardex[0]?.data);
+        console.log('   - Data convertida:', new Date(cardex[0]?.data));
+        console.log('   - Data com correção:', new Date(cardex[0]?.data + 'T12:00:00'));
+        console.log('   - Data local:', new Date().toLocaleDateString('pt-BR'));
+        console.log('   - Timezone offset:', new Date().getTimezoneOffset());
+
         return cardex.map((dia, index) => {
             const statusClass = this.getStatusClasseCardex(dia);
             const dataFormatada = this.formatarData(dia.data);
-            
+
             return `
                 <tr class="${statusClass.rowClass}">
                     <td><strong>D+${index}</strong></td>
@@ -257,7 +264,12 @@ class ModalCardex {
     }
 
     formatarData(dataStr) {
-        const data = new Date(dataStr);
+        // CORREÇÃO: Adicionar 'T12:00:00' para evitar problemas de timezone
+        // Quando recebemos apenas a data (ex: "2024-07-28"), o JavaScript
+        // pode interpretar como UTC 00:00, que seria o dia anterior no Brasil
+        const dataComHora = dataStr.includes('T') ? dataStr : dataStr + 'T12:00:00';
+        const data = new Date(dataComHora);
+
         return data.toLocaleDateString('pt-BR', {
             day: '2-digit',
             month: '2-digit',
@@ -267,38 +279,38 @@ class ModalCardex {
 
     exportarCardex(codProduto) {
         console.log(`📊 Exportando cardex para produto ${codProduto}`);
-        
+
         // Implementação básica de exportação CSV
         try {
             const modal = document.querySelector('.modal.show');
             const table = modal.querySelector('table');
-            
+
             if (!table) {
                 alert('❌ Dados não encontrados para exportação');
                 return;
             }
-            
+
             // Converter tabela para CSV
             let csv = '';
             const rows = table.querySelectorAll('tr');
-            
+
             rows.forEach(row => {
                 const cols = row.querySelectorAll('th, td');
-                const rowData = Array.from(cols).map(col => 
+                const rowData = Array.from(cols).map(col =>
                     col.textContent.trim().replace(/,/g, ';')
                 ).join(',');
                 csv += rowData + '\n';
             });
-            
+
             // Download do arquivo
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `cardex_${codProduto}_${new Date().toISOString().slice(0,10)}.csv`;
+            link.download = `cardex_${codProduto}_${new Date().toISOString().slice(0, 10)}.csv`;
             link.click();
-            
+
             console.log('✅ Cardex exportado com sucesso');
-            
+
         } catch (error) {
             console.error('❌ Erro ao exportar cardex:', error);
             alert('❌ Erro ao exportar dados');

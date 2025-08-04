@@ -1,0 +1,32 @@
+
+=====================================
+RELATÓRIO DE ANÁLISE DO BANCO DE DADOS
+=====================================
+
+Data: 2025-08-03 22:15:21
+
+RESUMO:
+-------
+- Tabelas no banco local: 109
+- Tabelas no backup Render: 91
+- Tabelas em comum: 91
+- Tabelas faltando no Render: 18
+
+TABELAS FALTANDO NO RENDER:
+batch_operation, cache_update_log, cadastro_cliente, equipe_permission, mcp_confirmation_requests, mcp_entity_mappings, mcp_error_logs, mcp_learning_patterns, mcp_query_history, mcp_user_preferences, permission_log, projecao_estoque_cache, saldo_estoque_cache, sub_module, user_equipe, user_permission_backup, user_vendedor, vendedor_permission
+
+AÇÕES GERADAS NO SCRIPT SQL:
+1. Adicionar colunas faltantes em tabelas críticas
+2. Criar tabelas que não existem no Render
+3. Criar índices para performance
+4. Ajustar sequences
+5. Limpar dados órfãos
+6. Validações de integridade
+
+PRÓXIMOS PASSOS:
+1. Revisar o arquivo 'atualizar_render_database.sql'
+2. Fazer backup do banco no Render
+3. Executar o script SQL no Render
+4. Executar VACUUM ANALYZE após o script
+5. Testar o sistema
+

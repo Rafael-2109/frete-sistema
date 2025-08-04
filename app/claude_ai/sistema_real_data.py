@@ -4,10 +4,9 @@ Busca dados VERDADEIROS do banco - ZERO invenção
 """
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from app import db
 from sqlalchemy import inspect
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ class SistemaRealData:
             from app.cadastros_agendamento.models import ContatoAgendamento
             from app.vinculos.models import CidadeAtendida
             from app.localidades.models import Cidade
-            from app.carteira.models import CarteiraPrincipal, CarteiraCopia, ControleCruzadoSeparacao, InconsistenciaFaturamento, TipoCarga
+            from app.carteira.models import CarteiraPrincipal, ControleCruzadoSeparacao, InconsistenciaFaturamento, TipoCarga
             
             modelos_sistema = {
                 'EntregaMonitorada': EntregaMonitorada,
@@ -54,7 +53,6 @@ class SistemaRealData:
                 'CidadeAtendida': CidadeAtendida,
                 'Cidade': Cidade,
                 'CarteiraPrincipal': CarteiraPrincipal,
-                'CarteiraCopia': CarteiraCopia,
                 'ControleCruzadoSeparacao': ControleCruzadoSeparacao,
                 'InconsistenciaFaturamento': InconsistenciaFaturamento,
                 'TipoCarga': TipoCarga,
@@ -110,7 +108,6 @@ class SistemaRealData:
     def buscar_clientes_reais(self) -> List[str]:
         """Busca lista REAL de clientes do banco"""
         try:
-            from app import create_app
             from app.faturamento.models import RelatorioFaturamentoImportado
             
             # Garantir contexto de aplicação

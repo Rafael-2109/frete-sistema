@@ -41,56 +41,69 @@
                             <div class="col-md-3 mb-3">
                                 <label for="data_inicio">Data Início:</label>
                                 <input type="date" class="form-control" id="data_inicio" name="data_inicio" 
-                                       value="{{ request.args.get('data_inicio', '') }}">
+                                       value="{{ filtros.data_inicio if filtros else request.args.get('data_inicio', '') }}">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="data_fim">Data Fim:</label>
                                 <input type="date" class="form-control" id="data_fim" name="data_fim" 
-                                       value="{{ request.args.get('data_fim', '') }}">
+                                       value="{{ filtros.data_fim if filtros else request.args.get('data_fim', '') }}">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="numero_nf">Número NF:</label>
                                 <input type="text" class="form-control" id="numero_nf" name="numero_nf" 
-                                       placeholder="Ex: 123456" value="{{ request.args.get('numero_nf', '') }}">
+                                       placeholder="Ex: 123456" value="{{ filtros.numero_nf if filtros and filtros.numero_nf else request.args.get('numero_nf', '') }}">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="cod_produto">Código Produto:</label>
                                 <input type="text" class="form-control" id="cod_produto" name="cod_produto" 
-                                       placeholder="Ex: 4320162" value="{{ request.args.get('cod_produto', '') }}">
+                                       placeholder="Ex: 4320162" value="{{ filtros.cod_produto if filtros else request.args.get('cod_produto', '') }}">
                             </div>
                         </div>
                         <div class="row">
                             <div class="col-md-4 mb-3">
                                 <label for="nome_cliente">Cliente:</label>
                                 <input type="text" class="form-control" id="nome_cliente" name="nome_cliente" 
-                                       placeholder="Nome do cliente" value="{{ request.args.get('nome_cliente', '') }}">
+                                       placeholder="Nome do cliente" value="{{ filtros.nome_cliente if filtros else request.args.get('nome_cliente', '') }}">
                             </div>
                             <div class="col-md-2 mb-3">
                                 <label for="estado">UF:</label>
                                 <select class="form-control" id="estado" name="estado">
                                     <option value="">Todos</option>
-                                    {% for uf in ufs_disponiveis %}
-                                    <option value="{{ uf }}" {% if request.args.get('estado') == uf %}selected{% endif %}>{{ uf }}</option>
-                                    {% endfor %}
+                                    {% if ufs_disponiveis %}
+                                        {% for uf in ufs_disponiveis %}
+                                        <option value="{{ uf }}" {% if (filtros and filtros.estado == uf) or request.args.get('estado') == uf %}selected{% endif %}>{{ uf }}</option>
+                                        {% endfor %}
+                                    {% endif %}
                                 </select>
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="vendedor">Vendedor:</label>
                                 <select class="form-control" id="vendedor" name="vendedor">
                                     <option value="">Todos</option>
-                                    {% for v in vendedores_disponiveis %}
-                                    <option value="{{ v }}" {% if request.args.get('vendedor') == v %}selected{% endif %}>{{ v }}</option>
-                                    {% endfor %}
+                                    {% if vendedores_disponiveis %}
+                                        {% for v in vendedores_disponiveis %}
+                                        <option value="{{ v }}" {% if (filtros and filtros.vendedor == v) or request.args.get('vendedor') == v %}selected{% endif %}>{{ v }}</option>
+                                        {% endfor %}
+                                    {% endif %}
                                 </select>
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="incoterm">Incoterm:</label>
                                 <select class="form-control" id="incoterm" name="incoterm">
                                     <option value="">Todos</option>
-                                    {% for inc in incoterms_disponiveis %}
-                                    <option value="{{ inc }}" {% if request.args.get('incoterm') == inc %}selected{% endif %}>{{ inc }}</option>
-                                    {% endfor %}
+                                    {% if incoterms_disponiveis %}
+                                        {% for inc in incoterms_disponiveis %}
+                                        <option value="{{ inc }}" {% if (filtros and filtros.incoterm == inc) or request.args.get('incoterm') == inc %}selected{% endif %}>{{ inc }}</option>
+                                        {% endfor %}
+                                    {% endif %}
                                 </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label for="municipio">Município:</label>
+                                <input type="text" class="form-control" id="municipio" name="municipio" 
+                                       placeholder="Nome do município" value="{{ filtros.municipio if filtros else request.args.get('municipio', '') }}">
                             </div>
                         </div>
                         <div class="row">
@@ -330,14 +343,8 @@ function changePerPage(newPerPage) {
     window.location.href = currentUrl.toString();
 }
 
-// Auto-submit nos filtros de data
-document.getElementById('data_inicio').addEventListener('change', function() {
-    document.getElementById('filtrosForm').submit();
-});
-
-document.getElementById('data_fim').addEventListener('change', function() {
-    document.getElementById('filtrosForm').submit();
-});
+// Remove auto-submit - user will click search button
+// This prevents unwanted submits while typing or selecting
 
 // Função para exportar Excel
 function exportarExcel() {

@@ -30,6 +30,8 @@ try:
     
 except ImportError:
     # Fallback se dependências não disponíveis
+    pass
+
 try:
     from unittest.mock import Mock
 except ImportError:

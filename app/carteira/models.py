@@ -4,11 +4,12 @@
 # TODO: Implementar modelos específicos do módulo carteira conforme necessário 
 
 from app import db
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from app.utils.timezone import agora_brasil
-from sqlalchemy import func, and_, or_, Index
+from sqlalchemy import and_, Index, func
 import logging
 import hashlib
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ class CarteiraPrincipal(db.Model):
     cond_pgto_pedido = db.Column(db.String(100), nullable=True)  # Condições de pagamento
     forma_pgto_pedido = db.Column(db.String(100), nullable=True)  # Forma de pagamento
     incoterm = db.Column(db.String(20), nullable=True)  # Incoterm
-    metodo_entrega_pedido = db.Column(db.String(50), nullable=True)  # Método de entrega
+    metodo_entrega_pedido = db.Column(db.String(100), nullable=True)  # Método de entrega - aumentado de 50 para 100
     data_entrega_pedido = db.Column(db.Date, nullable=True)  # Data de entrega
     cliente_nec_agendamento = db.Column(db.String(10), nullable=True)  # Sim/Não
     observ_ped_1 = db.Column(db.Text, nullable=True)  # Observações
@@ -71,7 +72,7 @@ class CarteiraPrincipal(db.Model):
     bairro_endereco_ent = db.Column(db.String(100), nullable=True)  # Bairro
     rua_endereco_ent = db.Column(db.String(255), nullable=True)  # Rua
     endereco_ent = db.Column(db.String(20), nullable=True)  # Número
-    telefone_endereco_ent = db.Column(db.String(20), nullable=True)  # Telefone
+    telefone_endereco_ent = db.Column(db.String(50), nullable=True)  # Telefone - aumentado de 20 para 50
     
     # 📅 DADOS OPERACIONAIS (PRESERVADOS na atualização)
     expedicao = db.Column(db.Date, nullable=True)  # Data prevista expedição  
@@ -191,8 +192,8 @@ class CarteiraCopia(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     
     # 🆔 CHAVES PRIMÁRIAS DE NEGÓCIO (iguais à principal)
-    num_pedido = db.Column(db.String(50), nullable=False, index=True)
-    cod_produto = db.Column(db.String(50), nullable=False, index=True)
+    num_pedido = db.Column(db.String(50), nullable=False, index=True) #Campo "NUMERO DO PEDIDO DO REPRESENTANTE"
+    cod_produto = db.Column(db.String(50), nullable=False, index=True) #Campo "CÓDIGO" ou "Codigo"
     
     # 📋 DADOS MESTRES (sincronizados com principal)
     pedido_cliente = db.Column(db.String(100), nullable=True)
@@ -221,7 +222,7 @@ class CarteiraCopia(db.Model):
     cond_pgto_pedido = db.Column(db.String(100), nullable=True)
     forma_pgto_pedido = db.Column(db.String(100), nullable=True)
     incoterm = db.Column(db.String(20), nullable=True)
-    metodo_entrega_pedido = db.Column(db.String(50), nullable=True)
+    metodo_entrega_pedido = db.Column(db.String(100), nullable=True)
     data_entrega_pedido = db.Column(db.Date, nullable=True)
     cliente_nec_agendamento = db.Column(db.String(10), nullable=True)
     observ_ped_1 = db.Column(db.Text, nullable=True)
@@ -236,10 +237,10 @@ class CarteiraCopia(db.Model):
     bairro_endereco_ent = db.Column(db.String(100), nullable=True)
     rua_endereco_ent = db.Column(db.String(255), nullable=True)
     endereco_ent = db.Column(db.String(20), nullable=True)
-    telefone_endereco_ent = db.Column(db.String(20), nullable=True)
+    telefone_endereco_ent = db.Column(db.String(50), nullable=True)
     
     # 💰 CONTROLE DE FATURAMENTO (ESPECÍFICO DA CÓPIA)
-    baixa_produto_pedido = db.Column(db.Numeric(15, 3), default=0, nullable=False)  # ⭐ CAMPO CHAVE
+    _baixa_produto_pedido_old = db.Column('baixa_produto_pedido', db.Numeric(15, 3), default=0, nullable=False)  # Campo legado
     qtd_saldo_produto_calculado = db.Column(db.Numeric(15, 3), nullable=False)  # Calculado: qtd - cancelado - baixa
     
     # 🛡️ AUDITORIA
@@ -256,16 +257,57 @@ class CarteiraCopia(db.Model):
         Index('idx_copia_saldo_calculado', 'qtd_saldo_produto_calculado'),
     )
 
+    @property
+    def baixa_produto_pedido(self):
+        """
+        Calcula dinamicamente a baixa do produto baseada em FaturamentoProduto
+        Soma todas as quantidades faturadas onde:
+        - origem = num_pedido
+        - cod_produto = cod_produto
+        """
+        from app.faturamento.models import FaturamentoProduto
+        
+        total_baixa = db.session.query(
+            func.sum(FaturamentoProduto.qtd_produto_faturado)
+        ).filter(
+            FaturamentoProduto.origem == self.num_pedido,
+            FaturamentoProduto.cod_produto == self.cod_produto
+        ).scalar()
+        
+        return float(total_baixa or 0)
+
     def __repr__(self):
         return f'<CarteiraCopia {self.num_pedido} - {self.cod_produto} - Baixa: {self.baixa_produto_pedido}>'
 
     def recalcular_saldo(self):
         """Recalcula saldo baseado nas quantidades atuais"""
-        self.qtd_saldo_produto_calculado = (
+        # Agora usa a property calculada dinamicamente
+        self.qtd_saldo_produto_calculado = float(
             self.qtd_produto_pedido - 
             self.qtd_cancelada_produto_pedido - 
-            self.baixa_produto_pedido
+            self.baixa_produto_pedido  # Usa property calculada dinamicamente
         )
+    
+    def sincronizar_com_principal(self):
+        """
+        Sincroniza qtd_saldo_produto_pedido da CarteiraPrincipal
+        para pedidos que NÃO começam com VCD, VFB ou VSC
+        """
+        # Verifica se é um pedido que deve ser sincronizado
+        prefixos_excluidos = ('VCD', 'VFB', 'VSC')
+        if self.num_pedido.startswith(prefixos_excluidos):
+            return  # Não sincroniza estes tipos
+        
+        # Busca CarteiraPrincipal correspondente
+        carteira_principal = CarteiraPrincipal.query.filter_by(
+            num_pedido=self.num_pedido,
+            cod_produto=self.cod_produto
+        ).first()
+        
+        if carteira_principal:
+            # Sincroniza o saldo calculado
+            carteira_principal.qtd_saldo_produto_pedido = self.qtd_saldo_produto_calculado
+            logger.info(f"Sincronizado CarteiraPrincipal {self.num_pedido}/{self.cod_produto}: saldo={self.qtd_saldo_produto_calculado}")
 
 class ControleCruzadoSeparacao(db.Model):
     """
@@ -621,7 +663,7 @@ class PreSeparacaoItem(db.Model):
     tipo_envio = db.Column(db.String(10), default='total')  # total, parcial
     
     # Auditoria
-    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_criacao = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     criado_por = db.Column(db.String(100))
     
     # ✅ CONSTRAINT ÚNICA COMPOSTA - Sistema de contexto único
@@ -694,7 +736,7 @@ class PreSeparacaoItem(db.Model):
     def marcar_como_recomposto(self, usuario):
         """Marca item como recomposto após sincronização Odoo"""
         self.recomposto = True
-        self.data_recomposicao = datetime.utcnow()
+        self.data_recomposicao = datetime.now(timezone.utc)
         self.recomposto_por = usuario
         self.status = 'RECOMPOSTO'
     
@@ -707,21 +749,18 @@ class PreSeparacaoItem(db.Model):
             if self.hash_item_original != novo_hash:
                 logger.warning(f"Item {self.num_pedido}-{self.cod_produto} foi alterado no Odoo")
             
-            # Aplicar divisão na carteira
-            if float(self.qtd_selecionada_usuario) < float(carteira_item.qtd_saldo_produto_pedido):
-                # Criar nova linha com o saldo
-                self._criar_linha_saldo_carteira(carteira_item)
-                
-                # Atualizar linha original
-                carteira_item.qtd_saldo_produto_pedido = self.qtd_selecionada_usuario
-                
-                # Aplicar dados editáveis preservados
-                if self.data_expedicao_editada:
-                    carteira_item.expedicao = self.data_expedicao_editada
-                if self.data_agendamento_editada:
-                    carteira_item.agendamento = self.data_agendamento_editada  
-                if self.protocolo_editado:
-                    carteira_item.protocolo = self.protocolo_editado
+            # NÃO criar linha de saldo - manter apenas uma linha por pedido/produto
+            # O saldo disponível será calculado dinamicamente:
+            # saldo_disponivel = qtd_carteira - soma(pre_separacoes) - soma(separacoes)
+            
+            # Aplicar dados editáveis preservados na pré-separação
+            if self.data_expedicao_editada:
+                # Dados ficam na pré-separação, não na carteira
+                logger.info(f"Data expedição preservada na pré-separação: {self.data_expedicao_editada}")
+            if self.data_agendamento_editada:
+                logger.info(f"Data agendamento preservada na pré-separação: {self.data_agendamento_editada}")
+            if self.protocolo_editado:
+                logger.info(f"Protocolo preservado na pré-separação: {self.protocolo_editado}")
                     
             # Marcar como recomposto
             self.marcar_como_recomposto(usuario)
@@ -732,23 +771,6 @@ class PreSeparacaoItem(db.Model):
         except Exception as e:
             logger.error(f"❌ Erro ao recompor item {self.num_pedido}-{self.cod_produto}: {e}")
             return False
-    
-    def _criar_linha_saldo_carteira(self, carteira_item):
-        """Cria nova linha na carteira com saldo restante"""
-        from .models import CarteiraPrincipal
-        
-                         # Criar nova linha copiando campos do item original
-        nova_linha = CarteiraPrincipal()
-        for column in CarteiraPrincipal.__table__.columns:
-            if column.name not in ['id']:
-                if hasattr(carteira_item, column.name):
-                    setattr(nova_linha, column.name, getattr(carteira_item, column.name))
-        
-        # Sobrescrever quantidade com saldo restante
-        nova_linha.qtd_saldo_produto_pedido = self.qtd_restante_calculada
-        
-        db.session.add(nova_linha)
-        logger.info(f"➕ Criada linha com saldo: {self.qtd_restante_calculada}")
     
     # ===== MÉTODOS DE CLASSE (QUERIES) =====
     
@@ -812,7 +834,7 @@ class PreSeparacaoItem(db.Model):
                 and_(
                     CarteiraPrincipal.num_pedido == pre_sep.num_pedido,
                     CarteiraPrincipal.cod_produto == pre_sep.cod_produto,
-                    CarteiraPrincipal.cnpj_cliente == pre_sep.cnpj_cliente
+                    CarteiraPrincipal.cnpj_cpf == pre_sep.cnpj_cliente  # Corrigido: cnpj_cpf ao invés de cnpj_cliente
                 )
             ).first()
             
@@ -866,9 +888,9 @@ class PreSeparacaoItem(db.Model):
             # Adicionar configuração de envio parcial se necessário
             if tipo_envio == 'parcial' and config_parcial:
                 observacoes_parcial = f"ENVIO PARCIAL - Motivo: {config_parcial.get('motivo', 'N/A')} | " \
-                                    f"Justificativa: {config_parcial.get('justificativa', 'N/A')} | " \
-                                    f"Previsão Complemento: {config_parcial.get('previsao_complemento', 'N/A')} | " \
-                                    f"Responsável: {config_parcial.get('responsavel_aprovacao', 'N/A')}"
+                                     f"Justificativa: {config_parcial.get('justificativa', 'N/A')} | " \
+                                     f"Previsão Complemento: {config_parcial.get('previsao_complemento', 'N/A')} | " \
+                                     f"Responsável: {config_parcial.get('responsavel_aprovacao', 'N/A')}"
                 
                 if pre_separacao.observacoes_usuario:
                     pre_separacao.observacoes_usuario += f"\n{observacoes_parcial}"
@@ -924,7 +946,8 @@ class PreSeparacaoItem(db.Model):
             
             if carteira_item and carteira_item.qtd_saldo_produto_pedido and qtd_restante > 0:
                 qtd_consumida_saldo = min(float(carteira_item.qtd_saldo_produto_pedido), qtd_restante)
-                carteira_item.qtd_saldo_produto_pedido -= qtd_consumida_saldo
+                # Converter para Decimal antes de subtrair para evitar erro de tipo
+                carteira_item.qtd_saldo_produto_pedido = Decimal(str(float(carteira_item.qtd_saldo_produto_pedido) - qtd_consumida_saldo))
                 qtd_restante -= qtd_consumida_saldo
                 log_operacoes.append(f"Saldo livre reduzido em {qtd_consumida_saldo}")
             
@@ -941,7 +964,8 @@ class PreSeparacaoItem(db.Model):
                         break
                     
                     qtd_consumida_pre = min(float(pre_sep.qtd_selecionada_usuario), qtd_restante)
-                    pre_sep.qtd_selecionada_usuario -= qtd_consumida_pre
+                    # Converter para Decimal antes de subtrair
+                    pre_sep.qtd_selecionada_usuario = Decimal(str(float(pre_sep.qtd_selecionada_usuario) - qtd_consumida_pre))
                     qtd_restante -= qtd_consumida_pre
                     log_operacoes.append(f"Pré-separação ID:{pre_sep.id} reduzida em {qtd_consumida_pre}")
                     
@@ -969,7 +993,8 @@ class PreSeparacaoItem(db.Model):
                             break
                         
                         qtd_consumida_sep = min(float(separacao.qtd_saldo or 0), qtd_restante)
-                        separacao.qtd_saldo -= qtd_consumida_sep
+                        # Converter para Decimal antes de subtrair
+                        separacao.qtd_saldo = Decimal(str(float(separacao.qtd_saldo or 0) - qtd_consumida_sep))
                         qtd_restante -= qtd_consumida_sep
                         log_operacoes.append(f"Separação ABERTO {separacao.separacao_lote_id} reduzida em {qtd_consumida_sep}")
                         
@@ -1002,7 +1027,8 @@ class PreSeparacaoItem(db.Model):
                                 break
                             
                             qtd_consumida_cotado = min(float(separacao.qtd_saldo or 0), qtd_restante)
-                            separacao.qtd_saldo -= qtd_consumida_cotado
+                            # Converter para Decimal antes de subtrair
+                            separacao.qtd_saldo = Decimal(str(float(separacao.qtd_saldo or 0) - qtd_consumida_cotado))
                             qtd_restante -= qtd_consumida_cotado
                             log_operacoes.append(f"🚨 CRÍTICO: Separação COTADA {separacao.separacao_lote_id} reduzida em {qtd_consumida_cotado}")
                             
@@ -1046,7 +1072,8 @@ class PreSeparacaoItem(db.Model):
                 
                 if pre_sep_unica:
                     # ATUALIZAR pré-separação única
-                    pre_sep_unica.qtd_selecionada_usuario += float(qtd_aumentada)
+                    # Converter para Decimal antes de somar
+                    pre_sep_unica.qtd_selecionada_usuario = Decimal(str(float(pre_sep_unica.qtd_selecionada_usuario) + float(qtd_aumentada)))
                     db.session.commit()
                     
                     logger.info(f"✅ Pré-separação TOTAL atualizada: {pre_sep_unica.id} +{qtd_aumentada}")
@@ -1061,8 +1088,7 @@ class PreSeparacaoItem(db.Model):
                     from app.separacao.models import Separacao
                     separacao_unica = Separacao.query.filter(
                         Separacao.num_pedido == num_pedido,
-                        Separacao.cod_produto == cod_produto,
-                        Separacao.ativo == True
+                        Separacao.cod_produto == cod_produto
                     ).first()
                     
                     if separacao_unica:
@@ -1086,7 +1112,8 @@ class PreSeparacaoItem(db.Model):
             ).first()
             
             if carteira_item:
-                carteira_item.qtd_saldo_produto_pedido += float(qtd_aumentada)
+                # Converter para Decimal antes de somar
+                carteira_item.qtd_saldo_produto_pedido = Decimal(str(float(carteira_item.qtd_saldo_produto_pedido) + float(qtd_aumentada)))
                 db.session.commit()
                 
                 logger.info(f"✅ Saldo livre criado: {num_pedido}-{cod_produto} +{qtd_aumentada}")
@@ -1126,8 +1153,7 @@ class PreSeparacaoItem(db.Model):
             try:
                 from app.separacao.models import Separacao
                 query_sep = Separacao.query.filter(
-                    Separacao.num_pedido == num_pedido,
-                    Separacao.ativo == True
+                    Separacao.num_pedido == num_pedido
                 )
                 if cod_produto:
                     query_sep = query_sep.filter(Separacao.cod_produto == cod_produto)
@@ -1162,7 +1188,7 @@ class PreSeparacaoItem(db.Model):
                 'quantidade_afetada': qtd_afetada,
                 'motivo': motivo,
                 'separacoes_afetadas': [s.separacao_lote_id for s in separacoes],
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(timezone.utc),
                 'mensagem': f'🚨 URGENTE: {len(separacoes)} separação(ões) COTADA(s) afetada(s) por {motivo}',
                 'acao_requerida': 'Verificar impacto no processo físico imediatamente'
             }
@@ -1174,3 +1200,114 @@ class PreSeparacaoItem(db.Model):
             
         except Exception as e:
             logger.error(f"❌ Erro ao gerar alerta: {e}")
+
+
+class CadastroCliente(db.Model):
+    """
+    Modelo para cadastro de clientes não-Odoo
+    Utilizado para complementar informações na importação de pedidos não-Odoo
+    """
+    __tablename__ = 'cadastro_cliente'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Chave principal - CNPJ/CPF
+    cnpj_cpf = db.Column(db.String(20), nullable=False, unique=True, index=True)
+    
+    # Dados básicos do cliente
+    raz_social = db.Column(db.String(255), nullable=False)  # Razão social
+    raz_social_red = db.Column(db.String(100), nullable=True)  # Nome fantasia
+    
+    # Localização
+    municipio = db.Column(db.String(100), nullable=False)
+    estado = db.Column(db.String(2), nullable=False)
+    
+    # Dados comerciais
+    vendedor = db.Column(db.String(100), nullable=True)
+    equipe_vendas = db.Column(db.String(100), nullable=True)
+    
+    # Endereço de entrega padrão
+    cnpj_endereco_ent = db.Column(db.String(20), nullable=True)
+    empresa_endereco_ent = db.Column(db.String(255), nullable=True)  # Nome fantasia do endereço
+    cep_endereco_ent = db.Column(db.String(10), nullable=True)
+    nome_cidade = db.Column(db.String(100), nullable=True)
+    cod_uf = db.Column(db.String(2), nullable=True)
+    bairro_endereco_ent = db.Column(db.String(100), nullable=True)
+    rua_endereco_ent = db.Column(db.String(255), nullable=True)
+    endereco_ent = db.Column(db.String(20), nullable=True)  # Número
+    telefone_endereco_ent = db.Column(db.String(50), nullable=True)
+    
+    # Flags de controle
+    endereco_mesmo_cliente = db.Column(db.Boolean, default=True)  # Se endereço de entrega é o mesmo do cliente
+    cliente_ativo = db.Column(db.Boolean, default=True)
+    
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_por = db.Column(db.String(100), nullable=True)
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
+    atualizado_por = db.Column(db.String(100), nullable=True)
+    
+    # Índices
+    __table_args__ = (
+        Index('idx_cadastro_cliente_vendedor', 'vendedor'),
+        Index('idx_cadastro_cliente_equipe', 'equipe_vendas'),
+        Index('idx_cadastro_cliente_municipio', 'municipio', 'estado'),
+    )
+    
+    def __repr__(self):
+        return f'<CadastroCliente {self.cnpj_cpf} - {self.raz_social_red or self.raz_social}>'
+    
+    def to_dict(self):
+        """Converte para dicionário para APIs"""
+        return {
+            'id': self.id,
+            'cnpj_cpf': self.cnpj_cpf,
+            'raz_social': self.raz_social,
+            'raz_social_red': self.raz_social_red,
+            'municipio': self.municipio,
+            'estado': self.estado,
+            'vendedor': self.vendedor,
+            'equipe_vendas': self.equipe_vendas,
+            'cnpj_endereco_ent': self.cnpj_endereco_ent,
+            'empresa_endereco_ent': self.empresa_endereco_ent,
+            'cep_endereco_ent': self.cep_endereco_ent,
+            'nome_cidade': self.nome_cidade,
+            'cod_uf': self.cod_uf,
+            'bairro_endereco_ent': self.bairro_endereco_ent,
+            'rua_endereco_ent': self.rua_endereco_ent,
+            'endereco_ent': self.endereco_ent,
+            'telefone_endereco_ent': self.telefone_endereco_ent,
+            'endereco_mesmo_cliente': self.endereco_mesmo_cliente,
+            'cliente_ativo': self.cliente_ativo
+        }
+    
+    @staticmethod
+    def limpar_cnpj(cnpj):
+        """Remove formatação do CNPJ/CPF"""
+        if not cnpj:
+            return None
+        return ''.join(filter(str.isdigit, str(cnpj)))
+    
+    @staticmethod
+    def formatar_cnpj(cnpj):
+        """Formata CNPJ/CPF com máscara"""
+        cnpj = CadastroCliente.limpar_cnpj(cnpj)
+        if not cnpj:
+            return None
+            
+        # CNPJ: 14 dígitos
+        if len(cnpj) == 14:
+            return f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}"
+        # CPF: 11 dígitos
+        elif len(cnpj) == 11:
+            return f"{cnpj[:3]}.{cnpj[3:6]}.{cnpj[6:9]}-{cnpj[9:]}"
+        else:
+            return cnpj
+    
+    def aplicar_endereco_cliente(self):
+        """Aplica endereço do cliente como endereço de entrega"""
+        self.cnpj_endereco_ent = self.cnpj_cpf
+        self.empresa_endereco_ent = self.raz_social_red or self.raz_social
+        self.nome_cidade = self.municipio
+        self.cod_uf = self.estado
+        self.endereco_mesmo_cliente = True

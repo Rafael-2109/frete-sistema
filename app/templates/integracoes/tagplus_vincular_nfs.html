@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+
+{% block title %}Vincular NFs TagPlus{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">
+                <i class="fas fa-link"></i> Vincular NFs TagPlus sem Separação
+            </h1>
+            
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> 
+                Esta interface permite vincular manualmente as NFs importadas do TagPlus que não foram automaticamente 
+                associadas a uma separação através do sistema de score.
+            </div>
+
+            <!-- Filtros -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-filter"></i> Filtros
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label>Número NF</label>
+                            <input type="text" class="form-control" id="filtro-nf" placeholder="Digite o número">
+                        </div>
+                        <div class="col-md-3">
+                            <label>CNPJ Cliente</label>
+                            <input type="text" class="form-control" id="filtro-cnpj" placeholder="Digite o CNPJ">
+                        </div>
+                        <div class="col-md-3">
+                            <label>Data Inicial</label>
+                            <input type="date" class="form-control" id="filtro-data-inicio">
+                        </div>
+                        <div class="col-md-3">
+                            <label>Data Final</label>
+                            <input type="date" class="form-control" id="filtro-data-fim">
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <button class="btn btn-primary" onclick="aplicarFiltros()">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            <button class="btn btn-secondary" onclick="limparFiltros()">
+                                <i class="fas fa-times"></i> Limpar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lista de NFs -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-invoice"></i> 
+                        NFs Sem Separação Vinculada
+                        <span class="badge badge-secondary" id="total-nfs">{{ nfs_sem_separacao|length }}</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="tabela-nfs">
+                            <thead>
+                                <tr>
+                                    <th>NF</th>
+                                    <th>Data</th>
+                                    <th>CNPJ</th>
+                                    <th>Cliente</th>
+                                    <th>Produtos</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for nf in nfs_sem_separacao %}
+                                <tr class="nf-row" 
+                                    data-nf="{{ nf.numero_nf }}"
+                                    data-cnpj="{{ nf.cnpj_cliente }}"
+                                    data-data="{{ nf.data_fatura.strftime('%Y-%m-%d') }}">
+                                    <td>
+                                        <strong>{{ nf.numero_nf }}</strong>
+                                    </td>
+                                    <td>{{ nf.data_fatura.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ nf.cnpj_cliente }}</td>
+                                    <td>{{ nf.nome_cliente }}</td>
+                                    <td>
+                                        <ul class="list-unstyled mb-0">
+                                            {% for item in nf.itens %}
+                                            <li>
+                                                <small>
+                                                    {{ item.cod_produto }} - {{ item.nome_produto }}
+                                                    (Qtd: {{ item.quantidade }})
+                                                </small>
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" 
+                                                onclick="abrirModalVinculacao('{{ nf.numero_nf }}')">
+                                            <i class="fas fa-link"></i> Vincular
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Vinculação -->
+<div class="modal fade" id="modalVinculacao" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-link"></i> Vincular NF <span id="modal-nf-numero"></span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Produtos da NF -->
+                <div class="alert alert-info mb-3">
+                    <h6><i class="fas fa-file-invoice"></i> Produtos da NF:</h6>
+                    <div id="produtos-nf-lista"></div>
+                </div>
+
+                <!-- Embarques Candidatos -->
+                <h6><i class="fas fa-truck"></i> Embarques Candidatos</h6>
+                <div class="text-muted mb-2">
+                    Selecione o embarque que corresponde a esta NF:
+                </div>
+                
+                <div id="loading-candidatos" class="text-center py-3" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="sr-only">Carregando...</span>
+                    </div>
+                </div>
+
+                <div id="candidatos-container" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Selecionar</th>
+                                    <th>Pedido</th>
+                                    <th>Produto</th>
+                                    <th>Quantidade</th>
+                                    <th>Lote</th>
+                                    <th>Embarque</th>
+                                    <th>Erro Validação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="candidatos-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="sem-candidatos" class="alert alert-warning" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    Nenhum embarque candidato encontrado para este CNPJ com os critérios necessários.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-confirmar-vinculo" 
+                        onclick="confirmarVinculacao()" disabled>
+                    <i class="fas fa-check"></i> Confirmar Vinculação
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let nfAtual = null;
+let embarqueSelecionado = null;
+
+// Filtros
+function aplicarFiltros() {
+    const filtroNf = document.getElementById('filtro-nf').value.toLowerCase();
+    const filtroCnpj = document.getElementById('filtro-cnpj').value.toLowerCase();
+    const filtroDataInicio = document.getElementById('filtro-data-inicio').value;
+    const filtroDataFim = document.getElementById('filtro-data-fim').value;
+    
+    const rows = document.querySelectorAll('.nf-row');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        const nf = row.dataset.nf.toLowerCase();
+        const cnpj = row.dataset.cnpj.toLowerCase();
+        const data = row.dataset.data;
+        
+        let mostrar = true;
+        
+        if (filtroNf && !nf.includes(filtroNf)) {
+            mostrar = false;
+        }
+        
+        if (filtroCnpj && !cnpj.includes(filtroCnpj)) {
+            mostrar = false;
+        }
+        
+        if (filtroDataInicio && data < filtroDataInicio) {
+            mostrar = false;
+        }
+        
+        if (filtroDataFim && data > filtroDataFim) {
+            mostrar = false;
+        }
+        
+        row.style.display = mostrar ? '' : 'none';
+        if (mostrar) visibleCount++;
+    });
+    
+    document.getElementById('total-nfs').textContent = visibleCount;
+}
+
+function limparFiltros() {
+    document.getElementById('filtro-nf').value = '';
+    document.getElementById('filtro-cnpj').value = '';
+    document.getElementById('filtro-data-inicio').value = '';
+    document.getElementById('filtro-data-fim').value = '';
+    aplicarFiltros();
+}
+
+// Modal de vinculação
+function abrirModalVinculacao(numeroNf) {
+    nfAtual = numeroNf;
+    embarqueSelecionado = null;
+    
+    document.getElementById('modal-nf-numero').textContent = numeroNf;
+    document.getElementById('btn-confirmar-vinculo').disabled = true;
+    
+    // Limpa estados anteriores
+    document.getElementById('produtos-nf-lista').innerHTML = '';
+    document.getElementById('candidatos-tbody').innerHTML = '';
+    document.getElementById('loading-candidatos').style.display = 'block';
+    document.getElementById('candidatos-container').style.display = 'none';
+    document.getElementById('sem-candidatos').style.display = 'none';
+    
+    $('#modalVinculacao').modal('show');
+    
+    // Busca candidatos
+    buscarEmbarquesCandidatos(numeroNf);
+}
+
+function buscarEmbarquesCandidatos(numeroNf) {
+    fetch('/integracoes/tagplus/api/buscar-embarques-candidatos', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ numero_nf: numeroNf })
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('loading-candidatos').style.display = 'none';
+        
+        if (data.success) {
+            // Mostra produtos da NF
+            let produtosHtml = '<ul class="mb-0">';
+            data.produtos_nf.forEach(prod => {
+                produtosHtml += `<li>${prod.cod_produto} - ${prod.nome_produto} (Qtd: ${prod.quantidade})</li>`;
+            });
+            produtosHtml += '</ul>';
+            document.getElementById('produtos-nf-lista').innerHTML = produtosHtml;
+            
+            // Mostra candidatos
+            if (data.candidatos.length > 0) {
+                document.getElementById('candidatos-container').style.display = 'block';
+                
+                let tbody = '';
+                data.candidatos.forEach(cand => {
+                    // Verifica se o produto está na NF
+                    const produtoNaNf = data.produtos_nf.some(p => p.cod_produto === cand.cod_produto);
+                    const rowClass = produtoNaNf ? 'table-success' : '';
+                    
+                    tbody += `
+                        <tr class="${rowClass}">
+                            <td>
+                                <input type="radio" name="embarque-candidato" 
+                                       value="${cand.id}"
+                                       onchange="selecionarEmbarque(${cand.id})">
+                            </td>
+                            <td>${cand.num_pedido}</td>
+                            <td>
+                                ${cand.cod_produto} - ${cand.nome_produto}
+                                ${produtoNaNf ? '<span class="badge badge-success">Produto correspondente</span>' : ''}
+                            </td>
+                            <td>${cand.qtd_separada}</td>
+                            <td>${cand.separacao_lote_id}</td>
+                            <td>#${cand.embarque_id}</td>
+                            <td><small>${cand.erro_validacao || '-'}</small></td>
+                        </tr>
+                    `;
+                });
+                
+                document.getElementById('candidatos-tbody').innerHTML = tbody;
+            } else {
+                document.getElementById('sem-candidatos').style.display = 'block';
+            }
+        } else {
+            alert('Erro ao buscar candidatos: ' + data.message);
+        }
+    })
+    .catch(error => {
+        document.getElementById('loading-candidatos').style.display = 'none';
+        alert('Erro ao buscar candidatos: ' + error);
+    });
+}
+
+function selecionarEmbarque(embarqueItemId) {
+    embarqueSelecionado = embarqueItemId;
+    document.getElementById('btn-confirmar-vinculo').disabled = false;
+}
+
+function confirmarVinculacao() {
+    if (!nfAtual || !embarqueSelecionado) {
+        alert('Selecione um embarque para vincular');
+        return;
+    }
+    
+    if (!confirm(`Confirmar vinculação da NF ${nfAtual} ao embarque selecionado?`)) {
+        return;
+    }
+    
+    const btn = document.getElementById('btn-confirmar-vinculo');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vinculando...';
+    
+    fetch('/integracoes/tagplus/api/vincular-nf-embarque', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            numero_nf: nfAtual,
+            embarque_item_id: embarqueSelecionado
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            $('#modalVinculacao').modal('hide');
+            // Recarrega a página para atualizar a lista
+            window.location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Vinculação';
+        }
+    })
+    .catch(error => {
+        alert('Erro ao vincular: ' + error);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Vinculação';
+    });
+}
+
+// Inicialização
+document.addEventListener('DOMContentLoaded', function() {
+    // Adiciona eventos de enter nos filtros
+    document.getElementById('filtro-nf').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') aplicarFiltros();
+    });
+    
+    document.getElementById('filtro-cnpj').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') aplicarFiltros();
+    });
+});
+</script>
+
+<style>
+.table-success {
+    background-color: #d4edda !important;
+}
+
+.nf-row {
+    cursor: pointer;
+}
+
+.nf-row:hover {
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}

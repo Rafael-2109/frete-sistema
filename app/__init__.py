@@ -149,14 +149,15 @@ def create_app(config_name=None):
     @app.errorhandler(CSRFError)
     def handle_csrf_error(error):
         """Handler específico para erros de CSRF"""
-        from flask import render_template, request, flash, redirect, url_for
+        from flask import request, flash, redirect, url_for
         
         # Log do erro CSRF para análise
         try:
             from app.utils.logging_config import logger
             logger.warning(f"🔒 ERRO CSRF: {error.description} | Rota: {request.path} | "
                           f"Método: {request.method} | User-Agent: {request.headers.get('User-Agent', 'Unknown')[:50]}...")
-        except:
+        except Exception as e:
+            print(f"Erro ao logar erro CSRF: {e}")
             pass
         
         # Para requisições AJAX, retorna JSON
@@ -299,7 +300,8 @@ def create_app(config_name=None):
             # Em caso de erro, retorna o valor original como string
             try:
                 return str(data) if data else ''
-            except:
+            except Exception as e:
+                print(f"Erro ao formatar data: {e}")
                 return ''
     
     app.jinja_env.filters['formatar_data_brasil'] = formatar_data_brasil
@@ -432,12 +434,13 @@ def create_app(config_name=None):
 
     @login_manager.user_loader
     def load_user(user_id):
-        from app.auth.models import Usuario
         return Usuario.query.get(int(user_id))
 
     # Registra comandos CLI apenas se existirem
     try:
-        from app.cli import normalizar_dados, atualizar_ibge, limpar_cache_localizacao, validar_localizacao, diagnosticar_vinculos, corrigir_vinculos_grupo, importar_cidades_cli
+        from app.cli import (normalizar_dados, atualizar_ibge, limpar_cache_localizacao, 
+                            validar_localizacao, diagnosticar_vinculos, corrigir_vinculos_grupo, 
+                            importar_cidades_cli, inicializar_cache_estoque, atualizar_cache_estoque)
         app.cli.add_command(normalizar_dados)
         app.cli.add_command(atualizar_ibge)
         app.cli.add_command(limpar_cache_localizacao)
@@ -445,6 +448,8 @@ def create_app(config_name=None):
         app.cli.add_command(diagnosticar_vinculos)
         app.cli.add_command(corrigir_vinculos_grupo)
         app.cli.add_command(importar_cidades_cli)
+        app.cli.add_command(inicializar_cache_estoque)
+        app.cli.add_command(atualizar_cache_estoque)
         
         # REMOVIDO: criar_vinculos_faltantes (função perigosa que criava vínculos automaticamente)
     except ImportError as e:
@@ -454,6 +459,8 @@ def create_app(config_name=None):
     from app.auth.routes import auth_bp
     from app.embarques.routes import embarques_bp
     from app.faturamento.routes import faturamento_bp
+    from app.faturamento.api.atualizar_nf_api import atualizar_nf_bp
+    from app.faturamento.api.inconsistencias_api import inconsistencias_bp
     from app.localidades.routes import localidades_bp
     from app.main.routes import main_bp
     from app.monitoramento.routes import monitoramento_bp
@@ -476,13 +483,24 @@ def create_app(config_name=None):
     
     # 📦 Importando blueprints dos módulos de carteira (seguindo padrão existente)
     from app.carteira.routes import carteira_bp
+    from app.carteira.routes.alertas_api import alertas_bp
     from app.estoque.routes import estoque_bp
     from app.producao.routes import producao_bp
+    from app.permissions.routes import permissions_bp
+    from app.permissions.api import permissions_api
+    
+    # Integrações
+    from app.integracoes.tagplus.routes import tagplus_bp
+    
+    # MCP Logistica
+    from app.mcp_logistica.flask_integration import mcp_logistica_bp, init_mcp_logistica
 
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(embarques_bp)
     app.register_blueprint(faturamento_bp)
+    app.register_blueprint(atualizar_nf_bp)
+    app.register_blueprint(inconsistencias_bp)
     app.register_blueprint(localidades_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(monitoramento_bp)
@@ -497,7 +515,8 @@ def create_app(config_name=None):
     app.register_blueprint(pedidos_bp)
     app.register_blueprint(cotacao_bp)
     app.register_blueprint(portaria_bp)
-    
+    app.register_blueprint(permissions_api)
+
     # 🆕 API REST para funcionalidades MCP
     app.register_blueprint(api_bp)
     
@@ -509,8 +528,6 @@ def create_app(config_name=None):
     app.register_blueprint(claude_ai_bp)
     
     # 🔐 Sistema de Permissões
-    from app.permissions import init_app as init_permissions
-    init_permissions(app)
     
     # 🎭 Registrar helpers de permissão nos templates
     @app.context_processor
@@ -526,15 +543,27 @@ def create_app(config_name=None):
         except Exception as e:
             app.logger.error(f"Erro ao registrar helpers de permissão: {e}")
             return {
-                'user_can_access': lambda *args: False,
+                'user_can_access': can_access,
                 'user_is_admin': lambda: False,
                 'user_level': lambda: 0
             }
     
     # 📦 Módulos de Carteira de Pedidos
     app.register_blueprint(carteira_bp)
+    app.register_blueprint(alertas_bp)
     app.register_blueprint(estoque_bp)
     app.register_blueprint(producao_bp)
+    app.register_blueprint(permissions_bp)
+
+    # 🚀 MCP Logistica
+    app.register_blueprint(mcp_logistica_bp)
+    init_mcp_logistica(app)
+    
+    # 🔗 Integração TagPlus
+    from app.integracoes.tagplus.routes import tagplus_bp
+    from app.integracoes.tagplus.webhook_routes import tagplus_webhook
+    app.register_blueprint(tagplus_bp)  # Sem prefixo pois as rotas já definem seus paths
+    app.register_blueprint(tagplus_webhook)  # Sem prefixo para manter URLs simples
     
     # ✅ INICIALIZAR CLAUDE AI DE FORMA EXPLÍCITA
     try:
@@ -564,7 +593,6 @@ def create_app(config_name=None):
                 database_url = os.getenv('DATABASE_URL', '')
                 if database_url and 'postgres' in database_url:
                     # Configurar encoding UTF-8 na conexão PostgreSQL
-                    import sqlalchemy
                     from sqlalchemy import create_engine
                     
                     # Corrigir URL do PostgreSQL para usar UTF-8
@@ -638,7 +666,8 @@ def create_app(config_name=None):
             # Tenta novamente
             try:
                 db.session.execute(text('SELECT 1'))
-            except:
+            except Exception as e:
+                logger.warning(f"🔄 Erro ao reconectar ao banco: {str(e)}")
                 pass
     
     # ✅ MIDDLEWARE PARA LIMPAR CONEXÕES APÓS CADA REQUEST
@@ -683,5 +712,22 @@ def create_app(config_name=None):
     except Exception as e:
         app.logger.warning(f"⚠️ Erro ao inicializar sistemas de autonomia: {e}")
         # Sistema continua funcionando sem autonomia
+
+    if os.getenv('MCP_ENABLED', 'false').lower() == 'true':
+
+        try:
+            from app.mcp_flask_integration import setup_mcp_routes
+            setup_mcp_routes(app)
+            app.logger.info("✅ MCP integration configured")
+        except Exception as e:
+            app.logger.warning(f"⚠️ MCP integration not available: {e}")
+
+    # Configurar triggers do cache de estoque (se as tabelas existirem)
+    try:
+        from app.estoque.cache_triggers import configurar_triggers_cache
+        configurar_triggers_cache()
+        app.logger.info("✅ Triggers de cache de estoque configurados")
+    except Exception as e:
+        app.logger.warning(f"⚠️ Triggers de cache não configurados: {e}")
 
     return app

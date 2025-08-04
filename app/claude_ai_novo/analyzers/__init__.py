@@ -28,6 +28,7 @@ try:
     from .structural_analyzer import StructuralAnalyzer, get_structural_analyzer  # type: ignore[assignment]
     from .semantic_analyzer import SemanticAnalyzer, get_semantic_analyzer  # type: ignore[assignment]
     from .performance_analyzer import PerformanceAnalyzer, get_performance_analyzer  # type: ignore[assignment]
+    from .data_analyzer import DataAnalyzer, get_data_analyzer  # type: ignore[assignment]
     
     logger.info("✅ Analyzers carregados com sucesso")
     
@@ -74,6 +75,10 @@ except ImportError as e:
         def __init__(self, orchestrator=None): pass
         def analyze_diagnostics(self): return {"status": "fallback", "message": "Diagnostics não disponível"}
     
+    class DataAnalyzer:
+        def __init__(self): pass
+        def analyze_data_context(self, query): return {"dominio": "entregas", "cliente_especifico": None, "periodo_dias": 30}
+    
     class AnalyzerManager:
         def __init__(self): 
             self.intention_analyzer = IntentionAnalyzer()
@@ -81,6 +86,7 @@ except ImportError as e:
             self.structural_analyzer = StructuralAnalyzer()
             self.semantic_analyzer = SemanticAnalyzer()
             self.performance_analyzer = PerformanceAnalyzer()
+            self.data_analyzer = DataAnalyzer()
         def analyze_query(self, query): return {"analyzed": True}
     
     # Funções de conveniência para fallback
@@ -89,6 +95,9 @@ except ImportError as e:
     
     def get_semantic_analyzer():
         return SemanticAnalyzer()
+    
+    def get_data_analyzer():
+        return DataAnalyzer()
 
 def get_analyzer_manager():
     """Retorna instância do AnalyzerManager"""
@@ -159,6 +168,7 @@ __all__ = [
     'DiagnosticsAnalyzer',
     'AnalyzerManager',
     'PerformanceAnalyzer',
+    'DataAnalyzer',
     
     # Funções de conveniência
     'get_analyzer_manager',
@@ -170,6 +180,7 @@ __all__ = [
     'get_semantic_analyzer',
     'get_diagnostics_analyzer',
     'get_performance_analyzer',
+    'get_data_analyzer',
     
     # Funções de análise rápida
     'analyze_query_intention',

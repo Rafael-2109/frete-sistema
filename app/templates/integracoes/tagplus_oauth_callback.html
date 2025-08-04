@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Autorização TagPlus - Callback{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-check-circle"></i> Autorização Concedida!
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-success">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Quase pronto!</strong><br>
+                        A aplicação foi autorizada com sucesso. Agora precisamos do Client Secret para finalizar.
+                    </div>
+                    
+                    <form id="trocar-codigo-form">
+                        <input type="hidden" id="code" value="{{ code }}">
+                        <input type="hidden" id="client_id" value="{{ client_id }}">
+                        <input type="hidden" id="redirect_uri" value="{{ redirect_uri }}">
+                        
+                        <div class="form-group">
+                            <label><strong>Client Secret:</strong></label>
+                            <input type="password" class="form-control" id="client_secret" 
+                                   placeholder="Cole seu Client Secret aqui" required>
+                            <small class="form-text text-muted">
+                                Por segurança, o Client Secret não é armazenado no servidor.
+                            </small>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success btn-block">
+                            <i class="fas fa-key"></i> Obter Tokens de Acesso
+                        </button>
+                    </form>
+                    
+                    <div id="resultado" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('trocar-codigo-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const resultado = document.getElementById('resultado');
+    resultado.innerHTML = '<div class="alert alert-info">Processando...</div>';
+    
+    const dados = {
+        code: document.getElementById('code').value,
+        client_id: document.getElementById('client_id').value,
+        client_secret: document.getElementById('client_secret').value,
+        redirect_uri: document.getElementById('redirect_uri').value
+    };
+    
+    fetch('/integracoes/tagplus/api/trocar-codigo', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(dados)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultado.innerHTML = `
+                <div class="alert alert-success">
+                    <h5>Tokens Obtidos com Sucesso!</h5>
+                    <p>Copie e guarde estes tokens com segurança:</p>
+                    <div class="form-group">
+                        <label>Access Token (válido por 24 horas):</label>
+                        <textarea class="form-control" rows="3" readonly>${data.access_token}</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Refresh Token (válido por 15 dias):</label>
+                        <textarea class="form-control" rows="2" readonly>${data.refresh_token}</textarea>
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>Importante:</strong> Guarde estes tokens! 
+                        Você precisará deles para fazer requisições à API.
+                    </div>
+                    <a href="{{ url_for('tagplus.pagina_importacao') }}" class="btn btn-primary">
+                        <i class="fas fa-arrow-left"></i> Voltar para Importação
+                    </a>
+                </div>`;
+        } else {
+            resultado.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-times-circle"></i> ${data.erro}
+                </div>`;
+        }
+    })
+    .catch(error => {
+        resultado.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> Erro: ${error}
+            </div>`;
+    });
+});
+</script>
+{% endblock %}

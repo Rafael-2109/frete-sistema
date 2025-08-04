@@ -75,7 +75,7 @@ class WorkspaceTabela {
                                    data-produto="${produto.cod_produto}"
                                    data-qtd-original="${Math.floor(produto.qtd_pedido)}"
                                    data-qtd-saldo="${Math.floor(saldoDisponivel.qtdEditavel)}"
-                                   onchange="workspace.atualizarQuantidadeProduto(this)"
+                                   oninput="workspace.atualizarQuantidadeProduto(this)"
                                    title="Quantidade editável para separação parcial (apenas números inteiros)">
                             <span class="input-group-text text-xs" 
                                   title="Saldo disponível: ${this.formatarQuantidade(saldoDisponivel.qtdEditavel)} de ${this.formatarQuantidade(produto.qtd_pedido)} do pedido"

@@ -88,22 +88,22 @@
                         <table class="table table-striped table-hover" id="tabelaEstoque">
                             <thead class="table-dark">
                                 <tr>
-                                    <th>Código</th>
-                                    <th>Produto</th>
-                                    <th>Est. Inicial (D0)</th>
-                                    <th>Carteira</th>
-                                    <th>Ruptura 7d</th>
-                                    <th>Status</th>
-                                    <th>Ações</th>
+                                    <th class="sortable text-start" onclick="serverSort('codigo')">Código <i class="fas fa-sort"></i></th>
+                                    <th class="sortable text-start" onclick="serverSort('produto')">Produto <i class="fas fa-sort"></i></th>
+                                    <th class="sortable text-end" onclick="serverSort('estoque')">Est. Inicial (D0) <i class="fas fa-sort"></i></th>
+                                    <th class="sortable text-end" onclick="serverSort('carteira')">Carteira <i class="fas fa-sort"></i></th>
+                                    <th class="sortable text-end" onclick="serverSort('ruptura')">Ruptura 7d <i class="fas fa-sort"></i></th>
+                                    <th class="sortable text-center" onclick="serverSort('status')">Status <i class="fas fa-sort"></i></th>
+                                    <th class="text-center">Ações</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for produto in produtos %}
                                 <tr data-codigo="{{ produto.cod_produto }}">
-                                    <td>
+                                    <td class="text-start">
                                         <strong>{{ produto.cod_produto }}</strong>
                                     </td>
-                                    <td>{{ produto.nome_produto }}</td>
+                                    <td class="text-start">{{ produto.nome_produto }}</td>
                                     <td class="text-end">
                                         <span class="badge {% if produto.estoque_inicial <= 0 %}bg-danger{% elif produto.estoque_inicial < 10 %}bg-warning{% else %}bg-success{% endif %}">
                                             {{ "{:,.0f}".format(produto.estoque_inicial).replace(',', '.') }}
@@ -122,20 +122,6 @@
                                         </span>
                                     </td>
                                     <td class="text-center">
-                                        <div class="btn-group btn-group-sm">
-                                            <a href="{{ url_for('estoque.nova_movimentacao') }}?cod_produto={{ produto.cod_produto }}&tipo=AJUSTE" 
-                                               class="btn btn-outline-warning btn-sm" 
-                                               title="Ajuste de Estoque">
-                                                <i class="fas fa-balance-scale"></i>
-                                            </a>
-                                            <button class="btn btn-outline-info btn-sm" 
-                                                    onclick="verProjecao('{{ produto.cod_produto }}')"
-                                                    title="Ver Projeção">
-                                                <i class="fas fa-chart-line"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
                                         {% if produto.status_ruptura == 'CRÍTICO' %}
                                             <span class="badge bg-danger">🔴 CRÍTICO</span>
                                         {% elif produto.status_ruptura == 'ATENÇÃO' %}
@@ -144,17 +130,17 @@
                                             <span class="badge bg-success">🟢 OK</span>
                                         {% endif %}
                                     </td>
-                                    <td>
+                                    <td class="text-center">
                                         <div class="btn-group btn-group-sm">
                                             <button type="button" 
-                                                    class="btn btn-outline-info" 
+                                                    class="btn btn-outline-info btn-sm" 
                                                     onclick="verProjecaoCompleta('{{ produto.cod_produto }}')"
                                                     title="Ver projeção 29 dias">
                                                 <i class="fas fa-chart-line"></i>
                                             </button>
                                             {% if current_user.nivel == 'admin' %}
                                             <button type="button" 
-                                                    class="btn btn-outline-warning" 
+                                                    class="btn btn-outline-warning btn-sm" 
                                                     onclick="abrirModalAjuste('{{ produto.cod_produto }}', '{{ produto.nome_produto }}')"
                                                     title="Ajustar estoque">
                                                 <i class="fas fa-edit"></i>
@@ -167,6 +153,62 @@
                             </tbody>
                         </table>
                     </div>
+                    
+                    <!-- Paginação -->
+                    {% if total_paginas > 1 %}
+                    <nav aria-label="Navegação de páginas">
+                        <ul class="pagination justify-content-center mt-4">
+                            <!-- Botão Anterior -->
+                            {% if page > 1 %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page - 1 }}&limite={{ limite }}&codigo_produto={{ codigo_produto }}&status_ruptura={{ status_ruptura }}&ordem={{ request.args.get('ordem', 'codigo') }}&dir={{ request.args.get('dir', 'asc') }}">
+                                    <i class="fas fa-chevron-left"></i> Anterior
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link"><i class="fas fa-chevron-left"></i> Anterior</span>
+                            </li>
+                            {% endif %}
+                            
+                            <!-- Números de Página -->
+                            {% for p in range(1, total_paginas + 1) %}
+                                {% if p == page %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ p }}</span>
+                                </li>
+                                {% elif p == 1 or p == total_paginas or (p >= page - 2 and p <= page + 2) %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ p }}&limite={{ limite }}&codigo_produto={{ codigo_produto }}&status_ruptura={{ status_ruptura }}&ordem={{ request.args.get('ordem', 'codigo') }}&dir={{ request.args.get('dir', 'asc') }}">{{ p }}</a>
+                                </li>
+                                {% elif p == page - 3 or p == page + 3 %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            <!-- Botão Próximo -->
+                            {% if page < total_paginas %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page + 1 }}&limite={{ limite }}&codigo_produto={{ codigo_produto }}&status_ruptura={{ status_ruptura }}&ordem={{ request.args.get('ordem', 'codigo') }}&dir={{ request.args.get('dir', 'asc') }}">
+                                    Próximo <i class="fas fa-chevron-right"></i>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Próximo <i class="fas fa-chevron-right"></i></span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    
+                    <!-- Info de paginação -->
+                    <div class="text-center text-muted mb-3">
+                        Mostrando {{ (page - 1) * limite + 1 }} a {{ [page * limite, estatisticas.total_filtrado] | min }} de {{ estatisticas.total_filtrado }} produtos
+                    </div>
+                    {% endif %}
+                    
                     {% else %}
                     <div class="text-center py-5">
                         <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
@@ -375,15 +417,15 @@ function gerarTabelaProjecao(produto) {
         </div>
         
         <div class="table-responsive">
-            <table class="table table-sm table-striped">
+            <table class="table table-sm table-striped table-hover align-middle">
                 <thead class="table-dark">
                     <tr>
-                        <th>Dia</th>
-                        <th>Data</th>
-                        <th>Est. Inicial</th>
-                        <th>Saída Prev.</th>
-                        <th>Produção</th>
-                        <th>Est. Final</th>
+                        <th style="width: 10%;">Dia</th>
+                        <th style="width: 20%;">Data</th>
+                        <th style="width: 17.5%;" class="text-end">Est. Inicial</th>
+                        <th style="width: 17.5%;" class="text-end">Saída Prev.</th>
+                        <th style="width: 17.5%;" class="text-end">Produção</th>
+                        <th style="width: 17.5%;" class="text-end">Est. Final</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -448,7 +490,8 @@ function recarregarDados() {
 
 // Eventos
 {% if current_user.nivel == 'admin' %}
-$('#formAjuste').on('submit', function(e) {
+$(document).ready(function() {
+    $('#formAjuste').on('submit', function(e) {
     e.preventDefault();
     
     const codProduto = $('#ajusteCodProduto').val();
@@ -497,10 +540,12 @@ $('#formAjuste').on('submit', function(e) {
     .catch(error => {
         alert('Erro de conexão: ' + error.message);
     });
+    });
 });
 {% endif %}
 
-$('#formFiltros').on('submit', function(e) {
+$(document).ready(function() {
+    $('#formFiltros').on('submit', function(e) {
     e.preventDefault();
     
     const codigo = $('#filtroCodigo').val();
@@ -512,21 +557,106 @@ $('#formFiltros').on('submit', function(e) {
     if (status) params.append('status_ruptura', status);
     if (limite) params.append('limite', limite);
     
-    fetch(`/estoque/saldo-estoque/filtrar?${params}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Recarregar página com filtros aplicados
-                const url = new URL(window.location);
-                params.forEach((value, key) => url.searchParams.set(key, value));
-                window.location.href = url.toString();
-            } else {
-                alert('Erro ao aplicar filtros: ' + data.error);
-            }
-        })
-        .catch(error => {
-            alert('Erro de conexão: ' + error.message);
-        });
+    // Redirecionar com parâmetros
+    window.location.href = '/estoque/saldo-estoque?' + params.toString();
+    });
 });
+
+// Função de ordenação server-side
+function serverSort(coluna) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const ordemAtual = urlParams.get('ordem');
+    const direcaoAtual = urlParams.get('dir');
+    
+    // Toggle direção se for a mesma coluna
+    let novaDirecao = 'asc';
+    if (ordemAtual === coluna && direcaoAtual === 'asc') {
+        novaDirecao = 'desc';
+    }
+    
+    urlParams.set('ordem', coluna);
+    urlParams.set('dir', novaDirecao);
+    urlParams.set('page', '1'); // Voltar para primeira página ao ordenar
+    
+    window.location.href = '/estoque/saldo-estoque?' + urlParams.toString();
+}
+
+// Função de ordenação de tabela (removida, usando server-side agora)
+/* function sortTable(columnIndex) {
+    const table = document.getElementById('tabelaEstoque');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    // Toggle sort direction
+    const isAscending = table.dataset.sortColumn == columnIndex && table.dataset.sortDirection === 'asc';
+    const direction = isAscending ? 'desc' : 'asc';
+    
+    table.dataset.sortColumn = columnIndex;
+    table.dataset.sortDirection = direction;
+    
+    rows.sort((a, b) => {
+        let aValue = a.cells[columnIndex].textContent.trim();
+        let bValue = b.cells[columnIndex].textContent.trim();
+        
+        // Tratamento especial para colunas numéricas (2, 3, 4)
+        if (columnIndex >= 2 && columnIndex <= 4) {
+            // Remover pontos e vírgulas, converter para número
+            aValue = parseFloat(aValue.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+            bValue = parseFloat(bValue.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
+        }
+        
+        if (direction === 'asc') {
+            return aValue > bValue ? 1 : -1;
+        } else {
+            return aValue < bValue ? 1 : -1;
+        }
+    });
+    
+    rows.forEach(row => tbody.appendChild(row));
+} */
 </script>
+
+<style>
+.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+.sortable:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+.sortable i {
+    font-size: 0.8em;
+    opacity: 0.6;
+}
+/* Alinhamento de colunas */
+.text-start { text-align: left !important; }
+.text-end { text-align: right !important; }
+.text-center { text-align: center !important; }
+
+/* Estilos para o modal de projeção */
+#modalProjecao .table {
+    font-size: 0.9rem;
+}
+#modalProjecao .table th {
+    white-space: nowrap;
+    font-weight: 600;
+    vertical-align: middle;
+}
+#modalProjecao .table td {
+    vertical-align: middle;
+    white-space: nowrap;
+}
+#modalProjecao .modal-dialog {
+    max-width: 900px;
+}
+/* Ajustes para valores numéricos */
+#modalProjecao .table td.text-end,
+#modalProjecao .table th.text-end {
+    padding-right: 15px;
+}
+/* Cores para status */
+.text-danger { color: #dc3545 !important; }
+.text-warning { color: #ffc107 !important; }
+.text-success { color: #198754 !important; }
+</style>
 {% endblock %} 

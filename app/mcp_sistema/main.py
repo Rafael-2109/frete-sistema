@@ -22,6 +22,13 @@ from .middleware.logging_middleware import LoggingMiddleware, PerformanceLogging
 from .services.cache.redis_manager import redis_manager
 from .services.cache.cache_warmer import cache_warmer, register_default_warmups
 from .config import config
+from .final_adjustments import (
+    PerformanceOptimizer, 
+    StartupOptimizer, 
+    GracefulShutdownHandler
+)
+from .monitoring import MetricsCollector
+from utils.health_checks import HealthChecker
 
 # Setup comprehensive logging with JSON format in production
 setup_logging(
@@ -35,11 +42,22 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Application lifespan manager
+    Application lifespan manager with optimized startup and graceful shutdown
     """
+    # Initialize components
+    metrics_collector = MetricsCollector()
+    health_checker = HealthChecker(config.__dict__)
+    shutdown_handler = GracefulShutdownHandler(config, metrics_collector)
+    
+    # Apply performance optimizations
+    if settings.ENVIRONMENT == "production":
+        logger.info("Applying production performance optimizations...")
+        optimizer = PerformanceOptimizer(config, metrics_collector)
+        optimizer.apply_all_adjustments()
+    
     # Startup
     logger.info(
-        "Starting MCP Sistema",
+        "Starting MCP Sistema with optimized startup sequence",
         extra={
             "environment": settings.ENVIRONMENT,
             "debug": settings.DEBUG,
@@ -47,14 +65,20 @@ async def lifespan(app: FastAPI):
         }
     )
     
-    # Initialize database
-    try:
-        logger.info("Initializing database...")
-        init_db()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        raise
+    # Use optimized startup if enabled
+    if config.startup_optimization.get('parallel_initialization', False):
+        startup_optimizer = StartupOptimizer(config)
+        await startup_optimizer.optimize_startup_sequence()
+    else:
+        # Legacy startup sequence
+        # Initialize database
+        try:
+            logger.info("Initializing database...")
+            init_db()
+            logger.info("Database initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize database: {e}")
+            raise
     
     # Initialize authentication system
     try:
@@ -95,36 +119,122 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize cache: {e}")
         # Continue without cache
     
+    # Store health checker in app state for endpoint access
+    app.state.health_checker = health_checker
+    app.state.metrics_collector = metrics_collector
+    
     yield
     
-    # Shutdown
-    logger.info("Shutting down MCP Sistema...")
+    # Graceful Shutdown
+    logger.info("Starting graceful shutdown of MCP Sistema...")
     
-    # Stop monitoring
-    try:
-        stop_monitoring()
-        logger.info("Monitoring services stopped")
-    except Exception as e:
-        logger.error(f"Error stopping monitoring: {e}")
+    # Use optimized shutdown if enabled
+    if config.graceful_shutdown.get('drain_connections', True):
+        await shutdown_handler.shutdown()
+    else:
+        # Legacy shutdown sequence
+        # Stop monitoring
+        try:
+            stop_monitoring()
+            logger.info("Monitoring services stopped")
+        except Exception as e:
+            logger.error(f"Error stopping monitoring: {e}")
+        
+        # Stop cache warmup scheduler
+        try:
+            cache_warmer.stop_scheduler()
+            logger.info("Cache warmup scheduler stopped")
+        except Exception as e:
+            logger.error(f"Error stopping cache scheduler: {e}")
     
-    # Stop cache warmup scheduler
-    try:
-        cache_warmer.stop_scheduler()
-        logger.info("Cache warmup scheduler stopped")
-    except Exception as e:
-        logger.error(f"Error stopping cache scheduler: {e}")
+    logger.info("MCP Sistema shutdown complete")
 
 
-# Create FastAPI app
+# Create FastAPI app with comprehensive OpenAPI documentation
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Model Context Protocol System for Freight Management",
+    description="""## Sistema de Fretes - API REST
+
+### Overview
+This API provides comprehensive endpoints for freight management including:
+- **Shipments (Embarques)**: Create and manage freight shipments
+- **Freight (Fretes)**: Handle freight pricing and approvals
+- **Monitoring**: Track deliveries and financial status
+- **Clients**: Detailed client information and reporting
+- **Statistics**: System-wide analytics and metrics
+- **MCP Integration**: Model Context Protocol for AI assistance
+
+### Authentication
+All endpoints except `/health` and `/docs` require JWT authentication.
+
+### Rate Limiting
+API requests are rate-limited to ensure fair usage. Default: 100 requests per minute.
+
+### Response Format
+All responses follow a consistent JSON structure with `success`, `data`, and `error` fields.
+""",
     version=settings.VERSION,
     debug=settings.DEBUG,
     lifespan=lifespan,
-    docs_url="/api/docs" if settings.DEBUG else None,
-    redoc_url="/api/redoc" if settings.DEBUG else None,
-    openapi_url="/api/openapi.json" if settings.DEBUG else None
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+    openapi_tags=[
+        {
+            "name": "auth",
+            "description": "Authentication operations",
+            "externalDocs": {
+                "description": "JWT Authentication Guide",
+                "url": "/docs/api/auth_guide.md"
+            }
+        },
+        {
+            "name": "embarques",
+            "description": "Shipment management operations"
+        },
+        {
+            "name": "fretes",
+            "description": "Freight pricing and approval operations"
+        },
+        {
+            "name": "monitoramento",
+            "description": "Delivery monitoring and tracking"
+        },
+        {
+            "name": "clientes",
+            "description": "Client management and reporting"
+        },
+        {
+            "name": "estatisticas",
+            "description": "System statistics and analytics"
+        },
+        {
+            "name": "mcp",
+            "description": "Model Context Protocol operations"
+        },
+        {
+            "name": "health",
+            "description": "System health and status checks"
+        }
+    ],
+    servers=[
+        {
+            "url": "http://localhost:5000",
+            "description": "Development server"
+        },
+        {
+            "url": "https://api.fretesistema.com.br",
+            "description": "Production server"
+        }
+    ],
+    contact={
+        "name": "API Support",
+        "email": "suporte@fretesistema.com.br"
+    },
+    license_info={
+        "name": "Proprietary",
+        "url": "https://fretesistema.com.br/license"
+    }
 )
 
 # Configure CORS - must be added before other middleware

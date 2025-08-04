@@ -470,3 +470,5 @@ COMMIT; -- Confirmar todas as alterações
 
 -- Para executar após o script:
 -- VACUUM ANALYZE;
+
+psql $DATABASE_URL -c "SELECT table_name FROM information_schema.tables WHERE table_name IN ('cadastro_cliente', 'saldo_estoque_cache') ORDER BY 1;"

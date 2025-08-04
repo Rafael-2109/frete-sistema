@@ -1,0 +1,572 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastro de Cliente Não-Odoo{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h2>Cadastro de Cliente Não-Odoo</h2>
+            <hr>
+        </div>
+    </div>
+
+    <!-- Formulário de Cadastro -->
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Dados do Cliente</h5>
+                </div>
+                <div class="card-body">
+                    <form id="formCadastroCliente">
+                        <!-- Dados Básicos -->
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>CNPJ/CPF <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="cnpj_cpf" name="cnpj_cpf" required>
+                                    <small class="form-text text-muted">Aceita CNPJ/CPF com ou sem formatação</small>
+                                </div>
+                            </div>
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label>Razão Social <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" name="raz_social" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Nome Fantasia</label>
+                                    <input type="text" class="form-control" name="raz_social_red">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label>Estado <span class="text-danger">*</span></label>
+                                    <select class="form-control" id="estado" name="estado" required>
+                                        <option value="">Selecione...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label>Município <span class="text-danger">*</span></label>
+                                    <select class="form-control" id="municipio" name="municipio" required>
+                                        <option value="">Selecione o estado primeiro</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Vendedor</label>
+                                    <select class="form-control" id="vendedor" name="vendedor">
+                                        <option value="">Selecione...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Equipe de Vendas</label>
+                                    <select class="form-control" id="equipe_vendas" name="equipe_vendas">
+                                        <option value="">Selecione...</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">Endereço de Entrega</h5>
+                            <button type="button" class="btn btn-sm btn-secondary" id="copiarEnderecoCliente">
+                                <i class="fas fa-copy"></i> Copiar Endereço do Cliente
+                            </button>
+                        </div>
+
+                        <div id="endereco_entrega">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>CNPJ Entrega</label>
+                                        <input type="text" class="form-control" name="cnpj_endereco_ent">
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="form-group">
+                                        <label>Empresa Entrega</label>
+                                        <input type="text" class="form-control" name="empresa_endereco_ent">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>CEP</label>
+                                        <input type="text" class="form-control" name="cep_endereco_ent">
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="form-group">
+                                        <label>UF</label>
+                                        <select class="form-control" id="cod_uf" name="cod_uf">
+                                            <option value="">Selecione...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>Cidade</label>
+                                        <select class="form-control" id="nome_cidade" name="nome_cidade">
+                                            <option value="">Selecione a UF primeiro</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>Telefone</label>
+                                        <input type="text" class="form-control" name="telefone_endereco_ent">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>Bairro</label>
+                                        <input type="text" class="form-control" name="bairro_endereco_ent">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Rua</label>
+                                        <input type="text" class="form-control" name="rua_endereco_ent">
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="form-group">
+                                        <label>Número</label>
+                                        <input type="text" class="form-control" name="endereco_ent">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">Salvar Cliente</button>
+                                
+                                <button type="button" class="btn btn-secondary" onclick="limparFormulario()">Limpar</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de Clientes -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Clientes Cadastrados</h5>
+                    <input type="text" class="form-control mt-2" id="buscarCliente" placeholder="Buscar por CNPJ, nome ou cidade...">
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    <div id="listaClientes">
+                        <p class="text-muted">Carregando...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Variáveis globais
+let clienteEditando = null;
+let timeoutBusca = null;
+
+// Função para limpar CNPJ/CPF antes de enviar (definida no escopo global)
+function limparCNPJ(cnpj) {
+    return cnpj ? cnpj.replace(/\D/g, '') : '';
+}
+
+// Inicialização
+$(document).ready(function() {
+    console.log('Inicializando página de cadastro de cliente...');
+    
+    // Configurar AJAX para incluir CSRF token
+    $.ajaxSetup({
+        beforeSend: function(xhr, settings) {
+            if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                xhr.setRequestHeader("X-CSRFToken", $('meta[name="csrf-token"]').attr('content'));
+            }
+        }
+    });
+    
+    // Carregar opções e clientes
+    carregarOpcoes();
+    carregarClientes();
+    
+    // Máscara de CNPJ/CPF com conversão automática
+    $('#cnpj_cpf').on('input', function() {
+        let valor = $(this).val();
+        // Remove tudo que não é número
+        let valorLimpo = valor.replace(/\D/g, '');
+        
+        // Aplica máscara baseada no tamanho
+        if (valorLimpo.length <= 11) {
+            // CPF
+            valorLimpo = valorLimpo.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+        } else if (valorLimpo.length <= 14) {
+            // CNPJ
+            valorLimpo = valorLimpo.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+        }
+        
+        $(this).val(valorLimpo);
+    });
+    
+    // Botão copiar endereço
+    $('#copiarEnderecoCliente').click(function() {
+        const cnpj = $('#cnpj_cpf').val();
+        const razaoSocial = $('input[name="raz_social"]').val();
+        const estado = $('#estado').val();
+        const municipio = $('#municipio').val();
+        
+        // Copiar dados
+        $('input[name="cnpj_endereco_ent"]').val(cnpj);
+        $('input[name="empresa_endereco_ent"]').val(razaoSocial);
+        $('#cod_uf').val(estado).trigger('change');
+        
+        // Aguardar cidades carregar e selecionar município
+        setTimeout(function() {
+            $('#nome_cidade').val(municipio);
+        }, 500);
+        
+        // Feedback visual
+        $(this).html('<i class="fas fa-check"></i> Copiado!');
+        setTimeout(() => {
+            $(this).html('<i class="fas fa-copy"></i> Copiar Endereço do Cliente');
+        }, 2000);
+    });
+    
+    // Mudança de estado
+    $('#estado').change(function() {
+        carregarCidades($(this).val(), 'municipio');
+    });
+    
+    $('#cod_uf').change(function() {
+        carregarCidades($(this).val(), 'nome_cidade');
+    });
+    
+    // Busca de clientes
+    $('#buscarCliente').on('input', function() {
+        clearTimeout(timeoutBusca);
+        timeoutBusca = setTimeout(() => carregarClientes($(this).val()), 300);
+    });
+    
+    // Submit do formulário
+    $('#formCadastroCliente').submit(function(e) {
+        e.preventDefault();
+        salvarCliente();
+    });
+});
+
+// Carregar opções dos selects
+function carregarOpcoes() {
+    console.log('Iniciando carregamento de opções...');
+    
+    $.ajax({
+        url: '/carteira/api/cadastro-cliente/opcoes',
+        method: 'GET',
+        dataType: 'json',
+        success: function(response) {
+            console.log('Resposta recebida:', response);
+            
+            if (response && response.success && response.opcoes) {
+                // UFs
+                if (response.opcoes.ufs && Array.isArray(response.opcoes.ufs)) {
+                    console.log('Carregando', response.opcoes.ufs.length, 'UFs');
+                    $('#estado, #cod_uf').empty().append('<option value="">Selecione...</option>');
+                    response.opcoes.ufs.forEach(uf => {
+                        $('#estado, #cod_uf').append(
+                            $('<option></option>').val(uf.value).text(uf.label)
+                        );
+                    });
+                }
+                
+                // Vendedores
+                if (response.opcoes.vendedores && Array.isArray(response.opcoes.vendedores)) {
+                    console.log('Carregando', response.opcoes.vendedores.length, 'vendedores');
+                    $('#vendedor').empty().append('<option value="">Selecione...</option>');
+                    response.opcoes.vendedores.forEach(v => {
+                        $('#vendedor').append(
+                            $('<option></option>').val(v.value).text(v.label)
+                        );
+                    });
+                }
+                
+                // Equipes
+                if (response.opcoes.equipes_vendas && Array.isArray(response.opcoes.equipes_vendas)) {
+                    console.log('Carregando', response.opcoes.equipes_vendas.length, 'equipes');
+                    $('#equipe_vendas').empty().append('<option value="">Selecione...</option>');
+                    response.opcoes.equipes_vendas.forEach(e => {
+                        $('#equipe_vendas').append(
+                            $('<option></option>').val(e.value).text(e.label)
+                        );
+                    });
+                }
+            } else {
+                console.error('Resposta inválida ou sem dados:', response);
+                toastr.error('Erro ao processar opções do servidor');
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Erro AJAX ao carregar opções:', {
+                status: status,
+                error: error,
+                statusCode: xhr.status,
+                responseText: xhr.responseText
+            });
+            
+            let mensagemErro = 'Erro ao carregar opções';
+            
+            if (xhr.status === 404) {
+                mensagemErro = 'Endpoint não encontrado. Verifique se o servidor está rodando.';
+            } else if (xhr.status === 500) {
+                mensagemErro = 'Erro no servidor ao buscar opções.';
+            } else if (xhr.status === 0) {
+                mensagemErro = 'Não foi possível conectar ao servidor.';
+            }
+            
+            if (typeof toastr !== 'undefined') {
+                toastr.error(mensagemErro);
+            } else {
+                alert(mensagemErro);
+            }
+        }
+    });
+}
+
+// Carregar cidades por UF
+function carregarCidades(uf, selectId) {
+    console.log('Carregando cidades para UF:', uf, 'no select:', selectId);
+    
+    if (!uf) {
+        $(`#${selectId}`).html('<option value="">Selecione a UF primeiro</option>');
+        return;
+    }
+    
+    $(`#${selectId}`).html('<option value="">Carregando...</option>');
+    
+    $.ajax({
+        url: `/carteira/api/cadastro-cliente/cidades/${uf}`,
+        method: 'GET',
+        dataType: 'json',
+        success: function(response) {
+            console.log('Cidades recebidas:', response);
+            
+            if (response && response.success && response.cidades) {
+                $(`#${selectId}`).empty();
+                $(`#${selectId}`).append('<option value="">Selecione...</option>');
+                
+                if (Array.isArray(response.cidades) && response.cidades.length > 0) {
+                    response.cidades.forEach(cidade => {
+                        $(`#${selectId}`).append(
+                            $('<option></option>').val(cidade.value).text(cidade.label)
+                        );
+                    });
+                    console.log(response.cidades.length, 'cidades carregadas');
+                } else {
+                    console.warn('Nenhuma cidade encontrada para UF:', uf);
+                    $(`#${selectId}`).html('<option value="">Nenhuma cidade encontrada</option>');
+                }
+            } else {
+                console.error('Resposta inválida:', response);
+                $(`#${selectId}`).html('<option value="">Erro ao carregar</option>');
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Erro ao carregar cidades:', status, error);
+            console.error('Resposta:', xhr.responseText);
+            $(`#${selectId}`).html('<option value="">Erro ao carregar</option>');
+            toastr.error('Erro ao carregar cidades: ' + error);
+        }
+    });
+}
+
+// Carregar lista de clientes
+function carregarClientes(busca = '') {
+    let url = '/carteira/api/cadastro-cliente';
+    if (busca) {
+        url += `?search=${encodeURIComponent(busca)}`;
+    }
+    
+    console.log('Carregando clientes de:', url);
+    
+    $.ajax({
+        url: url,
+        method: 'GET',
+        dataType: 'json',
+        success: function(response) {
+            console.log('Clientes recebidos:', response);
+            if (response && response.success) {
+                mostrarListaClientes(response.clientes || []);
+            } else {
+                $('#listaClientes').html('<p class="text-warning">Nenhum cliente encontrado</p>');
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Erro ao carregar clientes:', status, error);
+            console.error('Status:', xhr.status, 'Response:', xhr.responseText);
+            $('#listaClientes').html('<p class="text-danger">Erro ao carregar clientes</p>');
+        }
+    });
+}
+
+// Mostrar lista de clientes
+function mostrarListaClientes(clientes) {
+    if (clientes.length === 0) {
+        $('#listaClientes').html('<p class="text-muted">Nenhum cliente cadastrado</p>');
+        return;
+    }
+    
+    let html = '<div class="list-group">';
+    clientes.forEach(cliente => {
+        html += `
+            <div class="list-group-item list-group-item-action" onclick="editarCliente(${cliente.id})">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">${cliente.raz_social_red || cliente.raz_social}</h6>
+                    <small>${formatarCNPJ(cliente.cnpj_cpf)}</small>
+                </div>
+                <p class="mb-1">${cliente.municipio}/${cliente.estado}</p>
+                <small>Vendedor: ${cliente.vendedor || 'N/A'}</small>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    $('#listaClientes').html(html);
+}
+
+// Formatar CNPJ para exibição
+function formatarCNPJ(cnpj) {
+    cnpj = cnpj.replace(/\D/g, '');
+    if (cnpj.length === 14) {
+        return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    } else if (cnpj.length === 11) {
+        return cnpj.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    }
+    return cnpj;
+}
+
+// Salvar cliente
+function salvarCliente() {
+    const dados = {};
+    $('#formCadastroCliente').serializeArray().forEach(item => {
+        dados[item.name] = item.value;
+    });
+    
+    // Limpar CNPJ antes de enviar
+    dados.cnpj_cpf = limparCNPJ(dados.cnpj_cpf);
+    if (dados.cnpj_endereco_ent) {
+        dados.cnpj_endereco_ent = limparCNPJ(dados.cnpj_endereco_ent);
+    }
+    
+    // Não temos checkbox aplicar_endereco_cliente no formulário
+    
+    const url = clienteEditando ? `/carteira/api/cadastro-cliente/${clienteEditando}` : '/carteira/api/cadastro-cliente';
+    const method = clienteEditando ? 'PUT' : 'POST';
+    
+    // Obter o token CSRF do meta tag
+    const csrfToken = $('meta[name="csrf-token"]').attr('content');
+    
+    $.ajax({
+        url: url,
+        method: method,
+        data: JSON.stringify(dados),
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': csrfToken
+        },
+        success: function(response) {
+            if (response.success) {
+                toastr.success(response.message || 'Cliente salvo com sucesso!');
+                limparFormulario();
+                carregarClientes();
+            }
+        },
+        error: function(xhr) {
+            if (xhr.responseJSON && xhr.responseJSON.csrf_error) {
+                toastr.error('Sessão expirada. Por favor, recarregue a página.');
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                const error = xhr.responseJSON ? xhr.responseJSON.error : 'Erro ao salvar cliente';
+                toastr.error(error);
+            }
+        }
+    });
+}
+
+// Editar cliente
+function editarCliente(id) {
+    $.get(`/carteira/api/cadastro-cliente/${id}`)
+        .done(function(response) {
+            if (response.success) {
+                const cliente = response.cliente;
+                clienteEditando = id;
+                
+                // Preencher formulário
+                Object.keys(cliente).forEach(key => {
+                    $(`[name="${key}"]`).val(cliente[key]);
+                });
+                
+                // Se não usa endereço do cliente, mostra campos de entrega
+                if (!cliente.endereco_mesmo_cliente) {
+                    $('#endereco_entrega').show();
+                }
+                
+                // Carregar cidades do cliente principal
+                if (cliente.estado) {
+                    carregarCidades(cliente.estado, 'municipio');
+                    setTimeout(() => $('#municipio').val(cliente.municipio), 600);
+                }
+                
+                // Carregar cidades do endereço de entrega
+                if (cliente.cod_uf) {
+                    carregarCidades(cliente.cod_uf, 'nome_cidade');
+                    // Aguardar mais tempo para garantir que as cidades foram carregadas
+                    setTimeout(() => {
+                        $('#nome_cidade').val(cliente.nome_cidade);
+                        // Verificar se foi selecionado corretamente
+                        if ($('#nome_cidade').val() !== cliente.nome_cidade) {
+                            console.log('Tentando selecionar novamente:', cliente.nome_cidade);
+                            $('#nome_cidade').val(cliente.nome_cidade);
+                        }
+                    }, 800);
+                }
+                
+                // Scroll para o topo
+                window.scrollTo(0, 0);
+            }
+        })
+        .fail(function(xhr) {
+            console.error('Erro ao carregar cliente:', xhr);
+            toastr.error('Erro ao carregar dados do cliente');
+        });
+}
+
+// Limpar formulário
+function limparFormulario() {
+    $('#formCadastroCliente')[0].reset();
+    clienteEditando = null;
+    $('#endereco_entrega').show(); // Sempre mostra o endereço de entrega
+}
+</script>
+{% endblock %}

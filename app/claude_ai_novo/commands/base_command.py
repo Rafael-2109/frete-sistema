@@ -222,12 +222,9 @@ class BaseCommand:
         """Busca resultado em cache"""
         try:
             if hasattr(intelligent_cache, 'get'):
-                if REDIS_AVAILABLE and intelligent_cache:
-                return
-            intelligent_cache.get(cache_key)
+                return intelligent_cache.get(cache_key)
             elif hasattr(redis_cache, 'get'):
-                return if REDIS_AVAILABLE and redis_cache:
-            redis_cache.get(cache_key)
+                return redis_cache.get(cache_key)
         except Exception as e:
             self.logger.warning(f"Erro ao buscar cache: {e}")
         return None
@@ -237,18 +234,15 @@ class BaseCommand:
         try:
             if hasattr(intelligent_cache, 'set'):
                 # if REDIS_AVAILABLE and intelligent_cache:
-            intelligent_cache.set com categoria e ttl corretos
+                intelligent_cache.set(cache_key, data, "command_cache", ttl)
                 try:
-                    if REDIS_AVAILABLE and intelligent_cache:
-            intelligent_cache.set(cache_key, data, "command_cache", ttl)
+                    intelligent_cache.set(cache_key, data, "command_cache", ttl)
                 except TypeError:
                     # Fallback se a interface for diferente
-                    if REDIS_AVAILABLE and intelligent_cache:
-            intelligent_cache.set(cache_key, data)
+                    intelligent_cache.set(cache_key, data)
                 return True
             elif hasattr(redis_cache, 'set'):
-                if REDIS_AVAILABLE and redis_cache:
-            redis_cache.set(cache_key, data, ttl)
+                redis_cache.set(cache_key, data, ttl)
                 return True
         except Exception as e:
             self.logger.warning(f"Erro ao salvar cache: {e}")

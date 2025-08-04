@@ -30,10 +30,10 @@
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                NFs Processadas (Mês)
+                                NFs Faturadas (Mês)
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ nfs_processadas_mes or 0 }}
+                                {{ nfs_faturadas_mes or 0 }}
                             </div>
                         </div>
                         <div class="col-auto">
@@ -50,14 +50,14 @@
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Pendentes Reconciliação
+                                Itens Faturados (Mês)
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ nfs_pendentes or 0 }}
+                                {{ qtd_itens_faturados_mes or 0 }}
                             </div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                            <i class="fas fa-boxes fa-2x text-gray-300"></i>
                         </div>
                     </div>
                 </div>
@@ -73,7 +73,7 @@
                                 Valor Faturado (Mês)
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                R$ {{ "%.2f"|format(valor_faturado_mes or 0)|replace('.', ',')|replace(',', '.', 1) }}
+                                {{ valor_faturado_mes }}
                             </div>
                         </div>
                         <div class="col-auto">
@@ -161,40 +161,42 @@
     </div>
 
     <div class="row">
-        <!-- Reconciliação e Auditoria -->
+        <!-- Central de Inconsistências -->
         <div class="col-lg-6 mb-4">
-            <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-warning">
-                        <i class="fas fa-balance-scale me-2"></i>
-                        Reconciliação e Auditoria
+            <div class="card shadow border-left-danger">
+                <div class="card-header py-3 bg-gradient-danger text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Central de Inconsistências
+                        <span class="badge bg-white text-danger float-end">NOVO</span>
                     </h6>
                 </div>
                 <div class="card-body">
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Dashboard unificado para gestão de todas as inconsistências e pendências do sistema.
+                    </div>
                     <div class="row">
                         <div class="col-12 mb-3">
-                            <a href="{{ url_for('faturamento.dashboard_reconciliacao') }}" class="btn btn-warning btn-lg w-100">
-                                <i class="fas fa-search me-2"></i>
-                                Dashboard Reconciliação
+                            <a href="{{ url_for('inconsistencias.dashboard_inconsistencias') }}" class="btn btn-danger btn-lg w-100">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                Acessar Central de Inconsistências
                             </a>
-                            <small class="text-muted">Visualizar inconsistências e pendências</small>
-                        </div>
-                        <div class="col-12 mb-3">
-                            <a href="{{ url_for('faturamento.tela_conciliacao_manual') }}" class="btn btn-outline-warning w-100">
-                                <i class="fas fa-hands-helping me-2"></i>
-                                Conciliação Manual
-                            </a>
+                            <small class="text-muted d-block mt-2">
+                                Visualizar e resolver inconsistências de faturamento e embarques com erro
+                            </small>
                         </div>
                         <div class="col-12">
-                            <a href="{{ url_for('faturamento.relatorio_auditoria') }}" class="btn btn-outline-secondary w-100">
-                                <i class="fas fa-clipboard-check me-2"></i>
-                                Relatório de Auditoria
+                            <a href="{{ url_for('atualizar_nf.atualizar_nf_pendentes_view') }}" class="btn btn-outline-danger w-100">
+                                <i class="fas fa-edit me-2"></i>
+                                Atualizar NFs Pendentes
                             </a>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+
 
         <!-- Sincronização Segura -->
         <div class="col-lg-3 mb-4">
@@ -221,41 +223,35 @@
             </div>
         </div>
         
-        <!-- Processamento e Justificativas -->
+        <!-- Integração TagPlus -->
         <div class="col-lg-3 mb-4">
             <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-info">
-                        <i class="fas fa-cogs me-2"></i>
-                        Processamento
+                <div class="card-header py-3 bg-gradient-warning text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-sync me-2"></i>
+                        Integração TagPlus
                     </h6>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-12 mb-3">
-                            <button type="button" class="btn btn-info btn-sm w-100" onclick="processarPendencias()">
-                                <i class="fas fa-play-circle me-2"></i>
-                                Processar Pendências
-                            </button>
-                            <small class="text-muted d-block mt-1">Executar processamento automático de NFs</small>
-                        </div>
-                        <div class="col-12 mb-3">
-                            <a href="{{ url_for('faturamento.justificativas_parciais') }}" class="btn btn-outline-info btn-sm w-100">
-                                <i class="fas fa-edit me-2"></i>
-                                Justificativas
-                            </a>
-                        </div>
-                        <div class="col-12">
-                            <a href="{{ url_for('faturamento.status_processamento') }}" class="btn btn-outline-secondary btn-sm w-100">
-                                <i class="fas fa-chart-line me-2"></i>
-                                Status
-                            </a>
-                        </div>
-                    </div>
+                    <a href="{{ url_for('tagplus.pagina_importacao') }}" class="btn btn-warning btn-block mb-2">
+                        <i class="fas fa-download me-2"></i>
+                        Importar NFs
+                    </a>
+                    <a href="{{ url_for('tagplus.vincular_nfs') }}" class="btn btn-outline-warning btn-block mb-2">
+                        <i class="fas fa-link me-2"></i>
+                        Vincular NFs
+                    </a>
+                    <a href="{{ url_for('tagplus.importar_faturamento_excel') }}" class="btn btn-info btn-block">
+                        <i class="fas fa-file-excel me-2"></i>
+                        Importar Excel TagPlus
+                    </a>
+                    <small class="text-muted d-block mt-2">
+                        Importação e vinculação manual de NFs do TagPlus
+                    </small>
                 </div>
             </div>
         </div>
-    </div>
+        
 
     <!-- Logs de Atividade -->
     <div class="row">
@@ -367,20 +363,6 @@ function showAlert(type, message) {
     }, 5000);
 }
 
-// Auto-refresh dos cards de status a cada 5 minutos
-setInterval(() => {
-    fetch('/faturamento/api/status-cards')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Atualizar valores dos cards
-                document.querySelector('.text-primary').nextElementSibling.textContent = data.nfs_processadas_mes;
-                document.querySelector('.text-warning').nextElementSibling.textContent = data.nfs_pendentes;
-                document.querySelector('.text-info').nextElementSibling.textContent = 'R$ ' + data.valor_faturado_mes;
-                document.querySelector('.text-success').nextElementSibling.textContent = data.ultima_sincronizacao;
-            }
-        })
-        .catch(error => console.log('Erro ao atualizar status:', error));
-}, 300000); // 5 minutos
+// Removido auto-refresh - dados são carregados ao abrir a página
 </script>
 {% endblock %} 

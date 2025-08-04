@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+
+{% block title %}🚨 Alertas Críticos - Carteira{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-exclamation-triangle text-warning"></i>
+                Alertas Críticos do Sistema
+            </h1>
+            <p class="text-muted mb-0">Monitoramento de riscos operacionais e sincronização</p>
+        </div>
+        <div>
+            <button class="btn btn-primary" onclick="verificarAlertas()">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+            <a href="{{ url_for('alertas.dashboard_alertas') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Resumo de Alertas -->
+    <div class="row mb-4">
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Alertas Críticos
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ alertas.total_criticos or 0 }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Separações Cotadas
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ alertas.separacoes_cotadas.quantidade or 0 }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clipboard-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Pedidos Sem Faturamento
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ alertas.faturamento_pendente.quantidade or 0 }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-file-invoice fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detalhes dos Alertas -->
+    <div class="row">
+        <!-- Alerta 1: Separações Cotadas -->
+        {% if alertas.separacoes_cotadas %}
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3 bg-warning text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-clipboard-check"></i> 
+                        Separações Cotadas ({{ alertas.separacoes_cotadas.quantidade }})
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>O que são:</strong> Separações com status COTADO que podem ser afetadas pela sincronização.
+                    </div>
+                    
+                    <p class="mb-3">{{ alertas.separacoes_cotadas.mensagem }}</p>
+                    
+                    {% if alertas.separacoes_cotadas.separacoes_afetadas %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Lote</th>
+                                    <th>Pedido</th>
+                                    <th>Produto</th>
+                                    <th>Qtd</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for sep in alertas.separacoes_cotadas.separacoes_afetadas[:10] %}
+                                <tr>
+                                    <td><small>{{ sep.separacao_lote_id[:8] }}...</small></td>
+                                    <td>{{ sep.num_pedido }}</td>
+                                    <td>{{ sep.cod_produto }}</td>
+                                    <td>{{ sep.qtd_saldo }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                    
+                    <button class="btn btn-sm btn-warning" onclick="verDetalhes('separacoes_cotadas')">
+                        <i class="fas fa-search"></i> Ver Todos os Detalhes
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Alerta 2: Faturamento Pendente -->
+        {% if alertas.faturamento_pendente %}
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3 bg-danger text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-file-invoice"></i> 
+                        Pedidos Cotados Sem Faturamento ({{ alertas.faturamento_pendente.quantidade }})
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger mb-3">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>CRÍTICO:</strong> Estes pedidos cotados não têm NF registrada e podem perder vinculação!
+                    </div>
+                    
+                    <p class="mb-3">{{ alertas.faturamento_pendente.mensagem }}</p>
+                    
+                    {% if alertas.faturamento_pendente.percentual_risco %}
+                    <div class="progress mb-3">
+                        <div class="progress-bar bg-danger" role="progressbar" 
+                             style="width: {{ alertas.faturamento_pendente.percentual_risco }}%">
+                            {{ alertas.faturamento_pendente.percentual_risco }}% em risco
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if alertas.faturamento_pendente.pedidos_afetados %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>Produto</th>
+                                    <th>Qtd</th>
+                                    <th>Expedição</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ped in alertas.faturamento_pendente.pedidos_afetados[:10] %}
+                                <tr>
+                                    <td>{{ ped.num_pedido }}</td>
+                                    <td>{{ ped.cod_produto }}</td>
+                                    <td>{{ ped.qtd_saldo }}</td>
+                                    <td>{{ ped.expedicao or 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                    
+                    <button class="btn btn-sm btn-danger" onclick="verDetalhes('faturamento_pendente')">
+                        <i class="fas fa-search"></i> Ver Todos os Detalhes
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Recomendações -->
+    {% if alertas.recomendacoes %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow border-left-primary">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-lightbulb"></i> Recomendações
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        {% for rec in alertas.recomendacoes %}
+                        <li>{{ rec }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Histórico -->
+    {% if historico %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-history"></i> Histórico de Alertas (Últimas 24h)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Data/Hora</th>
+                                    <th>Tipo</th>
+                                    <th>Quantidade</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for h in historico %}
+                                <tr>
+                                    <td>{{ h.timestamp }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            {{ h.tipo }}
+                                        </span>
+                                    </td>
+                                    <td>{{ h.quantidade }}</td>
+                                    <td>
+                                        {% if h.resolvido %}
+                                        <span class="badge bg-success">Resolvido</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">Pendente</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Timestamp -->
+    <div class="text-center text-muted mt-4">
+        <small>Última verificação: {{ timestamp.strftime('%d/%m/%Y %H:%M:%S') if timestamp else 'N/A' }}</small>
+    </div>
+</div>
+
+<!-- Modal de Detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDetalhesTitle">Detalhes do Alerta</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="modalDetalhesBody">
+                <div class="text-center">
+                    <i class="fas fa-spinner fa-spin fa-3x"></i>
+                    <p>Carregando detalhes...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function verificarAlertas() {
+    location.reload();
+}
+
+function verDetalhes(tipoAlerta) {
+    $('#modalDetalhes').modal('show');
+    $('#modalDetalhesTitle').text('Detalhes: ' + tipoAlerta.replace('_', ' ').toUpperCase());
+    
+    // Buscar detalhes via API
+    fetch(`/carteira/alertas/api/detalhes/${tipoAlerta}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.sucesso) {
+                renderizarDetalhes(data.detalhes, tipoAlerta);
+            } else {
+                $('#modalDetalhesBody').html(
+                    '<div class="alert alert-danger">Erro ao carregar detalhes: ' + data.erro + '</div>'
+                );
+            }
+        })
+        .catch(error => {
+            $('#modalDetalhesBody').html(
+                '<div class="alert alert-danger">Erro ao carregar detalhes</div>'
+            );
+        });
+}
+
+function renderizarDetalhes(detalhes, tipo) {
+    let html = '<div class="table-responsive">';
+    html += '<table class="table table-sm">';
+    html += '<thead><tr>';
+    
+    if (tipo === 'separacoes_cotadas') {
+        html += '<th>Lote</th><th>Pedido</th><th>Produto</th><th>Nome</th><th>Qtd</th><th>Expedição</th><th>Cliente</th>';
+    } else {
+        html += '<th>Pedido</th><th>Produto</th><th>Qtd</th><th>Cliente</th><th>Data Pedido</th><th>Valor</th>';
+    }
+    
+    html += '</tr></thead><tbody>';
+    
+    detalhes.forEach(item => {
+        html += '<tr>';
+        if (tipo === 'separacoes_cotadas') {
+            html += `<td><small>${item.lote_id.substring(0, 8)}...</small></td>`;
+            html += `<td>${item.num_pedido}</td>`;
+            html += `<td>${item.cod_produto}</td>`;
+            html += `<td><small>${item.nome_produto}</small></td>`;
+            html += `<td>${item.qtd_saldo}</td>`;
+            html += `<td>${item.expedicao || 'N/A'}</td>`;
+            html += `<td><small>${item.cliente || 'N/A'}</small></td>`;
+        } else {
+            html += `<td>${item.num_pedido}</td>`;
+            html += `<td>${item.cod_produto}</td>`;
+            html += `<td>${item.qtd_saldo}</td>`;
+            html += `<td><small>${item.cliente || 'N/A'}</small></td>`;
+            html += `<td>${item.data_pedido || 'N/A'}</td>`;
+            html += `<td>R$ ${item.valor_pedido ? item.valor_pedido.toFixed(2) : '0.00'}</td>`;
+        }
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table></div>';
+    html += `<p class="text-muted">Total: ${detalhes.length} registros</p>`;
+    
+    $('#modalDetalhesBody').html(html);
+}
+</script>
+{% endblock %}

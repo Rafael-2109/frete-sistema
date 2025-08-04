@@ -6,10 +6,7 @@ Gera sugestões contextuais baseadas no perfil do usuário e histórico conversa
 
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
 from dataclasses import dataclass
-import json
-import random
 from app.claude_ai_novo.utils.flask_fallback import get_db
 
 logger = logging.getLogger(__name__)
@@ -187,8 +184,8 @@ class SuggestionsEngine:
             if self._is_redis_available():
                 try:
                     cached_suggestions = None
-            if REDIS_AVAILABLE and self.redis_cache:
-            redis_cache.get(cache_key)
+                    if self.redis_cache:
+                        cached_suggestions = self.redis_cache.get(cache_key)
                     if cached_suggestions and isinstance(cached_suggestions, list):
                         logger.debug(f"🎯 Sugestões carregadas do cache para usuário {user_context.get('username', 'unknown')}")
                         return cached_suggestions
@@ -201,8 +198,7 @@ class SuggestionsEngine:
             # Salvar no cache com validação
             if self._is_redis_available() and isinstance(suggestions, list):
                 try:
-                    self.if REDIS_AVAILABLE and redis_cache:
-            redis_cache.set(cache_key, suggestions, ttl=self.cache_ttl)
+                    self.redis_cache.set(cache_key, suggestions, ttl=self.cache_ttl)
                     logger.debug(f"💾 Sugestões salvas no cache para usuário {user_context.get('username', 'unknown')}")
                 except Exception as redis_error:
                     logger.warning(f"⚠️ Erro ao salvar no Redis: {redis_error}")
@@ -223,8 +219,7 @@ class SuggestionsEngine:
                 hasattr(self.redis_cache, 'disponivel') and 
                 hasattr(self.redis_cache, 'get') and 
                 hasattr(self.redis_cache, 'set') and
-                self.if REDIS_AVAILABLE and redis_cache:
-            redis_cache.disponivel
+                self.redis_cache.disponivel
             )
         except Exception:
             return False

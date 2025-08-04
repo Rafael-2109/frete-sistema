@@ -1,0 +1,424 @@
+{% extends "base.html" %}
+
+{% block title %}Carteira Não-Odoo{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="row">
+        <div class="col-12">
+            <h2>Carteira Não-Odoo</h2>
+            <div class="btn-group mb-3" role="group">
+                <a href="{{ url_for('carteira.views_nao_odoo.cadastro_cliente') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-user-plus"></i> Cadastrar Cliente
+                </a>
+                <a href="{{ url_for('carteira.views_nao_odoo.importacao_carteira') }}" class="btn btn-outline-success">
+                    <i class="fas fa-file-upload"></i> Importar Pedidos
+                </a>
+                <button class="btn btn-outline-info" onclick="atualizarTabela()">
+                    <i class="fas fa-sync"></i> Atualizar
+                </button>
+            </div>
+            <hr>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <input type="text" class="form-control" id="filtroGeral" placeholder="Buscar pedido, cliente, produto...">
+        </div>
+        <div class="col-md-2">
+            <select class="form-control" id="filtroVendedor">
+                <option value="">Todos Vendedores</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-control" id="filtroEquipe">
+                <option value="">Todas Equipes</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-control" id="filtroEstado">
+                <option value="">Todos Estados</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <button class="btn btn-primary" onclick="aplicarFiltros()">Filtrar</button>
+            <button class="btn btn-secondary" onclick="limparFiltros()">Limpar</button>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="row">
+        <div class="col-12">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover table-sm" id="tabelaCarteira">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th>Pedido</th>
+                            <th>CNPJ</th>
+                            <th>Cliente</th>
+                            <th>UF</th>
+                            <th>Município</th>
+                            <th>Vendedor</th>
+                            <th>Equipe</th>
+                            <th>Cód. Produto</th>
+                            <th>Produto</th>
+                            <th>Qtd. Pedido</th>
+                            <th>Qtd. Cancelada</th>
+                            <th>Qtd. Faturada</th>
+                            <th>Qtd. Saldo</th>
+                            <th>Qtd. Embarque</th>
+                            <th>Preço</th>
+                            <th>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyCarteira">
+                        <tr>
+                            <td colspan="16" class="text-center">
+                                <i class="fas fa-spinner fa-spin"></i> Carregando...
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="font-weight-bold">
+                            <td colspan="9">TOTAIS</td>
+                            <td id="totalPedido">0</td>
+                            <td id="totalCancelada">0</td>
+                            <td id="totalFaturada">0</td>
+                            <td id="totalSaldo">0</td>
+                            <td id="totalEmbarque">0</td>
+                            <td>-</td>
+                            <td id="totalValor">R$ 0,00</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Edição de Quantidade Cancelada -->
+<div class="modal fade" id="modalEditarCancelada" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Quantidade Cancelada</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditarCancelada">
+                    <input type="hidden" id="editItemId">
+                    <div class="form-group">
+                        <label>Produto:</label>
+                        <p id="editProdutoInfo" class="form-control-plaintext"></p>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Qtd. Pedido:</label>
+                                <p id="editQtdPedido" class="form-control-plaintext"></p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Qtd. Faturada:</label>
+                                <p id="editQtdFaturada" class="form-control-plaintext"></p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Qtd. em Embarque:</label>
+                                <p id="editQtdEmbarque" class="form-control-plaintext"></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Quantidade Cancelada:</label>
+                        <input type="number" class="form-control" id="editQtdCancelada" min="0" step="1" required>
+                        <small class="form-text text-muted">Máximo permitido: <span id="editMaxCancelada">0</span></small>
+                    </div>
+                    <div class="alert alert-warning" id="alertaCotado" style="display: none;">
+                        <strong>Atenção:</strong> Este produto tem quantidade em embarque cotado. O cancelamento não afetará essa quantidade.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarQtdCancelada()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Variáveis globais
+let dadosCarteira = [];
+let filtros = {
+    geral: '',
+    vendedor: '',
+    equipe: '',
+    estado: ''
+};
+
+// Inicialização
+$(document).ready(function() {
+    carregarCarteira();
+    carregarFiltros();
+    
+    // Eventos de filtro
+    $('#filtroGeral').on('input', function() {
+        filtros.geral = $(this).val();
+        aplicarFiltros();
+    });
+    
+    $('#filtroVendedor, #filtroEquipe, #filtroEstado').change(function() {
+        aplicarFiltros();
+    });
+});
+
+// Carregar dados da carteira
+function carregarCarteira() {
+    $.get('/carteira/api/carteira-nao-odoo')
+        .done(function(response) {
+            if (response.success) {
+                dadosCarteira = response.items;
+                renderizarTabela(dadosCarteira);
+                atualizarFiltros();
+            }
+        })
+        .fail(function(xhr) {
+            console.error('Erro ao carregar carteira:', xhr);
+            toastr.error('Erro ao carregar dados da carteira');
+        });
+}
+
+// Renderizar tabela
+function renderizarTabela(items) {
+    let html = '';
+    let totais = {
+        pedido: 0,
+        cancelada: 0,
+        faturada: 0,
+        saldo: 0,
+        embarque: 0,
+        valor: 0
+    };
+    
+    if (items.length === 0) {
+        html = '<tr><td colspan="16" class="text-center">Nenhum item encontrado</td></tr>';
+    } else {
+        items.forEach(item => {
+            // Calcular totais
+            totais.pedido += item.qtd_produto_pedido;
+            totais.cancelada += item.qtd_cancelada_produto_pedido;
+            totais.faturada += item.baixa_produto_pedido;
+            totais.saldo += item.qtd_saldo_produto_pedido;
+            totais.embarque += item.qtd_embarque || 0;
+            totais.valor += item.valor_total;
+            
+            // Formatar CNPJ
+            const cnpjFormatado = formatarCNPJ(item.cnpj_cpf);
+            
+            html += `
+                <tr>
+                    <td>${item.num_pedido}</td>
+                    <td>${cnpjFormatado}</td>
+                    <td title="${item.raz_social}">${item.raz_social_red || item.raz_social}</td>
+                    <td>${item.estado}</td>
+                    <td>${item.municipio}</td>
+                    <td>${item.vendedor || '-'}</td>
+                    <td>${item.equipe_vendas || '-'}</td>
+                    <td>${item.cod_produto}</td>
+                    <td>${item.nome_produto}</td>
+                    <td class="text-right">${formatarNumero(item.qtd_produto_pedido)}</td>
+                    <td class="text-right">
+                        <a href="#" onclick="editarQtdCancelada(${item.id})" title="Clique para editar">
+                            ${formatarNumero(item.qtd_cancelada_produto_pedido)}
+                        </a>
+                    </td>
+                    <td class="text-right">${formatarNumero(item.baixa_produto_pedido)}</td>
+                    <td class="text-right font-weight-bold">${formatarNumero(item.qtd_saldo_produto_pedido)}</td>
+                    <td class="text-right">${formatarNumero(item.qtd_embarque || 0)}</td>
+                    <td class="text-right">R$ ${formatarMoeda(item.preco_produto_pedido)}</td>
+                    <td class="text-right">R$ ${formatarMoeda(item.valor_total)}</td>
+                </tr>
+            `;
+        });
+    }
+    
+    $('#tbodyCarteira').html(html);
+    
+    // Atualizar totais
+    $('#totalPedido').text(formatarNumero(totais.pedido));
+    $('#totalCancelada').text(formatarNumero(totais.cancelada));
+    $('#totalFaturada').text(formatarNumero(totais.faturada));
+    $('#totalSaldo').text(formatarNumero(totais.saldo));
+    $('#totalEmbarque').text(formatarNumero(totais.embarque));
+    $('#totalValor').text('R$ ' + formatarMoeda(totais.valor));
+}
+
+// Formatar CNPJ
+function formatarCNPJ(cnpj) {
+    if (!cnpj) return '';
+    cnpj = cnpj.replace(/\D/g, '');
+    if (cnpj.length === 14) {
+        return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    } else if (cnpj.length === 11) {
+        return cnpj.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    }
+    return cnpj;
+}
+
+// Formatar número
+function formatarNumero(num) {
+    return parseFloat(num || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
+// Formatar moeda
+function formatarMoeda(valor) {
+    return parseFloat(valor || 0).toFixed(2).replace('.', ',');
+}
+
+// Carregar opções de filtros
+function carregarFiltros() {
+    $.get('/carteira/api/cadastro-cliente/opcoes')
+        .done(function(response) {
+            if (response.success) {
+                // Vendedores
+                response.opcoes.vendedores.forEach(v => {
+                    $('#filtroVendedor').append($('<option>').val(v.value).text(v.label));
+                });
+                
+                // Equipes
+                response.opcoes.equipes_vendas.forEach(e => {
+                    $('#filtroEquipe').append($('<option>').val(e.value).text(e.label));
+                });
+                
+                // Estados
+                response.opcoes.ufs.forEach(uf => {
+                    $('#filtroEstado').append($('<option>').val(uf.value).text(uf.label));
+                });
+            }
+        });
+}
+
+// Atualizar filtros com dados atuais
+function atualizarFiltros() {
+    // Esta função pode ser expandida para atualizar filtros dinamicamente
+}
+
+// Aplicar filtros
+function aplicarFiltros() {
+    filtros.vendedor = $('#filtroVendedor').val();
+    filtros.equipe = $('#filtroEquipe').val();
+    filtros.estado = $('#filtroEstado').val();
+    
+    let itemsFiltrados = dadosCarteira;
+    
+    // Filtro geral
+    if (filtros.geral) {
+        const termo = filtros.geral.toLowerCase();
+        itemsFiltrados = itemsFiltrados.filter(item => 
+            item.num_pedido.toLowerCase().includes(termo) ||
+            item.cnpj_cpf.includes(termo) ||
+            (item.raz_social && item.raz_social.toLowerCase().includes(termo)) ||
+            (item.raz_social_red && item.raz_social_red.toLowerCase().includes(termo)) ||
+            item.cod_produto.toLowerCase().includes(termo) ||
+            (item.nome_produto && item.nome_produto.toLowerCase().includes(termo))
+        );
+    }
+    
+    // Filtro vendedor
+    if (filtros.vendedor) {
+        itemsFiltrados = itemsFiltrados.filter(item => item.vendedor === filtros.vendedor);
+    }
+    
+    // Filtro equipe
+    if (filtros.equipe) {
+        itemsFiltrados = itemsFiltrados.filter(item => item.equipe_vendas === filtros.equipe);
+    }
+    
+    // Filtro estado
+    if (filtros.estado) {
+        itemsFiltrados = itemsFiltrados.filter(item => item.estado === filtros.estado);
+    }
+    
+    renderizarTabela(itemsFiltrados);
+}
+
+// Limpar filtros
+function limparFiltros() {
+    $('#filtroGeral').val('');
+    $('#filtroVendedor').val('');
+    $('#filtroEquipe').val('');
+    $('#filtroEstado').val('');
+    filtros = {
+        geral: '',
+        vendedor: '',
+        equipe: '',
+        estado: ''
+    };
+    renderizarTabela(dadosCarteira);
+}
+
+// Editar quantidade cancelada
+function editarQtdCancelada(itemId) {
+    const item = dadosCarteira.find(i => i.id === itemId);
+    if (!item) return;
+    
+    // Preencher modal
+    $('#editItemId').val(itemId);
+    $('#editProdutoInfo').text(`${item.cod_produto} - ${item.nome_produto}`);
+    $('#editQtdPedido').text(formatarNumero(item.qtd_produto_pedido));
+    $('#editQtdFaturada').text(formatarNumero(item.baixa_produto_pedido));
+    $('#editQtdEmbarque').text(formatarNumero(item.qtd_embarque || 0));
+    $('#editQtdCancelada').val(item.qtd_cancelada_produto_pedido);
+    
+    // Calcular máximo permitido
+    const maxCancelada = item.qtd_produto_pedido - item.baixa_produto_pedido - (item.qtd_embarque || 0);
+    $('#editMaxCancelada').text(formatarNumero(Math.max(0, maxCancelada)));
+    $('#editQtdCancelada').attr('max', Math.max(0, maxCancelada));
+    
+    // Mostrar alerta se tem embarque cotado
+    if (item.qtd_embarque > 0) {
+        $('#alertaCotado').show();
+    } else {
+        $('#alertaCotado').hide();
+    }
+    
+    $('#modalEditarCancelada').modal('show');
+}
+
+// Salvar quantidade cancelada
+function salvarQtdCancelada() {
+    const itemId = $('#editItemId').val();
+    const qtdCancelada = parseFloat($('#editQtdCancelada').val()) || 0;
+    
+    $.ajax({
+        url: `/carteira/api/carteira-nao-odoo/${itemId}/cancelar`,
+        method: 'PUT',
+        data: JSON.stringify({ qtd_cancelada: qtdCancelada }),
+        contentType: 'application/json',
+        success: function(response) {
+            if (response.success) {
+                toastr.success('Quantidade cancelada atualizada com sucesso');
+                $('#modalEditarCancelada').modal('hide');
+                carregarCarteira();
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Erro ao atualizar';
+            toastr.error(error);
+        }
+    });
+}
+
+// Atualizar tabela
+function atualizarTabela() {
+    carregarCarteira();
+}
+</script>
+{% endblock %}

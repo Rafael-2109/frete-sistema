@@ -8,15 +8,16 @@ import importlib
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Dict, Tuple, Any
 import json
 import subprocess
+import logging
 
 class DependencyChecker:
     def __init__(self):
         self.base_dir = Path(__file__).parent
         self.project_root = self.base_dir.parent.parent
-        
+        self.logger = logging.getLogger(__name__)
         # Dependências categorizadas
         self.dependencies = {
             'core': {
@@ -209,32 +210,20 @@ class DependencyChecker:
         print("=" * 60)
         
         try:
-            # Tentar importar e verificar configuração
-            from app import db
-        except Exception as e:
-            logger.error(f'Erro: {e}')
-            pass
-try:
-    from flask import current_app
-    FLASK_AVAILABLE = True
-except ImportError:
-    current_app = None
-    FLASK_AVAILABLE = False
+            from flask import current_app
+            FLASK_AVAILABLE = True
+        except ImportError:
+            current_app = None
+            FLASK_AVAILABLE = False
             
             # Verificar se estamos em contexto Flask
             try:
                 db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', 'Not configured')
                 print(f"✅ Database URI configurada")
                 print(f"   └─ Engine: {db_uri.split('://')[0] if '://' in db_uri else 'unknown'}")
-            except:
+            except Exception as e:
                 print("⚠️  Fora do contexto Flask - não é possível verificar configuração")
                 
-        except ImportError:
-            print("❌ SQLAlchemy não disponível")
-            self.results['issues'].append({
-                'type': 'database_unavailable',
-                'severity': 'critical'
-            })
             
     def check_redis_connection(self):
         """Verifica conexão com Redis"""

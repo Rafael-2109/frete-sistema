@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, send_file, Response
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from app import db
 from app.faturamento.models import RelatorioFaturamentoImportado, FaturamentoProduto
@@ -9,11 +9,7 @@ from app.embarques.models import EmbarqueItem, Embarque
 from app.fretes.routes import validar_cnpj_embarque_faturamento
 from app.monitoramento.models import EntregaMonitorada
 from datetime import datetime
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import func, and_, or_
-
-# 🌐 Importar sistema de arquivos S3
-from app.utils.file_storage import get_file_storage
+from sqlalchemy import func
 
 faturamento_bp = Blueprint('faturamento', __name__,url_prefix='/faturamento')
 
@@ -160,17 +156,17 @@ def listar_relatorios():
 
     # 3) Definir mapa de colunas ordenáveis
     sortable_columns = {
-        'numero_nf':           RelatorioFaturamentoImportado.numero_nf,
-        'origem':              RelatorioFaturamentoImportado.origem,
-        'cnpj_cliente':        RelatorioFaturamentoImportado.cnpj_cliente,
-        'data_fatura':         RelatorioFaturamentoImportado.data_fatura,
-        'nome_cliente':        RelatorioFaturamentoImportado.nome_cliente,
-        'valor_total':         RelatorioFaturamentoImportado.valor_total,
+        'numero_nf': RelatorioFaturamentoImportado.numero_nf,
+        'origem': RelatorioFaturamentoImportado.origem,
+        'cnpj_cliente': RelatorioFaturamentoImportado.cnpj_cliente,
+        'data_fatura': RelatorioFaturamentoImportado.data_fatura,
+        'nome_cliente': RelatorioFaturamentoImportado.nome_cliente,
+        'valor_total': RelatorioFaturamentoImportado.valor_total,
         'nome_transportadora': RelatorioFaturamentoImportado.nome_transportadora,
-        'municipio':           RelatorioFaturamentoImportado.municipio,
-        'estado':              RelatorioFaturamentoImportado.estado,
-        'incoterm':            RelatorioFaturamentoImportado.incoterm,
-        'vendedor':            RelatorioFaturamentoImportado.vendedor,
+        'municipio': RelatorioFaturamentoImportado.municipio,
+        'estado': RelatorioFaturamentoImportado.estado,
+        'incoterm': RelatorioFaturamentoImportado.incoterm,
+        'vendedor': RelatorioFaturamentoImportado.vendedor,
     }
 
     # 4) Aplicar .order_by() caso o sort seja válido
@@ -244,7 +240,7 @@ def sincronizar_nfs_pendentes_embarques(nfs_importadas):
             # Força rollback se houver erro na consulta
             try:
                 db.session.rollback()
-            except:
+            except Exception:
                 pass
             return 0
         
@@ -259,7 +255,7 @@ def sincronizar_nfs_pendentes_embarques(nfs_importadas):
             # Força rollback se houver erro na consulta
             try:
                 db.session.rollback()
-            except:
+            except Exception:
                 pass
             return 0
         
@@ -283,7 +279,7 @@ def sincronizar_nfs_pendentes_embarques(nfs_importadas):
                 # Força rollback se houver erro
                 try:
                     db.session.rollback()
-                except:
+                except Exception:
                     pass
                 continue
         
@@ -301,7 +297,7 @@ def sincronizar_nfs_pendentes_embarques(nfs_importadas):
                 # Força rollback se houver erro
                 try:
                     db.session.rollback()
-                except:
+                except Exception:
                     pass
         
         print(f"[DEBUG] ✅ Total de NFs de embarques sincronizadas: {contador_sincronizadas}")
@@ -312,7 +308,7 @@ def sincronizar_nfs_pendentes_embarques(nfs_importadas):
         # Força rollback da sessão principal se houver erro
         try:
             db.session.rollback()
-        except:
+        except Exception:
             pass
         return 0
 
@@ -405,13 +401,15 @@ def inativar_nfs():
 def listar_faturamento_produtos():
     """Lista faturamento detalhado por produto"""
     # Filtros
+    numero_nf = request.args.get('numero_nf', '')  # Add missing numero_nf filter
     nome_cliente = request.args.get('nome_cliente', '')
     cod_produto = request.args.get('cod_produto', '')
     vendedor = request.args.get('vendedor', '')
     estado = request.args.get('estado', '')
     incoterm = request.args.get('incoterm', '')
-    data_de = request.args.get('data_de', '')
-    data_ate = request.args.get('data_ate', '')
+    # FIXED: Match frontend parameter names
+    data_de = request.args.get('data_inicio', '')  # Frontend sends data_inicio
+    data_ate = request.args.get('data_fim', '')    # Frontend sends data_fim
     municipio = request.args.get('municipio', '')
     
     # Paginação - CORRIGIDO
@@ -440,6 +438,10 @@ def listar_faturamento_produtos():
             
             # Aplicar filtros com logs para debug
             filtros_aplicados = []
+            
+            if numero_nf and numero_nf.strip():
+                query = query.filter(FaturamentoProduto.numero_nf.ilike(f'%{numero_nf.strip()}%'))
+                filtros_aplicados.append(f"NF: {numero_nf}")
             
             if nome_cliente and nome_cliente.strip():
                 query = query.filter(FaturamentoProduto.nome_cliente.ilike(f'%{nome_cliente.strip()}%'))
@@ -526,44 +528,53 @@ def listar_faturamento_produtos():
             total_registros_filtrados = 0
             total_valor_faturado = 0
             total_quantidade = 0
+            total_peso = 0  # Add missing total_peso
             produtos_unicos = 0
             opcoes_estados = []
             opcoes_incoterms = []
             opcoes_vendedores = []
+            from datetime import date
+            mes_atual = date.today().replace(day=1)  # Initialize mes_atual for empty case
     except Exception:
         faturamentos = None
         total_registros_sistema = 0
         total_registros_filtrados = 0
         total_valor_faturado = 0
         total_quantidade = 0
+        total_peso = 0  # Add missing total_peso
         produtos_unicos = 0
         opcoes_estados = []
         opcoes_incoterms = []
         opcoes_vendedores = []
+        from datetime import date
+        mes_atual = date.today().replace(day=1)  # Initialize mes_atual for error case
     
     return render_template('faturamento/listar_produtos.html',
-                         produtos=faturamentos,
-                         pagination=faturamentos,
-                         total_registros_sistema=total_registros_sistema,
-                         total_registros_filtrados=total_registros_filtrados,
-                         total_valor_faturado=total_valor_faturado,
-                         total_quantidade=total_quantidade,
-                         total_peso=total_peso,  # ✅ PESO TOTAL ADICIONADO
-                         produtos_unicos=produtos_unicos,
-                         mes_atual=mes_atual.strftime('%m/%Y'),  # ✅ ADICIONAR MÊS
-                         filtros={
-                             'nome_cliente': nome_cliente,
-                             'cod_produto': cod_produto,
-                             'vendedor': vendedor,
-                             'estado': estado,
-                             'incoterm': incoterm,
-                             'data_de': data_de,
-                             'data_ate': data_ate,
-                             'municipio': municipio
-                         },
-                         opcoes_estados=opcoes_estados,
-                         opcoes_incoterms=opcoes_incoterms,
-                         opcoes_vendedores=opcoes_vendedores)
+                        produtos=faturamentos,
+                        pagination=faturamentos,
+                        total_registros_sistema=total_registros_sistema,
+                        total_registros_filtrados=total_registros_filtrados,
+                        total_valor_faturado=total_valor_faturado,
+                        total_quantidade=total_quantidade,
+                        total_peso=total_peso,
+                        produtos_unicos=produtos_unicos,
+                        mes_atual=mes_atual.strftime('%m/%Y'),
+                        # FIXED: Match frontend variable names
+                        ufs_disponiveis=opcoes_estados,
+                        incoterms_disponiveis=opcoes_incoterms,
+                        vendedores_disponiveis=opcoes_vendedores,
+                        per_page=per_page,  # Add per_page to template context
+                        filtros={
+                            'numero_nf': numero_nf,       # Add numero_nf to filters
+                            'nome_cliente': nome_cliente,
+                            'cod_produto': cod_produto,
+                            'vendedor': vendedor,
+                            'estado': estado,
+                            'incoterm': incoterm,
+                            'data_inicio': data_de,   # Keep frontend naming
+                            'data_fim': data_ate,     # Keep frontend naming
+                            'municipio': municipio
+                        })
 
 @faturamento_bp.route('/produtos/api/estatisticas')
 @login_required
@@ -591,7 +602,6 @@ def api_estatisticas_produtos():
 def exportar_dados_faturamento():
     """Exportar dados existentes de faturamento por produto"""
     try:
-        import pandas as pd
         from flask import make_response
         from io import BytesIO
         from sqlalchemy import inspect
@@ -677,32 +687,46 @@ def dashboard_faturamento():
         # Calcular estatísticas do mês atual
         mes_atual = date.today().replace(day=1)
         
-        # NFs processadas no mês
-        nfs_processadas_mes = RelatorioFaturamentoImportado.query.filter(
-            RelatorioFaturamentoImportado.criado_em >= mes_atual,
+        # NFs faturadas no mês
+        nfs_faturadas_mes = RelatorioFaturamentoImportado.query.filter(
+            RelatorioFaturamentoImportado.data_fatura >= mes_atual,
             RelatorioFaturamentoImportado.ativo == True
         ).count()
         
-        # NFs pendentes de reconciliação
-        nfs_pendentes = RelatorioFaturamentoImportado.query.filter(
+        # Valor faturado no mês
+        valor_faturado_mes = db.session.query(
+            func.sum(RelatorioFaturamentoImportado.valor_total)
+        ).filter(
+            RelatorioFaturamentoImportado.data_fatura >= mes_atual,
             RelatorioFaturamentoImportado.ativo == True
-            # TODO: Adicionar lógica de NFs sem vinculação
-        ).count()
+        ).scalar() or 0
         
-        # Valor faturado no mês (via FaturamentoProduto se existir)
-        valor_faturado_mes = 0
+        # Quantidade de itens faturados no mês (soma das quantidades)
+        qtd_itens_faturados_mes = 0
         try:
-            if db.engine.has_table('faturamento_produto'):
-                valor_faturado_mes = db.session.query(
-                    func.sum(FaturamentoProduto.valor_produto_faturado)
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+            
+            if inspector.has_table('faturamento_produto'):
+                resultado = db.session.query(
+                    func.sum(FaturamentoProduto.qtd_produto_faturado)
                 ).filter(
                     FaturamentoProduto.data_fatura >= mes_atual
-                ).scalar() or 0
-        except Exception:
-            pass
+                ).scalar()
+                
+                qtd_itens_faturados_mes = float(resultado) if resultado else 0
+                print(f"[DEBUG] Qtd itens faturados: {qtd_itens_faturados_mes}")
+        except Exception as e:
+            print(f"[DEBUG] Erro ao calcular itens faturados: {e}")
+            qtd_itens_faturados_mes = 0
         
-        # Última sincronização (exemplo)
-        ultima_sincronizacao = "Nunca"  # TODO: Implementar controle de sincronização
+        # Última sincronização do Odoo
+        ultima_sincronizacao = "Nunca"
+        ultima_nf = RelatorioFaturamentoImportado.query.order_by(
+            RelatorioFaturamentoImportado.criado_em.desc()
+        ).first()
+        if ultima_nf and ultima_nf.criado_em:
+            ultima_sincronizacao = ultima_nf.criado_em.strftime('%d/%m/%Y %H:%M')
         
         # Logs de atividade recentes
         logs_atividade = [
@@ -714,10 +738,20 @@ def dashboard_faturamento():
             }
         ]
         
+        # Formatar valor em padrão brasileiro
+        from app.utils.valores_brasileiros import formatar_valor_brasileiro
+        valor_faturado_mes_formatado = formatar_valor_brasileiro(valor_faturado_mes)
+        
+        # Formatar quantidade como número inteiro com separador de milhar
+        qtd_itens_formatada = f"{int(qtd_itens_faturados_mes):,.0f}".replace(',', '.')
+        
+        # Formatar NFs faturadas com separador de milhar
+        nfs_faturadas_formatada = f"{nfs_faturadas_mes:,.0f}".replace(',', '.')
+        
         return render_template('faturamento/dashboard_faturamento.html',
-                             nfs_processadas_mes=nfs_processadas_mes,
-                             nfs_pendentes=nfs_pendentes,
-                             valor_faturado_mes=valor_faturado_mes,
+                             nfs_faturadas_mes=nfs_faturadas_formatada,
+                             qtd_itens_faturados_mes=qtd_itens_formatada,
+                             valor_faturado_mes=valor_faturado_mes_formatado,
                              ultima_sincronizacao=ultima_sincronizacao,
                              logs_atividade=logs_atividade)
         

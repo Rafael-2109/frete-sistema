@@ -2,10 +2,7 @@
   "permissions": {
     "allow": [
       "mcp__ruv-swarm",
-      "mcp__claude-flow",
-      "Bash(npx claude-flow:*)",
-      "Bash(find:*)",
-      "Bash(mkdir:*)"
+      "mcp__claude-flow"
     ],
     "deny": []
   }

@@ -95,26 +95,12 @@ def create_processor_summary(data):
 
 # Configuração
 try:
-    from app.claude_ai_novo.config import ClaudeAIConfig
+    from app.claude_ai_novo.config.basic_config import ClaudeAIConfig
+    from app.claude_ai_novo.config import AdvancedConfig
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
     ClaudeAIConfig = None
-
-# Models
-try:
-    MODELS_AVAILABLE = True
-except ImportError:
-    MODELS_AVAILABLE = False
-
-# Configuração local
-try:
-    from app.claude_ai_novo.config import ClaudeAIConfig, AdvancedConfig
-    CONFIG_LOCAL_AVAILABLE = True
-except ImportError:
-    CONFIG_LOCAL_AVAILABLE = False
-    if not CONFIG_AVAILABLE:
-        ClaudeAIConfig = None
     AdvancedConfig = None
 
 class ResponseProcessor(ProcessorBase):
@@ -161,7 +147,7 @@ class ResponseProcessor(ProcessorBase):
             # Buscar dados
             dados = data_provider.get_data_by_domain(dominio, filters)
             
-            self.logger.info(f"Dados obtidos do domínio {dominio}: {dados.get('total', 0)} registros")
+            self.logger.info(f"Dados obtidos do domínio {dominio}: {dados.get('total_registros', 0)} registros")
             
             return dados
             
@@ -173,24 +159,40 @@ class ResponseProcessor(ProcessorBase):
         """Inicializa cliente Anthropic se configurado"""
         
         try:
+            self.logger.info("🔧 Iniciando configuração do cliente Anthropic...")
+            
             if not ANTHROPIC_AVAILABLE:
-                self.logger.warning("Anthropic não disponível - modo simulado")
+                self.logger.warning("❌ Biblioteca anthropic não instalada - modo simulado")
                 return
                 
-            if CONFIG_LOCAL_AVAILABLE and ClaudeAIConfig:
-                config = ClaudeAIConfig()
-                api_key = config.get_anthropic_api_key()
+            if CONFIG_AVAILABLE and ClaudeAIConfig:
+                self.logger.info("✅ Configuração disponível, obtendo API key...")
+                # ClaudeAIConfig é uma classe, não uma instância
+                api_key = ClaudeAIConfig.get_anthropic_api_key()
                 
                 if api_key:
+                    self.logger.info(f"🔑 API Key encontrada: {api_key[:10]}...")
                     self.client = anthropic.Anthropic(api_key=api_key)
-                    self.logger.info("Cliente Anthropic inicializado com sucesso")
+                    self.logger.info("✅ Cliente Anthropic inicializado com sucesso!")
+                    
+                    # Testar conexão
+                    try:
+                        test_response = self.client.messages.create(
+                            model="claude-sonnet-4-20250514",
+                            max_tokens=10,
+                            messages=[{"role": "user", "content": "test"}]
+                        )
+                        self.logger.info("✅ Teste de conexão com Claude bem-sucedido!")
+                    except Exception as test_e:
+                        self.logger.error(f"❌ Falha no teste de conexão: {test_e}")
                 else:
-                    self.logger.warning("API Key Anthropic não configurada")
+                    self.logger.warning("❌ API Key Anthropic não configurada")
             else:
-                self.logger.warning("Configuração não disponível para cliente Anthropic")
+                self.logger.warning("❌ Configuração não disponível para cliente Anthropic")
                 
         except Exception as e:
-            self.logger.error(f"Erro ao inicializar cliente Anthropic: {e}")
+            self.logger.error(f"❌ Erro ao inicializar cliente Anthropic: {str(e)}")
+            self.logger.error(f"❌ Tipo do erro: {type(e).__name__}")
     
     def gerar_resposta_otimizada(self, consulta: str, analise: Dict[str, Any], 
                                user_context: Optional[Dict] = None, dados_reais: Optional[Dict] = None) -> str:
@@ -270,14 +272,21 @@ class ResponseProcessor(ProcessorBase):
         """🎯 Gera resposta inicial otimizada"""
         
         try:
+            # Log para debug
+            self.logger.info(f"🔍 Gerando resposta inicial para: {consulta[:50]}...")
+            self.logger.info(f"🔑 Cliente Anthropic disponível: {self.client is not None}")
+            
             # Se não tem cliente Anthropic, usar resposta padrão
             if not self.client:
+                self.logger.warning("⚠️ Cliente Anthropic não disponível, usando resposta padrão")
                 return self._processar_consulta_padrao(consulta, user_context)
             
             # Construir prompt otimizado
             prompt = self._construir_prompt_otimizado(consulta, analise, user_context, dados_reais)
+            self.logger.debug(f"📝 Prompt construído com {len(prompt)} caracteres")
             
             # Gerar resposta com Claude
+            self.logger.info("🤖 Chamando API do Claude...")
             response = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=4000,
@@ -285,10 +294,13 @@ class ResponseProcessor(ProcessorBase):
                 messages=[{"role": "user", "content": prompt}]
             )
             
-            return response.content[0].text
+            resposta_texto = response.content[0].text
+            self.logger.info(f"✅ Resposta do Claude recebida: {len(resposta_texto)} caracteres")
+            return resposta_texto
             
         except Exception as e:
-            self.logger.error(f"Erro na resposta inicial: {e}")
+            self.logger.error(f"❌ Erro na resposta inicial: {str(e)}")
+            self.logger.error(f"❌ Tipo do erro: {type(e).__name__}")
             return self._processar_consulta_padrao(consulta, user_context)
     
     def _construir_prompt_otimizado(self, consulta: str, analise: Dict[str, Any], 
@@ -316,30 +328,68 @@ class ResponseProcessor(ProcessorBase):
         
         # Adicionar dados reais ao prompt
         if dados_reais and dados_reais.get('data'):
-            prompt += f"- Total de registros: {dados_reais.get('total', 0)}\n"
+            dados = dados_reais.get('data', [])
+            prompt += f"- Total de registros encontrados: {dados_reais.get('total_registros', 0)}\n"
+            
+            # Filtrar dados pelo cliente específico se mencionado
+            cliente_especifico = analise.get('cliente_especifico')
+            if cliente_especifico and dados:
+                # Filtrar dados do cliente específico
+                dados_cliente = [d for d in dados if cliente_especifico.lower() in str(d.get('nome_cliente', '')).lower()]
+                if dados_cliente:
+                    prompt += f"- Registros do {cliente_especifico}: {len(dados_cliente)}\n"
+                    dados = dados_cliente  # Usar apenas dados do cliente
             
             # Adicionar resumo dos dados
             if dados_reais.get('domain') == 'entregas':
-                entregas = dados_reais.get('data', [])
-                if entregas:
+                if dados:
                     # Calcular estatísticas
-                    total_entregues = len([e for e in entregas if e.get('status') == 'ENTREGUE'])
-                    total_pendentes = len([e for e in entregas if e.get('status') != 'ENTREGUE'])
+                    total_entregues = len([e for e in dados if e.get('status', '').lower() == 'entregue'])
+                    total_pendentes = len([e for e in dados if e.get('status', '').lower() == 'pendente'])
                     
+                    prompt += f"\n**Estatísticas de Entregas:**\n"
                     prompt += f"- Entregas realizadas: {total_entregues}\n"
                     prompt += f"- Entregas pendentes: {total_pendentes}\n"
+                    prompt += f"- Taxa de sucesso: {(total_entregues/len(dados)*100):.1f}% \n" if dados else ""
                     
-                    # Listar algumas entregas recentes
-                    prompt += "\n**Entregas recentes:**\n"
-                    for entrega in entregas[:5]:
-                        prompt += f"- NF {entrega.get('numero_nf')} - {entrega.get('destino')} - Status: {entrega.get('status', 'N/A')}\n"
+                    # Agrupar por destino
+                    destinos = {}
+                    for e in dados:
+                        destino = e.get('destino', 'N/A')
+                        if destino not in destinos:
+                            destinos[destino] = {'total': 0, 'entregue': 0, 'pendente': 0}
+                        destinos[destino]['total'] += 1
+                        if e.get('status', '').lower() == 'entregue':
+                            destinos[destino]['entregue'] += 1
+                        else:
+                            destinos[destino]['pendente'] += 1
+                    
+                    # Top 5 destinos
+                    if destinos:
+                        prompt += "\n**Top Destinos:**\n"
+                        top_destinos = sorted(destinos.items(), key=lambda x: x[1]['total'], reverse=True)[:5]
+                        for destino, stats in top_destinos:
+                            prompt += f"- {destino}: {stats['total']} entregas ({stats['entregue']} entregues, {stats['pendente']} pendentes)\n"
+                    
+                    # Listar entregas recentes
+                    prompt += f"\n**Últimas {min(10, len(dados))} entregas:**\n"
+                    for i, entrega in enumerate(dados[:10]):
+                        cliente = entrega.get('nome_cliente', 'N/A')
+                        prompt += f"{i+1}. NF {entrega.get('numero_nf')} - Cliente: {cliente} - {entrega.get('destino')} - Status: {entrega.get('status', 'N/A')}"
+                        if entrega.get('data_embarque'):
+                            prompt += f" - Embarcado: {entrega.get('data_embarque')}"
+                        if entrega.get('data_entrega'):
+                            prompt += f" - Entregue: {entrega.get('data_entrega')}"
+                        prompt += "\n"
                         
             elif dados_reais.get('domain') == 'pedidos':
-                pedidos = dados_reais.get('data', [])
-                if pedidos:
-                    prompt += f"\n**Pedidos encontrados: {len(pedidos)}**\n"
-                    for pedido in pedidos[:5]:
-                        prompt += f"- Pedido {pedido.get('num_pedido')} - {pedido.get('cliente')} - R$ {pedido.get('valor_total', 0):.2f}\n"
+                if dados:
+                    prompt += f"\n**Pedidos encontrados: {len(dados)}**\n"
+                    total_valor = sum(float(p.get('valor_total', 0)) for p in dados)
+                    prompt += f"- Valor total: R$ {total_valor:,.2f}\n\n"
+                    
+                    for i, pedido in enumerate(dados[:10]):
+                        prompt += f"{i+1}. Pedido {pedido.get('num_pedido')} - {pedido.get('cliente')} - R$ {pedido.get('valor_total', 0):,.2f}\n"
                         
         else:
             prompt += "Nenhum dado específico encontrado para esta consulta.\n"

@@ -10,6 +10,7 @@ import logging
 import asyncio
 import os
 
+
 # Configuração de logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -263,6 +264,14 @@ class ClaudeTransitionManager:
         
         # Se é um dicionário, procurar em campos conhecidos
         if isinstance(data, dict):
+            # LOG DEBUG para entender estrutura
+            if depth == 0:
+                logger.info(f"🔍 Dict recebido: {list(data.keys())}")
+                if 'result' in data:
+                    logger.info(f"🔍 Campo 'result' tipo: {type(data['result'])}")
+                    if isinstance(data['result'], dict):
+                        logger.info(f"🔍 Chaves em 'result': {list(data['result'].keys())}")
+            
             # ⭐ CAMPOS PRIORITÁRIOS EXPANDIDOS PARA ORCHESTRATORS
             priority_fields = [
                 'response', 'result', 'answer', 'message', 'text', 'content',

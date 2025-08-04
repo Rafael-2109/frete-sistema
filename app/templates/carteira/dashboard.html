@@ -14,12 +14,11 @@
             <p class="text-muted mb-0">Sistema central de gestão da carteira - Núcleo do ecossistema</p>
         </div>
         <div>
-            <a href="{{ url_for('carteira.listar_principal') }}" class="btn btn-outline-primary mr-2">
-                <i class="fas fa-list"></i> Ver Carteira
-            </a>
+            <button type="button" class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#modalPedidosNaoOdoo">
+                <i class="fas fa-file-import"></i> Pedidos Não-Odoo
+            </button>
             <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}" class="btn btn-success">
-                <i class="fas fa-boxes"></i> Workspace de Montagem
-                <span class="badge badge-light ml-1">v2.0</span>
+                <i class="fas fa-boxes"></i> Carteira de Pedidos
             </a>
         </div>
     </div>
@@ -107,70 +106,7 @@
         </div>
     </div>
 
-    <!-- Status Breakdown -->
-    {% if status_breakdown %}
-    <div class="row mb-4">
-        <div class="col-lg-6 mb-4">
-            <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-chart-pie"></i> Status dos Pedidos
-                    </h6>
-                </div>
-                <div class="card-body">
-                    {% for status in status_breakdown %}
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="text-sm">
-                            <span class="badge badge-pill 
-                                {% if status.status == 'ATIVO' %}badge-success
-                                {% elif status.status == 'PENDENTE' %}badge-warning  
-                                {% elif status.status == 'CANCELADO' %}badge-danger
-                                {% else %}badge-secondary{% endif %}">
-                                {{ status.status or 'N/A' }}
-                            </span>
-                        </span>
-                        <span class="font-weight-bold">{{ status.quantidade }} itens</span>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-6 mb-4">
-            <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-exclamation-triangle"></i> Alertas e Controles
-                    </h6>
-                </div>
-                <div class="card-body">
-                    {% if alertas_inconsistencias > 0 %}
-                    <div class="alert alert-warning" role="alert">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <strong>{{ alertas_inconsistencias }}</strong> inconsistência(s) de faturamento pendente(s)
-                        <!-- Link Ver detalhes removido - funcionalidade desativada -->
-                    </div>
-                    {% endif %}
-
-                    {% if alertas_vinculacao > 0 %}
-                    <div class="alert alert-info" role="alert">
-                        <i class="fas fa-link"></i>
-                        <strong>{{ alertas_vinculacao }}</strong> item(s) sem vinculação com separação
-                        <!-- Link Ver relatório removido - funcionalidade desativada -->
-                    </div>
-                    {% endif %}
-
-                    {% if alertas_inconsistencias == 0 and alertas_vinculacao == 0 %}
-                    <div class="alert alert-success" role="alert">
-                        <i class="fas fa-check-circle"></i>
-                        Sistema operando normalmente - Nenhum alerta crítico
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
+  
 
     <!-- Expedições Próximas -->
     {% if expedicoes_proximas %}
@@ -199,7 +135,7 @@
                                 {% for item in expedicoes_proximas[:10] %}
                                 <tr>
                                     <td>
-                                        <span class="badge badge-pill badge-primary">
+                                        <span class="badge bg-primary pill">
                                             {{ item.expedicao.strftime('%d/%m') if item.expedicao else 'N/A' }}
                                         </span>
                                     </td>
@@ -208,10 +144,10 @@
                                     <td>{{ item.nome_produto[:30] }}...</td>
                                     <td>{{ "{:,.0f}".format(item.qtd_saldo_produto_pedido or 0) }}</td>
                                     <td>
-                                        <span class="badge badge-pill 
+                                        <span class="badge bg-success pill 
                                             {% if item.status_pedido == 'ATIVO' %}badge-success
                                             {% elif item.status_pedido == 'PENDENTE' %}badge-warning
-                                            {% else %}badge-secondary{% endif %}">
+                                            {% else %}badge-secondary pill{% endif %}">
                                             {{ item.status_pedido or 'N/A' }}
                                         </span>
                                     </td>
@@ -276,7 +212,7 @@
                                     <i class="fas fa-sync-alt text-primary"></i> 
                                     Sincronização com Odoo
                                 </h6>
-                                <span class="badge badge-primary badge-pill">Seguro</span>
+                                <span class="badge bg-primary pill">Seguro</span>
                             </div>
                             <p class="mb-1">Sincronizar carteira e faturamento com sequência automática</p>
                             <small class="text-muted">Executa Faturamento → Carteira automaticamente</small>
@@ -288,7 +224,7 @@
                                     <i class="fas fa-file-invoice text-success"></i> 
                                     Gerenciar Faturamento
                                 </h6>
-                                <span class="badge badge-success badge-pill">Ativo</span>
+                                <span class="badge bg-success pill">Ativo</span>
                             </div>
                             <p class="mb-1">Acessar dashboard de faturamento e relatórios</p>
                             <small class="text-muted">Visualizar dados importados e processar NFs</small>
@@ -385,9 +321,9 @@
                                     APIs RESTful e interface responsiva.
                                 </p>
                                 <div class="badge-container">
-                                    <span class="badge badge-success">Drag & Drop</span>
-                                    <span class="badge badge-info">APIs REST</span>
-                                    <span class="badge badge-warning">Bootstrap 5</span>
+                                    <span class="badge bg-success pill">Drag & Drop</span>
+                                    <span class="badge bg-info pill">APIs REST</span>
+                                    <span class="badge bg-warning pill">Bootstrap 5</span>
                                 </div>
                             </div>
                         </div>
@@ -412,4 +348,86 @@
     border-left: 0.25rem solid #f6c23e !important;
 }
 </style>
+
+<!-- Modal Pedidos Não-Odoo -->
+<div class="modal fade" id="modalPedidosNaoOdoo" tabindex="-1" aria-labelledby="modalPedidosNaoOdooLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-white">
+                <h5 class="modal-title" id="modalPedidosNaoOdooLabel">
+                    <i class="fas fa-file-import"></i> Gestão de Pedidos Não-Odoo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-4">
+                    Sistema para importação e gestão de pedidos que não vêm do Odoo. 
+                    Permite cadastrar clientes, importar pedidos via Excel e gerenciar a carteira Não-Odoo.
+                </p>
+                
+                <div class="row">
+                    <!-- Cadastro de Cliente -->
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 text-center border-primary">
+                            <div class="card-body">
+                                <i class="fas fa-user-plus fa-3x text-primary mb-3"></i>
+                                <h5 class="card-title">Cadastro de Cliente</h5>
+                                <p class="card-text text-muted">
+                                    Cadastre novos clientes Não-Odoo com informações completas para importação
+                                </p>
+                                <a href="{{ url_for('carteira.views_nao_odoo.cadastro_cliente') }}" class="btn btn-primary btn-block">
+                                    <i class="fas fa-user-plus"></i> Cadastrar Cliente
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Importação de Pedidos -->
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 text-center border-success">
+                            <div class="card-body">
+                                <i class="fas fa-file-excel fa-3x text-success mb-3"></i>
+                                <h5 class="card-title">Importação de Pedidos</h5>
+                                <p class="card-text text-muted">
+                                    Importe pedidos através de planilhas Excel com mapeamento flexível
+                                </p>
+                                <a href="{{ url_for('carteira.views_nao_odoo.importacao_carteira') }}" class="btn btn-success btn-block">
+                                    <i class="fas fa-file-excel"></i> Importar Pedidos
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Carteira Não-Odoo -->
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 text-center border-warning">
+                            <div class="card-body">
+                                <i class="fas fa-clipboard-list fa-3x text-warning mb-3"></i>
+                                <h5 class="card-title">Carteira Não-Odoo</h5>
+                                <p class="card-text text-muted">
+                                    Visualize e gerencie todos os pedidos Não-Odoo importados
+                                </p>
+                                <a href="{{ url_for('carteira.views_nao_odoo.carteira_nao_odoo') }}" class="btn btn-warning btn-block">
+                                    <i class="fas fa-clipboard-list"></i> Ver Carteira
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info mt-3" role="alert">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Nota:</strong> Os pedidos importados serão adicionados tanto na CarteiraCopia (para controle) 
+                    quanto na CarteiraPrincipal (para operação normal).
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %} 

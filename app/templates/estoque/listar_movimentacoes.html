@@ -22,7 +22,7 @@
                 </div>
                 <div class="card-body">
                     <form method="GET" action="{{ url_for('estoque.listar_movimentacoes') }}" class="row">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="col-md-3">
                             <label for="cod_produto" class="form-label">Código do Produto</label>
                             <input type="text" class="form-control" id="cod_produto" name="cod_produto" 
@@ -127,7 +127,7 @@
                                         <span class="fw-bold 
                                             {% if mov.qtd_movimentacao > 0 %}text-success
                                             {% else %}text-danger{% endif %}">
-                                            {{ mov.qtd_movimentacao }}
+                                            {{ mov.qtd_movimentacao|valor_br }}
                                         </span>
                                     </td>
                                     <td class="fw-bold text-dark">{{ mov.local_movimentacao or '-' }}</td>
@@ -239,7 +239,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="formNovaMovimentacao" method="post" action="{{ url_for('estoque.processar_nova_movimentacao') }}">
-                {{ csrf_token() }}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div class="modal-body">
                     <div class="row">
                         <!-- Código do Produto com Dropdown -->
@@ -343,7 +343,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="formEditarMovimentacao" method="post">
-                {{ csrf_token() }}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
                 <input type="hidden" id="edit_movimentacao_id" name="movimentacao_id">
                 
                 <div class="modal-body">

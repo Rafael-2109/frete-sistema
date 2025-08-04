@@ -735,7 +735,7 @@ def suggestions_dashboard():
     """Dashboard para visualizar e gerenciar sugestões"""
     try:
         # Verificar se usuário tem permissão (admin ou staff)
-        if not getattr(current_user, 'staff', False) and getattr(current_user, 'perfil', '') != 'admin':
+        if not getattr(current_user, 'staff', False) and getattr(current_user, 'perfil', '') != 'administrador':
             flash('Acesso não autorizado', 'error')
             return redirect(url_for('claude_ai.claude_real'))
         

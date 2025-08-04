@@ -190,7 +190,8 @@ class SecurityGuard:
                     'analyze_query', 'generate_response', 'data_query',
                     'user_query', 'basic_query', 'session_query',
                     'workflow_query', 'integration_query', 'natural_command',
-                    'intelligent_suggestions', 'query', 'response_processing'
+                    'intelligent_suggestions', 'query', 'response_processing',
+                    'create_session', 'execute_session_workflow', 'complete_session'
                 ]
                 
                 if operation in basic_query_operations:

@@ -293,26 +293,26 @@ class LearningCore:
         except Exception as e:
             logger.error(f'Erro: {e}')
             pass
-try:
-    from sqlalchemy import text
-    SQLALCHEMY_AVAILABLE = True
-except ImportError:
-    text = None
-    SQLALCHEMY_AVAILABLE = False
-                self.db.session.execute(
-                    text("""
-                        INSERT INTO ai_learning_metrics
-                        (metrica_tipo, metrica_valor, contexto, periodo_inicio, periodo_fim)
-                        VALUES ('satisfaction', :valor, :contexto, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    """),
-                    {
-                        "valor": satisfacao,
-                        "contexto": json.dumps({"dominio": interpretacao.get("dominio")})
-                    }
-                )
+        try:
+            from sqlalchemy import text
+            SQLALCHEMY_AVAILABLE = True
+        except ImportError:
+            text = None
+            SQLALCHEMY_AVAILABLE = False
+            self.db.session.execute(
+        text("""
+            INSERT INTO ai_learning_metrics
+            (metrica_tipo, metrica_valor, contexto, periodo_inicio, periodo_fim)
+            VALUES ('satisfaction', :valor, :contexto, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """),
+        {
+            "valor": satisfacao,
+            "contexto": json.dumps({"dominio": interpretacao.get("dominio")})
+        }
+    )
                 
-                self.db.session.commit()
-                return True
+            self.db.session.commit()
+            return True
                 
         except Exception as e:
             logger.error(f"Erro ao atualizar métricas: {e}")
@@ -333,16 +333,9 @@ except ImportError:
         """
         try:
             with current_app.app_context():
-        except Exception as e:
-            logger.error(f'Erro: {e}')
-            pass
-try:
-    from sqlalchemy import text
-    SQLALCHEMY_AVAILABLE = True
-except ImportError:
-    text = None
-    SQLALCHEMY_AVAILABLE = False
-                
+                from sqlalchemy import text
+                SQLALCHEMY_AVAILABLE = True
+                            
                 self.db.session.execute(
                     text("""
                         INSERT INTO ai_learning_history
@@ -364,10 +357,6 @@ except ImportError:
                 
         except Exception as e:
             logger.error(f"Erro ao salvar histórico: {e}")
-            try:
-                self.db.session.rollback()
-            except:
-                pass
             return False
     
     def _calcular_score_aprendizado(self, aprendizados: Dict) -> float:

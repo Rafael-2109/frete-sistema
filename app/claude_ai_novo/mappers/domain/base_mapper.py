@@ -93,17 +93,16 @@ class BaseMapper(ABC):
             Lista de mapeamentos encontrados com score de similaridade
         """
         try:
-    from fuzzywuzzy import fuzz
-    FUZZY_AVAILABLE = True
-except ImportError:
-    class FuzzMock:
-        def ratio(self, a, b): return 0
-        def partial_ratio(self, a, b): return 0
-        def token_sort_ratio(self, a, b): return 0
-        def token_set_ratio(self, a, b): return 0
-    fuzz = FuzzMock()
-    FUZZY_AVAILABLE = False
+            from fuzzywuzzy import fuzz
+            FUZZY_AVAILABLE = True
         except ImportError:
+            class FuzzMock:
+                def ratio(self, a, b): return 0
+                def partial_ratio(self, a, b): return 0
+                def token_sort_ratio(self, a, b): return 0
+                def token_set_ratio(self, a, b): return 0
+            fuzz = FuzzMock()
+            FUZZY_AVAILABLE = False
             logger.warning("📦 fuzzywuzzy não instalado, pulando busca fuzzy")
             return []
             

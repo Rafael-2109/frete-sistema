@@ -60,14 +60,14 @@ class EntregasLoader:
             
             # Se falhar, tentar com app context
             try:
-    from flask import current_app
-    FLASK_AVAILABLE = True
-except ImportError:
-    current_app = None
-    FLASK_AVAILABLE = False
+                from flask import current_app
+                FLASK_AVAILABLE = True
                 if current_app and current_app.app_context:
                     with current_app.app_context():
                         return self._load_with_context(filters)
+            except ImportError:
+                current_app = None
+                FLASK_AVAILABLE = False
             except Exception as e:
                 self.logger.warning(f"⚠️ Erro com app context: {e}")
             
@@ -130,16 +130,16 @@ except ImportError:
             
             # Método 1: Tentar current_app primeiro
             try:
-    from flask import current_app
-    FLASK_AVAILABLE = True
-except ImportError:
-    current_app = None
-    FLASK_AVAILABLE = False
+                from flask import current_app
+                FLASK_AVAILABLE = True
                 # Verificar se current_app realmente funciona
                 current_app.config  # Isso vai falhar se não há contexto
                 app = current_app
                 flask_context_available = True
                 self.logger.info("✅ Flask context obtido via current_app")
+            except ImportError:
+                current_app = None
+                FLASK_AVAILABLE = False
             except RuntimeError:
                 # Método 2: Tentar obter app via flask_fallback
                 from app.claude_ai_novo.utils.flask_fallback import get_app
@@ -163,12 +163,12 @@ except ImportError:
                     # Verificar se já estamos em contexto ou precisamos criar um
                     try:
                         # Se current_app já funciona, estamos em contexto
-try:
-    from flask import current_app
-    FLASK_AVAILABLE = True
-except ImportError:
-    current_app = None
-    FLASK_AVAILABLE = False
+                        try:
+                            from flask import current_app
+                            FLASK_AVAILABLE = True
+                        except ImportError:
+                            current_app = None
+                            FLASK_AVAILABLE = False
                         current_app.config
                         self.logger.info("🎯 Já estamos em Flask context - carregando dados REAIS")
                         return self._load_with_app_context(filters)
@@ -205,13 +205,15 @@ except ImportError:
             
             # Verificar se db session está ativa
             try:
-    from sqlalchemy import text
-    SQLALCHEMY_AVAILABLE = True
-except ImportError:
-    text = None
-    SQLALCHEMY_AVAILABLE = False
+                from sqlalchemy import text
+                SQLALCHEMY_AVAILABLE = True
                 db.session.execute(text('SELECT 1'))
                 self.logger.info("✅ Sessão do banco de dados ativa")
+            except ImportError:
+                text = None
+                SQLALCHEMY_AVAILABLE = False
+                self.logger.warning("⚠️ SQLAlchemy não disponível")
+                return self._get_mock_data(filters)
             except Exception as e:
                 self.logger.warning(f"⚠️ Problema com sessão DB: {e}")
                 return self._get_mock_data(filters)
@@ -246,12 +248,12 @@ except ImportError:
                     'id': e.id,
                     'numero_nf': e.numero_nf,
                     'nome_cliente': getattr(e, 'nome_cliente', None) or getattr(e, 'cliente', None),
-                    'destino': e.destino,
+                    'destino': f"{e.municipio} - {e.uf}" if e.municipio and e.uf else "N/A",
                     'status': 'entregue' if e.entregue else 'pendente',
-                    'data_entrega': e.data_entrega_realizada.isoformat() if e.data_entrega_realizada else None,
+                    'data_entrega': e.data_hora_entrega_realizada.isoformat() if e.data_hora_entrega_realizada else None,
                     'data_embarque': e.data_embarque.isoformat() if e.data_embarque else None,
                     'valor_nf': float(e.valor_nf or 0),
-                    'peso_total': float(e.peso_total or 0)
+                    'peso_total': float(getattr(e, 'peso_total', 0) or 0)  # peso_total não existe no modelo
                 }
                 for e in entregas
             ]
@@ -476,16 +478,16 @@ except ImportError:
             dados_json.append({
                 'numero_nf': r.numero_nf,
                 'cliente': getattr(r, 'nome_cliente', None) or getattr(r, 'cliente', None),
-                'destino': r.destino,
+                'destino': f"{r.municipio} - {r.uf}" if r.municipio and r.uf else "N/A",
                 'data_embarque': r.data_embarque.strftime('%Y-%m-%d') if r.data_embarque else None,
                 'data_entrega_prevista': r.data_entrega_prevista.strftime('%Y-%m-%d') if r.data_entrega_prevista else None,
                 'entregue': r.entregue,
-                'data_entrega_real': r.data_entrega_real.strftime('%Y-%m-%d') if r.data_entrega_real else None,
+                'data_entrega_real': r.data_hora_entrega_realizada.strftime('%Y-%m-%d') if r.data_hora_entrega_realizada else None,
                 'status': 'Entregue' if r.entregue else 'Pendente',
                 'lead_time': r.lead_time,
                 'valor_nf': float(r.valor_nf or 0),
-                'peso_total': float(r.peso_total or 0),
-                'numero_embarque': r.numero_embarque,
+                'peso_total': float(getattr(r, 'peso_total', 0) or 0),
+                'numero_embarque': getattr(r, 'numero_embarque', None),
                 'transportadora': r.transportadora if hasattr(r, 'transportadora') else None
             })
         

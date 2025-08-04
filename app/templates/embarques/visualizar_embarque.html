@@ -409,16 +409,15 @@
                     <!-- Item ativo: status + ações -->
                     <div class="status-acoes-container">
                       <!-- Badge de status -->
-                                             {% if item and item.erro_validacao %}
+                      {% if item and item.erro_validacao %}
                          {% if 'NF_PENDENTE_FATURAMENTO' in item.erro_validacao %}
                            <span class="badge bg-warning text-dark">Pendente</span>
                          {% elif 'NF_DIVERGENTE' in item.erro_validacao %}
                            <span class="badge bg-danger">Divergente</span>
-
                          {% elif 'CLIENTE_NAO_DEFINIDO' in item.erro_validacao %}
-                           <span class="badge bg-secondary">Sem Cliente</span>
+                            <span class="badge bg-secondary">Sem Cliente</span>
                          {% else %}
-                           <span class="badge bg-info">Validando</span>
+                            <span class="badge bg-info">Validando</span>
                          {% endif %}
                       {% elif item %}
                         <span class="badge bg-success">OK</span>

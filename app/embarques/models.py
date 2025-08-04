@@ -210,4 +210,3 @@ class EmbarqueItem(db.Model):
 
     # Para carga FRACIONADA: Uma cotação -> Um item do embarque
     cotacao = db.relationship('Cotacao', backref='embarque_item', foreign_keys=[cotacao_id])
-

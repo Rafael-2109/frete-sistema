@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+
+{% block title %}Importação de Carteira Não-Odoo{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h2>Importação de Carteira Não-Odoo</h2>
+            <hr>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Formulário de Upload -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Upload do Arquivo</h5>
+                </div>
+                <div class="card-body">
+                    <form id="formImportacao" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="form-group">
+                            <label>Arquivo Excel <span class="text-danger">*</span></label>
+                            <input type="file" class="form-control-file" id="arquivo" name="file" accept=".xlsx,.xls" required>
+                            <small class="form-text text-muted">Formatos aceitos: .xlsx, .xls</small>
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <button type="button" class="btn btn-info" onclick="validarArquivo()">
+                                    <i class="fas fa-check"></i> Validar Arquivo
+                                </button>
+                                <button type="submit" class="btn btn-primary" id="btnImportar" disabled>
+                                    <i class="fas fa-upload"></i> Importar
+                                </button>
+                                <button type="button" class="btn btn-secondary" onclick="limparTudo()">
+                                    <i class="fas fa-times"></i> Limpar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Template de Exemplo -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0">Formato Esperado do Arquivo</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Campos do Cabeçalho (formato chave-valor):</h6>
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Coluna A</th>
+                                <th>Coluna B</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>NUMERO DO PEDIDO DO REPRESENTANTE</td>
+                                <td>PED-001</td>
+                            </tr>
+                            <tr>
+                                <td>CNPJ*</td>
+                                <td>12.345.678/0001-23</td>
+                            </tr>
+                            <tr>
+                                <td>NUMERO DO PEDIDO DO CLIENTE</td>
+                                <td>CLI-123</td>
+                            </tr>
+                            <tr>
+                                <td>Data Entrega</td>
+                                <td>15/08/2024</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h6 class="mt-3">Tabela de Produtos:</h6>
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>CÓDIGO</th>
+                                <th>Qtde Solicitada</th>
+                                <th>Valor Negociado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>P001</td>
+                                <td>100</td>
+                                <td>25.50</td>
+                            </tr>
+                            <tr>
+                                <td>P002</td>
+                                <td>50</td>
+                                <td>30.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="alert alert-info mt-3">
+                        <strong>Importante:</strong> O CNPJ do cliente deve estar previamente cadastrado no sistema.
+                        <a href="{{ url_for('carteira.views_nao_odoo.cadastro_cliente') }}" target="_blank">Cadastrar Cliente</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview e Resultado -->
+        <div class="col-md-6">
+            <!-- Preview da Validação -->
+            <div class="card" id="cardPreview" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0">Preview da Importação</h5>
+                </div>
+                <div class="card-body">
+                    <div id="previewContent"></div>
+                </div>
+            </div>
+
+            <!-- Resultado da Importação -->
+            <div class="card" id="cardResultado" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0">Resultado da Importação</h5>
+                </div>
+                <div class="card-body">
+                    <div id="resultadoContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Validar arquivo antes de importar
+function validarArquivo() {
+    const fileInput = document.getElementById('arquivo');
+    if (!fileInput.files.length) {
+        toastr.warning('Selecione um arquivo primeiro');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    
+    // Adicionar CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    formData.append('csrf_token', csrfToken);
+    
+    // Mostrar loading
+    $('#cardPreview').show();
+    $('#previewContent').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Validando arquivo...</div>');
+    
+    $.ajax({
+        url: '/carteira/api/importacao-nao-odoo/validar',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {
+            'X-CSRFToken': csrfToken
+        },
+        success: function(response) {
+            if (response.success) {
+                mostrarPreview(response.preview);
+                
+                // Se validação OK, habilita botão de importar
+                if (!response.preview.erros || response.preview.erros.length === 0) {
+                    $('#btnImportar').prop('disabled', false);
+                }
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Erro ao validar arquivo';
+            $('#previewContent').html(`<div class="alert alert-danger">${error}</div>`);
+            $('#btnImportar').prop('disabled', true);
+        }
+    });
+}
+
+// Mostrar preview da validação
+function mostrarPreview(preview) {
+    let html = '';
+    
+    // Erros
+    if (preview.erros && preview.erros.length > 0) {
+        html += '<div class="alert alert-danger">';
+        html += '<strong>Erros encontrados:</strong><ul>';
+        preview.erros.forEach(erro => {
+            html += `<li>${erro}</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    // Avisos
+    if (preview.avisos && preview.avisos.length > 0) {
+        html += '<div class="alert alert-warning">';
+        html += '<strong>Avisos:</strong><ul>';
+        preview.avisos.forEach(aviso => {
+            html += `<li>${aviso}</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    // Dados do cliente
+    if (preview.cliente) {
+        if (preview.cliente.encontrado) {
+            html += `<div class="alert alert-success">
+                <strong>Cliente encontrado:</strong> ${preview.cliente.raz_social}<br>
+                ${preview.cliente.municipio}/${preview.cliente.estado}
+            </div>`;
+        } else {
+            html += `<div class="alert alert-danger">
+                <strong>Cliente não cadastrado:</strong> CNPJ ${preview.cliente.cnpj}<br>
+                <a href="{{ url_for('carteira.views_nao_odoo.cadastro_cliente') }}" target="_blank" class="btn btn-sm btn-primary">
+                    Cadastrar Cliente
+                </a>
+            </div>`;
+        }
+    }
+    
+    // Mostrar dados no formato da tabela esperada
+    html += '<h6>Conteúdo do Arquivo:</h6>';
+    html += '<table class="table table-sm table-bordered">';
+    
+    // Cabeçalho - formato chave-valor
+    if (preview.cabecalho) {
+        const mapeamentoCabecalho = {
+            'num_pedido': 'NUMERO DO PEDIDO DO REPRESENTANTE',
+            'cnpj_cpf': 'CNPJ*',
+            'pedido_cliente': 'NUMERO DO PEDIDO DO CLIENTE',
+            'data_entrega': 'Data Entrega'
+        };
+        
+        Object.keys(mapeamentoCabecalho).forEach(key => {
+            if (preview.cabecalho[key]) {
+                html += `<tr>
+                    <td><strong>${mapeamentoCabecalho[key]}</strong></td>
+                    <td>${preview.cabecalho[key]}</td>
+                    <td></td>
+                </tr>`;
+            }
+        });
+        
+        // Linha em branco para separar
+        html += '<tr><td colspan="3">&nbsp;</td></tr>';
+    }
+    
+    // Cabeçalho da tabela de produtos
+    html += '<tr class="table-active">';
+    html += '<th>CÓDIGO</th>';
+    html += '<th>Qtde Solicitada</th>';
+    html += '<th>Valor Negociado</th>';
+    html += '</tr>';
+    
+    // Produtos
+    if (preview.produtos && preview.produtos.length > 0) {
+        preview.produtos.forEach(produto => {
+            html += `<tr>
+                <td>${produto.cod_produto}</td>
+                <td>${produto.qtd_produto_pedido}</td>
+                <td>R$ ${produto.preco_produto_pedido.toFixed(2)}</td>
+            </tr>`;
+        });
+    } else {
+        html += '<tr><td colspan="3" class="text-center text-muted">Nenhum produto válido encontrado (quantidade > 0)</td></tr>';
+    }
+    
+    html += '</table>';
+    
+    // Resumo
+    if (preview.produtos && preview.produtos.length > 0) {
+        html += `<p class="text-info"><strong>Total de produtos válidos: ${preview.total_produtos}</strong></p>`;
+    }
+    
+    $('#previewContent').html(html);
+}
+
+// Submit do formulário
+$('#formImportacao').submit(function(e) {
+    e.preventDefault();
+    
+    const fileInput = document.getElementById('arquivo');
+    if (!fileInput.files.length) {
+        toastr.warning('Selecione um arquivo');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    
+    // Adicionar CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    formData.append('csrf_token', csrfToken);
+    
+    // Desabilitar botões
+    $('#btnImportar').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Importando...');
+    
+    $.ajax({
+        url: '/carteira/api/importacao-nao-odoo/upload',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {
+            'X-CSRFToken': csrfToken
+        },
+        success: function(response) {
+            if (response.success) {
+                mostrarResultado(response);
+                // Limpar formulário
+                $('#formImportacao')[0].reset();
+                $('#btnImportar').prop('disabled', true).html('<i class="fas fa-upload"></i> Importar');
+                $('#cardPreview').hide();
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON : {error: 'Erro ao importar arquivo'};
+            mostrarErro(error);
+            $('#btnImportar').prop('disabled', false).html('<i class="fas fa-upload"></i> Importar');
+        }
+    });
+});
+
+// Mostrar resultado da importação
+function mostrarResultado(response) {
+    $('#cardResultado').show();
+    
+    let html = '<div class="alert alert-success">';
+    html += `<strong>${response.mensagem}</strong><br>`;
+    html += `Total de itens importados: ${response.pedidos_importados}`;
+    html += '</div>';
+    
+    if (response.detalhes && response.detalhes.length > 0) {
+        html += '<h6>Detalhes da Importação:</h6>';
+        html += '<table class="table table-sm table-striped">';
+        html += '<thead><tr><th>Pedido</th><th>Produto</th><th>Quantidade</th><th>Valor</th></tr></thead>';
+        html += '<tbody>';
+        response.detalhes.forEach(item => {
+            html += `<tr>
+                <td>${item.num_pedido}</td>
+                <td>${item.cod_produto}</td>
+                <td>${item.quantidade}</td>
+                <td>R$ ${item.valor.toFixed(2)}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+    }
+    
+    if (response.avisos && response.avisos.length > 0) {
+        html += '<div class="alert alert-warning mt-3">';
+        html += '<strong>Avisos:</strong><ul>';
+        response.avisos.forEach(aviso => {
+            html += `<li>${aviso}</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    html += '<div class="mt-3">';
+    html += '<a href="{{ url_for("carteira.views_nao_odoo.carteira_nao_odoo") }}" class="btn btn-primary">Ver Carteira Não-Odoo</a>';
+    html += '</div>';
+    
+    $('#resultadoContent').html(html);
+}
+
+// Mostrar erro
+function mostrarErro(error) {
+    $('#cardResultado').show();
+    
+    let html = '<div class="alert alert-danger">';
+    html += '<strong>Erro na importação:</strong><br>';
+    
+    if (error.erros && Array.isArray(error.erros)) {
+        html += '<ul>';
+        error.erros.forEach(erro => {
+            html += `<li>${erro}</li>`;
+        });
+        html += '</ul>';
+    } else {
+        html += error.error || 'Erro desconhecido';
+    }
+    
+    html += '</div>';
+    
+    $('#resultadoContent').html(html);
+}
+
+// Limpar tudo
+function limparTudo() {
+    $('#formImportacao')[0].reset();
+    $('#btnImportar').prop('disabled', true);
+    $('#cardPreview').hide();
+    $('#cardResultado').hide();
+}
+</script>
+{% endblock %}

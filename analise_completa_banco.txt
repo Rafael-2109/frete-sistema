@@ -1,0 +1,27 @@
+================================================================================
+ANÁLISE COMPLETA - TABELAS FALTANTES NO RENDER
+================================================================================
+
+TABELAS CRÍTICAS QUE FALTAM NO RENDER:
+----------------------------------------
+⭐ batch_operation
+⭐ cache_update_log
+⭐ cadastro_cliente
+⭐ equipe_permission
+⭐ permission_log
+⭐ projecao_estoque_cache
+⭐ saldo_estoque_cache
+⭐ user_equipe
+⭐ user_vendedor
+⭐ vendedor_permission
+
+OUTRAS TABELAS QUE FALTAM NO RENDER:
+----------------------------------------
+• mcp_confirmation_requests
+• mcp_entity_mappings
+• mcp_error_logs
+• mcp_learning_patterns
+• mcp_query_history
+• mcp_user_preferences
+• sub_module
+• user_permission_backup

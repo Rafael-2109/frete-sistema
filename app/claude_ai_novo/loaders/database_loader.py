@@ -56,12 +56,12 @@ class DatabaseLoader:
         except Exception as e:
             logger.error(f'Erro: {e}')
             pass
-try:
-    from sqlalchemy import create_engine
-    SQLALCHEMY_AVAILABLE = True
-except ImportError:
-    create_engine = None
-    SQLALCHEMY_AVAILABLE = False
+        try:
+            from sqlalchemy import create_engine
+            SQLALCHEMY_AVAILABLE = True
+        except ImportError:
+            create_engine = None
+            SQLALCHEMY_AVAILABLE = False
             from sqlalchemy.orm import sessionmaker
             
             # Construir URL de conexão
@@ -81,9 +81,6 @@ except ImportError:
             self._available = True
             logger.info("🗄️ DatabaseLoader inicializado com sucesso")
             
-        except ImportError:
-            logger.warning("📦 SQLAlchemy não disponível - usando modo mock")
-            self._available = False
             
         except Exception as e:
             logger.warning(f"⚠️ Erro ao conectar ao banco: {e} - usando modo mock")

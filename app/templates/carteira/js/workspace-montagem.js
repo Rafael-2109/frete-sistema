@@ -9,12 +9,12 @@ class WorkspaceMontagem {
         this.separacoesConfirmadas = []; // array de separações confirmadas
         this.produtosSelecionados = new Set();
         this.dadosProdutos = new Map(); // codProduto -> dados completos
-        
+
         // Inicializar módulos
         this.loteManager = new LoteManager(this);
         this.modalCardex = new ModalCardex();
         this.preSeparacaoManager = new PreSeparacaoManager(this);
-        
+
         this.init();
     }
 
@@ -36,7 +36,7 @@ class WorkspaceMontagem {
 
     async abrirWorkspace(numPedido) {
         console.log(`🔄 Carregando workspace para pedido ${numPedido}`);
-        
+
         try {
             // Carregar dados do workspace
             const workspaceResponse = await fetch(`/carteira/api/pedido/${numPedido}/workspace`);
@@ -50,29 +50,29 @@ class WorkspaceMontagem {
             workspaceData.produtos.forEach(produto => {
                 this.dadosProdutos.set(produto.cod_produto, produto);
             });
-            
+
             // Armazenar status do pedido
             this.statusPedido = workspaceData.status_pedido || 'ABERTO';
 
             // Carregar pré-separações existentes usando o manager
             const preSeparacoesData = await this.preSeparacaoManager.carregarPreSeparacoes(numPedido);
-            
+
             if (preSeparacoesData.success && preSeparacoesData.lotes) {
                 // Processar pré-separações carregadas
                 const preSeparacoesMap = this.preSeparacaoManager.processarPreSeparacoesCarregadas(preSeparacoesData.lotes);
-                
+
                 // Atualizar Map local
                 preSeparacoesMap.forEach((value, key) => {
                     this.preSeparacoes.set(key, value);
                 });
-                
+
                 console.log(`✅ Carregadas ${preSeparacoesData.lotes.length} pré-separações existentes`);
             }
 
             // Carregar separações confirmadas
             const separacoesResponse = await fetch(`/carteira/api/pedido/${numPedido}/separacoes-completas`);
             const separacoesData = await separacoesResponse.json();
-            
+
             if (separacoesData.success && separacoesData.separacoes) {
                 this.separacoesConfirmadas = separacoesData.separacoes;
                 console.log(`✅ Carregadas ${separacoesData.separacoes.length} separações confirmadas`);
@@ -81,7 +81,7 @@ class WorkspaceMontagem {
             // Renderizar workspace no container de detalhes
             const contentDiv = document.getElementById(`content-${numPedido}`);
             const loadingDiv = document.getElementById(`loading-${numPedido}`);
-            
+
             if (contentDiv) {
                 contentDiv.innerHTML = this.renderizarWorkspace(numPedido, workspaceData);
                 contentDiv.style.display = 'block';
@@ -211,10 +211,10 @@ class WorkspaceMontagem {
     renderizarSeparacoesConfirmadas() {
         return this.separacoesConfirmadas.map(separacao => {
             const statusClass = this.getStatusClass(separacao.status);
-            
+
             return `
                 <div class="col-md-4 mb-3">
-                    <div class="card h-100 border-${statusClass}">
+                    <div class="card h-100 border-${statusClass}" id="card-separacao-${separacao.separacao_lote_id}">
                         <div class="card-header bg-${statusClass} bg-opacity-10">
                             <h6 class="mb-0">
                                 <i class="fas fa-check me-2"></i>
@@ -241,7 +241,14 @@ class WorkspaceMontagem {
                                 </div>
                                 <div id="produtos-resumo-${separacao.separacao_lote_id}">
                                     ${separacao.produtos.slice(0, 3).map(p => `
-                                        <small class="d-block">• ${p.cod_produto} - ${this.formatarQuantidade(p.qtd_saldo)}un</small>
+                                        <small class="d-block mb-1">
+                                            • ${p.cod_produto} - ${this.formatarQuantidade(p.qtd_saldo)}un
+                                            <span class="text-muted ms-2">
+                                                | ${this.formatarMoeda(p.valor_saldo || 0)} 
+                                                | ${this.formatarPeso(p.peso || 0)} 
+                                                | ${this.formatarPallet(p.pallet || 0)}
+                                            </span>
+                                        </small>
                                     `).join('')}
                                     ${separacao.produtos.length > 3 ? `<small class="text-muted">... e mais ${separacao.produtos.length - 3} produtos</small>` : ''}
                                 </div>
@@ -253,6 +260,9 @@ class WorkspaceMontagem {
                                                     <th>Código</th>
                                                     <th>Produto</th>
                                                     <th class="text-end">Qtd</th>
+                                                    <th class="text-end">Valor</th>
+                                                    <th class="text-end">Peso</th>
+                                                    <th class="text-end">Pallet</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -261,6 +271,9 @@ class WorkspaceMontagem {
                                                         <td><small>${p.cod_produto}</small></td>
                                                         <td><small>${p.nome_produto || '-'}</small></td>
                                                         <td class="text-end"><small>${this.formatarQuantidade(p.qtd_saldo)}</small></td>
+                                                        <td class="text-end"><small>${this.formatarMoeda(p.valor_saldo || 0)}</small></td>
+                                                        <td class="text-end"><small>${this.formatarPeso(p.peso || 0)}</small></td>
+                                                        <td class="text-end"><small>${this.formatarPallet(p.pallet || 0)}</small></td>
                                                     </tr>
                                                 `).join('')}
                                             </tbody>
@@ -296,6 +309,25 @@ class WorkspaceMontagem {
                                 </div>
                             ` : ''}
                         </div>
+                        
+                        <!-- Botões de ação -->
+                        <div class="card-footer bg-light">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    ${separacao.status === 'ABERTO' ? `
+                                        <button class="btn btn-warning btn-sm" onclick="workspace.reverterSeparacao('${separacao.separacao_lote_id}')">
+                                            <i class="fas fa-undo me-1"></i> Reverter para Pré-Separação
+                                        </button>
+                                        <button class="btn btn-info btn-sm ms-2" onclick="workspace.editarDatasSeparacao('${separacao.separacao_lote_id}')">
+                                            <i class="fas fa-edit me-1"></i> Editar Datas
+                                        </button>
+                                    ` : ''}
+                                </div>
+                                <button class="btn btn-primary btn-sm" onclick="workspace.imprimirSeparacao('${separacao.separacao_lote_id}')">
+                                    <i class="fas fa-print me-1"></i> Imprimir
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -328,14 +360,14 @@ class WorkspaceMontagem {
         if (produto.estoque_hoje >= produto.qtd_pedido) {
             return { classe: 'bg-success', texto: 'Hoje' };
         }
-        
+
         if (produto.data_disponibilidade) {
             const diasAte = this.calcularDiasAte(produto.data_disponibilidade);
             if (diasAte <= 7) {
                 return { classe: 'bg-warning', texto: `${diasAte}d` };
             }
         }
-        
+
         return { classe: 'bg-danger', texto: 'Sem est.' };
     }
 
@@ -408,13 +440,13 @@ class WorkspaceMontagem {
         } else {
             this.produtosSelecionados.delete(codProduto);
         }
-        
+
         // Adicionar/remover classe visual
         const tr = document.querySelector(`tr[data-produto="${codProduto}"]`);
         if (tr) {
             tr.classList.toggle('selected', selecionado);
         }
-        
+
         console.log(`Produtos selecionados: ${this.produtosSelecionados.size}`);
     }
 
@@ -425,7 +457,7 @@ class WorkspaceMontagem {
         const selectAll = workspaceElement.querySelector('#select-all-produtos');
         const checkboxes = workspaceElement.querySelectorAll('.produto-checkbox');
         const checkedBoxes = workspaceElement.querySelectorAll('.produto-checkbox:checked');
-        
+
         if (selectAll) {
             selectAll.checked = checkboxes.length > 0 && checkboxes.length === checkedBoxes.length;
             selectAll.indeterminate = checkedBoxes.length > 0 && checkedBoxes.length < checkboxes.length;
@@ -443,13 +475,13 @@ class WorkspaceMontagem {
 
         try {
             const produtosParaAdicionar = [];
-            
+
             // Coletar dados dos produtos selecionados
             this.produtosSelecionados.forEach(codProduto => {
                 const produtoData = this.dadosProdutos.get(codProduto);
                 const inputQtd = document.querySelector(`.qtd-editavel[data-produto="${codProduto}"]`);
                 const quantidade = inputQtd ? parseInt(inputQtd.value) : 0;
-                
+
                 if (produtoData && quantidade > 0) {
                     produtosParaAdicionar.push({
                         codProduto,
@@ -467,13 +499,13 @@ class WorkspaceMontagem {
             // Adicionar produtos ao lote
             let produtosAdicionados = 0;
             let produtosAtualizados = 0;
-            
+
             for (const produto of produtosParaAdicionar) {
                 const loteData = this.preSeparacoes.get(loteId);
                 const produtoExistente = loteData?.produtos.find(p => p.codProduto === produto.codProduto);
-                
+
                 await this.adicionarProdutoNoLote(loteId, produto);
-                
+
                 if (produtoExistente) {
                     produtosAtualizados++;
                 } else {
@@ -483,7 +515,7 @@ class WorkspaceMontagem {
 
             // Limpar seleção
             this.limparSelecao();
-            
+
             // Feedback mais detalhado
             let mensagem = '';
             if (produtosAdicionados > 0 && produtosAtualizados > 0) {
@@ -493,9 +525,9 @@ class WorkspaceMontagem {
             } else {
                 mensagem = `${produtosAtualizados} produtos atualizados no lote!`;
             }
-            
+
             this.mostrarFeedback(mensagem, 'success');
-            
+
         } catch (error) {
             console.error('❌ Erro ao adicionar produtos:', error);
             this.mostrarFeedback(`Erro ao adicionar produtos: ${error.message}`, 'error');
@@ -510,15 +542,15 @@ class WorkspaceMontagem {
         document.querySelectorAll('.produto-checkbox').forEach(cb => {
             cb.checked = false;
         });
-        
+
         // Remover classe selected das linhas
         document.querySelectorAll('.produto-origem.selected').forEach(tr => {
             tr.classList.remove('selected');
         });
-        
+
         // Limpar conjunto de selecionados
         this.produtosSelecionados.clear();
-        
+
         // Atualizar select all
         const selectAll = document.querySelector('#select-all-produtos');
         if (selectAll) {
@@ -546,10 +578,10 @@ class WorkspaceMontagem {
             z-index: 10000;
             animation: slideIn 0.3s ease;
         `;
-        
+
         toast.textContent = mensagem;
         document.body.appendChild(toast);
-        
+
         // Remover após 3 segundos
         setTimeout(() => {
             toast.style.animation = 'slideOut 0.3s ease';
@@ -560,30 +592,30 @@ class WorkspaceMontagem {
     criarLote(numPedido, loteId) {
         this.loteManager.criarLote(numPedido, loteId);
     }
-    
+
     removerProdutoDoLote(loteId, codProduto) {
         this.loteManager.removerProdutoDoLote(loteId, codProduto);
     }
-    
+
     obterNumeroPedido() {
         // Buscar o número do pedido do workspace ativo
         const workspaceElement = document.querySelector('.workspace-montagem[data-pedido]');
         return workspaceElement ? workspaceElement.dataset.pedido : null;
     }
-    
+
     resetarQuantidadeProduto(codProduto) {
         const input = document.querySelector(`input[data-produto="${codProduto}"]`);
         if (input) {
             const qtdOriginal = parseInt(input.dataset.qtdOriginal) || 0;
             input.value = qtdOriginal;
             input.dataset.qtdSaldo = qtdOriginal;
-            
+
             // Atualizar span
             const spanSaldo = input.nextElementSibling;
             if (spanSaldo) {
                 spanSaldo.textContent = `/${qtdOriginal}`;
             }
-            
+
             // Atualizar valores calculados
             if (window.workspaceQuantidades) {
                 window.workspaceQuantidades.atualizarQuantidadeProduto(input);
@@ -597,41 +629,41 @@ class WorkspaceMontagem {
 
     adicionarProdutoNoLote(loteId, dadosProduto) {
         this.loteManager.adicionarProdutoNoLote(loteId, dadosProduto);
-        
+
         // Não atualizar aqui - o loteManager já faz isso
         // this.atualizarSaldoNaTabela(dadosProduto.codProduto);
     }
-    
+
     /**
      * 🎯 ATUALIZAR SALDO DISPONÍVEL NA TABELA APÓS MUDANÇAS
      */
     atualizarSaldoNaTabela(codProduto) {
         const dadosProduto = this.dadosProdutos.get(codProduto);
         if (!dadosProduto) return;
-        
+
         // Recalcular saldo disponível
         const saldoDisponivel = this.calcularSaldoDisponivel(dadosProduto);
-        
+
         // Encontrar input de quantidade na tabela
         const input = document.querySelector(`input[data-produto="${codProduto}"]`);
         if (input) {
             // Atualizar atributos do input
             input.dataset.qtdSaldo = Math.floor(saldoDisponivel.qtdEditavel);
             input.max = Math.floor(saldoDisponivel.qtdEditavel);
-            
+
             // Atualizar o valor se exceder o novo saldo
             const valorAtual = parseInt(input.value) || 0;
             if (valorAtual > saldoDisponivel.qtdEditavel) {
                 input.value = Math.floor(saldoDisponivel.qtdEditavel);
                 this.atualizarQuantidadeProduto(input);
             }
-            
+
             // Atualizar o span do saldo
             const spanSaldo = input.nextElementSibling;
             if (spanSaldo) {
                 spanSaldo.textContent = `/${Math.floor(saldoDisponivel.qtdEditavel)}`;
                 spanSaldo.title = `Saldo disponível: ${this.formatarQuantidade(saldoDisponivel.qtdEditavel)} de ${this.formatarQuantidade(dadosProduto.qtd_pedido)} do pedido`;
-                
+
                 // Visual feedback se saldo mudou
                 if (saldoDisponivel.temRestricao) {
                     spanSaldo.classList.add('text-warning');
@@ -656,14 +688,14 @@ class WorkspaceMontagem {
             window.workspaceQuantidades.atualizarQuantidadeProduto(input);
         }
     }
-    
+
     atualizarColunasCalculadas(codProduto, novaQtd, dadosProduto) {
         // Delegado para WorkspaceQuantidades
         if (window.workspaceQuantidades) {
             window.workspaceQuantidades.atualizarColunasCalculadas(codProduto, novaQtd, dadosProduto);
         }
     }
-    
+
     recalcularTotaisLotesComProduto(codProduto) {
         // Delegado para WorkspaceQuantidades
         if (window.workspaceQuantidades) {
@@ -689,7 +721,7 @@ class WorkspaceMontagem {
 
     async gerarSeparacao(loteId) {
         console.log(`⚡ Gerar separação para lote ${loteId}`);
-        
+
         const loteData = this.preSeparacoes.get(loteId);
         if (!loteData || loteData.produtos.length === 0) {
             alert('❌ Lote vazio! Adicione produtos antes de gerar a separação.');
@@ -703,12 +735,12 @@ class WorkspaceMontagem {
             return;
         }
 
-        // 🎯 DELEGAR PARA SEPARACAO-MANAGER (Caso 1 - Criar separação completa)
+        // 🎯 TRANSFORMAR ESTE LOTE ESPECÍFICO EM SEPARAÇÃO
         if (window.separacaoManager) {
-            await window.separacaoManager.criarSeparacaoCompleta(numPedido);
-            
-            // Se a separação foi criada, remover o lote local
-            this.loteManager.removerLote(loteId);
+            await window.separacaoManager.transformarLoteEmSeparacao(numPedido, loteId);
+
+            // Não remover mais o lote após gerar separação (mantém histórico)
+            // this.loteManager.removerLote(loteId);
         } else {
             console.error('❌ Separação Manager não disponível');
             alert('❌ Sistema de separação não está disponível');
@@ -717,13 +749,20 @@ class WorkspaceMontagem {
 
     async confirmarSeparacao(loteId) {
         console.log(`🔄 Confirmar separação para lote ${loteId}`);
-        
+
+        // Obter número do pedido
+        const numPedido = this.obterNumeroPedido();
+        if (!numPedido) {
+            alert('❌ Não foi possível identificar o número do pedido.');
+            return;
+        }
+
         // 🎯 DELEGAR PARA SEPARACAO-MANAGER (Caso 2 - Transformar pré-separação em separação)
         if (window.separacaoManager) {
-            await window.separacaoManager.transformarLoteEmSeparacao(null, loteId);
-            
-            // Se a transformação foi bem-sucedida, remover o lote local
-            this.loteManager.removerLote(loteId);
+            await window.separacaoManager.transformarLoteEmSeparacao(numPedido, loteId);
+
+            // Não remover mais o lote após confirmar separação (mantém histórico)
+            // this.loteManager.removerLote(loteId);
         } else {
             console.error('❌ Separação Manager não disponível');
             alert('❌ Sistema de separação não está disponível');
@@ -756,7 +795,7 @@ class WorkspaceMontagem {
 
     removerProdutoDoLote(loteId, codProduto) {
         this.loteManager.removerProdutoDoLote(loteId, codProduto);
-        
+
         // 🎯 ATUALIZAR SALDO DISPONÍVEL NA TABELA
         this.atualizarSaldoNaTabela(codProduto);
     }
@@ -764,7 +803,7 @@ class WorkspaceMontagem {
     renderizarErroWorkspace(numPedido, mensagem) {
         const contentDiv = document.getElementById(`content-${numPedido}`);
         const loadingDiv = document.getElementById(`loading-${numPedido}`);
-        
+
         if (contentDiv) {
             contentDiv.innerHTML = `
                 <div class="alert alert-danger">
@@ -812,18 +851,219 @@ class WorkspaceMontagem {
         const resumo = document.getElementById(`produtos-resumo-${loteId}`);
         const completo = document.getElementById(`produtos-completo-${loteId}`);
         const btnToggle = document.getElementById(`btn-toggle-${loteId}`);
-        
-        if (resumo && completo && btnToggle) {
+        const card = document.getElementById(`card-separacao-${loteId}`);
+
+        if (resumo && completo && btnToggle && card) {
             if (completo.style.display === 'none') {
                 resumo.style.display = 'none';
                 completo.style.display = 'block';
                 btnToggle.textContent = 'Ver menos';
+
+                // Expandir o card mudando a classe da coluna
+                const colParent = card.closest('.col-md-4');
+                if (colParent) {
+                    // Adicionar transição suave
+                    card.style.transition = 'all 0.3s ease';
+
+                    // Mudar de col-md-4 para col-md-6 (50% da largura)
+                    colParent.classList.remove('col-md-4');
+                    colParent.classList.add('col-md-6');
+
+                    // Elevar o card
+                    card.style.zIndex = '10';
+                    card.style.position = 'relative';
+                    card.classList.add('shadow-lg');
+                }
             } else {
                 resumo.style.display = 'block';
                 completo.style.display = 'none';
                 btnToggle.textContent = 'Ver todos';
+
+                // Restaurar o tamanho original
+                const colParent = card.closest('.col-md-6');
+                if (colParent) {
+                    // Voltar para col-md-4
+                    colParent.classList.remove('col-md-6');
+                    colParent.classList.add('col-md-4');
+
+                    // Remover elevação após transição
+                    setTimeout(() => {
+                        card.style.zIndex = '';
+                        card.classList.remove('shadow-lg');
+                    }, 300);
+                }
             }
         }
+    }
+
+    async reverterSeparacao(loteId) {
+        if (!confirm('Deseja reverter esta separação para pré-separação?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/carteira/api/separacao/${loteId}/reverter`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                alert('✅ Separação revertida com sucesso!');
+                location.reload();
+            } else {
+                alert(`❌ Erro ao reverter separação: ${data.error}`);
+            }
+
+        } catch (error) {
+            console.error('Erro ao reverter separação:', error);
+            alert('❌ Erro interno ao reverter separação');
+        }
+    }
+
+    editarDatasSeparacao(loteId) {
+        this.abrirModalEdicaoDatas('separacao', loteId);
+    }
+
+    editarDatasPreSeparacao(loteId) {
+        this.abrirModalEdicaoDatas('pre-separacao', loteId);
+    }
+
+    abrirModalEdicaoDatas(tipo, loteId) {
+        // Buscar dados atuais
+        let dadosAtuais = {};
+
+        if (tipo === 'pre-separacao') {
+            // Buscar dados da pré-separação
+            const loteData = this.preSeparacoes.get(loteId);
+            if (loteData && loteData.produtos.length > 0) {
+                const primeiroProduto = loteData.produtos[0];
+                dadosAtuais = {
+                    expedicao: primeiroProduto.dataExpedicao || '',
+                    agendamento: primeiroProduto.dataAgendamento || '',
+                    protocolo: primeiroProduto.protocolo || ''
+                };
+            }
+        } else {
+            // Para separações, buscar dos dados carregados
+            const separacao = this.separacoesConfirmadas.find(s => s.separacao_lote_id === loteId);
+            if (separacao) {
+                dadosAtuais = {
+                    expedicao: separacao.expedicao || '',
+                    agendamento: separacao.agendamento || '',
+                    protocolo: separacao.protocolo || ''
+                };
+            }
+        }
+
+        // Criar modal
+        const modalHtml = `
+            <div class="modal fade" id="modalEdicaoDatas" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Editar Datas - ${tipo === 'pre-separacao' ? 'Pré-Separação' : 'Separação'}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="formEdicaoDatas">
+                                <div class="mb-3">
+                                    <label class="form-label">Data de Expedição</label>
+                                    <input type="date" class="form-control" id="dataExpedicao" 
+                                           value="${dadosAtuais.expedicao}" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Data de Agendamento</label>
+                                    <input type="date" class="form-control" id="dataAgendamento" 
+                                           value="${dadosAtuais.agendamento}">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Protocolo</label>
+                                    <input type="text" class="form-control" id="protocolo" 
+                                           value="${dadosAtuais.protocolo}" 
+                                           placeholder="Digite o protocolo">
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" onclick="workspace.salvarEdicaoDatas('${tipo}', '${loteId}')">
+                                <i class="fas fa-save me-1"></i> Salvar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remover modal anterior se existir
+        const modalExistente = document.getElementById('modalEdicaoDatas');
+        if (modalExistente) {
+            modalExistente.remove();
+        }
+
+        // Adicionar modal ao body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // Mostrar modal
+        const modal = new bootstrap.Modal(document.getElementById('modalEdicaoDatas'));
+        modal.show();
+    }
+
+    async salvarEdicaoDatas(tipo, loteId) {
+        const expedicao = document.getElementById('dataExpedicao').value;
+        const agendamento = document.getElementById('dataAgendamento').value;
+        const protocolo = document.getElementById('protocolo').value;
+
+        if (!expedicao) {
+            alert('Data de expedição é obrigatória!');
+            return;
+        }
+
+        try {
+            const endpoint = tipo === 'pre-separacao'
+                ? `/carteira/api/pre-separacao/${loteId}/atualizar-datas`
+                : `/carteira/api/separacao/${loteId}/atualizar-datas`;
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    expedicao: expedicao,
+                    agendamento: agendamento,
+                    protocolo: protocolo
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Fechar modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalEdicaoDatas'));
+                modal.hide();
+
+                alert('✅ Datas atualizadas com sucesso!');
+                location.reload();
+            } else {
+                alert(`❌ Erro ao atualizar datas: ${data.error}`);
+            }
+
+        } catch (error) {
+            console.error('Erro ao atualizar datas:', error);
+            alert('❌ Erro interno ao atualizar datas');
+        }
+    }
+
+    imprimirSeparacao(loteId) {
+        window.open(`/carteira/separacao/${loteId}/imprimir`, '_blank');
     }
 }
 

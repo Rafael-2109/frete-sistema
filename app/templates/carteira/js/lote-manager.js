@@ -18,7 +18,7 @@ class LoteManager {
         const data = hoje.toISOString().slice(0, 10).replace(/-/g, '');
         const hora = hoje.toTimeString().slice(0, 8).replace(/:/g, '');
         const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        
+
         return `LOTE-${data}-${random}-${hora}`;
     }
 
@@ -47,7 +47,7 @@ class LoteManager {
         const loteCard = document.createElement('div');
         loteCard.className = 'col-md-4 mb-3';
         loteCard.innerHTML = this.renderizarCardLote(loteId);
-        
+
         container.appendChild(loteCard);
 
         // Drag & drop removido - usando checkboxes
@@ -59,7 +59,7 @@ class LoteManager {
     renderizarCardLote(loteId) {
         const loteData = this.workspace.preSeparacoes.get(loteId);
         const temProdutos = loteData.produtos.length > 0;
-        
+
         // Obter status do pedido atual
         const numPedido = this.workspace.obterNumeroPedido();
         const statusPedido = this.workspace.statusPedido || 'ABERTO';
@@ -80,8 +80,8 @@ class LoteManager {
                 
                 <div class="card-body">
                     <div class="produtos-lote mb-3">
-                        ${temProdutos ? this.renderizarProdutosDoLote(loteData.produtos, loteId) : 
-                          '<p class="text-muted text-center"><i class="fas fa-hand-pointer me-2"></i>Selecione produtos e clique em "Adicionar Selecionados"</p>'}
+                        ${temProdutos ? this.renderizarProdutosDoLote(loteData.produtos, loteId) :
+                '<p class="text-muted text-center"><i class="fas fa-hand-pointer me-2"></i>Selecione produtos e clique em "Adicionar Selecionados"</p>'}
                     </div>
                     
                     ${temProdutos ? `
@@ -122,6 +122,11 @@ class LoteManager {
                                     ${!temProdutos ? 'disabled' : ''}>
                                 <i class="fas fa-play me-1"></i> Gerar Separação
                             </button>
+                            <button class="btn btn-secondary btn-sm" 
+                                    onclick="workspace.editarDatasPreSeparacao('${loteId}')"
+                                    ${!temProdutos ? 'disabled' : ''}>
+                                <i class="fas fa-calendar-alt me-1"></i> Datas
+                            </button>
                             <button class="btn btn-info btn-sm" 
                                     onclick="workspace.abrirDetalhesLote('${loteId}')">
                                 <i class="fas fa-search me-1"></i>
@@ -140,7 +145,7 @@ class LoteManager {
     renderizarCardPreSeparacao(loteData) {
         const temProdutos = loteData.produtos.length > 0;
         const isPre = loteData.status === 'pre_separacao';
-        
+
         // Obter status do pedido atual
         const numPedido = this.workspace.obterNumeroPedido();
         const statusPedido = this.workspace.statusPedido || 'ABERTO';
@@ -163,8 +168,8 @@ class LoteManager {
                 
                 <div class="card-body">
                     <div class="produtos-lote mb-3">
-                        ${temProdutos ? this.renderizarProdutosDaPreSeparacao(loteData.produtos, loteData.lote_id) : 
-                          '<p class="text-muted text-center"><i class="fas fa-inbox me-2"></i>Nenhum produto</p>'}
+                        ${temProdutos ? this.renderizarProdutosDaPreSeparacao(loteData.produtos, loteData.lote_id) :
+                '<p class="text-muted text-center"><i class="fas fa-inbox me-2"></i>Nenhum produto</p>'}
                     </div>
                     
                     ${temProdutos ? `
@@ -267,7 +272,7 @@ class LoteManager {
         return produtos.map(produto => {
             const dadosProduto = this.workspace.dadosProdutos.get(produto.codProduto);
             const estoqueData = dadosProduto ? dadosProduto.estoque_data_expedicao : 0;
-            
+
             return `
                 <div class="produto-lote d-flex justify-content-between align-items-center mb-1">
                     <div class="produto-info">
@@ -288,7 +293,7 @@ class LoteManager {
         try {
             // Obter data de expedição (usar amanhã como padrão)
             const dataExpedicao = dadosProduto.dataExpedicao || this.obterDataExpedicaoDefault();
-            
+
             // 🎯 USAR PreSeparacaoManager para manter consistência
             const resultado = await this.workspace.preSeparacaoManager.salvarPreSeparacao(
                 this.workspace.obterNumeroPedido(),
@@ -310,7 +315,7 @@ class LoteManager {
 
             // Verificar se produto já existe no lote
             const produtoExistente = loteData.produtos.find(p => p.codProduto === dadosProduto.codProduto);
-            
+
             if (produtoExistente) {
                 // Somar quantidade ao produto existente
                 produtoExistente.quantidade = resultado.dados.quantidade; // Já vem somado da API
@@ -318,7 +323,7 @@ class LoteManager {
                 produtoExistente.peso = resultado.dados.peso;
                 produtoExistente.pallet = resultado.dados.pallet;
                 produtoExistente.preSeparacaoId = resultado.pre_separacao_id;
-                
+
                 // Mostrar feedback específico
                 this.workspace.mostrarFeedback(
                     `Quantidade do produto ${dadosProduto.codProduto} atualizada para ${resultado.dados.quantidade}`,
@@ -343,16 +348,59 @@ class LoteManager {
 
             // Recalcular totais
             this.recalcularTotaisLote(loteId);
-            
+
             // Re-renderizar o lote
             this.atualizarCardLote(loteId);
-            
+
             console.log(`✅ Produto ${dadosProduto.codProduto} persistido no lote ${loteId} (ID: ${resultado.pre_separacao_id})`);
-            
+
+            // DEBUG: Verificar estado antes de atualizar saldo
+            console.log(`🔍 DEBUG antes de atualizarSaldoAposAdicao:`);
+            console.log(`   - codProduto: ${dadosProduto.codProduto}`);
+            console.log(`   - quantidade adicionada ao lote: ${dadosProduto.qtdPedido}`);
+            console.log(`   - pré-separações no lote:`, loteData.produtos);
+
             // IMPORTANTE: Atualizar saldo na tabela de origem
             if (window.workspaceQuantidades) {
                 window.workspaceQuantidades.atualizarSaldoAposAdicao(dadosProduto.codProduto, dadosProduto.qtdPedido);
             }
+
+            // FORÇAR atualização visual do campo para garantir que mostre o saldo correto
+            setTimeout(() => {
+                const inputProduto = document.querySelector(`input.qtd-editavel[data-produto="${dadosProduto.codProduto}"]`);
+                if (inputProduto && window.workspace) {
+                    const dadosProdutoAtualizado = window.workspace.dadosProdutos.get(dadosProduto.codProduto);
+                    if (dadosProdutoAtualizado) {
+                        const saldoAtualizado = window.workspaceQuantidades.calcularSaldoDisponivel(dadosProdutoAtualizado);
+                        const novoValor = Math.floor(saldoAtualizado.qtdEditavel);
+
+                        console.log(`🔧 FORÇANDO atualização do campo ${dadosProduto.codProduto}:`);
+                        console.log(`   - Valor atual: ${inputProduto.value}`);
+                        console.log(`   - Novo valor: ${novoValor}`);
+
+                        inputProduto.value = novoValor;
+                        inputProduto.setAttribute('value', novoValor);
+                        inputProduto.dataset.qtdSaldo = novoValor;
+                        inputProduto.max = novoValor;
+
+                        // Atualizar span
+                        const span = inputProduto.nextElementSibling;
+                        if (span && span.classList.contains('input-group-text')) {
+                            span.textContent = `/${novoValor}`;
+                        }
+                    }
+                }
+            }, 200);
+
+            // DEBUG: Verificar valor do campo após atualização
+            setTimeout(() => {
+                const input = document.querySelector(`input[data-produto="${dadosProduto.codProduto}"]`);
+                if (input) {
+                    console.log(`🔍 DEBUG 100ms após atualização:`);
+                    console.log(`   - input.value: ${input.value}`);
+                    console.log(`   - input.dataset.qtdSaldo: ${input.dataset.qtdSaldo}`);
+                }
+            }, 100);
 
         } catch (error) {
             console.error('❌ Erro ao adicionar produto ao lote:', error);
@@ -389,7 +437,7 @@ class LoteManager {
         const cardElement = document.querySelector(`[data-lote-id="${loteId}"]`);
         if (cardElement) {
             cardElement.outerHTML = this.renderizarCardLote(loteId);
-            
+
             // Reconfigurar eventos no novo elemento
             const newCard = document.querySelector(`[data-lote-id="${loteId}"]`);
             // Drag & drop removido - usando checkboxes
@@ -400,41 +448,84 @@ class LoteManager {
         if (confirm(`Tem certeza que deseja remover o lote ${loteId}?`)) {
             try {
                 const loteData = this.workspace.preSeparacoes.get(loteId);
-                
+
                 if (loteData && loteData.produtos && loteData.produtos.length > 0) {
+                    // Guardar informações dos produtos antes de remover
+                    const produtosParaAtualizar = [...loteData.produtos];
+
                     // Remover cada produto da pré-separação via API
                     for (const produto of loteData.produtos) {
                         if (produto.preSeparacaoId) {
                             console.log(`🗑️ Removendo produto ${produto.codProduto} (ID: ${produto.preSeparacaoId})`);
-                            
+
                             const response = await fetch(`/carteira/api/pre-separacao/${produto.preSeparacaoId}/remover`, {
                                 method: 'DELETE',
                                 headers: {
                                     'X-CSRFToken': this.getCSRFToken()
                                 }
                             });
-                            
+
                             const result = await response.json();
-                            
+
                             if (!result.success) {
                                 throw new Error(result.error || 'Erro ao remover pré-separação');
                             }
                         }
                     }
+
+                    // Atualizar saldos de todos os produtos removidos
+                    for (const produto of produtosParaAtualizar) {
+                        if (window.workspaceQuantidades) {
+                            console.log(`🔄 Atualizando saldo após remover lote: ${produto.codProduto} (qtd: ${produto.quantidade})`);
+                            window.workspaceQuantidades.atualizarSaldoAposRemocao(produto.codProduto, produto.quantidade);
+                        }
+                    }
+
+                    // FORÇAR atualização visual após remover lote completo
+                    setTimeout(() => {
+                        console.log(`🔧 Forçando atualização de ${produtosParaAtualizar.length} produtos após remover lote`);
+
+                        for (const produto of produtosParaAtualizar) {
+                            const inputProduto = document.querySelector(`input.qtd-editavel[data-produto="${produto.codProduto}"]`);
+                            if (inputProduto && window.workspace) {
+                                const dadosProdutoAtualizado = window.workspace.dadosProdutos.get(produto.codProduto);
+                                if (dadosProdutoAtualizado) {
+                                    const saldoAtualizado = window.workspaceQuantidades.calcularSaldoDisponivel(dadosProdutoAtualizado);
+                                    const novoValor = Math.floor(saldoAtualizado.qtdEditavel);
+
+                                    console.log(`   - Atualizando ${produto.codProduto}: ${inputProduto.value} → ${novoValor}`);
+
+                                    inputProduto.value = novoValor;
+                                    inputProduto.setAttribute('value', novoValor);
+                                    inputProduto.dataset.qtdSaldo = novoValor;
+                                    inputProduto.max = novoValor;
+
+                                    // Atualizar span
+                                    const span = inputProduto.nextElementSibling;
+                                    if (span && span.classList.contains('input-group-text')) {
+                                        span.textContent = `/${novoValor}`;
+                                    }
+
+                                    // Atualizar valores calculados
+                                    window.workspaceQuantidades.atualizarColunasCalculadas(produto.codProduto, novoValor, dadosProdutoAtualizado);
+                                }
+                            }
+                        }
+                    }, 300);
                 }
-                
+
                 // Remover do Map local
                 this.workspace.preSeparacoes.delete(loteId);
-                
+
                 // Remover o card visual
                 const cardElement = document.querySelector(`[data-lote-id="${loteId}"]`).closest('.col-md-4');
                 if (cardElement) {
                     cardElement.remove();
                 }
-                
+
                 console.log(`✅ Lote ${loteId} removido completamente`);
                 this.workspace.mostrarToast('Lote removido com sucesso!', 'success');
-                
+
             } catch (error) {
                 console.error('❌ Erro ao remover lote:', error);
                 this.workspace.mostrarToast(`Erro ao remover lote: ${error.message}`, 'error');
@@ -480,13 +571,43 @@ class LoteManager {
             loteData.produtos = loteData.produtos.filter(p => p.codProduto !== codProduto);
             this.recalcularTotaisLote(loteId);
             this.atualizarCardLote(loteId);
-            
+
             console.log(`🗑️ Produto ${codProduto} removido do lote ${loteId} (ID: ${produto.preSeparacaoId})`);
-            
+
             // IMPORTANTE: Atualizar saldo na tabela de origem após remover
             if (window.workspaceQuantidades) {
                 window.workspaceQuantidades.atualizarSaldoAposRemocao(codProduto, produto.quantidade);
             }
+
+            // FORÇAR atualização visual do campo após remoção
+            setTimeout(() => {
+                const inputProduto = document.querySelector(`input.qtd-editavel[data-produto="${codProduto}"]`);
+                if (inputProduto && window.workspace) {
+                    const dadosProdutoAtualizado = window.workspace.dadosProdutos.get(codProduto);
+                    if (dadosProdutoAtualizado) {
+                        const saldoAtualizado = window.workspaceQuantidades.calcularSaldoDisponivel(dadosProdutoAtualizado);
+                        const novoValor = Math.floor(saldoAtualizado.qtdEditavel);
+
+                        console.log(`🔧 FORÇANDO atualização do campo após remoção ${codProduto}:`);
+                        console.log(`   - Valor atual: ${inputProduto.value}`);
+                        console.log(`   - Novo valor: ${novoValor}`);
+
+                        inputProduto.value = novoValor;
+                        inputProduto.setAttribute('value', novoValor);
+                        inputProduto.dataset.qtdSaldo = novoValor;
+                        inputProduto.max = novoValor;
+
+                        // Atualizar span
+                        const span = inputProduto.nextElementSibling;
+                        if (span && span.classList.contains('input-group-text')) {
+                            span.textContent = `/${novoValor}`;
+                        }
+
+                        // Atualizar valores calculados
+                        window.workspaceQuantidades.atualizarColunasCalculadas(codProduto, novoValor, dadosProdutoAtualizado);
+                    }
+                }
+            }, 200);
 
         } catch (error) {
             console.error('❌ Erro ao remover produto do lote:', error);
@@ -512,7 +633,7 @@ class LoteManager {
         if (!pallet) return '0 plt';
         return `${parseFloat(pallet).toFixed(2)} plt`;
     }
-    
+
     /**
      * Obter CSRF Token de forma consistente
      */
@@ -522,17 +643,17 @@ class LoteManager {
             .split('; ')
             .find(row => row.startsWith('csrftoken='))
             ?.split('=')[1];
-            
+
         if (cookieValue) return cookieValue;
-        
+
         const metaToken = document.querySelector('meta[name="csrf-token"]')?.content;
         if (metaToken) return metaToken;
-        
+
         const inputToken = document.querySelector('input[name="csrf_token"]')?.value;
         if (inputToken) return inputToken;
-        
+
         if (window.csrfToken) return window.csrfToken;
-        
+
         console.warn('⚠️ CSRF Token não encontrado');
         return '';
     }

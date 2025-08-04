@@ -41,20 +41,6 @@ def obter_separacoes_completas(num_pedido):
                 )
             ).first()
             
-            # Dados básicos da separação
-            sep_data = {
-                'separacao_lote_id': sep.separacao_lote_id,
-                'num_pedido': sep.num_pedido,
-                'expedicao': sep.expedicao.isoformat() if sep.expedicao else None,
-                'agendamento': sep.agendamento.isoformat() if sep.agendamento else None,
-                'protocolo': sep.protocolo,
-                'status': pedido.status if pedido else 'ABERTO',
-                'valor_total': float(sep.valor_saldo or 0),
-                'peso_total': float(sep.peso or 0),
-                'pallet_total': float(sep.pallet or 0),
-                'produtos': []
-            }
-            
             # Buscar produtos da separação
             produtos = db.session.query(Separacao).filter(
                 and_(
@@ -63,8 +49,18 @@ def obter_separacoes_completas(num_pedido):
                 )
             ).all()
             
+            # Calcular totais somando todos os produtos
+            valor_total = 0
+            peso_total = 0
+            pallet_total = 0
+            
+            produtos_data = []
             for prod in produtos:
-                sep_data['produtos'].append({
+                valor_total += float(prod.valor_saldo or 0)
+                peso_total += float(prod.peso or 0)
+                pallet_total += float(prod.pallet or 0)
+                
+                produtos_data.append({
                     'cod_produto': prod.cod_produto,
                     'nome_produto': prod.nome_produto,
                     'qtd_saldo': float(prod.qtd_saldo or 0),
@@ -72,6 +68,20 @@ def obter_separacoes_completas(num_pedido):
                     'peso': float(prod.peso or 0),
                     'pallet': float(prod.pallet or 0)
                 })
+            
+            # Dados básicos da separação com totais corretos
+            sep_data = {
+                'separacao_lote_id': sep.separacao_lote_id,
+                'num_pedido': sep.num_pedido,
+                'expedicao': sep.expedicao.isoformat() if sep.expedicao else None,
+                'agendamento': sep.agendamento.isoformat() if sep.agendamento else None,
+                'protocolo': sep.protocolo,
+                'status': pedido.status if pedido else 'ABERTO',
+                'valor_total': valor_total,
+                'peso_total': peso_total,
+                'pallet_total': pallet_total,
+                'produtos': produtos_data
+            }
             
             # Se status for COTADO, buscar informações do embarque
             if pedido and pedido.status == 'COTADO':
@@ -94,7 +104,7 @@ def obter_separacoes_completas(num_pedido):
                                 Transportadora.id == embarque.transportadora_id
                             ).first()
                             if transp:
-                                transportadora = transp.nome
+                                transportadora = transp.razao_social
                         
                         sep_data['embarque'] = {
                             'numero': embarque.numero,
@@ -103,16 +113,6 @@ def obter_separacoes_completas(num_pedido):
                         }
             
             separacoes_data.append(sep_data)
-        
-        # Calcular totais (considerando que produtos podem estar duplicados)
-        totais_unicos = {}
-        for sep in separacoes_data:
-            if sep['separacao_lote_id'] not in totais_unicos:
-                totais_unicos[sep['separacao_lote_id']] = {
-                    'valor': sep['valor_total'],
-                    'peso': sep['peso_total'],
-                    'pallet': sep['pallet_total']
-                }
         
         # Limpar duplicatas - agrupar por separacao_lote_id
         separacoes_unicas = {}

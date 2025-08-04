@@ -100,10 +100,31 @@ class ClaudeAPIClient(ExternalAPIClient):
     
     @classmethod
     def from_environment(cls):
-        """Cria cliente usando variável de ambiente."""
+        """Cria cliente usando variável de ambiente com lazy loading."""
+        # Tentar obter API key de múltiplas fontes
         api_key = os.getenv('ANTHROPIC_API_KEY')
+        
+        # Se não encontrou, tentar carregar .env
         if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY não configurada")
+            try:
+                from dotenv import load_dotenv
+                load_dotenv()
+                api_key = os.getenv('ANTHROPIC_API_KEY')
+            except ImportError:
+                pass
+        
+        # Se ainda não encontrou, tentar da configuração
+        if not api_key:
+            try:
+                from ..config.basic_config import ClaudeAIConfig
+                api_key = ClaudeAIConfig.get_anthropic_api_key()
+            except ImportError:
+                pass
+                
+        if not api_key:
+            logger.warning("⚠️ ANTHROPIC_API_KEY não encontrada - tentando fallback")
+            raise ValueError("ANTHROPIC_API_KEY não configurada em nenhuma fonte")
+            
         return cls(api_key)
     
     @classmethod

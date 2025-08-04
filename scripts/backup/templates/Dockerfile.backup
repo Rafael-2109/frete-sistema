@@ -1,0 +1,62 @@
+# Dockerfile for MCP Backup Services
+# Provides all necessary tools for backup, recovery, and testing
+
+FROM python:3.9-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    redis-tools \
+    curl \
+    wget \
+    gnupg \
+    lsb-release \
+    cron \
+    gzip \
+    bzip2 \
+    xz-utils \
+    docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install AWS CLI for S3 operations
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+    && unzip awscliv2.zip \
+    && ./aws/install \
+    && rm -rf awscliv2.zip aws/
+
+# Install Python dependencies
+COPY requirements.backup.txt /tmp/
+RUN pip install --no-cache-dir -r /tmp/requirements.backup.txt
+
+# Create necessary directories
+RUN mkdir -p /app/scripts /app/config /app/logs /var/backups/mcp /var/restore/mcp
+
+# Copy backup scripts
+COPY scripts/backup/ /app/scripts/
+COPY config/ /app/config/
+
+# Make scripts executable
+RUN chmod +x /app/scripts/*.py /app/scripts/*.sh
+
+# Setup cron for scheduled backups
+COPY crontab /etc/cron.d/mcp-backup
+RUN chmod 0644 /etc/cron.d/mcp-backup \
+    && crontab /etc/cron.d/mcp-backup
+
+# Create backup user
+RUN useradd -m -s /bin/bash backup \
+    && chown -R backup:backup /app /var/backups/mcp /var/restore/mcp
+
+# Environment variables
+ENV PYTHONPATH=/app:$PYTHONPATH
+ENV BACKUP_CONFIG=/app/config/backup_config.json
+
+# Health check
+HEALTHCHECK --interval=5m --timeout=3s \
+  CMD python /app/scripts/backup_manager.py list || exit 1
+
+# Switch to backup user
+USER backup
+
+# Default command - run cron in foreground
+CMD ["cron", "-f"]

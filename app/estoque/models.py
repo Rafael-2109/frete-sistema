@@ -1,8 +1,7 @@
 from app import db
-from datetime import datetime
 from app.utils.timezone import agora_brasil
-from sqlalchemy import inspect, and_, or_
-from datetime import datetime, timedelta
+from sqlalchemy import inspect
+from datetime import timedelta
 import logging
 
 logger = logging.getLogger(__name__)
@@ -222,7 +221,19 @@ class SaldoEstoque:
     def obter_produtos_com_estoque():
         """Obtém lista de produtos únicos que têm movimentação de estoque"""
         try:
+            # VERIFICA SE EXISTE CACHE PRIMEIRO
             inspector = inspect(db.engine)
+            if inspector.has_table('saldo_estoque_cache'):
+                from app.estoque.models_cache import SaldoEstoqueCache
+                # Usar cache se disponível (MUITO MAIS RÁPIDO)
+                produtos = db.session.query(
+                    SaldoEstoqueCache.cod_produto,
+                    SaldoEstoqueCache.nome_produto
+                ).all()
+                if produtos:
+                    return produtos
+            
+            # Fallback: usar método antigo se não houver cache
             if not inspector.has_table('movimentacao_estoque'):
                 return []
             
@@ -244,12 +255,25 @@ class SaldoEstoque:
     def calcular_estoque_inicial(cod_produto):
         """Calcula estoque inicial (D0) baseado em todas as movimentações"""
         try:
+            # VERIFICA SE EXISTE CACHE PRIMEIRO
             inspector = inspect(db.engine)
+            if inspector.has_table('saldo_estoque_cache'):
+                from app.estoque.models_cache import SaldoEstoqueCache
+                cache = SaldoEstoqueCache.query.filter_by(cod_produto=str(cod_produto)).first()
+                if cache:
+                    # Usar cache (instantâneo!)
+                    return float(cache.saldo_atual)
+            
+            # Fallback: cálculo tradicional se não houver cache
             if not inspector.has_table('movimentacao_estoque'):
                 return 0
             
             # Buscar todos os códigos relacionados (considerando unificação)
-            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            try:
+                codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            except (ValueError, TypeError):
+                # Se não for numérico, usar apenas o código original
+                codigos_relacionados = [str(cod_produto)]
             
             # Somar movimentações de todos os códigos relacionados
             total_estoque = 0
@@ -276,7 +300,11 @@ class SaldoEstoque:
                 return 0
             
             # Buscar todos os códigos relacionados (considerando unificação)
-            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            try:
+                codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            except (ValueError, TypeError):
+                # Se não for numérico, usar apenas o código original
+                codigos_relacionados = [str(cod_produto)]
             
             # Somar produção de todos os códigos relacionados
             total_producao = 0
@@ -314,7 +342,8 @@ class SaldoEstoque:
         """
         try:
             projecao = []
-            data_hoje = datetime.now().date()
+            # CORREÇÃO: Usar data no timezone brasileiro
+            data_hoje = agora_brasil().date()
             
             # Estoque inicial (D0)
             estoque_atual = SaldoEstoque.calcular_estoque_inicial(cod_produto)
@@ -380,6 +409,44 @@ class SaldoEstoque:
     def obter_resumo_produto(cod_produto, nome_produto):
         """Obtém resumo completo de um produto"""
         try:
+            # VERIFICA SE EXISTE CACHE PRIMEIRO
+            inspector = inspect(db.engine)
+            if inspector.has_table('saldo_estoque_cache'):
+                from app.estoque.models_cache import SaldoEstoqueCache, ProjecaoEstoqueCache
+                
+                # Buscar no cache
+                cache = SaldoEstoqueCache.query.filter_by(cod_produto=str(cod_produto)).first()
+                if cache:
+                    # Buscar projeção do cache
+                    projecoes = ProjecaoEstoqueCache.query.filter_by(
+                        cod_produto=str(cod_produto)
+                    ).order_by(ProjecaoEstoqueCache.dia_offset).all()
+                    
+                    # Se houver projeção no cache, usar
+                    if projecoes:
+                        projecao = []
+                        for proj in projecoes:
+                            projecao.append({
+                                'dia': proj.dia_offset,
+                                'data': proj.data_projecao,
+                                'data_formatada': proj.data_projecao.strftime('%d/%m'),
+                                'estoque_inicial': float(proj.estoque_inicial),
+                                'saida_prevista': float(proj.saida_prevista),
+                                'producao_programada': float(proj.producao_programada),
+                                'estoque_final': float(proj.estoque_final)
+                            })
+                        
+                        return {
+                            'cod_produto': cache.cod_produto,
+                            'nome_produto': cache.nome_produto,
+                            'estoque_inicial': float(cache.saldo_atual),
+                            'qtd_total_carteira': float(cache.qtd_carteira),
+                            'previsao_ruptura': float(cache.previsao_ruptura_7d) if cache.previsao_ruptura_7d else 0,
+                            'projecao_29_dias': projecao,
+                            'status_ruptura': cache.status_ruptura or 'OK'
+                        }
+            
+            # Fallback: cálculo tradicional se não houver cache
             # Calcular projeção completa
             projecao = SaldoEstoque.calcular_projecao_completa(cod_produto)
             
@@ -418,7 +485,11 @@ class SaldoEstoque:
         """
         try:
             # Buscar todos os códigos relacionados (considerando unificação)
-            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            try:
+                codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            except (ValueError, TypeError):
+                # Se não for numérico, usar apenas o código original
+                codigos_relacionados = [str(cod_produto)]
             
             total_saida = 0
             
@@ -478,7 +549,12 @@ class SaldoEstoque:
             from app.carteira.models import CarteiraPrincipal
             
             # Buscar todos os códigos relacionados (considerando unificação)
-            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            # Não converter para int se o código for alfanumérico
+            try:
+                codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(int(cod_produto))
+            except (ValueError, TypeError):
+                # Se não for numérico, usar apenas o código original
+                codigos_relacionados = [str(cod_produto)]
             
             total_carteira = 0
             for codigo in codigos_relacionados:
@@ -518,7 +594,7 @@ class SaldoEstoque:
                 nome_produto=produto_existente.nome_produto,
                 tipo_movimentacao='AJUSTE',
                 local_movimentacao='CD',
-                data_movimentacao=datetime.now().date(),
+                data_movimentacao=agora_brasil().date(),
                 qtd_movimentacao=float(qtd_ajuste),
                 observacao=f'Ajuste manual: {motivo}',
                 criado_por=usuario,

@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% set active_page = "faturamento" %}
+
+{% block title %}Importar Faturamento TagPlus{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-file-excel text-info me-2"></i>
+                Importar Faturamento TagPlus
+            </h1>
+            <p class="text-muted">Importação de arquivo Excel exportado do TagPlus</p>
+        </div>
+        <a href="{{ url_for('faturamento.dashboard_faturamento') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>
+            Voltar ao Dashboard
+        </a>
+    </div>
+
+    <!-- Instruções -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3 bg-info text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Instruções de Importação
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <h5>Formato do Arquivo Excel TagPlus:</h5>
+                    <ol>
+                        <li><strong>Linha de Cabeçalho da NF:</strong>
+                            <code>NF-e - 3548 - PAO PAO E ARROZ LTDA EPP</code>
+                            <ul>
+                                <li>Número da NF: caracteres 8-11 (3548)</li>
+                                <li>Razão Social: a partir do caractere 15</li>
+                            </ul>
+                        </li>
+                        <li><strong>Linhas de Itens:</strong> Começam 2 linhas abaixo do cabeçalho</li>
+                        <li><strong>Colunas dos Itens:</strong>
+                            <ul>
+                                <li><strong>Coluna A:</strong> Código do produto entre aspas ('4320162')</li>
+                                <li><strong>Coluna D:</strong> Data (01/07/2025 às 16:32:39)</li>
+                                <li><strong>Coluna E:</strong> Quantidade (5,000)</li>
+                                <li><strong>Coluna F:</strong> Valor (1.001,40)</li>
+                            </ul>
+                        </li>
+                        <li><strong>Fim dos Itens:</strong> Linha contendo "Total de Custo Utilizado:"</li>
+                    </ol>
+                    
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Importante:</strong> Os clientes devem estar cadastrados no sistema antes da importação.
+                        <a href="{{ url_for('carteira.views_nao_odoo.cadastro_cliente') }}" target="_blank">
+                            Cadastrar clientes
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário de Upload -->
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-upload me-2"></i>
+                        Selecionar Arquivo
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form id="formImportacao" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="arquivo" class="form-label">Arquivo Excel TagPlus:</label>
+                            <input type="file" class="form-control" id="arquivo" name="arquivo" 
+                                   accept=".xlsx,.xls" required>
+                            <small class="text-muted">Formatos aceitos: .xlsx, .xls</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="processar_completo" 
+                                       name="processar_completo" checked>
+                                <label class="form-check-label" for="processar_completo">
+                                    Processar com todas as sincronizações
+                                    <small class="text-muted d-block">
+                                        Inclui: movimentações de estoque, atualização de embarques, 
+                                        sincronização de entregas e lançamento de fretes
+                                    </small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" id="btnImportar">
+                            <i class="fas fa-upload me-2"></i>
+                            Importar Arquivo
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resultado da Importação -->
+        <div class="col-lg-6">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-success">
+                        <i class="fas fa-chart-line me-2"></i>
+                        Resultado da Importação
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div id="resultadoImportacao" style="display: none;">
+                        <div class="row text-center mb-3">
+                            <div class="col-4">
+                                <h4 class="text-primary mb-0" id="totalNFs">0</h4>
+                                <small class="text-muted">NFs no Arquivo</small>
+                            </div>
+                            <div class="col-4">
+                                <h4 class="text-success mb-0" id="nfsImportadas">0</h4>
+                                <small class="text-muted">Importadas</small>
+                            </div>
+                            <div class="col-4">
+                                <h4 class="text-danger mb-0" id="nfsErro">0</h4>
+                                <small class="text-muted">Com Erro</small>
+                            </div>
+                        </div>
+                        
+                        <div id="detalhesProcessamento" class="mt-3">
+                            <!-- Detalhes serão inseridos aqui -->
+                        </div>
+                    </div>
+                    
+                    <div id="mensagemInicial" class="text-center text-muted py-5">
+                        <i class="fas fa-inbox fa-3x mb-3"></i>
+                        <p>Selecione um arquivo para importar</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Processamento -->
+<div class="modal fade" id="modalProcessamento" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Processando...</span>
+                </div>
+                <h5>Processando Importação</h5>
+                <p class="text-muted mb-0" id="statusProcessamento">Analisando arquivo...</p>
+                <div class="progress mt-3" style="display: none;" id="progressBar">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('#formImportacao').on('submit', function(e) {
+        e.preventDefault();
+        
+        const arquivo = $('#arquivo')[0].files[0];
+        if (!arquivo) {
+            toastr.error('Por favor, selecione um arquivo');
+            return;
+        }
+        
+        // Prepara FormData
+        const formData = new FormData();
+        formData.append('arquivo', arquivo);
+        formData.append('processar_completo', $('#processar_completo').is(':checked'));
+        
+        // Obtém CSRF token
+        const csrfToken = $('meta[name="csrf-token"]').attr('content');
+        
+        // Mostra modal
+        $('#modalProcessamento').modal('show');
+        $('#statusProcessamento').text('Enviando arquivo...');
+        
+        // Envia requisição
+        $.ajax({
+            url: '{{ url_for("tagplus.api_importar_faturamento_excel") }}',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+            xhr: function() {
+                const xhr = new window.XMLHttpRequest();
+                xhr.upload.addEventListener('progress', function(evt) {
+                    if (evt.lengthComputable) {
+                        const percentComplete = evt.loaded / evt.total * 100;
+                        $('#progressBar').show();
+                        $('#progressBar .progress-bar').css('width', percentComplete + '%');
+                    }
+                }, false);
+                return xhr;
+            },
+            success: function(response) {
+                $('#modalProcessamento').modal('hide');
+                
+                if (response.success) {
+                    toastr.success(response.message || 'Importação concluída com sucesso!');
+                    exibirResultado(response);
+                } else {
+                    toastr.error(response.message || 'Erro na importação');
+                    if (response.detalhes_erro) {
+                        console.error('Detalhes do erro:', response.detalhes_erro);
+                    }
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#modalProcessamento').modal('hide');
+                
+                let mensagem = 'Erro ao processar arquivo';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    mensagem = xhr.responseJSON.message;
+                }
+                
+                toastr.error(mensagem);
+                console.error('Erro:', error);
+            }
+        });
+    });
+    
+    function exibirResultado(response) {
+        $('#mensagemInicial').hide();
+        $('#resultadoImportacao').show();
+        
+        // Estatísticas principais
+        $('#totalNFs').text(response.total_nfs || 0);
+        $('#nfsImportadas').text(response.nfs_importadas || 0);
+        $('#nfsErro').text(response.nfs_com_erro || 0);
+        
+        // Detalhes do processamento
+        let detalhesHtml = '';
+        
+        if (response.processamento_completo) {
+            detalhesHtml += `
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-check-circle me-2"></i>Processamento Completo Realizado:</h6>
+                    <ul class="mb-0">
+                        <li>Movimentações de estoque criadas</li>
+                        <li>Embarques atualizados</li>
+                        <li>Entregas sincronizadas</li>
+                        <li>Fretes processados</li>
+                    </ul>
+                </div>
+            `;
+        }
+        
+        // NFs processadas
+        if (response.nfs_processadas && response.nfs_processadas.length > 0) {
+            detalhesHtml += '<h6>NFs Processadas:</h6><ul class="list-group mb-3">';
+            response.nfs_processadas.slice(0, 10).forEach(nf => {
+                detalhesHtml += `<li class="list-group-item">${nf}</li>`;
+            });
+            if (response.nfs_processadas.length > 10) {
+                detalhesHtml += `<li class="list-group-item">... e mais ${response.nfs_processadas.length - 10} NFs</li>`;
+            }
+            detalhesHtml += '</ul>';
+        }
+        
+        // Erros
+        if (response.erros && response.erros.length > 0) {
+            detalhesHtml += '<h6 class="text-danger">Erros Encontrados:</h6><ul class="list-group">';
+            response.erros.forEach(erro => {
+                detalhesHtml += `<li class="list-group-item list-group-item-danger">${erro}</li>`;
+            });
+            detalhesHtml += '</ul>';
+        }
+        
+        $('#detalhesProcessamento').html(detalhesHtml);
+        
+        // Limpa o formulário
+        $('#formImportacao')[0].reset();
+    }
+});
+</script>
+{% endblock %}

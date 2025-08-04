@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 # 📦 Blueprint do estoque (seguindo padrão dos outros módulos)
 estoque_bp = Blueprint('estoque', __name__, url_prefix='/estoque')
 
+# Registrar filtro de formatação brasileira para o template
+@estoque_bp.app_template_filter('valor_br')
+def valor_br_filter(value):
+    """Filtro Jinja2 para formatar valores no padrão brasileiro"""
+    return formatar_valor_brasileiro(value)
+
 @estoque_bp.route('/')
 @login_required
 def index():
@@ -178,11 +184,8 @@ def importar_movimentacoes():
 def processar_importacao_movimentacoes():
     """Processar importação de movimentações de estoque"""
     try:
-        import pandas as pd
         import tempfile
         import os
-        from datetime import datetime
-        from werkzeug.utils import secure_filename
         
         if 'arquivo' not in request.files:
             flash('Nenhum arquivo selecionado!', 'error')
@@ -1031,28 +1034,99 @@ def exportar_dados_unificacao():
 def saldo_estoque():
     """Dashboard principal do saldo de estoque com projeção de 29 dias"""
     try:
+        # Obter parâmetros de filtro e ordenação
+        codigo_produto = request.args.get('codigo_produto', '').strip()
+        status_ruptura = request.args.get('status_ruptura', '').strip()
+        limite_param = request.args.get('limite', '50')
+        page = request.args.get('page', 1, type=int)
+        ordem_coluna = request.args.get('ordem', 'codigo')  # codigo, produto, estoque, carteira, ruptura, status
+        ordem_direcao = request.args.get('dir', 'asc')  # asc ou desc
+        
+        # Validar limite
+        try:
+            limite = int(limite_param)
+            if limite not in [50, 100, 200]:
+                limite = 50
+        except:
+            limite = 50
+        
         # Obter todos os produtos com movimentação de estoque
         produtos = SaldoEstoque.obter_produtos_com_estoque()
         
-        # Estatísticas gerais
+        # Filtrar por código se especificado
+        if codigo_produto:
+            produtos = [p for p in produtos if codigo_produto.lower() in str(p.cod_produto).lower() or 
+                       codigo_produto.lower() in str(p.nome_produto).lower()]
+        
+        # Para melhorar performance, processar apenas uma amostra para estatísticas
+        # e processar apenas os necessários para exibição
         total_produtos = len(produtos)
+        
+        # Se houver muitos produtos, fazer amostragem para estatísticas
+        if total_produtos > 200:
+            # Amostrar 200 produtos para estatísticas rápidas
+            import random
+            produtos_amostra = random.sample(produtos, min(200, total_produtos))
+        else:
+            produtos_amostra = produtos
+        
+        # Estatísticas aproximadas baseadas na amostra
         produtos_criticos = 0
         produtos_atencao = 0
+        produtos_ok = 0
         
-        # Processar resumo de cada produto (limitado para performance)
-        limite = min(50, len(produtos))  # Máximo 50 produtos na tela inicial
-        produtos_resumo = []
+        # Processar apenas produtos da página atual + amostra para estatísticas
+        produtos_com_resumo = []
         
-        for produto in produtos[:limite]:
+        # Primeiro processar a amostra para estatísticas
+        for produto in produtos_amostra[:50]:  # Limitar ainda mais para performance
             resumo = SaldoEstoque.obter_resumo_produto(produto.cod_produto, produto.nome_produto)
             if resumo:
-                produtos_resumo.append(resumo)
-                
                 # Contadores de status
                 if resumo['status_ruptura'] == 'CRÍTICO':
                     produtos_criticos += 1
                 elif resumo['status_ruptura'] == 'ATENÇÃO':
                     produtos_atencao += 1
+                else:
+                    produtos_ok += 1
+        
+        # Estimar estatísticas para o total se foi amostrado
+        if total_produtos > 50:
+            fator = total_produtos / 50
+            produtos_criticos = int(produtos_criticos * fator)
+            produtos_atencao = int(produtos_atencao * fator)
+            produtos_ok = int(produtos_ok * fator)
+        
+        # Agora processar apenas os produtos da página atual
+        inicio = (page - 1) * limite
+        fim = inicio + limite
+        produtos_pagina = produtos[inicio:fim]
+        
+        produtos_resumo = []
+        for produto in produtos_pagina:
+            resumo = SaldoEstoque.obter_resumo_produto(produto.cod_produto, produto.nome_produto)
+            if resumo:
+                produtos_resumo.append(resumo)
+        
+        # Aplicar ordenação server-side nos resultados da página
+        if ordem_coluna == 'codigo':
+            produtos_resumo.sort(key=lambda x: x['cod_produto'], reverse=(ordem_direcao == 'desc'))
+        elif ordem_coluna == 'produto':
+            produtos_resumo.sort(key=lambda x: x['nome_produto'], reverse=(ordem_direcao == 'desc'))
+        elif ordem_coluna == 'estoque':
+            produtos_resumo.sort(key=lambda x: x['estoque_inicial'], reverse=(ordem_direcao == 'desc'))
+        elif ordem_coluna == 'carteira':
+            produtos_resumo.sort(key=lambda x: x['qtd_total_carteira'], reverse=(ordem_direcao == 'desc'))
+        elif ordem_coluna == 'ruptura':
+            produtos_resumo.sort(key=lambda x: x['previsao_ruptura'], reverse=(ordem_direcao == 'desc'))
+        elif ordem_coluna == 'status':
+            # Ordenar por prioridade: CRÍTICO > ATENÇÃO > OK
+            status_ordem = {'CRÍTICO': 0, 'ATENÇÃO': 1, 'OK': 2}
+            produtos_resumo.sort(key=lambda x: status_ordem.get(x['status_ruptura'], 3), reverse=(ordem_direcao == 'desc'))
+        
+        # Calcular total de páginas
+        total_filtrado = total_produtos
+        total_paginas = (total_filtrado + limite - 1) // limite
         
         # Estatísticas
         estatisticas = {
@@ -1060,21 +1134,33 @@ def saldo_estoque():
             'produtos_exibidos': len(produtos_resumo),
             'produtos_criticos': produtos_criticos,
             'produtos_atencao': produtos_atencao,
-            'produtos_ok': len(produtos_resumo) - produtos_criticos - produtos_atencao
+            'produtos_ok': produtos_ok,
+            'total_filtrado': total_filtrado
         }
         
         return render_template('estoque/saldo_estoque.html',
                              produtos=produtos_resumo,
                              estatisticas=estatisticas,
-                             limite_exibicao=limite < total_produtos)
+                             limite_exibicao=limite < total_produtos,
+                             page=page,
+                             total_paginas=total_paginas,
+                             limite=limite,
+                             codigo_produto=codigo_produto,
+                             status_ruptura=status_ruptura)
         
     except Exception as e:
         flash(f'❌ Erro ao carregar saldo de estoque: {str(e)}', 'error')
         return render_template('estoque/saldo_estoque.html',
                              produtos=[],
                              estatisticas={'total_produtos': 0, 'produtos_exibidos': 0, 
-                                         'produtos_criticos': 0, 'produtos_atencao': 0, 'produtos_ok': 0},
-                             limite_exibicao=False)
+                                         'produtos_criticos': 0, 'produtos_atencao': 0, 'produtos_ok': 0,
+                                         'total_filtrado': 0},
+                             limite_exibicao=False,
+                             page=1,
+                             total_paginas=1,
+                             limite=50,
+                             codigo_produto='',
+                             status_ruptura='')
 
 @estoque_bp.route('/saldo-estoque/api/produto/<cod_produto>')
 @login_required
@@ -1255,11 +1341,11 @@ def exportar_dados_movimentacoes():
         for mov in movimentacoes:
             dados.append({
                 'ID': mov.id,
-                'Data': mov.data_movimentacao.strftime('%Y-%m-%d') if mov.data_movimentacao else '',
+                'Data': mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '',
                 'Código Produto': mov.cod_produto,
                 'Descrição': mov.nome_produto,
                 'Tipo': mov.tipo_movimentacao,
-                'Quantidade': mov.qtd_movimentacao,
+                'Quantidade': formatar_valor_brasileiro(mov.qtd_movimentacao),
                 'Observações': mov.observacao,
                 'Local': mov.local_movimentacao
             })

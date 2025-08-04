@@ -19,7 +19,7 @@ class RelatorioFaturamentoImportado(db.Model):
     codigo_ibge = db.Column(db.String(10), nullable=True)
     origem = db.Column(db.String(50), nullable=True)
     incoterm = db.Column(db.String(20), nullable=True)
-    vendedor= db.Column(db.String(100), nullable=True)
+    vendedor = db.Column(db.String(100), nullable=True)
     equipe_vendas = db.Column(db.String(100), nullable=True)  # 🆕 Campo para equipe de vendas
     ativo = db.Column(db.Boolean, default=True, nullable=False)  # 🆕 Campo para inativação
     inativado_em = db.Column(db.DateTime, nullable=True)  # 🆕 Data de inativação
@@ -108,4 +108,3 @@ class FaturamentoProduto(db.Model):
             'equipe_vendas': self.equipe_vendas,
             'incoterm': self.incoterm
         }
-

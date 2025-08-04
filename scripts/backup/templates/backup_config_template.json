@@ -1,0 +1,173 @@
+{
+  "backup_dir": "/var/backups/mcp",
+  "restore_dir": "/var/restore/mcp",
+  "retention_days": 30,
+  "compression": "gz",
+  "encryption": {
+    "enabled": true,
+    "key": "GENERATE_NEW_KEY_WITH_FERNET",
+    "comment": "Use: from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+  },
+  "cloud_storage": {
+    "enabled": false,
+    "provider": "s3",
+    "bucket": "mcp-backups",
+    "region": "us-east-1",
+    "storage_class": "STANDARD_IA",
+    "lifecycle_rules": {
+      "transition_to_glacier": 90,
+      "expire_after": 365
+    }
+  },
+  "components": {
+    "database": {
+      "enabled": true,
+      "type": "postgresql",
+      "connection": {
+        "host": "localhost",
+        "port": 5432,
+        "database": "frete_system",
+        "user": "postgres",
+        "password": "CHANGE_ME"
+      },
+      "backup_options": {
+        "format": "plain",
+        "compress_level": 6,
+        "parallel_jobs": 4,
+        "exclude_tables": []
+      }
+    },
+    "redis": {
+      "enabled": true,
+      "host": "localhost",
+      "port": 6379,
+      "db": 0,
+      "password": null,
+      "backup_options": {
+        "save_method": "bgsave",
+        "compress": true
+      }
+    },
+    "filesystem": {
+      "enabled": true,
+      "paths": [
+        "/app/config",
+        "/app/logs",
+        "/app/data",
+        "/app/uploads"
+      ],
+      "exclude": [
+        "*.tmp",
+        "*.log",
+        "__pycache__",
+        ".git",
+        "node_modules",
+        "*.pyc",
+        ".DS_Store"
+      ],
+      "follow_symlinks": false,
+      "preserve_permissions": true
+    },
+    "docker": {
+      "enabled": false,
+      "containers": [
+        "mcp-api",
+        "mcp-worker",
+        "mcp-scheduler"
+      ],
+      "export_options": {
+        "pause_container": true,
+        "include_volumes": false
+      }
+    },
+    "mongodb": {
+      "enabled": false,
+      "connection_string": "mongodb://localhost:27017",
+      "database": "mcp",
+      "backup_options": {
+        "oplog": true,
+        "gzip": true
+      }
+    },
+    "elasticsearch": {
+      "enabled": false,
+      "host": "localhost",
+      "port": 9200,
+      "indices": ["mcp-*"],
+      "backup_options": {
+        "repository": "mcp_backup_repo",
+        "compress": true
+      }
+    }
+  },
+  "schedule": {
+    "full_backup": {
+      "cron": "0 2 * * 0",
+      "description": "Full backup every Sunday at 2 AM"
+    },
+    "incremental": {
+      "cron": "0 2 * * 1-6",
+      "description": "Incremental backup Monday-Saturday at 2 AM"
+    },
+    "verify": {
+      "cron": "0 6 * * *",
+      "description": "Verify backups daily at 6 AM"
+    },
+    "cleanup": {
+      "cron": "0 4 * * 0",
+      "description": "Cleanup old backups weekly on Sunday at 4 AM"
+    },
+    "drill": {
+      "cron": "0 3 15 * *",
+      "description": "Recovery drill monthly on the 15th at 3 AM"
+    }
+  },
+  "notifications": {
+    "email": {
+      "enabled": false,
+      "smtp_server": "smtp.gmail.com",
+      "smtp_port": 587,
+      "use_tls": true,
+      "username": "backup@example.com",
+      "password": "CHANGE_ME",
+      "recipients": ["admin@example.com"],
+      "send_on": ["failure", "warning"]
+    },
+    "slack": {
+      "enabled": false,
+      "webhook_url": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
+      "channel": "#mcp-backups",
+      "send_on": ["failure", "warning", "success"]
+    },
+    "webhook": {
+      "enabled": false,
+      "url": "https://api.example.com/backup-webhook",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      },
+      "send_on": ["failure", "warning", "success"]
+    }
+  },
+  "monitoring": {
+    "health_check_url": "https://hc-ping.com/YOUR_UUID",
+    "metrics": {
+      "enabled": false,
+      "prometheus_pushgateway": "http://localhost:9091",
+      "job_name": "mcp_backup"
+    }
+  },
+  "advanced": {
+    "parallel_compression": true,
+    "buffer_size": 4194304,
+    "verify_after_backup": true,
+    "calculate_checksums": true,
+    "use_snapshots": false,
+    "pre_backup_scripts": [],
+    "post_backup_scripts": [],
+    "resource_limits": {
+      "max_cpu_percent": 50,
+      "max_memory_mb": 2048,
+      "nice_level": 10
+    }
+  }
+}

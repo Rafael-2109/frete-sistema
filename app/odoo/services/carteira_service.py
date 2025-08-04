@@ -19,10 +19,11 @@ Data: 2025-07-14
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, date
-from decimal import Decimal
 
 from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.safe_connection import get_safe_odoo_connection
 from app.odoo.utils.carteira_mapper import CarteiraMapper
+from sqlalchemy import or_
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,36 @@ class CarteiraService:
     """Serviço para gerenciar carteira de pedidos do Odoo usando mapeamento correto"""
     
     def __init__(self):
-        self.connection = get_odoo_connection()
+        # Usar conexão segura que trata erros de campos automaticamente
+        self.connection = get_safe_odoo_connection()
         self.mapper = CarteiraMapper()  # Usar novo CarteiraMapper
+    
+    @staticmethod
+    def is_pedido_odoo(numero_pedido: str) -> bool:
+        """
+        Verifica se um pedido é originado do Odoo baseado no prefixo.
+        
+        Critérios:
+        - VSC: Pedido do Odoo
+        - VCD: Pedido do Odoo
+        - VFB: Pedido do Odoo
+        - Outros: Pedido de fonte externa (não-Odoo)
+        
+        Args:
+            numero_pedido (str): Número do pedido a verificar
+            
+        Returns:
+            bool: True se for pedido Odoo, False caso contrário
+        """
+        if not numero_pedido:
+            return False
+            
+        # Converter para string e remover espaços
+        numero_pedido = str(numero_pedido).strip().upper()
+        
+        # Verificar prefixos Odoo
+        prefixos_odoo = ('VSC', 'VCD', 'VFB')
+        return numero_pedido.startswith(prefixos_odoo)
     
     def obter_carteira_pendente(self, data_inicio=None, data_fim=None, pedidos_especificos=None):
         """
@@ -103,90 +132,6 @@ class CarteiraService:
                 'dados': [],
                 'mensagem': 'Erro ao buscar carteira pendente'
             }
-    
-    def _processar_dados_carteira(self, dados_carteira: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Processa dados de carteira usando campos EXATOS do modelo CarteiraPrincipal
-        
-        Baseado em: projeto_carteira/mapeamento_carteira.csv
-        """
-        dados_processados = []
-        
-        for item in dados_carteira:
-            try:
-                # Processar usando EXATAMENTE os nomes do modelo CarteiraPrincipal
-                item_processado = {
-                    # 🆔 CHAVES PRIMÁRIAS DE NEGÓCIO
-                    'num_pedido': item.get('num_pedido', ''),
-                    'cod_produto': item.get('cod_produto', ''),
-                    
-                    # 📋 DADOS DO PEDIDO
-                    'pedido_cliente': item.get('pedido_cliente', ''),
-                    'data_pedido': self._format_date(item.get('data_pedido')),
-                    'data_atual_pedido': self._format_date(item.get('data_atual_pedido')),
-                    'status_pedido': item.get('status_pedido', ''),
-                    
-                    # 👥 DADOS DO CLIENTE
-                    'cnpj_cpf': item.get('cnpj_cpf', ''),
-                    'raz_social': item.get('raz_social', ''),
-                    'raz_social_red': item.get('raz_social_red', ''),
-                    'municipio': item.get('municipio', ''),
-                    'estado': item.get('estado', ''),
-                    'vendedor': item.get('vendedor', ''),
-                    'equipe_vendas': item.get('equipe_vendas', ''),
-                    
-                    # 📦 DADOS DO PRODUTO
-                    'nome_produto': item.get('nome_produto', ''),
-                    'unid_medida_produto': item.get('unid_medida_produto', ''),
-                    'embalagem_produto': item.get('embalagem_produto', ''),
-                    'materia_prima_produto': item.get('materia_prima_produto', ''),
-                    'categoria_produto': item.get('categoria_produto', ''),
-                    
-                    # 📊 QUANTIDADES E VALORES
-                    'qtd_produto_pedido': self._format_decimal(item.get('qtd_produto_pedido', 0)),
-                    'qtd_saldo_produto_pedido': self._format_decimal(item.get('qtd_saldo_produto_pedido', 0)),
-                    'qtd_cancelada_produto_pedido': self._format_decimal(item.get('qtd_cancelada_produto_pedido', 0)),
-                    'preco_produto_pedido': self._format_decimal(item.get('preco_produto_pedido', 0)),
-                    
-                    # 💳 CONDIÇÕES COMERCIAIS
-                    'cond_pgto_pedido': item.get('cond_pgto_pedido', ''),
-                    'forma_pgto_pedido': item.get('forma_pgto_pedido', ''),
-                    'incoterm': item.get('incoterm', ''),
-                    'metodo_entrega_pedido': item.get('metodo_entrega_pedido', ''),
-                    'data_entrega_pedido': self._format_date(item.get('data_entrega_pedido')),
-                    'cliente_nec_agendamento': item.get('cliente_nec_agendamento', ''),
-                    'observ_ped_1': item.get('observ_ped_1', ''),
-                    
-                    # 🏠 ENDEREÇO DE ENTREGA COMPLETO
-                    'cnpj_endereco_ent': item.get('cnpj_endereco_ent', ''),
-                    'empresa_endereco_ent': item.get('empresa_endereco_ent', ''),
-                    'cep_endereco_ent': item.get('cep_endereco_ent', ''),
-                    'nome_cidade': item.get('nome_cidade', ''),
-                    'cod_uf': item.get('cod_uf', ''),
-                    'bairro_endereco_ent': item.get('bairro_endereco_ent', ''),
-                    'rua_endereco_ent': item.get('rua_endereco_ent', ''),
-                    'endereco_ent': item.get('endereco_ent', ''),
-                    'telefone_endereco_ent': item.get('telefone_endereco_ent', ''),
-                    
-                    # 📈 CAMPOS DE ESTOQUE D0 a D28
-                    'estoque': None,  # Campo base
-                    **{f'estoque_d{i}': None for i in range(29)},  # estoque_d0 até estoque_d28
-                    
-                    # 🛡️ AUDITORIA (campos corretos do modelo)
-                    'created_at': datetime.now(),
-                    'updated_at': datetime.now(),
-                    'created_by': 'Sistema Odoo',
-                    'updated_by': 'Sistema Odoo'
-                }
-                
-                dados_processados.append(item_processado)
-                
-            except Exception as e:
-                self.logger.warning(f"Erro ao processar item da carteira: {e}")
-                continue
-        
-        self.logger.info(f"✅ {len(dados_processados)} itens processados com campos exatos")
-        return dados_processados
     
     def _processar_dados_carteira_com_multiplas_queries(self, dados_odoo_brutos: List[Dict]) -> List[Dict]:
         """
@@ -491,7 +436,6 @@ class CarteiraService:
                     'forma_pgto_pedido': extrair_relacao(pedido.get('payment_provider_id'), 1),
                     'incoterm': incoterm_codigo,
                     'metodo_entrega_pedido': extrair_relacao(pedido.get('carrier_id'), 1),
-                    'data_entrega_pedido': self._format_date(pedido.get('commitment_date')),
                     'cliente_nec_agendamento': cliente.get('agendamento', ''),
                     'observ_ped_1': str(pedido.get('picking_note', '')) if pedido.get('picking_note') not in [None, False] else '',
                     
@@ -771,228 +715,6 @@ class CarteiraService:
         logger.debug(f"Status mapeado: {status_odoo} → {status_traduzido}")
         return status_traduzido
 
-    def sincronizar_carteira_odoo(self, usar_filtro_pendente=True):
-        """
-        🔄 SINCRONIZAÇÃO OPERACIONAL COMPLETA COM ALERTAS E RECOMPOSIÇÃO
-        
-        Realiza sincronização destrutiva da carteira COM:
-        - ✅ Verificação pré-sincronização de separações cotadas
-        - ✅ Sistema de alertas integrado
-        - ✅ Backup automático de pré-separações
-        - ✅ Recomposição automática pós-sincronização
-        - ✅ Relatório operacional completo
-        
-        Args:
-            usar_filtro_pendente (bool): Se deve usar filtro 'Carteira Pendente' (qty_saldo > 0)
-        
-        Returns:
-            dict: Resultado operacional completo com alertas e estatísticas
-        """
-        from datetime import datetime
-        inicio_operacao = datetime.now()
-        
-        try:
-            from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
-            from app import db
-            
-            logger.info("🚀 INICIANDO SINCRONIZAÇÃO OPERACIONAL COMPLETA da carteira com Odoo")
-            
-            # ✅ ETAPA 1: VERIFICAÇÃO PRÉ-SINCRONIZAÇÃO (ALERTAS CRÍTICOS)
-            logger.info("🔍 ETAPA 1: Verificação pré-sincronização...")
-            alertas_pre_sync = self._verificar_riscos_pre_sincronizacao()
-            
-            if alertas_pre_sync.get('alertas_criticos'):
-                logger.warning(f"🚨 ALERTAS CRÍTICOS DETECTADOS: {len(alertas_pre_sync['alertas_criticos'])} separações cotadas")
-            
-            # ✅ ETAPA 2: BACKUP AUTOMÁTICO DE PRÉ-SEPARAÇÕES
-            logger.info("💾 ETAPA 2: Backup automático de pré-separações...")
-            backup_result = self._criar_backup_pre_separacoes()
-            
-            logger.info(f"✅ Backup criado: {backup_result['total_backups']} pré-separações preservadas")
-            
-            # ⚡ USAR MÉTODO OTIMIZADO sem limite para sincronização completa
-            resultado = self.obter_carteira_pendente()
-            
-            if not resultado['sucesso']:
-                return {
-                    'sucesso': False,
-                    'erro': resultado.get('erro', 'Erro na consulta do Odoo'),
-                    'estatisticas': {}
-                }
-            
-            dados_carteira = resultado.get('dados', [])
-            
-            if not dados_carteira:
-                return {
-                    'sucesso': False,
-                    'erro': 'Nenhum dado encontrado no Odoo',
-                    'estatisticas': {}
-                }
-            
-            # Filtrar por saldo pendente se solicitado
-            if usar_filtro_pendente:
-                dados_filtrados = [
-                    item for item in dados_carteira 
-                    if item.get('qtd_saldo_produto_pedido', 0) > 0 
-                    and item.get('status_pedido', '').lower() in ['draft', 'sent', 'sale', 'cotação', 'cotação enviada', 'pedido de venda']  # ✅ FILTRO ADICIONAL DE STATUS
-                ]
-            else:
-                # Mesmo sem filtro de saldo, aplicar filtro de status
-                dados_filtrados = [
-                    item for item in dados_carteira 
-                    if item.get('status_pedido', '').lower() in ['draft', 'sent', 'sale', 'cotação', 'cotação enviada', 'pedido de venda']  # ✅ FILTRO DE STATUS SEMPRE
-                ]
-            
-            # Sanitizar dados antes de inserir
-            logger.info("🧹 Sanitizando dados para garantir tipos corretos...")
-            dados_filtrados = self._sanitizar_dados_carteira(dados_filtrados)
-            
-            # Limpar tabela CarteiraPrincipal completamente
-            logger.info("🧹 Limpando tabela CarteiraPrincipal...")
-            registros_removidos = db.session.query(CarteiraPrincipal).count()
-            db.session.query(CarteiraPrincipal).delete()
-            
-            # Inserir novos dados usando campos EXATOS
-            contador_inseridos = 0
-            erros = []
-            
-            for item_mapeado in dados_filtrados:
-                try:
-                    # Validar dados essenciais
-                    if not item_mapeado.get('num_pedido') or not item_mapeado.get('cod_produto'):
-                        erros.append(f"Item sem pedido/produto: {item_mapeado}")
-                        continue
-                    
-                    # Criar registro usando campos exatos do modelo
-                    novo_registro = CarteiraPrincipal(**item_mapeado)
-                    db.session.add(novo_registro)
-                    contador_inseridos += 1
-                    
-                except Exception as e:
-                    erro_msg = f"Erro ao inserir item {item_mapeado.get('num_pedido', 'N/A')}: {e}"
-                    logger.error(erro_msg)
-                    erros.append(erro_msg)
-                    continue
-            
-            # ✅ ETAPA 3: COMMIT DAS ALTERAÇÕES DA CARTEIRA
-            logger.info("💾 ETAPA 3: Salvando nova carteira...")
-            db.session.commit()
-            
-            # ✅ ETAPA 4: RECOMPOSIÇÃO AUTOMÁTICA DE PRÉ-SEPARAÇÕES
-            logger.info("🔄 ETAPA 4: Recomposição automática de pré-separações...")
-            recomposicao_result = self._recompor_pre_separacoes_automaticamente()
-            
-            # ✅ ETAPA 5: VERIFICAÇÃO PÓS-SINCRONIZAÇÃO E ALERTAS
-            logger.info("🔍 ETAPA 5: Verificação pós-sincronização...")
-            alertas_pos_sync = self._verificar_alertas_pos_sincronizacao(dados_filtrados, alertas_pre_sync)
-            
-            # ✅ ETAPA 6: COMPILAR RESULTADO OPERACIONAL COMPLETO
-            fim_operacao = datetime.now()
-            tempo_total = (fim_operacao - inicio_operacao).total_seconds()
-            
-            # Estatísticas completas da operação
-            estatisticas_completas = {
-                'registros_inseridos': contador_inseridos,
-                'registros_removidos': registros_removidos,
-                'total_encontrados': len(dados_carteira),
-                'registros_filtrados': len(dados_filtrados),
-                'taxa_sucesso': f"{(contador_inseridos/len(dados_filtrados)*100):.1f}%" if dados_filtrados else "0%",
-                'erros_processamento': len(erros),
-                'metodo': 'operacional_completo',
-                
-                # ✅ DADOS OPERACIONAIS ESPECÍFICOS
-                'tempo_execucao_segundos': round(tempo_total, 2),
-                'backup_pre_separacoes': backup_result['total_backups'],
-                'recomposicao_sucesso': recomposicao_result['sucessos'],
-                'recomposicao_erros': recomposicao_result['erros'],
-                'alertas_pre_sync': len(alertas_pre_sync.get('alertas_criticos', [])),
-                'alertas_pos_sync': len(alertas_pos_sync.get('alertas_criticos', [])),
-                'separacoes_cotadas_afetadas': alertas_pos_sync.get('separacoes_cotadas_afetadas', 0)
-            }
-            
-            logger.info(f"✅ SINCRONIZAÇÃO OPERACIONAL COMPLETA CONCLUÍDA:")
-            logger.info(f"   📊 {contador_inseridos} registros inseridos")
-            logger.info(f"   🗑️ {registros_removidos} registros removidos")
-            logger.info(f"   💾 {backup_result['total_backups']} pré-separações em backup")
-            logger.info(f"   🔄 {recomposicao_result['sucessos']} pré-separações recompostas")
-            logger.info(f"   🚨 {len(alertas_pos_sync.get('alertas_criticos', []))} alertas pós-sincronização")
-            logger.info(f"   ⏱️ {tempo_total:.2f} segundos de execução")
-            
-            return {
-                'sucesso': True,
-                'operacao_completa': True,
-                'estatisticas': estatisticas_completas,
-                'registros_importados': contador_inseridos,
-                'registros_removidos': registros_removidos,
-                'erros': erros,
-                
-                # ✅ DADOS OPERACIONAIS PARA INTERFACE
-                'alertas_pre_sync': alertas_pre_sync,
-                'alertas_pos_sync': alertas_pos_sync,
-                'backup_info': backup_result,
-                'recomposicao_info': recomposicao_result,
-                'tempo_execucao': tempo_total,
-                
-                'mensagem': f'✅ Sincronização operacional completa: {contador_inseridos} registros importados, {recomposicao_result["sucessos"]} pré-separações recompostas'
-            }
-            
-        except Exception as e:
-            db.session.rollback()
-            fim_operacao = datetime.now()
-            tempo_erro = (fim_operacao - inicio_operacao).total_seconds()
-            
-            logger.error(f"❌ ERRO CRÍTICO na sincronização operacional: {e}")
-            
-            return {
-                'sucesso': False,
-                'operacao_completa': False,
-                'erro': str(e),
-                'registros_importados': 0,
-                'registros_removidos': 0,
-                'tempo_execucao': tempo_erro,
-                'estatisticas': {},
-                'alertas_pre_sync': {},
-                'alertas_pos_sync': {},
-                'mensagem': f'❌ Erro na sincronização operacional: {str(e)}'
-            }
-
-    def obter_carteira_otimizada(self, usar_filtro_pendente=True, limite=20):
-        """
-        Método otimizado SIMPLES - sem complicação
-        """
-        try:
-            logger.info(f"🚀 Busca otimizada: filtro_pendente={usar_filtro_pendente}, limite={limite}")
-            
-            # Usar método base e limitar resultado
-            resultado = self.obter_carteira_pendente()
-            
-            if not resultado['sucesso']:
-                return resultado
-            
-            dados = resultado.get('dados', [])
-            
-            # Aplicar limite
-            if limite and len(dados) > limite:
-                dados = dados[:limite]
-            
-            return {
-                'sucesso': True,
-                'dados': dados,
-                'total_registros': len(dados),
-                'estatisticas': {
-                    'queries_executadas': 1,
-                    'total_linhas': len(dados)
-                },
-                'mensagem': f'✅ {len(dados)} registros (método simples)'
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Erro: {e}")
-            return {
-                'sucesso': False,
-                'erro': str(e)
-            }
-
     # ============================================================================
     # 🔧 MÉTODOS AUXILIARES CRÍTICOS PARA OPERAÇÃO COMPLETA
     # ============================================================================
@@ -1240,10 +962,26 @@ class CarteiraService:
             
             logger.info("🔍 Verificando risco de faturamento pendente...")
             
-            # Buscar separações cotadas (potencialmente faturadas)
+            # Buscar pedidos cotados (potencialmente faturados)
+            from app.pedidos.models import Pedido
+            
+            pedidos_cotados = Pedido.query.filter(
+                Pedido.status == 'COTADO',
+                Pedido.separacao_lote_id is not None
+            ).all()
+            
+            if not pedidos_cotados:
+                return {
+                    'risco_faturamento': False,
+                    'impactos': [],
+                    'contagem': 0
+                }
+            
+            # Buscar separações desses pedidos
+            lotes_cotados = [p.separacao_lote_id for p in pedidos_cotados]
+            
             separacoes_cotadas = Separacao.query.filter(
-                Separacao.status == 'COTADO',
-                Separacao.ativo == True
+                Separacao.separacao_lote_id.in_(lotes_cotados)
             ).all()
             
             if not separacoes_cotadas:
@@ -1259,7 +997,7 @@ class CarteiraService:
             for separacao in separacoes_cotadas:
                 # Verificar se o pedido tem faturamento registrado
                 faturamento_existe = FaturamentoProduto.query.filter(
-                    FaturamentoProduto.num_pedido == separacao.num_pedido,
+                    FaturamentoProduto.origem == separacao.num_pedido,
                     FaturamentoProduto.cod_produto == separacao.cod_produto
                 ).first()
                 
@@ -1312,7 +1050,7 @@ class CarteiraService:
         """
         try:
             from app.faturamento.models import FaturamentoProduto
-            from datetime import datetime, timedelta
+            from datetime import datetime
             
             logger.info("📅 Verificando última sincronização de faturamento...")
             
@@ -1356,4 +1094,457 @@ class CarteiraService:
                 'horas_atraso': 0,
                 'ultima_sync': None,
                 'erro': str(e)
+            }
+    
+    def sincronizar_carteira_odoo_com_gestao_quantidades(self, usar_filtro_pendente=True):
+        """
+        🚀 SINCRONIZAÇÃO INTELIGENTE COM GESTÃO DE QUANTIDADES
+        
+        Versão completa que substitui sincronizar_carteira_odoo() com todas as
+        funcionalidades originais MAIS gestão inteligente de quantidades.
+        
+        FLUXO COMPLETO:
+        1. Verificação de riscos pré-sincronização
+        2. Backup de pré-separações
+        3. Carrega estado atual em memória
+        4. Busca dados novos do Odoo
+        5. Calcula diferenças (reduções/aumentos/novos/removidos)
+        6. Aplica mudanças respeitando hierarquia
+        7. Substitui carteira com dados atualizados
+        8. Recompõe pré-separações
+        9. Verificação pós-sincronização com alertas
+        
+        Args:
+            usar_filtro_pendente (bool): Se True, filtra apenas itens com saldo > 0
+            
+        Returns:
+            dict: Resultado completo compatível com sincronizar_carteira_odoo()
+        """
+        from datetime import datetime
+        
+        inicio_operacao = datetime.now()
+        alteracoes_aplicadas = []
+        
+        try:
+            from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
+            from app import db
+            
+            logger.info("🚀 INICIANDO SINCRONIZAÇÃO OPERACIONAL COMPLETA COM GESTÃO INTELIGENTE")
+            
+            # ============================================================
+            # ETAPA 1: VERIFICAÇÃO PRÉ-SINCRONIZAÇÃO (ALERTAS CRÍTICOS)
+            # ============================================================
+            logger.info("🔍 ETAPA 1: Verificação pré-sincronização...")
+            alertas_pre_sync = self._verificar_riscos_pre_sincronizacao()
+            
+            if alertas_pre_sync.get('alertas_criticos'):
+                logger.warning(f"🚨 ALERTAS CRÍTICOS DETECTADOS: {len(alertas_pre_sync['alertas_criticos'])} separações cotadas")
+            
+            # ============================================================
+            # ETAPA 2: BACKUP AUTOMÁTICO DE PRÉ-SEPARAÇÕES
+            # ============================================================
+            logger.info("💾 ETAPA 2: Backup automático de pré-separações...")
+            backup_result = self._criar_backup_pre_separacoes()
+            
+            logger.info(f"✅ Backup criado: {backup_result['total_backups']} pré-separações preservadas")
+            
+            # ============================================================
+            # FASE 3: ANÁLISE - Carregar estado atual em memória
+            # ============================================================
+            logger.info("📊 Fase 3: Analisando estado atual da carteira...")
+            
+            # Criar índice do estado atual usando campos CORRETOS
+            carteira_atual = {}
+            carteira_nao_odoo = {}  # Guardar pedidos não-Odoo separadamente
+            registros_atuais = 0
+            registros_nao_odoo = 0
+            
+            for item in CarteiraPrincipal.query.all():
+                chave = (item.num_pedido, item.cod_produto)
+                dados_item = {
+                    'qtd_saldo': float(item.qtd_saldo_produto_pedido or 0),
+                    'qtd_total': float(item.qtd_produto_pedido or 0),
+                    'separacao_lote_id': item.separacao_lote_id,
+                    'id': item.id
+                }
+                
+                # Separar pedidos por origem
+                if self.is_pedido_odoo(item.num_pedido):
+                    carteira_atual[chave] = dados_item
+                    registros_atuais += 1
+                else:
+                    carteira_nao_odoo[chave] = dados_item
+                    registros_nao_odoo += 1
+            
+            logger.info(f"✅ {registros_atuais} registros Odoo indexados na memória")
+            logger.info(f"🛡️ {registros_nao_odoo} registros não-Odoo protegidos")
+            
+            # ============================================================
+            # FASE 2: BUSCAR DADOS NOVOS DO ODOO
+            # ============================================================
+            logger.info("🔄 Fase 2: Buscando dados atualizados do Odoo...")
+            
+            resultado_odoo = self.obter_carteira_pendente()
+            
+            if not resultado_odoo['sucesso']:
+                return {
+                    'sucesso': False,
+                    'erro': resultado_odoo.get('erro', 'Erro ao buscar dados do Odoo'),
+                    'estatisticas': {}
+                }
+            
+            dados_novos = resultado_odoo.get('dados', [])
+            
+            # Aplicar filtro de pendente e status válidos
+            if usar_filtro_pendente:
+                dados_novos = [
+                    item for item in dados_novos 
+                    if float(item.get('qtd_saldo_produto_pedido', 0)) > 0
+                    and item.get('status_pedido', '').lower() in ['draft', 'sent', 'sale', 'cotação', 'cotação enviada', 'pedido de venda']
+                ]
+            else:
+                # Mesmo sem filtro de saldo, aplicar filtro de status
+                dados_novos = [
+                    item for item in dados_novos 
+                    if item.get('status_pedido', '').lower() in ['draft', 'sent', 'sale', 'cotação', 'cotação enviada', 'pedido de venda']
+                ]
+            
+            logger.info(f"✅ {len(dados_novos)} registros obtidos do Odoo")
+            
+            # ============================================================
+            # FASE 3: CALCULAR DIFERENÇAS
+            # ============================================================
+            logger.info("🔍 Fase 3: Calculando diferenças de quantidade...")
+            
+            reducoes = []
+            aumentos = []
+            novos_itens = []
+            itens_removidos = set(carteira_atual.keys())
+            
+            for item_novo in dados_novos:
+                # Usar campos CORRETOS
+                chave = (item_novo['num_pedido'], item_novo['cod_produto'])
+                qtd_nova = float(item_novo.get('qtd_saldo_produto_pedido', 0))
+                
+                if chave in carteira_atual:
+                    # Item existe - remover da lista de removidos
+                    itens_removidos.discard(chave)
+                    
+                    # Comparar quantidades
+                    qtd_atual = carteira_atual[chave]['qtd_saldo']
+                    
+                    if qtd_nova < qtd_atual:
+                        # REDUÇÃO detectada
+                        reducoes.append({
+                            'num_pedido': item_novo['num_pedido'],
+                            'cod_produto': item_novo['cod_produto'],
+                            'qtd_reduzida': qtd_atual - qtd_nova,
+                            'qtd_atual': qtd_atual,
+                            'qtd_nova': qtd_nova
+                        })
+                        
+                    elif qtd_nova > qtd_atual:
+                        # AUMENTO detectado
+                        aumentos.append({
+                            'num_pedido': item_novo['num_pedido'],
+                            'cod_produto': item_novo['cod_produto'],
+                            'qtd_aumentada': qtd_nova - qtd_atual,
+                            'qtd_atual': qtd_atual,
+                            'qtd_nova': qtd_nova
+                        })
+                else:
+                    # NOVO item
+                    novos_itens.append(item_novo)
+            
+            logger.info(f"📊 Diferenças identificadas:")
+            logger.info(f"   📉 {len(reducoes)} reduções")
+            logger.info(f"   📈 {len(aumentos)} aumentos")
+            logger.info(f"   ➕ {len(novos_itens)} novos itens")
+            logger.info(f"   ➖ {len(itens_removidos)} itens removidos")
+            
+            # ============================================================
+            # FASE 4: APLICAR REDUÇÕES (respeitando hierarquia)
+            # ============================================================
+            if reducoes:
+                logger.info(f"📉 Fase 4: Aplicando {len(reducoes)} reduções...")
+                
+                for idx, reducao in enumerate(reducoes, 1):
+                    try:
+                        # PROTEÇÃO: Verificar se é pedido Odoo antes de aplicar redução
+                        if not self.is_pedido_odoo(reducao['num_pedido']):
+                            logger.warning(f"🛡️ PROTEÇÃO: Ignorando redução em pedido não-Odoo: {reducao['num_pedido']}")
+                            continue
+                            
+                        logger.debug(f"Redução {idx}/{len(reducoes)}: {reducao['num_pedido']}/{reducao['cod_produto']} -{reducao['qtd_reduzida']}")
+                        
+                        resultado = PreSeparacaoItem.aplicar_reducao_quantidade(
+                            reducao['num_pedido'],
+                            reducao['cod_produto'],
+                            reducao['qtd_reduzida'],
+                            "SYNC_ODOO_BATCH"
+                        )
+                        
+                        alteracoes_aplicadas.append({
+                            'tipo': 'REDUCAO',
+                            'pedido': reducao['num_pedido'],
+                            'produto': reducao['cod_produto'],
+                            'quantidade': reducao['qtd_reduzida'],
+                            'de': reducao['qtd_atual'],
+                            'para': reducao['qtd_nova'],
+                            'resultado': resultado
+                        })
+                        
+                        if resultado.get('alertas_criticos'):
+                            logger.warning(f"🚨 Alerta crítico: {resultado['alertas_criticos']}")
+                            
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao aplicar redução {reducao['num_pedido']}/{reducao['cod_produto']}: {e}")
+                        alteracoes_aplicadas.append({
+                            'tipo': 'REDUCAO',
+                            'pedido': reducao['num_pedido'],
+                            'produto': reducao['cod_produto'],
+                            'erro': str(e)
+                        })
+            
+            # ============================================================
+            # FASE 5: APLICAR AUMENTOS
+            # ============================================================
+            if aumentos:
+                logger.info(f"📈 Fase 5: Aplicando {len(aumentos)} aumentos...")
+                
+                for idx, aumento in enumerate(aumentos, 1):
+                    try:
+                        # PROTEÇÃO: Verificar se é pedido Odoo antes de aplicar aumento
+                        if not self.is_pedido_odoo(aumento['num_pedido']):
+                            logger.warning(f"🛡️ PROTEÇÃO: Ignorando aumento em pedido não-Odoo: {aumento['num_pedido']}")
+                            continue
+                            
+                        logger.debug(f"Aumento {idx}/{len(aumentos)}: {aumento['num_pedido']}/{aumento['cod_produto']} +{aumento['qtd_aumentada']}")
+                        
+                        resultado = PreSeparacaoItem.aplicar_aumento_quantidade(
+                            aumento['num_pedido'],
+                            aumento['cod_produto'],
+                            aumento['qtd_aumentada'],
+                            "SYNC_ODOO_BATCH"
+                        )
+                        
+                        alteracoes_aplicadas.append({
+                            'tipo': 'AUMENTO',
+                            'pedido': aumento['num_pedido'],
+                            'produto': aumento['cod_produto'],
+                            'quantidade': aumento['qtd_aumentada'],
+                            'de': aumento['qtd_atual'],
+                            'para': aumento['qtd_nova'],
+                            'resultado': resultado
+                        })
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao aplicar aumento {aumento['num_pedido']}/{aumento['cod_produto']}: {e}")
+                        alteracoes_aplicadas.append({
+                            'tipo': 'AUMENTO',
+                            'pedido': aumento['num_pedido'],
+                            'produto': aumento['cod_produto'],
+                            'erro': str(e)
+                        })
+            
+            # ============================================================
+            # FASE 6: TRATAR ITENS REMOVIDOS
+            # ============================================================
+            if itens_removidos:
+                logger.info(f"🗑️ Fase 6: Tratando {len(itens_removidos)} itens removidos...")
+                
+                for chave in itens_removidos:
+                    num_pedido, cod_produto = chave
+                    qtd_atual = carteira_atual[chave]['qtd_saldo']
+                    
+                    if qtd_atual > 0:
+                        try:
+                            # PROTEÇÃO: Verificar se é pedido Odoo antes de remover
+                            if not self.is_pedido_odoo(num_pedido):
+                                logger.warning(f"🛡️ PROTEÇÃO: Ignorando remoção em pedido não-Odoo: {num_pedido}")
+                                continue
+                                
+                            # Aplicar redução total
+                            resultado = PreSeparacaoItem.aplicar_reducao_quantidade(
+                                num_pedido,
+                                cod_produto,
+                                qtd_atual,
+                                "SYNC_ODOO_REMOVED"
+                            )
+                            
+                            alteracoes_aplicadas.append({
+                                'tipo': 'REMOCAO',
+                                'pedido': num_pedido,
+                                'produto': cod_produto,
+                                'quantidade': qtd_atual,
+                                'resultado': resultado
+                            })
+                            
+                            if resultado.get('alertas_criticos'):
+                                logger.warning(f"🚨 Item removido afeta separação: {num_pedido}/{cod_produto}")
+                                
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao remover {num_pedido}/{cod_produto}: {e}")
+            
+            # ============================================================
+            # FASE 7: ATUALIZAR CARTEIRA (Delete + Insert)
+            # ============================================================
+            logger.info("💾 Fase 7: Atualizando carteira principal...")
+            
+            # Sanitizar dados antes de inserir
+            logger.info("🧹 Sanitizando dados...")
+            dados_novos = self._sanitizar_dados_carteira(dados_novos)
+            
+            # PROTEÇÃO: Deletar apenas pedidos Odoo usando query eficiente
+            logger.info(f"🛡️ Preservando {registros_nao_odoo} registros não-Odoo...")
+            
+            # Usar query SQL direta para deletar apenas pedidos Odoo de forma eficiente
+            # Isso evita problemas de constraint e é muito mais rápido
+            pedidos_odoo_deletados = db.session.query(CarteiraPrincipal).filter(
+                or_(
+                    CarteiraPrincipal.num_pedido.like('VSC%'),
+                    CarteiraPrincipal.num_pedido.like('VCD%'),
+                    CarteiraPrincipal.num_pedido.like('VFB%')
+                )
+            ).delete(synchronize_session='fetch')
+            
+            logger.info(f"🗑️ {pedidos_odoo_deletados} registros Odoo removidos")
+            
+            # Fazer flush para garantir que os deletes sejam executados antes dos inserts
+            db.session.flush()
+            
+            # Inserir novos registros do Odoo
+            contador_inseridos = 0
+            erros_insercao = []
+            
+            for item in dados_novos:
+                try:
+                    # Validar dados essenciais usando campos CORRETOS
+                    if not item.get('num_pedido') or not item.get('cod_produto'):
+                        erros_insercao.append(f"Item sem pedido/produto: {item}")
+                        continue
+                    
+                    novo_registro = CarteiraPrincipal(**item)
+                    db.session.add(novo_registro)
+                    contador_inseridos += 1
+                    
+                except Exception as e:
+                    erro_msg = f"Erro ao inserir {item.get('num_pedido', 'N/A')}/{item.get('cod_produto', 'N/A')}: {e}"
+                    logger.error(erro_msg)
+                    erros_insercao.append(erro_msg)
+            
+            # ============================================================
+            # FASE 8: COMMIT E RECOMPOSIÇÃO
+            # ============================================================
+            logger.info("💾 Fase 8: Salvando alterações...")
+            db.session.commit()
+            
+            logger.info("🔄 Fase 9: Recompondo pré-separações...")
+            recomposicao_result = self._recompor_pre_separacoes_automaticamente()
+            
+            # ============================================================
+            # FASE 10: VERIFICAÇÃO PÓS-SINCRONIZAÇÃO E ALERTAS
+            # ============================================================
+            logger.info("🔍 Fase 10: Verificação pós-sincronização...")
+            alertas_pos_sync = self._verificar_alertas_pos_sincronizacao(dados_novos, alertas_pre_sync)
+            
+            # ============================================================
+            # FASE 11: ESTATÍSTICAS FINAIS
+            # ============================================================
+            fim_operacao = datetime.now()
+            tempo_total = (fim_operacao - inicio_operacao).total_seconds()
+            
+            # Contar alterações bem-sucedidas
+            alteracoes_sucesso = [a for a in alteracoes_aplicadas if 'erro' not in a]
+            alteracoes_erro = [a for a in alteracoes_aplicadas if 'erro' in a]
+            
+            # Estatísticas completas compatíveis com função original
+            estatisticas_completas = {
+                'registros_inseridos': contador_inseridos,
+                'registros_removidos': pedidos_odoo_deletados,
+                'registros_nao_odoo_preservados': registros_nao_odoo,
+                'total_encontrados': len(resultado_odoo.get('dados', [])),
+                'registros_filtrados': len(dados_novos),
+                'taxa_sucesso': f"{(contador_inseridos/len(dados_novos)*100):.1f}%" if dados_novos else "0%",
+                'erros_processamento': len(erros_insercao),
+                'metodo': 'operacional_completo_com_gestao',
+                
+                # Dados operacionais específicos
+                'tempo_execucao_segundos': round(tempo_total, 2),
+                'backup_pre_separacoes': backup_result['total_backups'],
+                'recomposicao_sucesso': recomposicao_result['sucessos'],
+                'recomposicao_erros': recomposicao_result['erros'],
+                'alertas_pre_sync': len(alertas_pre_sync.get('alertas_criticos', [])),
+                'alertas_pos_sync': len(alertas_pos_sync.get('alertas_criticos', [])),
+                'separacoes_cotadas_afetadas': alertas_pos_sync.get('separacoes_cotadas_afetadas', 0),
+                
+                # Estatísticas da gestão de quantidades
+                'reducoes_aplicadas': len([a for a in alteracoes_sucesso if a['tipo'] == 'REDUCAO']),
+                'aumentos_aplicados': len([a for a in alteracoes_sucesso if a['tipo'] == 'AUMENTO']),
+                'remocoes_aplicadas': len([a for a in alteracoes_sucesso if a['tipo'] == 'REMOCAO']),
+                'novos_itens': len(novos_itens),
+                'alteracoes_com_erro': len(alteracoes_erro)
+            }
+            
+            # Log resumo final
+            logger.info(f"✅ SINCRONIZAÇÃO OPERACIONAL COMPLETA CONCLUÍDA:")
+            logger.info(f"   📊 {contador_inseridos} registros inseridos")
+            logger.info(f"   🗑️ {pedidos_odoo_deletados} registros Odoo removidos")
+            logger.info(f"   🛡️ {registros_nao_odoo} registros não-Odoo preservados")
+            logger.info(f"   💾 {backup_result['total_backups']} pré-separações em backup")
+            logger.info(f"   📉 {estatisticas_completas['reducoes_aplicadas']} reduções aplicadas")
+            logger.info(f"   📈 {estatisticas_completas['aumentos_aplicados']} aumentos aplicados")
+            logger.info(f"   ➖ {estatisticas_completas['remocoes_aplicadas']} remoções processadas")
+            logger.info(f"   ➕ {len(novos_itens)} novos itens")
+            logger.info(f"   🔄 {recomposicao_result['sucessos']} pré-separações recompostas")
+            logger.info(f"   🚨 {len(alertas_pos_sync.get('alertas_criticos', []))} alertas pós-sincronização")
+            logger.info(f"   ⏱️ {tempo_total:.2f} segundos de execução")
+            
+            if alteracoes_erro:
+                logger.warning(f"   ⚠️ {len(alteracoes_erro)} alterações com erro")
+            
+            # Retorno compatível com sincronizar_carteira_odoo original
+            return {
+                'sucesso': True,
+                'operacao_completa': True,
+                'estatisticas': estatisticas_completas,
+                'registros_importados': contador_inseridos,
+                'registros_removidos': pedidos_odoo_deletados,
+                'registros_nao_odoo_preservados': registros_nao_odoo,
+                'erros': erros_insercao,
+                
+                # Dados operacionais para interface
+                'alertas_pre_sync': alertas_pre_sync,
+                'alertas_pos_sync': alertas_pos_sync,
+                'backup_info': backup_result,
+                'recomposicao_info': recomposicao_result,
+                'tempo_execucao': tempo_total,
+                
+                # Dados específicos da gestão de quantidades
+                'alteracoes_aplicadas': alteracoes_aplicadas,
+                'gestao_quantidades_ativa': True,
+                
+                'mensagem': f'✅ Sincronização operacional completa: {contador_inseridos} registros importados, {recomposicao_result["sucessos"]} pré-separações recompostas, {len(alteracoes_sucesso)} mudanças de quantidade processadas'
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            fim_operacao = datetime.now()
+            tempo_erro = (fim_operacao - inicio_operacao).total_seconds()
+            
+            logger.error(f"❌ ERRO CRÍTICO na sincronização operacional: {e}")
+            
+            # Retorno de erro compatível com função original
+            return {
+                'sucesso': False,
+                'operacao_completa': False,
+                'erro': str(e),
+                'registros_importados': 0,
+                'registros_removidos': 0,
+                'tempo_execucao': tempo_erro,
+                'estatisticas': {},
+                'alertas_pre_sync': {},
+                'alertas_pos_sync': {},
+                'gestao_quantidades_ativa': True,
+                'mensagem': f'❌ Erro na sincronização operacional: {str(e)}'
             } 

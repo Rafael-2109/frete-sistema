@@ -144,7 +144,23 @@ class MainOrchestrator:
                 self._response_processor = False  # Marcar como indisponível
         return self._response_processor if self._response_processor is not False else None
     
-    def _setup_default_workflows(self):
+    @property
+    def loader_manager(self):
+        """Lazy loading do LoaderManager"""
+        if not hasattr(self, '_loader_manager'):
+            self._loader_manager = None
+        
+        if self._loader_manager is None:
+            try:
+                from app.claude_ai_novo.loaders import get_loader_manager
+                self._loader_manager = get_loader_manager()
+                logger.info("📦 LoaderManager integrado ao MainOrchestrator")
+            except ImportError as e:
+                logger.warning(f"⚠️ LoaderManager não disponível: {e}")
+                self._loader_manager = False  # Marcar como indisponível
+        return self._loader_manager if self._loader_manager is not False else None
+    
+    def _setup_default_workflows(self)
         """Configura workflows padrão"""
         # Pré-carregar componentes essenciais
         self._preload_essential_components()
@@ -854,7 +870,8 @@ Sua consulta foi processada mas não conseguimos gerar uma resposta específica.
                 "success": True,
                 "analysis_result": None,
                 "response_result": None,
-                "validation_result": None
+                "validation_result": None,
+                "data_loaded": None
             }
             
             # NOVA funcionalidade: Processamento de respostas
@@ -864,19 +881,63 @@ Sua consulta foi processada mas não conseguimos gerar uma resposta específica.
                 
                 # Análise da consulta (usar analyzers se disponível)
                 analysis = {"tipo_consulta": "geral", "dominio": "sistema"}
-                if hasattr(self, 'components') and 'analyzers' in self.components:
-                    try:
-                        analysis = self.components['analyzers'].analyze_intention(query=query)
-                    except Exception as e:
-                        logger.warning(f"Erro na análise: {e}")
+                
+                # 1. Usar o DataAnalyzer para análise completa
+                try:
+                    from app.claude_ai_novo.analyzers.data_analyzer import get_data_analyzer
+                    data_analyzer = get_data_analyzer()
+                    data_context = data_analyzer.analyze_data_context(query)
+                    
+                    # Combinar com análise de intenção se disponível
+                    if hasattr(self, 'components') and 'analyzers' in self.components:
+                        intention_analysis = self.components['analyzers'].analyze_intention(query=query)
+                        analysis.update(intention_analysis)
+                    
+                    # Adicionar contexto de dados à análise
+                    analysis.update(data_context)
+                    logger.info(f"📊 Análise completa: domínio={analysis.get('dominio')}, cliente={analysis.get('cliente_especifico')}")
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro na análise de dados: {e}")
                 
                 result["analysis_result"] = analysis
                 
-                # Gerar resposta otimizada
+                # 2. Carregar dados reais baseado na análise
+                dados_reais = None
+                if self.loader_manager and analysis.get('dominio'):
+                    try:
+                        # Criar filtros baseados na análise
+                        filtros = {}
+                        if analysis.get('cliente_especifico'):
+                            filtros['cliente'] = analysis['cliente_especifico']
+                        if analysis.get('periodo_dias'):
+                            filtros['periodo'] = analysis['periodo_dias']
+                        if analysis.get('filtros'):
+                            filtros.update(analysis['filtros'])
+                        
+                        # Carregar dados do domínio identificado
+                        dominio = analysis.get('dominio', 'entregas')
+                        dados_carregados = self.loader_manager.load_data(dominio, filtros)
+                        
+                        # Converter para formato esperado pelo ResponseProcessor
+                        if dados_carregados:
+                            dados_reais = {
+                                'data': dados_carregados,
+                                'total_registros': len(dados_carregados),
+                                'domain': dominio,
+                                'timestamp': datetime.now().isoformat()
+                            }
+                            result["data_loaded"] = dados_reais
+                            logger.info(f"✅ Dados carregados: {dados_reais['total_registros']} registros do domínio {dominio}")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao carregar dados: {e}")
+                
+                # 3. Gerar resposta otimizada com todos os dados
                 response = self.response_processor.gerar_resposta_otimizada(
                     consulta=query,
                     analise=analysis,
-                    user_context=context
+                    user_context=context,
+                    dados_reais=dados_reais  # Passar os dados carregados
                 )
                 
                 result["response_result"] = response

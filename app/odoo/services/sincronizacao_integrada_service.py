@@ -14,7 +14,6 @@ Data: 2025-07-21
 
 import logging
 from datetime import datetime
-from typing import Dict, Any
 
 from app.odoo.services.faturamento_service import FaturamentoService
 from app.odoo.services.carteira_service import CarteiraService
@@ -97,7 +96,7 @@ class SincronizacaoIntegradaService:
             logger.info("🔄 ETAPA 3/3: Sincronizando CARTEIRA (com faturamento protegido)...")
             resultado_completo['etapas_executadas'].append('INICIANDO_CARTEIRA')
             
-            resultado_carteira = self.carteira_service.sincronizar_carteira_odoo(
+            resultado_carteira = self.carteira_service.sincronizar_carteira_odoo_com_gestao_quantidades(
                 usar_filtro_pendente=usar_filtro_carteira
             )
             

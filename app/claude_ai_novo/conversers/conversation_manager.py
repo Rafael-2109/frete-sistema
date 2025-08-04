@@ -18,17 +18,18 @@ try:
 except ImportError:
     # Fallback
     try:
-    from unittest.mock import Mock
-except ImportError:
-    class Mock:
-        def __init__(self, *args, **kwargs):
-            pass
-        def __call__(self, *args, **kwargs):
-            return self
-        def __getattr__(self, name):
-            return self
-    get_context_memory = Mock()
-    get_conversation_memory = Mock()
+        from unittest.mock import Mock
+    except ImportError:
+
+        class Mock:
+            def __init__(self, *args, **kwargs):
+                pass
+            def __call__(self, *args, **kwargs):
+                return self
+            def __getattr__(self, name):
+                return self
+        get_context_memory = Mock()
+        get_conversation_memory = Mock()
 
 # Configurar logger
 logger = logging.getLogger(__name__)

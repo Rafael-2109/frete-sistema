@@ -38,12 +38,44 @@ class ClaudeAIConfig:
     @classmethod
     def get_anthropic_api_key(cls) -> Optional[str]:
         """
-        Retorna a chave da API Anthropic.
+        Retorna a chave da API Anthropic com lazy loading.
         
         Returns:
             Optional[str]: A chave da API Anthropic ou None se não configurada
         """
-        return cls.ANTHROPIC_API_KEY
+        # Primeiro tenta do atributo da classe
+        if cls.ANTHROPIC_API_KEY:
+            return cls.ANTHROPIC_API_KEY
+            
+        # Tenta carregar do ambiente novamente
+        key = os.getenv('ANTHROPIC_API_KEY')
+        if key:
+            cls.ANTHROPIC_API_KEY = key
+            return key
+            
+        # Tenta carregar .env se disponível
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+            key = os.getenv('ANTHROPIC_API_KEY')
+            if key:
+                cls.ANTHROPIC_API_KEY = key
+                return key
+        except ImportError:
+            pass
+            
+        # Tenta do Flask config se disponível
+        try:
+            from flask import current_app
+            if current_app:
+                key = current_app.config.get('ANTHROPIC_API_KEY')
+                if key:
+                    cls.ANTHROPIC_API_KEY = key
+                    return key
+        except:
+            pass
+            
+        return None
     
     @classmethod
     def get_claude_params(cls) -> Dict[str, Any]:

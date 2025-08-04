@@ -276,65 +276,58 @@ class PatternLearner:
         except Exception as e:
             logger.error(f'Erro: {e}')
             pass
-try:
-    from sqlalchemy import text
-    SQLALCHEMY_AVAILABLE = True
-except ImportError:
-    text = None
-    SQLALCHEMY_AVAILABLE = False
+        try:
+            from sqlalchemy import text
+            SQLALCHEMY_AVAILABLE = True
+        except ImportError:
+            text = None
+            SQLALCHEMY_AVAILABLE = False
+        
+        # Verificar se já existe
+        existe = self.db.session.execute(
+            text("""
+                SELECT id, confidence, usage_count, success_rate
+                FROM ai_knowledge_patterns
+                WHERE pattern_type = :tipo AND pattern_text = :texto
+            """),
+            {"tipo": padrao["tipo"], "texto": padrao["texto"]}
+        ).fetchone()
+        
+        if existe:
+            # Atualizar existente
+            self.db.session.execute(
+                text("""
+                    UPDATE ai_knowledge_patterns
+                    SET confidence = :conf, usage_count = usage_count + 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                """),
+                {"conf": padrao["confidence"], "id": existe[0]}
+            )
+        else:
+            # Inserir novo
+            result = self.db.session.execute(
+                text("""
+                    INSERT INTO ai_knowledge_patterns
+                    (pattern_type, pattern_text, confidence, usage_count, 
+                        success_rate, metadata)
+                    VALUES (:tipo, :texto, :conf, 1, 0.7, :meta)
+                    RETURNING id
+                """),
+                {
+                    "tipo": padrao["tipo"],
+                    "texto": padrao["texto"],
+                    "conf": padrao["confidence"],
+                    "meta": self._safe_json_dumps(padrao.get("metadata", {}))
+                }
+            )
+            row = result.fetchone()
+            if row:
+                padrao["id"] = row[0]
+        
+        self.db.session.commit()
+        return padrao
                 
-                # Verificar se já existe
-                existe = self.db.session.execute(
-                    text("""
-                        SELECT id, confidence, usage_count, success_rate
-                        FROM ai_knowledge_patterns
-                        WHERE pattern_type = :tipo AND pattern_text = :texto
-                    """),
-                    {"tipo": padrao["tipo"], "texto": padrao["texto"]}
-                ).fetchone()
-                
-                if existe:
-                    # Atualizar existente
-                    self.db.session.execute(
-                        text("""
-                            UPDATE ai_knowledge_patterns
-                            SET confidence = :conf, usage_count = usage_count + 1,
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE id = :id
-                        """),
-                        {"conf": padrao["confidence"], "id": existe[0]}
-                    )
-                else:
-                    # Inserir novo
-                    result = self.db.session.execute(
-                        text("""
-                            INSERT INTO ai_knowledge_patterns
-                            (pattern_type, pattern_text, confidence, usage_count, 
-                             success_rate, metadata)
-                            VALUES (:tipo, :texto, :conf, 1, 0.7, :meta)
-                            RETURNING id
-                        """),
-                        {
-                            "tipo": padrao["tipo"],
-                            "texto": padrao["texto"],
-                            "conf": padrao["confidence"],
-                            "meta": self._safe_json_dumps(padrao.get("metadata", {}))
-                        }
-                    )
-                    row = result.fetchone()
-                    if row:
-                        padrao["id"] = row[0]
-                
-                self.db.session.commit()
-                return padrao
-                
-        except Exception as e:
-            logger.error(f"Erro ao salvar padrão: {e}")
-            try:
-                from app.claude_ai_novo.utils.flask_fallback import get_db
-                self.db.session.rollback()
-            except:
-                pass
     
     def buscar_padroes_aplicaveis(self, consulta: str, threshold: float = 0.5) -> List[Dict]:
         """
@@ -353,12 +346,12 @@ except ImportError:
         except Exception as e:
             logger.error(f'Erro: {e}')
             pass
-try:
-    from sqlalchemy import text
-    SQLALCHEMY_AVAILABLE = True
-except ImportError:
-    text = None
-    SQLALCHEMY_AVAILABLE = False
+    try:
+                from sqlalchemy import text
+                SQLALCHEMY_AVAILABLE = True
+    except ImportError:
+        text = None
+        SQLALCHEMY_AVAILABLE = False
                 
                 padroes = self.db.session.execute(
                     text("""
@@ -393,11 +386,9 @@ except ImportError:
                         "uso_count": padrao.usage_count
                     })
                 
-                return padroes_aplicaveis
+                    return padroes_aplicaveis
                 
-        except Exception as e:
-            logger.error(f"❌ Erro ao buscar padrões: {e}")
-            return []
+                
     
     def _extrair_palavras_chave_dominio(self, texto: str, dominio: str) -> List[str]:
         """Extrai palavras-chave relevantes para o domínio"""

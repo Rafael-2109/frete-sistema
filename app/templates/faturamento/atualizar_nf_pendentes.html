@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+
+{% block title %}Atualizar Notas Fiscais Pendentes{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-invoice"></i> Atualização de Notas Fiscais - Embarques com Erro
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Estatísticas -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h4 id="total-pendentes">0</h4>
+                                    <small class="text-muted">Total Pendentes</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white">
+                                <div class="card-body text-center">
+                                    <h4 id="total-com-nf">0</h4>
+                                    <small>NFs Encontradas</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-warning text-white">
+                                <div class="card-body text-center">
+                                    <h4 id="total-sem-nf">0</h4>
+                                    <small>NFs Não Encontradas</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-info text-white">
+                                <div class="card-body text-center">
+                                    <h4 id="total-selecionados">0</h4>
+                                    <small>Selecionados</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Botões de Ação -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <button id="btn-carregar" class="btn btn-primary">
+                                <i class="fas fa-sync"></i> Carregar Pendentes
+                            </button>
+                            <button id="btn-selecionar-todos" class="btn btn-secondary" disabled>
+                                <i class="fas fa-check-square"></i> Selecionar Todos com NF
+                            </button>
+                            <button id="btn-desselecionar-todos" class="btn btn-secondary" disabled>
+                                <i class="fas fa-square"></i> Desselecionar Todos
+                            </button>
+                            <button id="btn-atualizar-selecionados" class="btn btn-success" disabled>
+                                <i class="fas fa-save"></i> Atualizar Selecionados
+                            </button>
+                            <button id="btn-atualizar-todos" class="btn btn-warning" disabled>
+                                <i class="fas fa-save"></i> Atualizar Todos
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tabela de Preview -->
+                    <div class="table-responsive">
+                        <table id="tabela-preview" class="table table-striped table-bordered">
+                            <thead>
+                                <tr>
+                                    <th width="40">
+                                        <input type="checkbox" id="check-todos" disabled>
+                                    </th>
+                                    <th>Embarque</th>
+                                    <th>Lote Separação</th>
+                                    <th>Pedido</th>
+                                    <th>Cliente</th>
+                                    <th>NF Atual</th>
+                                    <th>NF Sugerida</th>
+                                    <th>Erro</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-preview">
+                                <tr>
+                                    <td colspan="9" class="text-center text-muted">
+                                        Clique em "Carregar Pendentes" para visualizar os itens
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Progresso -->
+<div class="modal fade" id="modalProgresso" tabindex="-1" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Processando...</h5>
+            </div>
+            <div class="modal-body">
+                <div class="progress">
+                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%"></div>
+                </div>
+                <p id="progress-text" class="mt-2 mb-0">Iniciando...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    let dadosCarregados = [];
+    let itensSelecionados = new Set();
+    
+    // Configurar CSRF token para todas as requisições AJAX
+    $.ajaxSetup({
+        beforeSend: function(xhr, settings) {
+            if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                xhr.setRequestHeader("X-CSRFToken", "{{ csrf_token() }}");
+            }
+        }
+    });
+
+    // Carregar dados pendentes
+    $('#btn-carregar').click(function() {
+        carregarDadosPendentes();
+    });
+
+    // Selecionar todos com NF
+    $('#btn-selecionar-todos').click(function() {
+        $('.check-item').each(function() {
+            if ($(this).data('tem-nf')) {
+                $(this).prop('checked', true);
+                itensSelecionados.add($(this).val());
+            }
+        });
+        atualizarContadores();
+    });
+
+    // Desselecionar todos
+    $('#btn-desselecionar-todos').click(function() {
+        $('.check-item').prop('checked', false);
+        itensSelecionados.clear();
+        atualizarContadores();
+    });
+
+    // Checkbox selecionar todos
+    $('#check-todos').change(function() {
+        const isChecked = $(this).prop('checked');
+        $('.check-item').each(function() {
+            if ($(this).data('tem-nf')) {
+                $(this).prop('checked', isChecked);
+                if (isChecked) {
+                    itensSelecionados.add($(this).val());
+                } else {
+                    itensSelecionados.delete($(this).val());
+                }
+            }
+        });
+        atualizarContadores();
+    });
+
+    // Atualizar selecionados
+    $('#btn-atualizar-selecionados').click(function() {
+        if (itensSelecionados.size === 0) {
+            alert('Selecione pelo menos um item para atualizar');
+            return;
+        }
+
+        if (confirm(`Confirma a atualização de ${itensSelecionados.size} item(ns)?`)) {
+            atualizarItens(Array.from(itensSelecionados));
+        }
+    });
+
+    // Atualizar todos
+    $('#btn-atualizar-todos').click(function() {
+        const itensComNf = dadosCarregados
+            .filter(item => item.encontrou_nf)
+            .map(item => item.embarque_item_id);
+
+        if (itensComNf.length === 0) {
+            alert('Não há itens com NF encontrada para atualizar');
+            return;
+        }
+
+        if (confirm(`Confirma a atualização de TODOS os ${itensComNf.length} itens com NF encontrada?`)) {
+            atualizarItens(itensComNf);
+        }
+    });
+
+    function carregarDadosPendentes() {
+        $('#btn-carregar').prop('disabled', true);
+        $('#tbody-preview').html('<tr><td colspan="9" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>');
+
+        $.get('{{ url_for("atualizar_nf.api_preview_nf_pendentes") }}')
+            .done(function(response) {
+                if (response.sucesso) {
+                    dadosCarregados = response.items;
+                    renderizarTabela();
+                    habilitarBotoes();
+                } else {
+                    alert('Erro ao carregar dados: ' + response.erro);
+                }
+            })
+            .fail(function() {
+                alert('Erro ao comunicar com o servidor');
+            })
+            .always(function() {
+                $('#btn-carregar').prop('disabled', false);
+            });
+    }
+
+    function renderizarTabela() {
+        const tbody = $('#tbody-preview');
+        tbody.empty();
+
+        if (dadosCarregados.length === 0) {
+            tbody.html('<tr><td colspan="9" class="text-center text-muted">Nenhum item pendente encontrado</td></tr>');
+            return;
+        }
+
+        let totalComNf = 0;
+        let totalSemNf = 0;
+
+        dadosCarregados.forEach(function(item) {
+            const temNf = item.encontrou_nf;
+            if (temNf) totalComNf++; else totalSemNf++;
+
+            const statusBadge = temNf 
+                ? '<span class="badge badge-success">NF Encontrada</span>'
+                : '<span class="badge badge-warning">NF Não Encontrada</span>';
+
+            const checkbox = temNf 
+                ? `<input type="checkbox" class="check-item" value="${item.embarque_item_id}" data-tem-nf="true">`
+                : '<input type="checkbox" disabled>';
+
+            const tr = $('<tr>');
+            tr.html(`
+                <td>${checkbox}</td>
+                <td>${item.embarque.id} - ${formatarData(item.embarque.data_embarque)}</td>
+                <td>${item.separacao_lote_id || '-'}</td>
+                <td>${item.num_pedido}</td>
+                <td>${item.cliente || '-'}</td>
+                <td>${item.nota_fiscal_atual || '-'}</td>
+                <td><strong>${item.nota_fiscal_sugerida || '-'}</strong></td>
+                <td><small class="text-danger">${item.erro_atual}</small></td>
+                <td>${statusBadge}</td>
+            `);
+
+            tbody.append(tr);
+        });
+
+        // Atualizar contadores
+        $('#total-pendentes').text(dadosCarregados.length);
+        $('#total-com-nf').text(totalComNf);
+        $('#total-sem-nf').text(totalSemNf);
+
+        // Event handler para checkboxes individuais
+        $('.check-item').change(function() {
+            const itemId = $(this).val();
+            if ($(this).prop('checked')) {
+                itensSelecionados.add(itemId);
+            } else {
+                itensSelecionados.delete(itemId);
+            }
+            atualizarContadores();
+        });
+    }
+
+    function habilitarBotoes() {
+        $('#btn-selecionar-todos').prop('disabled', false);
+        $('#btn-desselecionar-todos').prop('disabled', false);
+        $('#btn-atualizar-selecionados').prop('disabled', false);
+        $('#btn-atualizar-todos').prop('disabled', false);
+        $('#check-todos').prop('disabled', false);
+    }
+
+    function atualizarContadores() {
+        $('#total-selecionados').text(itensSelecionados.size);
+        $('#btn-atualizar-selecionados').prop('disabled', itensSelecionados.size === 0);
+    }
+
+    function atualizarItens(itemIds) {
+        $('#modalProgresso').modal('show');
+        $('#progress-bar').css('width', '0%');
+        $('#progress-text').text('Atualizando notas fiscais...');
+
+        $.ajax({
+            url: '{{ url_for("atualizar_nf.api_atualizar_nf_selecionados") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ item_ids: itemIds }),
+            success: function(response) {
+                if (response.sucesso) {
+                    const relatorio = response.relatorio;
+                    $('#progress-bar').css('width', '100%');
+                    $('#progress-text').html(`
+                        <strong>Processo concluído!</strong><br>
+                        Atualizados: ${relatorio.total_atualizados}<br>
+                        Erros: ${relatorio.total_erros}
+                    `);
+
+                    setTimeout(function() {
+                        $('#modalProgresso').modal('hide');
+                        carregarDadosPendentes();
+                        itensSelecionados.clear();
+                    }, 2000);
+                } else {
+                    $('#modalProgresso').modal('hide');
+                    alert('Erro ao atualizar: ' + response.erro);
+                }
+            },
+            error: function() {
+                $('#modalProgresso').modal('hide');
+                alert('Erro ao comunicar com o servidor');
+            }
+        });
+    }
+
+    function formatarData(dataStr) {
+        if (!dataStr) return '-';
+        const data = new Date(dataStr);
+        return data.toLocaleDateString('pt-BR');
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,190 @@
+# Docker Compose configuration for MCP Monitoring Stack
+
+version: '3.8'
+
+services:
+  # Monitoring Dashboard
+  mcp-dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: mcp-monitoring-dashboard
+    ports:
+      - "5001:5001"
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_HOST=postgres
+      - DB_NAME=frete_sistema
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MONITORING_PORT=5001
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mcp-prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/alerting_rules.yml:/etc/prometheus/rules/alerting_rules.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mcp-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=redis-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Alert Manager
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: mcp-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./config/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Node Exporter (for system metrics)
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: mcp-node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # PostgreSQL Exporter
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: mcp-postgres-exporter
+    ports:
+      - "9187:9187"
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?sslmode=disable
+    depends_on:
+      - postgres
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Redis Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: mcp-redis-exporter
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Metrics Collector Service
+  metrics-collector:
+    build:
+      context: ./collectors
+      dockerfile: Dockerfile
+    container_name: mcp-metrics-collector
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=frete_sistema
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Alert Manager Service
+  alert-manager:
+    build:
+      context: ./alerts
+      dockerfile: Dockerfile
+    container_name: mcp-alert-manager
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - EMAIL_ALERTS_ENABLED=${EMAIL_ALERTS_ENABLED:-false}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SLACK_ALERTS_ENABLED=${SLACK_ALERTS_ENABLED:-false}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+    depends_on:
+      - redis
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+networks:
+  mcp-network:
+    external: true
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  alertmanager-data:

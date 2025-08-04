@@ -3,7 +3,7 @@ APIs para gerenciamento de pré-separações
 Sistema de persistência para drag & drop do workspace
 """
 
-from flask import jsonify, request
+from flask import jsonify, request, current_app
 from flask_login import login_required
 from datetime import datetime
 from app import db
@@ -252,6 +252,63 @@ def remover_pre_separacao(pre_separacao_id):
             'success': False,
             'error': f'Erro interno: {str(e)}'
         }), 500
+
+
+@carteira_bp.route('/api/pre-separacao/<lote_id>/atualizar-datas', methods=['POST'])
+@login_required
+def atualizar_datas_pre_separacao(lote_id):
+    """
+    Atualiza datas de expedição, agendamento e protocolo de uma pré-separação
+    """
+    try:
+        data = request.get_json()
+        data_expedicao = data.get('expedicao')
+        data_agendamento = data.get('agendamento')
+        protocolo = data.get('protocolo')
+        
+        if not data_expedicao:
+            return jsonify({
+                'success': False,
+                'error': 'Data de expedição é obrigatória'
+            }), 400
+            
+        # Buscar todas as pré-separações do lote
+        pre_separacoes = PreSeparacaoItem.query.filter(
+            PreSeparacaoItem.separacao_lote_id == lote_id,
+            PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
+        ).all()
+        
+        if not pre_separacoes:
+            return jsonify({
+                'success': False,
+                'error': 'Pré-separação não encontrada ou já processada'
+            }), 404
+            
+        # Converter datas
+        from datetime import datetime
+        data_expedicao_obj = datetime.strptime(data_expedicao, '%Y-%m-%d').date()
+        data_agendamento_obj = None
+        if data_agendamento:
+            data_agendamento_obj = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
+            
+        # Atualizar todas as pré-separações do lote
+        for pre_sep in pre_separacoes:
+            pre_sep.data_expedicao_editada = data_expedicao_obj
+            pre_sep.data_agendamento_editada = data_agendamento_obj
+            pre_sep.protocolo_editado = protocolo
+            
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'{len(pre_separacoes)} itens atualizados com sucesso',
+            'itens_atualizados': len(pre_separacoes)
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao atualizar datas da pré-separação: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # 🗑️ ROTA REMOVIDA - REDUNDANTE

@@ -193,11 +193,11 @@
                                         <td>
                                             {% if mov.tipo_movimentacao %}
                                                 {% if 'ENTRADA' in mov.tipo_movimentacao.upper() %}
-                                                    <span class="badge badge-success">{{ mov.tipo_movimentacao }}</span>
+                                                    <span class="badge bg-success">{{ mov.tipo_movimentacao }}</span>
                                                 {% elif 'SAIDA' in mov.tipo_movimentacao.upper() %}
-                                                    <span class="badge badge-warning">{{ mov.tipo_movimentacao }}</span>
+                                                    <span class="badge bg-danger">{{ mov.tipo_movimentacao }}</span>
                                                 {% else %}
-                                                    <span class="badge badge-info">{{ mov.tipo_movimentacao }}</span>
+                                                    <span class="badge bg-primary">{{ mov.tipo_movimentacao }}</span>
                                                 {% endif %}
                                             {% else %}
                                                 <span class="text-muted">-</span>
@@ -208,7 +208,11 @@
                                         </td>
                                         <td>{{ mov.nome_produto[:30] }}...</td>
                                         <td>
-                                            <span class="badge badge-primary">{{ mov.qtd_movimentacao | numero_br }}</span>
+                                            {% if mov.qtd_movimentacao > 0 %}
+                                                <span class="badge bg-success">{{ mov.qtd_movimentacao | numero_br }}</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">{{ mov.qtd_movimentacao | numero_br }}</span>
+                                            {% endif %}
                                         </td>
                                         <td>
                                             {% if mov.local_movimentacao %}

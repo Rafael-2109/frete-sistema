@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}MCP Logística - Interface de Consulta{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='mcp_logistica/style.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="page-title mb-4">
+                <i class="fas fa-truck"></i> MCP Logística - Interface de Consulta
+            </h1>
+        </div>
+    </div>
+
+    <!-- Natural Language Query Form -->
+    <div class="row mb-4">
+        <div class="col-lg-8 mx-auto">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-search"></i> Consulta em Linguagem Natural</h5>
+                </div>
+                <div class="card-body">
+                    <form id="nlq-form" action="{{ url_for('mcp_logistica.process_query') }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="mb-3">
+                            <label for="query" class="form-label">Digite sua consulta:</label>
+                            <textarea class="form-control" id="query" name="query" rows="3" 
+                                placeholder="Ex: Mostre todos os pedidos pendentes de separação para São Paulo"
+                                required></textarea>
+                            <div class="form-text">
+                                Você pode fazer perguntas como:
+                                <ul class="mt-2">
+                                    <li>Quantos pedidos estão aguardando separação?</li>
+                                    <li>Liste os embarques programados para hoje</li>
+                                    <li>Mostre o status dos lotes em processamento</li>
+                                    <li>Quais pedidos estão atrasados?</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="output_format" class="form-label">Formato de Saída:</label>
+                                <select class="form-select" id="output_format" name="output_format">
+                                    <option value="table">Tabela</option>
+                                    <option value="json">JSON</option>
+                                    <option value="summary">Resumo</option>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="limit" class="form-label">Limite de Resultados:</label>
+                                <input type="number" class="form-control" id="limit" name="limit" 
+                                    value="100" min="1" max="1000">
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="submit" class="btn btn-primary" id="submit-query">
+                                <i class="fas fa-paper-plane"></i> Executar Consulta
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="clear-form">
+                                <i class="fas fa-eraser"></i> Limpar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4 class="mb-3">Ações Rápidas</h4>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="card quick-action-card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-boxes fa-3x text-primary mb-3"></i>
+                            <h6>Pedidos Pendentes</h6>
+                            <button class="btn btn-sm btn-outline-primary quick-query" 
+                                data-query="Mostre todos os pedidos pendentes de separação">
+                                Consultar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card quick-action-card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-truck-loading fa-3x text-success mb-3"></i>
+                            <h6>Embarques Hoje</h6>
+                            <button class="btn btn-sm btn-outline-success quick-query" 
+                                data-query="Liste todos os embarques programados para hoje">
+                                Consultar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card quick-action-card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-warehouse fa-3x text-warning mb-3"></i>
+                            <h6>Status dos Lotes</h6>
+                            <button class="btn btn-sm btn-outline-warning quick-query" 
+                                data-query="Mostre o status de todos os lotes em processamento">
+                                Consultar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card quick-action-card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                            <h6>Pedidos Atrasados</h6>
+                            <button class="btn btn-sm btn-outline-danger quick-query" 
+                                data-query="Quais pedidos estão atrasados?">
+                                Consultar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Queries -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-history"></i> Consultas Recentes</h5>
+                </div>
+                <div class="card-body">
+                    <div id="recent-queries-container">
+                        <p class="text-muted">Nenhuma consulta recente encontrada.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Processando...</span>
+                </div>
+                <p class="mt-3 mb-0">Processando consulta...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='mcp_logistica/main.js') }}"></script>
+{% endblock %}

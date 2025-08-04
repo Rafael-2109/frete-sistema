@@ -1,2 +1,0 @@
-Este arquivo foi criado diretamente no Linux!
-Sem passar pelo Windows :)

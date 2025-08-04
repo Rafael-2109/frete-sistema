@@ -332,6 +332,12 @@ class SessionOrchestrator:
         if not session:
             return {'error': 'Sessão não encontrada', 'session_id': session_id}
         
+        # Se sessão está CREATED, ativar automaticamente para workflows
+        if session.status == SessionStatus.CREATED and workflow_type in ['query', 'intelligent_query']:
+            logger.info(f"🔄 Ativando sessão automaticamente para workflow: {workflow_type}")
+            session.status = SessionStatus.ACTIVE
+            session.update_activity()
+        
         if not session.is_active():
             return {'error': 'Sessão não está ativa', 'status': session.status.value}
         
@@ -1067,16 +1073,15 @@ class SessionOrchestrator:
             current_user = get_current_user()
             user_id = user_id or (current_user.id if current_user and hasattr(current_user, 'id') else None)
             
-            session_context = self.create_session(
+            session_id = self.create_session(
                 user_id=user_id,
                 priority=SessionPriority.NORMAL,
                 metadata={'query': query, 'auto_created': True}
             )
-            session_id = session_context.session_id
         
         # Processar usando o workflow de sessão
         try:
-            result = await self.execute_session_workflow(
+            result = self.execute_session_workflow(
                 session_id=session_id,
                 workflow_type='intelligent_query',
                 workflow_data={
