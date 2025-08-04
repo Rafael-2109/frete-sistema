@@ -6,15 +6,15 @@ Versão 2: Melhor tratamento de filiais e campos truncados
 
 import os
 import sys
+
+# Adiciona o diretório raiz ao path ANTES de importar app
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import re
 from app import create_app, db
 from app.carteira.models import CadastroCliente
-
-
-# Adiciona o diretório raiz ao path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
 
