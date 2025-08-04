@@ -1,15 +1,19 @@
-import io
 import pandas as pd
-from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response
 from flask_login import login_required, current_user
 from app import db
 from app.estoque.models import MovimentacaoEstoque, UnificacaoCodigos, SaldoEstoque
-from app.utils.auth_decorators import require_admin
 from app.utils.timezone import agora_brasil
 from app.utils.valores_brasileiros import formatar_valor_brasileiro
-from app.utils.timezone import formatar_data_brasil
 import logging
+import tempfile
+import os
+import io
+from datetime import datetime, timedelta
+import random
+from sqlalchemy import inspect, func, extract
+from app.producao.models import CadastroPalletizacao
+from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +31,6 @@ def valor_br_filter(value):
 def index():
     """Dashboard do módulo estoque"""
     try:
-        from sqlalchemy import inspect, extract, func
-        from datetime import datetime
         inspector = inspect(db.engine)
         
         # ✅ SEGURO: Verifica se tabela existe antes de fazer query
@@ -116,7 +118,6 @@ def listar_movimentacoes():
     per_page = 200  # 200 itens por página conforme solicitado
     
     try:
-        from sqlalchemy import inspect
         inspector = inspect(db.engine)
         
         if inspector.has_table('movimentacao_estoque'):
@@ -157,7 +158,6 @@ def listar_movimentacoes():
 def api_estatisticas():
     """API para estatísticas do módulo estoque"""
     try:
-        from sqlalchemy import inspect, func
         inspector = inspect(db.engine)
         
         # Estatísticas básicas
@@ -184,8 +184,7 @@ def importar_movimentacoes():
 def processar_importacao_movimentacoes():
     """Processar importação de movimentações de estoque"""
     try:
-        import tempfile
-        import os
+        
         
         if 'arquivo' not in request.files:
             flash('Nenhum arquivo selecionado!', 'error')
@@ -234,7 +233,7 @@ def processar_importacao_movimentacoes():
             return redirect(url_for('estoque.importar_movimentacoes'))
         
         # ✅ VALIDAR TIPOS DE MOVIMENTAÇÃO PERMITIDOS
-        tipos_permitidos = ['AVARIA', 'EST INICIAL', 'DEVOLUÇÃO', 'PRODUÇÃO', 'RETRABALHO', 'FATURAMENTO']
+        tipos_permitidos = ['AVARIA', 'EST INICIAL', 'DEVOLUÇÃO', 'PRODUÇÃO', 'RETRABALHO', 'FATURAMENTO', 'AJUSTE']
         if 'tipo_movimentacao' in df.columns:
             tipos_invalidos = df[df['tipo_movimentacao'].notna() & ~df['tipo_movimentacao'].isin(tipos_permitidos)]['tipo_movimentacao'].unique()
             if len(tipos_invalidos) > 0:
@@ -261,10 +260,11 @@ def processar_importacao_movimentacoes():
                         try:
                             # Formato brasileiro DD/MM/YYYY
                             data_movimentacao = pd.to_datetime(data_movimentacao, format='%d/%m/%Y').date()
-                        except:
+                        except Exception as e:
                             try:
                                 data_movimentacao = pd.to_datetime(data_movimentacao).date()
-                            except:
+                            except Exception as e:
+                                logger.error(f"Erro ao converter data_movimentacao: {e}")
                                 data_movimentacao = None
                     elif hasattr(data_movimentacao, 'date'):
                         data_movimentacao = data_movimentacao.date()
@@ -281,7 +281,6 @@ def processar_importacao_movimentacoes():
                 local_movimentacao = str(row.get('local_movimentacao', '')).strip()
                 
                 # 🔗 VERIFICAR/CRIAR PRODUTO NO CADASTRO DE PALLETIZAÇÃO
-                from app.producao.models import CadastroPalletizacao
                 produto_palletizacao = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
                 
                 if not produto_palletizacao:
@@ -352,7 +351,6 @@ def buscar_produto_api(codigo):
     """API para buscar produtos por código ou nome (dropdown com sugestões)"""
     try:
         # Buscar produtos na tabela cadastro_palletizacao (CÓDIGO ou NOME)
-        from app.producao.models import CadastroPalletizacao
         
         produtos = CadastroPalletizacao.query.filter(
             db.or_(
@@ -448,7 +446,6 @@ def processar_nova_movimentacao():
             return jsonify({'success': False, 'message': 'Quantidade deve ser um número válido'})
         
         # Verificar se produto existe
-        from app.producao.models import CadastroPalletizacao
         produto = CadastroPalletizacao.query.filter_by(
             cod_produto=cod_produto,
             ativo=True
@@ -459,7 +456,6 @@ def processar_nova_movimentacao():
         
         # Converter data
         try:
-            from datetime import datetime
             data_movimentacao_dt = datetime.strptime(data_movimentacao, '%Y-%m-%d').date()
         except ValueError:
             return jsonify({'success': False, 'message': 'Data inválida'})
@@ -504,7 +500,6 @@ def editar_movimentacao(id):
     movimentacao = MovimentacaoEstoque.query.get_or_404(id)
     
     # Por segurança, só permitir edição de movimentações recentes (últimos 30 dias)
-    from datetime import datetime, timedelta
     limite_edicao = datetime.now().date() - timedelta(days=30)
     
     if movimentacao.data_movimentacao < limite_edicao:
@@ -537,7 +532,6 @@ def processar_edicao_movimentacao(id):
         movimentacao = MovimentacaoEstoque.query.get_or_404(id)
         
         # Verificar limite de edição
-        from datetime import datetime, timedelta
         limite_edicao = datetime.now().date() - timedelta(days=30)
         
         if movimentacao.data_movimentacao < limite_edicao:
@@ -612,7 +606,6 @@ def processar_edicao_movimentacao(id):
 @login_required
 def listar_unificacao_codigos():
     """Lista unificações de códigos"""
-    from sqlalchemy import inspect
     
     # Definir variáveis no escopo da função para evitar UnboundLocalError
     codigo_busca = request.args.get('codigo_busca', '')
@@ -770,10 +763,6 @@ def importar_unificacao_codigos():
 def processar_importacao_unificacao():
     """Processar importação de unificações de códigos"""
     try:
-        import pandas as pd
-        import tempfile
-        import os
-        from werkzeug.utils import secure_filename
         
         if 'arquivo' not in request.files:
             flash('Nenhum arquivo selecionado!', 'error')
@@ -796,7 +785,6 @@ def processar_importacao_unificacao():
         file_content = arquivo.read()  # Ler todo o conteúdo uma vez
         
         # 📁 Para processamento, criar arquivo temporário dos bytes
-        import tempfile
         with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as temp_file:
             temp_file.write(file_content)  # Usar os bytes já lidos
             temp_filepath = temp_file.name
@@ -906,9 +894,6 @@ def processar_importacao_unificacao():
 def baixar_modelo_unificacao():
     """Baixar modelo Excel para importação de unificações"""
     try:
-        import pandas as pd
-        from flask import make_response
-        from io import BytesIO
         
         # Dados exemplo conforme arquivo CSV 7
         dados_exemplo = {
@@ -960,11 +945,6 @@ def baixar_modelo_unificacao():
 def exportar_dados_unificacao():
     """Exportar dados existentes de unificações"""
     try:
-        import pandas as pd
-        from flask import make_response
-        from io import BytesIO
-        from datetime import datetime
-        from sqlalchemy import inspect
         
         # 🔧 CORREÇÃO: Definir inspector na função
         inspector = inspect(db.engine)
@@ -1047,7 +1027,8 @@ def saldo_estoque():
             limite = int(limite_param)
             if limite not in [50, 100, 200]:
                 limite = 50
-        except:
+        except Exception as e:
+            logger.error(f"Erro ao validar limite: {e}")
             limite = 50
         
         # Obter todos os produtos com movimentação de estoque
@@ -1065,7 +1046,6 @@ def saldo_estoque():
         # Se houver muitos produtos, fazer amostragem para estatísticas
         if total_produtos > 200:
             # Amostrar 200 produtos para estatísticas rápidas
-            import random
             produtos_amostra = random.sample(produtos, min(200, total_produtos))
         else:
             produtos_amostra = produtos
@@ -1278,18 +1258,16 @@ def filtrar_saldo_estoque():
 def baixar_modelo_movimentacoes():
     """Download do modelo Excel para importação de movimentações"""
     try:
-        import io
-        import pandas as pd
-        from datetime import datetime
         
         # Criar modelo Excel
         modelo_data = {
             'data_movimentacao': ['2025-07-16'],
             'cod_produto': ['EXEMPLO001'],
-            'descricao_produto': ['Produto de exemplo'],
+            'nome_produto': ['Produto de exemplo'],
             'tipo_movimentacao': ['ENTRADA'],  # ENTRADA ou SAIDA
             'quantidade': [100],
-            'observacoes': ['Observação da movimentação']
+            'observacoes': ['Observação da movimentação'],
+            'local_movimentacao': ['Linha de Produção']
         }
         
         df = pd.DataFrame(modelo_data)
@@ -1328,11 +1306,7 @@ def baixar_modelo_movimentacoes():
 @login_required
 def exportar_dados_movimentacoes():
     """Exporta dados de movimentações para Excel"""
-    try:
-        import io
-        import pandas as pd
-        from datetime import datetime
-        
+    try:        
         # Buscar movimentações
         movimentacoes = MovimentacaoEstoque.query.order_by(MovimentacaoEstoque.data_movimentacao.desc()).all()
         

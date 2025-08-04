@@ -310,11 +310,12 @@ class SaldoEstoque:
             total_producao = 0
             for codigo in codigos_relacionados:
                 from app.producao.models import ProgramacaoProducao
+                from sqlalchemy import cast, Date
                 
                 producoes = ProgramacaoProducao.query.filter(
                     ProgramacaoProducao.cod_produto == str(codigo),
-                    ProgramacaoProducao.data_programacao >= data_inicio,
-                    ProgramacaoProducao.data_programacao <= data_fim
+                    cast(ProgramacaoProducao.data_programacao, Date) >= data_inicio,
+                    cast(ProgramacaoProducao.data_programacao, Date) <= data_fim
                 ).all()
                 
                 total_producao += sum(float(p.qtd_programada) for p in producoes)
@@ -426,10 +427,25 @@ class SaldoEstoque:
                     if projecoes:
                         projecao = []
                         for proj in projecoes:
+                            # Tratamento seguro para data_projecao
+                            try:
+                                if hasattr(proj.data_projecao, 'strftime'):
+                                    data_formatada = proj.data_projecao.strftime('%d/%m')
+                                else:
+                                    # Se for string ou outro tipo, converter
+                                    from datetime import datetime
+                                    if isinstance(proj.data_projecao, str):
+                                        data_temp = datetime.strptime(proj.data_projecao, '%Y-%m-%d').date()
+                                    else:
+                                        data_temp = proj.data_projecao
+                                    data_formatada = data_temp.strftime('%d/%m') if hasattr(data_temp, 'strftime') else str(data_temp)
+                            except Exception:
+                                data_formatada = str(proj.data_projecao)
+                            
                             projecao.append({
                                 'dia': proj.dia_offset,
                                 'data': proj.data_projecao,
-                                'data_formatada': proj.data_projecao.strftime('%d/%m'),
+                                'data_formatada': data_formatada,
                                 'estoque_inicial': float(proj.estoque_inicial),
                                 'saida_prevista': float(proj.saida_prevista),
                                 'producao_programada': float(proj.producao_programada),
@@ -502,11 +518,13 @@ class SaldoEstoque:
                     from app.pedidos.models import Pedido
                     
                     # Buscar separações linkadas com pedidos
+                    # Usar cast para garantir compatibilidade de tipos de data
+                    from sqlalchemy import cast, Date
                     separacoes = Separacao.query.join(
                         Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
                     ).filter(
                         Separacao.cod_produto == str(codigo),
-                        Pedido.expedicao == data_expedicao,  # Data vem do Pedido
+                        cast(Pedido.expedicao, Date) == data_expedicao,  # Cast para Date
                         Pedido.status.in_(['ABERTO', 'COTADO'])  # Status vem do Pedido
                     ).all()
                     
@@ -520,9 +538,10 @@ class SaldoEstoque:
                 # 📦 2. PRÉ-SEPARAÇÕES planejadas
                 try:
                     from app.carteira.models import PreSeparacaoItem
+                    from sqlalchemy import cast, Date
                     pre_separacoes = PreSeparacaoItem.query.filter(
                         PreSeparacaoItem.cod_produto == str(codigo),
-                        PreSeparacaoItem.data_expedicao_editada == data_expedicao,
+                        cast(PreSeparacaoItem.data_expedicao_editada, Date) == data_expedicao,
                         PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
                     ).all()
                     
