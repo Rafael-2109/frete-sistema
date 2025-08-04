@@ -21,7 +21,6 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, date
 
 from app.odoo.utils.connection import get_odoo_connection
-from app.odoo.utils.safe_connection import get_safe_odoo_connection
 from app.odoo.utils.carteira_mapper import CarteiraMapper
 from sqlalchemy import or_
 
@@ -31,8 +30,8 @@ class CarteiraService:
     """Serviço para gerenciar carteira de pedidos do Odoo usando mapeamento correto"""
     
     def __init__(self):
-        # Usar conexão segura que trata erros de campos automaticamente
-        self.connection = get_safe_odoo_connection()
+        # Usar conexão direta otimizada (safe_connection removida por causar lentidão)
+        self.connection = get_odoo_connection()
         self.mapper = CarteiraMapper()  # Usar novo CarteiraMapper
     
     @staticmethod

@@ -47,7 +47,7 @@ def dashboard_inconsistencias():
             ).first()
             
             # Criar objeto enriquecido mantendo a estrutura original
-            inc.cliente = nf_info.cliente if nf_info else 'Cliente não encontrado'
+            inc.nome_cliente = nf_info.nome_cliente if nf_info else 'Cliente não encontrado'
             inconsistencias_detalhadas.append(inc)
         
         # Contar por tipo
@@ -77,7 +77,7 @@ def dashboard_inconsistencias():
                 'embarque_id': item.embarque_id,
                 'separacao_lote_id': item.separacao_lote_id,
                 'num_pedido': item.pedido,
-                'cliente': item.cliente,
+                'nome_cliente': item.cliente,  # Já está correto como nome_cliente
                 'erro_validacao': item.erro_validacao,
                 'nf_sugerida': nf_sugerida
             })

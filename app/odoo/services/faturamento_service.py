@@ -14,7 +14,6 @@ from typing import Dict, List, Any, Optional
 
 from app.faturamento.models import RelatorioFaturamentoImportado, FaturamentoProduto
 from app.odoo.utils.connection import get_odoo_connection
-from app.odoo.utils.safe_connection import get_safe_odoo_connection
 from app.odoo.utils.faturamento_mapper import FaturamentoMapper
 from app import db
 
@@ -29,8 +28,8 @@ class FaturamentoService:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.mapper = FaturamentoMapper()
-        # Usar conexão segura que trata erros de campos automaticamente
-        self.connection = get_safe_odoo_connection()
+        # Usar conexão direta otimizada (safe_connection removida por causar lentidão)
+        self.connection = get_odoo_connection()
 
     
     def _processar_dados_faturamento_com_multiplas_queries(self, dados_odoo_brutos: List[Dict]) -> List[Dict]:

@@ -722,12 +722,27 @@ def create_app(config_name=None):
         except Exception as e:
             app.logger.warning(f"⚠️ MCP integration not available: {e}")
 
-    # Configurar triggers do cache de estoque (se as tabelas existirem)
+    # Configurar triggers do cache de estoque (versão corrigida)
     try:
-        from app.estoque.cache_triggers import configurar_triggers_cache
+        # Usar versão corrigida dos triggers que não causa problemas de transação
+        from app.estoque.cache_triggers_fixed import configurar_triggers_cache, desabilitar_triggers
+        
+        # Desabilitar triggers temporariamente durante operações críticas
+        # Eles podem ser reabilitados manualmente quando necessário
         configurar_triggers_cache()
-        app.logger.info("✅ Triggers de cache de estoque configurados")
+        desabilitar_triggers()  # Desabilita por padrão para evitar erros
+        
+        app.logger.info("✅ Triggers de cache configurados (desabilitados por padrão)")
+        app.logger.info("ℹ️  Para habilitar triggers: from app.estoque.cache_triggers_fixed import habilitar_triggers")
+    except ImportError:
+        # Se não existe a versão corrigida, tenta a original mas desabilita
+        try:
+            from app.estoque.cache_triggers import configurar_triggers_cache
+            # Não chamar configurar_triggers_cache() para evitar problemas
+            app.logger.warning("⚠️ Triggers de cache desabilitados (versão antiga detectada)")
+        except Exception as e:
+            app.logger.warning(f"⚠️ Triggers de cache não disponíveis: {e}")
     except Exception as e:
-        app.logger.warning(f"⚠️ Triggers de cache não configurados: {e}")
+        app.logger.warning(f"⚠️ Erro ao configurar triggers de cache: {e}")
 
     return app

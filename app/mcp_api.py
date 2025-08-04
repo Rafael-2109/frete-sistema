@@ -512,4 +512,3 @@ def initialize():
     """Initialize MCP system on first request."""
     init_mcp_system(current_app)
     logger.info("MCP API initialized")
-

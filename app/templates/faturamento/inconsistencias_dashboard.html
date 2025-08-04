@@ -192,7 +192,7 @@
                                             {% endif %}
                                         </td>
                                         <td>{{ inc.num_pedido or '-' }}</td>
-                                        <td>{{ inc.cliente[:30] }}...</td>
+                                        <td>{{ inc.nome_cliente[:30] if inc.nome_cliente else '-' }}{{ '...' if inc.nome_cliente and inc.nome_cliente|length > 30 else '' }}</td>
                                         <td>{{ inc.cod_produto }}</td>
                                         <td>{{ "{:,.0f}".format(inc.qtd_faturada or 0) }}</td>
                                         <td>
@@ -245,7 +245,7 @@
                                             <span class="badge bg-secondary">{{ item.separacao_lote_id }}</span>
                                         </td>
                                         <td>{{ item.num_pedido }}</td>
-                                        <td>{{ item.cliente[:30] }}...</td>
+                                        <td>{{ item.nome_cliente[:30] if item.nome_cliente else '-' }}{{ '...' if item.nome_cliente and item.nome_cliente|length > 30 else '' }}</td>
                                         <td>
                                             {% if item.nf_sugerida %}
                                                 <span class="badge bg-success">{{ item.nf_sugerida }}</span>
