@@ -420,9 +420,18 @@ def _atualizar_projecao_alternativa(session, cod_produto):
                 PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
             ).all()
             for ps in pre_seps:
-                if ps.data_expedicao_editada and ps.data_expedicao_editada == data_calculo:
-                    if ps.qtd_selecionada_usuario:
-                        saida_dia += float(ps.qtd_selecionada_usuario)
+                try:
+                    if ps.data_expedicao_editada:
+                        # Comparação segura de data
+                        if hasattr(ps.data_expedicao_editada, 'date'):
+                            data_exp = ps.data_expedicao_editada.date()
+                        else:
+                            data_exp = ps.data_expedicao_editada
+                        if data_exp == data_calculo:
+                            if ps.qtd_selecionada_usuario:
+                                saida_dia += float(ps.qtd_selecionada_usuario)
+                except Exception:
+                    pass  # Ignora erros de comparação de data
             
             # Separações - query simplificada
             seps = session.query(Separacao).join(
@@ -433,9 +442,18 @@ def _atualizar_projecao_alternativa(session, cod_produto):
             ).all()
             for s in seps:
                 pedido = session.query(Pedido).filter_by(separacao_lote_id=s.separacao_lote_id).first()
-                if pedido and pedido.expedicao and pedido.expedicao == data_calculo:
-                    if s.qtd_saldo:
-                        saida_dia += float(s.qtd_saldo)
+                if pedido and pedido.expedicao:
+                    # Comparação segura de data
+                    try:
+                        if hasattr(pedido.expedicao, 'date'):
+                            data_exp = pedido.expedicao.date()
+                        else:
+                            data_exp = pedido.expedicao
+                        if data_exp == data_calculo:
+                            if s.qtd_saldo:
+                                saida_dia += float(s.qtd_saldo)
+                    except Exception:
+                        pass  # Ignora erros de comparação de data
             
             # Calcular produção do dia - query simplificada
             producao_dia = 0
@@ -443,9 +461,18 @@ def _atualizar_projecao_alternativa(session, cod_produto):
                 ProgramacaoProducao.cod_produto == str(cod_produto)
             ).all()
             for p in prods:
-                if p.data_programacao and p.data_programacao == data_calculo:
-                    if p.qtd_programada:
-                        producao_dia += float(p.qtd_programada)
+                try:
+                    if p.data_programacao:
+                        # Comparação segura de data
+                        if hasattr(p.data_programacao, 'date'):
+                            data_prog = p.data_programacao.date()
+                        else:
+                            data_prog = p.data_programacao
+                        if data_prog == data_calculo:
+                            if p.qtd_programada:
+                                producao_dia += float(p.qtd_programada)
+                except Exception:
+                    pass  # Ignora erros de comparação de data
             
             # Calcular estoques
             if dia == 0:

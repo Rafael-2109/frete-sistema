@@ -39,7 +39,7 @@ class ProcessadorFaturamentoTagPlus:
             try:
                 embarque_item_match = self._encontrar_separacao_por_score(faturamento_produto)
                 separacao_lote_id = embarque_item_match.separacao_lote_id if embarque_item_match else None
-                num_pedido = embarque_item_match.num_pedido if embarque_item_match else None
+                num_pedido = embarque_item_match.pedido if embarque_item_match else None
             except Exception as e:
                 logger.error(f"Erro ao buscar separação: {e}")
                 erros_etapa.append(f"Busca separação: {str(e)}")
@@ -115,7 +115,7 @@ class ProcessadorFaturamentoTagPlus:
             ).join(
                 CarteiraCopia,
                 and_(
-                    EmbarqueItem.num_pedido == CarteiraCopia.num_pedido,
+                    EmbarqueItem.pedido == CarteiraCopia.num_pedido,
                     EmbarqueItem.cod_produto == CarteiraCopia.cod_produto
                 )
             ).filter(
