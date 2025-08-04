@@ -107,7 +107,7 @@ class AgrupamentoService:
         """Enriquece pedido com informações de separação"""
         try:
             # Calcular informações de separação
-            qtd_separacoes, valor_separacoes = self._calcular_separacoes(pedido.num_pedido)
+            qtd_separacoes, valor_separacoes, expedicao_separacao_completa = self._calcular_separacoes(pedido.num_pedido)
             
             # Calcular valor do saldo restante
             valor_pedido = float(pedido.valor_total) if pedido.valor_total else 0
@@ -115,6 +115,9 @@ class AgrupamentoService:
             
             # Determinar se está totalmente em separação
             totalmente_separado = valor_saldo_restante <= 0.01  # Margem de 1 centavo
+            
+            # Para separações tipo_envio 'completo', usar a expedição do Pedido ao invés da expedição da CarteiraPrincipal
+            expedicao_final = expedicao_separacao_completa if expedicao_separacao_completa else pedido.expedicao
             
             return {
                 'num_pedido': pedido.num_pedido,
@@ -125,14 +128,15 @@ class AgrupamentoService:
                 'raz_social_red': pedido.raz_social_red,
                 'rota': pedido.rota,
                 'sub_rota': pedido.sub_rota,
-                'expedicao': pedido.expedicao,
+                'expedicao': expedicao_final,  # Usa expedição da separação completa se existir
+                'expedicao_original': pedido.expedicao,  # Mantém a original para referência
                 'data_entrega_pedido': pedido.data_entrega_pedido,
                 'observ_ped_1': pedido.observ_ped_1,  
                 'status_pedido': pedido.status_pedido,
                 'pedido_cliente': pedido.pedido_cliente,
                 'cod_uf': pedido.cod_uf,
                 'nome_cidade': pedido.nome_cidade,
-                'incoterm': pedido.incoterm,
+                'incoterm': pedido.incoterm,  # Mantém apenas a sigla (CIF, FOB, etc)
                 'protocolo': pedido.protocolo,
                 'agendamento': pedido.agendamento,
                 'agendamento_confirmado': pedido.agendamento_confirmado,
@@ -144,7 +148,8 @@ class AgrupamentoService:
                 'valor_separacoes': float(valor_separacoes),
                 'valor_saldo_restante': valor_saldo_restante,
                 'qtd_separacoes': qtd_separacoes,
-                'totalmente_separado': totalmente_separado
+                'totalmente_separado': totalmente_separado,
+                'tem_separacao_completa': expedicao_separacao_completa is not None
             }
             
         except Exception as e:
@@ -152,7 +157,7 @@ class AgrupamentoService:
             return self._criar_pedido_basico(pedido)
     
     def _calcular_separacoes(self, num_pedido):
-        """Calcula quantidade e valor das separações ativas"""
+        """Calcula quantidade e valor das separações ativas e retorna expedição se tipo_envio for 'completo'"""
         try:
             # Contar separacao_lote_id únicos (quantidade de envios para separação)
             qtd_separacoes = db.session.query(
@@ -164,26 +169,32 @@ class AgrupamentoService:
                 Pedido.status.in_(['ABERTO', 'COTADO'])
             ).scalar() or 0
             
-            # Buscar separações para calcular valor total
-            separacoes_ativas = db.session.query(Separacao).join(
+            # Buscar separações para calcular valor total e verificar tipo_envio
+            separacoes_ativas = db.session.query(Separacao, Pedido).join(
                 Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
             ).filter(
                 Separacao.num_pedido == num_pedido,
                 Pedido.status.in_(['ABERTO', 'COTADO'])
             ).all()
             
-            # Calcular valor total das separações
+            # Calcular valor total das separações e buscar expedição de separação completa
             valor_separacoes = 0
-            for sep in separacoes_ativas:
+            expedicao_separacao_completa = None
+            
+            for sep, ped in separacoes_ativas:
                 if sep.qtd_saldo and sep.valor_saldo:
                     valor_unit = sep.valor_saldo / sep.qtd_saldo if sep.qtd_saldo > 0 else 0
                     valor_separacoes += sep.qtd_saldo * valor_unit
+                
+                # Se encontrar uma separação com tipo_envio 'completo', pegar a expedição do Pedido
+                if sep.tipo_envio == 'completo' and ped.expedicao:
+                    expedicao_separacao_completa = ped.expedicao
             
-            return qtd_separacoes, valor_separacoes
+            return qtd_separacoes, valor_separacoes, expedicao_separacao_completa
             
         except Exception as e:
             logger.warning(f"Erro ao calcular separações para {num_pedido}: {e}")
-            return 0, 0
+            return 0, 0, None
     
     def _criar_pedido_basico(self, pedido):
         """Cria estrutura básica de pedido em caso de erro"""
@@ -197,6 +208,7 @@ class AgrupamentoService:
             'rota': pedido.rota,
             'sub_rota': pedido.sub_rota,
             'expedicao': pedido.expedicao,
+            'expedicao_original': pedido.expedicao,
             'data_entrega_pedido': pedido.data_entrega_pedido,
             'observ_ped_1': pedido.observ_ped_1,
             'status_pedido': pedido.status_pedido,
@@ -214,5 +226,6 @@ class AgrupamentoService:
             'valor_separacoes': 0,
             'valor_saldo_restante': float(pedido.valor_total) if pedido.valor_total else 0,
             'qtd_separacoes': 0,
-            'totalmente_separado': False
+            'totalmente_separado': False,
+            'tem_separacao_completa': False
         }
