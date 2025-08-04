@@ -491,15 +491,43 @@ def reverter_separacao(lote_id):
             PreSeparacaoItem.status == 'ENVIADO_SEPARACAO'
         ).all()
         
+        # Se não existirem pré-separações, criar novas a partir das separações
         if not pre_separacoes:
-            return jsonify({
-                'success': False,
-                'error': 'Pré-separações originais não encontradas'
-            }), 404
+            from datetime import datetime
+            from flask_login import current_user
             
-        # Reverter status das pré-separações
-        for pre_sep in pre_separacoes:
-            pre_sep.status = 'CRIADO'
+            logger.info(f"Pré-separações não encontradas para lote {lote_id}, criando novas...")
+            pre_separacoes = []
+            
+            for sep in separacoes:
+                # Criar nova pré-separação baseada na separação
+                nova_pre_sep = PreSeparacaoItem(
+                    num_pedido=sep.num_pedido,
+                    cod_produto=sep.cod_produto,
+                    nome_produto=sep.nome_produto,
+                    cnpj_cpf=sep.cnpj_cpf,
+                    cliente=sep.cliente,
+                    cidade=sep.cidade,
+                    estado=sep.estado,
+                    vendedor=sep.vendedor,
+                    qtd_saldo_produto_pedido=sep.qtd_saldo,
+                    qtd_selecionada_usuario=sep.qtd_saldo,
+                    data_expedicao_editada=pedido.expedicao,
+                    data_agendamento_editada=pedido.agendamento,
+                    protocolo_editado=pedido.protocolo,
+                    tipo_envio=sep.tipo_envio,
+                    status='CRIADO',
+                    created_by=current_user.username if current_user.is_authenticated else 'Sistema',
+                    created_at=datetime.now()
+                )
+                db.session.add(nova_pre_sep)
+                pre_separacoes.append(nova_pre_sep)
+                
+            logger.info(f"Criadas {len(pre_separacoes)} novas pré-separações")
+        else:
+            # Reverter status das pré-separações existentes
+            for pre_sep in pre_separacoes:
+                pre_sep.status = 'CRIADO'
             
         # Remover separações
         for sep in separacoes:

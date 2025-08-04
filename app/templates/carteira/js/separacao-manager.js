@@ -60,43 +60,117 @@ class SeparacaoManager {
      * 🎯 SOLICITAR DATA DE EXPEDIÇÃO E CRIAR SEPARAÇÃO
      */
     async solicitarDataExpedicaoParaSeparacao(numPedido) {
-        const dataExpedicao = prompt('Digite a data de expedição (YYYY-MM-DD):');
+        // Criar modal dinâmico com input de data
+        const modalHtml = `
+            <div class="modal fade" id="modalDataExpedicao" tabindex="-1">
+                <div class="modal-dialog modal-sm">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title">
+                                <i class="fas fa-calendar me-2"></i>
+                                Data de Expedição
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="inputDataExpedicao" class="form-label">
+                                    Selecione a data de expedição:
+                                </label>
+                                <input type="date" class="form-control" id="inputDataExpedicao" 
+                                       value="${new Date().toISOString().split('T')[0]}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="inputAgendamento" class="form-label">
+                                    Data de Agendamento (opcional):
+                                </label>
+                                <input type="date" class="form-control" id="inputAgendamento">
+                            </div>
+                            <div class="mb-3">
+                                <label for="inputProtocolo" class="form-label">
+                                    Protocolo (opcional):
+                                </label>
+                                <input type="text" class="form-control" id="inputProtocolo" 
+                                       placeholder="Ex: PROT123">
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                Cancelar
+                            </button>
+                            <button type="button" class="btn btn-primary" id="btnConfirmarExpedicao">
+                                <i class="fas fa-check me-1"></i>
+                                Confirmar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
         
-        if (!dataExpedicao) {
-            return; // Usuário cancelou
+        // Remover modal se já existir
+        const modalExistente = document.getElementById('modalDataExpedicao');
+        if (modalExistente) {
+            modalExistente.remove();
         }
         
-        // Validar formato da data
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(dataExpedicao)) {
-            alert('Formato de data inválido. Use YYYY-MM-DD');
-            return;
-        }
+        // Adicionar modal ao body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
         
-        try {
-            const response = await fetch(`/carteira/api/pedido/${numPedido}/gerar-separacao-completa`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    expedicao: dataExpedicao
-                })
-            });
+        // Criar instância do modal Bootstrap
+        const modalElement = document.getElementById('modalDataExpedicao');
+        const modal = new bootstrap.Modal(modalElement);
+        
+        // Configurar handler do botão confirmar
+        document.getElementById('btnConfirmarExpedicao').onclick = async () => {
+            const dataExpedicao = document.getElementById('inputDataExpedicao').value;
+            const agendamento = document.getElementById('inputAgendamento').value;
+            const protocolo = document.getElementById('inputProtocolo').value;
             
-            const data = await response.json();
-            
-            if (data.success) {
-                alert(`Separação criada com sucesso! ${data.separacoes_criadas} produtos separados.`);
-                // Recarregar página para atualizar contadores
-                location.reload();
-            } else {
-                alert(`Erro ao criar separação: ${data.error}`);
+            if (!dataExpedicao) {
+                alert('Por favor, selecione uma data de expedição');
+                return;
             }
             
-        } catch (error) {
-            console.error('Erro ao criar separação:', error);
-            alert('Erro interno ao criar separação');
-        }
+            try {
+                // Fechar modal
+                modal.hide();
+                
+                const response = await fetch(`/carteira/api/pedido/${numPedido}/gerar-separacao-completa`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        expedicao: dataExpedicao,
+                        agendamento: agendamento || null,
+                        protocolo: protocolo || null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`Separação criada com sucesso! ${data.separacoes_criadas} produtos separados.`);
+                    // Recarregar página para atualizar contadores
+                    location.reload();
+                } else {
+                    alert(`Erro ao criar separação: ${data.error}`);
+                }
+                
+            } catch (error) {
+                console.error('Erro ao criar separação:', error);
+                alert('Erro interno ao criar separação');
+            }
+        };
+        
+        // Limpar modal ao fechar
+        modalElement.addEventListener('hidden.bs.modal', function () {
+            modalElement.remove();
+        });
+        
+        // Mostrar modal
+        modal.show();
     }
 
     /**

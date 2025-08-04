@@ -543,7 +543,7 @@ def create_app(config_name=None):
         except Exception as e:
             app.logger.error(f"Erro ao registrar helpers de permissão: {e}")
             return {
-                'user_can_access': can_access,
+                # 'user_can_access': can_access,  # Temporariamente desabilitado
                 'user_is_admin': lambda: False,
                 'user_level': lambda: 0
             }
@@ -560,7 +560,6 @@ def create_app(config_name=None):
     init_mcp_logistica(app)
     
     # 🔗 Integração TagPlus
-    from app.integracoes.tagplus.routes import tagplus_bp
     from app.integracoes.tagplus.webhook_routes import tagplus_webhook
     app.register_blueprint(tagplus_bp)  # Sem prefixo pois as rotas já definem seus paths
     app.register_blueprint(tagplus_webhook)  # Sem prefixo para manter URLs simples
@@ -722,27 +721,24 @@ def create_app(config_name=None):
         except Exception as e:
             app.logger.warning(f"⚠️ MCP integration not available: {e}")
 
-    # Configurar triggers do cache de estoque (versão corrigida)
+    # Configurar triggers do cache de estoque (versão otimizada)
     try:
-        # Usar versão corrigida dos triggers que não causa problemas de transação
-        from app.estoque.cache_triggers_fixed import configurar_triggers_cache, desabilitar_triggers
+        from app.estoque.cache_triggers_safe import configurar_triggers_cache, garantir_cache_atualizado
         
-        # Desabilitar triggers temporariamente durante operações críticas
-        # Eles podem ser reabilitados manualmente quando necessário
+        # Configurar triggers que atualizam IMEDIATAMENTE após commit
         configurar_triggers_cache()
-        desabilitar_triggers()  # Desabilita por padrão para evitar erros
         
-        app.logger.info("✅ Triggers de cache configurados (desabilitados por padrão)")
-        app.logger.info("ℹ️  Para habilitar triggers: from app.estoque.cache_triggers_fixed import habilitar_triggers")
-    except ImportError:
-        # Se não existe a versão corrigida, tenta a original mas desabilita
-        try:
-            from app.estoque.cache_triggers import configurar_triggers_cache
-            # Não chamar configurar_triggers_cache() para evitar problemas
-            app.logger.warning("⚠️ Triggers de cache desabilitados (versão antiga detectada)")
-        except Exception as e:
-            app.logger.warning(f"⚠️ Triggers de cache não disponíveis: {e}")
+        app.logger.info("✅ Sistema de Cache Dinâmico configurado com sucesso")
+        app.logger.info("📊 Atualização automática e imediata após cada operação")
+        app.logger.info("🎯 Monitorando: Movimentações, Carteira, Pré-Separações, Separações, Produção")
+        
+        # Registrar comandos CLI para gerenciar cache
+        from app.estoque import cli_cache
+        cli_cache.init_app(app)
+        app.logger.info("🛠️ Comandos CLI de cache registrados")
+        app.logger.info("💡 Use garantir_cache_atualizado(cod_produto) para garantir 100% de precisão")
+        
     except Exception as e:
-        app.logger.warning(f"⚠️ Erro ao configurar triggers de cache: {e}")
+        app.logger.warning(f"⚠️ Sistema de cache não configurado: {e}")
 
     return app

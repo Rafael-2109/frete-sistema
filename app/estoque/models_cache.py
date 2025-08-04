@@ -4,8 +4,8 @@ Objetivo: Performance < 1 segundo para consultas
 """
 from app import db
 from app.utils.timezone import agora_brasil
-from sqlalchemy import event
 import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,11 @@ class SaldoEstoqueCache(db.Model):
     
     def __repr__(self):
         return f'<SaldoEstoqueCache {self.cod_produto} - Saldo: {self.saldo_atual}>'
+    
+    @property
+    def saldo_disponivel(self):
+        """Retorna o saldo disponível (descontando carteira, pré-separação e separação)"""
+        return float(self.saldo_atual or 0) - float(self.qtd_carteira or 0) - float(self.qtd_pre_separacao or 0) - float(self.qtd_separacao or 0)
     
     @classmethod
     def atualizar_saldo_incremental(cls, cod_produto, nome_produto, delta_quantidade):
@@ -184,7 +189,6 @@ class SaldoEstoqueCache(db.Model):
                 
                 total = len(produtos)
                 processados = 0
-                produtos_processados = set()  # Controle de duplicatas
                 produtos_unificados = {}  # Mapear códigos unificados
                 
                 # Primeiro, mapear todos os códigos unificados
@@ -450,25 +454,3 @@ class CacheUpdateLog(db.Model):
             logger.error(f"Erro ao registrar mudança: {str(e)}")
             return False
 
-
-# Event listeners para atualização automática do cache
-from app.estoque.models import MovimentacaoEstoque
-
-@event.listens_for(MovimentacaoEstoque, 'after_insert')
-def atualizar_cache_apos_insert(mapper, connection, target):
-    """Atualiza cache após inserir movimentação"""
-    if target.ativo:
-        # Registrar para processamento assíncrono
-        CacheUpdateLog.registrar_mudanca('movimentacao_estoque', 'INSERT', target.cod_produto)
-        # Ou atualizar imediatamente (mais rápido, mas bloqueia)
-        SaldoEstoqueCache.atualizar_saldo_incremental(
-            target.cod_produto, 
-            target.nome_produto, 
-            float(target.qtd_movimentacao)
-        )
-
-@event.listens_for(MovimentacaoEstoque, 'after_update')
-def atualizar_cache_apos_update(mapper, connection, target):
-    """Atualiza cache após alterar movimentação"""
-    if target.ativo:
-        CacheUpdateLog.registrar_mudanca('movimentacao_estoque', 'UPDATE', target.cod_produto)

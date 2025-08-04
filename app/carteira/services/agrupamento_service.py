@@ -106,6 +106,9 @@ class AgrupamentoService:
     def _enriquecer_pedido_com_separacoes(self, pedido):
         """Enriquece pedido com informações de separação"""
         try:
+            # Importar funções de busca de rotas
+            from app.carteira.utils.separacao_utils import buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade
+            
             # Calcular informações de separação
             qtd_separacoes, valor_separacoes, expedicao_separacao_completa = self._calcular_separacoes(pedido.num_pedido)
             
@@ -119,6 +122,10 @@ class AgrupamentoService:
             # Para separações tipo_envio 'completo', usar a expedição do Pedido ao invés da expedição da CarteiraPrincipal
             expedicao_final = expedicao_separacao_completa if expedicao_separacao_completa else pedido.expedicao
             
+            # Buscar rota e sub-rota das localidades
+            rota_calculada = buscar_rota_por_uf(pedido.cod_uf) if pedido.cod_uf else None
+            sub_rota_calculada = buscar_sub_rota_por_uf_cidade(pedido.cod_uf, pedido.nome_cidade) if pedido.cod_uf and pedido.nome_cidade else None
+            
             return {
                 'num_pedido': pedido.num_pedido,
                 'vendedor': pedido.vendedor,
@@ -126,8 +133,8 @@ class AgrupamentoService:
                 'data_pedido': pedido.data_pedido,
                 'cnpj_cpf': pedido.cnpj_cpf,
                 'raz_social_red': pedido.raz_social_red,
-                'rota': pedido.rota,
-                'sub_rota': pedido.sub_rota,
+                'rota': rota_calculada,
+                'sub_rota': sub_rota_calculada,
                 'expedicao': expedicao_final,  # Usa expedição da separação completa se existir
                 'expedicao_original': pedido.expedicao,  # Mantém a original para referência
                 'data_entrega_pedido': pedido.data_entrega_pedido,
@@ -159,6 +166,8 @@ class AgrupamentoService:
     def _calcular_separacoes(self, num_pedido):
         """Calcula quantidade e valor das separações ativas e retorna expedição se tipo_envio for 'completo'"""
         try:
+            from app.carteira.models import PreSeparacaoItem
+            
             # Contar separacao_lote_id únicos (quantidade de envios para separação)
             qtd_separacoes = db.session.query(
                 func.count(func.distinct(Separacao.separacao_lote_id))
@@ -187,8 +196,19 @@ class AgrupamentoService:
                     valor_separacoes += sep.qtd_saldo * valor_unit
                 
                 # Se encontrar uma separação com tipo_envio 'completo', pegar a expedição do Pedido
-                if sep.tipo_envio == 'completo' and ped.expedicao:
+                if sep.tipo_envio == 'total' and ped.expedicao:
                     expedicao_separacao_completa = ped.expedicao
+            
+            # Buscar pré-separações completas também
+            if not expedicao_separacao_completa:
+                pre_sep_completa = PreSeparacaoItem.query.filter(
+                    PreSeparacaoItem.num_pedido == num_pedido,
+                    PreSeparacaoItem.tipo_envio == 'total',
+                    PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
+                ).first()
+                
+                if pre_sep_completa and pre_sep_completa.data_expedicao_editada:
+                    expedicao_separacao_completa = pre_sep_completa.data_expedicao_editada
             
             return qtd_separacoes, valor_separacoes, expedicao_separacao_completa
             
@@ -198,6 +218,12 @@ class AgrupamentoService:
     
     def _criar_pedido_basico(self, pedido):
         """Cria estrutura básica de pedido em caso de erro"""
+        from app.carteira.utils.separacao_utils import buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade
+        
+        # Buscar rota e sub-rota das localidades
+        rota_calculada = buscar_rota_por_uf(pedido.cod_uf) if pedido.cod_uf else None
+        sub_rota_calculada = buscar_sub_rota_por_uf_cidade(pedido.cod_uf, pedido.nome_cidade) if pedido.cod_uf and pedido.nome_cidade else None
+        
         return {
             'num_pedido': pedido.num_pedido,
             'vendedor': pedido.vendedor,
@@ -205,8 +231,8 @@ class AgrupamentoService:
             'data_pedido': pedido.data_pedido,
             'cnpj_cpf': pedido.cnpj_cpf,
             'raz_social_red': pedido.raz_social_red,
-            'rota': pedido.rota,
-            'sub_rota': pedido.sub_rota,
+            'rota': rota_calculada,
+            'sub_rota': sub_rota_calculada,
             'expedicao': pedido.expedicao,
             'expedicao_original': pedido.expedicao,
             'data_entrega_pedido': pedido.data_entrega_pedido,

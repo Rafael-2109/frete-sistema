@@ -888,9 +888,9 @@ class PreSeparacaoItem(db.Model):
             # Adicionar configuração de envio parcial se necessário
             if tipo_envio == 'parcial' and config_parcial:
                 observacoes_parcial = f"ENVIO PARCIAL - Motivo: {config_parcial.get('motivo', 'N/A')} | " \
-                                     f"Justificativa: {config_parcial.get('justificativa', 'N/A')} | " \
-                                     f"Previsão Complemento: {config_parcial.get('previsao_complemento', 'N/A')} | " \
-                                     f"Responsável: {config_parcial.get('responsavel_aprovacao', 'N/A')}"
+                    f"Justificativa: {config_parcial.get('justificativa', 'N/A')} | " \
+                    f"Previsão Complemento: {config_parcial.get('previsao_complemento', 'N/A')} | " \
+                    f"Responsável: {config_parcial.get('responsavel_aprovacao', 'N/A')}"
                 
                 if pre_separacao.observacoes_usuario:
                     pre_separacao.observacoes_usuario += f"\n{observacoes_parcial}"

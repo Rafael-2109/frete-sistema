@@ -112,8 +112,9 @@ def buscar_rota_por_uf(cod_uf):
         return None
     try:
         rota = CadastroRota.query.filter_by(cod_uf=cod_uf, ativa=True).first()
-        return rota.nome if rota else None
-    except Exception:
+        return rota.rota if rota else None  # Corrigido: usar .rota em vez de .nome
+    except Exception as e:
+        logger.debug(f"Erro ao buscar rota para UF {cod_uf}: {e}")
         return None
 
 
@@ -134,8 +135,9 @@ def buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade):
             CadastroSubRota.ativa == True
         ).first()
         
-        return sub_rota.nome if sub_rota else None
-    except Exception:
+        return sub_rota.sub_rota if sub_rota else None  # Corrigido: usar .sub_rota em vez de .nome
+    except Exception as e:
+        logger.debug(f"Erro ao buscar sub-rota para {nome_cidade}/{cod_uf}: {e}")
         return None
 
 
