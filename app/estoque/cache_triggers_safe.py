@@ -10,7 +10,7 @@ GARANTIA: O cache SEMPRE reflete o estado real do banco.
 """
 
 import logging
-from sqlalchemy import event
+from sqlalchemy import event, func, cast, Date
 from sqlalchemy.orm import Session
 from app import db
 from app.estoque.models import MovimentacaoEstoque
@@ -186,11 +186,12 @@ def configurar_triggers_cache():
         erros = 0
         
         # IMPORTANTE: Usar uma nova sessão independente para não interferir
-        from sqlalchemy.orm import Session as NewSession
+        from sqlalchemy.orm import sessionmaker
         from app import db
         
-        # Criar nova sessão totalmente independente
-        new_session = NewSession(bind=db.engine)
+        # Criar sessão factory para garantir configuração correta
+        SessionLocal = sessionmaker(bind=db.engine, autoflush=False, autocommit=False)
+        new_session = SessionLocal()
         
         try:
             for cod_produto, update_info in produtos_filtrados.items():
@@ -279,7 +280,25 @@ def configurar_triggers_cache():
                             
                 except Exception as e:
                     erros += 1
-                    logger.error(f"❌ Erro ao atualizar cache de {cod_produto}: {e}")
+                    error_msg = str(e)
+                    
+                    # Tratamento específico para erro de tipo numérico do PostgreSQL
+                    if "Unknown PG numeric type: 1082" in error_msg or "numeric type: 1082" in error_msg:
+                        logger.warning(f"⚠️ Erro de tipo de data para {cod_produto}, tentando método alternativo...")
+                        try:
+                            # Tentar atualização sem usar func.date() para este produto
+                            _atualizar_projecao_alternativa(new_session, cod_produto)
+                            logger.info(f"✅ Atualização alternativa bem-sucedida para {cod_produto}")
+                            sucessos += 1
+                            erros -= 1  # Compensar o erro contabilizado
+                        except Exception as alt_error:
+                            logger.error(f"❌ Método alternativo também falhou para {cod_produto}: {alt_error}")
+                    else:
+                        logger.error(f"❌ Erro ao atualizar cache de {cod_produto}: {e}")
+                        logger.debug(f"Detalhes do erro: {type(e).__name__} - {str(e)}")
+                        import traceback
+                        logger.debug(f"Stack trace: {traceback.format_exc()}")
+                    
                     new_session.rollback()
         finally:
             # Fechar a sessão independente
@@ -364,6 +383,108 @@ def _atualizar_carteira_na_sessao(session, cod_produto, codigos_relacionados):
     except Exception as e:
         logger.error(f"Erro ao atualizar quantidades de carteira: {e}")
 
+def _atualizar_projecao_alternativa(session, cod_produto):
+    """
+    Versão alternativa de atualização de projeção sem usar func.date()
+    Usada quando há problemas com tipos de data do PostgreSQL
+    """
+    try:
+        from datetime import timedelta
+        from app.producao.models import ProgramacaoProducao
+        from app.carteira.models import PreSeparacaoItem
+        from app.separacao.models import Separacao
+        from app.pedidos.models import Pedido
+        
+        # Obter saldo atual do cache
+        saldo_cache = session.query(SaldoEstoqueCache).filter_by(cod_produto=str(cod_produto)).first()
+        if not saldo_cache:
+            return False
+        
+        # Limpar projeção antiga
+        session.query(ProjecaoEstoqueCache).filter_by(cod_produto=str(cod_produto)).delete()
+        
+        data_hoje = agora_brasil().date()
+        estoque_atual = float(saldo_cache.saldo_atual)
+        estoque_final_anterior = estoque_atual
+        
+        # Calcular para cada dia (29 dias)
+        for dia in range(29):
+            data_calculo = data_hoje + timedelta(days=dia)
+            
+            # Calcular saídas do dia - usando comparação direta sem func.date()
+            saida_dia = 0
+            
+            # Pré-separações - query simplificada
+            pre_seps = session.query(PreSeparacaoItem).filter(
+                PreSeparacaoItem.cod_produto == str(cod_produto),
+                PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
+            ).all()
+            for ps in pre_seps:
+                if ps.data_expedicao_editada and ps.data_expedicao_editada == data_calculo:
+                    if ps.qtd_selecionada_usuario:
+                        saida_dia += float(ps.qtd_selecionada_usuario)
+            
+            # Separações - query simplificada
+            seps = session.query(Separacao).join(
+                Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+            ).filter(
+                Separacao.cod_produto == str(cod_produto),
+                Pedido.status.in_(['ABERTO', 'COTADO'])
+            ).all()
+            for s in seps:
+                pedido = session.query(Pedido).filter_by(separacao_lote_id=s.separacao_lote_id).first()
+                if pedido and pedido.expedicao and pedido.expedicao == data_calculo:
+                    if s.qtd_saldo:
+                        saida_dia += float(s.qtd_saldo)
+            
+            # Calcular produção do dia - query simplificada
+            producao_dia = 0
+            prods = session.query(ProgramacaoProducao).filter(
+                ProgramacaoProducao.cod_produto == str(cod_produto)
+            ).all()
+            for p in prods:
+                if p.data_programacao and p.data_programacao == data_calculo:
+                    if p.qtd_programada:
+                        producao_dia += float(p.qtd_programada)
+            
+            # Calcular estoques
+            if dia == 0:
+                estoque_inicial_dia = estoque_atual
+            else:
+                estoque_inicial_dia = estoque_final_anterior
+            
+            estoque_final_dia = estoque_inicial_dia - saida_dia + producao_dia
+            estoque_final_anterior = estoque_final_dia
+            
+            # Salvar projeção
+            projecao = ProjecaoEstoqueCache(
+                cod_produto=str(cod_produto),
+                data_projecao=data_calculo,
+                dia_offset=dia,
+                estoque_inicial=estoque_inicial_dia,
+                saida_prevista=saida_dia,
+                producao_programada=producao_dia,
+                estoque_final=estoque_final_dia
+            )
+            session.add(projecao)
+        
+        # Calcular previsão de ruptura (menor estoque em 7 dias)
+        projecoes_7d = session.query(ProjecaoEstoqueCache).filter(
+            ProjecaoEstoqueCache.cod_produto == str(cod_produto),
+            ProjecaoEstoqueCache.dia_offset <= 7
+        ).all()
+        
+        if projecoes_7d:
+            menor_estoque = min(float(p.estoque_final) for p in projecoes_7d)
+            saldo_cache.previsao_ruptura_7d = menor_estoque
+            saldo_cache.ultima_atualizacao_projecao = agora_brasil()
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Erro na atualização alternativa de projeção: {e}")
+        return False
+
 def _atualizar_projecao_na_sessao(session, cod_produto):
     """Atualiza projeção de estoque numa sessão específica"""
     try:
@@ -395,7 +516,7 @@ def _atualizar_projecao_na_sessao(session, cod_produto):
             # Pré-separações
             pre_seps = session.query(PreSeparacaoItem).filter(
                 PreSeparacaoItem.cod_produto == str(cod_produto),
-                PreSeparacaoItem.data_expedicao_editada == data_calculo,
+                func.date(PreSeparacaoItem.data_expedicao_editada) == data_calculo,
                 PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
             ).all()
             for ps in pre_seps:
@@ -407,7 +528,7 @@ def _atualizar_projecao_na_sessao(session, cod_produto):
                 Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
             ).filter(
                 Separacao.cod_produto == str(cod_produto),
-                Pedido.expedicao == data_calculo,
+                func.date(Pedido.expedicao) == data_calculo,
                 Pedido.status.in_(['ABERTO', 'COTADO'])
             ).all()
             for s in seps:
@@ -418,7 +539,7 @@ def _atualizar_projecao_na_sessao(session, cod_produto):
             producao_dia = 0
             prods = session.query(ProgramacaoProducao).filter(
                 ProgramacaoProducao.cod_produto == str(cod_produto),
-                ProgramacaoProducao.data_programacao == data_calculo
+                func.date(ProgramacaoProducao.data_programacao) == data_calculo
             ).all()
             for p in prods:
                 if p.qtd_programada:

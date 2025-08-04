@@ -1,11 +1,12 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_from_directory, send_file, jsonify, make_response, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_from_directory, send_file, jsonify, current_app
 from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta
 import os
 import pandas as pd
 import tempfile
-from werkzeug.utils import secure_filename
 from sqlalchemy import func
+import logging
+
 
 from collections import defaultdict
 
@@ -35,16 +36,18 @@ from app.monitoramento.forms import (
 )
 
 from app.financeiro.models import PendenciaFinanceiraNF
+from app.faturamento.models import RelatorioFaturamentoImportado
+from app.embarques.models import EmbarqueItem  # ✅ Adicionar import
 
 from app.cadastros_agendamento.models import ContatoAgendamento
 
 from app.utils.sincronizar_todas_entregas import sincronizar_todas_entregas
-from app.utils.sincronizar_entregas import adicionar_dias_uteis
 from app.pedidos.models import Pedido  # ✅ ADICIONADO: Para controle de status NF no CD
 
 # 🌐 Importar sistema de arquivos S3
 from app.utils.file_storage import get_file_storage
-from app.utils.template_filters import file_url
+
+logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, '..', '..', 'uploads', 'entregas')
@@ -495,8 +498,6 @@ def resolver_pendencia(id):
 @login_required
 @allow_vendedor_own_data()  # 🔒 VENDEDORES: Apenas dados próprios
 def listar_entregas():
-    from app.faturamento.models import RelatorioFaturamentoImportado
-    from app.embarques.models import Embarque, EmbarqueItem  # ✅ Adicionar import
     
     query = EntregaMonitorada.query
     
@@ -513,35 +514,35 @@ def listar_entregas():
         query = query.filter(EntregaMonitorada.status_finalizacao == 'Entregue')
     elif status == 'atrasada':
         query = query.filter(
-            EntregaMonitorada.status_finalizacao == None,
-            EntregaMonitorada.data_entrega_prevista != None,
+            EntregaMonitorada.status_finalizacao.is_(None),
+            EntregaMonitorada.data_entrega_prevista.isnot(None),
             EntregaMonitorada.data_entrega_prevista < date.today()
         )
     elif status == 'no_prazo':
         query = query.filter(
-            EntregaMonitorada.status_finalizacao == None,
-            EntregaMonitorada.data_entrega_prevista != None,
+            EntregaMonitorada.status_finalizacao.is_(None),
+            EntregaMonitorada.data_entrega_prevista.isnot(None),
             EntregaMonitorada.data_entrega_prevista >= date.today()
         )
     elif status == 'sem_previsao':
         # ✅ CORRIGIDO: Excluir finalizados do filtro "Sem Previsão"
         query = query.filter(
-            EntregaMonitorada.data_entrega_prevista == None,
-            EntregaMonitorada.status_finalizacao == None
+            EntregaMonitorada.data_entrega_prevista.is_(None),
+            EntregaMonitorada.status_finalizacao.is_(None)
         )
 
     if status == 'reagendar':
         query = query.filter(
             EntregaMonitorada.reagendar == True,
-            EntregaMonitorada.status_finalizacao == None
+            EntregaMonitorada.status_finalizacao.is_(None)
         )
     if status == 'pendencia_financeira':
         query = query.join(PendenciaFinanceiraNF, PendenciaFinanceiraNF.entrega_id == EntregaMonitorada.id)
         # Pendências não respondidas OU com resposta apagada
         query = query.filter(
             db.or_(
-                PendenciaFinanceiraNF.respondida_em == None,
-                PendenciaFinanceiraNF.resposta_excluida_em != None
+                PendenciaFinanceiraNF.respondida_em.is_(None),
+                PendenciaFinanceiraNF.resposta_excluida_em.isnot(None)
             )
         )
     # ✅ NOVOS FILTROS DE STATUS ESPECÍFICOS
@@ -558,7 +559,7 @@ def listar_entregas():
     if status == 'sem_agendamento':
         # Buscar CNPJs que precisam de agendamento (mesma lógica do dicionário)
         contatos_que_precisam = ContatoAgendamento.query.filter(
-            ContatoAgendamento.forma != None,
+            ContatoAgendamento.forma.isnot(None),
             ContatoAgendamento.forma != '',
             ContatoAgendamento.forma != 'SEM AGENDAMENTO'
         ).all()
@@ -579,7 +580,7 @@ def listar_entregas():
                 # ✅ CORREÇÃO CRÍTICA: Usar campo direto data_agenda ao invés de subquery
                 EntregaMonitorada.data_agenda.is_(None),  # Sem data de agendamento
                 # Não finalizada
-                EntregaMonitorada.status_finalizacao == None
+                EntregaMonitorada.status_finalizacao.is_(None)
             )
         else:
             # Se não há CNPJs válidos, não mostrar nenhuma entrega
@@ -795,27 +796,27 @@ def listar_entregas():
     
     # Contador Atrasadas
     contadores['atrasadas'] = EntregaMonitorada.query.filter(
-        EntregaMonitorada.status_finalizacao == None,
-        EntregaMonitorada.data_entrega_prevista != None,
+        EntregaMonitorada.status_finalizacao.is_(None),
+        EntregaMonitorada.data_entrega_prevista.isnot(None),
         EntregaMonitorada.data_entrega_prevista < date.today()
     ).count()
     
     # Contador Sem Previsão  
     contadores['sem_previsao'] = EntregaMonitorada.query.filter(
-        EntregaMonitorada.data_entrega_prevista == None,
-        EntregaMonitorada.status_finalizacao == None
+        EntregaMonitorada.data_entrega_prevista.is_(None),
+        EntregaMonitorada.status_finalizacao.is_(None)
     ).count()
     
     # Contador Reagendar
     contadores['reagendar'] = EntregaMonitorada.query.filter(
         EntregaMonitorada.reagendar == True,
-        EntregaMonitorada.status_finalizacao == None
+        EntregaMonitorada.status_finalizacao.is_(None)
     ).count()
     
     # ✅ CONTADOR SIMPLIFICADO: Mesma lógica do filtro usando campo direto
     # Buscar CNPJs que precisam de agendamento
     contatos_contador = ContatoAgendamento.query.filter(
-        ContatoAgendamento.forma != None,
+        ContatoAgendamento.forma.isnot(None),
         ContatoAgendamento.forma != '',
         ContatoAgendamento.forma != 'SEM AGENDAMENTO'
     ).all()
@@ -833,7 +834,7 @@ def listar_entregas():
         contadores['sem_agendamento'] = EntregaMonitorada.query.filter(
             db.or_(*[EntregaMonitorada.cnpj_cliente == cnpj for cnpj in cnpjs_contador]),
             EntregaMonitorada.data_agenda.is_(None),  # Sem data de agendamento (campo direto)
-            EntregaMonitorada.status_finalizacao == None
+            EntregaMonitorada.status_finalizacao.is_(None)
         ).count()
     else:
         contadores['sem_agendamento'] = 0
@@ -849,7 +850,7 @@ def listar_entregas():
 
     # ✅ BUSCAR VENDEDORES ÚNICOS para dropdown
     vendedores_unicos = db.session.query(RelatorioFaturamentoImportado.vendedor)\
-        .filter(RelatorioFaturamentoImportado.vendedor != None, RelatorioFaturamentoImportado.vendedor != '')\
+        .filter(RelatorioFaturamentoImportado.vendedor.isnot(None), RelatorioFaturamentoImportado.vendedor != '')\
         .distinct().order_by(RelatorioFaturamentoImportado.vendedor).all()
     vendedores_unicos = [v[0] for v in vendedores_unicos]
 
@@ -980,15 +981,12 @@ def visualizar_historico(id):
     agendamentos = AgendamentoEntrega.query.filter_by(entrega_id=id).all()
     
     historico_completo = sorted(
-        [
-            *((log.data_hora, 'Log', log.autor, f"{log.tipo}: {log.descricao}") for log in logs),
-            *((evento.criado_em, 'Evento', evento.autor, 
-               f"{evento.tipo_evento}: {evento.observacao} - Chegada: {evento.data_hora_chegada.strftime('%d/%m/%Y %H:%M') if evento.data_hora_chegada else 'Sem registro'}") for evento in eventos),
-            *((custo.criado_em, 'Custo', custo.autor, f"{custo.tipo}: R$ {custo.valor:.2f} - {custo.motivo}") for custo in custos),
-            *((ag.criado_em, 'Agendamento', ag.autor, f"Agendado por: {ag.forma_agendamento} Data: {ag.data_agendada.strftime('%d/%m/%Y')} - {ag.hora_agendada.strftime('%H:%M') if ag.hora_agendada else 'Sem horário'} - Protocolo {ag.protocolo_agendamento}- Motivo: {ag.motivo}") for ag in agendamentos),
-            *( [(entrega.finalizado_em, 'Finalização', entrega.finalizado_por, f"Entrega finalizada em: {entrega.data_hora_entrega_realizada.strftime('%d/%m/%Y-%H:%M') if entrega.data_hora_entrega_realizada else 'Data não informada'}"
-)] if entrega.finalizado_em else [] ),
-        ],
+        *((log.data_hora, 'Log', log.autor, f"{log.tipo}: {log.descricao}") for log in logs),
+        *((evento.criado_em, 'Evento', evento.autor, f"{evento.tipo_evento}: {evento.observacao} - Chegada: {evento.data_hora_chegada.strftime('%d/%m/%Y %H:%M') if evento.data_hora_chegada else 'Sem registro'}") for evento in eventos),
+        *((custo.criado_em, 'Custo', custo.autor, f"{custo.tipo}: R$ {custo.valor:.2f} - {custo.motivo}") for custo in custos),
+        *((ag.criado_em, 'Agendamento', ag.autor, f"Agendado por: {ag.forma_agendamento} Data: {ag.data_agendada.strftime('%d/%m/%Y')} - {ag.hora_agendada.strftime('%H:%M') if ag.hora_agendada else 'Sem horário'} - Protocolo {ag.protocolo_agendamento}- Motivo: {ag.motivo}") for ag in agendamentos),
+        *([(entrega.finalizado_em, 'Finalização', entrega.finalizado_por, f"Entrega finalizada em: {entrega.data_hora_entrega_realizada.strftime('%d/%m/%Y-%H:%M') if entrega.data_hora_entrega_realizada else 'Data não informada'}") if entrega.finalizado_em else []]),
+        *([(entrega.data_hora_entrega_realizada, 'Entrega', entrega.finalizado_por, f"Entrega realizada em: {entrega.data_hora_entrega_realizada.strftime('%d/%m/%Y-%H:%M') if entrega.data_hora_entrega_realizada else 'Data não informada'}") if entrega.data_hora_entrega_realizada else []]),
         key=lambda x: x[0], reverse=True
     )
 
@@ -1410,8 +1408,8 @@ def apagar_resposta_pendencia(pendencia_id):
     # Soma as que têm resposta excluída (voltam a contar como abertas)
     pendencias_resposta_excluida = PendenciaFinanceiraNF.query.filter(
         PendenciaFinanceiraNF.entrega_id == entrega.id,
-        PendenciaFinanceiraNF.respondida_em != None,
-        PendenciaFinanceiraNF.resposta_excluida_em != None
+        PendenciaFinanceiraNF.respondida_em.isnot(None),
+        PendenciaFinanceiraNF.resposta_excluida_em.isnot(None)
     ).count()
     
     total_pendencias_abertas = pendencias_abertas + pendencias_resposta_excluida
@@ -1635,7 +1633,8 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
             from app.utils.timezone import utc_para_brasil
             try:
                 finalizado_em_brasil = utc_para_brasil(entrega.finalizado_em)
-            except:
+            except Exception as e:
+                logger.error(f"Erro ao converter finalizado_em para fuso horário do Brasil: {e}")
                 # Fallback se não conseguir converter
                 finalizado_em_brasil = entrega.finalizado_em
         
@@ -1736,7 +1735,6 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
                 'tipo': log.tipo,
                 'descricao': log.descricao,
                 'lembrete_para': log.lembrete_para,
-                'autor': log.autor,
             })
         
         # Comentários
@@ -1913,7 +1911,7 @@ def exportar_entregas():
             for entrega in entregas:
                 # Como comentarios tem lazy='dynamic', carregamos após
                 entrega._comentarios_carregados = entrega.comentarios.filter(
-                    ComentarioNF.resposta_a_id == None
+                    ComentarioNF.resposta_a_id.is_(None)
                 ).all()
             
             if not entregas:
@@ -1948,7 +1946,8 @@ def exportar_entregas():
             def cleanup_file():
                 try:
                     os.unlink(arquivo_path)
-                except:
+                except Exception as e:
+                    logger.error(f"Erro ao excluir arquivo: {e}")
                     pass
             
             return send_file(
@@ -2010,7 +2009,8 @@ def upload_canhoto(id):
                 try:
                     # TODO: Implementar exclusão do arquivo anterior no S3 se necessário
                     pass
-                except:
+                except Exception as e:
+                    logger.error(f"Erro ao excluir arquivo: {e}")
                     pass
             
             entrega.canhoto_arquivo = file_path
@@ -2086,7 +2086,8 @@ def upload_canhotos_lote():
                         try:
                             # TODO: Implementar exclusão do arquivo anterior no S3 se necessário
                             pass
-                        except:
+                        except Exception as e:
+                            logger.error(f"Erro ao excluir arquivo: {e}")
                             pass
                     
                     entrega.canhoto_arquivo = file_path
@@ -2192,4 +2193,3 @@ def sincronizar_agendamento_pedido(entrega):
     except Exception as e:
         db.session.rollback()
         return False, f"Erro ao sincronizar agendamento: {str(e)}"
-
