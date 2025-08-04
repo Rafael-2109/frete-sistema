@@ -13,7 +13,7 @@
                     Carteira Agrupada por Pedidos
                 </h1>
                 {% if total_pedidos %}
-                <small class="text-muted">{{ total_pedidos }} pedidos encontrados</small>
+                <small class="text-muted"><span id="contador-pedidos">{{ total_pedidos }}</span> pedidos encontrados</small>
                 {% endif %}
             </div>
             
@@ -348,7 +348,7 @@
                                         <!-- Total em separação com texto visível -->
                                         {% if pedido.valor_saldo_restante %}
                                         <br><small class="text-dark"><strong>Saldo sem separação:</strong></small>
-                                        <br><span class="badge bg-info text-white">R$ {{ "%.2f"|format(pedido.valor_saldo_restante) }}</span>
+                                        <br><span class="badge bg-danger text-white">R$ {{ pedido.valor_saldo_restante|moeda_carteira }}</span>
                                         {% endif %}
                                     </div>
                                 </td>
@@ -375,6 +375,17 @@
                                                 onclick="solicitarAgendamento('{{ pedido.num_pedido }}')"
                                                 title="Solicitar agendamento">
                                             <i class="fas fa-calendar-plus me-1"></i> Agendar
+                                        </button>
+                                        
+                                        <!-- Botão Standby -->
+                                        <button type="button" 
+                                                class="btn btn-sm btn-standby" 
+                                                id="btn-standby-{{ pedido.num_pedido }}"
+                                                data-pedido="{{ pedido.num_pedido }}"
+                                                onclick="gerenciarStandby('{{ pedido.num_pedido }}')"
+                                                title="Enviar para Standby">
+                                            <i class="fas fa-pause-circle me-1"></i> 
+                                            <span class="btn-standby-text">Standby</span>
                                         </button>
                                     </div>
                                 </td>
@@ -474,6 +485,10 @@
 {% include 'carteira/js/workspace-quantidades.js' %}
 </script>
 
+<script>
+{% include 'carteira/js/standby-manager.js' %}
+</script>
+
 <!-- Inicialização -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -493,6 +508,94 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ Template balanceado carregado com todos os módulos');
 });
 </script>
+
+<!-- Modal de Standby -->
+<div class="modal fade" id="modalStandby" tabindex="-1" aria-labelledby="modalStandbyLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="modalStandbyLabel">
+                    <i class="fas fa-pause-circle me-2"></i>
+                    Enviar Pedido para Standby
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-standby-loading" class="text-center p-4" style="display: none;">
+                    <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+                    <p class="mt-2">Carregando informações...</p>
+                </div>
+                <div id="modal-standby-content">
+                    <h6 class="mb-3">Pedido: <span id="standby-pedido-numero" class="text-primary"></span></h6>
+                    
+                    <!-- Resumo do pedido -->
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title mb-3">Resumo do Pedido</h6>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <small class="text-muted d-block">Valor Total</small>
+                                    <strong id="standby-valor-total">R$ 0,00</strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted d-block">Peso Total</small>
+                                    <strong id="standby-peso-total">0 kg</strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted d-block">Pallet Total</small>
+                                    <strong id="standby-pallet-total">0</strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted d-block">Data do Pedido</small>
+                                    <strong id="standby-data-pedido">-</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Produtos -->
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title mb-3">Produtos</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Código</th>
+                                            <th>Produto</th>
+                                            <th class="text-end">Quantidade</th>
+                                            <th class="text-end">Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="standby-produtos-lista">
+                                        <!-- Produtos serão carregados aqui -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tipo de Standby -->
+                    <div class="mb-3">
+                        <label for="standby-tipo" class="form-label fw-bold">Tipo de Standby <span class="text-danger">*</span></label>
+                        <select class="form-select" id="standby-tipo" required>
+                            <option value="">Selecione o tipo...</option>
+                            <option value="Saldo">Saldo</option>
+                            <option value="Aguardar Comercial">Aguardar Comercial</option>
+                            <option value="Aguardar PCP">Aguardar PCP</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" onclick="confirmarStandby()">
+                    <i class="fas fa-pause-circle me-1"></i> Confirmar Standby
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Modal de Separações -->
 <div class="modal fade" id="modalSeparacoes" tabindex="-1" aria-labelledby="modalSeparacoesLabel" aria-hidden="true">

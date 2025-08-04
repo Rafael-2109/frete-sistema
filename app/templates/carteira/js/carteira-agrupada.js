@@ -309,6 +309,9 @@ class CarteiraAgrupada {
 
         console.log(`🔍 Filtros aplicados: ${totalVisiveis} pedidos visíveis`);
         
+        // Atualizar contador de pedidos
+        this.atualizarContador(totalVisiveis);
+        
         // Verificar e mostrar/ocultar subrotas SP
         this.verificarSubrotasSP();
     }
@@ -334,10 +337,10 @@ class CarteiraAgrupada {
     }
 
     atualizarContador(totalVisiveis) {
-        // Atualizar contador de pedidos visíveis se existir
-        const contador = document.querySelector('.contador-pedidos');
+        // Atualizar contador de pedidos visíveis
+        const contador = document.getElementById('contador-pedidos');
         if (contador) {
-            contador.textContent = `${totalVisiveis} pedidos`;
+            contador.textContent = totalVisiveis;
         }
     }
 

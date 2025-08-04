@@ -113,11 +113,11 @@
                                         {% if produto.qtd_total_carteira > 0 %}
                                             <span class="text-primary">{{ "{:,.0f}".format(produto.qtd_total_carteira).replace(',', '.') }}</span>
                                         {% else %}
-                                            <span class="text-muted">Em breve</span>
+                                            <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
-                                        <span class="badge {% if produto.previsao_ruptura <= 0 %}bg-danger{% elif produto.previsao_ruptura < 10 %}bg-warning{% else %}bg-success{% endif %}">
+                                        <span class="badge {% if produto.previsao_ruptura <= 0 %}bg-warning text-dark{% elif produto.previsao_ruptura < 10 %}bg-warning{% else %}bg-success{% endif %}">
                                             {{ "{:,.0f}".format(produto.previsao_ruptura).replace(',', '.') }}
                                         </span>
                                     </td>

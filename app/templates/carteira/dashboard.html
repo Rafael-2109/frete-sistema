@@ -194,10 +194,63 @@
             </div>
         </div>
         {% endif %}
+        
+        <!-- Saldo Standby -->
+        <div class="col-lg-6">
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-warning">
+                        <i class="fas fa-pause-circle"></i> Saldo Standby
+                    </h6>
+                    <a href="{{ url_for('carteira.standby.visualizar_standby') }}" class="btn btn-warning btn-sm">
+                        <i class="fas fa-eye"></i> Visualizar
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Total de Pedidos
+                            </div>
+                            <div class="h5 mb-2 font-weight-bold text-gray-800">
+                                {{ total_standby_pedidos }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Valor Total
+                            </div>
+                            <div class="h5 mb-2 font-weight-bold text-gray-800">
+                                R$ {{ "{:,.0f}".format(total_standby_valor) }}
+                            </div>
+                        </div>
+                    </div>
+                    {% if standby_stats %}
+                    <hr>
+                    <small class="text-muted">Por Status:</small>
+                    {% for stat in standby_stats %}
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="badge 
+                            {% if stat.status_standby == 'ATIVO' %}bg-success
+                            {% elif stat.status_standby == 'BLOQ. COML.' %}bg-warning text-dark
+                            {% elif stat.status_standby == 'SALDO' %}bg-info
+                            {% endif %}">
+                            {{ stat.status_standby }}
+                        </span>
+                        <div class="text-right">
+                            <small class="text-muted">{{ stat.qtd_pedidos }} pedidos</small>
+                            <strong class="ms-2">R$ {{ "{:,.0f}".format(stat.valor_total or 0) }}</strong>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
 
         
         <!-- Ações Rápidas sempre visíveis -->
-        <div class="{% if top_vendedores %}col-lg-12 mt-3{% else %}col-lg-8{% endif %}">
+        <div class="col-lg-12 mt-3">
             <div class="card shadow">
                 <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-primary">

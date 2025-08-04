@@ -4,7 +4,7 @@ from typing import Union, Tuple
 from app import db
 from app.carteira.models import (
     CarteiraPrincipal, ControleCruzadoSeparacao,
-    InconsistenciaFaturamento
+    InconsistenciaFaturamento, SaldoStandby
 )
 from app.estoque.models import SaldoEstoque
 from app.localidades.models import CadastroRota, CadastroSubRota
@@ -123,6 +123,9 @@ def index():
                                  alertas_vinculacao=0,
                                  expedicoes_proximas=[],
                                  top_vendedores=[],
+                                 standby_stats=[],
+                                 total_standby_pedidos=0,
+                                 total_standby_valor=0,
                                  sistema_inicializado=False)
         
         # 📊 ESTATÍSTICAS PRINCIPAIS
@@ -167,6 +170,35 @@ def index():
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido).desc()
         ).limit(10).all()
         
+        # 🔸 ESTATÍSTICAS DE STANDBY
+        standby_stats = []
+        total_standby_pedidos = 0
+        total_standby_valor = 0
+        
+        if inspector.has_table('saldo_standby'):
+            # Estatísticas por status
+            standby_stats = db.session.query(
+                SaldoStandby.status_standby,
+                func.count(func.distinct(SaldoStandby.num_pedido)).label('qtd_pedidos'),
+                func.sum(SaldoStandby.valor_saldo).label('valor_total')
+            ).filter(
+                SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+            ).group_by(
+                SaldoStandby.status_standby
+            ).all()
+            
+            # Total geral
+            total_geral = db.session.query(
+                func.count(func.distinct(SaldoStandby.num_pedido)).label('total_pedidos'),
+                func.sum(SaldoStandby.valor_saldo).label('valor_total')
+            ).filter(
+                SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+            ).first()
+            
+            if total_geral:
+                total_standby_pedidos = total_geral.total_pedidos or 0
+                total_standby_valor = float(total_geral.valor_total) if total_geral.valor_total else 0
+        
         # 📊 ORGANIZAR DADOS PARA O TEMPLATE
         estatisticas = {
             'total_pedidos': total_pedidos,
@@ -182,6 +214,9 @@ def index():
                              alertas_vinculacao=controles_pendentes,
                              expedicoes_proximas=[],  # Lista vazia por enquanto
                              top_vendedores=vendedores_breakdown[:5] if vendedores_breakdown else [],
+                             standby_stats=standby_stats,
+                             total_standby_pedidos=total_standby_pedidos,
+                             total_standby_valor=total_standby_valor,
                              sistema_inicializado=True)
         
     except Exception as e:
@@ -203,6 +238,9 @@ def index():
                              alertas_vinculacao=0,
                              expedicoes_proximas=[],
                              top_vendedores=[],
+                             standby_stats=[],
+                             total_standby_pedidos=0,
+                             total_standby_valor=0,
                              sistema_inicializado=False)
 
 @carteira_bp.route('/principal')

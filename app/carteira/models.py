@@ -555,12 +555,13 @@ class SaldoStandby(db.Model):
     valor_saldo = db.Column(db.Numeric(15,2), nullable=False)
     peso_saldo = db.Column(db.Numeric(15,3), nullable=True)
     pallet_saldo = db.Column(db.Numeric(15,3), nullable=True)
+    data_pedido = db.Column(db.Date, nullable=True)
     
     # 🎯 TIPO DE STANDBY
-    tipo_standby = db.Column(db.String(20), nullable=False, index=True)
-    # AGUARDA_COMPLEMENTO: Aguarda novo pedido mesmo CNPJ
-    # AGUARDA_DECISAO: Aguarda decisão comercial
-    # AGUARDA_REPOSICAO: Aguarda reposição de estoque
+    tipo_standby = db.Column(db.String(50), nullable=False, index=True)
+    # Saldo: Aguarda complemento de saldo
+    # Aguardar Comercial: Aguarda decisão comercial
+    # Aguardar PCP: Aguarda planejamento e controle de produção
     
     # 📅 CONTROLE TEMPORAL
     data_limite_standby = db.Column(db.Date, nullable=True)  # Prazo máximo em standby
@@ -573,9 +574,9 @@ class SaldoStandby(db.Model):
     # 🎯 RESOLUÇÃO
     status_standby = db.Column(db.String(20), default='ATIVO', index=True)
     # ATIVO: Em standby aguardando
-    # RESOLVIDO: Problema resolvido
-    # DESCARTADO: Removido definitivamente
-    # TRANSFERIDO: Transferido para nova carga
+    # BLOQ. COML.: Bloqueado pelo comercial
+    # SALDO: Aguardando saldo
+    # CONFIRMADO: Confirmado pelo comercial, retorna para carteira
     
     resolucao_final = db.Column(db.String(20), nullable=True)
     data_resolucao = db.Column(db.DateTime, nullable=True)

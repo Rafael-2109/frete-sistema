@@ -26,8 +26,14 @@ from .importacao_nao_odoo_api import importacao_nao_odoo_api
 from .carteira_nao_odoo_api import carteira_nao_odoo_api
 from .views_nao_odoo import views_nao_odoo_bp
 
+# API de Standby
+from .standby_api import standby_bp
+
 # Registrar os blueprints de Carteira Não-Odoo no blueprint principal
 carteira_bp.register_blueprint(cadastro_cliente_api)
 carteira_bp.register_blueprint(importacao_nao_odoo_api)
 carteira_bp.register_blueprint(carteira_nao_odoo_api)
 carteira_bp.register_blueprint(views_nao_odoo_bp)
+
+# Registrar blueprint de Standby
+carteira_bp.register_blueprint(standby_bp)

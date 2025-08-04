@@ -2,9 +2,9 @@
 Service para lógica de agrupamento de pedidos da carteira
 """
 
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, exists
 from app import db
-from app.carteira.models import CarteiraPrincipal
+from app.carteira.models import CarteiraPrincipal, SaldoStandby
 from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
 from app.producao.models import CadastroPalletizacao
@@ -96,7 +96,14 @@ class AgrupamentoService:
                 CadastroPalletizacao.ativo == True
             )
         ).filter(
-            CarteiraPrincipal.ativo == True
+            CarteiraPrincipal.ativo == True,
+            # Filtrar pedidos que NÃO estão em standby OU estão CONFIRMADOS
+            ~exists().where(
+                and_(
+                    SaldoStandby.num_pedido == CarteiraPrincipal.num_pedido,
+                    SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+                )
+            )
         ).group_by(
             CarteiraPrincipal.num_pedido,
             CarteiraPrincipal.vendedor,
