@@ -68,6 +68,9 @@ unidecode==1.4.0           # Remove acentos para comparação
 # NLTK Simplificado (apenas o essencial)
 nltk==3.8.1                # Natural Language Toolkit
 
+# Fuzzy matching adicional (necessário para entity_mapper)
+jellyfish==1.1.0           # String matching algorithms
+
 # SpaCy - Processamento Avançado de Linguagem Natural
 spacy==3.7.4               # Engine principal de NLP
 # IMPORTANTE: Após instalar, execute:
