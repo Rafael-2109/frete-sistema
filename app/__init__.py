@@ -660,6 +660,10 @@ def create_app(config_name=None):
     app.register_blueprint(carteira_bp)
     app.register_blueprint(alertas_bp)
     app.register_blueprint(estoque_bp)
+    
+    # Registrar blueprint de diagnóstico PG 1082
+    from app.estoque.diagnostico_pg1082 import pg1082_bp
+    app.register_blueprint(pg1082_bp)
     app.register_blueprint(producao_bp)
     app.register_blueprint(permissions_bp)
 

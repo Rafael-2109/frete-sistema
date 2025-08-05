@@ -428,98 +428,15 @@ class SaldoEstoque:
             cache = None  # Inicializar cache como None
             if inspector.has_table('saldo_estoque_cache'):
                 try:
-                    from app.estoque.models_cache import SaldoEstoqueCache, ProjecaoEstoqueCache
+                    # USAR FUNÇÃO SEGURA COM FALLBACK ROBUSTO
+                    from app.estoque.cache_fix_pg1082 import obter_cache_seguro
                     
-                    # Buscar no cache
-                    cache = SaldoEstoqueCache.query.filter_by(cod_produto=str(cod_produto)).first()
-                    if cache:
-                        # Buscar projeção do cache com tratamento especial para PostgreSQL
-                        try:
-                            # Tentar query normal primeiro
-                            projecoes = ProjecaoEstoqueCache.query.filter_by(
-                                cod_produto=str(cod_produto)
-                            ).order_by(ProjecaoEstoqueCache.dia_offset).all()
-                        except Exception as e:
-                            # Se falhar com erro de tipo, usar query com cast para string
-                            logger.warning(f"Erro ao buscar projeção, tentando com cast: {e}")
-                            from sqlalchemy import cast, String
-                            projecoes = db.session.query(
-                                ProjecaoEstoqueCache.cod_produto,
-                                cast(ProjecaoEstoqueCache.data_projecao, String).label('data_projecao'),
-                                ProjecaoEstoqueCache.dia_offset,
-                                ProjecaoEstoqueCache.estoque_inicial,
-                                ProjecaoEstoqueCache.saida_prevista,
-                                ProjecaoEstoqueCache.producao_programada,
-                                ProjecaoEstoqueCache.estoque_final
-                            ).filter(
-                                ProjecaoEstoqueCache.cod_produto == str(cod_produto)
-                            ).order_by(ProjecaoEstoqueCache.dia_offset).all()
-                        
-                        # Se houver projeção no cache, usar
-                        if projecoes:
-                            projecao = []
-                            for proj in projecoes:
-                                # Verificar se é tupla (resultado da query com cast) ou objeto
-                                if hasattr(proj, 'data_projecao'):
-                                    # É um objeto normal
-                                    data_projecao = proj.data_projecao
-                                    dia_offset = proj.dia_offset
-                                    estoque_inicial = float(proj.estoque_inicial)
-                                    saida_prevista = float(proj.saida_prevista)
-                                    producao_programada = float(proj.producao_programada)
-                                    estoque_final = float(proj.estoque_final)
-                                else:
-                                    # É uma tupla (resultado da query com cast)
-                                    cod_produto, data_projecao, dia_offset, estoque_inicial, saida_prevista, producao_programada, estoque_final = proj
-                                    estoque_inicial = float(estoque_inicial)
-                                    saida_prevista = float(saida_prevista)
-                                    producao_programada = float(producao_programada)
-                                    estoque_final = float(estoque_final)
-                                
-                                # Tratamento seguro para data_projecao - FIX para erro PG 1082
-                                try:
-                                    # Converter data_projecao para string primeiro para evitar erro de tipo
-                                    if data_projecao is not None:
-                                        # Forçar conversão para string via SQL se necessário
-                                        if hasattr(data_projecao, 'strftime'):
-                                            data_formatada = data_projecao.strftime('%d/%m')
-                                        else:
-                                            # Converter qualquer tipo para string primeiro
-                                            data_str = str(data_projecao)
-                                            # Se for formato YYYY-MM-DD, converter
-                                            if len(data_str) == 10 and data_str[4] == '-' and data_str[7] == '-':
-                                                from datetime import datetime
-                                                data_temp = datetime.strptime(data_str[:10], '%Y-%m-%d')
-                                                data_formatada = data_temp.strftime('%d/%m')
-                                            else:
-                                                # Fallback: usar string como está
-                                                data_formatada = data_str
-                                    else:
-                                        data_formatada = ''
-                                except Exception as e:
-                                    logger.debug(f"Erro ao formatar data_projecao: {e}")
-                                    # Fallback seguro: converter para string
-                                    data_formatada = str(data_projecao) if data_projecao else ''
-                                
-                                projecao.append({
-                                    'dia': dia_offset,
-                                    'data': data_projecao,
-                                    'data_formatada': data_formatada,
-                                    'estoque_inicial': estoque_inicial,
-                                    'saida_prevista': saida_prevista,
-                                    'producao_programada': producao_programada,
-                                    'estoque_final': estoque_final
-                                })
-                        
-                            return {
-                                'cod_produto': cache.cod_produto,
-                                'nome_produto': cache.nome_produto,
-                                'estoque_inicial': float(cache.saldo_atual),
-                                'qtd_total_carteira': float(cache.qtd_carteira),
-                                'previsao_ruptura': float(cache.previsao_ruptura_7d) if cache.previsao_ruptura_7d else 0,
-                                'projecao_29_dias': projecao,
-                                'status_ruptura': cache.status_ruptura or 'OK'
-                            }
+                    cache_data = obter_cache_seguro(cod_produto)
+                    if cache_data:
+                        # Adicionar nome do produto se não estiver no cache
+                        if not cache_data.get('nome_produto'):
+                            cache_data['nome_produto'] = nome_produto
+                        return cache_data
                 except Exception as e:
                     # Se houver erro com tipos PostgreSQL, retornar sem projeção
                     if "Unknown PG numeric type: 1082" in str(e) or "1082" in str(e):
