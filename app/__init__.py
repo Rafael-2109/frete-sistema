@@ -692,6 +692,18 @@ def create_app(config_name=None):
         SaldoStandby
     )
 
+    # ✅ EXECUTAR CORREÇÕES NO BANCO DE DADOS
+    with app.app_context():
+        try:
+            from init_db_fixes import run_all_fixes
+            run_all_fixes(app, db)
+            app.logger.info("✅ Correções no banco de dados executadas")
+        except ImportError:
+            # Se o arquivo não existir, não há problema
+            pass
+        except Exception as e:
+            app.logger.warning(f"⚠️ Erro ao executar correções no banco: {e}")
+
     # ✅ MIDDLEWARE PARA RECONEXÃO AUTOMÁTICA DO BANCO
     @app.before_request
     def ensure_db_connection():

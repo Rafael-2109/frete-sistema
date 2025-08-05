@@ -1,46 +1,73 @@
-#!/usr/bin/env python
-"""
-Verificar estrutura das tabelas
-"""
-import psycopg2
-import os
-from dotenv import load_dotenv
+#!/usr/bin/env python3
+"""Script para verificar estrutura da tabela projecao_estoque_cache"""
 
-load_dotenv()
+from app import create_app, db
+from sqlalchemy import text
 
-DATABASE_URL = os.getenv('DATABASE_URL')
+app = create_app()
 
-try:
-    conn = psycopg2.connect(DATABASE_URL)
-    cur = conn.cursor()
+with app.app_context():
+    print("=== Verificando estrutura da tabela projecao_estoque_cache ===\n")
     
-    # Verificar estrutura da tabela perfil_usuario
-    cur.execute("""
-        SELECT column_name, data_type 
-        FROM information_schema.columns 
-        WHERE table_name = 'perfil_usuario'
-        ORDER BY ordinal_position
-    """)
+    # Verifica se a tabela existe
+    result = db.session.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 
+            FROM information_schema.tables 
+            WHERE table_name = 'projecao_estoque_cache'
+        )
+    """))
     
-    print("📋 Estrutura da tabela perfil_usuario:")
-    for col in cur.fetchall():
-        print(f"   - {col[0]}: {col[1]}")
+    table_exists = result.scalar()
+    print(f"Tabela existe: {table_exists}")
     
-    # Verificar estrutura da tabela usuarios
-    cur.execute("""
-        SELECT column_name, data_type 
-        FROM information_schema.columns 
-        WHERE table_name = 'usuarios'
-        AND column_name IN ('id', 'nome', 'email', 'perfil_id', 'perfil_nome')
-        ORDER BY ordinal_position
-    """)
-    
-    print("\n📋 Campos relevantes da tabela usuarios:")
-    for col in cur.fetchall():
-        print(f"   - {col[0]}: {col[1]}")
-    
-    cur.close()
-    conn.close()
-    
-except Exception as e:
-    print(f"❌ Erro: {e}")
+    if table_exists:
+        print("\n=== Colunas da tabela ===")
+        result = db.session.execute(text("""
+            SELECT 
+                column_name,
+                data_type,
+                is_nullable,
+                column_default
+            FROM information_schema.columns 
+            WHERE table_name = 'projecao_estoque_cache'
+            ORDER BY ordinal_position
+        """))
+        
+        columns = result.fetchall()
+        for col in columns:
+            print(f"- {col[0]}: {col[1]} (nullable: {col[2]}, default: {col[3]})")
+            
+        # Verifica especificamente a coluna dia_offset
+        print("\n=== Verificando coluna dia_offset ===")
+        result = db.session.execute(text("""
+            SELECT COUNT(*) 
+            FROM information_schema.columns 
+            WHERE table_name = 'projecao_estoque_cache' 
+            AND column_name = 'dia_offset'
+        """))
+        
+        has_dia_offset = result.scalar() > 0
+        print(f"Coluna dia_offset existe: {has_dia_offset}")
+        
+        # Verifica o modelo SQLAlchemy
+        print("\n=== Verificando modelo ProjecaoEstoqueCache ===")
+        try:
+            from app.estoque.models_cache import ProjecaoEstoqueCache
+            print(f"Modelo encontrado: {ProjecaoEstoqueCache.__tablename__}")
+            print("\nColunas no modelo:")
+            for column in ProjecaoEstoqueCache.__table__.columns:
+                print(f"- {column.name}: {column.type}")
+        except ImportError:
+            print("Modelo ProjecaoEstoqueCache não encontrado em models_cache!")
+            # Tenta outro import
+            try:
+                from app.carteira.models import ProjecaoEstoqueCache
+                print(f"Modelo encontrado em carteira.models: {ProjecaoEstoqueCache.__tablename__}")
+                print("\nColunas no modelo:")
+                for column in ProjecaoEstoqueCache.__table__.columns:
+                    print(f"- {column.name}: {column.type}")
+            except ImportError:
+                print("Modelo ProjecaoEstoqueCache não encontrado em carteira.models!")
+        except Exception as e:
+            print(f"Erro ao verificar modelo: {e}")

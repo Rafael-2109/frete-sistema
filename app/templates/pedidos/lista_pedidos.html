@@ -588,7 +588,7 @@
                 <!-- Checkbox individual -->
                 <td class="text-center">
                   <input type="checkbox" name="pedido_ids" value="{{ p.id }}"
-                    {% if p.status_calculado not in ['ABERTO', 'COTADO', 'NF no CD'] %}disabled title="Pedido já processado"{% endif %}>
+                    {% if p.status_calculado not in ['ABERTO', 'COTADO', 'NF no CD', 'FATURADO'] %}disabled title="Pedido já processado"{% endif %}>
                 </td>
                 
                 <!-- ✨ COLUNA: Status + Embarque -->

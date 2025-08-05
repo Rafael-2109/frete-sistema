@@ -453,4 +453,3 @@ class CacheUpdateLog(db.Model):
             db.session.rollback()
             logger.error(f"Erro ao registrar mudança: {str(e)}")
             return False
-

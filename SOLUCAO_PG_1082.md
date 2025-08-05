@@ -36,6 +36,13 @@ Criado `app/utils/pg_types_config.py` que:
 - `safe_date` agora é apenas um alias para `formatar_data_brasil`
 - Mantém compatibilidade sem complexidade desnecessária
 
+### 4. Script de Correção Automática
+
+Criado `init_db_fixes.py` que:
+- Verifica e adiciona colunas faltantes no banco
+- Executa automaticamente na inicialização
+- Corrige estrutura da tabela `projecao_estoque_cache`
+
 ## 🚀 Benefícios
 
 1. **Simplicidade**: Código mais limpo e manutenível
@@ -61,3 +68,42 @@ A configuração é aplicada automaticamente ao iniciar a aplicação. Os tipos 
 ## 🎯 Resultado
 
 O erro PG 1082 foi resolvido de forma definitiva, sem necessidade de conversões customizadas ou soluções paliativas. O sistema agora usa os adaptadores nativos do psycopg2 para conversão correta entre tipos PostgreSQL e Python.
+
+## 🚨 Correções no Banco de Dados
+
+Além do registro de tipos, o sistema também corrige automaticamente a estrutura do banco:
+
+1. **Tabela projecao_estoque_cache** - Adiciona colunas faltantes:
+   - `dia_offset`
+   - `estoque_inicial`
+   - `saida_prevista`
+   - `producao_programada`
+   - `estoque_final`
+   - `atualizado_em`
+
+2. **Execução automática** - As correções são aplicadas automaticamente na inicialização via `init_db_fixes.py`
+
+## 📝 Arquivos Modificados
+
+1. `/app/__init__.py` - Importa configuração de tipos e executa correções
+2. `/app/utils/pg_types_config.py` - Registro centralizado de tipos
+3. `/init_db_fixes.py` - Script de correções automáticas no banco
+4. `/app/estoque/models.py` - Mantém tratamento de erro legado para compatibilidade
+
+## 🔄 Deploy
+
+Para aplicar as correções em produção:
+
+```bash
+git add .
+git commit -m "fix: resolver definitivamente erro PG 1082 e sincronizar estrutura do banco
+
+- Registrar tipos PostgreSQL antes do SQLAlchemy
+- Adicionar colunas faltantes em projecao_estoque_cache
+- Executar correções automaticamente na inicialização
+- Remover soluções paliativas desnecessárias"
+
+git push origin main
+```
+
+O deploy no Render executará automaticamente as correções na inicialização.
