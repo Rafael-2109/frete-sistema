@@ -64,7 +64,7 @@ timeout = 300
 max_requests = 1000
 max_requests_jitter = 100
 keepallive = 10
-preload_app = True
+preload_app = False  # Desabilitar preload para permitir registro de tipos
 
 def on_starting(server):
     """Executado ANTES do Gunicorn iniciar"""

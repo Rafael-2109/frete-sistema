@@ -2,6 +2,9 @@
 Modelos de cache para otimização do saldo de estoque
 Objetivo: Performance < 1 segundo para consultas
 """
+# IMPORTANTE: Registrar tipos PostgreSQL ANTES de usar db
+import app.estoque.pg_types_fix  # Força registro de tipos
+
 from app import db
 from app.utils.timezone import agora_brasil
 import logging

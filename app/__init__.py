@@ -92,7 +92,45 @@ login_manager = LoginManager()
 csrf = CSRFProtect()
 migrate = Migrate()
 
-# Event listener removido - tipos já registrados globalmente no pg_types_config
+# 🔥 EVENT LISTENER PARA REGISTRAR TIPOS EM CADA CONEXÃO
+from sqlalchemy import event
+from sqlalchemy.pool import Pool
+
+@event.listens_for(Pool, "connect")
+def register_pg_types_on_connect(dbapi_conn, connection_record):
+    """
+    Registra tipos PostgreSQL em CADA conexão criada
+    """
+    try:
+        import psycopg2
+        from psycopg2 import extensions
+        
+        # Criar cursor para registrar tipos nesta conexão específica
+        with dbapi_conn.cursor() as cursor:
+            # DATE (OID 1082)
+            DATE = extensions.new_type((1082,), "DATE", extensions.DATE)
+            extensions.register_type(DATE, dbapi_conn)
+            
+            # TIME (OID 1083)
+            TIME = extensions.new_type((1083,), "TIME", extensions.TIME)
+            extensions.register_type(TIME, dbapi_conn)
+            
+            # TIMESTAMP (OID 1114)
+            TIMESTAMP = extensions.new_type((1114,), "TIMESTAMP", extensions.PYDATETIME)
+            extensions.register_type(TIMESTAMP, dbapi_conn)
+            
+            # TIMESTAMPTZ (OID 1184)
+            TIMESTAMPTZ = extensions.new_type((1184,), "TIMESTAMPTZ", extensions.PYDATETIME)
+            extensions.register_type(TIMESTAMPTZ, dbapi_conn)
+            
+            # Arrays
+            DATEARRAY = extensions.new_array_type((1182,), "DATEARRAY", DATE)
+            extensions.register_type(DATEARRAY, dbapi_conn)
+            
+        print(f"✅ [POOL] Tipos PostgreSQL registrados na conexão {id(dbapi_conn)}")
+        
+    except Exception as e:
+        print(f"⚠️ [POOL] Erro ao registrar tipos na conexão: {e}")
 
 def formatar_data_segura(data, formato='%d/%m/%Y'):
     """

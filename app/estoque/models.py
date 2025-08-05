@@ -1,3 +1,16 @@
+# IMPORTANTE: Registrar tipos PostgreSQL ANTES de usar db
+import os
+if 'postgres' in os.getenv('DATABASE_URL', ''):
+    try:
+        import psycopg2
+        from psycopg2 import extensions
+        DATE = extensions.new_type((1082,), "DATE", extensions.DATE)
+        extensions.register_type(DATE)
+        extensions.register_type(DATE, None)
+        print("✅ [MODELS] Tipos PostgreSQL registrados em estoque/models.py")
+    except:
+        pass
+
 from app import db
 from app.utils.timezone import agora_brasil
 from sqlalchemy import inspect
