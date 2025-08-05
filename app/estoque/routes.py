@@ -1,5 +1,5 @@
 import pandas as pd
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response
+from flask import render_template, request, redirect, url_for, flash, jsonify, make_response
 from flask_login import login_required, current_user
 from app import db
 from app.estoque.models import MovimentacaoEstoque, UnificacaoCodigos, SaldoEstoque
@@ -14,11 +14,11 @@ import random
 from sqlalchemy import inspect, func, extract
 from app.producao.models import CadastroPalletizacao
 from io import BytesIO
+from app.estoque import estoque_bp
 
 logger = logging.getLogger(__name__)
 
 # 📦 Blueprint do estoque (seguindo padrão dos outros módulos)
-estoque_bp = Blueprint('estoque', __name__, url_prefix='/estoque')
 
 # Registrar filtro de formatação brasileira para o template
 @estoque_bp.app_template_filter('valor_br')

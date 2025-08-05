@@ -12,10 +12,12 @@ from app.localidades.models import Cidade
 from datetime import datetime
 from app.pedidos.models import Pedido
 from app.cotacao.models import Cotacao
+from app.utils.embarque_numero import obter_proximo_numero_embarque
+
+
 embarques_bp = Blueprint('embarques', __name__,url_prefix='/embarques')
 
 # Importa a função centralizada
-from app.utils.embarque_numero import obter_proximo_numero_embarque
 
 def apagar_fretes_sem_cte_embarque(embarque_id):
     """
@@ -1008,8 +1010,7 @@ def registrar_impressao(embarque_id):
     """
     Registra que o embarque foi impresso
     """
-    from flask import jsonify
-    
+
     embarque = Embarque.query.get_or_404(embarque_id)
     
     # Verificar se a data prevista de embarque está preenchida
@@ -1172,7 +1173,6 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
         cotacao_fob = None
         
         if is_embarque_fob:
-            from app.transportadoras.models import Transportadora
             transportadora_fob = Transportadora.query.filter_by(razao_social="FOB - COLETA").first()
             
             if transportadora_fob:
@@ -1247,11 +1247,9 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                     EmbarqueItem.separacao_lote_id == item.separacao_lote_id,
                     EmbarqueItem.status == 'ativo',
                     Embarque.status == 'ativo',
-                    EmbarqueItem.id != item.id
                 ).first()
                 
                 # ✅ VERIFICAR ENTREGAS MONITORADAS VINCULADAS
-                from app.monitoramento.models import EntregaMonitorada
                 entregas_vinculadas = EntregaMonitorada.query.filter_by(
                     separacao_lote_id=item.separacao_lote_id
                 ).all()
@@ -1514,4 +1512,3 @@ def alterar_cotacao(embarque_id):
     except Exception as e:
         flash(f'❌ Erro ao iniciar alteração de cotação: {str(e)}', 'danger')
         return redirect(url_for('embarques.listar_embarques'))
-

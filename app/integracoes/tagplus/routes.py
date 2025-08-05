@@ -10,7 +10,6 @@ from app.integracoes.tagplus.importador_simplificado import ImportadorTagPlus
 from app.integracoes.tagplus.processador_faturamento_tagplus import ProcessadorFaturamentoTagPlus
 from app.integracoes.tagplus.postman_helper import PostmanHelper
 from app.integracoes.tagplus.servico_importacao_excel import processar_arquivo_tagplus_web
-from app.integracoes.tagplus.oauth_flow import tagplus_oauth_bp
 from app.faturamento.models import FaturamentoProduto
 from app.embarques.models import Embarque, EmbarqueItem
 from app.carteira.models import CarteiraCopia
@@ -50,31 +49,8 @@ def oauth():
                          refresh_token=session.get('tagplus_refresh_token'),
                          client_id=get_config('client_id'),
                          client_secret=get_config('client_secret'),
-                         redirect_uri=url_for('tagplus_oauth.callback', _external=True))
+                         redirect_uri=url_for('tagplus.oauth_callback', _external=True))
 
-@tagplus_bp.route('/oauth/authorize')
-@login_required
-def oauth_authorize():
-    """Redireciona para autorização OAuth"""
-    return redirect(url_for('tagplus_oauth.authorize'))
-
-@tagplus_bp.route('/oauth/save_token', methods=['POST'])
-@login_required
-def oauth_save_token():
-    """Salva token OAuth manualmente"""
-    from flask import session
-    
-    access_token = request.form.get('access_token')
-    refresh_token = request.form.get('refresh_token')
-    
-    if access_token:
-        session['tagplus_access_token'] = access_token
-        session['tagplus_refresh_token'] = refresh_token
-        flash('Tokens salvos com sucesso!', 'success')
-    else:
-        flash('Access token é obrigatório!', 'error')
-    
-    return redirect(url_for('tagplus.oauth'))
 
 @tagplus_bp.route('/api/testar-conexao', methods=['POST'])
 @login_required

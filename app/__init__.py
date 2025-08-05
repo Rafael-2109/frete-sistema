@@ -534,7 +534,7 @@ def create_app(config_name=None):
     from app.permissions.api import permissions_api
     
     # Integrações
-    from app.integracoes.tagplus.routes import tagplus_bp
+    from app.integracoes.tagplus import tagplus_bp
     
     # MCP Logistica
     from app.mcp_logistica.flask_integration import mcp_logistica_bp, init_mcp_logistica

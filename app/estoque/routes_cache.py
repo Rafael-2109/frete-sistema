@@ -230,7 +230,6 @@ def atualizar_cache_manual():
         
         if tipo == 'completo':
             # Reconstruir todo o cache
-            from app.estoque.models_cache import SaldoEstoqueCache
             sucesso = SaldoEstoqueCache.inicializar_cache_completo()
             
             if sucesso:
@@ -269,7 +268,7 @@ def status_cache():
     Mostra estatísticas do cache
     """
     try:
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         
         # Estatísticas do cache
         total_produtos = SaldoEstoqueCache.query.count()
