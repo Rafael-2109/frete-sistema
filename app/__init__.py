@@ -62,7 +62,7 @@ try:
     try:
         from app.utils.pg_types_config import registrar_tipos_postgresql
         print("✅ Módulo pg_types_config também importado")
-    except:
+    except Exception:
         pass
     
 except Exception as e:
@@ -695,7 +695,7 @@ def create_app(config_name=None):
     # ✅ EXECUTAR CORREÇÕES NO BANCO DE DADOS
     with app.app_context():
         try:
-            from init_db_fixes import run_all_fixes
+            from app.init_db_fixes import run_all_fixes
             run_all_fixes(app, db)
             app.logger.info("✅ Correções no banco de dados executadas")
         except ImportError:
