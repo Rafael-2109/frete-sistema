@@ -29,83 +29,24 @@ from sqlalchemy import text
 # 🔄 Carrega as variáveis de ambiente do .env
 load_dotenv()
 
-# 🔧 Fix para "Unknown PG numeric type: 1082" no Render
-# Este fix registra o tipo DATE do PostgreSQL globalmente
+# 🔧 Configuração definitiva para tipos PostgreSQL
+# Resolve o erro "Unknown PG numeric type: 1082" de forma limpa
 try:
-    import psycopg2
-    from psycopg2 import extensions
-    from psycopg2.extras import register_default_json, register_default_jsonb
-    import datetime
-    
-    # Função para converter string de data PostgreSQL em objeto date
-    def cast_date(value, curs):
-        if value is None:
-            return None
-        try:
-            # Se já é um objeto date, retorna
-            if isinstance(value, datetime.date):
-                return value
-            # Converte string para date
-            if isinstance(value, str):
-                # Remove espaços e verifica formato
-                value = value.strip()
-                if len(value) == 10 and value[4] == '-' and value[7] == '-':
-                    return datetime.datetime.strptime(value, '%Y-%m-%d').date()
-            # Se é número (timestamp), converte
-            elif isinstance(value, (int, float)):
-                return datetime.date.fromtimestamp(value)
-        except:
-            pass
-        # Fallback: retorna como string
-        return value
-    
-    # Função para converter timestamp
-    def cast_timestamp(value, curs):
-        if value is None:
-            return None
-        try:
-            if isinstance(value, datetime.datetime):
-                return value
-            if isinstance(value, str):
-                # Remove timezone info se presente
-                if '+' in value:
-                    value = value.split('+')[0]
-                elif 'Z' in value:
-                    value = value.replace('Z', '')
-                # Tenta diferentes formatos
-                for fmt in ['%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d']:
-                    try:
-                        return datetime.datetime.strptime(value.strip(), fmt)
-                    except:
-                        continue
-        except:
-            pass
-        return value
-    
-    # Registrar tipo DATE (OID 1082) com conversão customizada
-    DATE = extensions.new_type((1082,), "DATE", cast_date)
-    extensions.register_type(DATE)
-    
-    # Registrar DATEARRAY
-    DATEARRAY = extensions.new_array_type((1182,), "DATEARRAY", DATE)
-    extensions.register_type(DATEARRAY)
-    
-    # Registrar TIMESTAMP com conversão
-    TIMESTAMP = extensions.new_type((1114,), "TIMESTAMP", cast_timestamp)
-    extensions.register_type(TIMESTAMP)
-    
-    TIMESTAMPTZ = extensions.new_type((1184,), "TIMESTAMPTZ", cast_timestamp)
-    extensions.register_type(TIMESTAMPTZ)
-    
-    # TIME continua como string
-    TIME = extensions.new_type((1083,), "TIME", psycopg2.STRING)
-    extensions.register_type(TIME)
-    
-    print("✅ Fix aplicado: Tipos DATE/TIME do PostgreSQL registrados com conversão para objetos Python")
-except Exception as e:
-    # Em produção, logar o erro mas continuar
-    print(f"⚠️ Aviso: Não foi possível registrar tipos PostgreSQL: {e}")
-    pass
+    from app.utils.pg_types_config import registrar_tipos_postgresql
+    # Tipos já foram registrados ao importar o módulo
+except ImportError:
+    # Fallback se o módulo não existir ainda
+    print("⚠️ Módulo pg_types_config não encontrado, aplicando fix temporário")
+    try:
+        import psycopg2
+        from psycopg2 import extensions
+        # Registro simples sem conversões customizadas
+        extensions.register_type(extensions.new_type((1082,), "DATE", extensions.DATE))
+        extensions.register_type(extensions.new_type((1083,), "TIME", extensions.TIME))
+        extensions.register_type(extensions.new_type((1114,), "TIMESTAMP", extensions.PYDATETIME))
+        extensions.register_type(extensions.new_type((1184,), "TIMESTAMPTZ", extensions.PYDATETIME))
+    except Exception as e:
+        print(f"⚠️ Erro ao aplicar fix temporário: {e}")
 
 # 🔧 Inicializações globais
 db = SQLAlchemy()
@@ -113,71 +54,7 @@ login_manager = LoginManager()
 csrf = CSRFProtect()
 migrate = Migrate()
 
-# 🔧 Configurar event listener para registrar tipos PostgreSQL em cada conexão
-from sqlalchemy import event
-from sqlalchemy.pool import Pool
-
-@event.listens_for(Pool, "connect")
-def register_pg_types(dbapi_conn, connection_record):
-    """Registra tipos PostgreSQL em cada nova conexão"""
-    try:
-        import psycopg2
-        from psycopg2 import extensions
-        import datetime
-        
-        # Verificar se é uma conexão PostgreSQL
-        if hasattr(dbapi_conn, 'cursor'):
-            cursor = dbapi_conn.cursor()
-            cursor.execute("SELECT version()")
-            version = cursor.fetchone()[0]
-            cursor.close()
-            
-            if 'PostgreSQL' in version:
-                # Mesmas funções de conversão do registro global
-                def cast_date(value, curs):
-                    if value is None:
-                        return None
-                    try:
-                        if isinstance(value, datetime.date):
-                            return value
-                        if isinstance(value, str):
-                            value = value.strip()
-                            if len(value) == 10 and value[4] == '-' and value[7] == '-':
-                                return datetime.datetime.strptime(value, '%Y-%m-%d').date()
-                        elif isinstance(value, (int, float)):
-                            return datetime.date.fromtimestamp(value)
-                    except:
-                        pass
-                    return value
-                
-                def cast_timestamp(value, curs):
-                    if value is None:
-                        return None
-                    try:
-                        if isinstance(value, datetime.datetime):
-                            return value
-                        if isinstance(value, str):
-                            if '+' in value:
-                                value = value.split('+')[0]
-                            elif 'Z' in value:
-                                value = value.replace('Z', '')
-                            for fmt in ['%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d']:
-                                try:
-                                    return datetime.datetime.strptime(value.strip(), fmt)
-                                except:
-                                    continue
-                    except:
-                        pass
-                    return value
-                
-                # Registrar tipos na conexão específica com conversão
-                extensions.register_type(extensions.new_type((1082,), "DATE", cast_date), dbapi_conn)
-                extensions.register_type(extensions.new_type((1083,), "TIME", psycopg2.STRING), dbapi_conn)
-                extensions.register_type(extensions.new_type((1114,), "TIMESTAMP", cast_timestamp), dbapi_conn)
-                extensions.register_type(extensions.new_type((1184,), "TIMESTAMPTZ", cast_timestamp), dbapi_conn)
-    except Exception:
-        # Silenciosamente ignorar erros para não interromper a aplicação
-        pass
+# Event listener removido - tipos já registrados globalmente no pg_types_config
 
 def formatar_data_segura(data, formato='%d/%m/%Y'):
     """
@@ -452,42 +329,8 @@ def create_app(config_name=None):
     app.jinja_env.filters['formatar_hora_brasil'] = formatar_hora_brasil
     app.jinja_env.filters['diferenca_timezone'] = diferenca_timezone
     
-    # Filtro especial para formatar datas com segurança (aceita Date, DateTime ou String)
-    def safe_date_format(date_value, formato='%d/%m/%Y'):
-        """
-        Formata data de forma segura, aceitando objetos Date/DateTime ou strings
-        Evita erro 'str object has no attribute strftime'
-        """
-        if date_value is None:
-            return ''
-        
-        try:
-            # Se já é string, verifica se está no formato esperado
-            if isinstance(date_value, str):
-                # Se já está formatada como DD/MM/YYYY, retorna como está
-                if len(date_value) == 10 and date_value[2] == '/' and date_value[5] == '/':
-                    return date_value
-                # Se está no formato YYYY-MM-DD, converte
-                elif len(date_value) >= 10 and date_value[4] == '-' and date_value[7] == '-':
-                    from datetime import datetime
-                    date_obj = datetime.strptime(date_value[:10], '%Y-%m-%d')
-                    return date_obj.strftime(formato)
-                else:
-                    return date_value
-            
-            # Se tem método strftime, usa ele
-            elif hasattr(date_value, 'strftime'):
-                return date_value.strftime(formato)
-            
-            # Caso contrário, converte para string
-            else:
-                return str(date_value)
-                
-        except Exception as e:
-            # Em caso de erro, retorna valor como string
-            return str(date_value) if date_value else ''
-    
-    app.jinja_env.filters['safe_date'] = safe_date_format
+    # Filtro safe_date simplificado - apenas um alias para formatar_data_brasil
+    app.jinja_env.filters['safe_date'] = formatar_data_brasil
     
     # ✅ NOVOS FILTROS: Formatação brasileira de números
     def formatar_valor_brasileiro(valor, decimais=2):
