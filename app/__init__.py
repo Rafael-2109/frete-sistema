@@ -29,6 +29,15 @@ from sqlalchemy import text
 # 🔄 Carrega as variáveis de ambiente do .env
 load_dotenv()
 
+# 🔥 IMPORTAÇÃO CRÍTICA: Registrar tipos PostgreSQL ANTES de TUDO
+# Isso garante que os tipos sejam registrados antes de qualquer conexão
+if 'postgres' in os.getenv('DATABASE_URL', ''):
+    try:
+        from app.utils.pg_types_production import registrar_tipos_postgresql_producao
+        registrar_tipos_postgresql_producao()
+    except Exception as e:
+        print(f"⚠️ Erro ao importar módulo de tipos PostgreSQL: {e}")
+
 # 🔧 IMPORTANTE: Registrar tipos PostgreSQL ANTES de criar SQLAlchemy
 # Isso garante que todas as conexões usem os tipos corretos
 try:
@@ -523,6 +532,14 @@ def create_app(config_name=None):
     # from app.odoo import odoo_bp  # DESATIVADO - Movido para Carteira & Estoque
     from app.odoo.routes.sincronizacao_integrada import sync_integrada_bp  # REATIVADO - Necessário!
     from app.claude_ai import claude_ai_bp
+    
+    # 🔍 Blueprint de diagnóstico PG
+    try:
+        from app.api.diagnostico_pg import diagnostico_pg_bp
+        app.register_blueprint(diagnostico_pg_bp)
+        app.logger.info("✅ Endpoint de diagnóstico PG registrado")
+    except Exception as e:
+        app.logger.warning(f"⚠️ Endpoint de diagnóstico PG não disponível: {e}")
     # Sistema de Permissões será inicializado depois
     
     # 📦 Importando blueprints dos módulos de carteira (seguindo padrão existente)
