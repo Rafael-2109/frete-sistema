@@ -228,22 +228,18 @@
             {% if current_user.tem_permissao('tabelas') or current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
             <li><hr class="dropdown-divider"></li>
             <li><h6 class="dropdown-header">📊 Tabelas de Frete</h6></li>
-            {% if current_user.tem_permissao('tabelas', 'editar') or current_user.pode_editar_cadastros() or current_user.perfil == 'administrador' %}
             <li><a class="dropdown-item" href="{{ url_for('tabelas.cadastrar_tabela_frete') }}">
               <i class="fas fa-table"></i> Cadastro de Tabelas
             </a></li>
             <li><a class="dropdown-item" href="{{ url_for('tabelas.importar_tabela_frete') }}">
               <i class="fas fa-upload"></i> Importar Tabelas
             </a></li>
-            {% endif %}
-            {% if current_user.tem_permissao('tabelas', 'visualizar') or current_user.perfil == 'administrador' %}
             <li><a class="dropdown-item" href="{{ url_for('tabelas.listar_todas_tabelas') }}">
               <i class="fas fa-eye"></i> Consulta de Tabelas
             </a></li>
             <li><a class="dropdown-item" href="{{ url_for('tabelas.historico_tabelas') }}">
               <i class="fas fa-history"></i> Histórico de Tabelas
             </a></li>
-            {% endif %}
             {% endif %}
           </ul>
         </li>
