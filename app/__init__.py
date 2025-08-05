@@ -29,24 +29,44 @@ from sqlalchemy import text
 # 🔄 Carrega as variáveis de ambiente do .env
 load_dotenv()
 
-# 🔧 Configuração definitiva para tipos PostgreSQL
-# Resolve o erro "Unknown PG numeric type: 1082" de forma limpa
+# 🔧 IMPORTANTE: Registrar tipos PostgreSQL ANTES de criar SQLAlchemy
+# Isso garante que todas as conexões usem os tipos corretos
 try:
-    from app.utils.pg_types_config import registrar_tipos_postgresql
-    # Tipos já foram registrados ao importar o módulo
-except ImportError:
-    # Fallback se o módulo não existir ainda
-    print("⚠️ Módulo pg_types_config não encontrado, aplicando fix temporário")
+    import psycopg2
+    from psycopg2 import extensions
+    
+    # Registrar tipos PostgreSQL globalmente
+    # DATE (OID 1082)
+    DATE = extensions.new_type((1082,), "DATE", extensions.DATE)
+    extensions.register_type(DATE)
+    
+    # TIME (OID 1083)
+    TIME = extensions.new_type((1083,), "TIME", extensions.TIME)
+    extensions.register_type(TIME)
+    
+    # TIMESTAMP (OID 1114)
+    TIMESTAMP = extensions.new_type((1114,), "TIMESTAMP", extensions.PYDATETIME)
+    extensions.register_type(TIMESTAMP)
+    
+    # TIMESTAMPTZ (OID 1184)
+    TIMESTAMPTZ = extensions.new_type((1184,), "TIMESTAMPTZ", extensions.PYDATETIME)
+    extensions.register_type(TIMESTAMPTZ)
+    
+    # Arrays
+    DATEARRAY = extensions.new_array_type((1182,), "DATEARRAY", DATE)
+    extensions.register_type(DATEARRAY)
+    
+    print("✅ Tipos PostgreSQL registrados ANTES do SQLAlchemy (solução definitiva)")
+    
+    # Importar também o módulo de configuração se existir
     try:
-        import psycopg2
-        from psycopg2 import extensions
-        # Registro simples sem conversões customizadas
-        extensions.register_type(extensions.new_type((1082,), "DATE", extensions.DATE))
-        extensions.register_type(extensions.new_type((1083,), "TIME", extensions.TIME))
-        extensions.register_type(extensions.new_type((1114,), "TIMESTAMP", extensions.PYDATETIME))
-        extensions.register_type(extensions.new_type((1184,), "TIMESTAMPTZ", extensions.PYDATETIME))
-    except Exception as e:
-        print(f"⚠️ Erro ao aplicar fix temporário: {e}")
+        from app.utils.pg_types_config import registrar_tipos_postgresql
+        print("✅ Módulo pg_types_config também importado")
+    except:
+        pass
+    
+except Exception as e:
+    print(f"⚠️ Erro ao registrar tipos PostgreSQL: {e}")
 
 # 🔧 Inicializações globais
 db = SQLAlchemy()
