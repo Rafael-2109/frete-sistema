@@ -1,6 +1,13 @@
 import os
 import sys
 
+# 🔥 PRIMEIRA COISA: REGISTRAR TIPOS POSTGRESQL
+try:
+    import register_pg_types
+    print("✅ run.py: Tipos PostgreSQL registrados ANTES de importar app")
+except Exception as e:
+    print(f"⚠️ run.py: Erro ao registrar tipos PostgreSQL: {e}")
+
 # Configurar encoding UTF-8 para Windows
 if sys.platform.startswith('win'):
     os.environ['PYTHONIOENCODING'] = 'utf-8'

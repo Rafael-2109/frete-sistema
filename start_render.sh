@@ -37,6 +37,10 @@ export SKIP_DB_CREATE=true
 # Configurar logs sem emojis
 export NO_EMOJI_LOGS=true
 
+# 🔥 EXECUTAR CONFIGURAÇÕES PRÉ-APLICAÇÃO
+echo " Executando configurações pré-aplicação..."
+python pre_start.py || echo " Aviso: Erro no pre_start.py"
+
 # Executar migrações se necessário
 echo " Executando migrações..."
 python -m flask db upgrade || echo " Migrações não executadas (pode ser normal)"
@@ -48,14 +52,39 @@ if [ "$MCP_ENABLED" = "true" ]; then
     sleep 5
 fi
 
-# Iniciar aplicação
-echo " Iniciando aplicação..."
-exec gunicorn --bind 0.0.0.0:$PORT \
-    --worker-class sync \
-    --timeout 300 \
-    --workers 1 \
-    --max-requests 1000 \
-    --max-requests-jitter 100 \
-    --keep-alive 10 \
-    --preload \
-    run:app
+# Criar arquivo de configuração do Gunicorn temporário
+cat > /tmp/gunicorn_config.py << 'EOF'
+import os
+
+# Configurações básicas
+bind = f"0.0.0.0:{os.environ.get('PORT', '5000')}"
+workers = 1
+worker_class = 'sync'
+timeout = 300
+max_requests = 1000
+max_requests_jitter = 100
+keepallive = 10
+preload_app = True
+
+def on_starting(server):
+    """Executado ANTES do Gunicorn iniciar"""
+    print("🚀 Gunicorn iniciando...")
+    try:
+        import register_pg_types
+        print("✅ Tipos PostgreSQL registrados via Gunicorn!")
+    except Exception as e:
+        print(f"⚠️ Erro ao registrar tipos via Gunicorn: {e}")
+
+def post_fork(server, worker):
+    """Executado DEPOIS de fazer fork do worker"""
+    print(f"✅ Worker {worker.pid} iniciado")
+    try:
+        import register_pg_types
+        print(f"✅ Tipos PostgreSQL registrados no worker {worker.pid}")
+    except Exception as e:
+        print(f"⚠️ Erro ao registrar tipos no worker {worker.pid}: {e}")
+EOF
+
+# Iniciar aplicação com configuração customizada
+echo " Iniciando aplicação com configuração customizada..."
+exec gunicorn --config /tmp/gunicorn_config.py run:app

@@ -1,3 +1,12 @@
+# 🔥 PRIMEIRA COISA: REGISTRAR TIPOS POSTGRESQL
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    import register_pg_types  # Importa e executa o registro FORÇADO
+except Exception as e:
+    print(f"⚠️ Erro ao importar register_pg_types: {e}")
+
 try:
     from dotenv import load_dotenv  # type: ignore
 except Exception:  # pragma: no cover - fallback when python-dotenv is missing
