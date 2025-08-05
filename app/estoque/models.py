@@ -412,6 +412,7 @@ class SaldoEstoque:
         try:
             # VERIFICA SE EXISTE CACHE PRIMEIRO
             inspector = inspect(db.engine)
+            cache = None  # Inicializar cache como None
             if inspector.has_table('saldo_estoque_cache'):
                 try:
                     from app.estoque.models_cache import SaldoEstoqueCache, ProjecaoEstoqueCache

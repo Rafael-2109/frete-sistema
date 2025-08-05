@@ -210,7 +210,7 @@
                                     <div class="pedido-info">
                                         <strong class="text-dark">{{ pedido.num_pedido }}</strong>
                                         {% if pedido.data_pedido %}
-                                        <br><small class="text-muted">{{ pedido.data_pedido.strftime('%d/%m/%Y') }}</small>
+                                        <br><small class="text-muted">{{ pedido.data_pedido|safe_date }}</small>
                                         {% endif %}
                                         {% if pedido.pedido_cliente %}
                                         <br><small class="text-info">PC: {{ pedido.pedido_cliente }}</small>
@@ -259,7 +259,7 @@
                                 <td>
                                     <div class="expedicao-info">
                                         {% if pedido.expedicao %}
-                                        <strong class="text-success">{{ pedido.expedicao.strftime('%d/%m/%Y') }}</strong>
+                                        <strong class="text-success">{{ pedido.expedicao|safe_date }}</strong>
                                         {% else %}
                                         <span class="text-warning">Não definida</span>
                                         {% endif %}
@@ -267,7 +267,7 @@
                                         {% if pedido.agendamento %}
                                         <br><small class="text-info">
                                             <i class="fas fa-calendar-check me-1"></i>
-                                            {{ pedido.agendamento.strftime('%d/%m/%Y') }}
+                                            {{ pedido.agendamento|safe_date }}
                                         </small>
                                         <!-- ✅ CORREÇÃO 1: Flags de Agendamento -->
                                         {% if pedido.agendamento_confirmado %}
@@ -292,7 +292,7 @@
                                         {% if pedido.data_entrega_pedido %}
                                         <div class="mb-1">
                                             <i class="fas fa-truck text-primary me-1"></i>
-                                            <strong class="text-primary">{{ pedido.data_entrega_pedido.strftime('%d/%m/%Y') }}</strong>
+                                            <strong class="text-primary">{{ pedido.data_entrega_pedido|safe_date }}</strong>
                                         </div>
                                         {% endif %}
                                         

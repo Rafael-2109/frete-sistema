@@ -268,12 +268,24 @@ def visualizar_embarque(id):
         form = EmbarqueForm()
 
         # Popular cabeçalho - ✅ READONLY: string com nome ao invés de ID
-        form.data_embarque.data = (
-            embarque.data_embarque.strftime('%d/%m/%Y') if embarque.data_embarque else ''
-        )
-        form.data_prevista_embarque.data = (
-            embarque.data_prevista_embarque.strftime('%d/%m/%Y') if embarque.data_prevista_embarque else ''
-        )
+        # Tratamento seguro para datas que podem vir como string ou date
+        if embarque.data_embarque:
+            if hasattr(embarque.data_embarque, 'strftime'):
+                form.data_embarque.data = embarque.data_embarque.strftime('%d/%m/%Y')
+            else:
+                # Se já é string, usa como está
+                form.data_embarque.data = str(embarque.data_embarque)
+        else:
+            form.data_embarque.data = ''
+            
+        if embarque.data_prevista_embarque:
+            if hasattr(embarque.data_prevista_embarque, 'strftime'):
+                form.data_prevista_embarque.data = embarque.data_prevista_embarque.strftime('%d/%m/%Y')
+            else:
+                # Se já é string, usa como está
+                form.data_prevista_embarque.data = str(embarque.data_prevista_embarque)
+        else:
+            form.data_prevista_embarque.data = ''
         form.transportadora.data = (
             embarque.transportadora.razao_social if embarque.transportadora else ''
         )
