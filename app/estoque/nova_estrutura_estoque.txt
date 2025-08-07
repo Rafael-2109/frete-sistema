@@ -1150,3 +1150,5 @@ Regras obrigatórias:
 
   corrigir_separacao_lote_id.py
   corrigir_status_pedidos.py
+
+python -c "from app.estoque.models_tempo_real import EstoqueTempoReal; print(EstoqueTempoReal.query.count())"

@@ -329,13 +329,18 @@ class ServicoEstoqueTempoReal:
             data_proj = hoje + timedelta(days=i)
             
             # Buscar movimentação prevista
-            mov = MovimentacaoPrevista.query.filter_by(
-                cod_produto=cod_produto,
-                data_prevista=data_proj
-            ).first()
+            # IMPORTANTE: Considerar UnificacaoCodigos
+            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
             
-            entrada = float(mov.entrada_prevista) if mov else 0
-            saida = float(mov.saida_prevista) if mov else 0
+            # Buscar movimentações de todos os códigos relacionados
+            movs = MovimentacaoPrevista.query.filter(
+                MovimentacaoPrevista.cod_produto.in_(codigos_relacionados),
+                MovimentacaoPrevista.data_prevista == data_proj
+            ).all()
+            
+            # Somar entradas e saídas de todos os códigos
+            entrada = sum(float(m.entrada_prevista) for m in movs) if movs else 0
+            saida = sum(float(m.saida_prevista) for m in movs) if movs else 0
             
             # Calcular saldo final do dia
             saldo_final = saldo_atual + entrada - saida

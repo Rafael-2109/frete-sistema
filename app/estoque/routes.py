@@ -68,11 +68,15 @@ def converter_projecao_para_resumo(projecao):
     qtd_total_carteira = 0
     if cod_produto:
         try:
-            # Somar qtd_saldo_produto_pedido de todos os pedidos do produto
+            # IMPORTANTE: Considerar UnificacaoCodigos
+            from app.estoque.models import UnificacaoCodigos
+            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(str(cod_produto))
+            
+            # Somar qtd_saldo_produto_pedido de todos os pedidos do produto e códigos unificados
             soma_carteira = db.session.query(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
             ).filter(
-                CarteiraPrincipal.cod_produto == str(cod_produto)
+                CarteiraPrincipal.cod_produto.in_(codigos_relacionados)
             ).scalar()
             qtd_total_carteira = float(soma_carteira) if soma_carteira else 0
         except Exception as e:
@@ -83,12 +87,16 @@ def converter_projecao_para_resumo(projecao):
     qtd_total_producao = 0
     if cod_produto:
         try:
-            # Somar qtd_programada de todas as programações futuras do produto
+            # IMPORTANTE: Considerar UnificacaoCodigos
+            from app.estoque.models import UnificacaoCodigos
+            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(str(cod_produto))
+            
+            # Somar qtd_programada de todas as programações futuras do produto e códigos unificados
             hoje = datetime.now().date()
             soma_producao = db.session.query(
                 func.sum(ProgramacaoProducao.qtd_programada)
             ).filter(
-                ProgramacaoProducao.cod_produto == str(cod_produto),
+                ProgramacaoProducao.cod_produto.in_(codigos_relacionados),
                 ProgramacaoProducao.data_programacao >= hoje
             ).scalar()
             qtd_total_producao = float(soma_producao) if soma_producao else 0
