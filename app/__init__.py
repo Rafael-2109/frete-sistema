@@ -826,10 +826,10 @@ def create_app(config_name=None):
     
     # 🚀 SISTEMA DE ESTOQUE EM TEMPO REAL
     try:
-        # Registrar triggers do sistema tempo real
-        from app.estoque.triggers_tempo_real import registrar_triggers
-        triggers_registrados = registrar_triggers()
-        app.logger.info(f"✅ Triggers de Estoque Tempo Real registrados: {len(triggers_registrados)} tabelas")
+        # Registrar triggers do sistema tempo real (versão after_commit sem warnings)
+        from app.estoque.triggers_after_commit import registrar_triggers_after_commit
+        registrar_triggers_after_commit()
+        app.logger.info("✅ Triggers after_commit do EstoqueTempoReal registrados com sucesso")
         
         # Registrar API de estoque tempo real
         from app.estoque.api_tempo_real import estoque_tempo_real_bp
