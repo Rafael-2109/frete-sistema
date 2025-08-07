@@ -72,7 +72,8 @@ class ServicoEstoqueTempoReal:
             estoque.saldo_atual = Decimal(str(estoque.saldo_atual)) + Decimal(str(delta))
             estoque.atualizado_em = agora_brasil()
             
-            db.session.add(estoque)
+            # Usar merge ao invés de add para evitar warning durante flush
+            db.session.merge(estoque)
             
             # Commit parcial para garantir consistência
             try:
