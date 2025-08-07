@@ -4,11 +4,8 @@ Rotas para visualização agrupada da carteira
 
 from flask import render_template, flash
 from flask_login import login_required
-from sqlalchemy import func, and_, inspect
+from sqlalchemy import inspect
 from app import db
-from app.carteira.models import CarteiraPrincipal
-from app.separacao.models import Separacao
-from app.pedidos.models import Pedido
 from ..services.agrupamento_service import AgrupamentoService
 from . import carteira_bp
 import logging

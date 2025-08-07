@@ -119,7 +119,7 @@ def formatar_data_brasileira(data):
                     try:
                         data_obj = date_parser.parse(data)
                         return data_obj.strftime('%d/%m/%Y')
-                    except:
+                    except Exception as e:
                         pass
         
         # Se for número (timestamp)
@@ -127,7 +127,7 @@ def formatar_data_brasileira(data):
             try:
                 data_obj = datetime.fromtimestamp(data)
                 return data_obj.strftime('%d/%m/%Y')
-            except:
+            except Exception as e:
                 pass
         
         # 🔧 CORREÇÃO: Retorna string vazia para valores inválidos
@@ -382,7 +382,7 @@ def tela_cotacao():
                                .filter(
                                    (Pedido.cod_uf == uf_busca) |
                                    ((Pedido.rota == 'RED') & (uf_busca == 'SP'))
-                               )
+                                )
                                .filter(~Pedido.id.in_(lista_ids))
                                .filter(Pedido.status == 'ABERTO')  # ✅ Apenas pedidos abertos
                                .all())
@@ -831,7 +831,7 @@ def fechar_frete():
                 import json
                 try:
                     data['pedidos'] = json.loads(data['pedidos'])
-                except:
+                except Exception as e:
                     data['pedidos'] = []
         
         if not data:
@@ -1304,7 +1304,7 @@ def fechar_frete_grupo():
                 import json
                 try:
                     data['cnpjs'] = json.loads(data['cnpjs'])
-                except:
+                except Exception as e:
                     data['cnpjs'] = [data['cnpjs']]
         
         if not data:
@@ -1669,7 +1669,7 @@ def otimizar():
                             valor = getattr(pedido_original, attr)
                             if not callable(valor):
                                 setattr(pedido_copia, attr, valor)
-                        except:
+                        except Exception as e:
                             pass
                 
                 # ✅ ALTERAÇÃO PRINCIPAL: Força UF=SP e cidade=Guarulhos
@@ -2433,7 +2433,7 @@ def redespachar():
                         valor = getattr(pedido_original, attr)
                         if not callable(valor):
                             setattr(pedido_copia, attr, valor)
-                    except:
+                    except Exception as e:
                         pass
             
             # ✅ ALTERAÇÃO PRINCIPAL: Força UF=SP e cidade=Guarulhos
@@ -2685,7 +2685,7 @@ def redespachar_sao_paulo():
                         valor = getattr(pedido_original, attr)
                         if not callable(valor):
                             setattr(pedido_copia, attr, valor)
-                    except:
+                    except Exception as e:
                         pass
             
             # ✅ ALTERAÇÃO PRINCIPAL: Força UF=SP e cidade=São Paulo

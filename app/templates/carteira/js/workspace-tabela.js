@@ -203,24 +203,61 @@ class WorkspaceTabela {
      */
     calcularStatusDisponibilidade(produto) {
         try {
+            // Debug dos dados recebidos
+            console.log('Debug disponibilidade:', {
+                cod_produto: produto.cod_produto,
+                qtd_pedido: produto.qtd_pedido,
+                estoque_hoje: produto.estoque_hoje,
+                data_disponibilidade: produto.data_disponibilidade,
+                qtd_disponivel: produto.qtd_disponivel
+            });
+            
             const qtdPedido = produto.qtd_pedido || 0;
             const estoqueHoje = produto.estoque_hoje || 0;
+            const dataDisponivel = produto.data_disponibilidade;
+            const qtdDisponivel = produto.qtd_disponivel || 0;
 
+            // Se tem estoque hoje suficiente
             if (estoqueHoje >= qtdPedido) {
                 return {
                     class: 'bg-success text-white',
                     texto: 'DISPONÍVEL',
-                    detalhes: 'Estoque suficiente',
+                    detalhes: `${this.formatarQuantidade(estoqueHoje)} unidades`,
                     tooltip: `Estoque: ${this.formatarQuantidade(estoqueHoje)}, Pedido: ${this.formatarQuantidade(qtdPedido)}`
                 };
-            } else if (estoqueHoje > 0) {
+            } 
+            // Se tem data de disponibilidade futura
+            else if (dataDisponivel && dataDisponivel !== 'Sem previsão') {
+                const hoje = new Date().toISOString().split('T')[0];
+                if (dataDisponivel > hoje) {
+                    const diasFuturo = this.calcularDiasAteData(dataDisponivel);
+                    return {
+                        class: 'bg-info text-white',
+                        texto: `${this.formatarQuantidade(qtdDisponivel)}`,
+                        detalhes: `D+${diasFuturo} - ${this.formatarData(dataDisponivel)}`,
+                        tooltip: `Disponível: ${this.formatarQuantidade(qtdDisponivel)} unidades em ${this.formatarData(dataDisponivel)}`
+                    };
+                } else if (qtdDisponivel > 0) {
+                    // Data passada ou hoje com quantidade disponível
+                    return {
+                        class: 'bg-warning text-dark',
+                        texto: 'PARCIAL',
+                        detalhes: `${this.formatarQuantidade(qtdDisponivel)} disponível`,
+                        tooltip: `Disponível: ${this.formatarQuantidade(qtdDisponivel)} unidades`
+                    };
+                }
+            }
+            // Se tem estoque parcial
+            else if (estoqueHoje > 0) {
                 return {
                     class: 'bg-warning text-dark',
                     texto: 'PARCIAL',
-                    detalhes: `Falta: ${this.formatarQuantidade(qtdPedido - estoqueHoje)}`,
+                    detalhes: `${this.formatarQuantidade(estoqueHoje)} de ${this.formatarQuantidade(qtdPedido)}`,
                     tooltip: `Disponível parcialmente. Estoque: ${this.formatarQuantidade(estoqueHoje)}`
                 };
-            } else {
+            } 
+            // Sem estoque e sem previsão
+            else {
                 return {
                     class: 'bg-danger text-white',
                     texto: 'INDISPONÍVEL',
@@ -229,6 +266,7 @@ class WorkspaceTabela {
                 };
             }
         } catch (error) {
+            console.error('Erro ao calcular disponibilidade:', error);
             return {
                 class: 'bg-secondary text-white',
                 texto: 'ERRO',
@@ -294,6 +332,39 @@ class WorkspaceTabela {
     formatarPallet(pallet) {
         if (!pallet) return '0 plt';
         return `${parseFloat(pallet).toFixed(2)} plt`;
+    }
+    
+    formatarData(data) {
+        if (!data) return '';
+        // Se já está no formato dd/mm/yyyy, retornar como está
+        if (data.includes('/')) return data;
+        // Converter de yyyy-mm-dd para dd/mm/yyyy
+        const [ano, mes, dia] = data.split('-');
+        return `${dia}/${mes}/${ano}`;
+    }
+    
+    calcularDiasAteData(dataFutura) {
+        try {
+            // Garantir formato correto da data (yyyy-mm-dd)
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            hoje.setMinutes(0);
+            hoje.setSeconds(0);
+            hoje.setMilliseconds(0);
+            
+            // Criar data futura garantindo timezone correto
+            const [ano, mes, dia] = dataFutura.split('-');
+            const futuro = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+            futuro.setHours(0, 0, 0, 0);
+            
+            const diffTime = futuro.getTime() - hoje.getTime();
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+            
+            return Math.max(0, diffDays);
+        } catch (error) {
+            console.error('Erro ao calcular dias:', error, dataFutura);
+            return 0;
+        }
     }
 }
 

@@ -89,8 +89,8 @@ def listar_carteira():
             
             # Recalcular saldo (qtd_pedido - qtd_cancelada - baixa)
             qtd_saldo = float(item.qtd_produto_pedido or 0) - \
-                       float(item.qtd_cancelada_produto_pedido or 0) - \
-                       float(item.baixa_produto_pedido or 0)
+                float(item.qtd_cancelada_produto_pedido or 0) - \
+                float(item.baixa_produto_pedido or 0)
             
             # Calcular valor total (saldo * preço)
             valor_total = qtd_saldo * float(item.preco_produto_pedido or 0)
@@ -169,8 +169,8 @@ def atualizar_qtd_cancelada(id):
         
         # Calcular máximo permitido
         max_cancelada = float(item_copia.qtd_produto_pedido or 0) - \
-                       float(item_copia.baixa_produto_pedido or 0) - \
-                       qtd_embarque_cotado
+            float(item_copia.baixa_produto_pedido or 0) - \
+            qtd_embarque_cotado
         
         if nova_qtd_cancelada > max_cancelada:
             return jsonify({

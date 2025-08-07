@@ -2,6 +2,16 @@
 
 {% block title %}Saldo de Estoque - Projeção 29 Dias{% endblock %}
 
+{% block extra_css %}
+<style>
+/* Hover simples e funcional no cabeçalho */
+#tabelaEstoque thead.table-dark th.sortable:hover {
+    background-color: #5a6268 !important;
+    transition: background-color 0.2s;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row">
@@ -91,8 +101,10 @@
                                     <th class="sortable text-start" onclick="serverSort('codigo')">Código <i class="fas fa-sort"></i></th>
                                     <th class="sortable text-start" onclick="serverSort('produto')">Produto <i class="fas fa-sort"></i></th>
                                     <th class="sortable text-end" onclick="serverSort('estoque')">Est. Inicial (D0) <i class="fas fa-sort"></i></th>
-                                    <th class="sortable text-end" onclick="serverSort('carteira')">Carteira <i class="fas fa-sort"></i></th>
                                     <th class="sortable text-end" onclick="serverSort('ruptura')">Ruptura 7d <i class="fas fa-sort"></i></th>
+                                    <th class="sortable text-center" onclick="serverSort('disponivel')">Disponível <i class="fas fa-sort"></i></th>
+                                    <th class="sortable text-end" onclick="serverSort('carteira')">Carteira <i class="fas fa-sort"></i></th>
+                                    <th class="sortable text-end" onclick="serverSort('producao')">Produção <i class="fas fa-sort"></i></th>
                                     <th class="sortable text-center" onclick="serverSort('status')">Status <i class="fas fa-sort"></i></th>
                                     <th class="text-center">Ações</th>
                                 </tr>
@@ -110,6 +122,28 @@
                                         </span>
                                     </td>
                                     <td class="text-end">
+                                        <span class="badge {% if produto.previsao_ruptura <= 0 %}bg-warning text-dark{% elif produto.previsao_ruptura < 10 %}bg-warning{% else %}bg-success{% endif %}">
+                                            {{ "{:,.0f}".format(produto.previsao_ruptura).replace(',', '.') }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        {% if produto.qtd_disponivel and produto.qtd_disponivel > 0 %}
+                                            <div>
+                                                <span class="badge bg-info text-white">
+                                                    {{ "{:,.0f}".format(produto.qtd_disponivel).replace(',', '.') }}
+                                                </span>
+                                                {% if produto.dias_disponivel is not none %}
+                                                    <br>
+                                                    <small class="text-muted">D+{{ produto.dias_disponivel }}</small>
+                                                {% endif %}
+                                            </div>
+                                        {% elif produto.estoque_inicial > 0 %}
+                                            <span class="badge bg-success">Disponível</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Indisponível</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
                                         {% if produto.qtd_total_carteira > 0 %}
                                             <span class="text-primary">{{ "{:,.0f}".format(produto.qtd_total_carteira).replace(',', '.') }}</span>
                                         {% else %}
@@ -117,9 +151,11 @@
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
-                                        <span class="badge {% if produto.previsao_ruptura <= 0 %}bg-warning text-dark{% elif produto.previsao_ruptura < 10 %}bg-warning{% else %}bg-success{% endif %}">
-                                            {{ "{:,.0f}".format(produto.previsao_ruptura).replace(',', '.') }}
-                                        </span>
+                                        {% if produto.qtd_total_producao > 0 %}
+                                            <span class="text-success">{{ "{:,.0f}".format(produto.qtd_total_producao).replace(',', '.') }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
                                     </td>
                                     <td class="text-center">
                                         {% if produto.status_ruptura == 'CRÍTICO' %}
@@ -134,9 +170,9 @@
                                         <div class="btn-group btn-group-sm">
                                             <button type="button" 
                                                     class="btn btn-outline-info btn-sm" 
-                                                    onclick="verProjecaoCompleta('{{ produto.cod_produto }}')"
-                                                    title="Ver projeção 29 dias">
-                                                <i class="fas fa-chart-line"></i>
+                                                    onclick="abrirCardex('{{ produto.cod_produto }}')"
+                                                    title="Ver cardex D0-D28">
+                                                <i class="fas fa-chart-line"></i> Cardex
                                             </button>
                                             {% if current_user.nivel == 'admin' %}
                                             <button type="button" 
@@ -621,12 +657,11 @@ function serverSort(coluna) {
     cursor: pointer;
     user-select: none;
 }
-.sortable:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-}
+
 .sortable i {
     font-size: 0.8em;
     opacity: 0.6;
+    margin-left: 5px;
 }
 /* Alinhamento de colunas */
 .text-start { text-align: left !important; }
@@ -659,4 +694,272 @@ function serverSort(coluna) {
 .text-warning { color: #ffc107 !important; }
 .text-success { color: #198754 !important; }
 </style>
+
+<!-- Modal Cardex -->
+<div class="modal fade" id="modalCardexEstoque" tabindex="-1" role="dialog" aria-labelledby="modalCardexLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document" style="max-width: 95%;">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalCardexLabel">
+                    <i class="fas fa-chart-line"></i> Cardex D0-D28
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="cardexLoading" class="text-center p-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2">Carregando dados do cardex...</p>
+                </div>
+                <div id="cardexContent" style="display: none;">
+                    <!-- Conteúdo será preenchido dinamicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Função para abrir o cardex
+function abrirCardex(codProduto) {
+    console.log('Abrindo cardex para produto:', codProduto);
+    
+    // Mostrar modal
+    $('#modalCardexEstoque').modal('show');
+    $('#cardexLoading').show();
+    $('#cardexContent').hide();
+    
+    // Buscar dados do produto
+    fetch(`/carteira/api/produto/${codProduto}/cardex`)
+        .then(response => response.json())
+        .then(data => {
+            console.log('Dados recebidos do cardex:', data);
+            if (data.success) {
+                // Renderizar cardex
+                renderizarCardex(data);
+            } else {
+                $('#cardexContent').html(`
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Erro ao carregar cardex: ${data.error}
+                    </div>
+                `);
+            }
+            $('#cardexLoading').hide();
+            $('#cardexContent').show();
+        })
+        .catch(error => {
+            console.error('Erro ao buscar cardex:', error);
+            $('#cardexContent').html(`
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Erro ao carregar cardex: ${error.message}
+                </div>
+            `);
+            $('#cardexLoading').hide();
+            $('#cardexContent').show();
+        });
+}
+
+function renderizarCardex(data) {
+    // Calcular estatísticas
+    let maiorEstoque = { valor: 0, dia: 0 };
+    let menorEstoque = { valor: 999999, dia: 0 };
+    let totalProducao = 0;
+    let totalSaidas = 0;
+    
+    if (data.cardex && data.cardex.length > 0) {
+        data.cardex.forEach((dia, index) => {
+            const estoqueFinal = dia.estoque_final || 0;
+            const producao = dia.producao || 0;
+            const saida = dia.saida || 0;
+            
+            if (estoqueFinal > maiorEstoque.valor) {
+                maiorEstoque = { valor: estoqueFinal, dia: index };
+            }
+            if (estoqueFinal < menorEstoque.valor) {
+                menorEstoque = { valor: estoqueFinal, dia: index };
+            }
+            totalProducao += producao;
+            totalSaidas += saida;
+        });
+    }
+    
+    let html = `
+        <!-- Header com Informações -->
+        <div class="mb-4">
+            <h5 class="text-primary">
+                <i class="fas fa-box me-2"></i>
+                ${data.cod_produto}
+            </h5>
+            <p class="text-muted mb-3">Projeção de Estoque - D0 a D28</p>
+        </div>
+        
+        <!-- Cards de Estatísticas -->
+        <div class="mb-4">
+            <div class="row g-3">
+                <div class="col-3">
+                    <div class="bg-success bg-opacity-10 p-3 rounded">
+                        <h5 class="text-success mb-1">${formatarNumero(maiorEstoque.valor)}</h5>
+                        <small class="text-muted">Maior Pico</small>
+                        <br><small class="text-success">D+${maiorEstoque.dia}</small>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="bg-warning bg-opacity-10 p-3 rounded">
+                        <h5 class="text-warning mb-1">${formatarNumero(menorEstoque.valor)}</h5>
+                        <small class="text-muted">Menor Estoque</small>
+                        <br><small class="text-warning">D+${menorEstoque.dia}</small>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="bg-info bg-opacity-10 p-3 rounded">
+                        <h5 class="text-info mb-1">${formatarNumero(totalProducao)}</h5>
+                        <small class="text-muted">Produção Total</small>
+                        <br><small class="text-info">28 dias</small>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="bg-danger bg-opacity-10 p-3 rounded">
+                        <h5 class="text-danger mb-1">${formatarNumero(totalSaidas)}</h5>
+                        <small class="text-muted">Saídas Total</small>
+                        <br><small class="text-danger">28 dias</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tabela Cardex -->
+        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <table class="table table-sm table-striped table-hover">
+                <thead class="table-dark sticky-top">
+                    <tr>
+                        <th>Dia</th>
+                        <th>Data</th>
+                        <th class="text-end">Est. Inicial</th>
+                        <th class="text-end">Saídas</th>
+                        <th class="text-end">Saldo</th>
+                        <th class="text-end">Produção</th>
+                        <th class="text-end">Est. Final</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    if (data.cardex && data.cardex.length > 0) {
+        data.cardex.forEach((dia, index) => {
+            // Garantir que todos os valores existem e são números
+            const estoque_inicial = dia.estoque_inicial || 0;
+            const saida = dia.saida || 0;
+            const producao = dia.producao || 0;
+            const estoque_final = dia.estoque_final || 0;
+            const saldo = estoque_inicial - saida;
+            
+            // Determinar status e classes
+            let statusClass = '';
+            let badgeClass = 'bg-success';
+            let statusTexto = 'Normal';
+            
+            if (estoque_final <= 0) {
+                statusClass = 'table-danger';
+                badgeClass = 'bg-danger';
+                statusTexto = 'Ruptura';
+            } else if (estoque_final <= 10) {
+                statusClass = 'table-warning';
+                badgeClass = 'bg-warning';
+                statusTexto = 'Crítico';
+            } else if (producao > 0) {
+                badgeClass = 'bg-info';
+                statusTexto = 'Produção';
+            }
+            
+            html += `
+                <tr class="${statusClass}">
+                    <td><strong>D+${index}</strong></td>
+                    <td>${formatarData(dia.data)}</td>
+                    <td class="text-end">${formatarNumero(estoque_inicial)}</td>
+                    <td class="text-end text-danger">
+                        ${saida > 0 ? `-${formatarNumero(saida)}` : '-'}
+                    </td>
+                    <td class="text-end">
+                        <span class="badge ${saldo <= 0 ? 'bg-danger' : 'bg-secondary'}">
+                            ${formatarNumero(saldo)}
+                        </span>
+                    </td>
+                    <td class="text-end text-success">
+                        ${producao > 0 ? `+${formatarNumero(producao)}` : '-'}
+                    </td>
+                    <td class="text-end">
+                        <strong class="${estoque_final <= 0 ? 'text-danger' : 'text-success'}">
+                            ${formatarNumero(estoque_final)}
+                        </strong>
+                    </td>
+                    <td>
+                        <span class="badge ${badgeClass}">
+                            ${statusTexto}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        });
+    } else {
+        html += '<tr><td colspan="8" class="text-center">Sem dados de projeção</td></tr>';
+    }
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    // Alertas (se houver)
+    if (data.alertas && data.alertas.length > 0) {
+        html += `
+            <div class="mt-4">
+                <h6 class="text-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Alertas Identificados
+                </h6>
+                <div class="list-group">
+                    ${data.alertas.map(alerta => `
+                        <div class="list-group-item list-group-item-${alerta.tipo}">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">${alerta.titulo}</h6>
+                                <small>D+${alerta.dia}</small>
+                            </div>
+                            <p class="mb-1">${alerta.descricao}</p>
+                            <small>${alerta.sugestao}</small>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    $('#cardexContent').html(html);
+}
+
+function formatarNumero(valor) {
+    if (!valor && valor !== 0) return '0';
+    return Math.floor(valor).toLocaleString('pt-BR');
+}
+
+function formatarData(dataStr) {
+    if (!dataStr) return '';
+    // Adicionar hora para evitar problemas de timezone
+    const dataComHora = dataStr.includes('T') ? dataStr : dataStr + 'T12:00:00';
+    const data = new Date(dataComHora);
+    
+    return data.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit'
+    });
+}
+</script>
 {% endblock %} 

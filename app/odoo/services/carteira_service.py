@@ -1394,26 +1394,74 @@ class CarteiraService:
             logger.info("🧹 Sanitizando dados...")
             dados_novos = self._sanitizar_dados_carteira(dados_novos)
             
-            # PROTEÇÃO: Deletar apenas pedidos Odoo usando query eficiente
-            logger.info(f"🛡️ Preservando {registros_nao_odoo} registros não-Odoo...")
+            # NOVO: Remover duplicatas vindas do Odoo (mesmo pedido com mesmo produto duplicado)
+            logger.info("🔍 Tratando duplicatas dos dados do Odoo...")
+            dados_unicos = {}
+            duplicatas_encontradas = 0
             
-            # Usar query SQL direta para deletar apenas pedidos Odoo de forma eficiente
-            # Isso evita problemas de constraint e é muito mais rápido
-            pedidos_odoo_deletados = db.session.query(CarteiraPrincipal).filter(
+            for item in dados_novos:
+                chave = (item.get('num_pedido'), item.get('cod_produto'))
+                if chave[0] and chave[1]:  # Validar que tem pedido e produto
+                    if chave not in dados_unicos:
+                        dados_unicos[chave] = item
+                    else:
+                        # Duplicata encontrada - consolidar quantidades
+                        duplicatas_encontradas += 1
+                        item_existente = dados_unicos[chave]
+                        
+                        # Somar quantidades dos itens duplicados
+                        qtd_produto = float(item.get('qtd_produto_pedido', 0) or 0)
+                        qtd_saldo = float(item.get('qtd_saldo_produto_pedido', 0) or 0)
+                        qtd_cancelada = float(item.get('qtd_cancelada_produto_pedido', 0) or 0)
+                        
+                        item_existente['qtd_produto_pedido'] = float(item_existente.get('qtd_produto_pedido', 0) or 0) + qtd_produto
+                        item_existente['qtd_saldo_produto_pedido'] = float(item_existente.get('qtd_saldo_produto_pedido', 0) or 0) + qtd_saldo
+                        item_existente['qtd_cancelada_produto_pedido'] = float(item_existente.get('qtd_cancelada_produto_pedido', 0) or 0) + qtd_cancelada
+                        
+                        logger.warning(f"⚠️ Duplicata consolidada: {chave[0]}/{chave[1]} - Qtds somadas: {qtd_produto} + existente")
+            
+            dados_novos = list(dados_unicos.values())
+            
+            if duplicatas_encontradas > 0:
+                logger.warning(f"🔄 {duplicatas_encontradas} itens duplicados consolidados (quantidades somadas)")
+            
+            # PROTEÇÃO: Usar estratégia UPSERT para evitar duplicatas
+            logger.info(f"🛡️ Preservando {registros_nao_odoo} registros não-Odoo...")
+            logger.info("🔄 Usando estratégia UPSERT para evitar erros de chave duplicada...")
+            
+            # Primeiro, obter todos os registros Odoo existentes
+            registros_odoo_existentes = {}
+            for item in db.session.query(CarteiraPrincipal).filter(
                 or_(
                     CarteiraPrincipal.num_pedido.like('VSC%'),
                     CarteiraPrincipal.num_pedido.like('VCD%'),
                     CarteiraPrincipal.num_pedido.like('VFB%')
                 )
-            ).delete(synchronize_session='fetch')
+            ).all():
+                chave = (item.num_pedido, item.cod_produto)
+                registros_odoo_existentes[chave] = item
             
-            logger.info(f"🗑️ {pedidos_odoo_deletados} registros Odoo removidos")
+            logger.info(f"📊 {len(registros_odoo_existentes)} registros Odoo existentes encontrados")
             
-            # Fazer flush para garantir que os deletes sejam executados antes dos inserts
-            db.session.flush()
+            # Criar conjunto de chaves dos novos dados para controle
+            chaves_novos_dados = set()
+            for item in dados_novos:
+                if item.get('num_pedido') and item.get('cod_produto'):
+                    chaves_novos_dados.add((item['num_pedido'], item['cod_produto']))
             
-            # Inserir novos registros do Odoo
+            # Remover registros que não existem mais no Odoo
+            pedidos_odoo_deletados = 0
+            for chave, registro in registros_odoo_existentes.items():
+                if chave not in chaves_novos_dados:
+                    db.session.delete(registro)
+                    pedidos_odoo_deletados += 1
+            
+            if pedidos_odoo_deletados > 0:
+                logger.info(f"🗑️ {pedidos_odoo_deletados} registros Odoo obsoletos removidos")
+            
+            # UPSERT: Atualizar existentes ou inserir novos
             contador_inseridos = 0
+            contador_atualizados = 0
             erros_insercao = []
             
             for item in dados_novos:
@@ -1423,14 +1471,28 @@ class CarteiraService:
                         erros_insercao.append(f"Item sem pedido/produto: {item}")
                         continue
                     
-                    novo_registro = CarteiraPrincipal(**item)
-                    db.session.add(novo_registro)
-                    contador_inseridos += 1
+                    chave = (item['num_pedido'], item['cod_produto'])
+                    
+                    if chave in registros_odoo_existentes:
+                        # ATUALIZAR registro existente
+                        registro_existente = registros_odoo_existentes[chave]
+                        for key, value in item.items():
+                            if hasattr(registro_existente, key) and key != 'id':
+                                setattr(registro_existente, key, value)
+                        contador_atualizados += 1
+                    else:
+                        # INSERIR novo registro
+                        novo_registro = CarteiraPrincipal(**item)
+                        db.session.add(novo_registro)
+                        contador_inseridos += 1
                     
                 except Exception as e:
-                    erro_msg = f"Erro ao inserir {item.get('num_pedido', 'N/A')}/{item.get('cod_produto', 'N/A')}: {e}"
+                    erro_msg = f"Erro ao processar {item.get('num_pedido', 'N/A')}/{item.get('cod_produto', 'N/A')}: {e}"
                     logger.error(erro_msg)
                     erros_insercao.append(erro_msg)
+            
+            logger.info(f"✅ {contador_inseridos} novos registros inseridos")
+            logger.info(f"🔄 {contador_atualizados} registros atualizados")
             
             # ============================================================
             # FASE 8: COMMIT E RECOMPOSIÇÃO
@@ -1460,13 +1522,14 @@ class CarteiraService:
             # Estatísticas completas compatíveis com função original
             estatisticas_completas = {
                 'registros_inseridos': contador_inseridos,
+                'registros_atualizados': contador_atualizados,
                 'registros_removidos': pedidos_odoo_deletados,
                 'registros_nao_odoo_preservados': registros_nao_odoo,
                 'total_encontrados': len(resultado_odoo.get('dados', [])),
                 'registros_filtrados': len(dados_novos),
-                'taxa_sucesso': f"{(contador_inseridos/len(dados_novos)*100):.1f}%" if dados_novos else "0%",
+                'taxa_sucesso': f"{((contador_inseridos + contador_atualizados)/len(dados_novos)*100):.1f}%" if dados_novos else "0%",
                 'erros_processamento': len(erros_insercao),
-                'metodo': 'operacional_completo_com_gestao',
+                'metodo': 'operacional_completo_com_upsert',
                 
                 # Dados operacionais específicos
                 'tempo_execucao_segundos': round(tempo_total, 2),
@@ -1488,6 +1551,7 @@ class CarteiraService:
             # Log resumo final
             logger.info(f"✅ SINCRONIZAÇÃO OPERACIONAL COMPLETA CONCLUÍDA:")
             logger.info(f"   📊 {contador_inseridos} registros inseridos")
+            logger.info(f"   🔄 {contador_atualizados} registros atualizados")
             logger.info(f"   🗑️ {pedidos_odoo_deletados} registros Odoo removidos")
             logger.info(f"   🛡️ {registros_nao_odoo} registros não-Odoo preservados")
             logger.info(f"   💾 {backup_result['total_backups']} pré-separações em backup")

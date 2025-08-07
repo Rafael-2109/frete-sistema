@@ -5,13 +5,11 @@ from flask import Blueprint, jsonify, request, render_template
 from flask_login import login_required, current_user
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func
 import logging
 
 from app import db
 from app.carteira.models import CarteiraPrincipal, SaldoStandby
-from app.separacao.models import Separacao
-from app.pedidos.models import Pedido
 
 logger = logging.getLogger(__name__)
 

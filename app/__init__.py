@@ -1,11 +1,9 @@
 # 🔥 PRIMEIRA COISA: REGISTRAR TIPOS POSTGRESQL
 import sys
 import os
+
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-try:
-    import register_pg_types  # Importa e executa o registro FORÇADO
-except Exception as e:
-    print(f"⚠️ Erro ao importar register_pg_types: {e}")
 
 try:
     from dotenv import load_dotenv  # type: ignore
@@ -534,6 +532,7 @@ def create_app(config_name=None):
 
     @login_manager.user_loader
     def load_user(user_id):
+        from app.auth.models import Usuario
         return Usuario.query.get(int(user_id))
 
     # Registra comandos CLI apenas se existirem
@@ -661,9 +660,6 @@ def create_app(config_name=None):
     app.register_blueprint(alertas_bp)
     app.register_blueprint(estoque_bp)
     
-    # Registrar blueprint de diagnóstico PG 1082
-    from app.estoque.diagnostico_pg1082 import pg1082_bp
-    app.register_blueprint(pg1082_bp)
     app.register_blueprint(producao_bp)
     app.register_blueprint(permissions_bp)
 
@@ -740,25 +736,6 @@ def create_app(config_name=None):
                 print(f"⚠️ Erro na criação de tabelas: {e}")
                 print("💡 Continuando sem criação automática de tabelas")
 
-    # Importa os modelos para que o Flask-Migrate os detecte
-    from app.auth.models import Usuario
-    from app.pedidos.models import Pedido
-    from app.transportadoras.models import Transportadora
-    from app.veiculos.models import Veiculo
-    from app.cotacao.models import Cotacao
-    # Novos modelos dos módulos de carteira
-    from app.faturamento.models import FaturamentoProduto
-    from app.estoque.models import MovimentacaoEstoque
-    from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
-    from app.localidades.models import CadastroRota, CadastroSubRota
-    
-    # 🆕 MODELOS DO SISTEMA CARTEIRA DE PEDIDOS (17 MODELOS)
-    from app.carteira.models import (
-        CarteiraPrincipal, PreSeparacaoItem,
-        InconsistenciaFaturamento, FaturamentoParcialJustificativa,
-        CarteiraCopia, ControleCruzadoSeparacao, TipoCarga, 
-        SaldoStandby
-    )
 
     # ✅ EXECUTAR CORREÇÕES NO BANCO DE DADOS
     with app.app_context():
@@ -845,24 +822,41 @@ def create_app(config_name=None):
         except Exception as e:
             app.logger.warning(f"⚠️ MCP integration not available: {e}")
 
-    # Configurar triggers do cache de estoque (versão otimizada)
+    # Sistema híbrido REMOVIDO - usando novo sistema de estoque em tempo real
+    
+    # 🚀 SISTEMA DE ESTOQUE EM TEMPO REAL
     try:
-        from app.estoque.cache_triggers_safe import configurar_triggers_cache, garantir_cache_atualizado
+        # Registrar triggers do sistema tempo real
+        from app.estoque.triggers_tempo_real import registrar_triggers
+        triggers_registrados = registrar_triggers()
+        app.logger.info(f"✅ Triggers de Estoque Tempo Real registrados: {len(triggers_registrados)} tabelas")
         
-        # Configurar triggers que atualizam IMEDIATAMENTE após commit
-        configurar_triggers_cache()
+        # Registrar API de estoque tempo real
+        from app.estoque.api_tempo_real import estoque_tempo_real_bp
+        app.register_blueprint(estoque_tempo_real_bp)
+        app.logger.info("✅ API de Estoque Tempo Real registrada")
         
-        app.logger.info("✅ Sistema de Cache Dinâmico configurado com sucesso")
-        app.logger.info("📊 Atualização automática e imediata após cada operação")
-        app.logger.info("🎯 Monitorando: Movimentações, Carteira, Pré-Separações, Separações, Produção")
+        # Configurar job de fallback (recalcula 10 produtos mais antigos a cada 60 segundos)
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
         
-        # Registrar comandos CLI para gerenciar cache
-        from app.estoque import cli_cache
-        cli_cache.init_app(app)
-        app.logger.info("🛠️ Comandos CLI de cache registrados")
-        app.logger.info("💡 Use garantir_cache_atualizado(cod_produto) para garantir 100% de precisão")
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(
+            func=ServicoEstoqueTempoReal.processar_fallback,
+            trigger="interval",
+            seconds=60,
+            id='fallback_estoque_tempo_real',
+            replace_existing=True,
+            max_instances=1  # Evita execuções paralelas
+        )
+        scheduler.start()
+        app.logger.info("✅ Job de Fallback de Estoque configurado (60 segundos)")
+        
+        # Registrar shutdown do scheduler
+        import atexit
+        atexit.register(lambda: scheduler.shutdown())
         
     except Exception as e:
-        app.logger.warning(f"⚠️ Sistema de cache não configurado: {e}")
+        app.logger.warning(f"⚠️ Sistema de Estoque Tempo Real não configurado: {e}")
 
     return app

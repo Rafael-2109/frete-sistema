@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, date
 
 # Imports específicos com fallbacks
 try:
-    from flask_login import current_user
+    from app.auth.models import Usuario
     FLASK_LOGIN_AVAILABLE = True
 except ImportError:
     from unittest.mock import Mock

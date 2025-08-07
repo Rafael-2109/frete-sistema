@@ -17,7 +17,7 @@ def login():
     if form.validate_on_submit():
         usuario = Usuario.query.filter_by(email=form.email.data).first()
         if usuario and usuario.verificar_senha(form.senha.data):
-            if usuario.is_active:
+            if usuario.is_approved:
                 # Atualizar último login
                 usuario.ultimo_login = datetime.utcnow()
                 db.session.commit()
@@ -235,7 +235,3 @@ def obter_lista_vendedores():
     except Exception as e:
         print(f"Erro ao obter lista de vendedores: {e}")
         return []
-
-
-
-

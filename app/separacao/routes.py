@@ -1,14 +1,13 @@
 import os
+import tempfile
 import numpy as np
 import pandas as pd
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required
-from werkzeug.utils import secure_filename
 
 from app import db
 from app.separacao.models import Separacao
 from app.separacao.forms import ImportarExcelForm
-from app.utils.localizacao import LocalizacaoService
 
 # 🌐 Importar sistema de arquivos S3
 from app.utils.file_storage import get_file_storage
@@ -99,18 +98,16 @@ def importar():
         
         try:
             # 📖 Ler o arquivo UMA vez no início para evitar problemas de arquivo fechado
-            import tempfile
-            import io
-            
+            arquivo.seek(0)  # Garantir que estamos no início do arquivo
             file_content = arquivo.read()
+            arquivo.seek(0)  # Voltar ao início para o save_file
             
-            # 🌐 Usar sistema S3 para salvar arquivo usando BytesIO
+            # 🌐 Usar sistema S3 para salvar arquivo
             storage = get_file_storage()
-            file_like = io.BytesIO(file_content)
-            file_like.filename = arquivo.filename  # Preservar nome original
             
+            # Passar o arquivo original para o storage (ele sabe lidar com FileStorage)
             file_path = storage.save_file(
-                file=file_like,
+                file=arquivo,
                 folder='separacao',
                 allowed_extensions=['xlsx', 'xls']
             )
@@ -143,28 +140,28 @@ def importar():
                         print(f"⚠️ Linha {i}: Campo observ_ped_1 truncado de {original_length} para 700 caracteres")
                     
                     pedido = Separacao(
-                        num_pedido      = parse_str(row.get('NUM_PEDIDO')),
-                        data_pedido     = parse_date(row.get('DATA_PEDIDO')),
-                        cnpj_cpf        = parse_str(row.get('CNPJ_CPF')),
-                        raz_social_red  = parse_str(row.get('RAZ_SOCIAL_RED')),
-                        nome_cidade     = parse_str(row.get('NOME_CIDADE')),
-                        cod_uf          = parse_str(row.get('COD_UF')),
-                        cod_produto     = parse_str(row.get('COD_PRODUTO')),
-                        nome_produto    = parse_str(row.get('NOME_PRODUTO')),
+                        num_pedido=parse_str(row.get('NUM_PEDIDO')),
+                        data_pedido=parse_date(row.get('DATA_PEDIDO')),
+                        cnpj_cpf=parse_str(row.get('CNPJ_CPF')),
+                        raz_social_red=parse_str(row.get('RAZ_SOCIAL_RED')),
+                        nome_cidade=parse_str(row.get('NOME_CIDADE')),
+                        cod_uf=parse_str(row.get('COD_UF')),
+                        cod_produto=parse_str(row.get('COD_PRODUTO')),
+                        nome_produto=parse_str(row.get('NOME_PRODUTO')),
 
-                        qtd_saldo       = qtd_saldo,
-                        valor_saldo     = parse_float_br(row.get('VALOR_SALDO')),
-                        pallet          = parse_float_br(row.get('PALLET')),
-                        peso            = parse_float_br(row.get('PESO')),
+                        qtd_saldo=qtd_saldo,
+                        valor_saldo=parse_float_br(row.get('VALOR_SALDO')),
+                        pallet=parse_float_br(row.get('PALLET')),
+                        peso=parse_float_br(row.get('PESO')),
 
-                        rota            = parse_str(row.get('ROTA')),
-                        sub_rota        = parse_str(row.get('SUB-ROTA')),
-                        observ_ped_1    = observ_ped_1_value,
-                        roteirizacao    = parse_str(row.get('ROTEIRIZAÇÃO')),
+                        rota=parse_str(row.get('ROTA')),
+                        sub_rota=parse_str(row.get('SUB-ROTA')),
+                        observ_ped_1=observ_ped_1_value,
+                        roteirizacao=parse_str(row.get('ROTEIRIZAÇÃO')),
 
-                        expedicao       = parse_date(row.get('EXPEDIÇÃO')),
-                        agendamento     = parse_date(row.get('AGENDAMENTO')),
-                        protocolo       = parse_str(row.get('PROTOCOLO')),
+                        expedicao=parse_date(row.get('EXPEDIÇÃO')),
+                        agendamento=parse_date(row.get('AGENDAMENTO')),
+                        protocolo=parse_str(row.get('PROTOCOLO')),
                     )
                     db.session.add(pedido)
                     db.session.flush()  # tenta inserir/validar já
@@ -306,7 +303,3 @@ def excluir_lote_separacao(lote_id):
             'success': False, 
             'message': f'Erro ao excluir lote: {str(e)}'
         }), 500
-
-
-
-

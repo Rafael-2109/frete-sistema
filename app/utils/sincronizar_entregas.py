@@ -188,7 +188,7 @@ def sincronizar_entrega_por_nf(numero_nf):
     if fat.cnpj_cliente:
         contato_db = ContatoAgendamento.query.filter_by(cnpj=fat.cnpj_cliente).first()
         if contato_db:
-            entrega.forma_agendamento   = contato_db.forma
+            entrega.forma_agendamento = contato_db.forma
             entrega.contato_agendamento = contato_db.contato
 
     data_final = None
@@ -196,8 +196,8 @@ def sincronizar_entrega_por_nf(numero_nf):
     assoc = None  # ✅ Inicializa a variável
 
     if item_mais_recente and embarque and embarque.transportadora:
-        cnpj_transp   = embarque.transportadora.cnpj
-        uf_dest       = item_mais_recente.uf_destino
+        cnpj_transp = embarque.transportadora.cnpj
+        uf_dest = item_mais_recente.uf_destino
         nome_cid_dest = item_mais_recente.cidade_destino
         assoc = (
             CidadeAtendida.query

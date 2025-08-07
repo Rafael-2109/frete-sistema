@@ -66,7 +66,7 @@ def verificar_lote_pedido(num_pedido):
         # Verificar se existe lote completo com expedição
         for lote_id, info in lotes_info.items():
             if (info['tipo_envio'] == 'total' and 
-                info['data_expedicao'] is not None):
+            info['data_expedicao'] is not None):
                 return jsonify({
                     'lote_completo_com_expedicao': True,
                     'lote_parcial_existe': False,

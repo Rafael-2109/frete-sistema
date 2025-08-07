@@ -35,9 +35,12 @@ class Usuario(db.Model, UserMixin):
         return check_password_hash(self.senha_hash, senha_plana)
     
     @property
-    def is_active(self):
-        """Usuário só está ativo se foi aprovado"""
+    def is_approved(self):
+        """Usuário só está aprovado se status == 'ativo'"""
         return self.status == 'ativo'
+    
+    # Flask-Login requer que is_active sempre retorne True
+    # Usamos is_approved para verificar se o usuário foi aprovado
     
     def aprovar(self, admin_email, vendedor_vinculado=None):
         """Aprova o usuário"""

@@ -3,6 +3,9 @@ from flask import render_template, request, redirect, url_for, flash, jsonify, m
 from flask_login import login_required, current_user
 from app import db
 from app.estoque.models import MovimentacaoEstoque, UnificacaoCodigos, SaldoEstoque
+# Importar novo sistema de estoque em tempo real
+# APIEstoqueTempoReal não é usada diretamente neste arquivo
+from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
 from app.utils.timezone import agora_brasil
 from app.utils.valores_brasileiros import formatar_valor_brasileiro
 import logging
@@ -12,11 +15,117 @@ import io
 from datetime import datetime, timedelta
 import random
 from sqlalchemy import inspect, func, extract
-from app.producao.models import CadastroPalletizacao
+from app.producao.models import CadastroPalletizacao, ProgramacaoProducao
+from app.carteira.models import CarteiraPrincipal
 from io import BytesIO
 from app.estoque import estoque_bp
 
 logger = logging.getLogger(__name__)
+
+
+def converter_projecao_para_resumo(projecao):
+    """Converte projeção do novo sistema para formato do resumo esperado pelas telas"""
+    if not projecao:
+        return None
+    
+    # Garantir que valores numéricos nunca sejam None
+    menor_estoque_d7 = projecao.get('menor_estoque_d7')
+    if menor_estoque_d7 is None:
+        menor_estoque_d7 = 0
+    
+    estoque_atual = projecao.get('estoque_atual', 0)
+    if estoque_atual is None:
+        estoque_atual = 0
+    
+    # NOVO: Calcular disponibilidade (quando estoque > 0)
+    data_disponivel = None
+    qtd_disponivel = None
+    dias_disponivel = None
+    
+    # Verificar projeção para encontrar quando terá estoque > 0
+    projecao_lista = projecao.get('projecao', [])
+    for dia_info in projecao_lista:
+        # Usar SALDO (Est. Inicial - Saída) como no workspace
+        est_inicial = dia_info.get('saldo_inicial', 0) or 0
+        saida = dia_info.get('saida', 0) or 0
+        saldo = est_inicial - saida
+        
+        if saldo > 0:
+            data_disponivel = dia_info.get('data')
+            qtd_disponivel = saldo
+            # Calcular dias até disponível
+            if data_disponivel:
+                try:
+                    data_disp_obj = datetime.strptime(data_disponivel, '%Y-%m-%d')
+                    hoje = datetime.now()
+                    dias_disponivel = (data_disp_obj - hoje).days
+                except Exception as e:
+                    dias_disponivel = None
+            break
+    
+    # NOVO: Buscar quantidade total na carteira de pedidos
+    cod_produto = projecao.get('cod_produto', '')
+    qtd_total_carteira = 0
+    if cod_produto:
+        try:
+            # Somar qtd_saldo_produto_pedido de todos os pedidos do produto
+            soma_carteira = db.session.query(
+                func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
+            ).filter(
+                CarteiraPrincipal.cod_produto == str(cod_produto)
+            ).scalar()
+            qtd_total_carteira = float(soma_carteira) if soma_carteira else 0
+        except Exception as e:
+            logger.error(f"Erro ao buscar carteira para produto {cod_produto}: {e}")
+            qtd_total_carteira = 0
+    
+    # NOVO: Buscar quantidade total na programação de produção
+    qtd_total_producao = 0
+    if cod_produto:
+        try:
+            # Somar qtd_programada de todas as programações futuras do produto
+            hoje = datetime.now().date()
+            soma_producao = db.session.query(
+                func.sum(ProgramacaoProducao.qtd_programada)
+            ).filter(
+                ProgramacaoProducao.cod_produto == str(cod_produto),
+                ProgramacaoProducao.data_programacao >= hoje
+            ).scalar()
+            qtd_total_producao = float(soma_producao) if soma_producao else 0
+        except Exception as e:
+            logger.error(f"Erro ao buscar produção para produto {cod_produto}: {e}")
+            qtd_total_producao = 0
+    
+    # NOVO CRITÉRIO DE STATUS:
+    # - Se Ruptura 7d > 0 então OK
+    # - Senão se data disponível em até D+7 então ATENÇÃO
+    # - Senão CRÍTICO
+    if menor_estoque_d7 > 0:
+        status_ruptura = 'OK'
+    elif dias_disponivel is not None and dias_disponivel <= 7:
+        status_ruptura = 'ATENÇÃO'
+    else:
+        status_ruptura = 'CRÍTICO'
+    
+    # Para previsao_ruptura, usar menor_estoque_d7 ao invés de dia_ruptura
+    previsao_ruptura = menor_estoque_d7
+    
+    return {
+        'cod_produto': projecao.get('cod_produto', ''),
+        'nome_produto': projecao.get('nome_produto', ''),
+        'estoque_inicial': estoque_atual,
+        'estoque_atual': estoque_atual,
+        'menor_estoque_d7': menor_estoque_d7,
+        'previsao_ruptura': previsao_ruptura,  # Agora é um número, não uma data
+        'status_ruptura': status_ruptura,
+        'qtd_total_carteira': qtd_total_carteira,  # ATUALIZADO: Soma real da carteira
+        'qtd_total_producao': qtd_total_producao,  # NOVO: Soma da produção
+        'projecao': projecao.get('projecao', []),
+        # NOVO: Campos de disponibilidade
+        'data_disponivel': data_disponivel,
+        'qtd_disponivel': qtd_disponivel,
+        'dias_disponivel': dias_disponivel
+    }
 
 # 📦 Blueprint do estoque (seguindo padrão dos outros módulos)
 
@@ -1036,8 +1145,8 @@ def saldo_estoque():
         
         # Filtrar por código se especificado
         if codigo_produto:
-            produtos = [p for p in produtos if codigo_produto.lower() in str(p.cod_produto).lower() or 
-                       codigo_produto.lower() in str(p.nome_produto).lower()]
+            produtos = [p for p in produtos if codigo_produto.lower() in str(p.get('cod_produto', '')).lower() or 
+                       codigo_produto.lower() in str(p.get('nome_produto', '')).lower()]
         
         # Para melhorar performance, processar apenas uma amostra para estatísticas
         # e processar apenas os necessários para exibição
@@ -1060,7 +1169,10 @@ def saldo_estoque():
         
         # Primeiro processar a amostra para estatísticas
         for produto in produtos_amostra[:50]:  # Limitar ainda mais para performance
-            resumo = SaldoEstoque.obter_resumo_produto(produto.cod_produto, produto.nome_produto)
+            # USAR NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
+            projecao = ServicoEstoqueTempoReal.get_projecao_completa(produto.get('cod_produto'), dias=7)
+            # Converter para formato compatível
+            resumo = converter_projecao_para_resumo(projecao) if projecao else None
             if resumo:
                 # Contadores de status
                 if resumo['status_ruptura'] == 'CRÍTICO':
@@ -1084,7 +1196,10 @@ def saldo_estoque():
         
         produtos_resumo = []
         for produto in produtos_pagina:
-            resumo = SaldoEstoque.obter_resumo_produto(produto.cod_produto, produto.nome_produto)
+            # USAR NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
+            projecao = ServicoEstoqueTempoReal.get_projecao_completa(produto.get('cod_produto'), dias=28)
+            # Converter para formato compatível
+            resumo = converter_projecao_para_resumo(projecao) if projecao else None
             if resumo:
                 produtos_resumo.append(resumo)
         
@@ -1094,11 +1209,34 @@ def saldo_estoque():
         elif ordem_coluna == 'produto':
             produtos_resumo.sort(key=lambda x: x['nome_produto'], reverse=(ordem_direcao == 'desc'))
         elif ordem_coluna == 'estoque':
-            produtos_resumo.sort(key=lambda x: x['estoque_inicial'], reverse=(ordem_direcao == 'desc'))
+            produtos_resumo.sort(key=lambda x: x.get('estoque_inicial', 0) if x.get('estoque_inicial') is not None else 0, reverse=(ordem_direcao == 'desc'))
         elif ordem_coluna == 'carteira':
-            produtos_resumo.sort(key=lambda x: x['qtd_total_carteira'], reverse=(ordem_direcao == 'desc'))
+            produtos_resumo.sort(key=lambda x: x.get('qtd_total_carteira', 0) if x.get('qtd_total_carteira') is not None else 0, reverse=(ordem_direcao == 'desc'))
+        elif ordem_coluna == 'producao':
+            # Ordenação para coluna Produção
+            produtos_resumo.sort(key=lambda x: x.get('qtd_total_producao', 0) if x.get('qtd_total_producao') is not None else 0, reverse=(ordem_direcao == 'desc'))
+        elif ordem_coluna == 'disponivel':
+            # Ordenação especial para Disponível
+            # Se ASC: ordena D+ crescente, mas dentro de cada D+ ordena qtd decrescente
+            # Se DESC: ordena D+ decrescente, mas dentro de cada D+ ordena qtd crescente
+            def sort_key_disponivel(x):
+                dias = x.get('dias_disponivel')
+                qtd = x.get('qtd_disponivel', 0) if x.get('qtd_disponivel') else 0
+                
+                # Se não tem disponibilidade, vai pro final
+                if dias is None:
+                    return (999999, 0) if ordem_direcao == 'asc' else (-999999, 0)
+                
+                # Para ASC: ordena por dias crescente, qtd decrescente
+                if ordem_direcao == 'asc':
+                    return (dias, -qtd)
+                # Para DESC: ordena por dias decrescente, qtd crescente  
+                else:
+                    return (-dias, qtd)
+                    
+            produtos_resumo.sort(key=sort_key_disponivel)
         elif ordem_coluna == 'ruptura':
-            produtos_resumo.sort(key=lambda x: x['previsao_ruptura'], reverse=(ordem_direcao == 'desc'))
+            produtos_resumo.sort(key=lambda x: x['previsao_ruptura'] if x['previsao_ruptura'] is not None else float('inf'), reverse=(ordem_direcao == 'desc'))
         elif ordem_coluna == 'status':
             # Ordenar por prioridade: CRÍTICO > ATENÇÃO > OK
             status_ordem = {'CRÍTICO': 0, 'ATENÇÃO': 1, 'OK': 2}
@@ -1147,20 +1285,22 @@ def saldo_estoque():
 def api_saldo_produto(cod_produto):
     """API para obter dados detalhados de um produto específico"""
     try:
-        # Buscar nome do produto
-        produto = MovimentacaoEstoque.query.filter_by(
-            cod_produto=str(cod_produto),
-            ativo=True
-        ).first()
-        
-        if not produto:
-            return jsonify({'error': 'Produto não encontrado'}), 404
-        
-        # Obter resumo completo
-        resumo = SaldoEstoque.obter_resumo_produto(cod_produto, produto.nome_produto)
+        # USAR NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
+        # Obter projeção completa
+        projecao = ServicoEstoqueTempoReal.get_projecao_completa(cod_produto, dias=28)
+        resumo = converter_projecao_para_resumo(projecao) if projecao else None
         
         if not resumo:
-            return jsonify({'error': 'Erro ao calcular projeção'}), 500
+            return jsonify({'error': 'Produto não encontrado'}), 404
+        
+        # Se não tem nome, buscar do MovimentacaoEstoque
+        if not resumo.get('nome_produto') or resumo['nome_produto'] == f'Produto {cod_produto}':
+            produto = MovimentacaoEstoque.query.filter_by(
+                cod_produto=str(cod_produto),
+                ativo=True
+            ).first()
+            if produto:
+                resumo['nome_produto'] = produto.nome_produto
         
         return jsonify({
             'success': True,
@@ -1379,4 +1519,5 @@ def excluir_movimentacao(id):
     
     return redirect(url_for('estoque.listar_movimentacoes'))
 
- 
+
+# Sistema híbrido removido - usando novo sistema de estoque em tempo real

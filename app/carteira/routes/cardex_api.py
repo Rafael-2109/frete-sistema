@@ -4,7 +4,8 @@ APIs específicas para cardex D0-D28
 
 from flask import jsonify
 from flask_login import login_required
-from app.estoque.models import SaldoEstoque
+# USAR NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
+from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
 from app.carteira.utils.workspace_utils import (
     converter_projecao_para_cardex,
     calcular_estatisticas_cardex,
@@ -24,14 +25,25 @@ def cardex_produto_real(cod_produto):
     API real para cardex D0-D28 usando SaldoEstoque
     """
     try:
-        # Obter resumo completo do produto usando SaldoEstoque
-        resumo_estoque = SaldoEstoque.obter_resumo_produto(cod_produto, '')
+        # Obter projeção completa usando Sistema de Estoque em Tempo Real
+        projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(cod_produto, dias=28)
 
-        if not resumo_estoque:
+        if not projecao_completa:
             return jsonify({
                 'success': False,
                 'error': f'Produto {cod_produto} não encontrado ou sem movimentações'
             }), 404
+
+        # Converter para formato compatível com cardex
+        # A projeção completa já vem com os campos corretos
+        resumo_estoque = {
+            'estoque_inicial': projecao_completa['estoque_atual'],
+            'estoque_atual': projecao_completa['estoque_atual'],
+            'menor_estoque_d7': projecao_completa.get('menor_estoque_d7'),
+            'dia_ruptura': projecao_completa.get('dia_ruptura'),
+            'projecao_29_dias': projecao_completa.get('projecao', []),  # Usar array de projeção
+            'status_ruptura': 'CRÍTICO' if projecao_completa.get('dia_ruptura') else 'OK'
+        }
 
         # Converter projeção para formato do cardex
         cardex_dados = converter_projecao_para_cardex(resumo_estoque)

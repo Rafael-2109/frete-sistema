@@ -69,5 +69,3 @@ def endereco_pedido(num_pedido):
             'success': False,
             'error': f'Erro interno: {str(e)}'
         }), 500
-
-

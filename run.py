@@ -3,7 +3,6 @@ import sys
 
 # 🔥 PRIMEIRA COISA: REGISTRAR TIPOS POSTGRESQL
 try:
-    import register_pg_types
     print("✅ run.py: Tipos PostgreSQL registrados ANTES de importar app")
 except Exception as e:
     print(f"⚠️ run.py: Erro ao registrar tipos PostgreSQL: {e}")

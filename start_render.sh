@@ -39,11 +39,14 @@ export NO_EMOJI_LOGS=true
 
 # 🔥 EXECUTAR CONFIGURAÇÕES PRÉ-APLICAÇÃO
 echo " Executando configurações pré-aplicação..."
-python pre_start.py || echo " Aviso: Erro no pre_start.py"
+python pre_start.py || echo " Aviso: Erro no pre_start.py (não crítico)"
 
-# Executar migrações se necessário
-echo " Executando migrações..."
-python -m flask db upgrade || echo " Migrações não executadas (pode ser normal)"
+# Executar migrações se necessário (pode falhar se já foram executadas)
+echo " Verificando migrações do banco..."
+python -m flask db upgrade 2>/dev/null || echo " Migrações não executadas (pode ser normal)"
+
+# Sistema de estoque em tempo real é inicializado automaticamente pelo pre_start.py
+# Para desabilitar, defina INIT_ESTOQUE_TEMPO_REAL=false
 
 if [ "$MCP_ENABLED" = "true" ]; then
     echo "Iniciando MCP em background..."

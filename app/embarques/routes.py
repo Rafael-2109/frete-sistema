@@ -1254,6 +1254,14 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                     separacao_lote_id=item.separacao_lote_id
                 ).all()
                 
+                # 🔧 CORREÇÃO: Se não encontrou por lote, buscar por NF (95% dos casos!)
+                if not entregas_vinculadas and item.nota_fiscal:
+                    entregas_vinculadas = EntregaMonitorada.query.filter_by(
+                        numero_nf=item.nota_fiscal
+                    ).all()
+                    if entregas_vinculadas:
+                        print(f"[SYNC] 🔍 Encontrada entrega pela NF {item.nota_fiscal} (fallback)")
+                
                 tem_entrega_no_cd = any(e.nf_cd for e in entregas_vinculadas)
                 
                 # ✅ LOGS DETALHADOS PARA AUDITORIA

@@ -8,7 +8,8 @@ if 'postgres' in os.getenv('DATABASE_URL', ''):
         extensions.register_type(DATE)
         extensions.register_type(DATE, None)
         print("✅ [MODELS] Tipos PostgreSQL registrados em estoque/models.py")
-    except:
+    except Exception as e:
+        print(f"⚠️ Erro ao registrar tipos PostgreSQL: {e}")
         pass
 
 from app import db
@@ -16,6 +17,8 @@ from app.utils.timezone import agora_brasil
 from sqlalchemy import inspect
 from datetime import timedelta
 import logging
+from app.producao.models import ProgramacaoProducao
+from sqlalchemy import cast, Date
 
 logger = logging.getLogger(__name__)
 
@@ -234,17 +237,21 @@ class SaldoEstoque:
     def obter_produtos_com_estoque():
         """Obtém lista de produtos únicos que têm movimentação de estoque"""
         try:
-            # VERIFICA SE EXISTE CACHE PRIMEIRO
+            # VERIFICA SE EXISTE NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
             inspector = inspect(db.engine)
-            if inspector.has_table('saldo_estoque_cache'):
-                from app.estoque.models_cache import SaldoEstoqueCache
-                # Usar cache se disponível (MUITO MAIS RÁPIDO)
+            if inspector.has_table('estoque_tempo_real'):
+                from app.estoque.models_tempo_real import EstoqueTempoReal
+                # Usar novo sistema de tempo real (MUITO MAIS RÁPIDO)
                 produtos = db.session.query(
-                    SaldoEstoqueCache.cod_produto,
-                    SaldoEstoqueCache.nome_produto
+                    EstoqueTempoReal.cod_produto,
+                    EstoqueTempoReal.nome_produto
                 ).all()
+                
                 if produtos:
-                    return produtos
+                    return [{
+                        'cod_produto': p.cod_produto,
+                        'nome_produto': p.nome_produto
+                    } for p in produtos]
             
             # Fallback: usar método antigo se não houver cache
             if not inspector.has_table('movimentacao_estoque'):
@@ -268,14 +275,14 @@ class SaldoEstoque:
     def calcular_estoque_inicial(cod_produto):
         """Calcula estoque inicial (D0) baseado em todas as movimentações"""
         try:
-            # VERIFICA SE EXISTE CACHE PRIMEIRO
+            # VERIFICA SE EXISTE NOVO SISTEMA PRIMEIRO
             inspector = inspect(db.engine)
-            if inspector.has_table('saldo_estoque_cache'):
-                from app.estoque.models_cache import SaldoEstoqueCache
-                cache = SaldoEstoqueCache.query.filter_by(cod_produto=str(cod_produto)).first()
-                if cache:
-                    # Usar cache (instantâneo!)
-                    return float(cache.saldo_atual)
+            if inspector.has_table('estoque_tempo_real'):
+                from app.estoque.models_tempo_real import EstoqueTempoReal
+                # Usar novo sistema de tempo real
+                estoque = EstoqueTempoReal.query.filter_by(cod_produto=cod_produto).first()
+                if estoque:
+                    return float(estoque.saldo_atual)
             
             # Fallback: cálculo tradicional se não houver cache
             if not inspector.has_table('movimentacao_estoque'):
@@ -322,8 +329,6 @@ class SaldoEstoque:
             # Somar produção de todos os códigos relacionados
             total_producao = 0
             for codigo in codigos_relacionados:
-                from app.producao.models import ProgramacaoProducao
-                from sqlalchemy import cast, Date
                 
                 producoes = ProgramacaoProducao.query.filter(
                     ProgramacaoProducao.cod_produto == str(codigo),
@@ -423,37 +428,27 @@ class SaldoEstoque:
     def obter_resumo_produto(cod_produto, nome_produto):
         """Obtém resumo completo de um produto"""
         try:
-            # VERIFICA SE EXISTE CACHE PRIMEIRO
+            # PRIMEIRO: Tentar usar o novo sistema de tempo real
             inspector = inspect(db.engine)
-            cache = None  # Inicializar cache como None
-            if inspector.has_table('saldo_estoque_cache'):
+            if inspector.has_table('estoque_tempo_real'):
                 try:
-                    # USAR FUNÇÃO SEGURA COM FALLBACK ROBUSTO
-                    from app.estoque.cache_fix_pg1082 import obter_cache_seguro
-                    
-                    cache_data = obter_cache_seguro(cod_produto)
-                    if cache_data:
-                        # Adicionar nome do produto se não estiver no cache
-                        if not cache_data.get('nome_produto'):
-                            cache_data['nome_produto'] = nome_produto
-                        return cache_data
+                    from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
+                    projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(cod_produto, dias=28)
+                    if projecao_completa:
+                        # Converter para formato esperado
+                        return {
+                            'cod_produto': cod_produto,
+                            'nome_produto': projecao_completa.get('nome_produto', nome_produto),
+                            'estoque_inicial': projecao_completa.get('estoque_atual', 0),
+                            'qtd_total_carteira': SaldoEstoque._calcular_qtd_total_carteira(cod_produto),
+                            'previsao_ruptura': projecao_completa.get('dia_ruptura', ''),
+                            'projecao_29_dias': projecao_completa.get('projecao', []),
+                            'status_ruptura': 'CRÍTICO' if projecao_completa.get('dia_ruptura') else 'OK'
+                        }
+                except ImportError:
+                    logger.debug("Sistema de tempo real não disponível")
                 except Exception as e:
-                    # Se houver erro com tipos PostgreSQL, retornar sem projeção
-                    if "Unknown PG numeric type: 1082" in str(e) or "1082" in str(e):
-                        logger.warning(f"Erro de tipo PostgreSQL ao buscar cache, retornando sem projeção: {e}")
-                        # Retornar dados básicos do cache sem projeção
-                        if cache:
-                            return {
-                                'cod_produto': cache.cod_produto,
-                                'nome_produto': cache.nome_produto,
-                                'estoque_inicial': float(cache.saldo_atual),
-                                'qtd_total_carteira': float(cache.qtd_carteira),
-                                'previsao_ruptura': float(cache.previsao_ruptura_7d) if cache.previsao_ruptura_7d else 0,
-                                'projecao_29_dias': [],  # Vazio por causa do erro
-                                'status_ruptura': cache.status_ruptura or 'OK'
-                            }
-                    # Re-lançar outros erros
-                    raise
+                    logger.error(f"Erro ao usar sistema de tempo real: {e}")
             
             # Fallback: cálculo tradicional se não houver cache
             # Calcular projeção completa

@@ -5,11 +5,12 @@ import logging
 from app import db
 from app.permissions.models import EquipeVendas
 from app.faturamento.models import RelatorioFaturamentoImportado
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
-def sincronizar_equipe_por_nome(equipe_nome: str, criado_por_id: int = None) -> EquipeVendas:
+def sincronizar_equipe_por_nome(equipe_nome: str, criado_por_id: int = None) -> Optional[EquipeVendas]:
     """
     Busca ou cria uma equipe de vendas pelo nome.
     Usado para sincronizar equipes do faturamento com a tabela equipe_vendas.

@@ -3,26 +3,19 @@ APIs reais para o workspace de montagem de carga
 """
 
 import logging
-from datetime import datetime, timedelta
 
-from flask import jsonify, request
+from flask import jsonify
 from flask_login import login_required
 from sqlalchemy import and_, func
 
 from app import db
 from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
-from app.carteira.utils.separacao_utils import (
-    buscar_rota_por_uf,
-    buscar_sub_rota_por_uf_cidade,
-    calcular_peso_pallet_produto,
-    determinar_tipo_envio,
-)
 from app.carteira.utils.workspace_utils import processar_dados_workspace_produto
-from app.estoque.models import SaldoEstoque
+# USAR NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
+from app.estoque.services.estoque_tempo_real import ServicoEstoqueTempoReal
 from app.pedidos.models import Pedido
 from app.producao.models import CadastroPalletizacao
 from app.separacao.models import Separacao
-from app.utils.timezone import agora_brasil
 
 from . import carteira_bp
 
@@ -74,8 +67,21 @@ def workspace_pedido_real(num_pedido):
         valor_total = 0
 
         for produto in produtos_carteira:
-            # Obter resumo completo do produto usando SaldoEstoque
-            resumo_estoque = SaldoEstoque.obter_resumo_produto(produto.cod_produto, produto.nome_produto)
+            # Obter projeção completa do produto usando Sistema de Estoque em Tempo Real
+            projecao_completa = ServicoEstoqueTempoReal.get_projecao_completa(produto.cod_produto, dias=28)
+            
+            # Converter formato para compatibilidade com workspace_utils
+            if projecao_completa:
+                resumo_estoque = {
+                    'estoque_inicial': projecao_completa['estoque_atual'],
+                    'estoque_atual': projecao_completa['estoque_atual'],
+                    'menor_estoque_d7': projecao_completa.get('menor_estoque_d7'),
+                    'dia_ruptura': projecao_completa.get('dia_ruptura'),
+                    'projecao_29_dias': projecao_completa.get('projecao', []),
+                    'status_ruptura': 'CRÍTICO' if projecao_completa.get('dia_ruptura') else 'OK'
+                }
+            else:
+                resumo_estoque = None
 
             # Processar dados do produto usando função utilitária
             produto_data = processar_dados_workspace_produto(produto, resumo_estoque)
