@@ -842,7 +842,7 @@ def create_app(config_name=None):
         
         scheduler = BackgroundScheduler()
         scheduler.add_job(
-            func=ServicoEstoqueTempoReal.processar_fallback,
+            func=lambda: ServicoEstoqueTempoReal.processar_fallback(app),
             trigger="interval",
             seconds=60,
             id='fallback_estoque_tempo_real',

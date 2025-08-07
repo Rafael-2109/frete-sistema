@@ -200,70 +200,80 @@ class ServicoEstoqueTempoReal:
             # O flush será feito pelo processo pai ou quando necessário
     
     @staticmethod
-    def processar_fallback() -> Dict[str, Any]:
+    def processar_fallback(app=None) -> Dict[str, Any]:
         """
         Job que roda a cada 60 segundos.
         Pega 10 produtos com atualizado_em mais antigo e recalcula do zero.
         
+        Args:
+            app: Flask application instance (passado pelo scheduler)
+            
         Returns:
             Dict com estatísticas do processamento
         """
-        # Buscar 10 produtos mais antigos
-        produtos = EstoqueTempoReal.query.order_by(
-            EstoqueTempoReal.atualizado_em.asc()
-        ).limit(10).all()
+        # Se app não foi passado, tentar pegar current_app
+        if app is None:
+            from flask import current_app
+            app = current_app._get_current_object()
         
-        processados = 0
-        erros = []
-        
-        for produto in produtos:
-            try:
-                # Recalcular saldo do zero baseado em MovimentacaoEstoque
-                saldo = Decimal('0')
-                
-                # Considerar unificação
-                codigos = UnificacaoCodigos.get_todos_codigos_relacionados(
-                    produto.cod_produto
-                )
-                
-                for codigo in codigos:
-                    movs = MovimentacaoEstoque.query.filter_by(
-                        cod_produto=codigo,
-                        ativo=True
-                    ).all()
+        # Criar contexto da aplicação para o job
+        with app.app_context():
+            # Buscar 10 produtos mais antigos
+            produtos = EstoqueTempoReal.query.order_by(
+                EstoqueTempoReal.atualizado_em.asc()
+            ).limit(10).all()
+            
+            processados = 0
+            erros = []
+            
+            for produto in produtos:
+                try:
+                    # Recalcular saldo do zero baseado em MovimentacaoEstoque
+                    saldo = Decimal('0')
                     
-                    for mov in movs:
-                        # qtd_movimentacao já vem com sinal correto
-                        saldo += Decimal(str(mov.qtd_movimentacao))
-                
-                # Atualizar produto
-                produto.saldo_atual = saldo
-                produto.atualizado_em = agora_brasil()
-                db.session.add(produto)
-                
-                # Recalcular projeção
-                ServicoEstoqueTempoReal.calcular_ruptura_d7(produto.cod_produto)
-                
-                processados += 1
-                
+                    # Considerar unificação
+                    codigos = UnificacaoCodigos.get_todos_codigos_relacionados(
+                        produto.cod_produto
+                    )
+                    
+                    for codigo in codigos:
+                        movs = MovimentacaoEstoque.query.filter_by(
+                            cod_produto=codigo,
+                            ativo=True
+                        ).all()
+                        
+                        for mov in movs:
+                            # qtd_movimentacao já vem com sinal correto
+                            saldo += Decimal(str(mov.qtd_movimentacao))
+                    
+                    # Atualizar produto
+                    produto.saldo_atual = saldo
+                    produto.atualizado_em = agora_brasil()
+                    db.session.add(produto)
+                    
+                    # Recalcular projeção
+                    ServicoEstoqueTempoReal.calcular_ruptura_d7(produto.cod_produto)
+                    
+                    processados += 1
+                    
+                except Exception as e:
+                    erros.append({
+                        'produto': produto.cod_produto,
+                        'erro': str(e)
+                    })
+            
+            # Commit final
+            try:
+                db.session.commit()
             except Exception as e:
-                erros.append({
-                    'produto': produto.cod_produto,
-                    'erro': str(e)
-                })
-        
-        # Commit final
-        try:
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            erros.append({'geral': str(e)})
-        
-        return {
-            'processados': processados,
-            'erros': erros,
-            'timestamp': agora_brasil().isoformat()
-        }
+                db.session.rollback()
+                erros.append({'geral': str(e)})
+            
+            return {
+                'processados': processados,
+                'erros': erros,
+                'timestamp': agora_brasil().isoformat()
+            }
     
     @staticmethod
     def inicializar_produto(cod_produto: str, nome_produto: str = None) -> EstoqueTempoReal:
