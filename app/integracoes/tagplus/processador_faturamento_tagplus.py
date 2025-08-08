@@ -122,11 +122,16 @@ class ProcessadorFaturamentoTagPlus:
     def _encontrar_separacao_por_score(self, faturamento):
         """Encontra separação usando lógica de score (CNPJ + Produto + Qtd)"""
         try:
-            # Importa modelo Embarque
+            # Importa modelo Embarque e utilitário de CNPJ
             from app.embarques.models import Embarque
+            from app.utils.cnpj_utils import normalizar_cnpj
 
+            # Normaliza CNPJ do faturamento para busca
+            cnpj_normalizado = normalizar_cnpj(faturamento.cnpj_cliente)
+            
             # Busca EmbarqueItens do mesmo CNPJ com critérios específicos
-            embarque_items = (
+            # Primeiro busca todos os itens candidatos
+            embarque_items_candidatos = (
                 EmbarqueItem.query.join(Embarque, EmbarqueItem.embarque_id == Embarque.id)
                 .join(
                     CarteiraCopia,
@@ -136,9 +141,6 @@ class ProcessadorFaturamentoTagPlus:
                     ),
                 )
                 .filter(
-                    CarteiraCopia.cnpj_cpf.contains(
-                        faturamento.cnpj_cliente.replace(".", "").replace("-", "").replace("/", "")
-                    ),
                     EmbarqueItem.numero_nf.is_(None),  # Ainda não faturado
                     Embarque.status == "ativo",  # Embarque ativo
                     EmbarqueItem.status == "ativo",  # Item ativo
@@ -146,6 +148,18 @@ class ProcessadorFaturamentoTagPlus:
                 )
                 .all()
             )
+            
+            # Filtra manualmente pelo CNPJ normalizado
+            embarque_items = []
+            for item in embarque_items_candidatos:
+                # Busca a CarteiraCopia para pegar o CNPJ
+                carteira = CarteiraCopia.query.filter_by(
+                    num_pedido=item.pedido,
+                    cod_produto=item.cod_produto
+                ).first()
+                
+                if carteira and normalizar_cnpj(carteira.cnpj_cpf) == cnpj_normalizado:
+                    embarque_items.append(item)
 
             if not embarque_items:
                 logger.info(

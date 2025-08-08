@@ -492,26 +492,35 @@ def buscar_embarques_candidatos():
         if not nf_items:
             return jsonify({'success': False, 'message': 'NF não encontrada'}), 404
         
-        # CNPJ do cliente
-        cnpj_cliente = nf_items[0].cnpj_cliente.replace('.', '').replace('-', '').replace('/', '')
+        # Importa utilitário de CNPJ
+        from app.utils.cnpj_utils import normalizar_cnpj
+        
+        # CNPJ do cliente normalizado
+        cnpj_cliente_normalizado = normalizar_cnpj(nf_items[0].cnpj_cliente)
         
         # Busca EmbarqueItems candidatos com os mesmos critérios do score
-        embarque_items = EmbarqueItem.query.join(
+        # Primeiro busca todos os candidatos sem filtro de CNPJ
+        embarque_items_candidatos = EmbarqueItem.query.join(
             Embarque,
             EmbarqueItem.embarque_id == Embarque.id
-        ).join(
-            CarteiraCopia,
-            and_(
-                EmbarqueItem.num_pedido == CarteiraCopia.num_pedido,
-                EmbarqueItem.cod_produto == CarteiraCopia.cod_produto
-            )
         ).filter(
-            CarteiraCopia.cnpj_cpf.contains(cnpj_cliente),
             EmbarqueItem.numero_nf.is_(None),  # Ainda não faturado
             Embarque.status == 'ativo',  # Embarque ativo
             EmbarqueItem.status == 'ativo',  # Item ativo
             EmbarqueItem.erro_validacao.isnot(None)  # Tem erro de validação
         ).all()
+        
+        # Filtra manualmente pelo CNPJ normalizado
+        embarque_items = []
+        for item in embarque_items_candidatos:
+            # Busca a CarteiraCopia para pegar o CNPJ
+            carteira = CarteiraCopia.query.filter_by(
+                num_pedido=item.num_pedido,
+                cod_produto=item.cod_produto
+            ).first()
+            
+            if carteira and normalizar_cnpj(carteira.cnpj_cpf) == cnpj_cliente_normalizado:
+                embarque_items.append(item)
         
         # Formata resposta
         candidatos = []

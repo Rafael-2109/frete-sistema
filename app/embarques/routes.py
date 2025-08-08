@@ -1100,6 +1100,7 @@ def validar_nf_cliente(item_embarque):
     Retorna (sucesso, mensagem_erro)
     """
     from app.faturamento.models import RelatorioFaturamentoImportado
+    from app.utils.cnpj_utils import normalizar_cnpj
     
     if not item_embarque.nota_fiscal:
         return True, None
@@ -1116,7 +1117,11 @@ def validar_nf_cliente(item_embarque):
     
     # ✅ CORREÇÃO PRINCIPAL: Se o item TEM cliente definido, verifica se a NF pertence a esse cliente
     if item_embarque.cnpj_cliente:
-        if item_embarque.cnpj_cliente != nf_faturamento.cnpj_cliente:
+        # 🔧 NORMALIZAR CNPJs para comparação (remove formatação)
+        cnpj_embarque_normalizado = normalizar_cnpj(item_embarque.cnpj_cliente)
+        cnpj_faturamento_normalizado = normalizar_cnpj(nf_faturamento.cnpj_cliente)
+        
+        if cnpj_embarque_normalizado != cnpj_faturamento_normalizado:
             # ✅ CORREÇÃO: NF não pertence ao cliente - APAGA APENAS a NF, mantém todos os outros dados
             nf_original = item_embarque.nota_fiscal
             item_embarque.erro_validacao = f"NF_DIVERGENTE: NF {nf_original} pertence ao CNPJ {nf_faturamento.cnpj_cliente}, não a {item_embarque.cnpj_cliente}"

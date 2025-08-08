@@ -1148,7 +1148,6 @@ Regras obrigatórias:
   - Testar performance < 100ms
 
 
-  psql $DATABASE_URL -f migrations/add_subcategorias_palletizacao.sql
   python atualizar_movimentacoes_previstas.py
 
 Preciso criar algumas criações e exportações de relatórios em excel:
