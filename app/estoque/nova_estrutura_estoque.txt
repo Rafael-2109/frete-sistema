@@ -1147,7 +1147,8 @@ Regras obrigatórias:
   - Migrar dados existentes
   - Testar performance < 100ms
 
-
+psql "${DATABASE_URL}" < migrations/add_alertas_separacao_cotada.sql
+python run_migration_alertas.py
   python atualizar_movimentacoes_previstas.py
 
 Preciso criar algumas criações e exportações de relatórios em excel:

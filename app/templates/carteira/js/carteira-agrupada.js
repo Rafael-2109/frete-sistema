@@ -22,7 +22,7 @@ class CarteiraAgrupada {
         this.initBadgesFiltros();
         console.log('✅ Carteira Agrupada inicializada');
     }
-    
+
     initWorkspace() {
         // Garantir que o workspace seja criado globalmente
         if (!window.workspace && window.WorkspaceMontagem) {
@@ -36,10 +36,10 @@ class CarteiraAgrupada {
     setupEventListeners() {
         // Filtros de busca
         this.setupFiltros();
-        
+
         // Botões de expandir/colapsar
         this.setupExpandirColapsar();
-        
+
         // Botões de expansão de detalhes
         this.setupDetalhesExpansao();
     }
@@ -85,14 +85,14 @@ class CarteiraAgrupada {
     toggleBadgeFiltro(badge) {
         const tipo = badge.dataset.tipo;
         const valor = badge.dataset.valor;
-        
+
         // Verificar limite de filtros ativos
-        const totalAtivos = this.filtrosAtivos.rotas.size + 
-                          this.filtrosAtivos.incoterms.size + 
-                          this.filtrosAtivos.subrotas.size;
-        
+        const totalAtivos = this.filtrosAtivos.rotas.size +
+            this.filtrosAtivos.incoterms.size +
+            this.filtrosAtivos.subrotas.size;
+
         const isActive = badge.classList.contains('active');
-        
+
         if (!isActive && totalAtivos >= this.maxFiltrosAtivos) {
             // Mostrar mensagem de limite
             this.mostrarAlerta('Você pode selecionar no máximo 3 filtros simultaneamente');
@@ -101,7 +101,7 @@ class CarteiraAgrupada {
 
         // Toggle do badge
         badge.classList.toggle('active');
-        
+
         // Atualizar filtros ativos
         if (tipo === 'rota') {
             if (isActive) {
@@ -125,10 +125,10 @@ class CarteiraAgrupada {
 
         // Mostrar/ocultar botões de limpar
         this.atualizarBotoesLimpar();
-        
+
         // Aplicar filtros
         this.aplicarFiltros();
-        
+
         // Verificar e mostrar subrotas SP se necessário
         this.verificarSubrotasSP();
     }
@@ -169,10 +169,10 @@ class CarteiraAgrupada {
         document.querySelectorAll('.badge-rota.active, .badge-incoterm.active').forEach(badge => {
             badge.classList.remove('active');
         });
-        
+
         this.filtrosAtivos.rotas.clear();
         this.filtrosAtivos.incoterms.clear();
-        
+
         this.atualizarBotoesLimpar();
         this.aplicarFiltros();
     }
@@ -182,9 +182,9 @@ class CarteiraAgrupada {
         document.querySelectorAll('.badge-subrota.active').forEach(badge => {
             badge.classList.remove('active');
         });
-        
+
         this.filtrosAtivos.subrotas.clear();
-        
+
         this.atualizarBotoesLimpar();
         this.aplicarFiltros();
     }
@@ -199,9 +199,9 @@ class CarteiraAgrupada {
             ${mensagem}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
-        
+
         document.body.appendChild(alerta);
-        
+
         // Remover após 3 segundos
         setTimeout(() => {
             alerta.remove();
@@ -255,24 +255,24 @@ class CarteiraAgrupada {
             const rota = linha.dataset.rota || '';
             const subrota = linha.dataset.subrota || '';
             const incoterm = linha.dataset.incoterm || 'CIF';
-            
+
             // Aplicar filtros básicos
             const matchBusca = !termoBusca || textoFiltro.includes(termoBusca);
             const matchStatus = !statusSelecionado || status === statusSelecionado;
             const matchEquipe = !equipeSelecionada || equipe === equipeSelecionada;
 
             let matchBadges = true;
-            
+
             // Filtros de badges (rotas/incoterms)
             if (this.filtrosAtivos.rotas.size > 0 || this.filtrosAtivos.incoterms.size > 0) {
                 matchBadges = false;
-                
+
                 // Verificar incoterms FOB e RED primeiro
                 if (this.filtrosAtivos.incoterms.has('FOB') && incoterm === 'FOB') {
                     matchBadges = true;
                 } else if (this.filtrosAtivos.incoterms.has('RED') && incoterm === 'RED') {
                     matchBadges = true;
-                } 
+                }
                 // Se o pedido é CIF, verificar rotas
                 else if (incoterm === 'CIF' && this.filtrosAtivos.rotas.size > 0) {
                     if (this.filtrosAtivos.rotas.has(rota)) {
@@ -280,7 +280,7 @@ class CarteiraAgrupada {
                     }
                 }
             }
-            
+
             // Filtros de subrotas (apenas para SP)
             let matchSubrotas = true;
             if (this.filtrosAtivos.subrotas.size > 0) {
@@ -294,9 +294,9 @@ class CarteiraAgrupada {
             }
 
             const mostrar = matchBusca && matchStatus && matchEquipe && matchBadges && matchSubrotas;
-            
+
             linha.style.display = mostrar ? '' : 'none';
-            
+
             // Ocultar também a linha de detalhes se existe
             const numPedido = linha.dataset.pedido;
             const linhaDetalhes = document.getElementById(`detalhes-${numPedido}`);
@@ -308,10 +308,10 @@ class CarteiraAgrupada {
         });
 
         console.log(`🔍 Filtros aplicados: ${totalVisiveis} pedidos visíveis`);
-        
+
         // Atualizar contador de pedidos
         this.atualizarContador(totalVisiveis);
-        
+
         // Verificar e mostrar/ocultar subrotas SP
         this.verificarSubrotasSP();
     }
@@ -350,7 +350,7 @@ class CarteiraAgrupada {
             const numPedido = linha.dataset.pedido;
             const detalhesRow = document.getElementById(`detalhes-${numPedido}`);
             const icon = linha.querySelector('.expand-icon');
-            
+
             if (detalhesRow && !detalhesRow.classList.contains('show')) {
                 this.expandirDetalhes(numPedido, detalhesRow, icon);
             }
@@ -363,7 +363,7 @@ class CarteiraAgrupada {
             const numPedido = detalhesRow.id.replace('detalhes-', '');
             const linha = document.querySelector(`[data-pedido="${numPedido}"]`);
             const icon = linha?.querySelector('.expand-icon');
-            
+
             this.colapsarDetalhes(detalhesRow, icon);
         });
         console.log('📖 Todos os pedidos colapsados');
@@ -394,7 +394,7 @@ class CarteiraAgrupada {
         // Carregar detalhes se ainda não carregou
         const contentDiv = document.getElementById(`content-${numPedido}`);
         const loadingDiv = document.getElementById(`loading-${numPedido}`);
-        
+
         // Verificar se o conteúdo já foi carregado
         // Se não tem conteúdo HTML ou está oculto, carregar
         if (contentDiv && (!contentDiv.innerHTML.trim() || contentDiv.style.display === 'none')) {
@@ -564,7 +564,7 @@ function criarSeparacao(numPedido) {
 
 function avaliarEstoques(numPedido) {
     console.log(`📊 Avaliar estoques do pedido ${numPedido}`);
-    
+
     // Abrir workspace para visualizar dados de estoque
     const btnExpandir = document.querySelector(`[data-pedido="${numPedido}"].btn-expandir`);
     if (btnExpandir && window.workspace) {
@@ -581,7 +581,7 @@ function avaliarEstoques(numPedido) {
         } else {
             // Expandir primeiro
             btnExpandir.click();
-            
+
             // Aguardar expansão e focar na tabela
             setTimeout(() => {
                 const detalhesExpandido = document.getElementById(`detalhes-${numPedido}`);
@@ -614,7 +614,6 @@ function abrirModalEndereco(numPedido) {
     } else {
         console.error('❌ Modal de endereço não inicializado');
     }
-}
-
-// 🎯 INICIALIZAÇÃO GLOBAL
+}// 🎯 INICIALIZAÇÃO GLOBAL
 window.CarteiraAgrupada = CarteiraAgrupada;
+

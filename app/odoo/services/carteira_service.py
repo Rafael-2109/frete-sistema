@@ -1262,8 +1262,13 @@ class CarteiraService:
             logger.info(f"   ➖ {len(itens_removidos)} itens removidos")
             
             # ============================================================
-            # FASE 4: APLICAR REDUÇÕES (respeitando hierarquia)
+            # FASE 4: APLICAR ALTERAÇÕES USANDO NOVO SERVIÇO
             # ============================================================
+            
+            # Importar o novo serviço de atualização
+            from app.carteira.services.separacao_update_service import SeparacaoUpdateService
+            
+            # Processar REDUÇÕES
             if reducoes:
                 logger.info(f"📉 Fase 4: Aplicando {len(reducoes)} reduções...")
                 
@@ -1276,11 +1281,14 @@ class CarteiraService:
                             
                         logger.debug(f"Redução {idx}/{len(reducoes)}: {reducao['num_pedido']}/{reducao['cod_produto']} -{reducao['qtd_reduzida']}")
                         
-                        resultado = PreSeparacaoItem.aplicar_reducao_quantidade(
-                            reducao['num_pedido'],
-                            reducao['cod_produto'],
-                            reducao['qtd_reduzida'],
-                            "SYNC_ODOO_BATCH"
+                        # Usar novo serviço que trata TOTAL vs PARCIAL corretamente
+                        resultado = SeparacaoUpdateService.processar_alteracao_pedido(
+                            num_pedido=reducao['num_pedido'],
+                            cod_produto=reducao['cod_produto'],
+                            alteracao_tipo='REDUCAO',
+                            qtd_anterior=reducao['qtd_atual'],
+                            qtd_nova=reducao['qtd_nova'],
+                            motivo="SYNC_ODOO_BATCH"
                         )
                         
                         alteracoes_aplicadas.append({
@@ -1293,8 +1301,8 @@ class CarteiraService:
                             'resultado': resultado
                         })
                         
-                        if resultado.get('alertas_criticos'):
-                            logger.warning(f"🚨 Alerta crítico: {resultado['alertas_criticos']}")
+                        if resultado.get('alertas_gerados'):
+                            logger.warning(f"🚨 {len(resultado['alertas_gerados'])} alertas gerados para separações COTADAS")
                             
                     except Exception as e:
                         logger.error(f"❌ Erro ao aplicar redução {reducao['num_pedido']}/{reducao['cod_produto']}: {e}")
@@ -1320,11 +1328,14 @@ class CarteiraService:
                             
                         logger.debug(f"Aumento {idx}/{len(aumentos)}: {aumento['num_pedido']}/{aumento['cod_produto']} +{aumento['qtd_aumentada']}")
                         
-                        resultado = PreSeparacaoItem.aplicar_aumento_quantidade(
-                            aumento['num_pedido'],
-                            aumento['cod_produto'],
-                            aumento['qtd_aumentada'],
-                            "SYNC_ODOO_BATCH"
+                        # Usar novo serviço que trata TOTAL vs PARCIAL corretamente
+                        resultado = SeparacaoUpdateService.processar_alteracao_pedido(
+                            num_pedido=aumento['num_pedido'],
+                            cod_produto=aumento['cod_produto'],
+                            alteracao_tipo='AUMENTO',
+                            qtd_anterior=aumento['qtd_atual'],
+                            qtd_nova=aumento['qtd_nova'],
+                            motivo="SYNC_ODOO_BATCH"
                         )
                         
                         alteracoes_aplicadas.append({
@@ -1336,6 +1347,9 @@ class CarteiraService:
                             'para': aumento['qtd_nova'],
                             'resultado': resultado
                         })
+                        
+                        if resultado.get('alertas_gerados'):
+                            logger.warning(f"🚨 {len(resultado['alertas_gerados'])} alertas gerados para separações COTADAS")
                         
                     except Exception as e:
                         logger.error(f"❌ Erro ao aplicar aumento {aumento['num_pedido']}/{aumento['cod_produto']}: {e}")
@@ -1363,12 +1377,14 @@ class CarteiraService:
                                 logger.warning(f"🛡️ PROTEÇÃO: Ignorando remoção em pedido não-Odoo: {num_pedido}")
                                 continue
                                 
-                            # Aplicar redução total
-                            resultado = PreSeparacaoItem.aplicar_reducao_quantidade(
-                                num_pedido,
-                                cod_produto,
-                                qtd_atual,
-                                "SYNC_ODOO_REMOVED"
+                            # Usar novo serviço para tratar remoção
+                            resultado = SeparacaoUpdateService.processar_alteracao_pedido(
+                                num_pedido=num_pedido,
+                                cod_produto=cod_produto,
+                                alteracao_tipo='REMOCAO',
+                                qtd_anterior=qtd_atual,
+                                qtd_nova=0,
+                                motivo="SYNC_ODOO_REMOVED"
                             )
                             
                             alteracoes_aplicadas.append({
@@ -1379,8 +1395,8 @@ class CarteiraService:
                                 'resultado': resultado
                             })
                             
-                            if resultado.get('alertas_criticos'):
-                                logger.warning(f"🚨 Item removido afeta separação: {num_pedido}/{cod_produto}")
+                            if resultado.get('alertas_gerados'):
+                                logger.warning(f"🚨 {len(resultado['alertas_gerados'])} alertas gerados para separações COTADAS removidas")
                                 
                         except Exception as e:
                             logger.error(f"❌ Erro ao remover {num_pedido}/{cod_produto}: {e}")

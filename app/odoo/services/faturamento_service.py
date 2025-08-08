@@ -532,46 +532,46 @@ class FaturamentoService:
             logger.info(f"✅ Sincronização principal concluída: {contador_novos} novos, {contador_atualizados} atualizados")
             
             # ============================================
-            # 🚨 PROCESSAMENTO DE NFs CANCELADAS
+            # 🚨 LIMPEZA DE MOVIMENTAÇÕES DE NFs CANCELADAS
             # ============================================
+            # LÓGICA SIMPLES:
+            # - NF está CANCELADA? → Apagar movimentações se existirem
+            # - Independente de quando foi importada
             
-            # Processar cancelamentos ANTES de criar novas movimentações
-            if 'nfs_para_cancelar' in locals() and nfs_para_cancelar:
-                logger.info(f"🚨 PROCESSANDO {len(nfs_para_cancelar)} NFs CANCELADAS...")
+            logger.info("🔍 Verificando NFs CANCELADAS para limpar movimentações...")
+            
+            from app.estoque.models import MovimentacaoEstoque
+            
+            # Buscar TODAS as NFs com status CANCELADO no banco
+            nfs_canceladas = db.session.query(
+                FaturamentoProduto.numero_nf
+            ).filter(
+                FaturamentoProduto.status_nf == 'CANCELADO'
+            ).distinct().all()
+            
+            logger.info(f"📊 Total de NFs CANCELADAS no sistema: {len(nfs_canceladas)}")
+            
+            movimentacoes_removidas_total = 0
+            nfs_limpas = 0
+            
+            for (numero_nf,) in nfs_canceladas:
+                # Para cada NF cancelada, buscar e remover movimentações
+                movs = MovimentacaoEstoque.query.filter(
+                    MovimentacaoEstoque.observacao.like(f"%NF {numero_nf}%")
+                ).all()
                 
-                from app.estoque.models import MovimentacaoEstoque
-                from app.faturamento.models import RelatorioFaturamentoImportado
-                
-                nfs_canceladas_processadas = 0
-                movimentacoes_removidas = 0
-                
-                for numero_nf in nfs_para_cancelar:
-                    try:
-                        # 1. Remover movimentações de estoque relacionadas
-                        movs = MovimentacaoEstoque.query.filter(
-                            MovimentacaoEstoque.observacao.like(f"%NF {numero_nf}%")
-                        ).all()
-                        
-                        if movs:
-                            for mov in movs:
-                                logger.info(f"  🗑️ Removendo movimentação: {mov.cod_produto} - Qtd: {mov.qtd_movimentacao}")
-                                db.session.delete(mov)
-                                movimentacoes_removidas += 1
-                        
-                        # 2. NÃO inativar em RelatorioFaturamentoImportado para manter rastreabilidade
-                        # O status "CANCELADO" em FaturamentoProduto já é suficiente para identificar
-                        # logger.info(f"  📊 Mantendo NF {numero_nf} em RelatorioFaturamentoImportado para rastreabilidade")
-                        
-                        nfs_canceladas_processadas += 1
-                        logger.info(f"✅ NF {numero_nf} - Cancelamento processado com sucesso")
-                        
-                    except Exception as e:
-                        logger.error(f"❌ Erro ao processar cancelamento da NF {numero_nf}: {e}")
-                        erros.append(f"Erro no cancelamento da NF {numero_nf}: {e}")
-                
-                # Commit dos cancelamentos
+                if movs:
+                    logger.info(f"🗑️ NF {numero_nf} CANCELADA - Removendo {len(movs)} movimentações")
+                    for mov in movs:
+                        db.session.delete(mov)
+                        movimentacoes_removidas_total += 1
+                    nfs_limpas += 1
+            
+            if movimentacoes_removidas_total > 0:
                 db.session.commit()
-                logger.info(f"✅ CANCELAMENTOS PROCESSADOS: {nfs_canceladas_processadas} NFs, {movimentacoes_removidas} movimentações removidas")
+                logger.info(f"✅ LIMPEZA CONCLUÍDA: {movimentacoes_removidas_total} movimentações removidas de {nfs_limpas} NFs")
+            else:
+                logger.info("✅ Nenhuma movimentação de NF cancelada para remover")
             
             # ============================================
             # 🚨 PROCESSAMENTO DE MOVIMENTAÇÕES DE ESTOQUE
@@ -733,8 +733,8 @@ class FaturamentoService:
                 'economia_tempo': 'MUITO SIGNIFICATIVA vs método DELETE+INSERT',
                 # 🆕 ESTATÍSTICAS DE CANCELAMENTOS
                 'cancelamentos': {
-                    'nfs_canceladas': nfs_canceladas_processadas if 'nfs_canceladas_processadas' in locals() else 0,
-                    'movimentacoes_removidas': movimentacoes_removidas if 'movimentacoes_removidas' in locals() else 0
+                    'nfs_canceladas': nfs_limpas if 'nfs_limpas' in locals() else 0,
+                    'movimentacoes_removidas': movimentacoes_removidas_total if 'movimentacoes_removidas_total' in locals() else 0
                 },
                 # 🆕 ESTATÍSTICAS DAS SINCRONIZAÇÕES
                 'sincronizacoes': stats_sincronizacao
@@ -745,9 +745,9 @@ class FaturamentoService:
             logger.info(f"   ✏️ {contador_atualizados} registros atualizados")
             
             # Log de cancelamentos se houver
-            if 'nfs_canceladas_processadas' in locals() and nfs_canceladas_processadas > 0:
-                logger.info(f"   🚨 {nfs_canceladas_processadas} NFs CANCELADAS processadas")
-                logger.info(f"   🗑️ {movimentacoes_removidas} movimentações de estoque removidas")
+            if 'nfs_limpas' in locals() and nfs_limpas > 0:
+                logger.info(f"   🚨 {nfs_limpas} NFs CANCELADAS processadas")
+                logger.info(f"   🗑️ {movimentacoes_removidas_total} movimentações de estoque removidas")
             
             logger.info(f"   📋 {stats_sincronizacao['relatorios_consolidados']} relatórios consolidados")
             logger.info(f"   🔄 {stats_sincronizacao['entregas_sincronizadas']} entregas sincronizadas")

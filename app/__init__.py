@@ -659,6 +659,11 @@ def create_app(config_name=None):
     # 📦 Módulos de Carteira de Pedidos
     app.register_blueprint(carteira_bp)
     app.register_blueprint(alertas_bp)
+    
+    # 🚨 Sistema de Alertas de Separações COTADAS
+    from app.carteira.routes.alertas_separacao_api import bp as alertas_separacao_bp
+    app.register_blueprint(alertas_separacao_bp)
+    
     app.register_blueprint(estoque_bp)
     
     app.register_blueprint(producao_bp)

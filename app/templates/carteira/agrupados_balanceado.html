@@ -13,10 +13,11 @@
                     Carteira Agrupada por Pedidos
                 </h1>
                 {% if total_pedidos %}
-                <small class="text-muted"><span id="contador-pedidos">{{ total_pedidos }}</span> pedidos encontrados</small>
+                <small class="text-muted"><span id="contador-pedidos">{{ total_pedidos }}</span> pedidos
+                    encontrados</small>
                 {% endif %}
             </div>
-            
+
             <div class="btn-toolbar" role="toolbar">
                 <div class="btn-group me-2" role="group">
                     <a href="{{ url_for('sync_integrada.dashboard') }}" class="btn btn-success btn-sm">
@@ -41,11 +42,11 @@
                             <span class="input-group-text">
                                 <i class="fas fa-search"></i>
                             </span>
-                            <input type="text" class="form-control" id="filtro-busca" 
-                                   placeholder="Buscar pedido, cliente, CNPJ, equipe vendas...">
+                            <input type="text" class="form-control" id="filtro-busca"
+                                placeholder="Buscar pedido, cliente, CNPJ, equipe vendas...">
                         </div>
                     </div>
-                    
+
                     <div class="col-md-4">
                         <div class="row">
                             <div class="col-6">
@@ -64,7 +65,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="col-md-4 text-end">
                         <div class="btn-group btn-group-sm" role="group">
                             <button type="button" class="btn btn-outline-primary" id="expandir-todos">
@@ -84,26 +85,41 @@
                         <div class="badges-rotas-wrapper">
                             <!-- Primeira linha de badges (7 badges) -->
                             <div class="badges-linha mb-1">
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="SP">SP</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="RJ">RJ</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="MG">MG</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="ES">ES</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="SUL">SUL</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="MS-MT">MS-MT</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="DF-GO-TO">DF-GO-TO</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
+                                    data-valor="SP">SP</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
+                                    data-valor="RJ">RJ</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
+                                    data-valor="MG">MG</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
+                                    data-valor="ES">ES</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
+                                    data-valor="SUL">SUL</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
+                                    data-valor="MS-MT">MS-MT</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
+                                    data-valor="DF-GO-TO">DF-GO-TO</span>
                             </div>
                             <!-- Segunda linha de badges (7 badges) -->
                             <div class="badges-linha">
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="BA">BA</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="NE">NE</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="NE2">NE2</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="NO">NO</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota" data-valor="MARIT.">MARIT.</span>
-                                <span class="badge badge-filtro badge-incoterm bg-warning text-dark" data-tipo="incoterm" data-valor="FOB">FOB</span>
-                                <span class="badge badge-filtro badge-incoterm bg-danger text-white" data-tipo="incoterm" data-valor="RED">RED</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
+                                    data-valor="BA">BA</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
+                                    data-valor="NE">NE</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
+                                    data-valor="NE2">NE2</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
+                                    data-valor="NO">NO</span>
+                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
+                                    data-valor="MARIT.">MARIT.</span>
+                                <span class="badge badge-filtro badge-incoterm bg-warning text-dark"
+                                    data-tipo="incoterm" data-valor="FOB">FOB</span>
+                                <span class="badge badge-filtro badge-incoterm bg-danger text-white"
+                                    data-tipo="incoterm" data-valor="RED">RED</span>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-rotas" style="display:none;">
+                        <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-rotas"
+                            style="display:none;">
                             <i class="fas fa-times"></i> Limpar
                         </button>
                     </div>
@@ -115,22 +131,33 @@
                             <div class="badges-subrotas-wrapper">
                                 <!-- Primeira linha (subrotas com LITORAL) -->
                                 <div class="badges-linha mb-1">
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="LITORAL - A">Litoral - A</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="LITORAL - B">Litoral - B</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="LITORAL - C">Litoral - C</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
+                                        data-valor="LITORAL - A">Litoral - A</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
+                                        data-valor="LITORAL - B">Litoral - B</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
+                                        data-valor="LITORAL - C">Litoral - C</span>
                                 </div>
                                 <!-- Segunda linha (outras subrotas) -->
                                 <div class="badges-linha">
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="A">A</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="ABC">ABC</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="B">B</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="C">C</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="D">D</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="E">E</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota" data-valor="SP">SP</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
+                                        data-valor="A">A</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
+                                        data-valor="ABC">ABC</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
+                                        data-valor="B">B</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
+                                        data-valor="C">C</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
+                                        data-valor="D">D</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
+                                        data-valor="E">E</span>
+                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
+                                        data-valor="SP">SP</span>
                                 </div>
                             </div>
-                            <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-subrotas" style="display:none;">
+                            <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-subrotas"
+                                style="display:none;">
                                 <i class="fas fa-times"></i> Limpar
                             </button>
                         </div>
@@ -151,7 +178,7 @@
                     <span class="badge bg-light text-dark ms-2">{{ total_pedidos }}</span>
                 </h6>
             </div>
-            
+
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover table-sm mb-0" id="tabela-carteira">
@@ -172,22 +199,19 @@
                         <tbody>
                             {% for pedido in pedidos %}
                             <!-- Linha Principal do Pedido -->
-                            <tr class="pedido-row {{ 'table-success' if pedido.totalmente_separado else '' }}" 
+                            <tr class="pedido-row {{ 'table-success' if pedido.totalmente_separado else '' }}"
                                 data-pedido="{{ pedido.num_pedido }}"
                                 data-status="{{ 'completo' if pedido.totalmente_separado else ('parcial' if pedido.qtd_separacoes > 0 else 'pendente') }}"
                                 data-vendedor="{{ pedido.vendedor or '' }}"
-                                data-equipe="{{ pedido.equipe_vendas or '' }}"
-                                data-rota="{{ pedido.rota or '' }}"
+                                data-equipe="{{ pedido.equipe_vendas or '' }}" data-rota="{{ pedido.rota or '' }}"
                                 data-subrota="{{ pedido.sub_rota or '' }}"
-                                data-incoterm="{{ pedido.incoterm or 'CIF' }}"
-                                data-uf="{{ pedido.cod_uf or '' }}"
+                                data-incoterm="{{ pedido.incoterm or 'CIF' }}" data-uf="{{ pedido.cod_uf or '' }}"
                                 data-filtro="{{ (pedido.num_pedido + ' ' + (pedido.raz_social_red or '') + ' ' + (pedido.cnpj_cpf or '') + ' ' + (pedido.equipe_vendas or ''))|lower }}">
-                                
+
                                 <!-- Botão Expandir -->
                                 <td class="text-center">
-                                    <button class="btn btn-sm btn-link p-0 btn-expandir" 
-                                            data-pedido="{{ pedido.num_pedido }}"
-                                            title="Expandir/Colapsar detalhes">
+                                    <button class="btn btn-sm btn-link p-0 btn-expandir"
+                                        data-pedido="{{ pedido.num_pedido }}" title="Expandir/Colapsar detalhes">
                                         <i class="fas fa-chevron-right text-muted expand-icon"></i>
                                     </button>
                                 </td>
@@ -200,7 +224,8 @@
                                         <br><small class="text-muted">{{ pedido.equipe_vendas }}</small>
                                         {% endif %}
                                         {% if pedido.status_pedido %}
-                                        <br><span class="badge bg-secondary text-white">{{ pedido.status_pedido }}</span>
+                                        <br><span class="badge bg-secondary text-white">{{ pedido.status_pedido
+                                            }}</span>
                                         {% endif %}
                                     </div>
                                 </td>
@@ -232,7 +257,8 @@
                                 <td>
                                     <div class="destino-info">
                                         {% if pedido.nome_cidade and pedido.cod_uf %}
-                                        <strong class="text-primary">{{ pedido.nome_cidade }}/{{ pedido.cod_uf }}</strong>
+                                        <strong class="text-primary">{{ pedido.nome_cidade }}/{{ pedido.cod_uf
+                                            }}</strong>
                                         {% endif %}
                                         {% if pedido.incoterm == 'FOB' %}
                                         <br><span class="badge bg-warning text-dark">FOB</span>
@@ -244,11 +270,11 @@
                                         {% if pedido.sub_rota %}
                                         <br><small class="text-muted">{{ pedido.sub_rota }}</small>
                                         {% endif %}
-                                        
+
                                         <!-- Botão Endereço -->
-                                        <br><button class="btn btn-outline-primary btn-sm mt-1" 
-                                                   onclick="modalEndereco.abrirModalEndereco('{{ pedido.num_pedido }}')"
-                                                   title="Ver endereço de entrega e dados do cliente">
+                                        <br><button class="btn btn-outline-primary btn-sm mt-1"
+                                            onclick="modalEndereco.abrirModalEndereco('{{ pedido.num_pedido }}')"
+                                            title="Ver endereço de entrega e dados do cliente">
                                             <i class="fas fa-map-marker-alt me-1"></i>
                                             Endereço
                                         </button>
@@ -263,7 +289,7 @@
                                         {% else %}
                                         <span class="text-warning">Não definida</span>
                                         {% endif %}
-                                        
+
                                         {% if pedido.agendamento %}
                                         <br><small class="text-info">
                                             <i class="fas fa-calendar-check me-1"></i>
@@ -276,7 +302,7 @@
                                         <br><span class="badge bg-warning text-dark">Ag. Aprovação</span>
                                         {% endif %}
                                         {% endif %}
-                                        
+
                                         {% if pedido.protocolo %}
                                         <br><small class="text-success">
                                             <i class="fas fa-clipboard-check me-1"></i>
@@ -292,21 +318,21 @@
                                         {% if pedido.data_entrega_pedido %}
                                         <div class="mb-1">
                                             <i class="fas fa-truck text-primary me-1"></i>
-                                            <strong class="text-primary">{{ pedido.data_entrega_pedido|safe_date }}</strong>
+                                            <strong class="text-primary">{{ pedido.data_entrega_pedido|safe_date
+                                                }}</strong>
                                         </div>
                                         {% endif %}
-                                        
+
                                         {% if pedido.observ_ped_1 %}
                                         <div class="observacao-container">
-                                            <small class="text-muted" 
-                                                   title="{{ pedido.observ_ped_1 }}"
-                                                   style="cursor: help; display: block; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                            <small class="text-muted" title="{{ pedido.observ_ped_1 }}"
+                                                style="cursor: help; display: block; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                                 <i class="fas fa-comment-alt me-1"></i>
                                                 {{ pedido.observ_ped_1 }}
                                             </small>
                                         </div>
                                         {% endif %}
-                                        
+
                                         {% if not pedido.data_entrega_pedido and not pedido.observ_ped_1 %}
                                         <span class="text-muted">-</span>
                                         {% endif %}
@@ -319,23 +345,23 @@
                                         <strong class="text-success">{{ pedido.valor_total|moeda_carteira }}</strong>
                                         <br><small class="text-muted">{{ pedido.peso_total|peso_carteira }}</small>
                                         <br><small class="text-muted">{{ pedido.pallet_total|pallet_carteira }}</small>
-                                        <br><span class="badge bg-primary text-white">{{ pedido.total_itens }} itens</span>
+                                        <br><span class="badge bg-primary text-white">{{ pedido.total_itens }}
+                                            itens</span>
                                     </div>
                                 </td>
 
                                 <!-- ✅ CORREÇÃO 3: Saldo (sem texto branco) -->
                                 <td>
                                     <div class="separacoes-container">
-                                        <button class="btn btn-outline-primary btn-sm btn-separacoes" 
-                                                type="button"
-                                                data-pedido="{{ pedido.num_pedido }}"
-                                                onclick="abrirModalSeparacoes('{{ pedido.num_pedido }}')"
-                                                title="Ver separações do pedido">
+                                        <button class="btn btn-outline-primary btn-sm btn-separacoes" type="button"
+                                            data-pedido="{{ pedido.num_pedido }}"
+                                            onclick="abrirModalSeparacoes('{{ pedido.num_pedido }}')"
+                                            title="Ver separações do pedido">
                                             <i class="fas fa-boxes me-1"></i>
                                             <span class="contador-separacoes">{{ pedido.qtd_separacoes or 0 }}</span>
                                             separações
                                         </button>
-                                        
+
                                         <!-- Status visual das separações -->
                                         {% if pedido.totalmente_separado %}
                                         <br><span class="badge bg-success text-white mt-1">Completo</span>
@@ -344,11 +370,12 @@
                                         {% else %}
                                         <br><span class="badge bg-secondary text-white mt-1">Pendente</span>
                                         {% endif %}
-                                        
+
                                         <!-- Total em separação com texto visível -->
                                         {% if pedido.valor_saldo_restante %}
                                         <br><small class="text-dark"><strong>Saldo sem separação:</strong></small>
-                                        <br><span class="badge bg-danger text-white">R$ {{ pedido.valor_saldo_restante|moeda_carteira }}</span>
+                                        <br><span class="badge bg-danger text-white">R$ {{
+                                            pedido.valor_saldo_restante|moeda_carteira }}</span>
                                         {% endif %}
                                     </div>
                                 </td>
@@ -356,35 +383,34 @@
                                 <!-- Ações -->
                                 <td>
                                     <div class="btn-group-vertical btn-group-sm" role="group">
-                                        <button type="button" class="btn btn-primary btn-sm" 
-                                                data-pedido="{{ pedido.num_pedido }}"
-                                                onclick="criarSeparacao('{{ pedido.num_pedido }}')"
-                                                title="Criar nova separação">
+                                        <button type="button" class="btn btn-primary btn-sm"
+                                            data-pedido="{{ pedido.num_pedido }}"
+                                            onclick="criarSeparacao('{{ pedido.num_pedido }}')"
+                                            title="Criar nova separação">
                                             <i class="fas fa-plus me-1"></i> Separação
                                         </button>
-                                        
+
                                         <button type="button" class="btn btn-info btn-sm"
-                                                data-pedido="{{ pedido.num_pedido }}"
-                                                onclick="avaliarEstoques('{{ pedido.num_pedido }}')"
-                                                title="Avaliar estoques do pedido">
+                                            data-pedido="{{ pedido.num_pedido }}"
+                                            onclick="avaliarEstoques('{{ pedido.num_pedido }}')"
+                                            title="Avaliar estoques do pedido">
                                             <i class="fas fa-chart-line me-1"></i> Estoques
                                         </button>
-                                        
+
                                         <button type="button" class="btn btn-success btn-sm"
-                                                data-pedido="{{ pedido.num_pedido }}"
-                                                onclick="solicitarAgendamento('{{ pedido.num_pedido }}')"
-                                                title="Solicitar agendamento">
+                                            data-pedido="{{ pedido.num_pedido }}"
+                                            onclick="solicitarAgendamento('{{ pedido.num_pedido }}')"
+                                            title="Solicitar agendamento">
                                             <i class="fas fa-calendar-plus me-1"></i> Agendar
                                         </button>
-                                        
+
                                         <!-- Botão Standby -->
-                                        <button type="button" 
-                                                class="btn btn-sm btn-standby" 
-                                                id="btn-standby-{{ pedido.num_pedido }}"
-                                                data-pedido="{{ pedido.num_pedido }}"
-                                                onclick="gerenciarStandby('{{ pedido.num_pedido }}')"
-                                                title="Enviar para Standby">
-                                            <i class="fas fa-pause-circle me-1"></i> 
+                                        <button type="button" class="btn btn-sm btn-standby"
+                                            id="btn-standby-{{ pedido.num_pedido }}"
+                                            data-pedido="{{ pedido.num_pedido }}"
+                                            onclick="gerenciarStandby('{{ pedido.num_pedido }}')"
+                                            title="Enviar para Standby">
+                                            <i class="fas fa-pause-circle me-1"></i>
                                             <span class="btn-standby-text">Standby</span>
                                         </button>
                                     </div>
@@ -399,7 +425,8 @@
                                             <i class="fas fa-spinner fa-spin me-2"></i>
                                             Carregando detalhes do pedido...
                                         </div>
-                                        <div class="content-detalhes" id="content-{{ pedido.num_pedido }}" style="display: none;">
+                                        <div class="content-detalhes" id="content-{{ pedido.num_pedido }}"
+                                            style="display: none;">
                                             <!-- Conteúdo será carregado via AJAX -->
                                         </div>
                                     </div>
@@ -428,85 +455,90 @@
 
 {% block styles %}
 <style>
-{% include 'carteira/css/agrupados.css' %}
-{% include 'carteira/css/workspace-montagem.css' %}
+    {
+        % include 'carteira/css/agrupados.css' %
+    }
+
+        {
+        % include 'carteira/css/workspace-montagem.css' %
+    }
 </style>
 {% endblock %}
 
 {% block scripts %}
 <!-- Módulos JavaScript incluídos -->
 <script>
-{% include 'carteira/js/dropdown-separacoes.js' %}
+    {% include 'carteira/js/dropdown-separacoes.js' %}
 </script>
 
 <script>
-{% include 'carteira/js/carteira-agrupada.js' %}
+    {% include 'carteira/js/carteira-agrupada.js' %}
 </script>
 
 <!-- Módulos do Workspace -->
 
 <script>
-{% include 'carteira/js/modal-cardex.js' %}
+    {% include 'carteira/js/modal-cardex.js' %}
 </script>
 
 <script>
-{% include 'carteira/js/modal-agendamento.js' %}
+    {% include 'carteira/js/modal-agendamento.js' %}
 </script>
 
 <script>
-{% include 'carteira/js/modal-endereco.js' %}
+    {% include 'carteira/js/modal-endereco.js' %}
 </script>
 
 <script>
-{% include 'carteira/js/modal-separacoes.js' %}
+    {% include 'carteira/js/modal-separacoes.js' %}
 </script>
 
 <script>
-{% include 'carteira/js/pre-separacao-manager.js' %}
+    {% include 'carteira/js/pre-separacao-manager.js' %}
 </script>
 
 <script>
-{% include 'carteira/js/lote-manager.js' %}
+    {% include 'carteira/js/lote-manager.js' %}
 </script>
 
 <script>
-{% include 'carteira/js/workspace-montagem.js' %}
+    {% include 'carteira/js/workspace-montagem.js' %}
 </script>
 
 <script>
-{% include 'carteira/js/separacao-manager.js' %}
+    {% include 'carteira/js/separacao-manager.js' %}
 </script>
 
 <script>
-{% include 'carteira/js/workspace-tabela.js' %}
+    {% include 'carteira/js/workspace-tabela.js' %}
 </script>
 
 <script>
-{% include 'carteira/js/workspace-quantidades.js' %}
+    {% include 'carteira/js/workspace-quantidades.js' %}
 </script>
 
 <script>
-{% include 'carteira/js/standby-manager.js' %}
+    {% include 'carteira/js/standby-manager.js' %}
 </script>
 
 <!-- Inicialização -->
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar módulos auxiliares primeiro (ordem importante!)
-    window.workspaceQuantidades = new WorkspaceQuantidades();
-    window.workspaceTabela = new WorkspaceTabela();
-    
-    // Inicializar controladores principais
-    window.carteiraAgrupada = new CarteiraAgrupada();
-    window.workspace = new WorkspaceMontagem();
-    window.modalCardex = new ModalCardex();
-    window.modalAgendamento = new ModalAgendamento();
-    window.modalEndereco = new ModalEndereco();
-    window.modalSeparacoes = new ModalSeparacoes();
-    window.separacaoManager = new SeparacaoManager();
-    
-    console.log('✅ Template balanceado carregado com todos os módulos');
-});
+    document.addEventListener('DOMContentLoaded', function () {
+        // Inicializar módulos auxiliares primeiro (ordem importante!)
+        window.workspaceQuantidades = new WorkspaceQuantidades();
+        window.workspaceTabela = new WorkspaceTabela();
+
+        // Inicializar controladores principais
+        window.carteiraAgrupada = new CarteiraAgrupada();
+        window.workspace = new WorkspaceMontagem();
+        window.modalCardex = new ModalCardex();
+        window.modalAgendamento = new ModalAgendamento();
+        window.modalEndereco = new ModalEndereco();
+        window.modalSeparacoes = new ModalSeparacoes();
+        window.separacaoManager = new SeparacaoManager();
+
+        console.log('✅ Template balanceado carregado com todos os módulos');
+    });
 </script>
 
 <!-- Modal de Standby -->
@@ -527,7 +559,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 <div id="modal-standby-content">
                     <h6 class="mb-3">Pedido: <span id="standby-pedido-numero" class="text-primary"></span></h6>
-                    
+
                     <!-- Resumo do pedido -->
                     <div class="card mb-3">
                         <div class="card-body">
@@ -552,7 +584,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Produtos -->
                     <div class="card mb-3">
                         <div class="card-body">
@@ -574,10 +606,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Tipo de Standby -->
                     <div class="mb-3">
-                        <label for="standby-tipo" class="form-label fw-bold">Tipo de Standby <span class="text-danger">*</span></label>
+                        <label for="standby-tipo" class="form-label fw-bold">Tipo de Standby <span
+                                class="text-danger">*</span></label>
                         <select class="form-select" id="standby-tipo" required>
                             <option value="">Selecione o tipo...</option>
                             <option value="Saldo">Saldo</option>
@@ -606,7 +639,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="fas fa-boxes me-2"></i>
                     Separações do Pedido <span id="modal-pedido-numero"></span>
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
                 <div id="modal-separacoes-loading" class="text-center p-4">
@@ -618,7 +652,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" onclick="criarSeparacao(document.getElementById('modal-pedido-numero').textContent)">
+                <button type="button" class="btn btn-primary"
+                    onclick="criarSeparacao(document.getElementById('modal-pedido-numero').textContent)">
                     <i class="fas fa-plus me-1"></i> Nova Separação
                 </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>

@@ -146,6 +146,9 @@
 {% block content %}
 <div class="container-fluid mt-4">
     <h1>Listagem de Pedidos</h1>
+    
+    <!-- Card de Alertas de Separações COTADAS Alteradas -->
+    <div id="alertasContainer"></div>
 
     <!-- 🔍 FORMULÁRIO DE FILTROS APRIMORADO -->
     <div class="card mb-4">
@@ -1534,5 +1537,34 @@ document.addEventListener('DOMContentLoaded', function() {
         padding: 0.2rem 0.4rem;
     }
 }
-</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Carregar alertas de separações COTADAS alteradas ao carregar a página
+document.addEventListener('DOMContentLoaded', function() {
+    carregarAlertasSeparacoes();
+});
+
+function carregarAlertasSeparacoes() {
+    fetch('/api/alertas-separacao/card-html')
+        .then(response => {
+            if (response.status === 204) {
+                // Sem alertas
+                return '';
+            }
+            return response.text();
+        })
+        .then(html => {
+            if (html) {
+                document.getElementById('alertasContainer').innerHTML = html;
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar alertas:', error);
+        });
+}
+
+// Função global para reimpressão (já definida no HTML retornado)
+</script>
 {% endblock %}

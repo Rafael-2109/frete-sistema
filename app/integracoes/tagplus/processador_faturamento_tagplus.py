@@ -122,80 +122,90 @@ class ProcessadorFaturamentoTagPlus:
     def _encontrar_separacao_por_score(self, faturamento):
         """Encontra separação usando lógica de score (CNPJ + Produto + Qtd)"""
         try:
-            # Importa modelo Embarque e utilitário de CNPJ
+            # Importa modelos necessários
             from app.embarques.models import Embarque
             from app.utils.cnpj_utils import normalizar_cnpj
+            from app.separacao.models import Separacao
 
             # Normaliza CNPJ do faturamento para busca
             cnpj_normalizado = normalizar_cnpj(faturamento.cnpj_cliente)
             
             # Busca EmbarqueItens do mesmo CNPJ com critérios específicos
-            # Primeiro busca todos os itens candidatos
+            # Não fazemos JOIN com CarteiraCopia aqui pois EmbarqueItem não tem cod_produto
             embarque_items_candidatos = (
                 EmbarqueItem.query.join(Embarque, EmbarqueItem.embarque_id == Embarque.id)
-                .join(
-                    CarteiraCopia,
-                    and_(
-                        EmbarqueItem.pedido == CarteiraCopia.num_pedido,
-                        EmbarqueItem.cod_produto == CarteiraCopia.cod_produto,
-                    ),
-                )
                 .filter(
                     EmbarqueItem.numero_nf.is_(None),  # Ainda não faturado
                     Embarque.status == "ativo",  # Embarque ativo
                     EmbarqueItem.status == "ativo",  # Item ativo
-                    EmbarqueItem.erro_validacao is not None,  # Tem erro de validação (candidato a faturamento)
+                    EmbarqueItem.erro_validacao.isnot(None),  # Tem erro de validação (candidato a faturamento)
                 )
                 .all()
             )
             
-            # Filtra manualmente pelo CNPJ normalizado
+            # Filtra manualmente pelo CNPJ normalizado e busca informações da Separacao
             embarque_items = []
+            items_com_separacao = []  # Lista para armazenar (item, separacao_info)
+            
             for item in embarque_items_candidatos:
                 # Busca a CarteiraCopia para pegar o CNPJ
                 carteira = CarteiraCopia.query.filter_by(
-                    num_pedido=item.pedido,
-                    cod_produto=item.cod_produto
+                    num_pedido=item.pedido
                 ).first()
                 
                 if carteira and normalizar_cnpj(carteira.cnpj_cpf) == cnpj_normalizado:
-                    embarque_items.append(item)
+                    # Busca informações da Separacao para este item
+                    separacoes = Separacao.query.filter_by(
+                        separacao_lote_id=item.separacao_lote_id,
+                        cod_produto=faturamento.cod_produto  # Filtra pelo produto do faturamento
+                    ).all()
+                    
+                    # Se encontrou separações do produto, adiciona à lista
+                    for sep in separacoes:
+                        items_com_separacao.append({
+                            'embarque_item': item,
+                            'cod_produto': sep.cod_produto,
+                            'qtd_separada': sep.qtd_saldo or 0
+                        })
 
-            if not embarque_items:
+            if not items_com_separacao:
                 logger.info(
-                    f"Nenhum EmbarqueItem ativo com erro_validacao encontrado para CNPJ {faturamento.cnpj_cliente}"
+                    f"Nenhum EmbarqueItem ativo com erro_validacao encontrado para CNPJ {faturamento.cnpj_cliente} e produto {faturamento.cod_produto}"
                 )
                 return None
 
             logger.info(
-                f"Encontrados {len(embarque_items)} EmbarqueItems candidatos para CNPJ {faturamento.cnpj_cliente}"
+                f"Encontrados {len(items_com_separacao)} EmbarqueItems candidatos para CNPJ {faturamento.cnpj_cliente}"
             )
 
             # Calcula score para cada item
             melhor_match = None
             melhor_score = 0
 
-            for item in embarque_items:
+            for item_info in items_com_separacao:
+                item = item_info['embarque_item']
+                cod_produto = item_info['cod_produto']
+                qtd_separada = item_info['qtd_separada']
                 score = 0
 
-                # Score por produto (peso maior)
-                if item.cod_produto == faturamento.cod_produto:
+                # Score por produto (peso maior) - agora sempre será igual pois já filtramos
+                if cod_produto == faturamento.cod_produto:
                     score += 50
 
                 # Score por quantidade (exata ou próxima)
-                if item.qtd_separada == faturamento.qtd_produto_faturado:
+                if qtd_separada == faturamento.qtd_produto_faturado:
                     score += 40  # Quantidade exata
-                else:
+                elif qtd_separada > 0:
                     # Tolerância de 10%
-                    diff_percent = abs(item.qtd_separada - faturamento.qtd_produto_faturado) / item.qtd_separada
+                    diff_percent = abs(qtd_separada - faturamento.qtd_produto_faturado) / qtd_separada
                     if diff_percent <= 0.1:
                         score += 30
                     elif diff_percent <= 0.2:
                         score += 20
 
                 # Score por data (embarques mais recentes)
-                if hasattr(item, "created_at"):
-                    dias_diff = (datetime.now() - item.created_at).days
+                if hasattr(item, "criado_em"):
+                    dias_diff = (datetime.now() - item.criado_em).days
                     if dias_diff <= 7:
                         score += 10
 
@@ -307,12 +317,6 @@ class ProcessadorFaturamentoTagPlus:
                 logger.info(f"NF {faturamento.numero_nf} já consolidada")
                 return
 
-            # Busca dados do cliente
-            from app.carteira.models import CadastroCliente
-
-            cliente = CadastroCliente.query.filter_by(
-                cnpj_cpf=faturamento.cnpj_cliente.replace(".", "").replace("-", "").replace("/", "")
-            ).first()
 
             # Calcula totais da NF
             itens_nf = FaturamentoProduto.query.filter_by(numero_nf=faturamento.numero_nf).all()

@@ -34,6 +34,7 @@ from app.transportadoras.models import Transportadora
 
 from app.utils.calculadora_frete import calcular_valor_frete_pela_tabela
 from app.utils.valores_brasileiros import converter_valor_brasileiro
+from app.utils.cnpj_utils import normalizar_cnpj
 
 fretes_bp = Blueprint('fretes', __name__, url_prefix='/fretes')
 
@@ -1904,8 +1905,8 @@ def verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente):
                 item.cnpj_cliente = nf_fat.cnpj_cliente
                 db.session.commit()
             
-            # Verifica se coincidem
-            if item.cnpj_cliente != nf_fat.cnpj_cliente:
+            # Verifica se coincidem (normaliza CNPJs para comparação)
+            if normalizar_cnpj(item.cnpj_cliente) != normalizar_cnpj(nf_fat.cnpj_cliente):
                 erros_cnpj.append(f"NF {item.nota_fiscal}: Embarque({item.cnpj_cliente}) ≠ Faturamento({nf_fat.cnpj_cliente})")
     
     if erros_cnpj:
@@ -1917,7 +1918,8 @@ def verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente):
         return False, f"Existem {len(itens_com_erro)} item(ns) ativo(s) com erro de validação no embarque"
     
     # REQUISITO 5: Verifica se há pelo menos uma NF do CNPJ específico
-    itens_cnpj = [item for item in itens_embarque if item.cnpj_cliente == cnpj_cliente]
+    cnpj_normalizado = normalizar_cnpj(cnpj_cliente)
+    itens_cnpj = [item for item in itens_embarque if normalizar_cnpj(item.cnpj_cliente) == cnpj_normalizado]
     if not itens_cnpj:
         return False, f"Nenhuma NF do CNPJ {cnpj_cliente} encontrada no embarque"
     
@@ -2298,7 +2300,11 @@ def validar_cnpj_embarque_faturamento(embarque_id):
             # REGRA b: Conferir se a NF pertence ao cliente correto
             # ✅ CORREÇÃO: Se o item tem CNPJ, verifica se a NF pertence a este CNPJ
             if item.cnpj_cliente:
-                if item.cnpj_cliente != nf_faturamento.cnpj_cliente:
+                # Normalizar CNPJs para comparação (remove formatação)
+                cnpj_item_normalizado = normalizar_cnpj(item.cnpj_cliente)
+                cnpj_nf_normalizado = normalizar_cnpj(nf_faturamento.cnpj_cliente)
+                
+                if cnpj_item_normalizado != cnpj_nf_normalizado:
                     # ✅ CORREÇÃO: NF não pertence ao cliente - APAGA APENAS a NF, mantém todos os outros dados
                     nf_original = item.nota_fiscal
                     item.erro_validacao = f"NF_DIVERGENTE: NF {nf_original} pertence ao CNPJ {nf_faturamento.cnpj_cliente}, não a {item.cnpj_cliente}"
