@@ -14,6 +14,7 @@ from datetime import datetime, date, timedelta
 import logging
 from app.carteira.utils.separacao_utils import calcular_peso_pallet_produto
 from app.separacao.models import Separacao
+from app.permissions.permissions import check_permission
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,7 @@ carteira_bp = Blueprint('carteira', __name__, url_prefix='/carteira')
 
 @carteira_bp.route('/')
 @login_required
+@check_permission('carteira')
 def index():
     """Dashboard principal da carteira de pedidos com KPIs e visão geral"""
     try:

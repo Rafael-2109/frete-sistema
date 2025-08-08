@@ -280,26 +280,26 @@
         </li>
 
         <!-- CARTEIRA & PRODUÇÃO - Módulos de carteira de pedidos -->
-        {% if current_user.is_authenticated and (current_user.tem_permissao('carteira') or current_user.tem_permissao('producao') or current_user.tem_permissao('estoque') or current_user.tem_permissao('rotas') or current_user.perfil == 'administrador') %}
+        {% if current_user.is_authenticated and (current_user.tem_permissao('carteira') or current_user.tem_permissao('producao') or current_user.tem_permissao('estoque') or current_user.tem_permissao('rotas') or current_user.perfil == 'administrador' or current_user.perfil == 'logistica') %}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="menuCarteira" role="button" data-bs-toggle="dropdown">
             <i class="fas fa-industry text-success"></i> Carteira & Estoque
           </a>
           <ul class="dropdown-menu">
-            {% if current_user.tem_permissao('carteira') or current_user.tem_permissao('producao') or current_user.tem_permissao('estoque') or current_user.perfil == 'administrador' %}
+            {% if current_user.tem_permissao('carteira', 'edit') or current_user.tem_permissao('producao') or current_user.tem_permissao('estoque') or current_user.perfil == 'logistica' or current_user.perfil == 'administrador' %}
             <li><h6 class="dropdown-header">📊 Dashboards</h6></li>
-            {% if current_user.tem_permissao('carteira', 'visualizar') or current_user.perfil == 'administrador' %}
+            {% if current_user.tem_permissao('carteira', 'visualizar') or current_user.perfil == 'administrador' or current_user.perfil == 'logistica'%}
             <li><a class="dropdown-item" href="{{ url_for('carteira.index') }}">
               <i class="fas fa-shopping-cart text-success"></i> Carteira de Pedidos
               <span class="badge bg-success ms-2">NOVO</span>
             </a></li>
             {% endif %}
-            {% if current_user.tem_permissao('producao', 'visualizar') or current_user.perfil == 'administrador' %}
+            {% if current_user.tem_permissao('producao', 'visualizar') or current_user.perfil == 'administrador' or current_user.perfil == 'logistica'%}
             <li><a class="dropdown-item" href="{{ url_for('producao.index') }}">
               <i class="fas fa-tachometer-alt text-primary"></i> Dashboard Produção
             </a></li>
             {% endif %}
-            {% if current_user.tem_permissao('estoque', 'visualizar') or current_user.perfil == 'administrador' %}
+            {% if current_user.tem_permissao('estoque', 'visualizar') or current_user.perfil == 'administrador' or current_user.perfil == 'logistica'%}
             <li><a class="dropdown-item" href="{{ url_for('estoque.index') }}">
               <i class="fas fa-warehouse text-info"></i> Dashboard Estoque
             </a></li>

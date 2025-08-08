@@ -467,6 +467,7 @@ class FaturamentoService:
                     numero_nf = item_mapeado.get('numero_nf', '').strip()
                     cod_produto = item_mapeado.get('cod_produto', '').strip()
                     status_odoo = item_mapeado.get('status_nf', 'Lançado')
+                    status_odoo_raw = item_mapeado.get('status_odoo_raw', '')  # Status bruto do Odoo
                     cnpj_cliente = item_mapeado.get('cnpj_cliente', '').strip()
                     
                     # Validar dados essenciais
@@ -500,11 +501,12 @@ class FaturamentoService:
                             logger.debug(f"✏️ UPDATE: NF {numero_nf} produto {cod_produto} - status: {registro_info['status_atual']} → {status_odoo}")
                             
                             # 🚨 IMPORTANTE: Se mudou para CANCELADO, marcar para processar cancelamento
-                            if status_odoo == 'CANCELADO' and registro_info['status_atual'] != 'CANCELADO':
+                            # Verificar o status BRUTO do Odoo (antes do mapeamento)
+                            if status_odoo_raw == 'cancel' and registro_info['status_atual'] != 'CANCELADO':
                                 if 'nfs_para_cancelar' not in locals():
                                     nfs_para_cancelar = set()
                                 nfs_para_cancelar.add(numero_nf)
-                                logger.info(f"🚨 NF {numero_nf} marcada para processar CANCELAMENTO")
+                                logger.info(f"🚨 NF {numero_nf} marcada para processar CANCELAMENTO (Odoo state='cancel')")
                         # Se status igual, não faz nada (otimização)
                         
                     else:
@@ -1011,6 +1013,7 @@ class FaturamentoService:
                 'data_fatura': self._parse_date(fatura.get('date')),  # Usar date da fatura via cache
                 'origem': fatura.get('invoice_origin', ''),
                 'status_nf': self._mapear_status(fatura.get('state', '')),
+                'status_odoo_raw': fatura.get('state', ''),  # Status bruto do Odoo para detectar cancelamentos
                 
                 # 👥 DADOS DO CLIENTE
                 'cnpj_cliente': fatura.get('l10n_br_cnpj') or cliente.get('l10n_br_cnpj', ''),
