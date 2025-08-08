@@ -119,6 +119,31 @@ class WorkspaceMontagem {
 
         // Renderizar cada lote existente
         for (const lote of lotes) {
+            // Garantir que o mapa interno tenha os dados necessários para edição de datas
+            try {
+                if (!this.preSeparacoes) {
+                    this.preSeparacoes = new Map();
+                }
+                // Normalizar produtos carregados do backend para o formato usado pelos handlers
+                const produtos = (Array.isArray(lote.produtos) ? lote.produtos : []).map((p) => ({
+                    codProduto: p.cod_produto || p.codProduto,
+                    preSeparacaoId: p.pre_separacao_id || p.preSeparacaoId,
+                    quantidade: p.quantidade,
+                    valor: p.valor,
+                    peso: p.peso,
+                    pallet: p.pallet,
+                    loteId: lote.lote_id,
+                }));
+                this.preSeparacoes.set(lote.lote_id, {
+                    loteId: lote.lote_id,
+                    dataExpedicao: lote.data_expedicao || '',
+                    dataAgendamento: lote.data_agendamento || '',
+                    protocolo: lote.protocolo || '',
+                    produtos: produtos
+                });
+            } catch (e) {
+                console.warn('Não foi possível registrar lote no mapa de pré-separações:', e);
+            }
             const loteCard = document.createElement('div');
             loteCard.className = 'col-md-4 mb-3';
             loteCard.innerHTML = this.loteManager.renderizarCardPreSeparacao(lote);
@@ -939,13 +964,25 @@ class WorkspaceMontagem {
         if (tipo === 'pre-separacao') {
             // Buscar dados da pré-separação
             const loteData = this.preSeparacoes.get(loteId);
-            if (loteData && loteData.produtos.length > 0) {
-                const primeiroProduto = loteData.produtos[0];
-                dadosAtuais = {
-                    expedicao: primeiroProduto.dataExpedicao || '',
-                    agendamento: primeiroProduto.dataAgendamento || '',
-                    protocolo: primeiroProduto.protocolo || ''
-                };
+            if (loteData) {
+                if (loteData.produtos && loteData.produtos.length > 0) {
+                    const primeiroProduto = loteData.produtos[0];
+                    const exp = (primeiroProduto.dataExpedicao || loteData.dataExpedicao || '');
+                    const ag = (primeiroProduto.dataAgendamento || loteData.dataAgendamento || '');
+                    dadosAtuais = {
+                        expedicao: (typeof exp === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(exp)) ? exp : '',
+                        agendamento: (typeof ag === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ag)) ? ag : '',
+                        protocolo: (primeiroProduto.protocolo || loteData.protocolo || '')
+                    };
+                } else {
+                    const exp = loteData.dataExpedicao || '';
+                    const ag = loteData.dataAgendamento || '';
+                    dadosAtuais = {
+                        expedicao: (typeof exp === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(exp)) ? exp : '',
+                        agendamento: (typeof ag === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ag)) ? ag : '',
+                        protocolo: loteData.protocolo || ''
+                    };
+                }
             }
         } else {
             // Para separações, buscar dos dados carregados

@@ -100,4 +100,4 @@ python-multipart==0.0.14
 python-jose[cryptography]==3.3.0
 httpx==0.28.1
 aioredis==2.0.1  # Para async Redis
-python-json-logger==2.0.7  # Para JSON logging
+python-json-logger==2.0.7  # Para JSON loggingxlsxwriter==3.2.5

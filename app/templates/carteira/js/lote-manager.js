@@ -199,7 +199,14 @@ class LoteManager {
                         <div class="mt-2 text-center">
                             <small class="text-muted">
                                 <i class="fas fa-calendar me-1"></i>
-                                Expedição: ${new Date(loteData.data_expedicao).toLocaleDateString('pt-BR')}
+                                Expedição: ${(() => {
+                    const v = loteData.data_expedicao;
+                    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+                        const [y, m, d] = v.split('-');
+                        return `${d}/${m}/${y}`;
+                    }
+                    return (new Date(v)).toLocaleDateString('pt-BR');
+                })()}
                             </small>
                         </div>
                     ` : ''}

@@ -147,7 +147,7 @@
         </div>
         
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
-            <a href="{{ url_for('producao.importar_programacao') }}" class="btn btn-secondary btn-lg btn-block">
+            <a href="#" onclick="exportarRelatoriosProducao()" class="btn btn-secondary btn-lg btn-block">
                 <i class="fas fa-chart-bar"></i><br>
                 Relatórios<br>Produção
             </a>
@@ -309,4 +309,16 @@
         </div>
     </div>
 </div>
+
+<!-- Script para exportação de relatórios -->
+<script>
+function exportarRelatoriosProducao() {
+    // Mostrar loading ou confirmação
+    if (confirm('Deseja exportar os relatórios de Estoque e Movimentações Previstas?')) {
+        // Fazer download do relatório
+        window.location.href = '/producao/relatorios/exportar';
+    }
+}
+</script>
+
 {% endblock %} 

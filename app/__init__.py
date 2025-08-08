@@ -593,6 +593,7 @@ def create_app(config_name=None):
     from app.carteira.routes.alertas_api import alertas_bp
     from app.estoque.routes import estoque_bp
     from app.producao.routes import producao_bp
+    from app.producao.relatorios_bp import relatorios_producao_bp
     from app.permissions.routes import permissions_bp
     from app.permissions.api import permissions_api
     
@@ -661,6 +662,7 @@ def create_app(config_name=None):
     app.register_blueprint(estoque_bp)
     
     app.register_blueprint(producao_bp)
+    app.register_blueprint(relatorios_producao_bp)
     app.register_blueprint(permissions_bp)
 
     # 🚀 MCP Logistica
@@ -826,10 +828,10 @@ def create_app(config_name=None):
     
     # 🚀 SISTEMA DE ESTOQUE EM TEMPO REAL
     try:
-        # Registrar triggers do sistema tempo real (versão after_commit sem warnings)
-        from app.estoque.triggers_after_commit import registrar_triggers_after_commit
-        registrar_triggers_after_commit()
-        app.logger.info("✅ Triggers after_commit do EstoqueTempoReal registrados com sucesso")
+        # Registrar triggers SQL corrigidos (versão definitiva sem erros de sintaxe)
+        from app.estoque.triggers_sql_corrigido import ativar_triggers_corrigidos
+        ativar_triggers_corrigidos()
+        app.logger.info("✅ Triggers SQL corrigidos do EstoqueTempoReal registrados com sucesso")
         
         # Registrar API de estoque tempo real
         from app.estoque.api_tempo_real import estoque_tempo_real_bp

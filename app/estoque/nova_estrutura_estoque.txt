@@ -1148,7 +1148,26 @@ Regras obrigatórias:
   - Testar performance < 100ms
 
 
-  corrigir_separacao_lote_id.py
-  corrigir_status_pedidos.py
+  psql $DATABASE_URL -f migrations/add_subcategorias_palletizacao.sql
+  python ativar_triggers_otimizados.py
+  python atualizar_movimentacoes_previstas.py
 
-python -c "from app.estoque.models_tempo_real import EstoqueTempoReal; print(EstoqueTempoReal.query.count())"
+Preciso criar algumas criações e exportações de relatórios em excel:
+
+Crie um botão no Dashboard da carteira chamado "Relatórios" que:
+Abra um Modal com 4 botões e 1 filtro de data "de" e "até".
+Esse filtro deverá ter um botão "aplicar" e um botão "limpar".
+Ao aplicar, grave no modal em qlqr lugar as datas solicitadas para servir de referencia para o usuario.
+Os botões deverão:
+1- Exportar todas as pré separações com status "CRIADO" e "RECOMPOSTO".
+2- Exportar todas as separações fazendo Join com Pedido para extrair o status
+3- Exportar Carteira de pedidos
+4- Exportar a Carteira de Pedidos da forma que:
+A- Traga todos os campos de app/carteira/routes/detalhes_api.py em 1 unica linha por cod_produto/num_pedido excluindo apenas os campos de "endereço de entrega", os campos de qtd, valor, peso e pallet deverão trazer 2 vezes, a 1a vez deverá trazer considerando apenas o pedido e a outra deverá trazer abatendo os valor de pré separação e separação.
+B- Embaixo de cada linha do pedido (cod_produto/num_pedido) traga cada linha da pré separação correspondente aquela linha do pedido onde deverá repetir os campos de cliente e preencher com as informações da pré separação abaixo dos campos "semelhantes" de detalhes (exemplo cod_produto embaixo de cod_produto), os valores deverão ser preenchidos abaixo dos valor abatidos do pedido.
+C- Embaixo de todas as Pré separações por do num_pedido/cod_produto, trazer as separações com a mesma lógica da pré separação.
+
+O intuito é ter um relatório que traga uma posição completa e atual da carteira de pedidos para o comercial de maneira que não tenha varios buracos no relatório e que eu consiga analisar as qtds e datas de expedicao por produto/num_pedido/separação ou pre_separacao
+
+Na tela de "Dashboard de Produção" tem um botão de "Relatórios Produção" que não funciona.
+O que eu quero é que esse botão gere 1 arquivo excel com 2 abas, sendo em 1 aba um relatório de estoque atualizado e na outra aba um relatório de MovimentaçõesPrevistas

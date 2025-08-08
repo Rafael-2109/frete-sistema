@@ -197,7 +197,7 @@
                             <!-- Botão Anterior -->
                             {% if page > 1 %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ page - 1 }}&limite={{ limite }}&codigo_produto={{ codigo_produto }}&status_ruptura={{ status_ruptura }}&ordem={{ request.args.get('ordem', 'codigo') }}&dir={{ request.args.get('dir', 'asc') }}">
+                                <a class="page-link" href="?page={{ page - 1 }}&limite={{ limite }}&codigo_produto={{ codigo_produto }}&status_ruptura={{ status_ruptura }}&categoria={{ categoria_filtro }}&embalagem={{ embalagem_filtro }}&materia_prima={{ materia_prima_filtro }}&linha_producao={{ linha_producao_filtro }}&ordem={{ request.args.get('ordem', 'codigo') }}&dir={{ request.args.get('dir', 'asc') }}">
                                     <i class="fas fa-chevron-left"></i> Anterior
                                 </a>
                             </li>
@@ -215,7 +215,7 @@
                                 </li>
                                 {% elif p == 1 or p == total_paginas or (p >= page - 2 and p <= page + 2) %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ p }}&limite={{ limite }}&codigo_produto={{ codigo_produto }}&status_ruptura={{ status_ruptura }}&ordem={{ request.args.get('ordem', 'codigo') }}&dir={{ request.args.get('dir', 'asc') }}">{{ p }}</a>
+                                    <a class="page-link" href="?page={{ p }}&limite={{ limite }}&codigo_produto={{ codigo_produto }}&status_ruptura={{ status_ruptura }}&categoria={{ categoria_filtro }}&embalagem={{ embalagem_filtro }}&materia_prima={{ materia_prima_filtro }}&linha_producao={{ linha_producao_filtro }}&ordem={{ request.args.get('ordem', 'codigo') }}&dir={{ request.args.get('dir', 'asc') }}">{{ p }}</a>
                                 </li>
                                 {% elif p == page - 3 or p == page + 3 %}
                                 <li class="page-item disabled">
@@ -227,7 +227,7 @@
                             <!-- Botão Próximo -->
                             {% if page < total_paginas %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ page + 1 }}&limite={{ limite }}&codigo_produto={{ codigo_produto }}&status_ruptura={{ status_ruptura }}&ordem={{ request.args.get('ordem', 'codigo') }}&dir={{ request.args.get('dir', 'asc') }}">
+                                <a class="page-link" href="?page={{ page + 1 }}&limite={{ limite }}&codigo_produto={{ codigo_produto }}&status_ruptura={{ status_ruptura }}&categoria={{ categoria_filtro }}&embalagem={{ embalagem_filtro }}&materia_prima={{ materia_prima_filtro }}&linha_producao={{ linha_producao_filtro }}&ordem={{ request.args.get('ordem', 'codigo') }}&dir={{ request.args.get('dir', 'asc') }}">
                                     Próximo <i class="fas fa-chevron-right"></i>
                                 </a>
                             </li>
@@ -366,25 +366,70 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="filtroCodigo" class="form-label">Código do Produto:</label>
-                        <input type="text" class="form-control" id="filtroCodigo" placeholder="Digite o código...">
+                        <input type="text" class="form-control" id="filtroCodigo" placeholder="Digite o código..." value="{{ codigo_produto }}">
                     </div>
                     
                     <div class="mb-3">
                         <label for="filtroStatus" class="form-label">Status de Ruptura:</label>
                         <select class="form-select" id="filtroStatus">
                             <option value="">Todos os status</option>
-                            <option value="OK">🟢 OK</option>
-                            <option value="ATENÇÃO">🟡 Atenção</option>
-                            <option value="CRÍTICO">🔴 Crítico</option>
+                            <option value="OK" {% if status_ruptura == 'OK' %}selected{% endif %}>🟢 OK</option>
+                            <option value="ATENÇÃO" {% if status_ruptura == 'ATENÇÃO' %}selected{% endif %}>🟡 Atenção</option>
+                            <option value="CRÍTICO" {% if status_ruptura == 'CRÍTICO' %}selected{% endif %}>🔴 Crítico</option>
                         </select>
+                    </div>
+                    
+                    <!-- NOVO: Filtros de Subcategorias -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="filtroCategoria" class="form-label">Categoria:</label>
+                            <select class="form-select" id="filtroCategoria">
+                                <option value="">Todas as categorias</option>
+                                {% for cat in categorias %}
+                                <option value="{{ cat }}" {% if categoria_filtro == cat %}selected{% endif %}>{{ cat }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="filtroEmbalagem" class="form-label">Embalagem:</label>
+                            <select class="form-select" id="filtroEmbalagem">
+                                <option value="">Todas as embalagens</option>
+                                {% for emb in embalagens %}
+                                <option value="{{ emb }}" {% if embalagem_filtro == emb %}selected{% endif %}>{{ emb }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="filtroMateriaPrima" class="form-label">Matéria-Prima:</label>
+                            <select class="form-select" id="filtroMateriaPrima">
+                                <option value="">Todas as matérias-primas</option>
+                                {% for mp in materias_primas %}
+                                <option value="{{ mp }}" {% if materia_prima_filtro == mp %}selected{% endif %}>{{ mp }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="filtroLinhaProducao" class="form-label">Linha de Produção:</label>
+                            <select class="form-select" id="filtroLinhaProducao">
+                                <option value="">Todas as linhas</option>
+                                {% for lp in linhas_producao %}
+                                <option value="{{ lp }}" {% if linha_producao_filtro == lp %}selected{% endif %}>{{ lp }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
                     
                     <div class="mb-3">
                         <label for="filtroLimite" class="form-label">Limite de Produtos:</label>
                         <select class="form-select" id="filtroLimite">
-                            <option value="50">50 produtos</option>
-                            <option value="100">100 produtos</option>
-                            <option value="200">200 produtos</option>
+                            <option value="50" {% if limite == 50 %}selected{% endif %}>50 produtos</option>
+                            <option value="100" {% if limite == 100 %}selected{% endif %}>100 produtos</option>
+                            <option value="200" {% if limite == 200 %}selected{% endif %}>200 produtos</option>
                         </select>
                     </div>
                 </div>
@@ -517,6 +562,10 @@ function filtrarProdutos() {
 function limparFiltros() {
     $('#filtroCodigo').val('');
     $('#filtroStatus').val('');
+    $('#filtroCategoria').val('');
+    $('#filtroEmbalagem').val('');
+    $('#filtroMateriaPrima').val('');
+    $('#filtroLinhaProducao').val('');
     $('#filtroLimite').val('50');
 }
 
@@ -582,19 +631,27 @@ $(document).ready(function() {
 
 $(document).ready(function() {
     $('#formFiltros').on('submit', function(e) {
-    e.preventDefault();
-    
-    const codigo = $('#filtroCodigo').val();
-    const status = $('#filtroStatus').val();
-    const limite = $('#filtroLimite').val();
-    
-    const params = new URLSearchParams();
-    if (codigo) params.append('codigo_produto', codigo);
-    if (status) params.append('status_ruptura', status);
-    if (limite) params.append('limite', limite);
-    
-    // Redirecionar com parâmetros
-    window.location.href = '/estoque/saldo-estoque?' + params.toString();
+        e.preventDefault();
+        
+        const codigo = $('#filtroCodigo').val();
+        const status = $('#filtroStatus').val();
+        const categoria = $('#filtroCategoria').val();
+        const embalagem = $('#filtroEmbalagem').val();
+        const materiaPrima = $('#filtroMateriaPrima').val();
+        const linhaProducao = $('#filtroLinhaProducao').val();
+        const limite = $('#filtroLimite').val();
+        
+        const params = new URLSearchParams();
+        if (codigo) params.append('codigo_produto', codigo);
+        if (status) params.append('status_ruptura', status);
+        if (categoria) params.append('categoria', categoria);
+        if (embalagem) params.append('embalagem', embalagem);
+        if (materiaPrima) params.append('materia_prima', materiaPrima);
+        if (linhaProducao) params.append('linha_producao', linhaProducao);
+        if (limite) params.append('limite', limite);
+        
+        // Redirecionar com parâmetros
+        window.location.href = '/estoque/saldo-estoque?' + params.toString();
     });
 });
 
@@ -776,7 +833,7 @@ function renderizarCardex(data) {
         data.cardex.forEach((dia, index) => {
             const estoqueFinal = dia.estoque_final || 0;
             const producao = dia.producao || 0;
-            const saida = dia.saida || 0;
+            const saida = dia.saidas || 0;  // Corrigido: saidas ao invés de saida
             
             if (estoqueFinal > maiorEstoque.valor) {
                 maiorEstoque = { valor: estoqueFinal, dia: index };
@@ -855,7 +912,7 @@ function renderizarCardex(data) {
         data.cardex.forEach((dia, index) => {
             // Garantir que todos os valores existem e são números
             const estoque_inicial = dia.estoque_inicial || 0;
-            const saida = dia.saida || 0;
+            const saida = dia.saidas || 0;  // Corrigido: saidas ao invés de saida
             const producao = dia.producao || 0;
             const estoque_final = dia.estoque_final || 0;
             const saldo = estoque_inicial - saida;

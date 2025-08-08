@@ -111,6 +111,10 @@
                                     <tr>
                                         <th>Código</th>
                                         <th>Nome Produto</th>
+                                        <th>Categoria</th>
+                                        <th>Matéria-Prima</th>
+                                        <th>Embalagem</th>
+                                        <th>Linha Produção</th>
                                         <th>Palletização</th>
                                         <th>Peso Bruto (kg)</th>
                                         <th>Altura (cm)</th>
@@ -125,6 +129,34 @@
                                         <td><code class="fw-bold">{{ item.cod_produto }}</code></td>
                                         <td>
                                             <small>{{ item.nome_produto[:60] }}{% if item.nome_produto|length > 60 %}...{% endif %}</small>
+                                        </td>
+                                        <td>
+                                            {% if item.categoria_produto %}
+                                                <span class="badge bg-info">{{ item.categoria_produto }}</span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if item.tipo_materia_prima %}
+                                                <span class="badge bg-secondary">{{ item.tipo_materia_prima }}</span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if item.tipo_embalagem %}
+                                                <span class="badge bg-warning text-dark">{{ item.tipo_embalagem }}</span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if item.linha_producao %}
+                                                <span class="badge bg-success">{{ item.linha_producao }}</span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
                                         </td>
                                         <td>
                                             <span class="fw-bold text-primary">{{ item.palletizacao | numero_br }}</span>

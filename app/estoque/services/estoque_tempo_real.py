@@ -276,9 +276,61 @@ class ServicoEstoqueTempoReal:
             }
     
     @staticmethod
+    def recalcular_estoque_produto(cod_produto: str) -> EstoqueTempoReal:
+        """
+        Recalcula o estoque de um produto do zero, considerando unificação.
+        
+        Args:
+            cod_produto: Código do produto
+            
+        Returns:
+            Objeto EstoqueTempoReal atualizado
+        """
+        # Buscar ou criar registro
+        estoque = EstoqueTempoReal.query.filter_by(
+            cod_produto=cod_produto
+        ).first()
+        
+        if not estoque:
+            # Se não existe, inicializar
+            return ServicoEstoqueTempoReal.inicializar_produto(cod_produto)
+        
+        # Recalcular saldo do zero
+        saldo = Decimal('0')
+        
+        # Obter códigos unificados
+        codigos = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
+        
+        # Somar movimentações de todos os códigos relacionados
+        for codigo in codigos:
+            movs = MovimentacaoEstoque.query.filter_by(
+                cod_produto=codigo,
+                ativo=True
+            ).all()
+            
+            for mov in movs:
+                # qtd_movimentacao já vem com sinal correto
+                saldo += Decimal(str(mov.qtd_movimentacao))
+        
+        # Atualizar estoque
+        estoque.saldo_atual = saldo
+        estoque.atualizado_em = agora_brasil()
+        
+        db.session.add(estoque)
+        
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise e
+        
+        return estoque
+    
+    @staticmethod
     def inicializar_produto(cod_produto: str, nome_produto: str = None) -> EstoqueTempoReal:
         """
         Inicializa EstoqueTempoReal para um produto se não existir.
+        Calcula o saldo inicial considerando unificação de códigos.
         
         Args:
             cod_produto: Código do produto
@@ -292,10 +344,27 @@ class ServicoEstoqueTempoReal:
         ).first()
         
         if not estoque:
+            # Calcular saldo inicial considerando unificação
+            saldo_inicial = Decimal('0')
+            
+            # Obter códigos unificados
+            codigos = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
+            
+            # Somar movimentações de todos os códigos relacionados
+            for codigo in codigos:
+                movs = MovimentacaoEstoque.query.filter_by(
+                    cod_produto=codigo,
+                    ativo=True
+                ).all()
+                
+                for mov in movs:
+                    # qtd_movimentacao já vem com sinal correto
+                    saldo_inicial += Decimal(str(mov.qtd_movimentacao))
+            
             estoque = EstoqueTempoReal(
                 cod_produto=cod_produto,
                 nome_produto=nome_produto or f"Produto {cod_produto}",
-                saldo_atual=Decimal('0')
+                saldo_atual=saldo_inicial  # Usar saldo calculado ao invés de zero
             )
             db.session.add(estoque)
             

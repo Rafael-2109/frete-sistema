@@ -80,6 +80,13 @@ class CadastroPalletizacao(db.Model):
     largura_cm = db.Column(db.Numeric(10, 2), nullable=True, default=0)
     comprimento_cm = db.Column(db.Numeric(10, 2), nullable=True, default=0)
     
+    # Subcategorias para filtros avançados
+    tipo_embalagem = db.Column(db.String(50), nullable=True, index=True)
+    tipo_materia_prima = db.Column(db.String(50), nullable=True, index=True)
+    categoria_produto = db.Column(db.String(50), nullable=True, index=True)
+    subcategoria = db.Column(db.String(50), nullable=True)
+    linha_producao = db.Column(db.String(50), nullable=True, index=True)
+    
     # Status
     ativo = db.Column(db.Boolean, nullable=False, default=True)
     

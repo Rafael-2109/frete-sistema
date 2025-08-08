@@ -3,7 +3,7 @@
  * Controla as operações de standby de pedidos
  */
 
-window.standbyManager = (function() {
+window.standbyManager = (function () {
     'use strict';
 
     let pedidoAtual = null;
@@ -13,11 +13,10 @@ window.standbyManager = (function() {
      * Inicializa o módulo
      */
     function init() {
-        console.log('[StandbyManager] Inicializando...');
+        // console.debug('[StandbyManager] Inicializando...');
         modal = new bootstrap.Modal(document.getElementById('modalStandby'));
-        
-        // Verificar status de standby de todos os pedidos ao carregar
-        verificarStatusTodosPedidos();
+
+        // Evitar varredura automática que polui logs: só consulta sob demanda
     }
 
     /**
@@ -25,10 +24,13 @@ window.standbyManager = (function() {
      */
     async function verificarStatusTodosPedidos() {
         const botoes = document.querySelectorAll('.btn-standby');
-        
-        for (const botao of botoes) {
-            const numPedido = botao.dataset.pedido;
-            await verificarStatusPedido(numPedido);
+        const pedidos = Array.from(botoes).map(b => b.dataset.pedido).filter(Boolean);
+        // Evitar tempestade de requisições: consultar no máximo 10 por segundo
+        for (let i = 0; i < pedidos.length; i += 10) {
+            const slice = pedidos.slice(i, i + 10);
+            await Promise.all(slice.map(p => verificarStatusPedido(p)));
+            // Pequeno intervalo para não poluir logs/back-end
+            await new Promise(r => setTimeout(r, 200));
         }
     }
 
@@ -39,12 +41,12 @@ window.standbyManager = (function() {
         try {
             const response = await fetch(`/carteira/api/carteira/standby/status/${numPedido}`);
             const data = await response.json();
-            
+
             if (data.success && data.em_standby) {
                 atualizarBotaoStandby(numPedido, data.status_standby);
             }
         } catch (error) {
-            console.error('[StandbyManager] Erro ao verificar status:', error);
+            // console.debug('[StandbyManager] Erro ao verificar status:', error);
         }
     }
 
@@ -54,9 +56,9 @@ window.standbyManager = (function() {
     function atualizarBotaoStandby(numPedido, statusStandby) {
         const botao = document.getElementById(`btn-standby-${numPedido}`);
         if (!botao) return;
-        
+
         const textSpan = botao.querySelector('.btn-standby-text');
-        
+
         if (statusStandby === 'CONFIRMADO') {
             botao.classList.remove('btn-warning');
             botao.classList.add('confirmado');
@@ -73,25 +75,25 @@ window.standbyManager = (function() {
     /**
      * Gerencia o standby de um pedido
      */
-    window.gerenciarStandby = async function(numPedido) {
+    window.gerenciarStandby = async function (numPedido) {
         pedidoAtual = numPedido;
-        
+
         // Verificar se já está em standby
         try {
             const response = await fetch(`/carteira/api/carteira/standby/status/${numPedido}`);
             const data = await response.json();
-            
+
             if (data.success && data.em_standby) {
                 showAlert('info', `Pedido já está em standby com status: ${data.status_standby}`);
                 return;
             }
         } catch (error) {
-            console.error('[StandbyManager] Erro ao verificar status:', error);
+            // console.debug('[StandbyManager] Erro ao verificar status:', error);
         }
-        
+
         // Carregar informações do pedido
         await carregarDadosPedido(numPedido);
-        
+
         // Abrir modal
         modal.show();
     };
@@ -102,50 +104,50 @@ window.standbyManager = (function() {
     async function carregarDadosPedido(numPedido) {
         const loading = document.getElementById('modal-standby-loading');
         const content = document.getElementById('modal-standby-content');
-        
+
         loading.style.display = 'block';
         content.style.display = 'none';
-        
+
         try {
-            // Buscar detalhes do pedido
-            const response = await fetch(`/carteira/api/detalhes-pedido/${numPedido}`);
+            // Buscar detalhes do pedido usando a rota consolidada atual
+            const response = await fetch(`/carteira/api/pedido/${numPedido}/detalhes`);
             const data = await response.json();
-            
-            if (data.success && data.pedido) {
-                // Preencher informações do pedido
+
+            if (data.success) {
+                // Preencher informações do pedido (totais vêm em data.totais)
                 document.getElementById('standby-pedido-numero').textContent = numPedido;
-                document.getElementById('standby-valor-total').textContent = formatarMoeda(data.pedido.valor_total || 0);
-                document.getElementById('standby-peso-total').textContent = `${formatarNumero(data.pedido.peso_total || 0, 2)} kg`;
-                document.getElementById('standby-pallet-total').textContent = formatarNumero(data.pedido.pallet_total || 0, 2);
-                document.getElementById('standby-data-pedido').textContent = data.pedido.data_pedido || '-';
-                
-                // Preencher lista de produtos
+                const totalValor = (data.totais && typeof data.totais.valor === 'number') ? data.totais.valor : 0;
+                const totalPeso = (data.totais && typeof data.totais.peso === 'number') ? data.totais.peso : 0;
+                document.getElementById('standby-valor-total').textContent = formatarMoeda(totalValor);
+                document.getElementById('standby-peso-total').textContent = `${formatarNumero(totalPeso, 2)} kg`;
+                const totalPallet = (data.totais && typeof data.totais.pallet === 'number') ? data.totais.pallet : 0;
+                document.getElementById('standby-pallet-total').textContent = formatarNumero(totalPallet, 2);
+                document.getElementById('standby-data-pedido').textContent = data.data_pedido || '-';
+
+                // Preencher lista de produtos (itens vêm em data.itens)
                 const tbody = document.getElementById('standby-produtos-lista');
                 tbody.innerHTML = '';
-                
-                if (data.produtos && data.produtos.length > 0) {
-                    data.produtos.forEach(produto => {
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = `
-                            <td>${produto.cod_produto}</td>
-                            <td>${produto.nome_produto}</td>
-                            <td class="text-end">${formatarNumero(produto.qtd_saldo_produto_pedido, 3)}</td>
-                            <td class="text-end">${formatarMoeda(produto.valor_total || 0)}</td>
-                        `;
-                        tbody.appendChild(tr);
-                    });
-                }
-                
+                (data.itens || []).forEach((produto) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${produto.cod_produto}</td>
+                        <td>${produto.nome_produto}</td>
+                        <td class="text-end">${formatarNumero(produto.qtd_saldo, 3)}</td>
+                        <td class="text-end">${formatarMoeda(produto.valor_total || 0)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
                 // Limpar seleção de tipo
                 document.getElementById('standby-tipo').value = '';
-                
+
                 loading.style.display = 'none';
                 content.style.display = 'block';
             } else {
                 throw new Error('Falha ao carregar dados do pedido');
             }
         } catch (error) {
-            console.error('[StandbyManager] Erro ao carregar pedido:', error);
+            // console.debug('[StandbyManager] Erro ao carregar pedido:', error);
             loading.style.display = 'none';
             content.style.display = 'block';
             showAlert('error', 'Erro ao carregar informações do pedido');
@@ -155,14 +157,14 @@ window.standbyManager = (function() {
     /**
      * Confirma o envio para standby
      */
-    window.confirmarStandby = async function() {
+    window.confirmarStandby = async function () {
         const tipoStandby = document.getElementById('standby-tipo').value;
-        
+
         if (!tipoStandby) {
             showAlert('warning', 'Selecione o tipo de standby');
             return;
         }
-        
+
         try {
             const response = await fetch('/carteira/api/carteira/standby/criar', {
                 method: 'POST',
@@ -174,16 +176,16 @@ window.standbyManager = (function() {
                     tipo_standby: tipoStandby
                 })
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 showAlert('success', data.message);
                 modal.hide();
-                
+
                 // Atualizar botão
                 atualizarBotaoStandby(pedidoAtual, 'ATIVO');
-                
+
                 // Recarregar a página após 2 segundos
                 setTimeout(() => {
                     location.reload();
@@ -192,7 +194,7 @@ window.standbyManager = (function() {
                 showAlert('error', data.message || 'Erro ao enviar para standby');
             }
         } catch (error) {
-            console.error('[StandbyManager] Erro ao confirmar standby:', error);
+            // console.debug('[StandbyManager] Erro ao confirmar standby:', error);
             showAlert('error', 'Erro ao processar solicitação');
         }
     };
@@ -224,7 +226,7 @@ window.standbyManager = (function() {
             'warning': 'alert-warning',
             'info': 'alert-info'
         };
-        
+
         const alertDiv = document.createElement('div');
         alertDiv.className = `alert ${alertTypes[type]} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
         alertDiv.style.zIndex = '9999';
@@ -232,9 +234,9 @@ window.standbyManager = (function() {
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
-        
+
         document.body.appendChild(alertDiv);
-        
+
         setTimeout(() => {
             alertDiv.remove();
         }, 5000);
@@ -248,6 +250,6 @@ window.standbyManager = (function() {
 })();
 
 // Inicializar quando o DOM estiver pronto
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     standbyManager.init();
 });

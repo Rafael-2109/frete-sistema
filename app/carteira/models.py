@@ -653,6 +653,13 @@ class PreSeparacaoItem(db.Model):
     observacoes_usuario = db.Column(db.Text)
     
     # Controle de recomposição (sobrevivência ao Odoo)
+    # ATENÇÃO: Campo praticamente INÚTIL! (Análise completa em 08/08/2025)
+    # - Durante sincronização: Reseta para False → verifica hash → marca como True
+    # - NÃO afeta ajustes de quantidade (feitos por aplicar_reducao/aumento_quantidade)
+    # - NÃO modifica carteira, NÃO reaplica divisões, NÃO age sobre mudanças detectadas
+    # - É apenas um ciclo decorativo: detecta mudanças via hash mas só gera logs
+    # - Para movimentações previstas: IGNORAR completamente este campo
+    # - Ver: FLUXO_COMPLETO_SINCRONIZACAO.md para análise detalhada
     recomposto = db.Column(db.Boolean, default=False, index=True)
     data_recomposicao = db.Column(db.DateTime)
     recomposto_por = db.Column(db.String(100))

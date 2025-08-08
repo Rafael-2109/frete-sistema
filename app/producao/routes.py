@@ -83,7 +83,6 @@ def index():
 def listar_programacao():
     """Lista programação de produção"""
     from sqlalchemy import inspect
-    from datetime import datetime
     
     # Filtros
     data_de = request.args.get('data_de', '')
@@ -110,14 +109,14 @@ def listar_programacao():
                 try:
                     data_de_obj = datetime.strptime(data_de, '%Y-%m-%d').date()
                     query = query.filter(ProgramacaoProducao.data_programacao >= data_de_obj)
-                except:
+                except Exception as e:
                     pass
             
             if data_ate:
                 try:
                     data_ate_obj = datetime.strptime(data_ate, '%Y-%m-%d').date()
                     query = query.filter(ProgramacaoProducao.data_programacao <= data_ate_obj)
-                except:
+                except Exception as e:
                     pass
             
             if cod_produto:
@@ -221,14 +220,14 @@ def listar_palletizacao():
                 try:
                     palletizacao_val = float(palletizacao_filtro)
                     query = query.filter(CadastroPalletizacao.palletizacao == palletizacao_val)
-                except:
+                except Exception as e:
                     pass
                     
             if peso_bruto_filtro:
                 try:
                     peso_val = float(peso_bruto_filtro)
                     query = query.filter(CadastroPalletizacao.peso_bruto == peso_val)
-                except:
+                except Exception as e:
                     pass
             
             # Ordenação e paginação
@@ -363,6 +362,12 @@ def processar_importacao_palletizacao():
                 largura_cm = float(row.get('largura_cm', 0) or 0) if pd.notna(row.get('largura_cm')) else 0
                 comprimento_cm = float(row.get('comprimento_cm', 0) or 0) if pd.notna(row.get('comprimento_cm')) else 0
                 
+                # 🏷️ NOVOS CAMPOS DE SUBCATEGORIAS (opcionais)
+                categoria_produto = str(row.get('CATEGORIA', '')).strip() if pd.notna(row.get('CATEGORIA')) else None
+                tipo_materia_prima = str(row.get('MATERIA_PRIMA', '')).strip() if pd.notna(row.get('MATERIA_PRIMA')) else None
+                tipo_embalagem = str(row.get('EMBALAGEM', '')).strip() if pd.notna(row.get('EMBALAGEM')) else None
+                linha_producao = str(row.get('LINHA_PRODUCAO', '')).strip() if pd.notna(row.get('LINHA_PRODUCAO')) else None
+                
                 if palletizacao_existente:
                     # ✏️ ATUALIZAR EXISTENTE
                     palletizacao_existente.nome_produto = nome_produto
@@ -371,6 +376,11 @@ def processar_importacao_palletizacao():
                     palletizacao_existente.altura_cm = altura_cm
                     palletizacao_existente.largura_cm = largura_cm
                     palletizacao_existente.comprimento_cm = comprimento_cm
+                    # Atualizar novos campos de subcategorias
+                    palletizacao_existente.categoria_produto = categoria_produto
+                    palletizacao_existente.tipo_materia_prima = tipo_materia_prima
+                    palletizacao_existente.tipo_embalagem = tipo_embalagem
+                    palletizacao_existente.linha_producao = linha_producao
                     palletizacao_existente.updated_by = current_user.nome
                     palletizacao_existente.ativo = True  # Reativar se estava inativo
                     produtos_atualizados += 1
@@ -384,6 +394,11 @@ def processar_importacao_palletizacao():
                     nova_palletizacao.altura_cm = altura_cm
                     nova_palletizacao.largura_cm = largura_cm
                     nova_palletizacao.comprimento_cm = comprimento_cm
+                    # Adicionar novos campos de subcategorias
+                    nova_palletizacao.categoria_produto = categoria_produto
+                    nova_palletizacao.tipo_materia_prima = tipo_materia_prima
+                    nova_palletizacao.tipo_embalagem = tipo_embalagem
+                    nova_palletizacao.linha_producao = linha_producao
                     nova_palletizacao.created_by = current_user.nome
                     nova_palletizacao.ativo = True
                     
@@ -532,10 +547,10 @@ def processar_importacao_programacao():
                         try:
                             # Formato brasileiro DD/MM/YYYY
                             data_programacao = pd.to_datetime(data_programacao, format='%d/%m/%Y').date()
-                        except:
+                        except Exception as e:
                             try:
                                 data_programacao = pd.to_datetime(data_programacao).date()
-                            except:
+                            except Exception as e:
                                 data_programacao = None
                     elif hasattr(data_programacao, 'date'):
                         data_programacao = data_programacao.date()
@@ -605,7 +620,6 @@ def baixar_modelo_programacao():
     """Baixar modelo Excel para importação de programação de produção"""
     try:
         import pandas as pd
-        from flask import make_response
         from io import BytesIO
         
         # Colunas exatas conforme arquivo CSV
@@ -747,7 +761,11 @@ def baixar_modelo_palletizacao():
             'PESO BRUTO': [9, 8.5, 7.2],
             'altura_cm': [120, 115, 110],
             'largura_cm': [80, 80, 80],
-            'comprimento_cm': [100, 100, 100]
+            'comprimento_cm': [100, 100, 100],
+            'CATEGORIA': ['MOLHOS', 'ÓLEOS', 'CONSERVAS'],
+            'MATERIA_PRIMA': ['KETCHUP', 'OL. MISTO', 'AZ VSC'],
+            'EMBALAGEM': ['GALÃO 4X3,05', 'GARRAFA 12X500', 'BD 6X2'],
+            'LINHA_PRODUCAO': ['LF', 'LF', '1105']
         }
         
         df = pd.DataFrame(dados_exemplo)
@@ -763,8 +781,9 @@ def baixar_modelo_palletizacao():
                     '3. PALLETIZACAO: fator para converter qtd em pallets',
                     '4. PESO BRUTO: fator para converter qtd em peso',
                     '5. Medidas em cm são opcionais (altura, largura, comprimento)',
-                    '6. Volume m³ será calculado automaticamente',
-                    '7. Comportamento: SUBSTITUI/ADICIONA por produto'
+                    '6. Campos de categorização opcionais: CATEGORIA, MATERIA_PRIMA, EMBALAGEM, LINHA_PRODUCAO',
+                    '7. Volume m³ será calculado automaticamente',
+                    '8. Comportamento: SUBSTITUI/ADICIONA por produto'
                 ]
             })
             instrucoes.to_excel(writer, sheet_name='Instruções', index=False)
@@ -801,6 +820,11 @@ def processar_nova_palletizacao():
         altura_cm = request.form.get('altura_cm', '').replace(',', '.') or None
         largura_cm = request.form.get('largura_cm', '').replace(',', '.') or None
         comprimento_cm = request.form.get('comprimento_cm', '').replace(',', '.') or None
+        # Novos campos de categorização
+        categoria_produto = request.form.get('categoria_produto', '').strip() or None
+        tipo_materia_prima = request.form.get('tipo_materia_prima', '').strip() or None
+        tipo_embalagem = request.form.get('tipo_embalagem', '').strip() or None
+        linha_producao = request.form.get('linha_producao', '').strip() or None
         
         # Validações básicas
         if not cod_produto or not nome_produto:
@@ -836,6 +860,11 @@ def processar_nova_palletizacao():
         nova_palletizacao.altura_cm = altura_cm
         nova_palletizacao.largura_cm = largura_cm
         nova_palletizacao.comprimento_cm = comprimento_cm
+        # Novos campos de categorização
+        nova_palletizacao.categoria_produto = categoria_produto
+        nova_palletizacao.tipo_materia_prima = tipo_materia_prima
+        nova_palletizacao.tipo_embalagem = tipo_embalagem
+        nova_palletizacao.linha_producao = linha_producao
         nova_palletizacao.created_by = current_user.nome
         nova_palletizacao.ativo = True
         
@@ -1047,6 +1076,10 @@ def exportar_dados_palletizacao():
             dados_export.append({
                 'Cód.Produto': p.cod_produto,
                 'Descrição Produto': p.nome_produto,
+                'CATEGORIA': p.categoria_produto or '',
+                'MATERIA_PRIMA': p.tipo_materia_prima or '',
+                'EMBALAGEM': p.tipo_embalagem or '',
+                'LINHA_PRODUCAO': p.linha_producao or '',
                 'PALLETIZACAO': p.palletizacao,
                 'PESO BRUTO': p.peso_bruto,
                 'altura_cm': p.altura_cm or '',

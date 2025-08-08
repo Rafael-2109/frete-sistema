@@ -1139,6 +1139,12 @@ def saldo_estoque():
         ordem_coluna = request.args.get('ordem', 'codigo')  # codigo, produto, estoque, carteira, ruptura, status
         ordem_direcao = request.args.get('dir', 'asc')  # asc ou desc
         
+        # NOVO: Filtros de subcategorias
+        categoria_filtro = request.args.get('categoria', '').strip()
+        embalagem_filtro = request.args.get('embalagem', '').strip()
+        materia_prima_filtro = request.args.get('materia_prima', '').strip()
+        linha_producao_filtro = request.args.get('linha_producao', '').strip()
+        
         # Validar limite
         try:
             limite = int(limite_param)
@@ -1155,6 +1161,26 @@ def saldo_estoque():
         if codigo_produto:
             produtos = [p for p in produtos if codigo_produto.lower() in str(p.get('cod_produto', '')).lower() or 
                        codigo_produto.lower() in str(p.get('nome_produto', '')).lower()]
+        
+        # NOVO: Aplicar filtros de subcategorias se houver
+        produtos_codigos = [p.get('cod_produto') for p in produtos]
+        if categoria_filtro or embalagem_filtro or materia_prima_filtro or linha_producao_filtro:
+            # Buscar produtos com as categorias especificadas
+            query = CadastroPalletizacao.query.filter(
+                CadastroPalletizacao.cod_produto.in_(produtos_codigos)
+            )
+            
+            if categoria_filtro:
+                query = query.filter(CadastroPalletizacao.categoria_produto == categoria_filtro)
+            if embalagem_filtro:
+                query = query.filter(CadastroPalletizacao.tipo_embalagem == embalagem_filtro)
+            if materia_prima_filtro:
+                query = query.filter(CadastroPalletizacao.tipo_materia_prima == materia_prima_filtro)
+            if linha_producao_filtro:
+                query = query.filter(CadastroPalletizacao.linha_producao == linha_producao_filtro)
+            
+            produtos_filtrados_codes = [p.cod_produto for p in query.all()]
+            produtos = [p for p in produtos if p.get('cod_produto') in produtos_filtrados_codes]
         
         # Para melhorar performance, processar apenas uma amostra para estatísticas
         # e processar apenas os necessários para exibição
@@ -1264,6 +1290,27 @@ def saldo_estoque():
             'total_filtrado': total_filtrado
         }
         
+        # NOVO: Buscar valores únicos para os filtros
+        categorias = db.session.query(CadastroPalletizacao.categoria_produto).distinct().filter(
+            CadastroPalletizacao.categoria_produto.isnot(None)
+        ).order_by(CadastroPalletizacao.categoria_produto).all()
+        categorias = [c[0] for c in categorias if c[0]]
+        
+        embalagens = db.session.query(CadastroPalletizacao.tipo_embalagem).distinct().filter(
+            CadastroPalletizacao.tipo_embalagem.isnot(None)
+        ).order_by(CadastroPalletizacao.tipo_embalagem).all()
+        embalagens = [e[0] for e in embalagens if e[0]]
+        
+        materias_primas = db.session.query(CadastroPalletizacao.tipo_materia_prima).distinct().filter(
+            CadastroPalletizacao.tipo_materia_prima.isnot(None)
+        ).order_by(CadastroPalletizacao.tipo_materia_prima).all()
+        materias_primas = [m[0] for m in materias_primas if m[0]]
+        
+        linhas_producao = db.session.query(CadastroPalletizacao.linha_producao).distinct().filter(
+            CadastroPalletizacao.linha_producao.isnot(None)
+        ).order_by(CadastroPalletizacao.linha_producao).all()
+        linhas_producao = [linha[0] for linha in linhas_producao if linha[0]]
+        
         return render_template('estoque/saldo_estoque.html',
                              produtos=produtos_resumo,
                              estatisticas=estatisticas,
@@ -1272,7 +1319,15 @@ def saldo_estoque():
                              total_paginas=total_paginas,
                              limite=limite,
                              codigo_produto=codigo_produto,
-                             status_ruptura=status_ruptura)
+                             status_ruptura=status_ruptura,
+                             categoria_filtro=categoria_filtro,
+                             embalagem_filtro=embalagem_filtro,
+                             materia_prima_filtro=materia_prima_filtro,
+                             linha_producao_filtro=linha_producao_filtro,
+                             categorias=categorias,
+                             embalagens=embalagens,
+                             materias_primas=materias_primas,
+                             linhas_producao=linhas_producao)
         
     except Exception as e:
         flash(f'❌ Erro ao carregar saldo de estoque: {str(e)}', 'error')
@@ -1529,3 +1584,41 @@ def excluir_movimentacao(id):
 
 
 # Sistema híbrido removido - usando novo sistema de estoque em tempo real
+
+@estoque_bp.route('/saldo-estoque/api/subcategorias')
+@login_required
+def api_subcategorias():
+    """API para obter valores únicos de subcategorias para filtros"""
+    try:
+        # Buscar valores únicos de cada campo
+        categorias = db.session.query(CadastroPalletizacao.categoria_produto).distinct().filter(
+            CadastroPalletizacao.categoria_produto.isnot(None)
+        ).order_by(CadastroPalletizacao.categoria_produto).all()
+        categorias = [c[0] for c in categorias if c[0]]
+        
+        embalagens = db.session.query(CadastroPalletizacao.tipo_embalagem).distinct().filter(
+            CadastroPalletizacao.tipo_embalagem.isnot(None)
+        ).order_by(CadastroPalletizacao.tipo_embalagem).all()
+        embalagens = [e[0] for e in embalagens if e[0]]
+        
+        materias_primas = db.session.query(CadastroPalletizacao.tipo_materia_prima).distinct().filter(
+            CadastroPalletizacao.tipo_materia_prima.isnot(None)
+        ).order_by(CadastroPalletizacao.tipo_materia_prima).all()
+        materias_primas = [m[0] for m in materias_primas if m[0]]
+        
+        linhas_producao = db.session.query(CadastroPalletizacao.linha_producao).distinct().filter(
+            CadastroPalletizacao.linha_producao.isnot(None)
+        ).order_by(CadastroPalletizacao.linha_producao).all()
+        linhas_producao = [linha[0] for linha in linhas_producao if linha[0]]
+        
+        return jsonify({
+            'success': True,
+            'categorias': categorias,
+            'embalagens': embalagens,
+            'materias_primas': materias_primas,
+            'linhas_producao': linhas_producao
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar subcategorias: {str(e)}")
+        return jsonify({'error': str(e)}), 500

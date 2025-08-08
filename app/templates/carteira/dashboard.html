@@ -14,6 +14,9 @@
             <p class="text-muted mb-0">Sistema central de gestão da carteira - Núcleo do ecossistema</p>
         </div>
         <div>
+            <button type="button" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#modalRelatorios">
+                <i class="fas fa-file-excel"></i> Relatórios
+            </button>
             <button type="button" class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#modalPedidosNaoOdoo">
                 <i class="fas fa-file-import"></i> Pedidos Não-Odoo
             </button>
@@ -481,6 +484,9 @@
             </div>
         </div>
     </div>
-</div>
+    </div>
+
+<!-- Script de Relatórios -->
+<script src="{{ url_for('static', filename='carteira/js/modal-relatorios.js') }}"></script>
 
 {% endblock %} 
