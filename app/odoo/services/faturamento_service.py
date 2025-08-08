@@ -498,6 +498,13 @@ class FaturamentoService:
                             contador_atualizados += 1
                             nfs_atualizadas.append(numero_nf)
                             logger.debug(f"✏️ UPDATE: NF {numero_nf} produto {cod_produto} - status: {registro_info['status_atual']} → {status_odoo}")
+                            
+                            # 🚨 IMPORTANTE: Se mudou para CANCELADO, marcar para processar cancelamento
+                            if status_odoo == 'CANCELADO' and registro_info['status_atual'] != 'CANCELADO':
+                                if 'nfs_para_cancelar' not in locals():
+                                    nfs_para_cancelar = set()
+                                nfs_para_cancelar.add(numero_nf)
+                                logger.info(f"🚨 NF {numero_nf} marcada para processar CANCELAMENTO")
                         # Se status igual, não faz nada (otimização)
                         
                     else:
@@ -521,6 +528,48 @@ class FaturamentoService:
             # 💾 COMMIT das alterações principais
             db.session.commit()
             logger.info(f"✅ Sincronização principal concluída: {contador_novos} novos, {contador_atualizados} atualizados")
+            
+            # ============================================
+            # 🚨 PROCESSAMENTO DE NFs CANCELADAS
+            # ============================================
+            
+            # Processar cancelamentos ANTES de criar novas movimentações
+            if 'nfs_para_cancelar' in locals() and nfs_para_cancelar:
+                logger.info(f"🚨 PROCESSANDO {len(nfs_para_cancelar)} NFs CANCELADAS...")
+                
+                from app.estoque.models import MovimentacaoEstoque
+                from app.faturamento.models import RelatorioFaturamentoImportado
+                
+                nfs_canceladas_processadas = 0
+                movimentacoes_removidas = 0
+                
+                for numero_nf in nfs_para_cancelar:
+                    try:
+                        # 1. Remover movimentações de estoque relacionadas
+                        movs = MovimentacaoEstoque.query.filter(
+                            MovimentacaoEstoque.observacao.like(f"%NF {numero_nf}%")
+                        ).all()
+                        
+                        if movs:
+                            for mov in movs:
+                                logger.info(f"  🗑️ Removendo movimentação: {mov.cod_produto} - Qtd: {mov.qtd_movimentacao}")
+                                db.session.delete(mov)
+                                movimentacoes_removidas += 1
+                        
+                        # 2. NÃO inativar em RelatorioFaturamentoImportado para manter rastreabilidade
+                        # O status "CANCELADO" em FaturamentoProduto já é suficiente para identificar
+                        # logger.info(f"  📊 Mantendo NF {numero_nf} em RelatorioFaturamentoImportado para rastreabilidade")
+                        
+                        nfs_canceladas_processadas += 1
+                        logger.info(f"✅ NF {numero_nf} - Cancelamento processado com sucesso")
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao processar cancelamento da NF {numero_nf}: {e}")
+                        erros.append(f"Erro no cancelamento da NF {numero_nf}: {e}")
+                
+                # Commit dos cancelamentos
+                db.session.commit()
+                logger.info(f"✅ CANCELAMENTOS PROCESSADOS: {nfs_canceladas_processadas} NFs, {movimentacoes_removidas} movimentações removidas")
             
             # ============================================
             # 🚨 PROCESSAMENTO DE MOVIMENTAÇÕES DE ESTOQUE
@@ -680,6 +729,11 @@ class FaturamentoService:
                 'taxa_novos': f"{(contador_novos / len(dados_faturamento) * 100):.1f}%" if dados_faturamento else "0%",
                 'taxa_atualizados': f"{(contador_atualizados / len(dados_faturamento) * 100):.1f}%" if dados_faturamento else "0%",
                 'economia_tempo': 'MUITO SIGNIFICATIVA vs método DELETE+INSERT',
+                # 🆕 ESTATÍSTICAS DE CANCELAMENTOS
+                'cancelamentos': {
+                    'nfs_canceladas': nfs_canceladas_processadas if 'nfs_canceladas_processadas' in locals() else 0,
+                    'movimentacoes_removidas': movimentacoes_removidas if 'movimentacoes_removidas' in locals() else 0
+                },
                 # 🆕 ESTATÍSTICAS DAS SINCRONIZAÇÕES
                 'sincronizacoes': stats_sincronizacao
             }
@@ -687,6 +741,12 @@ class FaturamentoService:
             logger.info(f"   ✅ SINCRONIZAÇÃO INCREMENTAL COMPLETA CONCLUÍDA:")
             logger.info(f"   ➕ {contador_novos} novos registros inseridos")
             logger.info(f"   ✏️ {contador_atualizados} registros atualizados")
+            
+            # Log de cancelamentos se houver
+            if 'nfs_canceladas_processadas' in locals() and nfs_canceladas_processadas > 0:
+                logger.info(f"   🚨 {nfs_canceladas_processadas} NFs CANCELADAS processadas")
+                logger.info(f"   🗑️ {movimentacoes_removidas} movimentações de estoque removidas")
+            
             logger.info(f"   📋 {stats_sincronizacao['relatorios_consolidados']} relatórios consolidados")
             logger.info(f"   🔄 {stats_sincronizacao['entregas_sincronizadas']} entregas sincronizadas")
             logger.info(f"   📦 {stats_sincronizacao['embarques_revalidados']} embarques re-validados")

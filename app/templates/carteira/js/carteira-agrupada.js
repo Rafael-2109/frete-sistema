@@ -395,7 +395,9 @@ class CarteiraAgrupada {
         const contentDiv = document.getElementById(`content-${numPedido}`);
         const loadingDiv = document.getElementById(`loading-${numPedido}`);
         
-        if (contentDiv && contentDiv.style.display === 'none') {
+        // Verificar se o conteúdo já foi carregado
+        // Se não tem conteúdo HTML ou está oculto, carregar
+        if (contentDiv && (!contentDiv.innerHTML.trim() || contentDiv.style.display === 'none')) {
             this.carregarDetalhes(numPedido, contentDiv, loadingDiv);
         }
     }
@@ -413,6 +415,15 @@ class CarteiraAgrupada {
             if (loadingDiv) loadingDiv.style.display = 'block';
             if (contentDiv) contentDiv.style.display = 'none';
 
+            // Tentar carregar o workspace se disponível
+            if (window.workspace && window.workspace.abrirWorkspace) {
+                console.log(`🔧 Carregando workspace para pedido ${numPedido}`);
+                await window.workspace.abrirWorkspace(numPedido);
+                // O workspace já renderiza o conteúdo no contentDiv
+                return;
+            }
+
+            // Fallback: carregar apenas detalhes simples se workspace não disponível
             const response = await fetch(`/carteira/api/pedido/${numPedido}/detalhes`);
             const data = await response.json();
 

@@ -1149,7 +1149,6 @@ Regras obrigatórias:
 
 
   psql $DATABASE_URL -f migrations/add_subcategorias_palletizacao.sql
-  python ativar_triggers_otimizados.py
   python atualizar_movimentacoes_previstas.py
 
 Preciso criar algumas criações e exportações de relatórios em excel:
