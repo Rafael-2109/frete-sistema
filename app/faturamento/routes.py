@@ -1023,6 +1023,53 @@ def relatorio_auditoria():
 # 🔄 APIs PARA FUNCIONALIDADES DINÂMICAS
 # =====================================
 
+@faturamento_bp.route('/api/excluir-nf/<string:numero_nf>', methods=['DELETE'])
+@login_required
+def api_excluir_nf(numero_nf):
+    """API para excluir NF (apenas administradores)"""
+    try:
+        # Verificar se o usuário é administrador
+        if current_user.perfil != 'administrador':
+            return jsonify({
+                'success': False,
+                'error': 'Apenas administradores podem excluir notas fiscais'
+            }), 403
+        
+        # Buscar a NF em RelatorioFaturamentoImportado
+        nf_relatorio = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).first()
+        
+        if not nf_relatorio:
+            return jsonify({
+                'success': False,
+                'error': f'Nota fiscal {numero_nf} não encontrada'
+            }), 404
+        
+        # Buscar e deletar todas as linhas em FaturamentoProduto
+        produtos_deletados = FaturamentoProduto.query.filter_by(numero_nf=numero_nf).all()
+        qtd_produtos = len(produtos_deletados)
+        
+        for produto in produtos_deletados:
+            db.session.delete(produto)
+        
+        # Deletar a NF do RelatorioFaturamentoImportado
+        db.session.delete(nf_relatorio)
+        
+        # Commit das alterações
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'NF {numero_nf} excluída com sucesso',
+            'produtos_deletados': qtd_produtos
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao excluir NF: {str(e)}'
+        }), 500
+
 @faturamento_bp.route('/api/sincronizar-odoo', methods=['POST'])
 @login_required
 def api_sincronizar_odoo():

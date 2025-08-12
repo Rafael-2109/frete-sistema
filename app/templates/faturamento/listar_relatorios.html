@@ -296,6 +296,11 @@
         
         {# 🆕 STATUS #}
         <th style="width: 100px;">Status</th>
+        
+        {# 🗑️ AÇÕES - apenas para administradores #}
+        {% if current_user.perfil == 'administrador' %}
+        <th style="width: 100px;">Ações</th>
+        {% endif %}
       </tr>
     </thead>
 
@@ -334,6 +339,18 @@
             {% endif %}
           {% endif %}
         </td>
+        
+        {# 🗑️ AÇÕES - BOTÃO EXCLUIR (apenas administradores) #}
+        {% if current_user.perfil == 'administrador' %}
+        <td class="text-center">
+          <button type="button" 
+                  class="btn btn-danger btn-sm" 
+                  onclick="excluirNF('{{ r.numero_nf }}')"
+                  title="Excluir NF permanentemente">
+            🗑️ Excluir
+          </button>
+        </td>
+        {% endif %}
       </tr>
       {% endfor %}
     </tbody>
@@ -545,5 +562,52 @@ document.addEventListener('DOMContentLoaded', function() {
     link.href = linkUrl.toString();
   });
 });
+
+// 🗑️ FUNÇÃO PARA EXCLUIR NF (apenas administradores)
+function excluirNF(numeroNF) {
+  // Confirmação dupla para evitar exclusões acidentais
+  const confirmacao1 = confirm(`⚠️ ATENÇÃO: Você está prestes a EXCLUIR PERMANENTEMENTE a NF ${numeroNF}.\n\nEsta ação irá:\n- Deletar a NF da tabela RelatorioFaturamentoImportado\n- Deletar TODAS as linhas de produtos desta NF\n\nDeseja continuar?`);
+  
+  if (!confirmacao1) return;
+  
+  const confirmacao2 = confirm(`⚠️ ÚLTIMA CONFIRMAÇÃO:\n\nTem CERTEZA ABSOLUTA que deseja excluir a NF ${numeroNF}?\n\nEsta ação NÃO pode ser desfeita!`);
+  
+  if (!confirmacao2) return;
+  
+  // Mostrar loading
+  const btn = event.target;
+  const textoOriginal = btn.innerHTML;
+  btn.innerHTML = '⏳ Excluindo...';
+  btn.disabled = true;
+  
+  // Fazer requisição DELETE para a API
+  fetch(`/faturamento/api/excluir-nf/${numeroNF}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest'
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert(`✅ NF ${numeroNF} excluída com sucesso!\n\n${data.produtos_deletados} produtos foram removidos.`);
+      // Recarregar a página para atualizar a lista
+      window.location.reload();
+    } else {
+      alert(`❌ Erro ao excluir NF: ${data.error}`);
+      // Restaurar botão
+      btn.innerHTML = textoOriginal;
+      btn.disabled = false;
+    }
+  })
+  .catch(error => {
+    console.error('Erro:', error);
+    alert(`❌ Erro ao excluir NF: ${error.message}`);
+    // Restaurar botão
+    btn.innerHTML = textoOriginal;
+    btn.disabled = false;
+  });
+}
 </script>
 {% endblock %}
