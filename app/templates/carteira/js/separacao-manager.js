@@ -1,258 +1,557 @@
 /**
- * 🎯 SEPARAÇÃO MANAGER
- * Gerencia criação e transformação de separações DEFINITIVAS
- * Para pré-separações, usar pre-separacao-manager.js
+ * 🎯 SEPARAÇÃO MANAGER - Refatorado com Parciais HTML
+ * Usa o servidor como fonte única de verdade
+ * Atualiza apenas os trechos necessários do DOM
  */
 
 class SeparacaoManager {
     constructor() {
+        this.expandedPedidos = new Set();
+        this.currentFilters = new URLSearchParams(window.location.search);
+        this.processingRequests = new Set(); // Prevenir duplo clique
         this.init();
     }
 
     init() {
         console.log('✅ Separação Manager inicializado');
+        this.restoreExpandedState();
+        this.setupEventDelegation();
     }
-
+    
     /**
-     * 🎯 CRIAR NOVA SEPARAÇÃO COMPLETA
-     * CASO 1: Usado pelos botões principais na carteira agrupada
-     * Verifica se tem 1 pré-separação com tipo_envio completo, se tiver transforma em separação
-     * Se não tiver pré-separação, solicita a data de expedição e cria uma separação direto
-     * Se tiver pré-separação parcial não deixa criar por esse botão
+     * 🎯 CONFIGURAR DELEGAÇÃO DE EVENTOS
+     * Evita perder listeners quando o DOM é atualizado
      */
-    async criarSeparacaoCompleta(numPedido) {
-        console.log(`📦 CASO 1: Criar separação completa para pedido ${numPedido}`);
-        
-        try {
-            // Verificar se já existe lote completo com expedição
-            const verificacaoResponse = await fetch(`/carteira/api/pedido/${numPedido}/verificar-lote`);
+    setupEventDelegation() {
+        // Delegação para botões de gerar separação
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-gerar-separacao');
+            if (!btn) return;
+            e.preventDefault();
             
-            if (!verificacaoResponse.ok) {
-                // Se não existe API de verificação, solicitar data de expedição diretamente
-                await this.solicitarDataExpedicaoParaSeparacao(numPedido);
-                return;
-            }
+            const numPedido = btn.dataset.pedido || btn.closest('[data-pedido]')?.dataset.pedido;
+            if (!numPedido) return;
             
-            const verificacaoData = await verificacaoResponse.json();
+            // Prevenir duplo clique
+            if (this.processingRequests.has(numPedido)) return;
             
-            if (verificacaoData.lote_completo_com_expedicao) {
-                // CASO 1a: Lote completo existe, confirmar transformação
-                if (confirm(`Existe uma pré-separação completa para este pedido. Deseja transformá-la em separação definitiva?`)) {
-                    await this.transformarLoteEmSeparacao(numPedido, verificacaoData.lote_id);
-                }
-            } else if (verificacaoData.lote_parcial_existe) {
-                // CASO 1b: Lote parcial existe, não permitir
-                alert('❌ Este pedido possui pré-separação parcial. Não é possível criar separação completa por este botão.');
-                return;
-            } else {
-                // CASO 1c: Não existe lote, solicitar data de expedição
-                await this.solicitarDataExpedicaoParaSeparacao(numPedido);
-            }
-            
-        } catch (error) {
-            console.error('Erro ao verificar lote:', error);
-            // Fallback: solicitar data de expedição diretamente
-            await this.solicitarDataExpedicaoParaSeparacao(numPedido);
-        }
-    }
-
-    /**
-     * 🎯 SOLICITAR DATA DE EXPEDIÇÃO E CRIAR SEPARAÇÃO
-     */
-    async solicitarDataExpedicaoParaSeparacao(numPedido) {
-        // Criar modal dinâmico com input de data
-        const modalHtml = `
-            <div class="modal fade" id="modalDataExpedicao" tabindex="-1">
-                <div class="modal-dialog modal-sm">
-                    <div class="modal-content">
-                        <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title">
-                                <i class="fas fa-calendar me-2"></i>
-                                Data de Expedição
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label for="inputDataExpedicao" class="form-label">
-                                    Selecione a data de expedição:
-                                </label>
-                                <input type="date" class="form-control" id="inputDataExpedicao" 
-                                       value="${new Date().toISOString().split('T')[0]}" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="inputAgendamento" class="form-label">
-                                    Data de Agendamento (opcional):
-                                </label>
-                                <input type="date" class="form-control" id="inputAgendamento">
-                            </div>
-                            <div class="mb-3">
-                                <label for="inputProtocolo" class="form-label">
-                                    Protocolo (opcional):
-                                </label>
-                                <input type="text" class="form-control" id="inputProtocolo" 
-                                       placeholder="Ex: PROT123">
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                Cancelar
-                            </button>
-                            <button type="button" class="btn btn-primary" id="btnConfirmarExpedicao">
-                                <i class="fas fa-check me-1"></i>
-                                Confirmar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Remover modal se já existir
-        const modalExistente = document.getElementById('modalDataExpedicao');
-        if (modalExistente) {
-            modalExistente.remove();
-        }
-        
-        // Adicionar modal ao body
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        
-        // Criar instância do modal Bootstrap
-        const modalElement = document.getElementById('modalDataExpedicao');
-        const modal = new bootstrap.Modal(modalElement);
-        
-        // Configurar handler do botão confirmar
-        document.getElementById('btnConfirmarExpedicao').onclick = async () => {
-            const dataExpedicao = document.getElementById('inputDataExpedicao').value;
-            const agendamento = document.getElementById('inputAgendamento').value;
-            const protocolo = document.getElementById('inputProtocolo').value;
-            
-            if (!dataExpedicao) {
-                alert('Por favor, selecione uma data de expedição');
-                return;
-            }
-            
-            try {
-                // Fechar modal
-                modal.hide();
-                
-                const response = await fetch(`/carteira/api/pedido/${numPedido}/gerar-separacao-completa`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        expedicao: dataExpedicao,
-                        agendamento: agendamento || null,
-                        protocolo: protocolo || null
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert(`Separação criada com sucesso! ${data.separacoes_criadas} produtos separados.`);
-                    // Recarregar página para atualizar contadores
-                    location.reload();
-                } else {
-                    alert(`Erro ao criar separação: ${data.error}`);
-                }
-                
-            } catch (error) {
-                console.error('Erro ao criar separação:', error);
-                alert('Erro interno ao criar separação');
-            }
-        };
-        
-        // Limpar modal ao fechar
-        modalElement.addEventListener('hidden.bs.modal', function () {
-            modalElement.remove();
+            this.criarSeparacaoCompleta(numPedido);
         });
         
-        // Mostrar modal
-        modal.show();
+        // Delegação para transformar lote
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-transformar-lote');
+            if (!btn) return;
+            e.preventDefault();
+            
+            const loteId = btn.dataset.loteId;
+            if (!loteId) return;
+            
+            if (this.processingRequests.has(loteId)) return;
+            
+            this.transformarLoteEmSeparacao(loteId);
+        });
+        
+        // Delegação para excluir separação
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-excluir-separacao');
+            if (!btn) return;
+            e.preventDefault();
+            
+            const separacaoId = btn.dataset.separacaoId;
+            const numPedido = btn.dataset.pedido;
+            
+            if (!separacaoId) return;
+            
+            this.excluirSeparacao(separacaoId, numPedido);
+        });
+        
+        // Delegação para excluir pré-separação
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-excluir-pre-separacao');
+            if (!btn) return;
+            e.preventDefault();
+            
+            const loteId = btn.dataset.loteId;
+            const numPedido = btn.dataset.pedido;
+            
+            if (!loteId) return;
+            
+            this.excluirPreSeparacao(loteId, numPedido);
+        });
     }
 
     /**
-     * 🎯 TRANSFORMAR LOTE EM SEPARAÇÃO
-     * CASO 2: Usado dentro do workspace nos lotes existentes
-     * Transforma uma pré-separação em separação através de um botão na pré-separação
+     * 🔄 APLICAR PARCIAIS HTML RETORNADOS DO SERVIDOR
+     * Esta é a função central que atualiza o DOM com os parciais
      */
-    async transformarLoteEmSeparacao(numPedido, loteId) {
-        console.log(`🔄 CASO 2: Transformar lote ${loteId} em separação`);
+    async applyTargets(data) {
+        if (!data?.targets) return;
+        
+        for (const [selector, html] of Object.entries(data.targets)) {
+            const element = document.querySelector(selector);
+            if (element) {
+                // Salvar estado de expansão se for um collapse
+                const wasExpanded = element.classList?.contains('show');
+                
+                // Substituir HTML
+                element.outerHTML = html;
+                
+                // Restaurar estado de expansão
+                if (wasExpanded) {
+                    const newElement = document.querySelector(selector);
+                    if (newElement?.classList?.contains('collapse')) {
+                        newElement.classList.add('show');
+                    }
+                }
+                
+                // Adicionar animação de atualização
+                const updatedElement = document.querySelector(selector);
+                if (updatedElement) {
+                    updatedElement.classList.add('update-animation');
+                    setTimeout(() => {
+                        updatedElement.classList.remove('update-animation');
+                    }, 1000);
+                }
+            }
+        }
+    }
+
+    /**
+     * 🎯 CRIAR SEPARAÇÃO COMPLETA
+     */
+    async criarSeparacaoCompleta(numPedido) {
+        console.log(`📦 Criar separação completa para pedido ${numPedido}`);
+        
+        // Prevenir duplo processamento
+        if (this.processingRequests.has(numPedido)) {
+            console.log('⚠️ Requisição já em andamento para', numPedido);
+            return;
+        }
+        
+        const dataExpedicao = await this.solicitarDataExpedicao();
+        if (!dataExpedicao) return;
+        
+        // Adicionar à lista de processamento
+        this.processingRequests.add(numPedido);
+        
+        const botao = document.querySelector(`[data-pedido="${numPedido}"] .btn-gerar-separacao`);
         
         try {
+            // Loading local no botão
+            if (botao) {
+                botao.disabled = true;
+                botao.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processando...';
+            }
+            
+            const response = await fetch(`/carteira/api/pedido/${numPedido}/gerar-separacao-completa`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/html',  // Solicitar parciais HTML
+                    'X-CSRFToken': this.getCSRFToken()  // Adicionar CSRF token
+                },
+                body: JSON.stringify({
+                    expedicao: dataExpedicao.expedicao,
+                    agendamento: dataExpedicao.agendamento,
+                    protocolo: dataExpedicao.protocolo
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.ok || data.success) {
+                // Aplicar parciais HTML retornados
+                await this.applyTargets(data);
+                
+                // Atualizar contadores globais
+                if (data.contadores) {
+                    this.atualizarContadores(data.contadores);
+                }
+                
+                // Feedback de sucesso
+                this.mostrarSucesso(data.message || 'Separação criada com sucesso!');
+            } else {
+                this.mostrarErro(data.error || 'Erro ao criar separação');
+                
+                // Restaurar botão em caso de erro
+                if (botao) {
+                    botao.disabled = false;
+                    botao.innerHTML = '<i class="fas fa-truck-loading me-1"></i>Gerar Separação';
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao criar separação:', error);
+            this.mostrarErro('Erro de comunicação com o servidor');
+            
+            // Restaurar botão
+            if (botao) {
+                botao.disabled = false;
+                botao.innerHTML = '<i class="fas fa-truck-loading me-1"></i>Gerar Separação';
+            }
+        } finally {
+            // Remover da lista de processamento
+            this.processingRequests.delete(numPedido);
+        }
+    }
+
+    /**
+     * 🔄 TRANSFORMAR PRÉ-SEPARAÇÃO EM SEPARAÇÃO
+     */
+    async transformarLoteEmSeparacao(loteId) {
+        console.log(`🔄 Transformar lote ${loteId} em separação`);
+        
+        const botao = document.querySelector(`[data-lote-id="${loteId}"] .btn-transformar`);
+        
+        try {
+            // Loading local no botão
+            if (botao) {
+                botao.disabled = true;
+                botao.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Transformando...';
+            }
+            
             const response = await fetch(`/carteira/api/lote/${loteId}/transformar-separacao`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'text/html',  // Solicitar parciais HTML
+                    'X-CSRFToken': this.getCSRFToken()
                 }
             });
             
             const data = await response.json();
             
-            if (data.success) {
-                alert(`✅ Lote transformado em separação com sucesso!\n${data.separacoes_criadas} produtos processados.`);
-                // Recarregar página para atualizar contadores
-                location.reload();
+            if (data.ok || data.success) {
+                // Aplicar parciais HTML
+                await this.applyTargets(data);
+                
+                // Atualizar contadores
+                if (data.contadores) {
+                    this.atualizarContadores(data.contadores);
+                }
+                
+                this.mostrarSucesso(data.message || 'Transformado com sucesso!');
             } else {
-                alert(`❌ Erro ao transformar lote: ${data.error}`);
+                this.mostrarErro(data.error || 'Erro ao transformar');
+                
+                // Restaurar botão
+                if (botao) {
+                    botao.disabled = false;
+                    botao.innerHTML = '<i class="fas fa-exchange-alt me-1"></i>Transformar';
+                }
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            this.mostrarErro('Erro de comunicação');
+            
+            if (botao) {
+                botao.disabled = false;
+                botao.innerHTML = '<i class="fas fa-exchange-alt me-1"></i>Transformar';
+            }
+        }
+    }
+
+    /**
+     * 🗑️ EXCLUIR SEPARAÇÃO
+     */
+    async excluirSeparacao(separacaoId, numPedido) {
+        if (!await this.confirmarAcao('Excluir Separação', 'Esta ação não pode ser desfeita.')) {
+            return;
+        }
+        
+        console.log(`🗑️ Excluindo separação ${separacaoId} do pedido ${numPedido}`);
+        
+        const card = document.querySelector(`[data-separacao-id="${separacaoId}"]`);
+        
+        try {
+            // Adicionar classe de exclusão
+            if (card) {
+                card.classList.add('deleting');
             }
             
+            const response = await fetch(`/carteira/api/separacao/${separacaoId}/excluir`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/html',  // Solicitar parciais HTML
+                    'X-CSRFToken': this.getCSRFToken()
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.ok || data.success) {
+                // Aplicar parciais (servidor retorna HTML atualizado)
+                await this.applyTargets(data);
+                
+                // Atualizar contadores
+                if (data.contadores) {
+                    this.atualizarContadores(data.contadores);
+                }
+                
+                this.mostrarSucesso('Separação excluída');
+            } else {
+                // Remover classe de exclusão em caso de erro
+                if (card) {
+                    card.classList.remove('deleting');
+                }
+                this.mostrarErro(data.error || 'Erro ao excluir');
+            }
         } catch (error) {
-            console.error('Erro ao transformar lote:', error);
-            alert('❌ Erro interno ao transformar lote em separação');
+            console.error('Erro:', error);
+            if (card) {
+                card.classList.remove('deleting');
+            }
+            this.mostrarErro('Erro de comunicação');
         }
     }
 
     /**
-     * 🎯 CONFIRMAR TRANSFORMAÇÃO DE LOTE
-     * Modal de confirmação para transformar lote específico
+     * 🗑️ EXCLUIR PRÉ-SEPARAÇÃO
      */
-    async confirmarTransformacaoLote(loteId) {
-        if (confirm(`Deseja transformar o lote ${loteId} em separação?`)) {
-            await this.transformarLoteEmSeparacao(null, loteId);
+    async excluirPreSeparacao(loteId, numPedido) {
+        if (!await this.confirmarAcao('Excluir Pré-Separação', 'Esta ação não pode ser desfeita.')) {
+            return;
         }
-    }
-
-    /**
-     * 🎯 REMOVER SEPARAÇÕES INVÁLIDAS
-     * Remove qualquer separação que não faça parte dos 3 casos válidos
-     */
-    async removerSeparacoesInvalidas() {
-        console.log('🧹 Verificando separações inválidas...');
         
-        // Esta função seria implementada para limpar separações que não seguem os 3 casos
-        // Por enquanto, apenas log para não afetar o sistema em produção
-        console.log('⚠️ Função de limpeza não implementada - usar com cuidado em produção');
+        console.log(`🗑️ Excluindo pré-separação ${loteId} do pedido ${numPedido}`);
+        
+        const card = document.querySelector(`[data-lote-id="${loteId}"]`);
+        
+        try {
+            if (card) {
+                card.classList.add('deleting');
+            }
+            
+            const response = await fetch(`/carteira/api/pre-separacao/${loteId}/excluir`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/html',  // Solicitar parciais HTML
+                    'X-CSRFToken': this.getCSRFToken()
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.ok || data.success) {
+                await this.applyTargets(data);
+                
+                if (data.contadores) {
+                    this.atualizarContadores(data.contadores);
+                }
+                
+                this.mostrarSucesso('Pré-separação excluída');
+            } else {
+                if (card) {
+                    card.classList.remove('deleting');
+                }
+                this.mostrarErro(data.error || 'Erro ao excluir');
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            if (card) {
+                card.classList.remove('deleting');
+            }
+            this.mostrarErro('Erro de comunicação');
+        }
+    }
+
+    /**
+     * 📊 ATUALIZAR CONTADORES (valores do servidor)
+     */
+    atualizarContadores(contadores) {
+        if (!contadores) return;
+        
+        // Atualizar cada contador com o valor real do servidor
+        for (const [id, valor] of Object.entries(contadores)) {
+            const elemento = document.getElementById(id);
+            if (elemento) {
+                const valorAnterior = elemento.textContent;
+                elemento.textContent = valor;
+                
+                // Animação apenas se o valor mudou
+                if (valorAnterior !== String(valor)) {
+                    elemento.classList.add('pulse-animation');
+                    setTimeout(() => {
+                        elemento.classList.remove('pulse-animation');
+                    }, 1000);
+                }
+            }
+        }
+    }
+
+    /**
+     * 🔄 BUSCAR CONTADORES DO SERVIDOR
+     */
+    async refreshContadores() {
+        try {
+            const response = await fetch('/carteira/api/contadores');
+            const data = await response.json();
+            
+            if (data.ok && data.contadores) {
+                this.atualizarContadores(data.contadores);
+            }
+        } catch (error) {
+            console.error('Erro ao buscar contadores:', error);
+        }
+    }
+
+    /**
+     * 📅 SOLICITAR DATA DE EXPEDIÇÃO
+     */
+    async solicitarDataExpedicao() {
+        return new Promise((resolve) => {
+            // Se tem SweetAlert, usar modal bonito
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Data de Expedição',
+                    html: `
+                        <div class="mb-3">
+                            <label class="form-label">Data de Expedição *</label>
+                            <input type="date" id="swal-expedicao" class="form-control" 
+                                   value="${new Date().toISOString().split('T')[0]}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Agendamento (opcional)</label>
+                            <input type="date" id="swal-agendamento" class="form-control">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Protocolo (opcional)</label>
+                            <input type="text" id="swal-protocolo" class="form-control">
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Confirmar',
+                    cancelButtonText: 'Cancelar',
+                    preConfirm: () => {
+                        const expedicao = document.getElementById('swal-expedicao').value;
+                        if (!expedicao) {
+                            Swal.showValidationMessage('Data de expedição é obrigatória');
+                            return false;
+                        }
+                        return {
+                            expedicao: expedicao,
+                            agendamento: document.getElementById('swal-agendamento').value,
+                            protocolo: document.getElementById('swal-protocolo').value
+                        };
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        resolve(result.value);
+                    } else {
+                        resolve(null);
+                    }
+                });
+            } else {
+                // Fallback simples
+                const expedicao = prompt('Data de expedição (AAAA-MM-DD):');
+                if (expedicao) {
+                    resolve({ expedicao, agendamento: null, protocolo: null });
+                } else {
+                    resolve(null);
+                }
+            }
+        });
+    }
+
+    /**
+     * 💾 PRESERVAR ESTADO DE EXPANSÃO
+     */
+    saveExpandedState(pedidoId, isExpanded) {
+        if (isExpanded) {
+            this.expandedPedidos.add(pedidoId);
+        } else {
+            this.expandedPedidos.delete(pedidoId);
+        }
+        localStorage.setItem('expandedPedidos', JSON.stringify([...this.expandedPedidos]));
+    }
+
+    restoreExpandedState() {
+        const saved = localStorage.getItem('expandedPedidos');
+        if (saved) {
+            this.expandedPedidos = new Set(JSON.parse(saved));
+            // Reabrir pedidos expandidos
+            this.expandedPedidos.forEach(pedidoId => {
+                const collapse = document.querySelector(`#collapse-${pedidoId}`);
+                if (collapse) {
+                    collapse.classList.add('show');
+                }
+            });
+        }
+    }
+
+    /**
+     * 🔒 OBTER CSRF TOKEN
+     */
+    getCSRFToken() {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute('content') : '';
+    }
+    
+    /**
+     * 🔔 MÉTODOS DE NOTIFICAÇÃO
+     */
+    async confirmarAcao(titulo, mensagem) {
+        if (typeof Swal !== 'undefined') {
+            const result = await Swal.fire({
+                title: titulo,
+                text: mensagem,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sim, continuar',
+                cancelButtonText: 'Cancelar'
+            });
+            return result.isConfirmed;
+        }
+        return confirm(`${titulo}\n${mensagem}`);
+    }
+
+    mostrarSucesso(mensagem) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'success',
+                title: mensagem,
+                toast: true,
+                position: 'top-end',
+                timer: 3000,
+                showConfirmButton: false
+            });
+        } else {
+            console.log('✅', mensagem);
+        }
+    }
+
+    mostrarErro(mensagem) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: mensagem
+            });
+        } else {
+            alert('❌ ' + mensagem);
+        }
     }
 }
 
-// 🎯 FUNÇÕES GLOBAIS PARA ONCLICK
+// 🎯 FUNÇÕES GLOBAIS
+window.separacaoManager = new SeparacaoManager();
+
 function criarSeparacao(numPedido) {
-    if (window.separacaoManager) {
-        window.separacaoManager.criarSeparacaoCompleta(numPedido);
-    } else {
-        console.error('❌ Separação Manager não inicializado');
-    }
+    window.separacaoManager.criarSeparacaoCompleta(numPedido);
 }
 
 function transformarLote(loteId) {
-    if (window.separacaoManager) {
-        window.separacaoManager.confirmarTransformacaoLote(loteId);
-    } else {
-        console.error('❌ Separação Manager não inicializado');
-    }
+    window.separacaoManager.transformarLoteEmSeparacao(loteId);
 }
 
+function excluirSeparacao(separacaoId, numPedido) {
+    window.separacaoManager.excluirSeparacao(separacaoId, numPedido);
+}
 
-// Disponibilizar globalmente
-window.SeparacaoManager = SeparacaoManager;
-
-// Inicializar instância global
-document.addEventListener('DOMContentLoaded', function() {
-    if (!window.separacaoManager) {
-        window.separacaoManager = new SeparacaoManager();
-        console.log('✅ Separação Manager Global inicializado');
-    }
-});
+function excluirPreSeparacao(loteId, numPedido) {
+    window.separacaoManager.excluirPreSeparacao(loteId, numPedido);
+}

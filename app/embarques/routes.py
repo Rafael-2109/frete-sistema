@@ -1122,6 +1122,31 @@ def validar_nf_cliente(item_embarque):
         cnpj_faturamento_normalizado = normalizar_cnpj(nf_faturamento.cnpj_cliente)
         
         if cnpj_embarque_normalizado != cnpj_faturamento_normalizado:
+            # 🔧 FALLBACK INTELIGENTE: Verifica se o CNPJ da NF começa com 0
+            # Se sim, tenta adicionar 0 no início do CNPJ do embarque
+            if cnpj_faturamento_normalizado and cnpj_faturamento_normalizado[0] == '0':
+                # O CNPJ da NF começa com 0, vamos tentar adicionar 0 no CNPJ do embarque
+                cnpj_embarque_com_zero = '0' + cnpj_embarque_normalizado
+                
+                # Verifica se agora os CNPJs batem
+                if cnpj_embarque_com_zero == cnpj_faturamento_normalizado:
+                    # ✅ SUCESSO! O problema era o zero faltando
+                    print(f"[INFO] ✅ CNPJ corrigido: {cnpj_embarque_normalizado} -> {cnpj_embarque_com_zero}")
+                    
+                    # Atualiza o CNPJ do item_embarque com o zero na frente
+                    item_embarque.cnpj_cliente = cnpj_embarque_com_zero
+                    
+                    # Atualiza peso e valor da NF
+                    item_embarque.peso = float(nf_faturamento.peso_bruto or 0)
+                    item_embarque.valor = float(nf_faturamento.valor_total or 0)
+                    item_embarque.erro_validacao = None
+                    
+                    # Log da correção
+                    print(f"[INFO] ✅ NF {item_embarque.nota_fiscal} validada após correção do CNPJ")
+                    
+                    return True, None
+            
+            # Se não conseguiu corrigir com o fallback, mantém o erro original
             # ✅ CORREÇÃO: NF não pertence ao cliente - APAGA APENAS a NF, mantém todos os outros dados
             nf_original = item_embarque.nota_fiscal
             item_embarque.erro_validacao = f"NF_DIVERGENTE: NF {nf_original} pertence ao CNPJ {nf_faturamento.cnpj_cliente}, não a {item_embarque.cnpj_cliente}"

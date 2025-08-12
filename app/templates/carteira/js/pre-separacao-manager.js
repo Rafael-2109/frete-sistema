@@ -143,7 +143,7 @@ class PreSeparacaoManager {
         
         // 🎯 USAR a nova rota unificada do separacao-manager
         if (window.separacaoManager) {
-            await window.separacaoManager.transformarLoteEmSeparacao(null, loteId);
+            await window.separacaoManager.transformarLoteEmSeparacao(loteId);
             return { success: true, message: 'Lote transformado em separação com sucesso' };
         } else {
             console.error('❌ Separação Manager não disponível');

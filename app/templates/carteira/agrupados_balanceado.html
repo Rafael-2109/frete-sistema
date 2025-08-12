@@ -455,13 +455,8 @@
 
 {% block styles %}
 <style>
-    {
-        % include 'carteira/css/agrupados.css' %
-    }
-
-        {
-        % include 'carteira/css/workspace-montagem.css' %
-    }
+    {% include 'carteira/css/agrupados.css' %}
+    {% include 'carteira/css/workspace-montagem.css' %}
 </style>
 {% endblock %}
 
@@ -661,5 +656,62 @@
         </div>
     </div>
 </div>
+
+<!-- SweetAlert2 para notificações elegantes -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<!-- CSS de animações fluidas -->
+<style>
+/* Animações fluidas para atualizações parciais */
+.update-animation {
+    animation: highlightUpdate 1s ease-in-out;
+}
+
+@keyframes highlightUpdate {
+    0% { background-color: rgba(40, 167, 69, 0.2); }
+    100% { background-color: transparent; }
+}
+
+.pulse-animation {
+    animation: pulse 0.5s ease-in-out;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); color: #28a745; }
+}
+
+.deleting {
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.separacao-criada-animation {
+    animation: sucessoPulse 0.5s ease-in-out;
+}
+
+@keyframes sucessoPulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4); }
+    50% { transform: scale(1.02); box-shadow: 0 0 20px 10px rgba(40, 167, 69, 0.2); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+}
+
+/* Acessibilidade - respeitar preferências de movimento reduzido */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    
+    .update-animation,
+    .pulse-animation,
+    .separacao-criada-animation {
+        animation: none !important;
+    }
+}
+</style>
 
 {% endblock %}

@@ -1,9 +1,10 @@
 """
 API para gerar separação de pedidos completos na carteira agrupada
+Versão unificada com suporte a parciais HTML e JSON
 """
 
-from flask import jsonify, request
-from flask_login import login_required
+from flask import jsonify, request, render_template
+from flask_login import login_required, current_user
 from datetime import datetime
 from app import db
 from app.carteira.models import CarteiraPrincipal
@@ -46,10 +47,11 @@ def verificar_lote_pedido(num_pedido):
         if not pre_separacoes:
             return jsonify({"lote_completo_com_expedicao": False, "lote_parcial_existe": False, "lote_id": None})
 
-        # Agrupar por lote_id e verificar tipo_envio
+        # Agrupar por separacao_lote_id e verificar tipo_envio
         lotes_info = {}
         for item in pre_separacoes:
-            lote_id = getattr(item, "lote_id", None) or "sem_lote"
+            # Usar separacao_lote_id que é o campo correto
+            lote_id = getattr(item, "separacao_lote_id", None) or "sem_lote"
             if lote_id not in lotes_info:
                 lotes_info[lote_id] = {
                     "tipo_envio": getattr(item, "tipo_envio", "total"),
@@ -236,21 +238,47 @@ def gerar_separacao_completa_pedido(num_pedido):
         # Commit das mudanças
         db.session.commit()
 
-        return jsonify(
-            {
+        # Verificar se cliente quer resposta com parciais HTML
+        accept_html = request.headers.get('Accept', '').find('text/html') != -1 or request.args.get('format') == 'html'
+        
+        if accept_html:
+            # Retornar parciais HTML para atualização sem reload
+            pedido_atualizado = _get_pedido_completo(num_pedido)
+            contadores = _calcular_contadores_globais()
+            
+            return jsonify({
+                "ok": True,
                 "success": True,
                 "message": f"Separação completa gerada com sucesso! {len(separacoes_criadas)} produtos separados.",
-                "lote_id": lote_id,
-                "tipo_envio": tipo_envio,
-                "separacoes_criadas": len(separacoes_criadas),
-                "totais": {
-                    "valor": valor_total_separacao,
-                    "peso": peso_total_separacao,
-                    "pallet": pallet_total_separacao,
+                "targets": {
+                    f"#resumo-{num_pedido}": render_template('carteira/partials/_resumo_pedido.html', 
+                                                            pedido=pedido_atualizado),
+                    f"#separacoes-{num_pedido}": render_template('carteira/partials/_separacoes_pedido.html', 
+                                                                pedido=pedido_atualizado),
+                    f"#botoes-{num_pedido}": render_template('carteira/partials/_botoes_pedido.html', 
+                                                            pedido=pedido_atualizado)
                 },
-                "datas": {"expedicao": expedicao, "agendamento": agendamento, "protocolo": protocolo},
-            }
-        )
+                "contadores": contadores,
+                "lote_id": lote_id,
+                "separacoes_criadas": len(separacoes_criadas)
+            })
+        else:
+            # Resposta JSON tradicional para compatibilidade
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Separação completa gerada com sucesso! {len(separacoes_criadas)} produtos separados.",
+                    "lote_id": lote_id,
+                    "tipo_envio": tipo_envio,
+                    "separacoes_criadas": len(separacoes_criadas),
+                    "totais": {
+                        "valor": valor_total_separacao,
+                        "peso": peso_total_separacao,
+                        "pallet": pallet_total_separacao,
+                    },
+                    "datas": {"expedicao": expedicao, "agendamento": agendamento, "protocolo": protocolo},
+                }
+            )
 
     except Exception as e:
         db.session.rollback()
@@ -266,12 +294,30 @@ def transformar_lote_em_separacao(lote_id):
     Usado pelo botão "Transformar em Separação" no workspace
     """
     try:
+        # Log para debug
+        logger.info(f"Tentando transformar lote {lote_id} em separação")
+        
         # Buscar pré-separações pelo separacao_lote_id
         pre_separacoes = PreSeparacaoItem.query.filter(
-            PreSeparacaoItem.separacao_lote_id == lote_id, PreSeparacaoItem.status.in_(["CRIADO", "RECOMPOSTO"])
+            PreSeparacaoItem.separacao_lote_id == lote_id, 
+            PreSeparacaoItem.status.in_(["CRIADO", "RECOMPOSTO"])
         ).all()
+        
+        # Debug: verificar se existem pré-separações com outro status
+        todas_pre_sep = PreSeparacaoItem.query.filter(
+            PreSeparacaoItem.separacao_lote_id == lote_id
+        ).all()
+        
+        if todas_pre_sep and not pre_separacoes:
+            status_encontrados = [ps.status for ps in todas_pre_sep]
+            logger.warning(f"Lote {lote_id} tem pré-separações mas com status: {status_encontrados}")
+            return jsonify({
+                "success": False, 
+                "error": f"Pré-separações encontradas mas com status inadequado: {set(status_encontrados)}"
+            }), 400
 
         if not pre_separacoes:
+            logger.warning(f"Nenhuma pré-separação encontrada para lote {lote_id}")
             return jsonify({"success": False, "error": "Nenhuma pré-separação encontrada para este lote"}), 404
 
         # Verificar se é lote completo (todos os produtos do pedido)
@@ -392,21 +438,316 @@ def transformar_lote_em_separacao(lote_id):
         # Commit das mudanças
         db.session.commit()
 
-        return jsonify(
-            {
+        # Verificar se cliente quer resposta com parciais HTML
+        accept_html = request.headers.get('Accept', '').find('text/html') != -1 or request.args.get('format') == 'html'
+        
+        if accept_html:
+            # Retornar parciais HTML
+            pedido_atualizado = _get_pedido_completo(num_pedido)
+            contadores = _calcular_contadores_globais()
+            
+            return jsonify({
+                "ok": True,
                 "success": True,
                 "message": f"Lote transformado em separação com sucesso! {len(separacoes_criadas)} produtos processados.",
+                "targets": {
+                    f"#resumo-{num_pedido}": render_template('carteira/partials/_resumo_pedido.html', 
+                                                            pedido=pedido_atualizado),
+                    f"#separacoes-{num_pedido}": render_template('carteira/partials/_separacoes_pedido.html', 
+                                                                pedido=pedido_atualizado),
+                    f"#botoes-{num_pedido}": render_template('carteira/partials/_botoes_pedido.html', 
+                                                            pedido=pedido_atualizado)
+                },
+                "contadores": contadores,
                 "lote_id": separacao_lote_id,
-                "separacoes_criadas": len(separacoes_criadas),
-                "pre_separacoes_processadas": len(pre_separacoes),
-                "totais": {"valor": valor_total, "peso": peso_total, "pallet": pallet_total},
-            }
-        )
+                "separacoes_criadas": len(separacoes_criadas)
+            })
+        else:
+            # Resposta JSON tradicional
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Lote transformado em separação com sucesso! {len(separacoes_criadas)} produtos processados.",
+                    "lote_id": separacao_lote_id,
+                    "separacoes_criadas": len(separacoes_criadas),
+                    "pre_separacoes_processadas": len(pre_separacoes),
+                    "totais": {"valor": valor_total, "peso": peso_total, "pallet": pallet_total},
+                }
+            )
 
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao transformar lote {lote_id} em separação: {e}")
         return jsonify({"success": False, "error": f"Erro interno: {str(e)}"}), 500
+
+
+# ============================================================================
+# FUNÇÕES AUXILIARES PARA PARCIAIS HTML
+# ============================================================================
+
+def _get_pedido_completo(num_pedido):
+    """
+    Busca dados completos do pedido para renderizar parciais
+    """
+    from app.pedidos.models import Pedido
+    
+    pedido = Pedido.query.filter_by(num_pedido=num_pedido).first()
+    
+    # Se não existe pedido, criar objeto mock
+    if not pedido:
+        pedido = type('obj', (object,), {
+            'num_pedido': num_pedido,
+            'status': 'ABERTO',
+            'cliente_nome': '',
+            'itens_separados': 0,
+            'total_itens': 0,
+            'valor_saldo': 0
+        })()
+    
+    # Adicionar dados calculados
+    separacoes_raw = Separacao.query.filter_by(num_pedido=num_pedido).all()
+    
+    # Agrupar separações por lote e adicionar informações extras
+    from collections import defaultdict
+    lotes_sep = defaultdict(list)
+    for sep in separacoes_raw:
+        lotes_sep[sep.separacao_lote_id].append(sep)
+    
+    # Criar objetos de lote para separações
+    pedido.separacoes = []
+    for lote_id, itens in lotes_sep.items():
+        lote_obj = type('obj', (object,), {
+            'separacao_lote_id': lote_id,
+            'qtd_itens': len(itens),
+            'tipo_envio': itens[0].tipo_envio if itens else 'total',
+            'expedicao': itens[0].expedicao if itens else None,
+            'agendamento': itens[0].agendamento if itens else None,
+            'protocolo': itens[0].protocolo if itens else None,
+            'itens': itens,
+            # ID da primeira separação para exclusão
+            'id': itens[0].id if itens else None
+        })()
+        pedido.separacoes.append(lote_obj)
+    
+    # Buscar pré-separações agrupadas por lote
+    pre_separacoes_raw = PreSeparacaoItem.query.filter_by(
+        num_pedido=num_pedido,
+        status='CRIADO'
+    ).all()
+    
+    # Agrupar pré-separações por lote
+    lotes_pre_sep = defaultdict(list)
+    for ps in pre_separacoes_raw:
+        lotes_pre_sep[ps.separacao_lote_id].append(ps)
+    
+    # Criar objetos de lote para o template
+    pedido.pre_separacoes = []
+    for lote_id, itens in lotes_pre_sep.items():
+        lote_obj = type('obj', (object,), {
+            'separacao_lote_id': lote_id,
+            'qtd_itens': len(itens),
+            'tipo_envio': itens[0].tipo_envio if itens else 'total',
+            'itens': itens
+        })()
+        pedido.pre_separacoes.append(lote_obj)
+    
+    # Buscar dados da carteira
+    carteira_itens = CarteiraPrincipal.query.filter_by(
+        num_pedido=num_pedido,
+        ativo=True
+    ).all()
+    
+    # Calcular totais
+    pedido.total_itens = len(carteira_itens)
+    pedido.itens_separados = len(pedido.separacoes)
+    
+    # Calcular valor saldo
+    pedido.valor_saldo = sum(float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0) 
+                            for item in carteira_itens if (item.qtd_saldo_produto_pedido or 0) > 0)
+    
+    # Buscar nome do cliente
+    if carteira_itens:
+        pedido.cliente_nome = carteira_itens[0].raz_social_red or carteira_itens[0].raz_social or ''
+    
+    # Determinar status e cores
+    if pedido.itens_separados == pedido.total_itens and pedido.total_itens > 0:
+        pedido.status = 'COMPLETO'
+        pedido.status_cor = 'success'
+        pedido.pode_gerar_separacao = False
+    elif pedido.itens_separados > 0:
+        pedido.status = 'PARCIAL'
+        pedido.status_cor = 'warning'
+        pedido.pode_gerar_separacao = True
+    else:
+        pedido.status = 'PENDENTE'
+        pedido.status_cor = 'secondary'
+        pedido.pode_gerar_separacao = True
+    
+    return pedido
+
+
+def _calcular_contadores_globais():
+    """
+    Calcula contadores globais para atualizar no frontend
+    """
+    from app.pedidos.models import Pedido
+    
+    total_separacoes = Separacao.query.count()
+    total_pre_separacoes = PreSeparacaoItem.query.filter_by(status='CRIADO').count()
+    # Usar status COMPLETO ao invés de SEPARADO para consistência
+    pedidos_completos = db.session.query(Pedido).filter_by(status='COMPLETO').count()
+    
+    # Contar pedidos únicos com separação
+    pedidos_com_separacao = db.session.query(Separacao.num_pedido).distinct().count()
+    
+    return {
+        'contador-total-separacoes': total_separacoes,
+        'contador-pre-separacoes': total_pre_separacoes,
+        'contador-pedidos-completos': pedidos_completos,
+        'contador-pedidos-separados': pedidos_com_separacao
+    }
+
+
+@carteira_bp.route("/api/contadores", methods=["GET"])
+@login_required
+def get_contadores():
+    """
+    Rota para buscar contadores globais atualizados
+    """
+    try:
+        contadores = _calcular_contadores_globais()
+        return jsonify({
+            'ok': True,
+            'contadores': contadores
+        })
+    except Exception as e:
+        logger.error(f"Erro ao buscar contadores: {str(e)}")
+        return jsonify({
+            'ok': False,
+            'error': str(e)
+        }), 500
+
+
+@carteira_bp.route("/api/separacao/<int:separacao_id>/excluir", methods=["DELETE"])
+@login_required
+def excluir_separacao(separacao_id):
+    """
+    Exclui separação e retorna parciais HTML atualizados
+    """
+    try:
+        separacao = Separacao.query.get(separacao_id)
+        if not separacao:
+            return jsonify({
+                'ok': False,
+                'success': False,
+                'error': 'Separação não encontrada'
+            }), 404
+        
+        num_pedido = separacao.num_pedido
+        
+        # Excluir separação
+        db.session.delete(separacao)
+        db.session.commit()
+        
+        # Verificar se cliente quer parciais HTML
+        accept_html = request.headers.get('Accept', '').find('text/html') != -1
+        
+        if accept_html:
+            pedido_atualizado = _get_pedido_completo(num_pedido)
+            contadores = _calcular_contadores_globais()
+            
+            return jsonify({
+                'ok': True,
+                'success': True,
+                'message': 'Separação excluída com sucesso',
+                'targets': {
+                    f'#resumo-{num_pedido}': render_template('carteira/partials/_resumo_pedido.html', 
+                                                            pedido=pedido_atualizado),
+                    f'#separacoes-{num_pedido}': render_template('carteira/partials/_separacoes_pedido.html', 
+                                                                pedido=pedido_atualizado),
+                    f'#botoes-{num_pedido}': render_template('carteira/partials/_botoes_pedido.html', 
+                                                            pedido=pedido_atualizado)
+                },
+                'contadores': contadores
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': 'Separação excluída com sucesso'
+            })
+        
+    except Exception as e:
+        logger.error(f"Erro ao excluir separação: {str(e)}")
+        db.session.rollback()
+        return jsonify({
+            'ok': False,
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@carteira_bp.route("/api/pre-separacao/<lote_id>/excluir", methods=["DELETE"])
+@login_required
+def excluir_pre_separacao(lote_id):
+    """
+    Exclui pré-separação e retorna parciais HTML atualizados
+    """
+    try:
+        pre_separacoes = PreSeparacaoItem.query.filter_by(
+            separacao_lote_id=lote_id,
+            status='CRIADO'
+        ).all()
+        
+        if not pre_separacoes:
+            return jsonify({
+                'ok': False,
+                'success': False,
+                'error': 'Pré-separação não encontrada'
+            }), 404
+        
+        num_pedido = pre_separacoes[0].num_pedido if pre_separacoes else None
+        
+        # Excluir todas as pré-separações do lote
+        for pre_sep in pre_separacoes:
+            db.session.delete(pre_sep)
+        
+        db.session.commit()
+        
+        # Verificar se cliente quer parciais HTML
+        accept_html = request.headers.get('Accept', '').find('text/html') != -1
+        
+        if accept_html and num_pedido:
+            pedido_atualizado = _get_pedido_completo(num_pedido)
+            contadores = _calcular_contadores_globais()
+            
+            return jsonify({
+                'ok': True,
+                'success': True,
+                'message': 'Pré-separação excluída com sucesso',
+                'targets': {
+                    f'#resumo-{num_pedido}': render_template('carteira/partials/_resumo_pedido.html', 
+                                                            pedido=pedido_atualizado),
+                    f'#separacoes-{num_pedido}': render_template('carteira/partials/_separacoes_pedido.html', 
+                                                                pedido=pedido_atualizado),
+                    f'#botoes-{num_pedido}': render_template('carteira/partials/_botoes_pedido.html', 
+                                                            pedido=pedido_atualizado)
+                },
+                'contadores': contadores
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': f'Pré-separação {lote_id} excluída com sucesso'
+            })
+        
+    except Exception as e:
+        logger.error(f"Erro ao excluir pré-separação: {str(e)}")
+        db.session.rollback()
+        return jsonify({
+            'ok': False,
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @carteira_bp.route("/api/separacao/<lote_id>/reverter", methods=["POST"])
@@ -455,7 +796,6 @@ def reverter_separacao(lote_id):
 
         # 2) Criar (ou reativar) pré-separações após remover as separações
         from datetime import datetime
-        from flask_login import current_user
 
         pre_separacoes_criadas = []
         if not pre_separacoes_existentes or len(pre_separacoes_existentes) == 0:
@@ -497,17 +837,50 @@ def reverter_separacao(lote_id):
 
         db.session.commit()
 
-        total_pre = (
-            len(pre_separacoes_criadas) if "pre_separacoes_criadas" in locals() else len(pre_separacoes_existentes)
-        )
-        return jsonify(
-            {
+        # Calcular total de pré-separações de forma correta
+        # Se criamos novas pré-separações (separação sem PreSeparacaoItem prévia)
+        if pre_separacoes_criadas:
+            total_pre = len(pre_separacoes_criadas)
+        # Se revertemos pré-separações existentes (status ENVIADO_SEPARACAO → CRIADO)
+        elif pre_separacoes_existentes:
+            total_pre = len(pre_separacoes_existentes)
+        # Fallback: usar quantidade de separações removidas
+        else:
+            total_pre = len(separacoes)
+        
+        # Verificar se cliente quer resposta com parciais HTML
+        accept_html = request.headers.get('Accept', '').find('text/html') != -1
+        num_pedido = separacoes[0].num_pedido if separacoes else None
+        
+        if accept_html and num_pedido:
+            pedido_atualizado = _get_pedido_completo(num_pedido)
+            contadores = _calcular_contadores_globais()
+            
+            return jsonify({
+                "ok": True,
                 "success": True,
                 "message": f"Separação revertida com sucesso! {total_pre} itens voltaram para pré-separação.",
+                "targets": {
+                    f"#resumo-{num_pedido}": render_template('carteira/partials/_resumo_pedido.html', 
+                                                            pedido=pedido_atualizado),
+                    f"#separacoes-{num_pedido}": render_template('carteira/partials/_separacoes_pedido.html', 
+                                                                pedido=pedido_atualizado),
+                    f"#botoes-{num_pedido}": render_template('carteira/partials/_botoes_pedido.html', 
+                                                            pedido=pedido_atualizado)
+                },
+                "contadores": contadores,
                 "pre_separacoes_revertidas": total_pre,
-                "separacoes_removidas": len(separacoes),
-            }
-        )
+                "separacoes_removidas": len(separacoes)
+            })
+        else:
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Separação revertida com sucesso! {total_pre} itens voltaram para pré-separação.",
+                    "pre_separacoes_revertidas": total_pre,
+                    "separacoes_removidas": len(separacoes),
+                }
+            )
 
     except Exception as e:
         db.session.rollback()
@@ -615,13 +988,37 @@ def atualizar_datas_separacao(lote_id):
 
         db.session.commit()
 
-        return jsonify(
-            {
+        # Verificar se cliente quer resposta com parciais HTML
+        accept_html = request.headers.get('Accept', '').find('text/html') != -1
+        num_pedido = separacoes[0].num_pedido if separacoes else None
+        
+        if accept_html and num_pedido:
+            pedido_atualizado = _get_pedido_completo(num_pedido)
+            contadores = _calcular_contadores_globais()
+            
+            return jsonify({
+                "ok": True,
                 "success": True,
                 "message": f"{len(separacoes)} itens atualizados com sucesso",
-                "itens_atualizados": len(separacoes),
-            }
-        )
+                "targets": {
+                    f"#resumo-{num_pedido}": render_template('carteira/partials/_resumo_pedido.html', 
+                                                            pedido=pedido_atualizado),
+                    f"#separacoes-{num_pedido}": render_template('carteira/partials/_separacoes_pedido.html', 
+                                                                pedido=pedido_atualizado),
+                    f"#botoes-{num_pedido}": render_template('carteira/partials/_botoes_pedido.html', 
+                                                            pedido=pedido_atualizado)
+                },
+                "contadores": contadores,
+                "itens_atualizados": len(separacoes)
+            })
+        else:
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"{len(separacoes)} itens atualizados com sucesso",
+                    "itens_atualizados": len(separacoes),
+                }
+            )
 
     except Exception as e:
         db.session.rollback()

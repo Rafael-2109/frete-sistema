@@ -1,0 +1,72 @@
+{# Partial para lista de separações do pedido #}
+<div id="separacoes-{{ pedido.num_pedido }}" class="separacoes-container">
+    {% if pedido.separacoes %}
+        <div class="list-group">
+            {% for separacao in pedido.separacoes %}
+            <div class="list-group-item" data-separacao-id="{{ separacao.id }}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>Lote {{ separacao.separacao_lote_id }}</strong>
+                        <span class="badge bg-info ms-2">{{ separacao.tipo_envio|default('Total') }}</span>
+                        <div class="small text-muted">
+                            Expedição: {{ separacao.expedicao|safe_date if separacao.expedicao else 'N/A' }}
+                            {% if separacao.agendamento %}
+                                | Agendamento: {{ separacao.agendamento|safe_date }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <span class="badge bg-secondary">{{ separacao.qtd_itens }} itens</span>
+                        <button class="btn btn-sm btn-danger ms-2 btn-excluir-separacao" 
+                                data-separacao-id="{{ separacao.id }}"
+                                data-pedido="{{ pedido.num_pedido }}"
+                                onclick="excluirSeparacao('{{ separacao.id }}', '{{ pedido.num_pedido }}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info mb-0">
+            <i class="fas fa-info-circle me-2"></i>
+            Nenhuma separação criada ainda
+        </div>
+    {% endif %}
+    
+    {# Pré-separações se existirem #}
+    {% if pedido.pre_separacoes %}
+        <div class="mt-3">
+            <h6 class="text-muted">Pré-Separações</h6>
+            <div class="list-group">
+                {% for pre_sep in pedido.pre_separacoes %}
+                <div class="list-group-item list-group-item-warning" data-lote-id="{{ pre_sep.separacao_lote_id }}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Lote {{ pre_sep.separacao_lote_id }}</strong>
+                            <span class="badge bg-warning text-dark ms-2">Pré-Separação</span>
+                            <div class="small text-muted">
+                                {{ pre_sep.qtd_itens }} itens | Tipo: {{ pre_sep.tipo_envio }}
+                            </div>
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-success btn-transformar-lote" 
+                                    data-lote-id="{{ pre_sep.separacao_lote_id }}"
+                                    onclick="transformarLote('{{ pre_sep.separacao_lote_id }}')">
+                                <i class="fas fa-exchange-alt"></i> Transformar
+                            </button>
+                            <button class="btn btn-sm btn-danger ms-1 btn-excluir-pre-separacao" 
+                                    data-lote-id="{{ pre_sep.separacao_lote_id }}"
+                                    data-pedido="{{ pedido.num_pedido }}"
+                                    onclick="excluirPreSeparacao('{{ pre_sep.separacao_lote_id }}', '{{ pedido.num_pedido }}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+</div>

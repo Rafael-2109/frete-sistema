@@ -1,0 +1,25 @@
+{# Partial para resumo do pedido - atualizado após ações #}
+<div id="resumo-{{ pedido.num_pedido }}" class="card-header">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h6 class="mb-0">
+                <i class="fas fa-box me-2"></i>
+                Pedido {{ pedido.num_pedido }}
+                {% if pedido.status %}
+                    <span class="badge bg-{{ pedido.status_cor }} ms-2">{{ pedido.status }}</span>
+                {% endif %}
+            </h6>
+            <small class="text-muted">
+                {{ pedido.cliente_nome }}
+            </small>
+        </div>
+        <div class="text-end">
+            <div class="fw-bold">
+                Itens: <span class="contador-separados">{{ pedido.itens_separados }}</span>/{{ pedido.total_itens }}
+            </div>
+            <div class="small text-muted">
+                Saldo: R$ {{ pedido.valor_saldo|valor_br }}
+            </div>
+        </div>
+    </div>
+</div>

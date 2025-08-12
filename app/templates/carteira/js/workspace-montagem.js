@@ -762,7 +762,7 @@ class WorkspaceMontagem {
 
         // 🎯 TRANSFORMAR ESTE LOTE ESPECÍFICO EM SEPARAÇÃO
         if (window.separacaoManager) {
-            await window.separacaoManager.transformarLoteEmSeparacao(numPedido, loteId);
+            await window.separacaoManager.transformarLoteEmSeparacao(loteId);
 
             // Não remover mais o lote após gerar separação (mantém histórico)
             // this.loteManager.removerLote(loteId);
@@ -784,7 +784,7 @@ class WorkspaceMontagem {
 
         // 🎯 DELEGAR PARA SEPARACAO-MANAGER (Caso 2 - Transformar pré-separação em separação)
         if (window.separacaoManager) {
-            await window.separacaoManager.transformarLoteEmSeparacao(numPedido, loteId);
+            await window.separacaoManager.transformarLoteEmSeparacao(loteId);
 
             // Não remover mais o lote após confirmar separação (mantém histórico)
             // this.loteManager.removerLote(loteId);
@@ -931,22 +931,120 @@ class WorkspaceMontagem {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',  // Solicitar JSON
+                    'X-CSRFToken': this.getCSRFToken()
                 }
             });
 
+            // Verificar se a resposta foi bem sucedida
+            if (!response.ok) {
+                console.error('Resposta com erro:', response.status, response.statusText);
+                // Tentar pegar mensagem de erro do corpo
+                try {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Erro HTTP ${response.status}`);
+                } catch (e) {
+                    throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
+                }
+            }
+
             const data = await response.json();
 
-            if (data.success) {
-                alert('✅ Separação revertida com sucesso!');
-                location.reload();
+            if (data.success || data.ok) {
+                // Tentar aplicar parciais HTML se disponíveis
+                try {
+                    if (data.targets && window.separacaoManager && window.separacaoManager.applyTargets) {
+                        await window.separacaoManager.applyTargets(data);
+                        
+                        // Atualizar contadores se disponíveis
+                        if (data.contadores && window.separacaoManager.atualizarContadores) {
+                            window.separacaoManager.atualizarContadores(data.contadores);
+                        }
+                    }
+                } catch (applyError) {
+                    console.warn('Aviso: Não foi possível aplicar atualizações parciais:', applyError);
+                    // Continua mesmo se falhar aplicar parciais
+                }
+                
+                // Mostrar mensagem de sucesso
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Separação revertida!',
+                        text: data.message || 'Separação revertida com sucesso',
+                        toast: true,
+                        position: 'top-end',
+                        timer: 3000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    alert('✅ ' + (data.message || 'Separação revertida com sucesso!'));
+                }
+                
+                // Atualizar workspace localmente
+                try {
+                    this.atualizarListaSeparacoes();
+                } catch (updateError) {
+                    console.warn('Aviso: Não foi possível atualizar lista local:', updateError);
+                }
+                
+                // Se não conseguiu aplicar parciais, fazer reload
+                if (!data.targets || !window.separacaoManager) {
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
+                }
             } else {
-                alert(`❌ Erro ao reverter separação: ${data.error}`);
+                alert(`❌ Erro ao reverter separação: ${data.error || 'Erro desconhecido'}`);
             }
 
         } catch (error) {
             console.error('Erro ao reverter separação:', error);
-            alert('❌ Erro interno ao reverter separação');
+            
+            // Verificar se o erro é de parsing JSON ou se a mensagem contém indicação de sucesso
+            const errorMessage = error.message ? error.message.toLowerCase() : '';
+            
+            if (error instanceof SyntaxError || errorMessage.includes('json')) {
+                // Provavelmente a operação funcionou mas retornou HTML ao invés de JSON
+                console.log('Possível sucesso com resposta não-JSON, recarregando...');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Processando...',
+                        text: 'Separação sendo revertida, aguarde...',
+                        toast: true,
+                        position: 'top-end',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                }
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                // Erro real - mostrar mensagem apropriada
+                const userMessage = error.message || 'Erro desconhecido ao reverter separação';
+                
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro ao reverter',
+                        text: userMessage,
+                        toast: true,
+                        position: 'top-end',
+                        timer: 5000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    alert(`❌ ${userMessage}`);
+                }
+            }
         }
+    }
+    
+    getCSRFToken() {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute('content') : '';
     }
 
     editarDatasSeparacao(loteId) {
