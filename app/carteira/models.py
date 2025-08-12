@@ -746,7 +746,10 @@ class PreSeparacaoItem(db.Model):
         self.recomposto = True
         self.data_recomposicao = datetime.now(timezone.utc)
         self.recomposto_por = usuario
-        self.status = 'RECOMPOSTO'
+        # CRÍTICO: NÃO mudar status se já é ENVIADO_SEPARACAO
+        # Items que viraram Separacao devem manter esse status!
+        if self.status != 'ENVIADO_SEPARACAO':
+            self.status = 'RECOMPOSTO'
     
     def recompor_na_carteira(self, carteira_item, usuario):
         """Recompõe divisão na carteira após reimportação Odoo"""

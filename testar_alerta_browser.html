@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Teste Alerta Browser</title>
+</head>
+<body>
+    <h1>Teste de Alerta de Separações</h1>
+    <div id="alertasContainer" style="border: 2px solid red; padding: 20px; min-height: 100px;">
+        <p>Aguardando alertas...</p>
+    </div>
+    
+    <h2>Log:</h2>
+    <pre id="log"></pre>
+
+    <script>
+    function log(msg) {
+        document.getElementById('log').innerHTML += msg + '\n';
+    }
+
+    log('Iniciando teste...');
+    
+    // Fazer a chamada para a API
+    fetch('http://localhost:5000/api/alertas-separacao/card-html', {
+        credentials: 'include'  // Incluir cookies de sessão
+    })
+    .then(response => {
+        log('Response status: ' + response.status);
+        if (response.status === 204) {
+            log('Sem alertas (204)');
+            return '';
+        }
+        return response.text();
+    })
+    .then(html => {
+        log('HTML recebido: ' + (html ? html.length + ' caracteres' : 'vazio'));
+        if (html) {
+            document.getElementById('alertasContainer').innerHTML = html;
+            log('HTML inserido no container');
+        }
+    })
+    .catch(error => {
+        log('ERRO: ' + error);
+        console.error('Erro:', error);
+    });
+    </script>
+</body>
+</html>

@@ -149,6 +149,77 @@
     
     <!-- Card de Alertas de Separações COTADAS Alteradas -->
     <div id="alertasContainer"></div>
+    
+    <!-- Script INLINE de emergência para carregar alertas -->
+    <script>
+    // Definir função de reimpressão ANTES de carregar os alertas
+    function reimprimirSeparacao(separacaoLoteId, numPedido) {
+        console.log('[REIMPRIMIR] Iniciando reimpressão:', separacaoLoteId, numPedido);
+        
+        if (!confirm('Confirma a reimpressão da separação do pedido ' + numPedido + '?')) {
+            console.log('[REIMPRIMIR] Cancelado pelo usuário');
+            return;
+        }
+        
+        console.log('[REIMPRIMIR] Fazendo chamada para API...');
+        
+        fetch('/api/alertas-separacao/reimprimir/' + separacaoLoteId, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                num_pedido: numPedido
+            })
+        })
+        .then(function(response) {
+            console.log('[REIMPRIMIR] Response status:', response.status);
+            return response.json();
+        })
+        .then(function(data) {
+            console.log('[REIMPRIMIR] Data recebida:', data);
+            
+            if (data.success) {
+                // Abrir URL de impressão em nova aba
+                if (data.url_impressao && data.url_impressao !== '#') {
+                    console.log('[REIMPRIMIR] Abrindo URL:', data.url_impressao);
+                    window.open(data.url_impressao, '_blank');
+                    
+                    alert('Separação marcada como reimpressa. ' + data.alertas_marcados + ' alertas processados.');
+                    
+                    // Recarregar a página após 2 segundos
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    console.error('[REIMPRIMIR] URL de impressão inválida:', data.url_impressao);
+                    alert('Erro: URL de impressão não encontrada. Verifique se o pedido está em um embarque ativo.');
+                }
+            } else {
+                console.error('[REIMPRIMIR] Erro no servidor:', data.error);
+                alert('Erro ao reimprimir: ' + data.error);
+            }
+        })
+        .catch(function(error) {
+            console.error('[REIMPRIMIR] Erro na chamada:', error);
+            alert('Erro ao processar reimpressão: ' + error.message);
+        });
+    }
+    
+    // Carregar alertas
+    (function() {
+        console.log('[ALERTA-INLINE] Carregando alertas IMEDIATAMENTE...');
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/alertas-separacao/card-html', true);
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                document.getElementById('alertasContainer').innerHTML = xhr.responseText;
+                console.log('[ALERTA-INLINE] ✅ Alertas carregados!');
+            }
+        };
+        xhr.send();
+    })();
+    </script>
 
     <!-- 🔍 FORMULÁRIO DE FILTROS APRIMORADO -->
     <div class="card mb-4">
@@ -1542,26 +1613,63 @@ document.addEventListener('DOMContentLoaded', function() {
 {% block extra_js %}
 <script>
 // Carregar alertas de separações COTADAS alteradas ao carregar a página
-document.addEventListener('DOMContentLoaded', function() {
+// Usar setTimeout para garantir que execute mesmo se houver erro em outro código
+setTimeout(function() {
+    console.log('[ALERTAS] Iniciando carregamento de alertas (com delay de segurança)...');
     carregarAlertasSeparacoes();
-});
+}, 100);
+
+// Também tentar no DOMContentLoaded como backup
+try {
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('[ALERTAS] DOMContentLoaded - Iniciando carregamento de alertas...');
+        carregarAlertasSeparacoes();
+    });
+} catch(e) {
+    console.error('[ALERTAS] Erro ao adicionar DOMContentLoaded:', e);
+}
 
 function carregarAlertasSeparacoes() {
+    console.log('[ALERTAS] Função carregarAlertasSeparacoes() chamada');
+    
+    // Verificar se o container existe
+    const container = document.getElementById('alertasContainer');
+    if (!container) {
+        console.error('[ALERTAS] ❌ Container alertasContainer não encontrado!');
+        return;
+    }
+    console.log('[ALERTAS] ✅ Container encontrado');
+    
     fetch('/api/alertas-separacao/card-html')
         .then(response => {
+            console.log('[ALERTAS] Response status:', response.status);
+            
+            if (response.status === 401 || response.status === 302) {
+                console.error('[ALERTAS] ❌ Não autorizado ou redirecionamento - faça login!');
+                return null;
+            }
+            
             if (response.status === 204) {
-                // Sem alertas
+                console.log('[ALERTAS] Sem alertas (204 No Content)');
                 return '';
             }
+            
             return response.text();
         })
         .then(html => {
-            if (html) {
-                document.getElementById('alertasContainer').innerHTML = html;
+            if (html === null) return;
+            
+            console.log('[ALERTAS] HTML recebido:', html ? html.length + ' caracteres' : 'vazio');
+            
+            if (html && html.length > 0) {
+                container.innerHTML = html;
+                console.log('[ALERTAS] ✅ HTML inserido no container com sucesso!');
+            } else {
+                console.log('[ALERTAS] HTML vazio, nenhum alerta para mostrar');
             }
         })
         .catch(error => {
-            console.error('Erro ao carregar alertas:', error);
+            console.error('[ALERTAS] ❌ Erro ao carregar alertas:', error);
         });
 }
 

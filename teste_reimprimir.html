@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste Reimprimir</title>
+</head>
+<body>
+    <h1>Teste de Reimpressão</h1>
+    
+    <button onclick="testarReimprimir()">Testar Reimprimir</button>
+    
+    <div id="resultado"></div>
+    
+    <script>
+    function testarReimprimir() {
+        const separacaoLoteId = 'LOTE-20250811-243-093217';
+        const numPedido = 'VCD2521287';
+        
+        console.log('Testando reimprimir:', separacaoLoteId, numPedido);
+        
+        if (!confirm(`Confirma a reimpressão da separação do pedido ${numPedido}?`)) {
+            return;
+        }
+        
+        fetch(`/api/alertas-separacao/reimprimir/${separacaoLoteId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                num_pedido: numPedido
+            })
+        })
+        .then(response => {
+            console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Data recebida:', data);
+            document.getElementById('resultado').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            
+            if (data.success) {
+                // Abrir URL de impressão em nova aba
+                if (data.url_impressao && data.url_impressao !== '#') {
+                    console.log('Abrindo URL:', data.url_impressao);
+                    window.open(data.url_impressao, '_blank');
+                } else {
+                    console.error('URL de impressão inválida:', data.url_impressao);
+                    alert('URL de impressão não encontrada!');
+                }
+                
+                alert(`Separação marcada como reimpressa. ${data.alertas_marcados} alertas processados.`);
+            } else {
+                alert('Erro ao reimprimir: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            document.getElementById('resultado').innerHTML = '<pre>Erro: ' + error + '</pre>';
+            alert('Erro ao processar reimpressão: ' + error);
+        });
+    }
+    </script>
+</body>
+</html>

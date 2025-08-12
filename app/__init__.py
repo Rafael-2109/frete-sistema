@@ -577,6 +577,7 @@ def create_app(config_name=None):
     from app.api.routes import api_bp
     # from app.odoo import odoo_bp  # DESATIVADO - Movido para Carteira & Estoque
     from app.odoo.routes.sincronizacao_integrada import sync_integrada_bp  # REATIVADO - Necessário!
+    from app.odoo.routes.manufatura_routes import manufatura_odoo_bp  # Integração Manufatura/Odoo
     from app.claude_ai import claude_ai_bp
     
     # 🔍 Blueprint de diagnóstico PG
@@ -594,6 +595,7 @@ def create_app(config_name=None):
     from app.estoque.routes import estoque_bp
     from app.producao.routes import producao_bp
     from app.producao.relatorios_bp import relatorios_producao_bp
+    from app.manufatura import manufatura_bp
     from app.permissions.routes import permissions_bp
     from app.permissions.api import permissions_api
     
@@ -631,6 +633,7 @@ def create_app(config_name=None):
     # 🔗 API Odoo Integration - DESATIVADO (funcionalidade integrada em Carteira & Estoque)
     # app.register_blueprint(odoo_bp)  # Movido para Carteira & Estoque
     app.register_blueprint(sync_integrada_bp)  # REATIVADO - Necessário!
+    app.register_blueprint(manufatura_odoo_bp)  # Integração Manufatura/Odoo
     
     # 🤖 Claude AI Integration
     app.register_blueprint(claude_ai_bp)
@@ -668,6 +671,7 @@ def create_app(config_name=None):
     
     app.register_blueprint(producao_bp)
     app.register_blueprint(relatorios_producao_bp)
+    app.register_blueprint(manufatura_bp)
     app.register_blueprint(permissions_bp)
 
     # 🚀 MCP Logistica

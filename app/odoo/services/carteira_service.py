@@ -1127,7 +1127,6 @@ class CarteiraService:
         try:
             from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
             from app import db
-            
             logger.info("🚀 INICIANDO SINCRONIZAÇÃO OPERACIONAL COMPLETA COM GESTÃO INTELIGENTE")
             
             # ============================================================
@@ -1262,144 +1261,85 @@ class CarteiraService:
             logger.info(f"   ➖ {len(itens_removidos)} itens removidos")
             
             # ============================================================
-            # FASE 4: APLICAR ALTERAÇÕES USANDO NOVO SERVIÇO
+            # FASE 3.5: PROCESSAR PEDIDOS ALTERADOS COM NOVO SERVIÇO UNIFICADO
             # ============================================================
             
-            # Importar o novo serviço de atualização
-            from app.carteira.services.separacao_update_service import SeparacaoUpdateService
+            # Importar o novo serviço unificado
+            from app.odoo.services.ajuste_sincronizacao_service import AjusteSincronizacaoService
             
-            # Processar REDUÇÕES
-            if reducoes:
-                logger.info(f"📉 Fase 4: Aplicando {len(reducoes)} reduções...")
+            # Agrupar alterações por pedido
+            pedidos_com_alteracoes = set()
+            
+            # Coletar todos os pedidos que tiveram alterações
+            for reducao in reducoes:
+                pedidos_com_alteracoes.add(reducao['num_pedido'])
+            for aumento in aumentos:
+                pedidos_com_alteracoes.add(aumento['num_pedido'])
+            for num_pedido, _ in itens_removidos:
+                pedidos_com_alteracoes.add(num_pedido)
+            for item in novos_itens:
+                pedidos_com_alteracoes.add(item['num_pedido'])
+            
+            # Processar cada pedido alterado com o novo serviço unificado
+            pedidos_processados = set()
+            alertas_totais = []
+            
+            for num_pedido in pedidos_com_alteracoes:
+                # PROTEÇÃO: Verificar se é pedido Odoo antes de processar
+                if not self.is_pedido_odoo(num_pedido):
+                    logger.warning(f"🛡️ PROTEÇÃO: Ignorando alterações em pedido não-Odoo: {num_pedido}")
+                    continue
                 
-                for idx, reducao in enumerate(reducoes, 1):
-                    try:
-                        # PROTEÇÃO: Verificar se é pedido Odoo antes de aplicar redução
-                        if not self.is_pedido_odoo(reducao['num_pedido']):
-                            logger.warning(f"🛡️ PROTEÇÃO: Ignorando redução em pedido não-Odoo: {reducao['num_pedido']}")
-                            continue
-                            
-                        logger.debug(f"Redução {idx}/{len(reducoes)}: {reducao['num_pedido']}/{reducao['cod_produto']} -{reducao['qtd_reduzida']}")
-                        
-                        # Usar novo serviço que trata TOTAL vs PARCIAL corretamente
-                        resultado = SeparacaoUpdateService.processar_alteracao_pedido(
-                            num_pedido=reducao['num_pedido'],
-                            cod_produto=reducao['cod_produto'],
-                            alteracao_tipo='REDUCAO',
-                            qtd_anterior=reducao['qtd_atual'],
-                            qtd_nova=reducao['qtd_nova'],
-                            motivo="SYNC_ODOO_BATCH"
-                        )
-                        
-                        alteracoes_aplicadas.append({
-                            'tipo': 'REDUCAO',
-                            'pedido': reducao['num_pedido'],
-                            'produto': reducao['cod_produto'],
-                            'quantidade': reducao['qtd_reduzida'],
-                            'de': reducao['qtd_atual'],
-                            'para': reducao['qtd_nova'],
-                            'resultado': resultado
-                        })
-                        
-                        if resultado.get('alertas_gerados'):
-                            logger.warning(f"🚨 {len(resultado['alertas_gerados'])} alertas gerados para separações COTADAS")
-                            
-                    except Exception as e:
-                        logger.error(f"❌ Erro ao aplicar redução {reducao['num_pedido']}/{reducao['cod_produto']}: {e}")
-                        alteracoes_aplicadas.append({
-                            'tipo': 'REDUCAO',
-                            'pedido': reducao['num_pedido'],
-                            'produto': reducao['cod_produto'],
-                            'erro': str(e)
-                        })
-            
-            # ============================================================
-            # FASE 5: APLICAR AUMENTOS
-            # ============================================================
-            if aumentos:
-                logger.info(f"📈 Fase 5: Aplicando {len(aumentos)} aumentos...")
+                logger.info(f"📦 Processando pedido alterado: {num_pedido}")
                 
-                for idx, aumento in enumerate(aumentos, 1):
-                    try:
-                        # PROTEÇÃO: Verificar se é pedido Odoo antes de aplicar aumento
-                        if not self.is_pedido_odoo(aumento['num_pedido']):
-                            logger.warning(f"🛡️ PROTEÇÃO: Ignorando aumento em pedido não-Odoo: {aumento['num_pedido']}")
-                            continue
-                            
-                        logger.debug(f"Aumento {idx}/{len(aumentos)}: {aumento['num_pedido']}/{aumento['cod_produto']} +{aumento['qtd_aumentada']}")
-                        
-                        # Usar novo serviço que trata TOTAL vs PARCIAL corretamente
-                        resultado = SeparacaoUpdateService.processar_alteracao_pedido(
-                            num_pedido=aumento['num_pedido'],
-                            cod_produto=aumento['cod_produto'],
-                            alteracao_tipo='AUMENTO',
-                            qtd_anterior=aumento['qtd_atual'],
-                            qtd_nova=aumento['qtd_nova'],
-                            motivo="SYNC_ODOO_BATCH"
-                        )
-                        
-                        alteracoes_aplicadas.append({
-                            'tipo': 'AUMENTO',
-                            'pedido': aumento['num_pedido'],
-                            'produto': aumento['cod_produto'],
-                            'quantidade': aumento['qtd_aumentada'],
-                            'de': aumento['qtd_atual'],
-                            'para': aumento['qtd_nova'],
-                            'resultado': resultado
-                        })
-                        
-                        if resultado.get('alertas_gerados'):
-                            logger.warning(f"🚨 {len(resultado['alertas_gerados'])} alertas gerados para separações COTADAS")
-                        
-                    except Exception as e:
-                        logger.error(f"❌ Erro ao aplicar aumento {aumento['num_pedido']}/{aumento['cod_produto']}: {e}")
-                        alteracoes_aplicadas.append({
-                            'tipo': 'AUMENTO',
-                            'pedido': aumento['num_pedido'],
-                            'produto': aumento['cod_produto'],
-                            'erro': str(e)
-                        })
-            
-            # ============================================================
-            # FASE 6: TRATAR ITENS REMOVIDOS
-            # ============================================================
-            if itens_removidos:
-                logger.info(f"🗑️ Fase 6: Tratando {len(itens_removidos)} itens removidos...")
+                # Buscar todos os itens do Odoo para este pedido
+                itens_odoo = [item for item in dados_novos if item['num_pedido'] == num_pedido]
                 
-                for chave in itens_removidos:
-                    num_pedido, cod_produto = chave
-                    qtd_atual = carteira_atual[chave]['qtd_saldo']
+                # Processar com o serviço unificado
+                resultado = AjusteSincronizacaoService.processar_pedido_alterado(
+                    num_pedido=num_pedido,
+                    itens_odoo=itens_odoo
+                )
+                
+                if resultado['sucesso']:
+                    logger.info(f"✅ Pedido {num_pedido} processado: {resultado['tipo_processamento']}")
                     
-                    if qtd_atual > 0:
-                        try:
-                            # PROTEÇÃO: Verificar se é pedido Odoo antes de remover
-                            if not self.is_pedido_odoo(num_pedido):
-                                logger.warning(f"🛡️ PROTEÇÃO: Ignorando remoção em pedido não-Odoo: {num_pedido}")
-                                continue
-                                
-                            # Usar novo serviço para tratar remoção
-                            resultado = SeparacaoUpdateService.processar_alteracao_pedido(
-                                num_pedido=num_pedido,
-                                cod_produto=cod_produto,
-                                alteracao_tipo='REMOCAO',
-                                qtd_anterior=qtd_atual,
-                                qtd_nova=0,
-                                motivo="SYNC_ODOO_REMOVED"
-                            )
-                            
-                            alteracoes_aplicadas.append({
-                                'tipo': 'REMOCAO',
-                                'pedido': num_pedido,
-                                'produto': cod_produto,
-                                'quantidade': qtd_atual,
-                                'resultado': resultado
-                            })
-                            
-                            if resultado.get('alertas_gerados'):
-                                logger.warning(f"🚨 {len(resultado['alertas_gerados'])} alertas gerados para separações COTADAS removidas")
-                                
-                        except Exception as e:
-                            logger.error(f"❌ Erro ao remover {num_pedido}/{cod_produto}: {e}")
+                    # Registrar alterações aplicadas
+                    for alteracao in resultado.get('alteracoes_aplicadas', []):
+                        alteracoes_aplicadas.append({
+                            'pedido': num_pedido,
+                            **alteracao
+                        })
+                    
+                    # Coletar alertas gerados
+                    alertas_totais.extend(resultado.get('alertas_gerados', []))
+                    
+                    # Marcar como processado
+                    pedidos_processados.add(num_pedido)
+                    
+                    if resultado.get('alertas_gerados'):
+                        logger.warning(f"🚨 {len(resultado['alertas_gerados'])} alertas gerados para separações COTADAS alteradas")
+                else:
+                    logger.error(f"❌ Erro ao processar pedido {num_pedido}: {resultado.get('erros')}")
+                    alteracoes_aplicadas.append({
+                        'tipo': 'ERRO',
+                        'pedido': num_pedido,
+                        'erros': resultado.get('erros', [])
+                    })
+            
+            # Processar pedidos novos (que não tinham alterações mas são novos)
+            pedidos_novos = set(item['num_pedido'] for item in novos_itens) - pedidos_processados
+            
+            for num_pedido in pedidos_novos:
+                if not self.is_pedido_odoo(num_pedido):
+                    logger.warning(f"🛡️ PROTEÇÃO: Ignorando pedido novo não-Odoo: {num_pedido}")
+                    continue
+                    
+                logger.info(f"➕ Processando pedido novo: {num_pedido}")
+            
+            # Resumo dos alertas gerados  
+            if alertas_totais:
+                logger.warning(f"🚨 Total de {len(alertas_totais)} alertas gerados para separações COTADAS alteradas")
             
             # ============================================================
             # FASE 7: ATUALIZAR CARTEIRA (Delete + Insert)

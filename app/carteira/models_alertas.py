@@ -125,10 +125,18 @@ class AlertaSeparacaoCotada(db.Model):
             ).first()
             
             if pedido:
-                # Buscar o embarque
+                # Buscar o embarque - IMPORTANTE: só embarques ATIVOS!
                 embarque_item = EmbarqueItem.query.filter_by(
-                    separacao_lote_id=alerta.separacao_lote_id
+                    separacao_lote_id=alerta.separacao_lote_id,
+                    status='ativo'  # Ignorar embarques cancelados
                 ).first()
+                
+                if not embarque_item:
+                    # Se não achou pelo lote, tentar pelo pedido (caso lote tenha sido substituído)
+                    embarque_item = EmbarqueItem.query.filter_by(
+                        pedido=alerta.num_pedido,
+                        status='ativo'
+                    ).first()
                 
                 if embarque_item:
                     embarque = Embarque.query.get(embarque_item.embarque_id)
@@ -141,7 +149,7 @@ class AlertaSeparacaoCotada(db.Model):
                                 'embarque_id': embarque.id,
                                 'embarque_numero': embarque_num,
                                 'data_embarque': embarque.data_embarque,
-                                'transportadora': embarque.transportadora.nome if embarque.transportadora else 'N/A',
+                                'transportadora': embarque.transportadora.razao_social if embarque.transportadora and hasattr(embarque.transportadora, 'razao_social') else 'N/A',
                                 'pedidos': {}
                             }
                         
@@ -190,8 +198,18 @@ class AlertaSeparacaoCotada(db.Model):
     def contar_alertas_pendentes(cls):
         """
         Retorna a quantidade de alertas pendentes de reimpressão
+        que têm pedido e embarque ativo (que serão exibidos)
         """
-        return cls.query.filter_by(reimpresso=False).count()
+        # Usar o mesmo método que busca os alertas para garantir consistência
+        alertas_agrupados = cls.buscar_alertas_pendentes()
+        
+        # Contar total de alertas em todos os embarques
+        total = 0
+        for embarque_info in alertas_agrupados.values():
+            for pedido_info in embarque_info['pedidos'].values():
+                total += len(pedido_info['itens'])
+        
+        return total
     
     def __repr__(self):
         return f'<AlertaSeparacaoCotada {self.num_pedido}/{self.cod_produto} - {self.tipo_alteracao}>'

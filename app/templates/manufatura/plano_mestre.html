@@ -1,0 +1,748 @@
+{% extends "layout/layout.html" %}
+{% set active_page = "manufatura" %}
+
+{% block title %}Plano Mestre de Produção - PCP{% endblock %}
+
+{% block head %}
+<style>
+    .card-metric {
+        border-left: 4px solid;
+        transition: transform 0.2s;
+    }
+    .card-metric:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .card-metric.critical {
+        border-left-color: #dc3545;
+    }
+    .card-metric.warning {
+        border-left-color: #ffc107;
+    }
+    .card-metric.normal {
+        border-left-color: #28a745;
+    }
+    .status-badge {
+        font-size: 0.85rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+    }
+    .progress-bar-animated {
+        animation: progress 2s ease-in-out infinite;
+    }
+    @keyframes progress {
+        0% { width: 0%; }
+        100% { width: var(--progress-width); }
+    }
+    .table-responsive {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    .sticky-header th {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 10;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2 class="h3 mb-0">
+                <i class="bi bi-calendar-check"></i> Plano Mestre de Produção
+            </h2>
+            <p class="text-muted mb-0">Visão consolidada do planejamento de produção</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <button class="btn btn-primary" onclick="gerarPlanoMestre()">
+                <i class="bi bi-arrow-clockwise"></i> Gerar Plano
+            </button>
+            <button class="btn btn-success" onclick="exportarPlano()">
+                <i class="bi bi-file-excel"></i> Exportar
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form id="formFiltros" class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">Mês</label>
+                    <select class="form-select" id="filtroMes" name="mes">
+                        <option value="">Todos</option>
+                        {% for i in range(1, 13) %}
+                        <option value="{{ i }}" {% if i == mes_atual %}selected{% endif %}>
+                            {{ i|month_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Ano</label>
+                    <select class="form-select" id="filtroAno" name="ano">
+                        {% for ano in anos_disponiveis %}
+                        <option value="{{ ano }}" {% if ano == ano_atual %}selected{% endif %}>
+                            {{ ano }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Produto</label>
+                    <input type="text" class="form-control" id="filtroProduto" 
+                           placeholder="Código ou nome do produto">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Tipo Produção</label>
+                    <select class="form-select" id="filtroTipo" name="tipo">
+                        <option value="">Todos</option>
+                        <option value="MTS">MTS - Estoque</option>
+                        <option value="MTO">MTO - Sob Encomenda</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="filtroStatus" name="status">
+                        <option value="">Todos</option>
+                        <option value="CRÍTICO">Crítico</option>
+                        <option value="ATENÇÃO">Atenção</option>
+                        <option value="NORMAL">Normal</option>
+                    </select>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="button" class="btn btn-primary w-100" onclick="aplicarFiltros()">
+                        <i class="bi bi-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Cards de Métricas -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card card-metric critical">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Produtos Críticos</h6>
+                    <h3 class="mb-0 text-danger" id="metricaCriticos">0</h3>
+                    <small class="text-muted">Abaixo do estoque de segurança</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card card-metric warning">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Em Atenção</h6>
+                    <h3 class="mb-0 text-warning" id="metricaAtencao">0</h3>
+                    <small class="text-muted">Próximo ao limite mínimo</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card card-metric normal">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Produção Programada</h6>
+                    <h3 class="mb-0 text-success" id="metricaProgramada">0</h3>
+                    <small class="text-muted">Unidades no período</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card card-metric normal">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Taxa Atendimento</h6>
+                    <h3 class="mb-0" id="metricaAtendimento">0%</h3>
+                    <small class="text-muted">Demanda coberta</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela Principal do Plano Mestre -->
+    <div class="card">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                <i class="bi bi-table"></i> Plano de Produção Detalhado
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 sticky-header">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Código</th>
+                            <th>Produto</th>
+                            <th>Tipo</th>
+                            <th class="text-end">Demanda Prevista</th>
+                            <th class="text-end">Estoque Atual</th>
+                            <th class="text-end">Estoque Segurança</th>
+                            <th class="text-end">Produção Programada</th>
+                            <th class="text-end">Ordens Abertas</th>
+                            <th class="text-end">Reposição Sugerida</th>
+                            <th class="text-center">Dias Cobertura</th>
+                            <th class="text-center">Prioridade</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaPlanoMestre">
+                        {% for item in plano_mestre %}
+                        <tr data-produto="{{ item.cod_produto }}" 
+                            class="{% if item.status_estoque == 'CRÍTICO' %}table-danger{% elif item.status_estoque == 'ATENÇÃO' %}table-warning{% endif %}">
+                            <td>
+                                <strong>{{ item.cod_produto }}</strong>
+                            </td>
+                            <td>
+                                {{ item.nome_produto }}
+                                {% if item.ruptura_prevista %}
+                                <span class="badge bg-danger ms-1">
+                                    <i class="bi bi-exclamation-triangle"></i> Ruptura
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ 'info' if item.disparo_producao == 'MTO' else 'secondary' }}">
+                                    {{ item.disparo_producao or 'MTS' }}
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                {{ "{:,.0f}".format(item.qtd_demanda_prevista or 0) }}
+                            </td>
+                            <td class="text-end">
+                                <span class="{% if item.qtd_estoque < item.qtd_estoque_seguranca %}text-danger fw-bold{% endif %}">
+                                    {{ "{:,.0f}".format(item.qtd_estoque or 0) }}
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                {{ "{:,.0f}".format(item.qtd_estoque_seguranca or 0) }}
+                            </td>
+                            <td class="text-end">
+                                <span class="text-primary fw-bold">
+                                    {{ "{:,.0f}".format(item.qtd_producao_programada or 0) }}
+                                </span>
+                                {% if item.qtd_producao_programada_atual %}
+                                <br><small class="text-muted">
+                                    Real: {{ "{:,.0f}".format(item.qtd_producao_programada_atual) }}
+                                </small>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {{ "{:,.0f}".format(item.qtd_ordens_abertas or 0) }}
+                            </td>
+                            <td class="text-end">
+                                {% if item.qtd_reposicao_sugerida > 0 %}
+                                <span class="text-success fw-bold">
+                                    {{ "{:,.0f}".format(item.qtd_reposicao_sugerida) }}
+                                </span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.dias_cobertura %}
+                                    {% if item.dias_cobertura < 7 %}
+                                        <span class="badge bg-danger">{{ item.dias_cobertura }}d</span>
+                                    {% elif item.dias_cobertura < 15 %}
+                                        <span class="badge bg-warning">{{ item.dias_cobertura }}d</span>
+                                    {% else %}
+                                        <span class="badge bg-success">{{ item.dias_cobertura }}d</span>
+                                    {% endif %}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% set prioridade = item.prioridade_producao or 5 %}
+                                {% if prioridade <= 3 %}
+                                    <span class="badge bg-danger">Alta ({{ prioridade }})</span>
+                                {% elif prioridade <= 7 %}
+                                    <span class="badge bg-warning">Média ({{ prioridade }})</span>
+                                {% else %}
+                                    <span class="badge bg-info">Baixa ({{ prioridade }})</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.status_estoque == 'CRÍTICO' %}
+                                    <span class="badge bg-danger">CRÍTICO</span>
+                                {% elif item.status_estoque == 'ATENÇÃO' %}
+                                    <span class="badge bg-warning">ATENÇÃO</span>
+                                {% else %}
+                                    <span class="badge bg-success">NORMAL</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" 
+                                            onclick="gerarOrdemProducao('{{ item.cod_produto }}', {{ item.qtd_reposicao_sugerida or 0 }})"
+                                            title="Gerar Ordem de Produção">
+                                        <i class="bi bi-plus-circle"></i>
+                                    </button>
+                                    <button class="btn btn-outline-info" 
+                                            onclick="verDetalhes('{{ item.cod_produto }}')"
+                                            title="Ver Detalhes">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-warning"
+                                            onclick="editarPlano('{{ item.id }}')"
+                                            title="Editar">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Cobertura de Estoque</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="graficoCoberturaEstoque"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Capacidade vs Demanda</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="graficoCapacidadeDemanda"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Gerar Ordem -->
+<div class="modal fade" id="modalGerarOrdem" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Gerar Ordem de Produção</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formGerarOrdem">
+                    <input type="hidden" id="ordemCodProduto">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Produto</label>
+                            <input type="text" class="form-control" id="ordemNomeProduto" readonly>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Quantidade</label>
+                            <input type="number" class="form-control" id="ordemQuantidade" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Data Início</label>
+                            <input type="date" class="form-control" id="ordemDataInicio" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Data Fim</label>
+                            <input type="date" class="form-control" id="ordemDataFim" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Linha de Produção</label>
+                            <select class="form-select" id="ordemLinha" required>
+                                <option value="">Selecione...</option>
+                                {% for linha in linhas_producao %}
+                                <option value="{{ linha }}">{{ linha }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Turno</label>
+                            <select class="form-select" id="ordemTurno">
+                                <option value="">Selecione...</option>
+                                <option value="Manhã">Manhã</option>
+                                <option value="Tarde">Tarde</option>
+                                <option value="Noite">Noite</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="confirmarGerarOrdem()">
+                    <i class="bi bi-check-circle"></i> Gerar Ordem
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Variáveis globais
+let planoMestre = [];
+let graficoCoberturaEstoque = null;
+let graficoCapacidadeDemanda = null;
+
+// Inicialização
+document.addEventListener('DOMContentLoaded', function() {
+    carregarPlanoMestre();
+    inicializarGraficos();
+});
+
+// Carregar Plano Mestre
+function carregarPlanoMestre() {
+    const mes = document.getElementById('filtroMes').value;
+    const ano = document.getElementById('filtroAno').value;
+    
+    fetch(`/manufatura/api/plano-mestre?mes=${mes}&ano=${ano}`)
+        .then(response => response.json())
+        .then(data => {
+            planoMestre = data.plano;
+            atualizarTabela(data.plano);
+            atualizarMetricas(data.metricas);
+            atualizarGraficos(data);
+        })
+        .catch(error => {
+            console.error('Erro ao carregar plano mestre:', error);
+            showNotification('Erro ao carregar plano mestre', 'error');
+        });
+}
+
+// Aplicar Filtros
+function aplicarFiltros() {
+    const produto = document.getElementById('filtroProduto').value.toLowerCase();
+    const tipo = document.getElementById('filtroTipo').value;
+    const status = document.getElementById('filtroStatus').value;
+    
+    const filtrados = planoMestre.filter(item => {
+        let match = true;
+        
+        if (produto) {
+            match = match && (
+                item.cod_produto.toLowerCase().includes(produto) ||
+                item.nome_produto.toLowerCase().includes(produto)
+            );
+        }
+        
+        if (tipo) {
+            match = match && item.disparo_producao === tipo;
+        }
+        
+        if (status) {
+            match = match && item.status_estoque === status;
+        }
+        
+        return match;
+    });
+    
+    atualizarTabela(filtrados);
+}
+
+// Atualizar Tabela
+function atualizarTabela(dados) {
+    const tbody = document.getElementById('tabelaPlanoMestre');
+    tbody.innerHTML = '';
+    
+    dados.forEach(item => {
+        const tr = document.createElement('tr');
+        
+        // Aplicar classe de status
+        if (item.status_estoque === 'CRÍTICO') {
+            tr.classList.add('table-danger');
+        } else if (item.status_estoque === 'ATENÇÃO') {
+            tr.classList.add('table-warning');
+        }
+        
+        tr.innerHTML = `
+            <td><strong>${item.cod_produto}</strong></td>
+            <td>
+                ${item.nome_produto}
+                ${item.ruptura_prevista ? '<span class="badge bg-danger ms-1"><i class="bi bi-exclamation-triangle"></i> Ruptura</span>' : ''}
+            </td>
+            <td>
+                <span class="badge bg-${item.disparo_producao === 'MTO' ? 'info' : 'secondary'}">
+                    ${item.disparo_producao || 'MTS'}
+                </span>
+            </td>
+            <td class="text-end">${formatNumber(item.qtd_demanda_prevista || 0)}</td>
+            <td class="text-end">
+                <span class="${item.qtd_estoque < item.qtd_estoque_seguranca ? 'text-danger fw-bold' : ''}">
+                    ${formatNumber(item.qtd_estoque || 0)}
+                </span>
+            </td>
+            <td class="text-end">${formatNumber(item.qtd_estoque_seguranca || 0)}</td>
+            <td class="text-end">
+                <span class="text-primary fw-bold">${formatNumber(item.qtd_producao_programada || 0)}</span>
+            </td>
+            <td class="text-end">${formatNumber(item.qtd_ordens_abertas || 0)}</td>
+            <td class="text-end">
+                ${item.qtd_reposicao_sugerida > 0 ? 
+                    `<span class="text-success fw-bold">${formatNumber(item.qtd_reposicao_sugerida)}</span>` : 
+                    '-'}
+            </td>
+            <td class="text-center">${formatDiasCobertura(item.dias_cobertura)}</td>
+            <td class="text-center">${formatPrioridade(item.prioridade_producao)}</td>
+            <td class="text-center">${formatStatus(item.status_estoque)}</td>
+            <td class="text-center">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" 
+                            onclick="gerarOrdemProducao('${item.cod_produto}', ${item.qtd_reposicao_sugerida || 0})"
+                            title="Gerar Ordem">
+                        <i class="bi bi-plus-circle"></i>
+                    </button>
+                    <button class="btn btn-outline-info" 
+                            onclick="verDetalhes('${item.cod_produto}')"
+                            title="Ver Detalhes">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        
+        tbody.appendChild(tr);
+    });
+}
+
+// Atualizar Métricas
+function atualizarMetricas(metricas) {
+    document.getElementById('metricaCriticos').textContent = metricas.criticos || 0;
+    document.getElementById('metricaAtencao').textContent = metricas.atencao || 0;
+    document.getElementById('metricaProgramada').textContent = formatNumber(metricas.producao_programada || 0);
+    document.getElementById('metricaAtendimento').textContent = (metricas.taxa_atendimento || 0) + '%';
+}
+
+// Gerar Ordem de Produção
+function gerarOrdemProducao(codProduto, qtdSugerida) {
+    const produto = planoMestre.find(p => p.cod_produto === codProduto);
+    
+    document.getElementById('ordemCodProduto').value = codProduto;
+    document.getElementById('ordemNomeProduto').value = produto.nome_produto;
+    document.getElementById('ordemQuantidade').value = qtdSugerida || produto.qtd_reposicao_sugerida || 0;
+    
+    // Sugerir datas baseadas no lead time
+    const hoje = new Date();
+    const dataFim = new Date(hoje.getTime() + 7 * 24 * 60 * 60 * 1000);
+    
+    document.getElementById('ordemDataInicio').value = hoje.toISOString().split('T')[0];
+    document.getElementById('ordemDataFim').value = dataFim.toISOString().split('T')[0];
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalGerarOrdem'));
+    modal.show();
+}
+
+// Confirmar Gerar Ordem
+function confirmarGerarOrdem() {
+    const dados = {
+        cod_produto: document.getElementById('ordemCodProduto').value,
+        qtd_planejada: document.getElementById('ordemQuantidade').value,
+        data_inicio_prevista: document.getElementById('ordemDataInicio').value,
+        data_fim_prevista: document.getElementById('ordemDataFim').value,
+        linha_producao: document.getElementById('ordemLinha').value,
+        turno: document.getElementById('ordemTurno').value,
+        origem_ordem: 'Plano Mestre'
+    };
+    
+    fetch('/manufatura/api/ordens-producao', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(dados)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Ordem de produção criada com sucesso!', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('modalGerarOrdem')).hide();
+            carregarPlanoMestre();
+        } else {
+            showNotification(data.message || 'Erro ao criar ordem', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showNotification('Erro ao criar ordem de produção', 'error');
+    });
+}
+
+// Gerar Plano Mestre
+function gerarPlanoMestre() {
+    const mes = document.getElementById('filtroMes').value;
+    const ano = document.getElementById('filtroAno').value;
+    
+    if (!mes || !ano) {
+        showNotification('Selecione mês e ano', 'warning');
+        return;
+    }
+    
+    if (!confirm('Gerar plano mestre de produção para ' + mes + '/' + ano + '?')) {
+        return;
+    }
+    
+    fetch('/manufatura/api/plano-mestre/gerar', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ mes, ano })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Plano mestre gerado com sucesso!', 'success');
+            carregarPlanoMestre();
+        } else {
+            showNotification(data.message || 'Erro ao gerar plano', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showNotification('Erro ao gerar plano mestre', 'error');
+    });
+}
+
+// Inicializar Gráficos
+function inicializarGraficos() {
+    // Gráfico de Cobertura de Estoque
+    const ctxCobertura = document.getElementById('graficoCoberturaEstoque').getContext('2d');
+    graficoCoberturaEstoque = new Chart(ctxCobertura, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Dias de Cobertura',
+                data: [],
+                backgroundColor: [],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Gráfico Capacidade vs Demanda
+    const ctxCapacidade = document.getElementById('graficoCapacidadeDemanda').getContext('2d');
+    graficoCapacidadeDemanda = new Chart(ctxCapacidade, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Demanda',
+                data: [],
+                borderColor: 'rgb(255, 99, 132)',
+                tension: 0.1
+            }, {
+                label: 'Capacidade',
+                data: [],
+                borderColor: 'rgb(54, 162, 235)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+// Atualizar Gráficos
+function atualizarGraficos(data) {
+    if (data.graficos) {
+        // Atualizar gráfico de cobertura
+        if (data.graficos.cobertura) {
+            graficoCoberturaEstoque.data.labels = data.graficos.cobertura.labels;
+            graficoCoberturaEstoque.data.datasets[0].data = data.graficos.cobertura.valores;
+            graficoCoberturaEstoque.data.datasets[0].backgroundColor = data.graficos.cobertura.cores;
+            graficoCoberturaEstoque.update();
+        }
+        
+        // Atualizar gráfico de capacidade
+        if (data.graficos.capacidade) {
+            graficoCapacidadeDemanda.data.labels = data.graficos.capacidade.labels;
+            graficoCapacidadeDemanda.data.datasets[0].data = data.graficos.capacidade.demanda;
+            graficoCapacidadeDemanda.data.datasets[1].data = data.graficos.capacidade.capacidade;
+            graficoCapacidadeDemanda.update();
+        }
+    }
+}
+
+// Funções auxiliares
+function formatNumber(num) {
+    return new Intl.NumberFormat('pt-BR').format(num);
+}
+
+function formatDiasCobertura(dias) {
+    if (!dias) return '-';
+    
+    let badgeClass = 'bg-success';
+    if (dias < 7) badgeClass = 'bg-danger';
+    else if (dias < 15) badgeClass = 'bg-warning';
+    
+    return `<span class="badge ${badgeClass}">${dias}d</span>`;
+}
+
+function formatPrioridade(prioridade) {
+    const p = prioridade || 5;
+    let badgeClass = 'bg-info';
+    let texto = 'Baixa';
+    
+    if (p <= 3) {
+        badgeClass = 'bg-danger';
+        texto = 'Alta';
+    } else if (p <= 7) {
+        badgeClass = 'bg-warning';
+        texto = 'Média';
+    }
+    
+    return `<span class="badge ${badgeClass}">${texto} (${p})</span>`;
+}
+
+function formatStatus(status) {
+    const classes = {
+        'CRÍTICO': 'bg-danger',
+        'ATENÇÃO': 'bg-warning',
+        'NORMAL': 'bg-success'
+    };
+    
+    return `<span class="badge ${classes[status] || 'bg-secondary'}">${status}</span>`;
+}
+
+function showNotification(message, type) {
+    // Implementar notificação toast ou alert
+    alert(message);
+}
+
+function verDetalhes(codProduto) {
+    window.location.href = `/manufatura/produto/${codProduto}/detalhes`;
+}
+
+function exportarPlano() {
+    const mes = document.getElementById('filtroMes').value;
+    const ano = document.getElementById('filtroAno').value;
+    window.location.href = `/manufatura/api/plano-mestre/exportar?mes=${mes}&ano=${ano}`;
+}
+</script>
+{% endblock %}

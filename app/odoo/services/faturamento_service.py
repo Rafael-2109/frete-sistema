@@ -511,7 +511,12 @@ class FaturamentoService:
                         
                     else:
                         # ➕ REGISTRO NÃO EXISTE → INSERT
-                        novo_registro = FaturamentoProduto(**item_mapeado)
+                        # Remover campo status_odoo_raw que não existe no modelo
+                        item_para_inserir = item_mapeado.copy()
+                        if 'status_odoo_raw' in item_para_inserir:
+                            del item_para_inserir['status_odoo_raw']
+                        
+                        novo_registro = FaturamentoProduto(**item_para_inserir)
                         novo_registro.created_by = 'Sistema Odoo'
                         novo_registro.status_nf = status_odoo
                         

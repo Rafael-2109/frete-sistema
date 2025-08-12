@@ -1,0 +1,49 @@
+<!-- Script independente para injetar alertas - adicionar no topo de lista_pedidos.html -->
+<div id="alertasContainer"></div>
+
+<script>
+(function() {
+    // Função auto-executável isolada de qualquer erro
+    console.log('[ALERTA-INJECT] Script de alertas iniciado');
+    
+    // Executar imediatamente
+    function carregarAlertas() {
+        console.log('[ALERTA-INJECT] Tentando carregar alertas...');
+        
+        var container = document.getElementById('alertasContainer');
+        if (!container) {
+            console.error('[ALERTA-INJECT] Container não encontrado!');
+            return;
+        }
+        
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/alertas-separacao/card-html', true);
+        
+        xhr.onload = function() {
+            console.log('[ALERTA-INJECT] Status:', xhr.status);
+            
+            if (xhr.status === 200) {
+                console.log('[ALERTA-INJECT] HTML recebido:', xhr.responseText.length, 'caracteres');
+                container.innerHTML = xhr.responseText;
+                console.log('[ALERTA-INJECT] ✅ Alertas carregados!');
+            } else if (xhr.status === 204) {
+                console.log('[ALERTA-INJECT] Sem alertas (204)');
+            } else {
+                console.error('[ALERTA-INJECT] Erro:', xhr.status);
+            }
+        };
+        
+        xhr.onerror = function() {
+            console.error('[ALERTA-INJECT] Erro de rede');
+        };
+        
+        xhr.send();
+    }
+    
+    // Executar imediatamente
+    carregarAlertas();
+    
+    // E também após 1 segundo como backup
+    setTimeout(carregarAlertas, 1000);
+})();
+</script>

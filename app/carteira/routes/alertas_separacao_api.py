@@ -5,13 +5,11 @@ API para Alertas de Separações Cotadas Alteradas
 Endpoints para gerenciar alertas e reimpressões de separações.
 """
 
-from flask import Blueprint, jsonify, request, render_template, redirect, url_for, flash
+from flask import Blueprint, jsonify, request, url_for
 from flask_login import login_required, current_user
-from app import db
 from app.carteira.models_alertas import AlertaSeparacaoCotada
-from app.separacao.models import Separacao
-from app.pedidos.models import Pedido
 import logging
+from app import db
 
 logger = logging.getLogger(__name__)
 
@@ -61,15 +59,26 @@ def reimprimir_separacao(separacao_lote_id):
         qtd_marcados = AlertaSeparacaoCotada.marcar_como_reimpresso(
             num_pedido=num_pedido,
             separacao_lote_id=separacao_lote_id,
-            usuario=current_user.nome if current_user else 'Sistema'
+            usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
         )
         
         logger.info(f"✅ {qtd_marcados} alertas marcados como reimpresos para {num_pedido}/{separacao_lote_id}")
         
-        # Retornar URL para impressão
-        url_impressao = url_for('separacao.imprimir_separacao', 
-                               separacao_lote_id=separacao_lote_id,
-                               _external=True)
+        # Retornar URL para impressão - buscar embarque_id primeiro
+        from app.embarques.models import EmbarqueItem
+        embarque_item = EmbarqueItem.query.filter_by(
+            separacao_lote_id=separacao_lote_id,
+            status='ativo'
+        ).first()
+        
+        if embarque_item:
+            url_impressao = url_for('embarques.imprimir_separacao', 
+                                   embarque_id=embarque_item.embarque_id,
+                                   separacao_lote_id=separacao_lote_id,
+                                   _external=True)
+        else:
+            # Fallback caso não encontre o embarque
+            url_impressao = '#'
         
         return jsonify({
             'success': True,
@@ -126,44 +135,52 @@ def get_card_alertas_html():
                             <div id="collapse{idx}" class="accordion-collapse collapse" 
                                  data-bs-parent="#accordionAlertas">
                                 <div class="accordion-body">
-                                    <table class="table table-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>Pedido</th>
-                                                <th>Cliente</th>
-                                                <th>Produto</th>
-                                                <th>Alteração</th>
-                                                <th>Qtd Anterior</th>
-                                                <th>Qtd Nova</th>
-                                                <th>Ação</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
             '''
             
+            # Agrupar por pedido para ter um único botão por pedido
             for num_pedido, pedido_info in embarque_info['pedidos'].items():
+                html += f'''
+                                    <div class="mb-3 border rounded p-2">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div>
+                                                <strong>Pedido: {num_pedido}</strong><br>
+                                                <small class="text-muted">Cliente: {pedido_info.get('cliente', 'N/A')}</small>
+                                            </div>
+                                            <button class="btn btn-sm btn-primary" 
+                                                    onclick="reimprimirSeparacao('{pedido_info['separacao_lote_id']}', '{num_pedido}')">
+                                                <i class="fas fa-print"></i> Reimprimir Separação
+                                            </button>
+                                        </div>
+                                        <table class="table table-sm mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Produto</th>
+                                                    <th>Alteração</th>
+                                                    <th>Qtd Anterior</th>
+                                                    <th>Qtd Nova</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                '''
+                
                 for item in pedido_info['itens']:
                     tipo_badge = 'danger' if item['tipo_alteracao'] == 'REMOCAO' else 'warning'
                     html += f'''
-                                            <tr>
-                                                <td>{num_pedido}</td>
-                                                <td>{pedido_info.get('cliente', 'N/A')}</td>
-                                                <td>{item['cod_produto']}<br><small>{item.get('nome_produto', '')}</small></td>
-                                                <td><span class="badge bg-{tipo_badge}">{item['tipo_alteracao']}</span></td>
-                                                <td>{item['qtd_anterior']:.2f}</td>
-                                                <td>{item['qtd_nova']:.2f}</td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-primary" 
-                                                            onclick="reimprimirSeparacao('{pedido_info['separacao_lote_id']}', '{num_pedido}')">
-                                                        <i class="fas fa-print"></i> Reimprimir
-                                                    </button>
-                                                </td>
-                                            </tr>
+                                                <tr>
+                                                    <td>{item['cod_produto']}<br><small class="text-muted">{item.get('nome_produto', '')}</small></td>
+                                                    <td><span class="badge bg-{tipo_badge}">{item['tipo_alteracao']}</span></td>
+                                                    <td>{item['qtd_anterior']:.2f}</td>
+                                                    <td>{item['qtd_nova']:.2f}</td>
+                                                </tr>
                     '''
+                
+                html += '''
+                                            </tbody>
+                                        </table>
+                                    </div>
+                '''
             
             html += '''
-                                        </tbody>
-                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -175,44 +192,6 @@ def get_card_alertas_html():
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         </div>
-        
-        <script>
-        function reimprimirSeparacao(separacaoLoteId, numPedido) {
-            if (!confirm(`Confirma a reimpressão da separação do pedido ${numPedido}?`)) {
-                return;
-            }
-            
-            fetch(`/api/alertas-separacao/reimprimir/${separacaoLoteId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    num_pedido: numPedido
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Abrir URL de impressão em nova aba
-                    window.open(data.url_impressao, '_blank');
-                    
-                    // Recarregar a página após 2 segundos
-                    setTimeout(() => {
-                        location.reload();
-                    }, 2000);
-                    
-                    alert(`Separação marcada como reimpressa. ${data.alertas_marcados} alertas processados.`);
-                } else {
-                    alert('Erro ao reimprimir: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Erro:', error);
-                alert('Erro ao processar reimpressão');
-            });
-        }
-        </script>
         '''
         
         return html

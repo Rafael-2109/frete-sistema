@@ -1,0 +1,6 @@
+✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!
+✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!
+✅ Tipos PostgreSQL registrados ANTES do SQLAlchemy (solução definitiva)
+✅ Tipos PostgreSQL registrados com sucesso (solução definitiva)
+✅ Módulo pg_types_config também importado
+✅ [MODELS] Tipos PostgreSQL registrados em estoque/models.py
