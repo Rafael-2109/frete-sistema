@@ -101,32 +101,48 @@
           <tbody>
             {% for item in alertas %}
             <tr class="{% if item.is_orfao %}table-danger{% endif %}">
-              <td>{{ item.alerta.id }}</td>
-              <td>{{ item.alerta.data_alerta.strftime('%d/%m/%Y %H:%M') }}</td>
-              <td>{{ item.alerta.separacao_lote_id }}</td>
-              <td>{{ item.alerta.num_pedido }}</td>
+              <td>{{ item.alerta.id if item.alerta else '-' }}</td>
+              <td>{{ item.alerta.data_alerta.strftime('%d/%m/%Y %H:%M') if item.alerta and item.alerta.data_alerta else '-' }}</td>
+              <td>{{ item.alerta.separacao_lote_id if item.alerta else '-' }}</td>
+              <td>{{ item.alerta.num_pedido if item.alerta else '-' }}</td>
               <td>
                 <small>
-                  {{ item.alerta.cod_produto }}<br>
-                  {{ item.alerta.nome_produto[:30] }}...
+                  {% if item.alerta %}
+                    {{ item.alerta.cod_produto if item.alerta.cod_produto else '-' }}<br>
+                    {% if item.alerta.nome_produto %}
+                      {{ item.alerta.nome_produto[:30] }}...
+                    {% else %}
+                      -
+                    {% endif %}
+                  {% else %}
+                    -
+                  {% endif %}
                 </small>
               </td>
               <td>
-                {% if item.alerta.tipo_alteracao == 'alteracao_quantidade' %}
-                  <span class="badge bg-info">Quantidade</span>
-                {% elif item.alerta.tipo_alteracao == 'alteracao_data' %}
-                  <span class="badge bg-warning">Data</span>
-                {% elif item.alerta.tipo_alteracao == 'cancelamento' %}
-                  <span class="badge bg-danger">Cancelamento</span>
+                {% if item.alerta %}
+                  {% if item.alerta.tipo_alteracao == 'alteracao_quantidade' %}
+                    <span class="badge bg-info">Quantidade</span>
+                  {% elif item.alerta.tipo_alteracao == 'alteracao_data' %}
+                    <span class="badge bg-warning">Data</span>
+                  {% elif item.alerta.tipo_alteracao == 'cancelamento' %}
+                    <span class="badge bg-danger">Cancelamento</span>
+                  {% else %}
+                    <span class="badge bg-secondary">{{ item.alerta.tipo_alteracao if item.alerta.tipo_alteracao else '-' }}</span>
+                  {% endif %}
                 {% else %}
-                  <span class="badge bg-secondary">{{ item.alerta.tipo_alteracao }}</span>
+                  <span class="badge bg-secondary">-</span>
                 {% endif %}
               </td>
               <td>
-                {% if item.alerta.tipo_alteracao == 'alteracao_quantidade' %}
-                  {{ item.alerta.qtd_anterior }} → {{ item.alerta.qtd_nova }}
-                {% elif item.alerta.tipo_alteracao == 'alteracao_data' %}
-                  {{ item.alerta.data_anterior }} → {{ item.alerta.data_nova }}
+                {% if item.alerta %}
+                  {% if item.alerta.tipo_alteracao == 'alteracao_quantidade' %}
+                    {{ item.alerta.qtd_anterior if item.alerta.qtd_anterior else '-' }} → {{ item.alerta.qtd_nova if item.alerta.qtd_nova else '-' }}
+                  {% elif item.alerta.tipo_alteracao == 'alteracao_data' %}
+                    {{ item.alerta.data_anterior if item.alerta.data_anterior else '-' }} → {{ item.alerta.data_nova if item.alerta.data_nova else '-' }}
+                  {% else %}
+                    -
+                  {% endif %}
                 {% else %}
                   -
                 {% endif %}
@@ -146,14 +162,18 @@
                 {% endif %}
               </td>
               <td>
-                {% if item.alerta.reimpresso %}
-                  <span class="badge bg-success">Reimpresso</span>
+                {% if item.alerta %}
+                  {% if item.alerta.reimpresso %}
+                    <span class="badge bg-success">Reimpresso</span>
+                  {% else %}
+                    <span class="badge bg-warning">Pendente</span>
+                  {% endif %}
                 {% else %}
-                  <span class="badge bg-warning">Pendente</span>
+                  <span class="badge bg-secondary">-</span>
                 {% endif %}
               </td>
               <td>
-                {% if not item.alerta.reimpresso %}
+                {% if item.alerta and not item.alerta.reimpresso %}
                   <form method="POST" action="{{ url_for('carteira.alertas_visualizacao.marcar_reimpresso', alerta_id=item.alerta.id) }}" style="display: inline;">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-success" title="Marcar como reimpresso">
