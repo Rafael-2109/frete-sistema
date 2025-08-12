@@ -498,6 +498,13 @@ class WorkspaceMontagem {
             return;
         }
 
+        // Verificar se os dados dos produtos foram carregados
+        if (this.dadosProdutos.size === 0) {
+            console.warn('⚠️ dadosProdutos está vazio. Tentando recarregar...');
+            // Tentar coletar dados dos produtos da tabela diretamente
+            await this.coletarDadosProdutosDaTabela();
+        }
+
         try {
             const produtosParaAdicionar = [];
 
@@ -507,7 +514,21 @@ class WorkspaceMontagem {
                 const inputQtd = document.querySelector(`.qtd-editavel[data-produto="${codProduto}"]`);
                 const quantidade = inputQtd ? parseInt(inputQtd.value) : 0;
 
-                if (produtoData && quantidade > 0) {
+                // Se não encontrar em dadosProdutos, tentar coletar da tabela
+                if (!produtoData) {
+                    console.warn(`⚠️ Produto ${codProduto} não encontrado em dadosProdutos. Tentando coletar da tabela...`);
+                    const row = document.querySelector(`tr[data-produto="${codProduto}"]`);
+                    if (row) {
+                        const nomeProduto = row.querySelector('.nome-produto')?.textContent || codProduto;
+                        if (quantidade > 0) {
+                            produtosParaAdicionar.push({
+                                codProduto,
+                                qtdPedido: quantidade,
+                                nomeProduto: nomeProduto
+                            });
+                        }
+                    }
+                } else if (quantidade > 0) {
                     produtosParaAdicionar.push({
                         codProduto,
                         qtdPedido: quantidade,
@@ -557,6 +578,32 @@ class WorkspaceMontagem {
             console.error('❌ Erro ao adicionar produtos:', error);
             this.mostrarFeedback(`Erro ao adicionar produtos: ${error.message}`, 'error');
         }
+    }
+
+    /**
+     * 🎯 COLETAR DADOS DOS PRODUTOS DA TABELA (FALLBACK)
+     */
+    async coletarDadosProdutosDaTabela() {
+        console.log('📊 Coletando dados dos produtos da tabela...');
+        const rows = document.querySelectorAll('tr.produto-origem');
+        
+        rows.forEach(row => {
+            const codProduto = row.dataset.produto;
+            if (codProduto) {
+                const nomeProduto = row.querySelector('.nome-produto')?.textContent || '';
+                const qtdSaldo = parseFloat(row.querySelector('.qtd-saldo')?.textContent || 0);
+                const valor = parseFloat(row.querySelector('.valor')?.textContent?.replace('R$', '').replace(',', '.') || 0);
+                
+                this.dadosProdutos.set(codProduto, {
+                    cod_produto: codProduto,
+                    nome_produto: nomeProduto,
+                    qtd_saldo_produto_pedido: qtdSaldo,
+                    preco_produto_pedido: valor / qtdSaldo || 0
+                });
+            }
+        });
+        
+        console.log(`✅ Coletados dados de ${this.dadosProdutos.size} produtos`);
     }
 
     /**
