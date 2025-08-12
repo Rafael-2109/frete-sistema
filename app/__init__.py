@@ -664,7 +664,7 @@ def create_app(config_name=None):
     app.register_blueprint(alertas_bp)
     
     # 🚨 Sistema de Alertas de Separações COTADAS
-    from app.carteira.routes.alertas_separacao_api import bp as alertas_separacao_bp
+    from app.carteira.routes.alertas_separacao_api import alertas_separacao_api as alertas_separacao_bp
     app.register_blueprint(alertas_separacao_bp)
     
     app.register_blueprint(estoque_bp)

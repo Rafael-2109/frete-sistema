@@ -17,6 +17,15 @@
             <button type="button" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#modalRelatorios">
                 <i class="fas fa-file-excel"></i> Relatórios
             </button>
+            <a href="{{ url_for('carteira.alertas_visualizacao.dashboard') }}" class="btn btn-danger me-2 position-relative">
+                <i class="fas fa-bell"></i> Alertas
+                {% if alertas_pendentes_count and alertas_pendentes_count > 0 %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark">
+                    {{ alertas_pendentes_count }}
+                    <span class="visually-hidden">alertas pendentes</span>
+                </span>
+                {% endif %}
+            </a>
             <button type="button" class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#modalPedidosNaoOdoo">
                 <i class="fas fa-file-import"></i> Pedidos Não-Odoo
             </button>

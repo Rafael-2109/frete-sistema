@@ -234,7 +234,11 @@ def gerar_separacao_workspace_interno(num_pedido, lote_id, produtos, expedicao, 
             peso_calculado, pallet_calculado = calcular_peso_pallet_produto(cod_produto, quantidade)
             
             # Buscar rota
-            rota_calculada = buscar_rota_por_uf(item_carteira.cod_uf or 'SP')
+            # Se incoterm for RED ou FOB, usar ele como rota
+            if hasattr(item_carteira, 'incoterm') and item_carteira.incoterm in ["RED", "FOB"]:
+                rota_calculada = item_carteira.incoterm
+            else:
+                rota_calculada = buscar_rota_por_uf(item_carteira.cod_uf or 'SP')
             sub_rota_calculada = buscar_sub_rota_por_uf_cidade(
                 item_carteira.cod_uf or '', 
                 item_carteira.nome_cidade or ''

@@ -123,6 +123,7 @@ def index():
                                  status_breakdown=[],
                                  alertas_inconsistencias=0,
                                  alertas_vinculacao=0,
+                                 alertas_pendentes_count=0,
                                  expedicoes_proximas=[],
                                  top_vendedores=[],
                                  standby_stats=[],
@@ -201,6 +202,14 @@ def index():
                 total_standby_pedidos = total_geral.total_pedidos or 0
                 total_standby_valor = float(total_geral.valor_total) if total_geral.valor_total else 0
         
+        # 📊 CONTAGEM DE ALERTAS PENDENTES
+        try:
+            from app.carteira.models_alertas import AlertaSeparacaoCotada
+            alertas_pendentes_count = AlertaSeparacaoCotada.query.filter_by(reimpresso=False).count()
+        except Exception as e:
+            logger.error(f"Erro ao buscar alertas pendentes: {e}")
+            alertas_pendentes_count = 0
+        
         # 📊 ORGANIZAR DADOS PARA O TEMPLATE
         estatisticas = {
             'total_pedidos': total_pedidos,
@@ -214,6 +223,7 @@ def index():
                              status_breakdown=status_breakdown,
                              alertas_inconsistencias=inconsistencias_abertas,
                              alertas_vinculacao=controles_pendentes,
+                             alertas_pendentes_count=alertas_pendentes_count,
                              expedicoes_proximas=[],  # Lista vazia por enquanto
                              top_vendedores=vendedores_breakdown[:5] if vendedores_breakdown else [],
                              standby_stats=standby_stats,
@@ -238,6 +248,7 @@ def index():
                              status_breakdown=[],
                              alertas_inconsistencias=0,
                              alertas_vinculacao=0,
+                             alertas_pendentes_count=0,
                              expedicoes_proximas=[],
                              top_vendedores=[],
                              standby_stats=[],
@@ -1306,7 +1317,11 @@ def api_enviar_agrupamentos_para_separacao():
                 # ✅ BUSCAR ROTA POR UF (funções já definidas neste arquivo)
                 cod_uf_item = carteira_item.cod_uf if carteira_item else 'SP'
                 nome_cidade_item = carteira_item.nome_cidade if carteira_item else ''
-                rota_calculada = _buscar_rota_por_uf(cod_uf_item)
+                # Se incoterm for RED ou FOB, usar ele como rota
+                if carteira_item and hasattr(carteira_item, 'incoterm') and carteira_item.incoterm in ["RED", "FOB"]:
+                    rota_calculada = carteira_item.incoterm
+                else:
+                    rota_calculada = _buscar_rota_por_uf(cod_uf_item)
                 sub_rota_calculada = _buscar_sub_rota_por_uf_cidade(cod_uf_item, nome_cidade_item)
                 
                 # Criar separação com TODOS os campos obrigatórios
@@ -1739,7 +1754,11 @@ def api_criar_separacao_pedido(num_pedido):
             peso_calculado, pallet_calculado = calcular_peso_pallet_produto(carteira_item.cod_produto, qtd_separacao)
             
             # ✅ BUSCAR ROTA POR UF DO CLIENTE (funções já definidas neste arquivo)
-            rota_calculada = _buscar_rota_por_uf(carteira_item.cod_uf or 'SP')
+            # Se incoterm for RED ou FOB, usar ele como rota
+            if hasattr(carteira_item, 'incoterm') and carteira_item.incoterm in ["RED", "FOB"]:
+                rota_calculada = carteira_item.incoterm
+            else:
+                rota_calculada = _buscar_rota_por_uf(carteira_item.cod_uf or 'SP')
             
             # ✅ BUSCAR SUB-ROTA POR UF E CIDADE  
             sub_rota_calculada = _buscar_sub_rota_por_uf_cidade(

@@ -8,7 +8,7 @@ def formatar_moeda(valor):
         return "R$ 0,00"
     try:
         return f"R$ {float(valor):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-    except:
+    except Exception:
         return "R$ 0,00"
 
 
@@ -18,7 +18,7 @@ def formatar_peso(peso):
         return "0 kg"
     try:
         return f"{float(peso):,.1f} kg".replace(',', 'X').replace('.', ',').replace('X', '.')
-    except:
+    except Exception:
         return "0 kg"
 
 
@@ -28,5 +28,5 @@ def formatar_pallet(pallet):
         return "0 plt"
     try:
         return f"{float(pallet):,.2f} plt".replace(',', 'X').replace('.', ',').replace('X', '.')
-    except:
+    except Exception:
         return "0 plt"

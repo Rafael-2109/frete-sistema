@@ -147,7 +147,11 @@ def gerar_separacao_completa_pedido(num_pedido):
             peso_calculado, pallet_calculado = calcular_peso_pallet_produto(item.cod_produto, quantidade)
 
             # Buscar rota e sub-rota
-            rota_calculada = buscar_rota_por_uf(item.cod_uf or "SP")
+            # Se incoterm for RED ou FOB, usar ele como rota
+            if item.incoterm in ["RED", "FOB"]:
+                rota_calculada = item.incoterm
+            else:
+                rota_calculada = buscar_rota_por_uf(item.cod_uf or "SP")
             sub_rota_calculada = buscar_sub_rota_por_uf_cidade(item.cod_uf or "", item.nome_cidade or "")
 
             # Criar separação
@@ -302,7 +306,11 @@ def transformar_lote_em_separacao(lote_id):
             peso_calculado, pallet_calculado = calcular_peso_pallet_produto(pre_sep.cod_produto, quantidade)
 
             # Calcular rota e sub-rota
-            rota_calculada = buscar_rota_por_uf(item_carteira.cod_uf or "SP")
+            # Se incoterm for RED ou FOB, usar ele como rota
+            if item_carteira.incoterm in ["RED", "FOB"]:
+                rota_calculada = item_carteira.incoterm
+            else:
+                rota_calculada = buscar_rota_por_uf(item_carteira.cod_uf or "SP")
             sub_rota_calculada = buscar_sub_rota_por_uf_cidade(
                 item_carteira.cod_uf or "", item_carteira.nome_cidade or ""
             )

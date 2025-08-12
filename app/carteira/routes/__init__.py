@@ -32,6 +32,10 @@ from .standby_api import standby_bp
 # API de Relatórios
 from .relatorios_api import *
 
+# API de Alertas de Separação
+from .alertas_separacao_api import alertas_separacao_api
+from .alertas_visualizacao import alertas_visualizacao_bp
+
 # Registrar os blueprints de Carteira Não-Odoo no blueprint principal
 carteira_bp.register_blueprint(cadastro_cliente_api)
 carteira_bp.register_blueprint(importacao_nao_odoo_api)
@@ -40,3 +44,7 @@ carteira_bp.register_blueprint(views_nao_odoo_bp)
 
 # Registrar blueprint de Standby
 carteira_bp.register_blueprint(standby_bp)
+
+# Registrar blueprints de Alertas
+carteira_bp.register_blueprint(alertas_separacao_api)
+carteira_bp.register_blueprint(alertas_visualizacao_bp)

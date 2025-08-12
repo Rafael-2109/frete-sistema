@@ -1460,6 +1460,25 @@ class CarteiraService:
             recomposicao_result = self._recompor_pre_separacoes_automaticamente()
             
             # ============================================================
+            # FASE 9.5: ATUALIZAR DADOS DE SEPARAÇÃO/PEDIDO/PRÉ-SEPARAÇÃO
+            # ============================================================
+            logger.info("🔄 Fase 9.5: Atualizando dados de Separação/Pedido/Pré-Separação...")
+            try:
+                from app.carteira.services.atualizar_dados_service import AtualizarDadosService
+                atualizador = AtualizarDadosService()
+                resultado_atualizacao = atualizador.atualizar_dados_pos_sincronizacao()
+                
+                if resultado_atualizacao.get('sucesso'):
+                    logger.info(f"✅ Dados atualizados: {resultado_atualizacao['total_pedidos_atualizados']} pedidos, "
+                               f"{resultado_atualizacao['total_separacoes_atualizadas']} separações, "
+                               f"{resultado_atualizacao['total_pre_separacoes_atualizadas']} pré-separações")
+                else:
+                    logger.warning(f"⚠️ Atualização de dados com problemas: {resultado_atualizacao.get('erro')}")
+            except Exception as e:
+                logger.error(f"❌ Erro ao atualizar dados de Separação/Pedido: {str(e)}")
+                # Não interromper o fluxo principal
+            
+            # ============================================================
             # FASE 10: VERIFICAÇÃO PÓS-SINCRONIZAÇÃO E ALERTAS
             # ============================================================
             logger.info("🔍 Fase 10: Verificação pós-sincronização...")

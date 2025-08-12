@@ -29,3 +29,14 @@ Mostrar na tela de uma forma que seja extremamente visual e interativo para o us
 Cria uma requisição de compras respeitando lead time dos componentes de maneira automatica na criação da ordem de produção ou opta por não criar a requisição de compras na ordem de produção e cria posteriormente avaliando o estoque dos componentes.
 
 5- Avaliação dos estoques de produtos onde CadastroPalletizacao.produto_comprado = True junto com as RequisicaoCompras, PedidoCompras (Não sei como vincular a requisição criada no Odoo com a requisição criada no sistema, onde a requisição do sistema deverá ser um "rascunho" da requisição do sistema)
+
+
+# Corrigir trigger se necessário
+psql $DATABASE_URL
+\i sql/fix_alertas_trigger.sql
+
+# Visualizar alertas via script
+python visualizar_alertas.py
+
+# Limpar órfãos interativamente
+python limpar_alertas_orfaos.py

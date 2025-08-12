@@ -13,10 +13,10 @@ from app import db
 
 logger = logging.getLogger(__name__)
 
-bp = Blueprint('alertas_separacao', __name__, url_prefix='/api/alertas-separacao')
+alertas_separacao_api = Blueprint('alertas_separacao', __name__, url_prefix='/api/alertas-separacao')
 
 
-@bp.route('/pendentes', methods=['GET'])
+@alertas_separacao_api.route('/pendentes', methods=['GET'])
 @login_required
 def buscar_alertas_pendentes():
     """
@@ -40,7 +40,7 @@ def buscar_alertas_pendentes():
         }), 500
 
 
-@bp.route('/reimprimir/<separacao_lote_id>', methods=['POST'])
+@alertas_separacao_api.route('/reimprimir/<separacao_lote_id>', methods=['POST'])
 @login_required
 def reimprimir_separacao(separacao_lote_id):
     """
@@ -94,7 +94,7 @@ def reimprimir_separacao(separacao_lote_id):
         }), 500
 
 
-@bp.route('/card-html', methods=['GET'])
+@alertas_separacao_api.route('/card-html', methods=['GET'])
 @login_required
 def get_card_alertas_html():
     """

@@ -285,9 +285,18 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  // Variável para prevenir múltiplos cliques
+  let buscandoMotorista = false;
+  
   // Busca motorista por CPF
   document.getElementById('form-buscar-motorista').addEventListener('submit', function(e) {
     e.preventDefault();
+    
+    // Previne múltiplos cliques
+    if (buscandoMotorista) {
+      console.log('Busca já em andamento...');
+      return;
+    }
     
     const cpf = document.getElementById('cpf-buscar').value;
     const csrfToken = document.querySelector('input[name="csrf_token"]').value;
@@ -297,6 +306,13 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
+    // Marca que está buscando e desabilita o botão
+    buscandoMotorista = true;
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Buscando...';
+    
     fetch('{{ url_for("portaria.buscar_motorista") }}', {
       method: 'POST',
       headers: {
@@ -305,8 +321,17 @@ document.addEventListener('DOMContentLoaded', function() {
       },
       body: `cpf=${encodeURIComponent(cpf)}&csrf_token=${encodeURIComponent(csrfToken)}`
     })
-    .then(response => response.json())
+    .then(response => {
+      if (response.redirected) {
+        // Se foi redirecionado (erro CSRF), recarrega a página
+        window.location.reload();
+        return;
+      }
+      return response.json();
+    })
     .then(data => {
+      if (!data) return;
+      
       if (data.success) {
         // Preenche dados do motorista
         const motorista = data.motorista;
@@ -328,7 +353,13 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .catch(error => {
       console.error('Erro:', error);
-      alert('Erro ao buscar motorista');
+      alert('Erro ao buscar motorista. Por favor, recarregue a página e tente novamente.');
+    })
+    .finally(() => {
+      // Reabilita o botão após a busca
+      buscandoMotorista = false;
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
     });
   });
   

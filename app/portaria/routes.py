@@ -77,33 +77,42 @@ def buscar_motorista():
     """
     Busca motorista por CPF via AJAX
     """
-    # 🐛 Debug CSRF
-    logger.info(f"🔍 Headers: {dict(request.headers)}")
-    logger.info(f"🔍 Form data: {dict(request.form)}")
-    
-    cpf = request.form.get('cpf', '').strip()
+    # Verifica se é uma requisição AJAX
+    if request.headers.get('X-Requested-With') != 'XMLHttpRequest' and \
+       'application/json' not in request.headers.get('Accept', ''):
+        # Se não for AJAX, trata como requisição normal
+        cpf = request.form.get('cpf', '').strip()
+    else:
+        cpf = request.form.get('cpf', '').strip()
     
     if not cpf:
         return jsonify({'success': False, 'message': 'CPF é obrigatório'})
     
-    motorista = Motorista.buscar_por_cpf(cpf)
-    
-    if motorista:
+    try:
+        motorista = Motorista.buscar_por_cpf(cpf)
+        
+        if motorista:
+            return jsonify({
+                'success': True,
+                'motorista': {
+                    'id': motorista.id,
+                    'nome_completo': motorista.nome_completo,
+                    'rg': motorista.rg,
+                    'cpf': motorista.cpf,
+                    'telefone': motorista.telefone
+                }
+            })
+        else:
+            return jsonify({
+                'success': False, 
+                'message': 'Motorista não encontrado',
+                'redirect_cadastro': True
+            })
+    except Exception as e:
+        logger.error(f"Erro ao buscar motorista: {str(e)}")
         return jsonify({
-            'success': True,
-            'motorista': {
-                'id': motorista.id,
-                'nome_completo': motorista.nome_completo,
-                'rg': motorista.rg,
-                'cpf': motorista.cpf,
-                'telefone': motorista.telefone
-            }
-        })
-    else:
-        return jsonify({
-            'success': False, 
-            'message': 'Motorista não encontrado',
-            'redirect_cadastro': True
+            'success': False,
+            'message': 'Erro ao buscar motorista. Tente novamente.'
         })
 
 @portaria_bp.route('/cadastrar_motorista', methods=['GET', 'POST'])
