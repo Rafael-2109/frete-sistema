@@ -1275,8 +1275,29 @@ class CarteiraService:
                 pedidos_com_alteracoes.add(reducao['num_pedido'])
             for aumento in aumentos:
                 pedidos_com_alteracoes.add(aumento['num_pedido'])
+            
+            # PROTEÇÃO CRÍTICA: Processar pedidos removidos apenas se não estiverem faturados
             for num_pedido, _ in itens_removidos:
-                pedidos_com_alteracoes.add(num_pedido)
+                # Verificar se tem Pedido com este número e qual o status
+                from app.pedidos.models import Pedido
+                pedidos_do_numero = Pedido.query.filter_by(num_pedido=num_pedido).all()
+                
+                pode_processar = False
+                for pedido in pedidos_do_numero:
+                    if pedido.status in ['ABERTO', 'COTADO']:
+                        pode_processar = True
+                        break
+                
+                if pode_processar:
+                    pedidos_com_alteracoes.add(num_pedido)
+                    logger.info(f"✅ Pedido {num_pedido} removido da carteira - será processado (tem separações em ABERTO/COTADO)")
+                else:
+                    if pedidos_do_numero:
+                        status_encontrados = ', '.join([p.status for p in pedidos_do_numero])
+                        logger.warning(f"🛡️ PROTEÇÃO: Pedido {num_pedido} removido mas NÃO será processado (status: {status_encontrados})")
+                    else:
+                        logger.info(f"ℹ️ Pedido {num_pedido} removido - sem separações para processar")
+            
             for item in novos_itens:
                 pedidos_com_alteracoes.add(item['num_pedido'])
             

@@ -147,36 +147,74 @@ class AjusteSincronizacaoService:
         lotes = []
         lotes_processados = set()
         
-        # PRIMEIRO: Buscar separações (têm prioridade absoluta)
-        seps = db.session.query(Separacao.separacao_lote_id).filter(
+        # PRIMEIRO: Buscar separações com JOIN em Pedido para filtrar status diretamente
+        # Só busca separações onde o Pedido tem status ABERTO ou COTADO
+        seps = db.session.query(
+            Separacao.separacao_lote_id,
+            Pedido.status
+        ).outerjoin(
+            Pedido,
+            Separacao.separacao_lote_id == Pedido.separacao_lote_id
+        ).filter(
             Separacao.num_pedido == num_pedido,
-            Separacao.separacao_lote_id.isnot(None)
+            Separacao.separacao_lote_id.isnot(None),
+            # PROTEÇÃO: Só pegar separações com Pedido em status alterável
+            db.or_(
+                Pedido.status.in_(['ABERTO', 'COTADO']),
+                Pedido.status.is_(None)  # Ou sem Pedido (pode acontecer)
+            )
         ).distinct().all()
         
-        for (lote_id,) in seps:
+        for lote_id, status_pedido in seps:
             lotes.append({
                 'lote_id': lote_id,
                 'tipo': 'SEPARACAO'
             })
             lotes_processados.add(lote_id)
-            logger.info(f"Encontrada Separacao com lote {lote_id}")
+            logger.info(f"Encontrada Separacao com lote {lote_id} (status: {status_pedido or 'SEM_PEDIDO'})")
         
-        # SEGUNDO: Buscar pré-separações APENAS se não tiver o mesmo lote_id de uma Separacao
-        # Incluir TODOS os status possíveis de PreSeparacaoItem
-        pre_seps = db.session.query(PreSeparacaoItem.separacao_lote_id).filter(
-            PreSeparacaoItem.num_pedido == num_pedido,
-            PreSeparacaoItem.separacao_lote_id.isnot(None)
-            # Removido filtro de status - buscar TODAS as PreSeparacaoItem
+        # Log das separações ignoradas por status
+        seps_ignoradas = db.session.query(
+            Separacao.separacao_lote_id,
+            Pedido.status
+        ).join(
+            Pedido,
+            Separacao.separacao_lote_id == Pedido.separacao_lote_id
+        ).filter(
+            Separacao.num_pedido == num_pedido,
+            Separacao.separacao_lote_id.isnot(None),
+            ~Pedido.status.in_(['ABERTO', 'COTADO'])
         ).distinct().all()
         
-        for (lote_id,) in pre_seps:
+        for lote_id, status in seps_ignoradas:
+            logger.warning(f"🛡️ PROTEÇÃO: Ignorando lote {lote_id} - Pedido com status '{status}' não pode ser alterado")
+            lotes_processados.add(lote_id)  # Marcar como processado para não processar PreSeparacao também
+        
+        # SEGUNDO: Buscar pré-separações com JOIN em Pedido
+        pre_seps = db.session.query(
+            PreSeparacaoItem.separacao_lote_id,
+            Pedido.status
+        ).outerjoin(
+            Pedido,
+            PreSeparacaoItem.separacao_lote_id == Pedido.separacao_lote_id
+        ).filter(
+            PreSeparacaoItem.num_pedido == num_pedido,
+            PreSeparacaoItem.separacao_lote_id.isnot(None),
+            # PROTEÇÃO: Só pegar pré-separações com Pedido em status alterável
+            db.or_(
+                Pedido.status.in_(['ABERTO', 'COTADO']),
+                Pedido.status.is_(None)  # Ou sem Pedido
+            )
+        ).distinct().all()
+        
+        for lote_id, status_pedido in pre_seps:
             if lote_id not in lotes_processados:
                 # Só adiciona se não tem Separacao com mesmo lote
                 lotes.append({
                     'lote_id': lote_id,
                     'tipo': 'PRE_SEPARACAO'
                 })
-                logger.info(f"Encontrada PreSeparacaoItem independente com lote {lote_id}")
+                logger.info(f"Encontrada PreSeparacaoItem independente com lote {lote_id} (status: {status_pedido or 'SEM_PEDIDO'})")
             else:
                 # Já tem Separacao com este lote - será processada junto automaticamente
                 logger.info(f"PreSeparacaoItem com lote {lote_id} será processada junto com Separacao")
@@ -543,6 +581,12 @@ class AjusteSincronizacaoService:
         Substitui completamente uma pré-separação TOTAL.
         Pega 1 linha existente como modelo, deleta tudo e recria com os novos itens.
         """
+        # PROTEÇÃO: Verificar se o Pedido permite alteração
+        pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
+        if pedido and pedido.status not in ['ABERTO', 'COTADO']:
+            logger.warning(f"🛡️ PROTEÇÃO: Não alterando PreSeparacao {lote_id} - Pedido com status '{pedido.status}'")
+            return
+            
         # 1. Pegar primeira linha existente como modelo (tem todos os campos preenchidos)
         modelo = PreSeparacaoItem.query.filter_by(
             separacao_lote_id=lote_id,
@@ -627,6 +671,12 @@ class AjusteSincronizacaoService:
         Substitui completamente uma separação TOTAL.
         Pega 1 linha existente como modelo, deleta tudo e recria com os novos itens.
         """
+        # PROTEÇÃO: Verificar se o Pedido permite alteração
+        pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
+        if pedido and pedido.status not in ['ABERTO', 'COTADO']:
+            logger.warning(f"🛡️ PROTEÇÃO: Não alterando Separacao {lote_id} - Pedido com status '{pedido.status}'")
+            return
+            
         # 1. Pegar primeira linha existente como modelo
         modelo = Separacao.query.filter_by(
             separacao_lote_id=lote_id,
@@ -866,6 +916,12 @@ class AjusteSincronizacaoService:
                 if qtd_restante <= 0:
                     break
                 
+                # PROTEÇÃO: Verificar status do Pedido
+                pedido = Pedido.query.filter_by(separacao_lote_id=sep.separacao_lote_id).first()
+                if pedido and pedido.status not in ['ABERTO', 'COTADO']:
+                    logger.warning(f"🛡️ Ignorando Separacao {sep.separacao_lote_id} - Pedido com status '{pedido.status}'")
+                    continue
+                
                 # Verificar se está COTADO
                 is_cotado = cls._verificar_se_cotado(sep.separacao_lote_id)
                 
@@ -893,6 +949,12 @@ class AjusteSincronizacaoService:
             for sep in separacoes:
                 if qtd_restante <= 0:
                     break
+                
+                # PROTEÇÃO: Verificar status do Pedido
+                pedido = Pedido.query.filter_by(separacao_lote_id=sep.separacao_lote_id).first()
+                if pedido and pedido.status not in ['ABERTO', 'COTADO']:
+                    logger.warning(f"🛡️ Ignorando Separacao COTADA {sep.separacao_lote_id} - Pedido com status '{pedido.status}'")
+                    continue
                 
                 # Verificar se está COTADO
                 is_cotado = cls._verificar_se_cotado(sep.separacao_lote_id)

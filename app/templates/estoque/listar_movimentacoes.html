@@ -39,6 +39,11 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        <div class="col-md-3">
+                            <label for="observacao" class="form-label">Observações (NF, etc)</label>
+                            <input type="text" class="form-control" id="observacao" name="observacao" 
+                                   value="{{ observacao_filtro }}" placeholder="Digite NF ou observação">
+                        </div>
                         <div class="col-md-3 d-flex align-items-end">
                             <button type="submit" class="btn btn-primary me-2">
                                 <i class="fas fa-search"></i> Pesquisar
@@ -47,14 +52,16 @@
                                 <i class="fas fa-times"></i> Limpar
                             </a>
                         </div>
-                        <div class="col-md-3 d-flex align-items-end justify-content-end">
+                    </form>
+                    <div class="row mt-3">
+                        <div class="col-md-12 d-flex justify-content-end">
                             {% if movimentacoes and movimentacoes.items %}
                             <a href="{{ url_for('estoque.exportar_dados_movimentacoes') }}" class="btn btn-warning">
                                 <i class="fas fa-file-export"></i> Exportar
                             </a>
                             {% endif %}
                         </div>
-                    </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -104,13 +111,14 @@
                                     <th>Produto</th>
                                     <th>Quantidade</th>
                                     <th>Local</th>
+                                    <th>Observações</th>
                                     <th>Criado por</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for mov in movimentacoes.items %}
-                                <tr>
+                                <tr id="row-{{ mov.id }}">
                                     <td>{{ mov.id }}</td>
                                     <td>{{ mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '-' }}</td>
                                     <td>
@@ -131,6 +139,13 @@
                                         </span>
                                     </td>
                                     <td class="fw-bold text-dark">{{ mov.local_movimentacao or '-' }}</td>
+                                    <td title="{{ mov.observacao or '' }}">
+                                        {% if mov.observacao %}
+                                            {{ mov.observacao[:50] }}{% if mov.observacao|length > 50 %}...{% endif %}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
                                     <td>{{ mov.created_by or '-' }}</td>
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
@@ -139,11 +154,11 @@
                                                class="btn btn-outline-primary btn-sm" title="Editar">
                                                 <i class="fas fa-edit"></i>
                                             </a>
-                                            <a href="javascript:void(0)" 
-                                               onclick="confirmarExclusao({{ mov.id }}, '{{ mov.cod_produto }}', '{{ mov.tipo_movimentacao }}')"
+                                            <button type="button"
+                                               onclick="confirmarExclusao({{ mov.id }}, '{{ mov.cod_produto|e }}', '{{ mov.tipo_movimentacao|e }}')"
                                                class="btn btn-outline-danger btn-sm" title="Excluir">
                                                 <i class="fas fa-trash"></i>
-                                            </a>
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -435,10 +450,108 @@
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 function confirmarExclusao(id, codProduto, tipoMovimentacao) {
-    if (confirm(`Tem certeza que deseja excluir a movimentação ${tipoMovimentacao} do produto ${codProduto}?`)) {
-        window.location.href = "{{ url_for('estoque.excluir_movimentacao', id=0) }}".replace('0', id);
+    // Verificar se SweetAlert2 está disponível
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Confirmar Exclusão',
+            text: `Deseja excluir a movimentação ${tipoMovimentacao} do produto ${codProduto}?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sim, excluir!',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                excluirMovimentacao(id);
+            }
+        });
+    } else {
+        // Fallback para confirm nativo
+        if (confirm(`Deseja excluir a movimentação ${tipoMovimentacao} do produto ${codProduto}?`)) {
+            excluirMovimentacao(id);
+        }
+    }
+}
+
+function excluirMovimentacao(id) {
+    // Fazer requisição AJAX DELETE
+    fetch(`/estoque/excluir_movimentacao/${id}`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token() }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Remover a linha da tabela sem recarregar
+            const row = document.getElementById(`row-${id}`);
+            if (row) {
+                row.style.transition = 'opacity 0.3s';
+                row.style.opacity = '0';
+                setTimeout(() => {
+                    row.remove();
+                    // Atualizar contador se existir
+                    updateRowCount();
+                    
+                    // Mostrar mensagem de sucesso
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Excluído!',
+                            text: data.message,
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        alert(data.message);
+                    }
+                }, 300);
+            }
+        } else {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro!',
+                    text: data.message || 'Erro ao excluir movimentação'
+                });
+            } else {
+                alert(data.message || 'Erro ao excluir movimentação');
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro!',
+                text: 'Erro de comunicação com o servidor'
+            });
+        } else {
+            alert('Erro de comunicação com o servidor');
+        }
+    });
+}
+
+function updateRowCount() {
+    // Atualizar contador de registros na tela
+    const tbody = document.querySelector('tbody');
+    const rows = tbody ? tbody.querySelectorAll('tr') : [];
+    const badge = document.querySelector('.badge.bg-secondary');
+    if (badge && rows.length > 0) {
+        const text = badge.textContent;
+        const match = text.match(/Mostrando (\d+) de (\d+)/);
+        if (match) {
+            const newCount = rows.length;
+            const total = parseInt(match[2]) - 1;
+            badge.textContent = text.replace(/Mostrando \d+ de \d+/, `Mostrando ${newCount} de ${total}`);
+        }
     }
 }
 </script>

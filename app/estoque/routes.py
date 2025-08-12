@@ -226,6 +226,7 @@ def listar_movimentacoes():
     # Filtros
     cod_produto = request.args.get('cod_produto', '')
     tipo_movimentacao = request.args.get('tipo_movimentacao', '')
+    observacao_filtro = request.args.get('observacao', '')  # NOVO: Filtro de observações
     
     # Paginação
     try:
@@ -246,6 +247,9 @@ def listar_movimentacoes():
                 query = query.filter(MovimentacaoEstoque.cod_produto.ilike(f'%{cod_produto}%'))
             if tipo_movimentacao:
                 query = query.filter(MovimentacaoEstoque.tipo_movimentacao == tipo_movimentacao)
+            # NOVO: Filtro de observações com ILIKE
+            if observacao_filtro:
+                query = query.filter(MovimentacaoEstoque.observacao.ilike(f'%{observacao_filtro}%'))
             
             # Ordenação e paginação
             movimentacoes = query.order_by(MovimentacaoEstoque.data_movimentacao.desc()).paginate(
@@ -268,6 +272,7 @@ def listar_movimentacoes():
                          movimentacoes=movimentacoes,
                          cod_produto=cod_produto,
                          tipo_movimentacao=tipo_movimentacao,
+                         observacao_filtro=observacao_filtro,  # NOVO: Passar filtro de observações
                          tipos_disponiveis=tipos_disponiveis)
 
 @estoque_bp.route('/api/estatisticas')
@@ -1558,11 +1563,11 @@ def exportar_dados_movimentacoes():
         return redirect(url_for('estoque.index'))
 
 
-@estoque_bp.route('/excluir_movimentacao/<int:id>')
+@estoque_bp.route('/excluir_movimentacao/<int:id>', methods=['DELETE', 'GET'])
 @login_required
 def excluir_movimentacao(id):
     """
-    Excluir uma movimentação de estoque
+    Excluir uma movimentação de estoque via AJAX sem recarregar a página
     """
     try:
         movimentacao = MovimentacaoEstoque.query.get_or_404(id)
@@ -1570,17 +1575,36 @@ def excluir_movimentacao(id):
         # Log da exclusão
         logger.info(f"Excluindo movimentação ID {id}: {movimentacao.cod_produto} - {movimentacao.tipo_movimentacao}")
         
+        # Guardar dados para retornar
+        cod_produto = movimentacao.cod_produto
+        tipo = movimentacao.tipo_movimentacao
+        
         db.session.delete(movimentacao)
         db.session.commit()
         
-        flash(f'Movimentação {movimentacao.tipo_movimentacao} do produto {movimentacao.cod_produto} excluída com sucesso.', 'success')
+        # Se for requisição AJAX (DELETE), retornar JSON
+        if request.method == 'DELETE':
+            return jsonify({
+                'success': True,
+                'message': f'Movimentação {tipo} do produto {cod_produto} excluída com sucesso.'
+            })
+        else:
+            # Se for GET (fallback), redirecionar
+            flash(f'Movimentação {tipo} do produto {cod_produto} excluída com sucesso.', 'success')
+            return redirect(url_for('estoque.listar_movimentacoes'))
         
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao excluir movimentação {id}: {str(e)}")
-        flash(f'Erro ao excluir movimentação: {str(e)}', 'danger')
-    
-    return redirect(url_for('estoque.listar_movimentacoes'))
+        
+        if request.method == 'DELETE':
+            return jsonify({
+                'success': False,
+                'message': f'Erro ao excluir movimentação: {str(e)}'
+            }), 500
+        else:
+            flash(f'Erro ao excluir movimentação: {str(e)}', 'danger')
+            return redirect(url_for('estoque.listar_movimentacoes'))
 
 
 # Sistema híbrido removido - usando novo sistema de estoque em tempo real
