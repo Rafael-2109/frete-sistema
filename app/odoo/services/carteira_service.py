@@ -1125,7 +1125,7 @@ class CarteiraService:
         alteracoes_aplicadas = []
         
         try:
-            from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
+            from app.carteira.models import CarteiraPrincipal
             from app import db
             logger.info("🚀 INICIANDO SINCRONIZAÇÃO OPERACIONAL COMPLETA COM GESTÃO INTELIGENTE")
             
@@ -1436,12 +1436,21 @@ class CarteiraService:
             if pedidos_odoo_deletados > 0:
                 logger.info(f"🗑️ {pedidos_odoo_deletados} registros Odoo obsoletos removidos")
             
-            # UPSERT: Atualizar existentes ou inserir novos
+            # UPSERT: Atualizar existentes ou inserir novos COM COMMITS INCREMENTAIS
             contador_inseridos = 0
             contador_atualizados = 0
             erros_insercao = []
             
-            for item in dados_novos:
+            # Importar helper para commits com retry
+            from app.utils.database_retry import commit_with_retry, execute_in_chunks
+            
+            # Configuração para commits incrementais - evitar erro SSL
+            TAMANHO_LOTE = 10  # Processar 10 registros por vez para evitar timeout SSL
+            contador_lote = 0
+            
+            logger.info(f"🔄 Processando {len(dados_novos)} registros em lotes de {TAMANHO_LOTE}...")
+            
+            for idx, item in enumerate(dados_novos):
                 try:
                     # Validar dados essenciais usando campos CORRETOS
                     if not item.get('num_pedido') or not item.get('cod_produto'):
@@ -1463,19 +1472,51 @@ class CarteiraService:
                         db.session.add(novo_registro)
                         contador_inseridos += 1
                     
+                    contador_lote += 1
+                    
+                    # Commit incremental a cada TAMANHO_LOTE registros para evitar erro SSL
+                    if contador_lote >= TAMANHO_LOTE:
+                        try:
+                            if commit_with_retry(db.session, max_retries=3):
+                                logger.debug(f"✅ Lote {idx//TAMANHO_LOTE + 1} salvo ({contador_lote} registros)")
+                            else:
+                                logger.warning(f"⚠️ Falha ao salvar lote {idx//TAMANHO_LOTE + 1}")
+                        except Exception as commit_error:
+                            logger.error(f"❌ Erro no commit do lote: {commit_error}")
+                            # Tentar rollback e continuar
+                            try:
+                                db.session.rollback()
+                            except Exception:
+                                pass
+                        finally:
+                            contador_lote = 0
+                    
                 except Exception as e:
                     erro_msg = f"Erro ao processar {item.get('num_pedido', 'N/A')}/{item.get('cod_produto', 'N/A')}: {e}"
                     logger.error(erro_msg)
                     erros_insercao.append(erro_msg)
             
+            # Commit final para registros restantes
+            if contador_lote > 0:
+                try:
+                    if commit_with_retry(db.session, max_retries=3):
+                        logger.debug(f"✅ Último lote salvo ({contador_lote} registros)")
+                    else:
+                        logger.warning(f"⚠️ Falha ao salvar último lote")
+                except Exception as commit_error:
+                    logger.error(f"❌ Erro no commit final: {commit_error}")
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+            
             logger.info(f"✅ {contador_inseridos} novos registros inseridos")
             logger.info(f"🔄 {contador_atualizados} registros atualizados")
             
             # ============================================================
-            # FASE 8: COMMIT E RECOMPOSIÇÃO
+            # FASE 8: COMMIT FINAL (já feito incrementalmente)
             # ============================================================
-            logger.info("💾 Fase 8: Salvando alterações...")
-            db.session.commit()
+            logger.info("💾 Fase 8: Todas as alterações já salvas incrementalmente")
             
             logger.info("🔄 Fase 9: Recompondo pré-separações...")
             recomposicao_result = self._recompor_pre_separacoes_automaticamente()

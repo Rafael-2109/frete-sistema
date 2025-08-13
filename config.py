@@ -89,25 +89,26 @@ class Config:
 
     # Configurações condicionais baseadas no tipo de banco
     if IS_POSTGRESQL:
-        # Configurações para PostgreSQL (Render) - OTIMIZADAS PARA EVITAR EOF
+        # Configurações para PostgreSQL (Render) - OTIMIZADAS PARA EVITAR EOF E SSL ERRORS
         SQLALCHEMY_ENGINE_OPTIONS = {
             "pool_pre_ping": True,  # Testa conexão antes de usar
-            "pool_recycle": 300,  # Recicla conexões a cada 5 minutos (era 200)
+            "pool_recycle": 180,  # Recicla conexões a cada 3 minutos (reduzido para evitar SSL timeout)
             "pool_timeout": 10,  # Timeout mais curto para falhar rápido (era 30)
-            "max_overflow": 10,  # Permite mais conexões temporárias (era 0)
-            "pool_size": 10,  # Mais conexões no pool (era 5)
+            "max_overflow": 15,  # Permite mais conexões temporárias (aumentado)
+            "pool_size": 5,  # Menos conexões no pool mas com recycle mais frequente
             "echo_pool": False,  # Debug do pool (ativar se precisar)
             "connect_args": {
-                "sslmode": "require",
-                "connect_timeout": 10,  # Timeout de conexão mais curto (era 15)
+                "sslmode": "prefer",  # Mudado de 'require' para 'prefer' (mais flexível)
+                "connect_timeout": 10,  # Timeout de conexão mais curto
                 "application_name": "frete_sistema",
                 "keepalives": 1,  # Ativa keepalive
                 "keepalives_idle": 30,  # Envia keepalive a cada 30s
                 "keepalives_interval": 10,  # Intervalo entre keepalives
                 "keepalives_count": 5,  # Tentativas antes de desistir
-                "options": "-c statement_timeout=60000 -c idle_in_transaction_session_timeout=300000",
                 "client_encoding": "utf8",  # Encoding UTF-8 explícito
-                "options": "-c client_encoding=UTF8 -c timezone=UTC",  # Força UTF-8 + UTC no PostgreSQL
+                # Combina todas as opções em uma única string
+                # idle_in_transaction_session_timeout reduzido para 30s para evitar SSL timeout
+                "options": "-c client_encoding=UTF8 -c timezone=UTC -c statement_timeout=60000 -c idle_in_transaction_session_timeout=30000",
             },
         }
     else:

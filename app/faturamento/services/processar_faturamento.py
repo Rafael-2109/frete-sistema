@@ -82,7 +82,8 @@ class ProcessadorFaturamento:
                         # MELHORIA: Commit incremental para cancelamentos
                         try:
                             db.session.commit()
-                        except:
+                        except Exception as e:
+                            logger.error(f"❌ Erro no commit da NF {nf.numero_nf}: {e}")
                             db.session.rollback()
                         continue
 
@@ -93,14 +94,49 @@ class ProcessadorFaturamento:
                         resultado["movimentacoes_criadas"] += mov_criadas
                         resultado["embarque_items_atualizados"] += emb_atualizados
                         
-                        # MELHORIA: Commit incremental após cada NF processada com sucesso
-                        try:
-                            db.session.commit()
-                            logger.debug(f"✅ NF {nf.numero_nf} commitada com sucesso")
-                        except Exception as commit_error:
-                            logger.error(f"❌ Erro no commit da NF {nf.numero_nf}: {commit_error}")
-                            db.session.rollback()
-                            resultado["erros"].append(f"NF {nf.numero_nf}: Erro no commit")
+                        # MELHORIA: Commit incremental com RETRY para evitar perda por erro SSL
+                        commit_sucesso = False
+                        max_tentativas = 3
+                        
+                        for tentativa in range(max_tentativas):
+                            try:
+                                db.session.commit()
+                                logger.info(f"✅ NF {nf.numero_nf} commitada com sucesso - {mov_criadas} movimentações criadas")
+                                commit_sucesso = True
+                                break
+                            except Exception as commit_error:
+                                error_msg = str(commit_error).lower()
+                                
+                                # Verificar se é erro SSL recuperável
+                                if 'ssl' in error_msg or 'decryption' in error_msg or 'eof' in error_msg:
+                                    if tentativa < max_tentativas - 1:
+                                        logger.warning(f"⚠️ Erro SSL no commit da NF {nf.numero_nf}, tentativa {tentativa + 1}/{max_tentativas}")
+                                        # Aguardar antes de tentar novamente
+                                        import time
+                                        time.sleep(0.5 * (tentativa + 1))  # Delay crescente
+                                        
+                                        # Forçar reconexão
+                                        try:
+                                            db.session.rollback()
+                                            db.session.close()
+                                            db.engine.dispose()
+                                        except:
+                                            pass
+                                    else:
+                                        logger.error(f"❌ Erro SSL persistente após {max_tentativas} tentativas para NF {nf.numero_nf}")
+                                        db.session.rollback()
+                                        resultado["erros"].append(f"NF {nf.numero_nf}: Erro SSL no commit após {max_tentativas} tentativas")
+                                else:
+                                    # Erro não relacionado a SSL - não tentar novamente
+                                    logger.error(f"❌ Erro no commit da NF {nf.numero_nf}: {commit_error}")
+                                    db.session.rollback()
+                                    resultado["erros"].append(f"NF {nf.numero_nf}: Erro no commit")
+                                    break
+                        
+                        if not commit_sucesso:
+                            # Decrementar contadores se o commit falhou
+                            resultado["movimentacoes_criadas"] -= mov_criadas
+                            resultado["embarque_items_atualizados"] -= emb_atualizados
 
                 except Exception as e:
                     logger.error(f"❌ Erro ao processar NF {nf.numero_nf}: {str(e)}")
@@ -180,13 +216,20 @@ class ProcessadorFaturamento:
 
         if embarque_item and embarque_item.pedido == nf.origem:
             # Caso 1: NF vinculada e pedido bate
-            logger.info(f"📦 NF {nf.numero_nf} em EmbarqueItem com mesmo pedido")
+            logger.info(f"📦 NF {nf.numero_nf} já vinculada em EmbarqueItem com mesmo pedido")
             self._apagar_movimentacao_anterior(nf.numero_nf)
 
             # Gravar movimentação com o lote do EmbarqueItem
             if embarque_item.separacao_lote_id:
                 mov_criadas = self._criar_movimentacao_com_lote(nf, embarque_item.separacao_lote_id, usuario)
                 movimentacoes_criadas += mov_criadas
+                
+                # Limpar erro de validação se existir
+                if embarque_item.erro_validacao in ['NF_PENDENTE_FATURAMENTO', 'NF_DIVERGENTE']:
+                    embarque_item.erro_validacao = None
+                    logger.info(f"✅ Erro de validação limpo para EmbarqueItem ID {embarque_item.id}")
+                    embarque_items_atualizados += 1
+                
                 # Avaliar score para verificar se há divergência
                 self._avaliar_score_e_gerar_inconsistencia(nf, embarque_item.separacao_lote_id, usuario)
                 return True, movimentacoes_criadas, embarque_items_atualizados
@@ -426,23 +469,30 @@ class ProcessadorFaturamento:
         ).first()
 
         if existe:
+            logger.debug(f"Movimentação 'Sem Separação' já existe para NF {nf.numero_nf}")
             return 0
 
         produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
+        logger.info(f"📦 Criando {len(produtos)} movimentações 'Sem Separação' para NF {nf.numero_nf}")
 
         for produto in produtos:
-            mov = MovimentacaoEstoque()
-            mov.cod_produto = produto.cod_produto
-            mov.nome_produto = produto.nome_produto
-            mov.tipo_movimentacao = "FATURAMENTO"
-            mov.local_movimentacao = "VENDA"
-            mov.data_movimentacao = datetime.now().date()
-            mov.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
-            mov.observacao = f"Baixa automática NF {nf.numero_nf} - Sem Separação"
-            mov.criado_por = usuario
-            db.session.add(mov)
-            movimentacoes_criadas += 1
-            
+            try:
+                mov = MovimentacaoEstoque()
+                mov.cod_produto = produto.cod_produto
+                mov.nome_produto = produto.nome_produto
+                mov.tipo_movimentacao = "FATURAMENTO"
+                mov.local_movimentacao = "VENDA"
+                mov.data_movimentacao = datetime.now().date()
+                mov.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
+                mov.observacao = f"Baixa automática NF {nf.numero_nf} - Sem Separação"
+                mov.criado_por = usuario
+                db.session.add(mov)
+                movimentacoes_criadas += 1
+                logger.debug(f"  ✓ Movimentação criada: {produto.cod_produto} - Qtd: {mov.qtd_movimentacao}")
+            except Exception as e:
+                logger.error(f"  ✗ Erro ao criar movimentação para produto {produto.cod_produto}: {e}")
+        
+        logger.info(f"✅ {movimentacoes_criadas} movimentações 'Sem Separação' preparadas para NF {nf.numero_nf}")
         return movimentacoes_criadas
 
     def _criar_movimentacao_com_lote(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str) -> int:
@@ -452,33 +502,41 @@ class ProcessadorFaturamento:
         """
         movimentacoes_criadas = 0
         produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
+        logger.info(f"📦 Criando {len(produtos)} movimentações com lote {lote_id} para NF {nf.numero_nf}")
 
         for produto in produtos:
-            mov = MovimentacaoEstoque()
-            mov.cod_produto = produto.cod_produto
-            mov.nome_produto = produto.nome_produto
-            mov.tipo_movimentacao = "FATURAMENTO"
-            mov.local_movimentacao = "VENDA"
-            mov.data_movimentacao = datetime.now().date()
-            mov.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
-            mov.observacao = f"Baixa automática NF {nf.numero_nf} - lote separação {lote_id}"
-            mov.criado_por = usuario
-            db.session.add(mov)
-            movimentacoes_criadas += 1
-
-            # Abater MovimentacaoPrevista SEM fallback de data
             try:
-                sep = Separacao.query.filter_by(separacao_lote_id=lote_id, cod_produto=produto.cod_produto).first()
-                if sep and sep.expedicao:
-                    ServicoEstoqueTempoReal.atualizar_movimentacao_prevista(
-                        cod_produto=produto.cod_produto,
-                        data=sep.expedicao,
-                        qtd_entrada=Decimal("0"),
-                        qtd_saida=Decimal(str(-abs(produto.qtd_produto_faturado))),
-                    )
+                mov = MovimentacaoEstoque()
+                mov.cod_produto = produto.cod_produto
+                mov.nome_produto = produto.nome_produto
+                mov.tipo_movimentacao = "FATURAMENTO"
+                mov.local_movimentacao = "VENDA"
+                mov.data_movimentacao = datetime.now().date()
+                mov.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
+                mov.observacao = f"Baixa automática NF {nf.numero_nf} - lote separação {lote_id}"
+                mov.criado_por = usuario
+                db.session.add(mov)
+                movimentacoes_criadas += 1
+                logger.debug(f"  ✓ Movimentação criada: {produto.cod_produto} - Qtd: {mov.qtd_movimentacao}")
+
+                # Abater MovimentacaoPrevista SEM fallback de data
+                try:
+                    sep = Separacao.query.filter_by(separacao_lote_id=lote_id, cod_produto=produto.cod_produto).first()
+                    if sep and sep.expedicao:
+                        ServicoEstoqueTempoReal.atualizar_movimentacao_prevista(
+                            cod_produto=produto.cod_produto,
+                            data=sep.expedicao,
+                            qtd_entrada=Decimal("0"),
+                            qtd_saida=Decimal(str(-abs(produto.qtd_produto_faturado))),
+                        )
+                        logger.debug(f"  ✓ Previsão abatida para {produto.cod_produto}")
+                except Exception as e:
+                    logger.debug(f"  ⚠️ Falha ao abater previsão {produto.cod_produto}: {e}")
+                    
             except Exception as e:
-                logger.debug(f"Falha ao abater previsão NF {nf.numero_nf}/{produto.cod_produto}: {e}")
-                
+                logger.error(f"  ✗ Erro ao criar movimentação para produto {produto.cod_produto}: {e}")
+        
+        logger.info(f"✅ {movimentacoes_criadas} movimentações com lote preparadas para NF {nf.numero_nf}")        
         return movimentacoes_criadas
 
     def _criar_justificativa_divergencia(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str):
@@ -517,13 +575,38 @@ class ProcessadorFaturamento:
         Atualiza EmbarqueItem com a NF
         Retorna: True se atualizou, False caso contrário
         """
-        item = EmbarqueItem.query.filter_by(separacao_lote_id=lote_id, nota_fiscal=None).first()
-
-        if item:
+        try:
+            # Primeiro verificar se existe item para atualizar
+            item = EmbarqueItem.query.filter_by(separacao_lote_id=lote_id, nota_fiscal=None).first()
+            
+            if not item:
+                # Verificar se já foi atualizado anteriormente
+                item_ja_atualizado = EmbarqueItem.query.filter_by(
+                    separacao_lote_id=lote_id, 
+                    nota_fiscal=numero_nf
+                ).first()
+                
+                if item_ja_atualizado:
+                    logger.debug(f"EmbarqueItem do lote {lote_id} já possui NF {numero_nf}")
+                    return False
+                else:
+                    logger.warning(f"⚠️ Nenhum EmbarqueItem encontrado para lote {lote_id} sem NF")
+                    return False
+            
+            # Atualizar o item
             item.nota_fiscal = numero_nf
-            logger.info(f"✅ NF {numero_nf} vinculada ao EmbarqueItem do lote {lote_id}")
+            
+            # Também limpar erro de validação se existir
+            if item.erro_validacao in ['NF_PENDENTE_FATURAMENTO', 'NF_DIVERGENTE']:
+                item.erro_validacao = None
+                logger.info(f"✅ Erro de validação limpo para EmbarqueItem do lote {lote_id}")
+            
+            logger.info(f"✅ NF {numero_nf} vinculada ao EmbarqueItem do lote {lote_id} (ID: {item.id})")
             return True
-        return False
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao atualizar EmbarqueItem do lote {lote_id} com NF {numero_nf}: {e}")
+            return False
 
     def _gerar_inconsistencia_divergencia_embarque(
         self, nf: RelatorioFaturamentoImportado, embarque_item: EmbarqueItem, usuario: str
