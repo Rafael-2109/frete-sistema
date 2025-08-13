@@ -201,30 +201,30 @@ class ReconstrutorSeparacoes:
                 self.stats['usando_faturamento'] += 1
                 
                 for fat in faturamentos:
-                    # Buscar peso unitário do CadastroPalletizacao
+                    # Buscar peso_bruto do CadastroPalletizacao
                     palletizacao = CadastroPalletizacao.query.filter_by(
                         cod_produto=fat.cod_produto
                     ).first()
                     
-                    peso_unitario = 1.0  # Padrão se não encontrar
-                    if palletizacao and palletizacao.peso_unitario:
-                        peso_unitario = float(palletizacao.peso_unitario)
+                    peso_bruto = 1.0  # Padrão se não encontrar
+                    if palletizacao and palletizacao.peso_bruto:
+                        peso_bruto = float(palletizacao.peso_bruto)
                     
-                    # Calcular peso total = qtd * peso_unitario
-                    peso_total = float(fat.qtd_produto_faturado) * peso_unitario
+                    # Calcular peso total = qtd * peso_bruto
+                    peso_total = float(fat.qtd_produto_faturado) * peso_bruto
                     
                     dados['produtos'][fat.cod_produto] = {
                         'nome': fat.nome_produto,
                         'qtd': float(fat.qtd_produto_faturado),  # QTD do FaturamentoProduto
                         'valor': float(fat.valor_produto_faturado),  # VALOR do FaturamentoProduto
-                        'peso': peso_total,  # PESO calculado com CadastroPalletizacao
-                        'peso_unitario': peso_unitario,
+                        'peso': peso_total,  # PESO calculado com CadastroPalletizacao.peso_bruto
+                        'peso_bruto': peso_bruto,
                         'fonte': 'faturamento'
                     }
                     
                     logger.debug(f"    Produto {fat.cod_produto}: Qtd={fat.qtd_produto_faturado}, "
                                f"Valor={fat.valor_produto_faturado}, Peso={peso_total:.2f} "
-                               f"(unitário={peso_unitario})")
+                               f"(peso_bruto={peso_bruto})")
         
         # 3. Se não tem FaturamentoProduto, buscar CarteiraPrincipal
         if not dados['produtos'] and pedido:
@@ -241,25 +241,25 @@ class ReconstrutorSeparacoes:
                     # Usar qtd_saldo se disponível, senão qtd_saldo_produto_pedido
                     qtd = float(item.qtd_saldo) if item.qtd_saldo else float(item.qtd_saldo_produto_pedido)
                     if qtd > 0:
-                        # Buscar peso unitário do CadastroPalletizacao
+                        # Buscar peso_bruto do CadastroPalletizacao
                         palletizacao = CadastroPalletizacao.query.filter_by(
                             cod_produto=item.cod_produto
                         ).first()
                         
-                        peso_unitario = 1.0  # Padrão se não encontrar
-                        if palletizacao and palletizacao.peso_unitario:
-                            peso_unitario = float(palletizacao.peso_unitario)
+                        peso_bruto = 1.0  # Padrão se não encontrar
+                        if palletizacao and palletizacao.peso_bruto:
+                            peso_bruto = float(palletizacao.peso_bruto)
                         
                         # Calcular valores
                         valor_total = float(item.valor_saldo) if item.valor_saldo else qtd * float(item.preco_produto_pedido or 0)
-                        peso_total = qtd * peso_unitario
+                        peso_total = qtd * peso_bruto
                         
                         dados['produtos'][item.cod_produto] = {
                             'nome': item.nome_produto,
                             'qtd': qtd,  # QTD da CarteiraPrincipal
                             'valor': valor_total,  # VALOR da CarteiraPrincipal ou calculado
-                            'peso': peso_total,  # PESO calculado com CadastroPalletizacao
-                            'peso_unitario': peso_unitario,
+                            'peso': peso_total,  # PESO calculado com CadastroPalletizacao.peso_bruto
+                            'peso_bruto': peso_bruto,
                             'fonte': 'carteira'
                         }
         
@@ -280,21 +280,21 @@ class ReconstrutorSeparacoes:
                         qtd_usar = float(alerta.qtd_anterior or alerta.qtd_nova or 0)
                         
                         if cod not in dados['produtos'] or qtd_usar > dados['produtos'][cod]['qtd']:
-                            # Buscar peso unitário do CadastroPalletizacao
+                            # Buscar peso_bruto do CadastroPalletizacao
                             palletizacao = CadastroPalletizacao.query.filter_by(
                                 cod_produto=cod
                             ).first()
                             
-                            peso_unitario = 1.0
-                            if palletizacao and palletizacao.peso_unitario:
-                                peso_unitario = float(palletizacao.peso_unitario)
+                            peso_bruto = 1.0
+                            if palletizacao and palletizacao.peso_bruto:
+                                peso_bruto = float(palletizacao.peso_bruto)
                             
                             dados['produtos'][cod] = {
                                 'nome': alerta.nome_produto or f'Produto {cod}',
                                 'qtd': qtd_usar,  # QTD do alerta
                                 'valor': 0,  # Sem valor nos alertas - será estimado
-                                'peso': qtd_usar * peso_unitario,  # PESO calculado
-                                'peso_unitario': peso_unitario,
+                                'peso': qtd_usar * peso_bruto,  # PESO calculado com peso_bruto
+                                'peso_bruto': peso_bruto,
                                 'fonte': 'alerta'
                             }
         
@@ -370,8 +370,8 @@ class ReconstrutorSeparacoes:
                     qtd_pallets = info['qtd'] / float(palletizacao.palletizacao)
                 
                 # Se não tem peso, estimar baseado no produto
-                if peso_real == 0 and palletizacao.peso_unitario:
-                    peso_real = info['qtd'] * float(palletizacao.peso_unitario)
+                if peso_real == 0 and palletizacao.peso_bruto:
+                    peso_real = info['qtd'] * float(palletizacao.peso_bruto)
             
             # Se ainda não tem peso, usar estimativa padrão
             if peso_real == 0:
