@@ -2,7 +2,7 @@
 Service para lógica de agrupamento de pedidos da carteira
 """
 
-from sqlalchemy import func, and_, exists
+from sqlalchemy import func, and_, exists, or_
 from app import db
 from app.carteira.models import CarteiraPrincipal, SaldoStandby
 from app.separacao.models import Separacao
@@ -194,23 +194,52 @@ class AgrupamentoService:
         """Calcula quantidade e valor das separações ativas e retorna expedição se tipo_envio for 'completo'"""
         try:
             from app.carteira.models import PreSeparacaoItem
+            from app.embarques.models import EmbarqueItem
             
             # Contar separacao_lote_id únicos (quantidade de envios para separação)
+            # Inclui FATURADO quando EmbarqueItem tem erro_validacao
             qtd_separacoes = db.session.query(
                 func.count(func.distinct(Separacao.separacao_lote_id))
             ).join(
-                Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                Pedido, and_(
+                    Separacao.separacao_lote_id == Pedido.separacao_lote_id,
+                    Separacao.num_pedido == Pedido.num_pedido
+                )
+            ).outerjoin(
+                EmbarqueItem, EmbarqueItem.separacao_lote_id == Separacao.separacao_lote_id
             ).filter(
                 Separacao.num_pedido == num_pedido,
-                Pedido.status.in_(['ABERTO', 'COTADO'])
+                or_(
+                    # Condição original: ABERTO ou COTADO
+                    Pedido.status.in_(['ABERTO', 'COTADO']),
+                    # Nova condição: FATURADO mas com erro de validação
+                    and_(
+                        Pedido.status == 'FATURADO',
+                        EmbarqueItem.erro_validacao.isnot(None)
+                    )
+                )
             ).scalar() or 0
             
             # Buscar separações para calcular valor total e verificar tipo_envio
+            # Também inclui FATURADO quando tem erro_validacao
             separacoes_ativas = db.session.query(Separacao, Pedido).join(
-                Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+                Pedido, and_(
+                    Separacao.separacao_lote_id == Pedido.separacao_lote_id,
+                    Separacao.num_pedido == Pedido.num_pedido
+                )
+            ).outerjoin(
+                EmbarqueItem, EmbarqueItem.separacao_lote_id == Separacao.separacao_lote_id
             ).filter(
                 Separacao.num_pedido == num_pedido,
-                Pedido.status.in_(['ABERTO', 'COTADO'])
+                or_(
+                    # Condição original: ABERTO ou COTADO
+                    Pedido.status.in_(['ABERTO', 'COTADO']),
+                    # Nova condição: FATURADO mas com erro de validação
+                    and_(
+                        Pedido.status == 'FATURADO',
+                        EmbarqueItem.erro_validacao.isnot(None)
+                    )
+                )
             ).all()
             
             # Calcular valor total das separações e buscar expedição de separação completa

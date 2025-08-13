@@ -30,6 +30,7 @@ class ProcessadorFaturamento:
     ) -> Optional[Dict[str, Any]]:
         """
         Processa todas as NFs importadas seguindo lógica simplificada
+        COM MELHORIAS: Commits incrementais e tratamento de erros isolados
         """
         resultado = {
             "processadas": 0,
@@ -39,17 +40,23 @@ class ProcessadorFaturamento:
             "sem_separacao": 0,
             "erros": [],
             "detalhes": [],
+            "movimentacoes_criadas": 0,
+            "embarque_items_atualizados": 0
         }
 
         try:
             # 0. Limpar inconsistências anteriores se solicitado
             if limpar_inconsistencias:
                 logger.info("🧹 Limpando inconsistências anteriores...")
-                # Limpar todas as inconsistências não resolvidas
-                # Mantém as resolvidas como histórico
-                deletadas = InconsistenciaFaturamento.query.filter_by(resolvida=False).delete()
-                db.session.commit()
-                logger.info(f"✅ {deletadas} inconsistências não resolvidas removidas antes do processamento")
+                try:
+                    # Limpar todas as inconsistências não resolvidas
+                    # Mantém as resolvidas como histórico
+                    deletadas = InconsistenciaFaturamento.query.filter_by(resolvida=False).delete()
+                    db.session.commit()
+                    logger.info(f"✅ {deletadas} inconsistências não resolvidas removidas antes do processamento")
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro ao limpar inconsistências: {e}")
+                    db.session.rollback()
 
             # 1. Buscar TODAS as NFs ativas
             nfs_pendentes = self._buscar_nfs_pendentes()
@@ -72,21 +79,42 @@ class ProcessadorFaturamento:
                         self._processar_cancelamento(nf)
                         resultado["canceladas"] += 1
                         logger.info(f"🚫 NF {nf.numero_nf} cancelada - movimentações removidas")
+                        # MELHORIA: Commit incremental para cancelamentos
+                        try:
+                            db.session.commit()
+                        except:
+                            db.session.rollback()
                         continue
 
                     # 1.C - Processar NF (com ou sem movimentação "Sem Separação")
-                    processou = self._processar_nf(nf, usuario)
+                    processou, mov_criadas, emb_atualizados = self._processar_nf(nf, usuario)
                     if processou:
                         resultado["processadas"] += 1
+                        resultado["movimentacoes_criadas"] += mov_criadas
+                        resultado["embarque_items_atualizados"] += emb_atualizados
+                        
+                        # MELHORIA: Commit incremental após cada NF processada com sucesso
+                        try:
+                            db.session.commit()
+                            logger.debug(f"✅ NF {nf.numero_nf} commitada com sucesso")
+                        except Exception as commit_error:
+                            logger.error(f"❌ Erro no commit da NF {nf.numero_nf}: {commit_error}")
+                            db.session.rollback()
+                            resultado["erros"].append(f"NF {nf.numero_nf}: Erro no commit")
 
                 except Exception as e:
                     logger.error(f"❌ Erro ao processar NF {nf.numero_nf}: {str(e)}")
                     resultado["erros"].append(f"NF {nf.numero_nf}: {str(e)}")
+                    # MELHORIA: Rollback apenas desta NF específica
+                    db.session.rollback()
                     continue
 
-            # Commit final
-            db.session.commit()
+            # Estatísticas finais
             logger.info(f"✅ Processamento completo: {resultado['processadas']} NFs processadas")
+            if resultado.get('movimentacoes_criadas', 0) > 0:
+                logger.info(f"📊 Movimentações criadas: {resultado['movimentacoes_criadas']}")
+            if resultado.get('embarque_items_atualizados', 0) > 0:
+                logger.info(f"📦 EmbarqueItems atualizados: {resultado['embarque_items_atualizados']}")
 
         except Exception as e:
             db.session.rollback()
@@ -139,10 +167,14 @@ class ProcessadorFaturamento:
         """
         MovimentacaoEstoque.query.filter(MovimentacaoEstoque.observacao.like(f"%NF {nf.numero_nf}%")).delete()
 
-    def _processar_nf(self, nf: RelatorioFaturamentoImportado, usuario: str) -> bool:
+    def _processar_nf(self, nf: RelatorioFaturamentoImportado, usuario: str) -> tuple:
         """
         Processa uma NF seguindo a lógica simplificada
+        Retorna: (processou, movimentacoes_criadas, embarque_items_atualizados)
         """
+        movimentacoes_criadas = 0
+        embarque_items_atualizados = 0
+        
         # 2. NF consta em EmbarqueItem?
         embarque_item = EmbarqueItem.query.filter_by(nota_fiscal=nf.numero_nf).first()
 
@@ -153,20 +185,22 @@ class ProcessadorFaturamento:
 
             # Gravar movimentação com o lote do EmbarqueItem
             if embarque_item.separacao_lote_id:
-                self._criar_movimentacao_com_lote(nf, embarque_item.separacao_lote_id, usuario)
+                mov_criadas = self._criar_movimentacao_com_lote(nf, embarque_item.separacao_lote_id, usuario)
+                movimentacoes_criadas += mov_criadas
                 # Avaliar score para verificar se há divergência
                 self._avaliar_score_e_gerar_inconsistencia(nf, embarque_item.separacao_lote_id, usuario)
-                return True
+                return True, movimentacoes_criadas, embarque_items_atualizados
             else:
                 logger.error(f"❌ EmbarqueItem sem separacao_lote_id para NF {nf.numero_nf}")
-                return False
+                return False, 0, 0
 
         elif embarque_item:
             # NF vinculada mas pedido não bate
             logger.warning(f"⚠️ NF {nf.numero_nf} em EmbarqueItem mas pedido divergente")
-            self._criar_movimentacao_sem_separacao(nf, usuario)
+            mov_criadas = self._criar_movimentacao_sem_separacao(nf, usuario)
+            movimentacoes_criadas += mov_criadas
             self._gerar_inconsistencia_divergencia_embarque(nf, embarque_item, usuario)
-            return True
+            return True, movimentacoes_criadas, embarque_items_atualizados
 
         # 3. Origem da NF consta em algum embarque ativo?
         embarque_ativo = self._buscar_embarque_ativo_por_pedido(nf.origem)
@@ -175,25 +209,42 @@ class ProcessadorFaturamento:
             # Caso 2: Pedido encontrado em embarque ativo
             logger.info(f"🚢 NF {nf.numero_nf} tem embarque ativo - avaliando score")
             self._apagar_movimentacao_anterior(nf.numero_nf)
-            return self._avaliar_score_completo(nf, usuario)
+            processou, mov_criadas, emb_atualizados = self._avaliar_score_completo(nf, usuario)
+            return processou, mov_criadas, emb_atualizados
         else:
             # Não - Registra "Sem Separação" + inconsistência
             logger.info(f"❌ NF {nf.numero_nf} sem embarque ativo - registrando 'Sem Separação'")
-            self._criar_movimentacao_sem_separacao(nf, usuario)
+            mov_criadas = self._criar_movimentacao_sem_separacao(nf, usuario)
+            movimentacoes_criadas += mov_criadas
             self._gerar_inconsistencia_sem_separacao(nf, usuario)
-            return True
+            return True, movimentacoes_criadas, embarque_items_atualizados
 
     def _buscar_embarque_ativo_por_pedido(self, num_pedido: str) -> Optional[EmbarqueItem]:
         """
-        Busca embarque ativo por número do pedido
+        Busca embarque ativo por número do pedido que precisa de processamento
+        
+        Processa SE:
+        1. NF vazia (ainda não preenchida) OU  
+        2. erro_validacao != None (tem erro para resolver)
+        
+        NÃO processa SE:
+        NF preenchida E erro_validacao = None (já está tudo OK!)
         """
+        from sqlalchemy import or_
+        
         return (
             EmbarqueItem.query.join(Embarque, EmbarqueItem.embarque_id == Embarque.id)
             .filter(
                 EmbarqueItem.pedido == num_pedido,
                 Embarque.status == "ativo",
                 EmbarqueItem.status == "ativo",
-                EmbarqueItem.erro_validacao is not None,
+                or_(
+                    # Caso 1: NF vazia (ainda não preenchida)
+                    EmbarqueItem.nota_fiscal.is_(None),
+                    EmbarqueItem.nota_fiscal == '',
+                    # Caso 2: Tem erro de validação para resolver
+                    EmbarqueItem.erro_validacao.isnot(None)
+                )
             )
             .first()
         )
@@ -219,10 +270,14 @@ class ProcessadorFaturamento:
             if tem_divergencia:
                 self._criar_justificativa_divergencia(nf, lote_id, usuario)
 
-    def _avaliar_score_completo(self, nf: RelatorioFaturamentoImportado, usuario: str) -> bool:
+    def _avaliar_score_completo(self, nf: RelatorioFaturamentoImportado, usuario: str) -> tuple:
         """
         Avalia score completo para encontrar melhor lote (Caso 2)
+        Retorna: (processou, movimentacoes_criadas, embarque_items_atualizados)
         """
+        movimentacoes_criadas = 0
+        embarque_items_atualizados = 0
+        
         # Verificar se há apenas 1 EmbarqueItem com o pedido
         embarques_pedido = EmbarqueItem.query.filter_by(pedido=nf.origem).all()
 
@@ -231,11 +286,13 @@ class ProcessadorFaturamento:
             lote_id = embarques_pedido[0].separacao_lote_id
             if lote_id:
                 logger.info(f"✅ Único EmbarqueItem encontrado para pedido {nf.origem} - lote {lote_id}")
-                self._criar_movimentacao_com_lote(nf, lote_id, usuario)
-                self._atualizar_embarque_item(nf.numero_nf, lote_id)
+                mov_criadas = self._criar_movimentacao_com_lote(nf, lote_id, usuario)
+                movimentacoes_criadas += mov_criadas
+                if self._atualizar_embarque_item(nf.numero_nf, lote_id):
+                    embarque_items_atualizados += 1
                 # Avaliar divergência
                 self._avaliar_score_e_gerar_inconsistencia(nf, lote_id, usuario)
-                return True
+                return True, movimentacoes_criadas, embarque_items_atualizados
 
         # Múltiplos embarques ou nenhum - avaliar por score
         return self._avaliar_melhor_lote_por_score(nf, embarques_pedido, usuario)
@@ -272,10 +329,14 @@ class ProcessadorFaturamento:
 
     def _avaliar_melhor_lote_por_score(
         self, nf: RelatorioFaturamentoImportado, embarques_pedido: List[EmbarqueItem], usuario: str
-    ) -> bool:
+    ) -> tuple:
         """
         Avalia múltiplos lotes e escolhe o melhor por score
+        Retorna: (processou, movimentacoes_criadas, embarque_items_atualizados)
         """
+        movimentacoes_criadas = 0
+        embarque_items_atualizados = 0
+        
         # Coletar todos os lotes únicos
         lotes_unicos = set()
         for item in embarques_pedido:
@@ -284,9 +345,10 @@ class ProcessadorFaturamento:
 
         if not lotes_unicos:
             logger.warning(f"⚠️ Nenhum lote encontrado para pedido {nf.origem}")
-            self._criar_movimentacao_sem_separacao(nf, usuario)
+            mov_criadas = self._criar_movimentacao_sem_separacao(nf, usuario)
+            movimentacoes_criadas += mov_criadas
             self._gerar_inconsistencia_sem_separacao(nf, usuario)
-            return True
+            return True, movimentacoes_criadas, embarque_items_atualizados
 
         # Buscar produtos da NF
         produtos_nf = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
@@ -337,20 +399,26 @@ class ProcessadorFaturamento:
 
         if melhor_lote:
             logger.info(f"✅ Melhor lote para NF {nf.numero_nf}: {melhor_lote} (score: {melhor_score:.2f})")
-            self._criar_movimentacao_com_lote(nf, melhor_lote, usuario)
-            self._atualizar_embarque_item(nf.numero_nf, melhor_lote)
+            mov_criadas = self._criar_movimentacao_com_lote(nf, melhor_lote, usuario)
+            movimentacoes_criadas += mov_criadas
+            if self._atualizar_embarque_item(nf.numero_nf, melhor_lote):
+                embarque_items_atualizados += 1
             self._avaliar_score_e_gerar_inconsistencia(nf, melhor_lote, usuario)
-            return True
+            return True, movimentacoes_criadas, embarque_items_atualizados
         else:
             logger.warning(f"⚠️ Nenhum lote adequado encontrado para NF {nf.numero_nf}")
-            self._criar_movimentacao_sem_separacao(nf, usuario)
+            mov_criadas = self._criar_movimentacao_sem_separacao(nf, usuario)
+            movimentacoes_criadas += mov_criadas
             self._gerar_inconsistencia_sem_separacao(nf, usuario)
-            return True
+            return True, movimentacoes_criadas, embarque_items_atualizados
 
-    def _criar_movimentacao_sem_separacao(self, nf: RelatorioFaturamentoImportado, usuario: str):
+    def _criar_movimentacao_sem_separacao(self, nf: RelatorioFaturamentoImportado, usuario: str) -> int:
         """
         Cria movimentação 'Sem Separação'
+        Retorna: quantidade de movimentações criadas
         """
+        movimentacoes_criadas = 0
+        
         # Verificar se já existe
         existe = MovimentacaoEstoque.query.filter(
             MovimentacaoEstoque.observacao.like(f"%NF {nf.numero_nf}%"),
@@ -358,7 +426,7 @@ class ProcessadorFaturamento:
         ).first()
 
         if existe:
-            return
+            return 0
 
         produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
 
@@ -373,11 +441,16 @@ class ProcessadorFaturamento:
             mov.observacao = f"Baixa automática NF {nf.numero_nf} - Sem Separação"
             mov.criado_por = usuario
             db.session.add(mov)
+            movimentacoes_criadas += 1
+            
+        return movimentacoes_criadas
 
-    def _criar_movimentacao_com_lote(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str):
+    def _criar_movimentacao_com_lote(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str) -> int:
         """
         Cria movimentação com lote de separação
+        Retorna: quantidade de movimentações criadas
         """
+        movimentacoes_criadas = 0
         produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
 
         for produto in produtos:
@@ -391,6 +464,7 @@ class ProcessadorFaturamento:
             mov.observacao = f"Baixa automática NF {nf.numero_nf} - lote separação {lote_id}"
             mov.criado_por = usuario
             db.session.add(mov)
+            movimentacoes_criadas += 1
 
             # Abater MovimentacaoPrevista SEM fallback de data
             try:
@@ -404,6 +478,8 @@ class ProcessadorFaturamento:
                     )
             except Exception as e:
                 logger.debug(f"Falha ao abater previsão NF {nf.numero_nf}/{produto.cod_produto}: {e}")
+                
+        return movimentacoes_criadas
 
     def _criar_justificativa_divergencia(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str):
         """
@@ -436,15 +512,18 @@ class ProcessadorFaturamento:
                     just.criado_por = usuario
                     db.session.add(just)
 
-    def _atualizar_embarque_item(self, numero_nf: str, lote_id: str):
+    def _atualizar_embarque_item(self, numero_nf: str, lote_id: str) -> bool:
         """
         Atualiza EmbarqueItem com a NF
+        Retorna: True se atualizou, False caso contrário
         """
         item = EmbarqueItem.query.filter_by(separacao_lote_id=lote_id, nota_fiscal=None).first()
 
         if item:
             item.nota_fiscal = numero_nf
             logger.info(f"✅ NF {numero_nf} vinculada ao EmbarqueItem do lote {lote_id}")
+            return True
+        return False
 
     def _gerar_inconsistencia_divergencia_embarque(
         self, nf: RelatorioFaturamentoImportado, embarque_item: EmbarqueItem, usuario: str

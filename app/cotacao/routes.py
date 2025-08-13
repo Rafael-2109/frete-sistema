@@ -277,6 +277,12 @@ def iniciar_cotacao():
 
     # Armazena no session para usar nas rotas subsequentes:
     session["cotacao_pedidos"] = lista_ids
+    
+    # CORREÇÃO: Limpa informações de alteração de embarque se houver
+    # Isso evita que uma alteração anterior não finalizada interfira em nova cotação
+    if 'alterando_embarque' in session:
+        session.pop('alterando_embarque', None)
+        print(f"[DEBUG] 🔄 Limpando alteração de embarque anterior não finalizada")
 
     return redirect(url_for("cotacao.tela_cotacao"))
 
@@ -292,6 +298,14 @@ def tela_cotacao():
     if 'redespacho_ativo' in session:
         del session['redespacho_ativo']
         print(f"[DEBUG] 🔄 Modo redespacho desativado - voltou para cotação normal")
+    
+    # CORREÇÃO: Se não veio de alteração de embarque, limpa informações antigas
+    # Verifica se a requisição não veio da rota de alteração
+    if 'alterando_embarque' in session and request.referrer:
+        # Se não veio da rota de alteração de embarque, limpa
+        if 'alterar_cotacao' not in request.referrer:
+            session.pop('alterando_embarque', None)
+            print(f"[DEBUG] 🔄 Limpando alteração de embarque não relacionada")
     
     # Inicializa as variáveis que serão usadas no template
     pedidos = []
@@ -1152,10 +1166,14 @@ def fechar_frete():
                     # O status será calculado automaticamente como COTADO pelo trigger
 
             # ✅ CRIA EMBARQUE
+            # CORREÇÃO: Garante número único de embarque
+            novo_numero = obter_proximo_numero_embarque()
+            print(f"[DEBUG] 🔢 Novo número de embarque gerado: {novo_numero}")
+            
             embarque = Embarque(
                 transportadora_id=transportadora_id,
                 status='ativo',
-                numero=obter_proximo_numero_embarque(),
+                numero=novo_numero,
                 tipo_cotacao='Automatica',
                 tipo_carga=tipo,
                 valor_total=valor_mercadorias,
