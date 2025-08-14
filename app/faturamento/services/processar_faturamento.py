@@ -123,14 +123,12 @@ class ProcessadorFaturamento:
                     # AJUSTE SEGURO: Commit em lote a cada N NFs para evitar timeout
                     if len(nfs_processadas_lote) >= TAMANHO_LOTE_COMMIT:
                         # Fazer commit do lote com retry para SSL
-                        commit_sucesso = False
                         max_tentativas = 3
                         
                         for tentativa in range(max_tentativas):
                             try:
                                 db.session.commit()
                                 logger.info(f"✅ Lote {(idx//TAMANHO_LOTE_COMMIT)+1} com {len(nfs_processadas_lote)} NFs commitado com sucesso")
-                                commit_sucesso = True
                                 nfs_processadas_lote = []  # Resetar lista
                                 break
                             except Exception as commit_error:
@@ -552,12 +550,24 @@ class ProcessadorFaturamento:
 
     def _criar_movimentacao_com_lote(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str) -> int:
         """
-        Cria movimentação com lote de separação
+        Cria movimentação com lote de separação e marca Pedido como FATURADO
         Retorna: quantidade de movimentações criadas
         """
         movimentacoes_criadas = 0
         produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
         logger.info(f"📦 Criando {len(produtos)} movimentações com lote {lote_id} para NF {nf.numero_nf}")
+        
+        # IMPORTANTE: Atualizar status do Pedido para FATURADO
+        # Isso evita que o ajuste_sincronizacao_service rode desnecessariamente
+        from app.pedidos.models import Pedido
+        
+        pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
+        if pedido:
+            if pedido.status != 'FATURADO':
+                pedido.status = 'FATURADO'
+                logger.info(f"✅ Pedido {pedido.num_pedido} marcado como FATURADO ao criar movimentação (lote {lote_id})")
+        else:
+            logger.warning(f"⚠️ Pedido não encontrado para lote {lote_id} ao criar movimentação")
 
         for produto in produtos:
             try:
@@ -627,7 +637,7 @@ class ProcessadorFaturamento:
 
     def _atualizar_embarque_item(self, numero_nf: str, lote_id: str) -> bool:
         """
-        Atualiza EmbarqueItem com a NF
+        Atualiza EmbarqueItem com a NF e marca o Pedido como FATURADO
         Retorna: True se atualizou, False caso contrário
         """
         try:
@@ -655,6 +665,18 @@ class ProcessadorFaturamento:
             if item.erro_validacao in ['NF_PENDENTE_FATURAMENTO', 'NF_DIVERGENTE']:
                 item.erro_validacao = None
                 logger.info(f"✅ Erro de validação limpo para EmbarqueItem do lote {lote_id}")
+            
+            # IMPORTANTE: Atualizar status do Pedido para FATURADO
+            # Isso evita que o ajuste_sincronizacao_service rode desnecessariamente
+            from app.pedidos.models import Pedido
+            
+            pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
+            if pedido:
+                if pedido.status != 'FATURADO':
+                    pedido.status = 'FATURADO'
+                    logger.info(f"✅ Pedido {pedido.num_pedido} marcado como FATURADO (lote {lote_id})")
+            else:
+                logger.warning(f"⚠️ Pedido não encontrado para lote {lote_id}")
             
             logger.info(f"✅ NF {numero_nf} vinculada ao EmbarqueItem do lote {lote_id} (ID: {item.id})")
             return True

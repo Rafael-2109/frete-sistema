@@ -784,3 +784,1026 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+'''INFO:app.claude_ai.auto_command_processor:🤖 Auto Command Processor inicializado
+13:40:43 | INFO     | app.claude_ai.auto_command_processor | 🤖 Auto Command Processor inicializado
+INFO:app:🤖 Processador automático de comandos inicializado
+13:40:43 | INFO     | app | 🤖 Processador automático de comandos inicializado
+INFO:app.claude_ai.claude_code_generator:🚀 Claude Code Generator inicializado: /opt/render/project/src/app
+13:40:43 | INFO     | app.claude_ai.claude_code_generator | 🚀 Claude Code Generator inicializado: /opt/render/project/src/app
+INFO:app:🚀 Gerador de código Claude AI inicializado
+13:40:43 | INFO     | app | 🚀 Gerador de código Claude AI inicializado
+INFO:app.estoque.triggers_sql_corrigido:✅ Triggers SQL corrigidos ativados com sucesso
+13:40:43 | INFO     | app.estoque.triggers_sql_corrigido | ✅ Triggers SQL corrigidos ativados com sucesso
+INFO:app:✅ Triggers SQL corrigidos do EstoqueTempoReal registrados com sucesso
+13:40:43 | INFO     | app | ✅ Triggers SQL corrigidos do EstoqueTempoReal registrados com sucesso
+INFO:app:✅ API de Estoque Tempo Real registrada
+13:40:43 | INFO     | app | ✅ API de Estoque Tempo Real registrada
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+13:40:43 | INFO     | apscheduler.scheduler | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Added job "create_app.<locals>.<lambda>" to job store "default"
+13:40:43 | INFO     | apscheduler.scheduler | Added job "create_app.<locals>.<lambda>" to job store "default"
+INFO:apscheduler.scheduler:Scheduler started
+13:40:43 | INFO     | apscheduler.scheduler | Scheduler started
+INFO:app:✅ Job de Fallback de Estoque configurado (60 segundos)
+13:40:43 | INFO     | app | ✅ Job de Fallback de Estoque configurado (60 segundos)
+INFO:__main__:======================================================================
+13:40:43 | INFO     | __main__ | ======================================================================
+INFO:__main__:🔧 RECONSTRUÇÃO MELHORADA DE SEPARAÇÕES COM FALLBACK ROBUSTO
+13:40:43 | INFO     | __main__ | 🔧 RECONSTRUÇÃO MELHORADA DE SEPARAÇÕES COM FALLBACK ROBUSTO
+INFO:__main__:======================================================================
+13:40:43 | INFO     | __main__ | ======================================================================
+INFO:__main__:🔍 Buscando lotes em Alertas...
+13:40:43 | INFO     | __main__ | 🔍 Buscando lotes em Alertas...
+WARNING:__main__:    ⚠️ Produto 4100161 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4100161 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4360147 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4360147 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4510162 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4510162 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4870146 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4870146 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4210165 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4210165 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4360162 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4360162 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4080156 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4080156 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4080156 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4080156 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4080156 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4080156 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4070162 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4070162 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4050176 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4050176 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4050176 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4050176 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4070162 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4070162 faltando na Separação
+WARNING:__main__:    ⚠️ Produto 4320147 faltando na Separação
+13:40:43 | WARNING  | __main__ |     ⚠️ Produto 4320147 faltando na Separação
+INFO:__main__:🔍 Buscando Pedidos órfãos (sem Separação correspondente)...
+13:40:43 | INFO     | __main__ | 🔍 Buscando Pedidos órfãos (sem Separação correspondente)...
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2521224 (Lote: LOTE_20250808_034538_384)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2521224 (Lote: LOTE_20250808_034538_384)
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2521491 (Lote: LOTE_20250808_194054_398)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2521491 (Lote: LOTE_20250808_194054_398)
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2521086 (Lote: LOTE_20250811_140846_758)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2521086 (Lote: LOTE_20250811_140846_758)
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2521073 (Lote: LOTE_20250811_140907_061)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2521073 (Lote: LOTE_20250811_140907_061)
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2521077 (Lote: LOTE_20250811_140923_592)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2521077 (Lote: LOTE_20250811_140923_592)
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2521114 (Lote: LOTE_20250811_140931_636)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2521114 (Lote: LOTE_20250811_140931_636)
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2521080 (Lote: LOTE_20250811_140957_676)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2521080 (Lote: LOTE_20250811_140957_676)
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2521105 (Lote: LOTE_20250811_141005_038)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2521105 (Lote: LOTE_20250811_141005_038)
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2520309 (Lote: LOTE_23B29D1B)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2520309 (Lote: LOTE_23B29D1B)
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2520214 (Lote: LOTE_5BB46EE6)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2520214 (Lote: LOTE_5BB46EE6)
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2520562 (Lote: LOTE_AEA24966)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2520562 (Lote: LOTE_AEA24966)
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2520411 (Lote: LOTE_C4D3F191)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2520411 (Lote: LOTE_C4D3F191)
+INFO:__main__:  📌 Pedido órfão encontrado: VCD2520355 (Lote: LOTE_F7E2EB60)
+13:40:43 | INFO     | __main__ |   📌 Pedido órfão encontrado: VCD2520355 (Lote: LOTE_F7E2EB60)
+INFO:__main__:🔍 Buscando EmbarqueItems sem lote (via NF)...
+13:40:43 | INFO     | __main__ | 🔍 Buscando EmbarqueItems sem lote (via NF)...
+INFO:__main__:📋 38 lotes encontrados para análise
+13:40:43 | INFO     | __main__ | 📋 38 lotes encontrados para análise
+INFO:__main__:
+============================================================
+13:40:43 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250807_142223_692
+13:40:43 | INFO     | __main__ | 📦 Processando lote: LOTE_20250807_142223_692
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:43 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 15 produtos de alertas
+13:40:43 | INFO     | __main__ |   ✓ Usando 15 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 15
+13:40:43 | INFO     | __main__ |   📊 Total de produtos: 15
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:43 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=954.00, Valor=R$4096.00, Peso=19547.84kg
+13:40:43 | INFO     | __main__ |   📊 Totais: Qtd=954.00, Valor=R$4096.00, Peso=19547.84kg
+INFO:__main__:    ✅ 4100161: 20.00 un | R$ 0.00 | 268.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4100161: 20.00 un | R$ 0.00 | 268.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4230162: 10.00 un | R$ 0.00 | 210.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4230162: 10.00 un | R$ 0.00 | 210.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4520161: 20.00 un | R$ 0.00 | 268.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4520161: 20.00 un | R$ 0.00 | 268.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4360162: 20.00 un | R$ 0.00 | 420.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4360162: 20.00 un | R$ 0.00 | 420.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510161: 20.00 un | R$ 0.00 | 268.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4510161: 20.00 un | R$ 0.00 | 268.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4040162: 8.00 un | R$ 0.00 | 168.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4040162: 8.00 un | R$ 0.00 | 168.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310164: 350.00 un | R$ 0.00 | 7350.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4310164: 350.00 un | R$ 0.00 | 7350.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4350162: 20.00 un | R$ 0.00 | 420.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4350162: 20.00 un | R$ 0.00 | 420.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320162: 360.00 un | R$ 0.00 | 7560.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4320162: 360.00 un | R$ 0.00 | 7560.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4210165: 10.00 un | R$ 0.00 | 210.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4210165: 10.00 un | R$ 0.00 | 210.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4070162: 20.00 un | R$ 0.00 | 420.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4070162: 20.00 un | R$ 0.00 | 420.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4520162: 10.00 un | R$ 0.00 | 210.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4520162: 10.00 un | R$ 0.00 | 210.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4050162: 60.00 un | R$ 0.00 | 1260.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4050162: 60.00 un | R$ 0.00 | 1260.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4080162: 10.00 un | R$ 0.00 | 210.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4080162: 10.00 un | R$ 0.00 | 210.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4759699: 16.00 un | R$ 4096.00 | 305.84 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4759699: 16.00 un | R$ 4096.00 | 305.84 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 15 itens
+13:40:43 | INFO     | __main__ | ✅ Lote reconstruído com 15 itens
+INFO:__main__:
+============================================================
+13:40:43 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250808_034121_469
+13:40:43 | INFO     | __main__ | 📦 Processando lote: LOTE_20250808_034121_469
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:43 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 4 produtos de alertas
+13:40:43 | INFO     | __main__ |   ✓ Usando 4 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 4
+13:40:43 | INFO     | __main__ |   📊 Total de produtos: 4
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:43 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=25.00, Valor=R$0.00, Peso=143.08kg
+13:40:43 | INFO     | __main__ |   📊 Totais: Qtd=25.00, Valor=R$0.00, Peso=143.08kg
+INFO:__main__:    ✅ 4360147: 5.00 un | R$ 0.00 | 27.30 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4360147: 5.00 un | R$ 0.00 | 27.30 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510173: 4.00 un | R$ 0.00 | 27.76 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4510173: 4.00 un | R$ 0.00 | 27.76 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510145: 6.00 un | R$ 0.00 | 33.42 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4510145: 6.00 un | R$ 0.00 | 33.42 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320147: 10.00 un | R$ 0.00 | 54.60 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4320147: 10.00 un | R$ 0.00 | 54.60 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 4 itens
+13:40:43 | INFO     | __main__ | ✅ Lote reconstruído com 4 itens
+INFO:__main__:
+============================================================
+13:40:43 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250808_195315_979
+13:40:43 | INFO     | __main__ | 📦 Processando lote: LOTE_20250808_195315_979
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:43 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 2 produtos de alertas
+13:40:43 | INFO     | __main__ |   ✓ Usando 2 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 2
+13:40:43 | INFO     | __main__ |   📊 Total de produtos: 2
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:43 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=6.00, Valor=R$0.00, Peso=126.00kg
+13:40:43 | INFO     | __main__ |   📊 Totais: Qtd=6.00, Valor=R$0.00, Peso=126.00kg
+INFO:__main__:    ✅ 4510162: 2.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4510162: 2.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4230162: 4.00 un | R$ 0.00 | 84.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4230162: 4.00 un | R$ 0.00 | 84.00 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 2 itens
+13:40:43 | INFO     | __main__ | ✅ Lote reconstruído com 2 itens
+INFO:__main__:
+============================================================
+13:40:43 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250811_134048_814
+13:40:43 | INFO     | __main__ | 📦 Processando lote: LOTE_20250811_134048_814
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:43 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+INFO:__main__:  ✓ Usando 7 produtos de alertas
+13:40:43 | INFO     | __main__ |   ✓ Usando 7 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 7
+13:40:43 | INFO     | __main__ |   📊 Total de produtos: 7
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:43 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=21.00, Valor=R$0.00, Peso=254.02kg
+13:40:43 | INFO     | __main__ |   📊 Totais: Qtd=21.00, Valor=R$0.00, Peso=254.02kg
+INFO:__main__:    ✅ 4520145: 2.00 un | R$ 0.00 | 11.14 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4520145: 2.00 un | R$ 0.00 | 11.14 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310145: 2.00 un | R$ 0.00 | 11.14 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4310145: 2.00 un | R$ 0.00 | 11.14 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510145: 2.00 un | R$ 0.00 | 11.14 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4510145: 2.00 un | R$ 0.00 | 11.14 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320156: 1.00 un | R$ 0.00 | 10.20 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4320156: 1.00 un | R$ 0.00 | 10.20 kg | Fonte: alerta
+INFO:__main__:    ✅ 4759698: 6.00 un | R$ 0.00 | 57.60 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4759698: 6.00 un | R$ 0.00 | 57.60 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510161: 2.00 un | R$ 0.00 | 26.80 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4510161: 2.00 un | R$ 0.00 | 26.80 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310164: 6.00 un | R$ 0.00 | 126.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4310164: 6.00 un | R$ 0.00 | 126.00 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 7 itens
+13:40:43 | INFO     | __main__ | ✅ Lote reconstruído com 7 itens
+INFO:__main__:
+============================================================
+13:40:43 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250811_142606_640
+13:40:43 | INFO     | __main__ | 📦 Processando lote: LOTE_20250811_142606_640
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:43 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 8 produtos de alertas
+13:40:43 | INFO     | __main__ |   ✓ Usando 8 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 8
+13:40:43 | INFO     | __main__ |   📊 Total de produtos: 8
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:43 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=170.00, Valor=R$0.00, Peso=549.29kg
+13:40:43 | INFO     | __main__ |   📊 Totais: Qtd=170.00, Valor=R$0.00, Peso=549.29kg
+INFO:__main__:    ✅ 4870146: 35.00 un | R$ 0.00 | 71.75 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4870146: 35.00 un | R$ 0.00 | 71.75 kg | Fonte: alerta
+INFO:__main__:    ✅ 4840176: 30.00 un | R$ 0.00 | 80.40 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4840176: 30.00 un | R$ 0.00 | 80.40 kg | Fonte: alerta
+INFO:__main__:    ✅ 4870112: 10.00 un | R$ 0.00 | 140.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4870112: 10.00 un | R$ 0.00 | 140.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4810146: 25.00 un | R$ 0.00 | 51.25 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4810146: 25.00 un | R$ 0.00 | 51.25 kg | Fonte: alerta
+INFO:__main__:    ✅ 4880176: 20.00 un | R$ 0.00 | 53.60 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4880176: 20.00 un | R$ 0.00 | 53.60 kg | Fonte: alerta
+INFO:__main__:    ✅ 4860146: 35.00 un | R$ 0.00 | 71.75 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4860146: 35.00 un | R$ 0.00 | 71.75 kg | Fonte: alerta
+INFO:__main__:    ✅ 4080178: 1.00 un | R$ 0.00 | 12.50 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4080178: 1.00 un | R$ 0.00 | 12.50 kg | Fonte: alerta
+INFO:__main__:    ✅ 4210186: 14.00 un | R$ 0.00 | 68.04 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4210186: 14.00 un | R$ 0.00 | 68.04 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 8 itens
+13:40:43 | INFO     | __main__ | ✅ Lote reconstruído com 8 itens
+INFO:__main__:
+============================================================
+13:40:43 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250811_150804_744
+13:40:43 | INFO     | __main__ | 📦 Processando lote: LOTE_20250811_150804_744
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:43 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+INFO:__main__:  ✓ Usando 2 produtos de alertas
+13:40:43 | INFO     | __main__ |   ✓ Usando 2 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 2
+13:40:43 | INFO     | __main__ |   📊 Total de produtos: 2
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:43 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=250.00, Valor=R$0.00, Peso=4303.00kg
+13:40:43 | INFO     | __main__ |   📊 Totais: Qtd=250.00, Valor=R$0.00, Peso=4303.00kg
+ERROR:__main__:  ❌ Sem dados do pedido para criar Separação
+13:40:43 | ERROR    | __main__ |   ❌ Sem dados do pedido para criar Separação
+INFO:__main__:
+============================================================
+13:40:43 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250811_173356_765
+13:40:43 | INFO     | __main__ | 📦 Processando lote: LOTE_20250811_173356_765
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:43 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 6 produtos de alertas
+13:40:43 | INFO     | __main__ |   ✓ Usando 6 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 6
+13:40:43 | INFO     | __main__ |   📊 Total de produtos: 6
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:43 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=208.00, Valor=R$0.00, Peso=4155.20kg
+13:40:43 | INFO     | __main__ |   📊 Totais: Qtd=208.00, Valor=R$0.00, Peso=4155.20kg
+INFO:__main__:    ✅ 4210165: 20.00 un | R$ 0.00 | 420.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4210165: 20.00 un | R$ 0.00 | 420.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320162: 50.00 un | R$ 0.00 | 1050.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4320162: 50.00 un | R$ 0.00 | 1050.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4360162: 50.00 un | R$ 0.00 | 1050.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4360162: 50.00 un | R$ 0.00 | 1050.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310164: 60.00 un | R$ 0.00 | 1260.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4310164: 60.00 un | R$ 0.00 | 1260.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4520161: 14.00 un | R$ 0.00 | 187.60 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4520161: 14.00 un | R$ 0.00 | 187.60 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510161: 14.00 un | R$ 0.00 | 187.60 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4510161: 14.00 un | R$ 0.00 | 187.60 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 6 itens
+13:40:43 | INFO     | __main__ | ✅ Lote reconstruído com 6 itens
+INFO:__main__:
+============================================================
+13:40:43 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250811_173441_549
+13:40:43 | INFO     | __main__ | 📦 Processando lote: LOTE_20250811_173441_549
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:43 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 2 produtos de alertas
+13:40:43 | INFO     | __main__ |   ✓ Usando 2 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 2
+13:40:43 | INFO     | __main__ |   📊 Total de produtos: 2
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:43 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=25.00, Valor=R$0.00, Peso=525.00kg
+13:40:43 | INFO     | __main__ |   📊 Totais: Qtd=25.00, Valor=R$0.00, Peso=525.00kg
+INFO:__main__:    ✅ 4360162: 15.00 un | R$ 0.00 | 315.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4360162: 15.00 un | R$ 0.00 | 315.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320162: 10.00 un | R$ 0.00 | 210.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4320162: 10.00 un | R$ 0.00 | 210.00 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 2 itens
+13:40:43 | INFO     | __main__ | ✅ Lote reconstruído com 2 itens
+INFO:__main__:
+============================================================
+13:40:43 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250812_184659_960
+13:40:43 | INFO     | __main__ | 📦 Processando lote: LOTE_20250812_184659_960
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:43 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 13 produtos de alertas
+13:40:43 | INFO     | __main__ |   ✓ Usando 13 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 13
+13:40:43 | INFO     | __main__ |   📊 Total de produtos: 13
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:43 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=139.00, Valor=R$0.00, Peso=1135.13kg
+13:40:43 | INFO     | __main__ |   📊 Totais: Qtd=139.00, Valor=R$0.00, Peso=1135.13kg
+INFO:__main__:    ✅ 4080156: 5.00 un | R$ 0.00 | 51.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4080156: 5.00 un | R$ 0.00 | 51.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4520171: 5.00 un | R$ 0.00 | 42.90 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4520171: 5.00 un | R$ 0.00 | 42.90 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510156: 5.00 un | R$ 0.00 | 51.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4510156: 5.00 un | R$ 0.00 | 51.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4759099: 5.00 un | R$ 0.00 | 95.57 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4759099: 5.00 un | R$ 0.00 | 95.57 kg | Fonte: alerta
+INFO:__main__:    ✅ 4080178: 5.00 un | R$ 0.00 | 62.50 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4080178: 5.00 un | R$ 0.00 | 62.50 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510171: 3.00 un | R$ 0.00 | 25.74 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4510171: 3.00 un | R$ 0.00 | 25.74 kg | Fonte: alerta
+INFO:__main__:    ✅ 4759098: 30.00 un | R$ 0.00 | 288.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4759098: 30.00 un | R$ 0.00 | 288.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310177: 3.00 un | R$ 0.00 | 47.27 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4310177: 3.00 un | R$ 0.00 | 47.27 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510145: 5.00 un | R$ 0.00 | 27.85 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4510145: 5.00 un | R$ 0.00 | 27.85 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320147: 60.00 un | R$ 0.00 | 327.60 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4320147: 60.00 un | R$ 0.00 | 327.60 kg | Fonte: alerta
+INFO:__main__:    ✅ 4520161: 3.00 un | R$ 0.00 | 40.20 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4520161: 3.00 un | R$ 0.00 | 40.20 kg | Fonte: alerta
+INFO:__main__:    ✅ 4070176: 5.00 un | R$ 0.00 | 36.50 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4070176: 5.00 un | R$ 0.00 | 36.50 kg | Fonte: alerta
+INFO:__main__:    ✅ 4080154: 5.00 un | R$ 0.00 | 39.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4080154: 5.00 un | R$ 0.00 | 39.00 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 13 itens
+13:40:43 | INFO     | __main__ | ✅ Lote reconstruído com 13 itens
+INFO:__main__:
+============================================================
+13:40:43 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250812_184759_586
+13:40:43 | INFO     | __main__ | 📦 Processando lote: LOTE_20250812_184759_586
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:43 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 11 produtos de alertas
+13:40:43 | INFO     | __main__ |   ✓ Usando 11 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 11
+13:40:43 | INFO     | __main__ |   📊 Total de produtos: 11
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:43 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=88.00, Valor=R$0.00, Peso=905.41kg
+13:40:43 | INFO     | __main__ |   📊 Totais: Qtd=88.00, Valor=R$0.00, Peso=905.41kg
+INFO:__main__:    ✅ 4080156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4080156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+INFO:__main__:    ✅ 4520171: 5.00 un | R$ 0.00 | 42.90 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4520171: 5.00 un | R$ 0.00 | 42.90 kg | Fonte: alerta
+INFO:__main__:    ✅ 4070162: 2.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4070162: 2.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4759099: 5.00 un | R$ 0.00 | 95.57 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4759099: 5.00 un | R$ 0.00 | 95.57 kg | Fonte: alerta
+INFO:__main__:    ✅ 4080178: 5.00 un | R$ 0.00 | 62.50 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4080178: 5.00 un | R$ 0.00 | 62.50 kg | Fonte: alerta
+INFO:__main__:    ✅ 4759098: 50.00 un | R$ 0.00 | 480.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4759098: 50.00 un | R$ 0.00 | 480.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4360147: 5.00 un | R$ 0.00 | 27.30 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4360147: 5.00 un | R$ 0.00 | 27.30 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310176: 3.00 un | R$ 0.00 | 22.44 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4310176: 3.00 un | R$ 0.00 | 22.44 kg | Fonte: alerta
+INFO:__main__:    ✅ 4520161: 5.00 un | R$ 0.00 | 67.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4520161: 5.00 un | R$ 0.00 | 67.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4070176: 3.00 un | R$ 0.00 | 21.90 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4070176: 3.00 un | R$ 0.00 | 21.90 kg | Fonte: alerta
+INFO:__main__:    ✅ 4080154: 3.00 un | R$ 0.00 | 23.40 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4080154: 3.00 un | R$ 0.00 | 23.40 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 11 itens
+13:40:43 | INFO     | __main__ | ✅ Lote reconstruído com 11 itens
+INFO:__main__:
+============================================================
+13:40:43 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250812_184911_710
+13:40:43 | INFO     | __main__ | 📦 Processando lote: LOTE_20250812_184911_710
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:43 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 9 produtos de alertas
+13:40:43 | INFO     | __main__ |   ✓ Usando 9 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 9
+13:40:43 | INFO     | __main__ |   📊 Total de produtos: 9
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:43 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=89.00, Valor=R$0.00, Peso=989.57kg
+13:40:43 | INFO     | __main__ |   📊 Totais: Qtd=89.00, Valor=R$0.00, Peso=989.57kg
+INFO:__main__:    ✅ 4080156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4080156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+INFO:__main__:    ✅ 4759099: 10.00 un | R$ 0.00 | 191.15 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4759099: 10.00 un | R$ 0.00 | 191.15 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510171: 3.00 un | R$ 0.00 | 25.74 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4510171: 3.00 un | R$ 0.00 | 25.74 kg | Fonte: alerta
+INFO:__main__:    ✅ 4759098: 50.00 un | R$ 0.00 | 480.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4759098: 50.00 un | R$ 0.00 | 480.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310177: 5.00 un | R$ 0.00 | 78.78 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4310177: 5.00 un | R$ 0.00 | 78.78 kg | Fonte: alerta
+INFO:__main__:    ✅ 4360156: 3.00 un | R$ 0.00 | 30.60 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4360156: 3.00 un | R$ 0.00 | 30.60 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320156: 10.00 un | R$ 0.00 | 102.00 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4320156: 10.00 un | R$ 0.00 | 102.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4080178: 3.00 un | R$ 0.00 | 37.50 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4080178: 3.00 un | R$ 0.00 | 37.50 kg | Fonte: alerta
+INFO:__main__:    ✅ 4080154: 3.00 un | R$ 0.00 | 23.40 kg | Fonte: alerta
+13:40:43 | INFO     | __main__ |     ✅ 4080154: 3.00 un | R$ 0.00 | 23.40 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 9 itens
+13:40:43 | INFO     | __main__ | ✅ Lote reconstruído com 9 itens
+INFO:__main__:
+============================================================
+13:40:43 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250812_185019_514
+13:40:43 | INFO     | __main__ | 📦 Processando lote: LOTE_20250812_185019_514
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:43 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 11 produtos de alertas
+13:40:43 | INFO     | __main__ |   ✓ Usando 11 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 11
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 11
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=238.00, Valor=R$0.00, Peso=2296.83kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=238.00, Valor=R$0.00, Peso=2296.83kg
+INFO:__main__:    ✅ 4070162: 2.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4070162: 2.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4759099: 10.00 un | R$ 0.00 | 191.15 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4759099: 10.00 un | R$ 0.00 | 191.15 kg | Fonte: alerta
+INFO:__main__:    ✅ 4759098: 150.00 un | R$ 0.00 | 1440.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4759098: 150.00 un | R$ 0.00 | 1440.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310177: 5.00 un | R$ 0.00 | 78.78 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310177: 5.00 un | R$ 0.00 | 78.78 kg | Fonte: alerta
+INFO:__main__:    ✅ 4360147: 10.00 un | R$ 0.00 | 54.60 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4360147: 10.00 un | R$ 0.00 | 54.60 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320156: 10.00 un | R$ 0.00 | 102.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4320156: 10.00 un | R$ 0.00 | 102.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320147: 30.00 un | R$ 0.00 | 163.80 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4320147: 30.00 un | R$ 0.00 | 163.80 kg | Fonte: alerta
+INFO:__main__:    ✅ 4520161: 10.00 un | R$ 0.00 | 134.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4520161: 10.00 un | R$ 0.00 | 134.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4070176: 5.00 un | R$ 0.00 | 36.50 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4070176: 5.00 un | R$ 0.00 | 36.50 kg | Fonte: alerta
+INFO:__main__:    ✅ 4080154: 3.00 un | R$ 0.00 | 23.40 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4080154: 3.00 un | R$ 0.00 | 23.40 kg | Fonte: alerta
+INFO:__main__:    ✅ 4080156: 3.00 un | R$ 0.00 | 30.60 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4080156: 3.00 un | R$ 0.00 | 30.60 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 11 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 11 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250812_185129_320
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250812_185129_320
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:44 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 1 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 1 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 1
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 1
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=5.00, Valor=R$0.00, Peso=36.50kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=5.00, Valor=R$0.00, Peso=36.50kg
+INFO:__main__:    ✅ 4050176: 5.00 un | R$ 0.00 | 36.50 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4050176: 5.00 un | R$ 0.00 | 36.50 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 1 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 1 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250812_185205_416
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250812_185205_416
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:44 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 1 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 1 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 1
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 1
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=5.00, Valor=R$0.00, Peso=36.50kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=5.00, Valor=R$0.00, Peso=36.50kg
+INFO:__main__:    ✅ 4050176: 5.00 un | R$ 0.00 | 36.50 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4050176: 5.00 un | R$ 0.00 | 36.50 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 1 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 1 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250813_141257_053
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250813_141257_053
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:44 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 5 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 5 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 5
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 5
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=31.00, Valor=R$3145.56, Peso=575.00kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=31.00, Valor=R$3145.56, Peso=575.00kg
+INFO:__main__:    ✅ 4070162: 5.00 un | R$ 0.00 | 105.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4070162: 5.00 un | R$ 0.00 | 105.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4360162: 5.00 un | R$ 0.00 | 105.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4360162: 5.00 un | R$ 0.00 | 105.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320162: 11.00 un | R$ 3145.56 | 231.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4320162: 11.00 un | R$ 3145.56 | 231.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4100161: 4.00 un | R$ 0.00 | 53.60 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4100161: 4.00 un | R$ 0.00 | 53.60 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510161: 6.00 un | R$ 0.00 | 80.40 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4510161: 6.00 un | R$ 0.00 | 80.40 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 5 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 5 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250813_142907_855
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250813_142907_855
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+INFO:__main__:  ✓ Usando 2 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 2 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 2
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 2
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=16.00, Valor=R$0.00, Peso=336.00kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=16.00, Valor=R$0.00, Peso=336.00kg
+INFO:__main__:    ✅ 4360162: 8.00 un | R$ 0.00 | 168.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4360162: 8.00 un | R$ 0.00 | 168.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510162: 8.00 un | R$ 0.00 | 168.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4510162: 8.00 un | R$ 0.00 | 168.00 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 2 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 2 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250813_152713_870
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250813_152713_870
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+INFO:__main__:  ✓ Usando 4 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 4 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 4
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 4
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=12.00, Valor=R$0.00, Peso=138.40kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=12.00, Valor=R$0.00, Peso=138.40kg
+INFO:__main__:    ✅ 4030156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4030156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+INFO:__main__:    ✅ 4050156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4050156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+INFO:__main__:    ✅ 4520156: 3.00 un | R$ 0.00 | 30.60 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4520156: 3.00 un | R$ 0.00 | 30.60 kg | Fonte: alerta
+INFO:__main__:    ✅ 4100161: 5.00 un | R$ 0.00 | 67.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4100161: 5.00 un | R$ 0.00 | 67.00 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 4 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 4 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250813_152720_166
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250813_152720_166
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+INFO:__main__:  ✓ Usando 6 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 6 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 6
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 6
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=54.00, Valor=R$0.00, Peso=356.05kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=54.00, Valor=R$0.00, Peso=356.05kg
+INFO:__main__:    ✅ 4360147: 12.00 un | R$ 0.00 | 65.52 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4360147: 12.00 un | R$ 0.00 | 65.52 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320147: 18.00 un | R$ 0.00 | 98.28 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4320147: 18.00 un | R$ 0.00 | 98.28 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310177: 5.00 un | R$ 0.00 | 78.78 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310177: 5.00 un | R$ 0.00 | 78.78 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510145: 4.00 un | R$ 0.00 | 22.28 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4510145: 4.00 un | R$ 0.00 | 22.28 kg | Fonte: alerta
+INFO:__main__:    ✅ 4520145: 11.00 un | R$ 0.00 | 61.27 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4520145: 11.00 un | R$ 0.00 | 61.27 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310176: 4.00 un | R$ 0.00 | 29.92 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310176: 4.00 un | R$ 0.00 | 29.92 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 6 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 6 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250813_152730_414
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250813_152730_414
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+INFO:__main__:  ✓ Usando 2 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 2 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 2
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 2
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=11.00, Valor=R$0.00, Peso=163.02kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=11.00, Valor=R$0.00, Peso=163.02kg
+INFO:__main__:    ✅ 4360147: 1.00 un | R$ 0.00 | 5.46 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4360147: 1.00 un | R$ 0.00 | 5.46 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310177: 10.00 un | R$ 0.00 | 157.56 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310177: 10.00 un | R$ 0.00 | 157.56 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 2 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 2 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250813_152849_761
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250813_152849_761
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+INFO:__main__:  ✓ Usando 2 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 2 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 2
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 2
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=13.00, Valor=R$0.00, Peso=101.87kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=13.00, Valor=R$0.00, Peso=101.87kg
+INFO:__main__:    ✅ 4320147: 10.00 un | R$ 0.00 | 54.60 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4320147: 10.00 un | R$ 0.00 | 54.60 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310177: 3.00 un | R$ 0.00 | 47.27 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310177: 3.00 un | R$ 0.00 | 47.27 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 2 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 2 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250813_190828_437
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250813_190828_437
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+INFO:__main__:  ✓ Usando 7 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 7 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 7
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 7
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=18.00, Valor=R$0.00, Peso=298.00kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=18.00, Valor=R$0.00, Peso=298.00kg
+INFO:__main__:    ✅ 4320162: 5.00 un | R$ 0.00 | 105.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4320162: 5.00 un | R$ 0.00 | 105.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4510156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+INFO:__main__:    ✅ 4210165: 2.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4210165: 2.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4520156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4520156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+INFO:__main__:    ✅ 4100161: 2.00 un | R$ 0.00 | 26.80 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4100161: 2.00 un | R$ 0.00 | 26.80 kg | Fonte: alerta
+INFO:__main__:    ✅ 4230162: 3.00 un | R$ 0.00 | 63.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4230162: 3.00 un | R$ 0.00 | 63.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4030156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4030156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 7 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 7 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250813_190932_048
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250813_190932_048
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+INFO:__main__:  ✓ Usando 5 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 5 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 5
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 5
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=50.00, Valor=R$0.00, Peso=433.22kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=50.00, Valor=R$0.00, Peso=433.22kg
+INFO:__main__:    ✅ 4070176: 6.00 un | R$ 0.00 | 43.80 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4070176: 6.00 un | R$ 0.00 | 43.80 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310152: 7.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310152: 7.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4510145: 15.00 un | R$ 0.00 | 83.55 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4510145: 15.00 un | R$ 0.00 | 83.55 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310176: 10.00 un | R$ 0.00 | 74.80 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310176: 10.00 un | R$ 0.00 | 74.80 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310177: 12.00 un | R$ 0.00 | 189.07 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310177: 12.00 un | R$ 0.00 | 189.07 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 5 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 5 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250813_190939_561
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250813_190939_561
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+INFO:__main__:  ✓ Usando 2 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 2 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 2
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 2
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=5.00, Valor=R$0.00, Peso=83.40kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=5.00, Valor=R$0.00, Peso=83.40kg
+INFO:__main__:    ✅ 4210165: 3.00 un | R$ 0.00 | 63.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4210165: 3.00 un | R$ 0.00 | 63.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4030156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4030156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 2 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 2 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250813_192614_966
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250813_192614_966
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+INFO:__main__:  ✓ Usando 3 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 3 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 3
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 3
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=6.00, Valor=R$0.00, Peso=104.40kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=6.00, Valor=R$0.00, Peso=104.40kg
+INFO:__main__:    ✅ 4510156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4510156: 2.00 un | R$ 0.00 | 20.40 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320162: 2.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4320162: 2.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310162: 2.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310162: 2.00 un | R$ 0.00 | 42.00 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 3 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 3 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_BF50340F
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_BF50340F
+WARNING:__main__:⚠️ Lote com Separação DIVERGENTE - será reconstruído
+13:40:44 | WARNING  | __main__ | ⚠️ Lote com Separação DIVERGENTE - será reconstruído
+INFO:__main__:  ✓ Usando 9 produtos de alertas
+13:40:44 | INFO     | __main__ |   ✓ Usando 9 produtos de alertas
+INFO:__main__:  📊 Total de produtos: 9
+13:40:44 | INFO     | __main__ |   📊 Total de produtos: 9
+INFO:__main__:  📊 Fonte principal: alertas
+13:40:44 | INFO     | __main__ |   📊 Fonte principal: alertas
+INFO:__main__:  📊 Totais: Qtd=804.00, Valor=R$0.00, Peso=5074.88kg
+13:40:44 | INFO     | __main__ |   📊 Totais: Qtd=804.00, Valor=R$0.00, Peso=5074.88kg
+INFO:__main__:    ✅ 4320147: 112.00 un | R$ 0.00 | 611.52 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4320147: 112.00 un | R$ 0.00 | 611.52 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310148: 112.00 un | R$ 0.00 | 657.44 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310148: 112.00 un | R$ 0.00 | 657.44 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310146: 112.00 un | R$ 0.00 | 657.44 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310146: 112.00 un | R$ 0.00 | 657.44 kg | Fonte: alerta
+INFO:__main__:    ✅ 4350150: 112.00 un | R$ 0.00 | 672.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4350150: 112.00 un | R$ 0.00 | 672.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4320154: 80.00 un | R$ 0.00 | 624.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4320154: 80.00 un | R$ 0.00 | 624.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310141: 112.00 un | R$ 0.00 | 585.76 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310141: 112.00 un | R$ 0.00 | 585.76 kg | Fonte: alerta
+INFO:__main__:    ✅ 4360147: 32.00 un | R$ 0.00 | 174.72 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4360147: 32.00 un | R$ 0.00 | 174.72 kg | Fonte: alerta
+INFO:__main__:    ✅ 4360162: 20.00 un | R$ 0.00 | 420.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4360162: 20.00 un | R$ 0.00 | 420.00 kg | Fonte: alerta
+INFO:__main__:    ✅ 4310152: 112.00 un | R$ 0.00 | 672.00 kg | Fonte: alerta
+13:40:44 | INFO     | __main__ |     ✅ 4310152: 112.00 un | R$ 0.00 | 672.00 kg | Fonte: alerta
+INFO:__main__:✅ Lote reconstruído com 9 itens
+13:40:44 | INFO     | __main__ | ✅ Lote reconstruído com 9 itens
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250808_034538_384
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250808_034538_384
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250808_194054_398
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250808_194054_398
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250811_140846_758
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250811_140846_758
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250811_140907_061
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250811_140907_061
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250811_140923_592
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250811_140923_592
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250811_140931_636
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250811_140931_636
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250811_140957_676
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250811_140957_676
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_20250811_141005_038
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_20250811_141005_038
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_23B29D1B
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_23B29D1B
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_5BB46EE6
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_5BB46EE6
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_AEA24966
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_AEA24966
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_C4D3F191
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_C4D3F191
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+============================================================
+13:40:44 | INFO     | __main__ | 
+============================================================
+INFO:__main__:📦 Processando lote: LOTE_F7E2EB60
+13:40:44 | INFO     | __main__ | 📦 Processando lote: LOTE_F7E2EB60
+WARNING:__main__:🔴 Lote SEM Separação - será reconstruído
+13:40:44 | WARNING  | __main__ | 🔴 Lote SEM Separação - será reconstruído
+ERROR:__main__:❌ Sem dados de produtos para reconstruir
+13:40:44 | ERROR    | __main__ | ❌ Sem dados de produtos para reconstruir
+INFO:__main__:
+📋 Atualizando EmbarqueItems sem separacao_lote_id...
+13:40:44 | INFO     | __main__ | 
+📋 Atualizando EmbarqueItems sem separacao_lote_id...
+INFO:__main__:  ✓ Todos os EmbarqueItems têm separacao_lote_id
+13:40:44 | INFO     | __main__ |   ✓ Todos os EmbarqueItems têm separacao_lote_id
+INFO:__main__:
+💾 Salvando alterações no banco...
+13:40:44 | INFO     | __main__ | 
+💾 Salvando alterações no banco...
+INFO:__main__:✅ Alterações salvas com sucesso!
+13:40:44 | INFO     | __main__ | ✅ Alterações salvas com sucesso!
+INFO:__main__:
+======================================================================
+13:40:44 | INFO     | __main__ | 
+======================================================================
+INFO:__main__:📊 ESTATÍSTICAS DA RECONSTRUÇÃO COM FALLBACK
+13:40:44 | INFO     | __main__ | 📊 ESTATÍSTICAS DA RECONSTRUÇÃO COM FALLBACK
+INFO:__main__:======================================================================
+13:40:44 | INFO     | __main__ | ======================================================================
+INFO:__main__:
+📋 PROCESSAMENTO:
+13:40:44 | INFO     | __main__ | 
+📋 PROCESSAMENTO:
+INFO:__main__:  • Lotes processados: 38
+13:40:44 | INFO     | __main__ |   • Lotes processados: 38
+INFO:__main__:  • Lotes reconstruídos: 24
+13:40:44 | INFO     | __main__ |   • Lotes reconstruídos: 24
+INFO:__main__:  • Lotes já existentes: 0
+13:40:44 | INFO     | __main__ |   • Lotes já existentes: 0
+INFO:__main__:  • Lotes sem dados: 13
+13:40:44 | INFO     | __main__ |   • Lotes sem dados: 13
+INFO:__main__:
+✅ VALIDAÇÕES:
+13:40:44 | INFO     | __main__ | 
+✅ VALIDAÇÕES:
+INFO:__main__:  • Separações validadas: 0
+13:40:44 | INFO     | __main__ |   • Separações validadas: 0
+INFO:__main__:  • Separações divergentes: 14
+13:40:44 | INFO     | __main__ |   • Separações divergentes: 14
+INFO:__main__:
+🔄 RECUPERAÇÕES VIA FALLBACK:
+13:40:44 | INFO     | __main__ | 
+🔄 RECUPERAÇÕES VIA FALLBACK:
+INFO:__main__:  • Lotes recuperados via Pedido: 13
+13:40:44 | INFO     | __main__ |   • Lotes recuperados via Pedido: 13
+INFO:__main__:  • Lotes recuperados via NF: 0
+13:40:44 | INFO     | __main__ |   • Lotes recuperados via NF: 0
+INFO:__main__:  • EmbarqueItems atualizados: 0
+13:40:44 | INFO     | __main__ |   • EmbarqueItems atualizados: 0
+INFO:__main__:
+📦 ITENS CRIADOS:
+13:40:44 | INFO     | __main__ | 
+📦 ITENS CRIADOS:
+INFO:__main__:  • Total de itens: 137
+13:40:44 | INFO     | __main__ |   • Total de itens: 137
+INFO:__main__:
+📊 FONTES DE DADOS:
+13:40:44 | INFO     | __main__ | 
+📊 FONTES DE DADOS:
+INFO:__main__:  • FaturamentoProduto: 0 lotes
+13:40:44 | INFO     | __main__ |   • FaturamentoProduto: 0 lotes
+INFO:__main__:  • CarteiraPrincipal: 0 lotes
+13:40:44 | INFO     | __main__ |   • CarteiraPrincipal: 0 lotes
+INFO:__main__:  • Alertas: 25 lotes
+13:40:44 | INFO     | __main__ |   • Alertas: 25 lotes
+INFO:__main__:
+✅ SUCESSO: 24 lotes reconstruídos, 0 embarques atualizados!
+13:40:44 | INFO     | __main__ | 
+✅ SUCESSO: 24 lotes reconstruídos, 0 embarques atualizados!
+INFO:__main__:
+✅ Script executado com sucesso
+13:40:44 | INFO     | __main__ | 
+✅ Script executado com sucesso
+INFO:apscheduler.scheduler:Scheduler has been shut down
+13:40:44 | INFO     | apscheduler.scheduler | Scheduler has been shut down
+render@srv-d13m38vfte5s738t6p60-6bcf86c75b-q59bn:~/project/src$ '''
