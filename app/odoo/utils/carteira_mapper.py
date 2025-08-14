@@ -4,7 +4,7 @@ Usando mapeamento hardcoded diretamente no código
 """
 
 import logging
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -62,15 +62,16 @@ class CarteiraMapper:
             'cliente_nec_agendamento': 'order_id/partner_id/agendamento',
             'observ_ped_1': 'order_id/picking_note',
             
-            # 🏠 ENDEREÇO DE ENTREGA COMPLETO (EXATAMENTE COMO USUÁRIO ESPECIFICOU)
+            # 🏠 ENDEREÇO DE ENTREGA COMPLETO
+            # Nota: Será ajustado dinamicamente para carrier_id/l10n_br_partner_id quando incoterm = RED/REDESPACHO
             'cnpj_endereco_ent': 'order_id/partner_shipping_id/l10n_br_cnpj',
             'empresa_endereco_ent': 'order_id/partner_shipping_id/name',
             'cep_endereco_ent': 'order_id/partner_shipping_id/zip',
             'nome_cidade': 'order_id/partner_shipping_id/l10n_br_municipio_id/name',
             'cod_uf': 'order_id/partner_shipping_id/l10n_br_municipio_id',
-            'bairro_endereco_ent': 'order_id/partner_shipping_id/l10n_br_endereco_bairro',  # CORRETO do CSV
+            'bairro_endereco_ent': 'order_id/partner_shipping_id/l10n_br_endereco_bairro',
             'rua_endereco_ent': 'order_id/partner_shipping_id/street',
-            'endereco_ent': 'order_id/partner_shipping_id/l10n_br_endereco_numero',  # CORRETO do CSV
+            'endereco_ent': 'order_id/partner_shipping_id/l10n_br_endereco_numero',
             'telefone_endereco_ent': 'order_id/partner_shipping_id/phone',
         }
         
@@ -124,7 +125,11 @@ class CarteiraMapper:
                 queries.append(("product.category", partes[i]))
             elif partes[i-1] == 'parent_id' and i >= 2 and partes[i-2] == 'categ_id':
                 queries.append(("product.category", partes[i]))
-            elif partes[i-1] in ['user_id', 'team_id', 'payment_term_id', 'payment_provider_id', 'carrier_id']:
+            elif partes[i-1] == 'carrier_id':
+                queries.append(("delivery.carrier", partes[i]))
+            elif partes[i-1] == 'l10n_br_partner_id':
+                queries.append(("res.partner", partes[i]))
+            elif partes[i-1] in ['user_id', 'team_id', 'payment_term_id', 'payment_provider_id']:
                 # Estes são relações simples que o Odoo resolve automaticamente
                 continue
             else:
@@ -144,17 +149,29 @@ class CarteiraMapper:
             for linha_odoo in dados_odoo:
                 item_carteira = {}
                 
+                # Primeiro, verificar o incoterm para decidir a fonte do endereço de entrega
+                incoterm = self._extrair_valor_simples(linha_odoo, 'order_id/incoterm')
+                usar_carrier_para_endereco = self._deve_usar_carrier_para_endereco(incoterm)
+                
+                if usar_carrier_para_endereco:
+                    logger.info(f"Pedido com incoterm '{incoterm}' - usando carrier_id para endereço de entrega")
+                
                 for campo_carteira, campo_odoo in self.mapeamento_carteira.items():
                     try:
+                        # Aplicar lógica especial para campos de endereço quando incoterm = RED/REDESPACHO
+                        campo_odoo_ajustado = self._ajustar_campo_endereco_por_incoterm(
+                            campo_carteira, campo_odoo, usar_carrier_para_endereco
+                        )
+                        
                         # Verificar se é um campo que precisa de múltiplas queries
-                        if campo_odoo in self.campos_multiplas_queries:
+                        if campo_odoo_ajustado in self.campos_multiplas_queries:
                             # Para múltiplas queries, vamos precisar buscar os dados relacionados
                             # Por enquanto, marcar como None e tratar depois
                             valor = None
-                            logger.debug(f"Campo {campo_odoo} requer múltiplas queries - tratamento especial necessário")
+                            logger.debug(f"Campo {campo_odoo_ajustado} requer múltiplas queries - tratamento especial necessário")
                         else:
                             # Campos simples - usar a lógica existente
-                            valor = self._extrair_valor_simples(linha_odoo, campo_odoo)
+                            valor = self._extrair_valor_simples(linha_odoo, campo_odoo_ajustado)
                         
                         item_carteira[campo_carteira] = valor
                         
@@ -261,14 +278,26 @@ class CarteiraMapper:
             for linha_odoo in dados_odoo:
                 item_carteira = {}
                 
+                # Primeiro, verificar o incoterm para decidir a fonte do endereço de entrega
+                incoterm = self._extrair_valor_simples(linha_odoo, 'order_id/incoterm')
+                usar_carrier_para_endereco = self._deve_usar_carrier_para_endereco(incoterm)
+                
+                if usar_carrier_para_endereco:
+                    logger.info(f"Pedido com incoterm '{incoterm}' - usando carrier_id para endereço de entrega")
+                
                 for campo_carteira, campo_odoo in self.mapeamento_carteira.items():
                     try:
-                        if self.eh_campo_multiplas_queries(campo_odoo) and odoo_connection:
+                        # Aplicar lógica especial para campos de endereço quando incoterm = RED/REDESPACHO
+                        campo_odoo_ajustado = self._ajustar_campo_endereco_por_incoterm(
+                            campo_carteira, campo_odoo, usar_carrier_para_endereco
+                        )
+                        
+                        if self.eh_campo_multiplas_queries(campo_odoo_ajustado) and odoo_connection:
                             # Campo que precisa de múltiplas queries
-                            valor = self.executar_multiplas_queries(odoo_connection, campo_odoo, linha_odoo)
+                            valor = self.executar_multiplas_queries(odoo_connection, campo_odoo_ajustado, linha_odoo)
                         else:
                             # Campo simples
-                            valor = self._extrair_valor_simples(linha_odoo, campo_odoo)
+                            valor = self._extrair_valor_simples(linha_odoo, campo_odoo_ajustado)
                         
                         item_carteira[campo_carteira] = valor
                         
@@ -284,6 +313,134 @@ class CarteiraMapper:
         except Exception as e:
             logger.error(f"Erro no mapeamento completo: {e}")
             return []
+    
+    def _deve_usar_carrier_para_endereco(self, incoterm: Any) -> bool:
+        """
+        Verifica se deve usar carrier_id para endereço de entrega baseado no incoterm
+        
+        Regras:
+        - incoterm = ID 16 (no Odoo) -> usa carrier_id
+        - incoterm = "RED" -> usa carrier_id
+        - incoterm contém "[RED]" -> usa carrier_id  
+        - incoterm contém "REDESPACHO" -> usa carrier_id
+        - Outros casos -> usa partner_shipping_id (padrão)
+        """
+        if not incoterm:
+            return False
+        
+        # Verificar se é o ID 16 (usado no Odoo para redespacho)
+        if isinstance(incoterm, (list, tuple)) and len(incoterm) > 0:
+            # Formato do Odoo: [16, "RED - Redespacho"]
+            incoterm_id = incoterm[0] if isinstance(incoterm, (list, tuple)) else incoterm
+            if incoterm_id == 16:
+                logger.info(f"✅ Incoterm ID 16 identificado como REDESPACHO - será usado carrier_id para endereço de entrega")
+                return True
+            # Também verificar o texto se estiver no formato [id, texto]
+            if len(incoterm) > 1:
+                incoterm_str = str(incoterm[1]).upper().strip()
+            else:
+                incoterm_str = str(incoterm).upper().strip()
+        elif isinstance(incoterm, int):
+            # Se for apenas o ID numérico
+            if incoterm == 16:
+                logger.info(f"✅ Incoterm ID 16 identificado como REDESPACHO - será usado carrier_id para endereço de entrega")
+                return True
+            incoterm_str = str(incoterm)
+        else:
+            # Converter para string e verificar padrões
+            incoterm_str = str(incoterm).upper().strip()
+        
+        # Verificar se é RED ou contém [RED] REDESPACHO no texto
+        usar_carrier = (
+            incoterm_str == 'RED' or 
+            incoterm_str == '16' or  # ID 16 como string
+            '[RED]' in incoterm_str or 
+            'REDESPACHO' in incoterm_str
+        )
+        
+        if usar_carrier:
+            logger.info(f"✅ Incoterm '{incoterm}' identificado como REDESPACHO - será usado carrier_id para endereço de entrega")
+        
+        return usar_carrier
+    
+    def _ajustar_campo_endereco_por_incoterm(self, campo_carteira: str, campo_odoo: str, usar_carrier: bool) -> str:
+        """
+        Ajusta o campo de origem do endereço baseado no incoterm
+        Quando incoterm=RED ou [RED] REDESPACHO, troca partner_shipping_id por carrier_id/l10n_br_partner_id
+        
+        IMPORTANTE: Esta funcionalidade mapeia endereços de entrega para transportadoras
+        quando o incoterm indica REDESPACHO, garantindo que o endereço correto seja usado
+        para envios que precisam passar por um centro de distribuição intermediário.
+        
+        Estrutura no Odoo:
+        - sale.order.carrier_id -> delivery.carrier
+        - delivery.carrier.l10n_br_partner_id -> res.partner (dados do endereço)
+        """
+        if not usar_carrier:
+            return campo_odoo
+        
+        # Lista de campos de endereço que devem ser ajustados
+        campos_endereco_entrega = [
+            'cnpj_endereco_ent',
+            'empresa_endereco_ent',
+            'cep_endereco_ent',
+            'nome_cidade',
+            'cod_uf',
+            'bairro_endereco_ent',
+            'rua_endereco_ent',
+            'endereco_ent',
+            'telefone_endereco_ent'
+        ]
+        
+        # Se for um campo de endereço de entrega, substituir partner_shipping_id por carrier_id/l10n_br_partner_id
+        if campo_carteira in campos_endereco_entrega and 'partner_shipping_id' in campo_odoo:
+            # Trocar partner_shipping_id por carrier_id/l10n_br_partner_id
+            campo_ajustado = campo_odoo.replace('partner_shipping_id', 'carrier_id/l10n_br_partner_id')
+            logger.info(f"🔄 Incoterm RED/REDESPACHO - Campo {campo_carteira}: usando carrier_id/l10n_br_partner_id")
+            return campo_ajustado
+        
+        return campo_odoo
+    
+    def validar_dados_carrier(self, linha_odoo: Dict) -> Tuple[bool, str]:
+        """
+        Valida se os dados do carrier_id estão disponíveis quando necessário
+        
+        Returns:
+            Tuple[bool, str]: (sucesso, mensagem de erro/aviso)
+        """
+        try:
+            # Verificar incoterm
+            incoterm = self._extrair_valor_simples(linha_odoo, 'order_id/incoterm')
+            
+            if not self._deve_usar_carrier_para_endereco(incoterm):
+                return True, "OK - Não requer carrier_id"
+            
+            # Se requer carrier, validar se existe
+            carrier_id = self._extrair_valor_simples(linha_odoo, 'order_id/carrier_id')
+            
+            if not carrier_id:
+                num_pedido = self._extrair_valor_simples(linha_odoo, 'order_id/name')
+                return False, f"⚠️ Pedido {num_pedido} com incoterm '{incoterm}' mas sem carrier_id definido"
+            
+            # Verificar campos essenciais do carrier
+            campos_essenciais = [
+                'order_id/carrier_id/name',
+                'order_id/carrier_id/l10n_br_cnpj'
+            ]
+            
+            campos_faltantes = []
+            for campo in campos_essenciais:
+                valor = self._extrair_valor_simples(linha_odoo, campo)
+                if not valor:
+                    campos_faltantes.append(campo.split('/')[-1])
+            
+            if campos_faltantes:
+                return False, f"⚠️ Carrier_id existe mas falta(m) campo(s): {', '.join(campos_faltantes)}"
+            
+            return True, "✅ Dados do carrier válidos para REDESPACHO"
+            
+        except Exception as e:
+            return False, f"❌ Erro ao validar carrier: {str(e)}"
     
     def obter_estatisticas_mapeamento(self) -> Dict[str, Any]:
         """Retorna estatísticas do mapeamento"""

@@ -455,3 +455,117 @@ query = db.session.query(Separacao).join(
 - app/templates/carteira/js/
 - app/templates/carteira/agrupados_balanceado.html
 - app/templates/carteira/dashboard.html
+
+
+
+
+# BUSCAR E DELETAR PEDIDOS DE TODAS AS EMPRESAS
+data_corte = "2025-08-14 19:00:52"
+
+# Listar todas as empresas
+empresas = env['res.company'].search([])
+info_empresas = []
+
+total_geral = 0
+pedidos_por_empresa = {}
+
+# Buscar em CADA empresa
+for empresa in empresas:
+    # Buscar com sudo() e forçando a empresa
+    pedidos = env['sale.order'].sudo().with_company(empresa).search([
+        ('create_date', '>=', data_corte),
+        ('state', '=', 'cancel'),
+        ('company_id', '=', empresa.id)
+    ])
+
+    # Também buscar sem filtro de company_id para pegar órfãos
+    pedidos_sem_empresa = env['sale.order'].sudo().search([
+        ('create_date', '>=', data_corte),
+        ('state', '=', 'cancel'),
+        ('company_id', '=', False)  # Pedidos sem empresa
+    ])
+
+    total_empresa = len(pedidos)
+    total_geral += total_empresa
+
+    if pedidos:
+        pedidos_por_empresa[empresa.name] = pedidos
+
+    info_empresas.append("""
+    Empresa: %s (ID: %s)
+    - Pedidos encontrados: %d
+    - Primeiros: %s
+    """ % (
+        empresa.name,
+        empresa.id,
+        total_empresa,
+        ', '.join([p.name for p in pedidos[:5]]) if pedidos else "Nenhum"
+    ))
+
+# Buscar também com sudo() sem filtro de empresa
+todos_pedidos = env['sale.order'].sudo().search([
+    ('create_date', '>=', data_corte),
+    ('state', '=', 'cancel')
+])
+
+# Deletar TODOS encontrados
+deletados = 0
+erros = []
+
+for pedido in todos_pedidos:
+    try:
+        # Forçar exclusão com sudo
+        env.cr.execute("""
+            DELETE FROM sale_order_line WHERE order_id = %s
+        """, (pedido.id,))
+
+        env.cr.execute("""
+            DELETE FROM sale_order WHERE id = %s
+        """, (pedido.id,))
+
+        deletados += 1
+    except Exception as e:
+        erros.append("%s (Empresa: %s): %s" % (
+            pedido.name,
+            pedido.company_id.name if pedido.company_id else "SEM EMPRESA",
+            str(e)
+        ))
+
+# Commit
+env.cr.commit()
+
+# Verificar restantes em TODAS as empresas
+restantes_total = env['sale.order'].sudo().search_count([
+    ('create_date', '>=', data_corte),
+    ('state', '=', 'cancel')
+])
+
+mensagem = """
+🏢 EXCLUSÃO MULTI-EMPRESA:
+---------------------------
+EMPRESAS NO SISTEMA: %d
+
+DETALHES POR EMPRESA:
+%s
+
+RESUMO GERAL:
+- Total encontrado (todas empresas): %d
+- Total com sudo() direto: %d
+- Deletados: %d
+- Restantes: %d
+
+ERROS:
+%s
+
+NOTA: Use sudo() para acessar dados de todas as empresas!
+""" % (
+    len(empresas),
+    '\n'.join(info_empresas),
+    total_geral,
+    len(todos_pedidos),
+    deletados,
+    restantes_total,
+    '\n'.join(erros[:10]) if erros else "Nenhum"
+)
+
+raise UserError(mensagem)

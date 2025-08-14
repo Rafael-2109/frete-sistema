@@ -507,6 +507,9 @@
                         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.querySelectorAll('input[name=pedido_ids]:checked').forEach(cb => cb.checked = false); updateSelectedCount(); updateCotarButton();">
                             <i class="fas fa-times"></i> Limpar Seleção
                         </button>
+                        <button type="button" class="btn btn-success btn-sm" onclick="abrirMapaPedidos()" id="btnVerMapa" disabled>
+                            <i class="fas fa-map-marked-alt"></i> Ver no Mapa
+                        </button>
                         <a href="{{ url_for('pedidos.atualizar_status') }}" class="btn btn-outline-warning btn-sm" onclick="return confirm('Confirma a atualização de todos os status dos pedidos?')">
                             <i class="fas fa-sync-alt"></i> Atualizar Status
                         </a>
@@ -751,6 +754,14 @@
                   {% if p.sub_rota %}
                     <br><small>{{ p.sub_rota }}</small>
                   {% endif %}
+                  <!-- Botão para ver endereço -->
+                  <br>
+                  <button type="button" 
+                          class="btn btn-sm btn-outline-info mt-1" 
+                          onclick="abrirModalEnderecoPedido('{{ p.num_pedido }}')"
+                          title="Ver endereço de entrega">
+                      <i class="fas fa-map-marker-alt"></i> Endereço
+                  </button>
                 </td>
                 
                 <td class="text-center">
@@ -911,6 +922,7 @@ function updateCotarButton() {
     const cotarButton = document.getElementById('btnCotarFrete');
     const cotacaoManualButton = document.getElementById('btnCotacaoManual');
     const embarqueFOBButton = document.getElementById('btnEmbarqueFOB');
+    const verMapaButton = document.getElementById('btnVerMapa');
     
     // Debug básico para identificar problemas
     if (selectedCheckboxes.length > 0) {
@@ -950,6 +962,16 @@ function updateCotarButton() {
             embarqueFOBButton.innerHTML = `<i class="fas fa-ship"></i> Embarque FOB (${selectedCheckboxes.length})`;
         } else {
             embarqueFOBButton.innerHTML = '<i class="fas fa-ship"></i> Embarque FOB';
+        }
+    }
+    
+    // Controla também o botão Ver no Mapa
+    if (verMapaButton) {
+        verMapaButton.disabled = selectedCheckboxes.length === 0;
+        if (selectedCheckboxes.length > 0) {
+            verMapaButton.innerHTML = `<i class="fas fa-map-marked-alt"></i> Ver no Mapa (${selectedCheckboxes.length})`;
+        } else {
+            verMapaButton.innerHTML = '<i class="fas fa-map-marked-alt"></i> Ver no Mapa';
         }
     }
 }
@@ -1063,6 +1085,32 @@ function confirmCotacao() {
     const message = `Confirma a cotação de ${count} pedido(s) selecionado(s)?`;
     
     return confirm(message);
+}
+
+// Função para abrir mapa de pedidos
+function abrirMapaPedidos() {
+    const selectedCheckboxes = document.querySelectorAll('input[name="pedido_ids"]:checked');
+    
+    if (selectedCheckboxes.length === 0) {
+        alert('Por favor, selecione pelo menos um pedido para visualizar no mapa.');
+        return false;
+    }
+    
+    // Coleta os números dos pedidos selecionados
+    const pedidoNumeros = [];
+    selectedCheckboxes.forEach(checkbox => {
+        const row = checkbox.closest('tr');
+        const numPedido = row.querySelector('td:nth-child(3) strong').textContent.trim();
+        pedidoNumeros.push(numPedido);
+    });
+    
+    // Cria URL com os pedidos como parâmetros
+    const params = new URLSearchParams();
+    pedidoNumeros.forEach(num => params.append('pedidos[]', num));
+    
+    // Abre o mapa em nova aba
+    const url = `/carteira/mapa/visualizar?${params.toString()}`;
+    window.open(url, '_blank');
 }
 
 // Função para abrir embarque FOB
@@ -1492,6 +1540,188 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+// Função para abrir modal de endereço do pedido
+async function abrirModalEnderecoPedido(numPedido) {
+    console.log(`📍 Abrindo modal de endereço para pedido ${numPedido}`);
+    
+    // Criar modal se não existir
+    if (!document.getElementById('modalEnderecoPedido')) {
+        criarModalEnderecoPedido();
+    }
+    
+    try {
+        // Buscar dados do endereço na CarteiraPrincipal
+        const response = await fetch(`/pedidos/api/pedido/${numPedido}/endereco-carteira`);
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Erro ao carregar dados do endereço');
+        }
+
+        // Preencher dados do modal
+        preencherDadosEnderecoPedido(data.dados);
+        
+        // Mostrar modal
+        const modalElement = document.getElementById('modalEnderecoPedido');
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+
+    } catch (error) {
+        console.error('Erro ao carregar endereço:', error);
+        alert(`❌ Erro ao carregar dados do endereço: ${error.message}`);
+    }
+}
+
+function criarModalEnderecoPedido() {
+    const modal = document.createElement('div');
+    modal.id = 'modalEnderecoPedido';
+    modal.className = 'modal fade';
+    modal.setAttribute('tabindex', '-1');
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-map-marker-alt"></i> Endereço de Entrega
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <!-- Dados do Cliente -->
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-user"></i> Cliente
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-unstyled mb-0">
+                                        <li class="mb-2">
+                                            <strong>Razão Social:</strong><br>
+                                            <span id="modal_razao_social">-</span>
+                                        </li>
+                                        <li class="mb-2">
+                                            <strong>CNPJ:</strong><br>
+                                            <span id="modal_cnpj_cliente">-</span>
+                                        </li>
+                                        <li class="mb-2">
+                                            <strong>Município/UF:</strong><br>
+                                            <span id="modal_cliente_municipio">-</span>
+                                        </li>
+                                        <li class="mb-2">
+                                            <strong>Incoterm:</strong><br>
+                                            <span id="modal_incoterm" class="badge bg-warning">-</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Endereço de Entrega -->
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-truck"></i> Endereço de Entrega
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-unstyled mb-0">
+                                        <li class="mb-2">
+                                            <strong>Empresa:</strong><br>
+                                            <span id="modal_empresa_entrega">-</span>
+                                        </li>
+                                        <li class="mb-2">
+                                            <strong>CNPJ:</strong><br>
+                                            <span id="modal_cnpj_entrega">-</span>
+                                        </li>
+                                        <li class="mb-2">
+                                            <strong>Endereço:</strong><br>
+                                            <span id="modal_endereco_completo">-</span>
+                                        </li>
+                                        <li class="mb-2">
+                                            <strong>CEP:</strong> <span id="modal_cep_entrega">-</span>
+                                        </li>
+                                        <li class="mb-2">
+                                            <strong>Telefone:</strong> <span id="modal_telefone_entrega">-</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Observações -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-secondary text-white">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-sticky-note"></i> Observações
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <p id="modal_observacoes" class="mb-0">-</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function preencherDadosEnderecoPedido(dados) {
+    // Dados do cliente
+    document.getElementById('modal_razao_social').textContent = dados.raz_social || '-';
+    document.getElementById('modal_cnpj_cliente').textContent = dados.cnpj_cpf || '-';
+    document.getElementById('modal_cliente_municipio').textContent = 
+        `${dados.municipio || '-'} / ${dados.estado || '-'}`;
+    document.getElementById('modal_incoterm').textContent = dados.incoterm || '-';
+    
+    // Dados do endereço de entrega
+    document.getElementById('modal_empresa_entrega').textContent = dados.empresa_endereco_ent || '-';
+    document.getElementById('modal_cnpj_entrega').textContent = dados.cnpj_endereco_ent || '-';
+    
+    // Montar endereço completo
+    const enderecoCompleto = [
+        dados.rua_endereco_ent,
+        dados.endereco_ent ? `nº ${dados.endereco_ent}` : null,
+        dados.bairro_endereco_ent,
+        dados.nome_cidade,
+        dados.cod_uf
+    ].filter(Boolean).join(', ');
+    
+    document.getElementById('modal_endereco_completo').textContent = enderecoCompleto || '-';
+    document.getElementById('modal_cep_entrega').textContent = dados.cep_endereco_ent || '-';
+    document.getElementById('modal_telefone_entrega').textContent = dados.telefone_endereco_ent || '-';
+    
+    // Observações
+    document.getElementById('modal_observacoes').textContent = dados.observ_ped_1 || 'Sem observações';
+    
+    // Destacar se for REDESPACHO
+    if (dados.incoterm && (dados.incoterm.includes('RED') || dados.incoterm.includes('REDESPACHO'))) {
+        document.getElementById('modal_incoterm').className = 'badge bg-danger';
+        // Adicionar aviso no título do endereço
+        const headerEntrega = document.querySelector('#modalEnderecoPedido .bg-success');
+        if (headerEntrega) {
+            headerEntrega.innerHTML = `
+                <h6 class="mb-0">
+                    <i class="fas fa-truck"></i> Endereço de Entrega 
+                    <span class="badge bg-white text-danger ms-2">REDESPACHO</span>
+                </h6>
+            `;
+        }
+    }
+}
 </script>
 
 <style>

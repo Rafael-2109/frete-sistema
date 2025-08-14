@@ -1455,7 +1455,7 @@ class CarteiraService:
             erros_insercao = []
             
             # Importar helper para commits com retry
-            from app.utils.database_retry import commit_with_retry, execute_in_chunks
+            from app.utils.database_retry import commit_with_retry
             
             # Configuração para commits incrementais - evitar erro SSL
             TAMANHO_LOTE = 10  # Processar 10 registros por vez para evitar timeout SSL

@@ -667,6 +667,10 @@ def create_app(config_name=None):
     from app.carteira.routes.alertas_separacao_api import alertas_separacao_api as alertas_separacao_bp
     app.register_blueprint(alertas_separacao_bp)
     
+    # 🗺️ Módulo de Visualização no Mapa
+    from app.carteira.routes.mapa_routes import bp as mapa_bp
+    app.register_blueprint(mapa_bp)
+    
     app.register_blueprint(estoque_bp)
     
     app.register_blueprint(producao_bp)

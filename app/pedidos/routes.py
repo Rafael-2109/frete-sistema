@@ -710,6 +710,69 @@ def gerar_lote_id():
     """Gera um ID único para o lote de separação"""
     return f"LOTE_{uuid.uuid4().hex[:8].upper()}"
 
+@pedidos_bp.route('/api/pedido/<string:num_pedido>/endereco-carteira', methods=['GET'])
+@login_required
+def api_endereco_carteira(num_pedido):
+    """
+    API para buscar dados de endereço da CarteiraPrincipal
+    """
+    try:
+        from app.carteira.models import CarteiraPrincipal
+        
+        # Buscar primeiro item da carteira para este pedido
+        # (pega apenas um registro pois os dados de endereço são iguais para todo o pedido)
+        item_carteira = CarteiraPrincipal.query.filter_by(
+            num_pedido=num_pedido
+        ).first()
+        
+        if not item_carteira:
+            return jsonify({
+                'success': False,
+                'error': f'Pedido {num_pedido} não encontrado na carteira'
+            }), 404
+        
+        # Preparar dados do endereço
+        dados = {
+            # Dados do cliente
+            'raz_social': item_carteira.raz_social,
+            'raz_social_red': item_carteira.raz_social_red,
+            'cnpj_cpf': item_carteira.cnpj_cpf,
+            'municipio': item_carteira.municipio,
+            'estado': item_carteira.estado,
+            'incoterm': item_carteira.incoterm,
+            
+            # Dados do endereço de entrega
+            'empresa_endereco_ent': item_carteira.empresa_endereco_ent,
+            'cnpj_endereco_ent': item_carteira.cnpj_endereco_ent,
+            'cep_endereco_ent': item_carteira.cep_endereco_ent,
+            'nome_cidade': item_carteira.nome_cidade,
+            'cod_uf': item_carteira.cod_uf,
+            'bairro_endereco_ent': item_carteira.bairro_endereco_ent,
+            'rua_endereco_ent': item_carteira.rua_endereco_ent,
+            'endereco_ent': item_carteira.endereco_ent,
+            'telefone_endereco_ent': item_carteira.telefone_endereco_ent,
+            
+            # Observações
+            'observ_ped_1': item_carteira.observ_ped_1,
+            
+            # Dados adicionais úteis
+            'pedido_cliente': item_carteira.pedido_cliente,
+            'vendedor': item_carteira.vendedor,
+            'equipe_vendas': item_carteira.equipe_vendas,
+            'cliente_nec_agendamento': item_carteira.cliente_nec_agendamento
+        }
+        
+        return jsonify({
+            'success': True,
+            'dados': dados
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @pedidos_bp.route('/gerar_resumo', methods=['GET'])
 def gerar_resumo():
     print("[DEBUG] 🔄 Iniciando geração de resumo com correção de separações...")
