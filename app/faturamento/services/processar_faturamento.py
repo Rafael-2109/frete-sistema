@@ -62,6 +62,20 @@ class ProcessadorFaturamento:
             nfs_pendentes = self._buscar_nfs_pendentes()
             logger.info(f"📊 Total de NFs para processar: {len(nfs_pendentes)}")
             
+            # LOG DETALHADO: Verificar quantas têm movimentação
+            nfs_com_mov = 0
+            nfs_sem_mov = 0
+            for nf in nfs_pendentes:
+                tem_mov = MovimentacaoEstoque.query.filter(
+                    MovimentacaoEstoque.observacao.like(f"%NF {nf.numero_nf}%")
+                ).first()
+                if tem_mov:
+                    nfs_com_mov += 1
+                else:
+                    nfs_sem_mov += 1
+            
+            logger.info(f"📊 Status inicial: {nfs_com_mov} já têm movimentação, {nfs_sem_mov} precisam ser processadas")
+            
             # AJUSTE MAIS SEGURO: Processar em lotes com SAVEPOINTS
             # Lote de 20 é ideal: ~14s por commit, baixo risco de timeout SSL
             TAMANHO_LOTE_COMMIT = 20  # Commit a cada 20 NFs processadas
@@ -160,7 +174,8 @@ class ProcessadorFaturamento:
                         try:
                             savepoint.rollback()  # Rollback APENAS desta NF
                             logger.warning(f"⚠️ Rollback do savepoint para NF {nf.numero_nf}")
-                        except:
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao fazer rollback do savepoint para NF {nf.numero_nf}: {str(e)}")
                             pass
                     
                     logger.error(f"❌ Erro ao processar NF {nf.numero_nf}: {str(e)}")
@@ -181,7 +196,8 @@ class ProcessadorFaturamento:
                         db.session.close()
                         db.engine.dispose()
                         resultado["erros"].append(f"Último lote ({len(nfs_processadas_lote)} NFs): Erro no commit")
-                    except:
+                    except Exception as e:
+                        logger.error(f"❌ Erro no commit do último lote: {e}")
                         pass
             
             # Estatísticas finais

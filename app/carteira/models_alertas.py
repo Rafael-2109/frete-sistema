@@ -8,7 +8,7 @@ que precisam de reimpressão após sincronização com Odoo.
 
 from app import db
 from datetime import datetime
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_
 
 
 class AlertaSeparacaoCotada(db.Model):

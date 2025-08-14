@@ -579,8 +579,27 @@ class FaturamentoService:
                 logger.info("✅ Nenhuma movimentação de NF cancelada para remover")
             
             # ============================================
+            # 🔄 CONSOLIDAÇÃO PARA RELATORIOFATURAMENTOIMPORTADO
+            # ============================================
+            # IMPORTANTE: Consolidar ANTES de processar movimentações!
+            # ProcessadorFaturamento busca NFs em RelatorioFaturamentoImportado
+            
+            # 📋 CONSOLIDAR dados para RelatorioFaturamentoImportado
+            logger.info("🔄 Iniciando consolidação para RelatorioFaturamentoImportado...")
+            relatorios_consolidados = 0
+            try:
+                resultado_consolidacao = self._consolidar_faturamento(dados_faturamento)
+                relatorios_consolidados = resultado_consolidacao.get('total_relatorio_importado', 0)
+                logger.info(f"✅ Consolidação concluída: {relatorios_consolidados} relatórios processados")
+            except Exception as e:
+                logger.error(f"❌ Erro na consolidação: {e}")
+                erros.append(f"Erro na consolidação RelatorioFaturamentoImportado: {e}")
+            
+            # ============================================
             # 🚨 PROCESSAMENTO DE MOVIMENTAÇÕES DE ESTOQUE
             # ============================================
+            # AGORA que RelatorioFaturamentoImportado está populado,
+            # ProcessadorFaturamento pode encontrar as NFs
             
             # 🏭 PROCESSAR NFs para gerar movimentações de estoque
             logger.info("🏭 Iniciando processamento de movimentações de estoque...")
@@ -626,20 +645,6 @@ class FaturamentoService:
                 logger.error(f"❌ {erro_msg}")
                 stats_estoque['erros_processamento'].append(erro_msg)
             
-            # ============================================
-            # 🔄 CONSOLIDAÇÃO PARA RELATORIOFATURAMENTOIMPORTADO
-            # ============================================
-            
-            # 📋 CONSOLIDAR dados para RelatorioFaturamentoImportado
-            logger.info("🔄 Iniciando consolidação para RelatorioFaturamentoImportado...")
-            relatorios_consolidados = 0
-            try:
-                resultado_consolidacao = self._consolidar_faturamento(dados_faturamento)
-                relatorios_consolidados = resultado_consolidacao.get('total_relatorio_importado', 0)
-                logger.info(f"✅ Consolidação concluída: {relatorios_consolidados} relatórios processados")
-            except Exception as e:
-                logger.error(f"❌ Erro na consolidação: {e}")
-                erros.append(f"Erro na consolidação RelatorioFaturamentoImportado: {e}")
             
             # ============================================
             # 🔄 SINCRONIZAÇÕES INTEGRADAS (4 MÉTODOS)
