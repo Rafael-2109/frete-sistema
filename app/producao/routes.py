@@ -521,8 +521,22 @@ def processar_importacao_programacao():
         
         # COMPORTAMENTO: SEMPRE SUBSTITUI - Deletar todos os dados existentes
         try:
+            # Limpar TODAS as entradas_previstas de MovimentacaoPrevista
+            from app.estoque.models import MovimentacaoPrevista
+            
+            # Zerar todas as entradas_previstas
+            MovimentacaoPrevista.query.update({'entrada_prevista': 0})
+            
+            # Deletar registros onde ambos entrada e saída são zero
+            MovimentacaoPrevista.query.filter(
+                MovimentacaoPrevista.entrada_prevista == 0,
+                MovimentacaoPrevista.saida_prevista == 0
+            ).delete()
+            
+            # Deletar todas as programações existentes
             ProgramacaoProducao.query.delete()
             db.session.commit()
+            
             flash('✅ Dados existentes removidos (substituição completa)', 'info')
         except Exception as e:
             db.session.rollback()

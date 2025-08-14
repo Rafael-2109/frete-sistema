@@ -14,6 +14,7 @@ from app.producao.models import ProgramacaoProducao
 from app.carteira.models import PreSeparacaoItem
 from app.separacao.models import Separacao
 from app.embarques.models import EmbarqueItem
+from app.estoque.triggers_recalculo_otimizado import RecalculoMovimentacaoPrevista
 
 logger = logging.getLogger(__name__)
 
@@ -202,182 +203,107 @@ def mov_estoque_delete(mapper, connection, target):
 
 @event.listens_for(PreSeparacaoItem, 'after_insert')
 def presep_insert(mapper, connection, target):
-    """Trigger para INSERT em PreSeparacaoItem"""
-    if not target.recomposto and target.data_expedicao_editada:
-        TriggersSQLCorrigido.atualizar_movimentacao_prevista(
+    """Trigger para INSERT em PreSeparacaoItem - Usa RECÁLCULO"""
+    if target.data_expedicao_editada and target.status in ('CRIADO', 'RECOMPOSTO'):
+        # Recalcular ao invés de somar
+        RecalculoMovimentacaoPrevista.recalcular_saida_prevista_produto(
             connection,
             cod_produto=target.cod_produto,
-            data_prevista=target.data_expedicao_editada,
-            qtd_saida=float(target.qtd_selecionada_usuario)
+            data_prevista=target.data_expedicao_editada
         )
 
 
 @event.listens_for(PreSeparacaoItem, 'after_update')
 def presep_update(mapper, connection, target):
-    """Trigger para UPDATE em PreSeparacaoItem"""
-    if not target.recomposto:
-        try:
-            hist = db.inspect(target).attrs
-            
-            # Processar mudanças na data
-            if hist.data_expedicao_editada.history.has_changes():
-                if hist.data_expedicao_editada.history.deleted:
-                    data_anterior = hist.data_expedicao_editada.history.deleted[0]
-                    qtd_anterior = (
-                        hist.qtd_selecionada_usuario.history.deleted[0]
-                        if hist.qtd_selecionada_usuario.history.deleted
-                        else target.qtd_selecionada_usuario
-                    )
-                    
-                    if data_anterior and qtd_anterior:
-                        # Reverter anterior
-                        TriggersSQLCorrigido.atualizar_movimentacao_prevista(
-                            connection,
-                            cod_produto=target.cod_produto,
-                            data_prevista=data_anterior,
-                            qtd_saida=-float(qtd_anterior)
-                        )
-                
-                # Adicionar nova
-                if target.data_expedicao_editada:
-                    TriggersSQLCorrigido.atualizar_movimentacao_prevista(
+    """Trigger para UPDATE em PreSeparacaoItem - Usa RECÁLCULO"""
+    try:
+        hist = db.inspect(target).attrs
+        
+        # Detectar mudanças relevantes
+        mudou_data = hist.data_expedicao_editada.history.has_changes()
+        mudou_qtd = hist.qtd_selecionada_usuario.history.has_changes()
+        mudou_status = hist.status.history.has_changes() if hasattr(hist, 'status') else False
+        
+        # Se mudou algo relevante, recalcular
+        if mudou_data or mudou_qtd or mudou_status:
+            # Recalcular data anterior se mudou
+            if mudou_data and hist.data_expedicao_editada.history.deleted:
+                data_anterior = hist.data_expedicao_editada.history.deleted[0]
+                if data_anterior:
+                    RecalculoMovimentacaoPrevista.recalcular_saida_prevista_produto(
                         connection,
                         cod_produto=target.cod_produto,
-                        data_prevista=target.data_expedicao_editada,
-                        qtd_saida=float(target.qtd_selecionada_usuario)
+                        data_prevista=data_anterior
                     )
             
-            # Processar mudanças na quantidade
-            elif hist.qtd_selecionada_usuario.history.has_changes() and target.data_expedicao_editada:
-                qtd_anterior = (
-                    hist.qtd_selecionada_usuario.history.deleted[0]
-                    if hist.qtd_selecionada_usuario.history.deleted
-                    else 0
+            # Recalcular data atual
+            if target.data_expedicao_editada and target.status in ('CRIADO', 'RECOMPOSTO'):
+                RecalculoMovimentacaoPrevista.recalcular_saida_prevista_produto(
+                    connection,
+                    cod_produto=target.cod_produto,
+                    data_prevista=target.data_expedicao_editada
                 )
-                diferenca = float(target.qtd_selecionada_usuario) - float(qtd_anterior)
-                
-                if diferenca != 0:
-                    TriggersSQLCorrigido.atualizar_movimentacao_prevista(
-                        connection,
-                        cod_produto=target.cod_produto,
-                        data_prevista=target.data_expedicao_editada,
-                        qtd_saida=diferenca
-                    )
-        except Exception as e:
-            logger.debug(f"Erro no trigger presep_update: {e}")
+    except Exception as e:
+        logger.debug(f"Erro no trigger presep_update: {e}")
 
 
 @event.listens_for(PreSeparacaoItem, 'after_delete')
 def presep_delete(mapper, connection, target):
-    """Trigger para DELETE em PreSeparacaoItem"""
-    if not target.recomposto and target.data_expedicao_editada:
-        TriggersSQLCorrigido.atualizar_movimentacao_prevista(
+    """Trigger para DELETE em PreSeparacaoItem - Usa RECÁLCULO"""
+    if target.data_expedicao_editada:
+        # Recalcular após deletar
+        RecalculoMovimentacaoPrevista.recalcular_saida_prevista_produto(
             connection,
             cod_produto=target.cod_produto,
-            data_prevista=target.data_expedicao_editada,
-            qtd_saida=-float(target.qtd_selecionada_usuario)
+            data_prevista=target.data_expedicao_editada
         )
 
 
 @event.listens_for(Separacao, 'after_insert')
 def sep_insert(mapper, connection, target):
     """
-    Trigger para INSERT em Separacao.
-    Só gera movimentação se for separação direta (não vinda de pré-separação).
+    Trigger para INSERT em Separacao - Usa RECÁLCULO
+    Recalcula sempre, pois o método já considera NF faturada
     """
     if target.expedicao and target.qtd_saldo and target.qtd_saldo > 0:
-        # Verificar se existe PreSeparacaoItem com mesmo lote
-        # Se existir, a movimentação já foi contabilizada pela pré-separação
-        if target.separacao_lote_id:
-            # Verificar via SQL se existe pré-separação
-            sql_check = """
-            SELECT COUNT(*) FROM pre_separacao_item 
-            WHERE separacao_lote_id = :lote_id 
-            LIMIT 1
-            """
-            result = connection.execute(
-                text(sql_check), 
-                {'lote_id': target.separacao_lote_id}
-            )
-            tem_pre_separacao = result.scalar() > 0
-            
-            # Se tem pré-separação, NÃO gerar movimentação (já foi gerada)
-            if tem_pre_separacao:
-                logger.debug(f"Separação {target.separacao_lote_id} vem de pré-separação, pulando movimentação")
-                return
-        
-        # Só gera movimentação se for separação direta (completa)
-        TriggersSQLCorrigido.atualizar_movimentacao_prevista(
+        # Sempre recalcular - o método já verifica se tem NF faturada
+        RecalculoMovimentacaoPrevista.recalcular_saida_prevista_produto(
             connection,
             cod_produto=target.cod_produto,
-            data_prevista=target.expedicao,
-            qtd_saida=float(target.qtd_saldo)
+            data_prevista=target.expedicao
         )
 
 
 @event.listens_for(Separacao, 'after_update')
 def sep_update(mapper, connection, target):
     """
-    Trigger para UPDATE em Separacao.
-    Só gera movimentação se for separação direta (não vinda de pré-separação).
+    Trigger para UPDATE em Separacao - Usa RECÁLCULO
     """
     try:
-        # Verificar se vem de pré-separação
-        if target.separacao_lote_id:
-            sql_check = """
-            SELECT COUNT(*) FROM pre_separacao_item 
-            WHERE separacao_lote_id = :lote_id 
-            LIMIT 1
-            """
-            result = connection.execute(
-                text(sql_check), 
-                {'lote_id': target.separacao_lote_id}
-            )
-            tem_pre_separacao = result.scalar() > 0
-            
-            if tem_pre_separacao:
-                logger.debug(f"Separação {target.separacao_lote_id} vem de pré-separação, pulando update de movimentação")
-                return
-        
         hist = db.inspect(target).attrs
         
-        # Processar mudanças na data
-        if hist.expedicao.history.has_changes():
-            if hist.expedicao.history.deleted:
+        # Detectar mudanças relevantes
+        mudou_data = hist.expedicao.history.has_changes()
+        mudou_qtd = hist.qtd_saldo.history.has_changes()
+        
+        # Se mudou algo relevante, recalcular
+        if mudou_data or mudou_qtd:
+            # Recalcular data anterior se mudou
+            if mudou_data and hist.expedicao.history.deleted:
                 data_anterior = hist.expedicao.history.deleted[0]
-                qtd_anterior = (
-                    hist.qtd_saldo.history.deleted[0]
-                    if hist.qtd_saldo.history.deleted
-                    else target.qtd_saldo
-                )
-                
-                if data_anterior and qtd_anterior and qtd_anterior > 0:
-                    TriggersSQLCorrigido.atualizar_movimentacao_prevista(
+                if data_anterior:
+                    RecalculoMovimentacaoPrevista.recalcular_saida_prevista_produto(
                         connection,
                         cod_produto=target.cod_produto,
-                        data_prevista=data_anterior,
-                        qtd_saida=-float(qtd_anterior)
+                        data_prevista=data_anterior
                     )
             
+            # Recalcular data atual
             if target.expedicao and target.qtd_saldo and target.qtd_saldo > 0:
-                TriggersSQLCorrigido.atualizar_movimentacao_prevista(
+                RecalculoMovimentacaoPrevista.recalcular_saida_prevista_produto(
                     connection,
                     cod_produto=target.cod_produto,
-                    data_prevista=target.expedicao,
-                    qtd_saida=float(target.qtd_saldo)
-                )
-        
-        # Processar mudanças na quantidade
-        elif hist.qtd_saldo.history.has_changes() and target.expedicao:
-            qtd_anterior = hist.qtd_saldo.history.deleted[0] if hist.qtd_saldo.history.deleted else 0
-            diferenca = float(target.qtd_saldo or 0) - float(qtd_anterior or 0)
-            
-            if diferenca != 0:
-                TriggersSQLCorrigido.atualizar_movimentacao_prevista(
-                    connection,
-                    cod_produto=target.cod_produto,
-                    data_prevista=target.expedicao,
-                    qtd_saida=diferenca
+                    data_prevista=target.expedicao
                 )
     except Exception as e:
         logger.debug(f"Erro no trigger sep_update: {e}")
@@ -386,33 +312,14 @@ def sep_update(mapper, connection, target):
 @event.listens_for(Separacao, 'after_delete')
 def sep_delete(mapper, connection, target):
     """
-    Trigger para DELETE em Separacao.
-    Só gera movimentação se for separação direta (não vinda de pré-separação).
+    Trigger para DELETE em Separacao - Usa RECÁLCULO
     """
-    if target.expedicao and target.qtd_saldo and target.qtd_saldo > 0:
-        # Verificar se vem de pré-separação
-        if target.separacao_lote_id:
-            sql_check = """
-            SELECT COUNT(*) FROM pre_separacao_item 
-            WHERE separacao_lote_id = :lote_id 
-            LIMIT 1
-            """
-            result = connection.execute(
-                text(sql_check), 
-                {'lote_id': target.separacao_lote_id}
-            )
-            tem_pre_separacao = result.scalar() > 0
-            
-            if tem_pre_separacao:
-                logger.debug(f"Separação {target.separacao_lote_id} vem de pré-separação, pulando delete de movimentação")
-                return
-        
-        # Só gera movimentação se for separação direta
-        TriggersSQLCorrigido.atualizar_movimentacao_prevista(
+    if target.expedicao:
+        # Recalcular após deletar
+        RecalculoMovimentacaoPrevista.recalcular_saida_prevista_produto(
             connection,
             cod_produto=target.cod_produto,
-            data_prevista=target.expedicao,
-            qtd_saida=-float(target.qtd_saldo)
+            data_prevista=target.expedicao
         )
 
 

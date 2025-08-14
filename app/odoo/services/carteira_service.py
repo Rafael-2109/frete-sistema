@@ -863,6 +863,8 @@ class CarteiraService:
         """
         try:
             from app.carteira.models import PreSeparacaoItem
+            from app.estoque.triggers_recalculo_otimizado import RecalculoMovimentacaoPrevista
+            from app import db
             
             logger.info("🔄 Iniciando recomposição automática de pré-separações...")
             
@@ -871,11 +873,22 @@ class CarteiraService:
             
             logger.info(f"✅ Recomposição concluída: {resultado['sucesso']} sucessos, {resultado['erro']} erros")
             
+            # IMPORTANTE: Recalcular MovimentacaoPrevista após recomposição
+            logger.info("📊 Recalculando MovimentacaoPrevista após recomposição...")
+            try:
+                with db.engine.connect() as connection:
+                    RecalculoMovimentacaoPrevista.recalcular_apos_sincronizacao(connection)
+                    connection.commit()
+                logger.info("✅ MovimentacaoPrevista recalculada com sucesso")
+            except Exception as e:
+                logger.error(f"❌ Erro ao recalcular MovimentacaoPrevista: {e}")
+            
             return {
                 'sucessos': resultado['sucesso'],
                 'erros': resultado['erro'],
                 'timestamp': datetime.now(),
-                'metodo': 'recomposicao_automatica'
+                'metodo': 'recomposicao_automatica',
+                'movimentacao_recalculada': True
             }
             
         except Exception as e:

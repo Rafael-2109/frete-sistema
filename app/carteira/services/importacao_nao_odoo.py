@@ -6,7 +6,6 @@ import logging
 from datetime import datetime
 from app import db
 from app.carteira.models import CarteiraCopia, CadastroCliente, CarteiraPrincipal
-from app.localidades.models import Cidade
 from app.utils.timezone import agora_brasil
 from sqlalchemy import and_
 import re
@@ -77,7 +76,6 @@ class ImportadorPedidosNaoOdoo:
     
     def celula_para_indices(self, celula):
         """Converte referência de célula (ex: 'B8') para índices de linha e coluna"""
-        import string
         coluna_letra = ''.join(filter(str.isalpha, celula))
         linha_num = int(''.join(filter(str.isdigit, celula)))
         
@@ -160,12 +158,12 @@ class ImportadorPedidosNaoOdoo:
                     try:
                         # Tentar converter para data se for string
                         if isinstance(valor, str) and '/' in valor:
-                            from datetime import datetime
                             data_obj = datetime.strptime(valor, '%d/%m/%Y')
                             dados[campo] = data_obj.date()
                         else:
                             dados[campo] = valor
-                    except:
+                    except Exception as e:
+                        logger.error(f"Erro ao converter data: {e}")
                         dados[campo] = valor
                 else:
                     dados[campo] = valor
@@ -217,7 +215,8 @@ class ImportadorPedidosNaoOdoo:
                         # Remover vírgulas e converter
                         qtd_str = str(valor_qtd).replace(',', '.')
                         qtd = float(qtd_str)
-                    except:
+                    except Exception as e:
+                        logger.error(f"Erro ao converter quantidade: {e}")
                         qtd = 0
                 
                 # Preço
@@ -227,7 +226,8 @@ class ImportadorPedidosNaoOdoo:
                         # Remover vírgulas e converter
                         preco_str = str(valor_preco).replace(',', '.')
                         preco = float(preco_str)
-                    except:
+                    except Exception as e:
+                        logger.error(f"Erro ao converter preço: {e}")
                         preco = 0
                 
                 # Adicionar produto se quantidade for válida (qtd != None e qtd > 0)

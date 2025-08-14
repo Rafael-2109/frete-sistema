@@ -3,8 +3,6 @@ Modelos para Sistema de Estoque em Tempo Real com Projeção Futura
 Performance-focused: Consultas < 100ms
 """
 
-from datetime import datetime
-from decimal import Decimal
 from app import db
 from app.utils.timezone import agora_brasil
 

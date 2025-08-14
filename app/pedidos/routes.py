@@ -121,7 +121,7 @@ def lista_pedidos():
     # ✅ NOVO: Contador de pedidos com agendamento pendente
     # Buscar CNPJs que precisam de agendamento
     contatos_agendamento_count = ContatoAgendamento.query.filter(
-        ContatoAgendamento.forma != None,
+        ContatoAgendamento.forma is not None,
         ContatoAgendamento.forma != '',
         ContatoAgendamento.forma != 'SEM AGENDAMENTO'
     ).all()
@@ -335,14 +335,12 @@ def lista_pedidos():
         else:
             query = query.order_by(campo_ordenacao.asc())
     else:
-        # Ordenação padrão se campo inválido
+        # Ordenação padrão: mesma hierarquia da carteira agrupada
         query = query.order_by(
-            Pedido.rota.asc(),
-            Pedido.cod_uf.asc(),
-            Pedido.sub_rota.asc(),
-            Pedido.expedicao.asc(),
-            Pedido.nome_cidade.asc(),
-            Pedido.cnpj_cpf.asc()
+            Pedido.rota.asc().nullslast(),      # 1º Rota: menor para maior (A-Z)
+            Pedido.sub_rota.asc().nullslast(),  # 2º Sub-rota: menor para maior (A-Z)
+            Pedido.cnpj_cpf.asc().nullslast(),  # 3º CNPJ: menor para maior (0-9)
+            Pedido.expedicao.asc().nullslast(), # 4º Data de expedição
         )
 
     pedidos = query.all()
@@ -803,23 +801,23 @@ def gerar_resumo():
             LocalizacaoService.normalizar_dados_pedido(pedido_existente)
         else:
             novo = Pedido(
-                num_pedido = row.num_pedido,
-                data_pedido = row.data_pedido,
-                cnpj_cpf = row.cnpj_cpf,
-                raz_social_red = row.raz_social_red,
-                nome_cidade = row.nome_cidade,
-                cod_uf = row.cod_uf,
-                valor_saldo_total = row.valor_saldo_total,
-                pallet_total = row.pallet_total,
-                peso_total = row.peso_total,
-                rota = row.rota,
-                sub_rota = row.sub_rota,
-                observ_ped_1 = row.observ_ped_1,
-                roteirizacao = row.roteirizacao,
-                expedicao = row.expedicao,
-                agendamento = row.agendamento,
-                protocolo = row.protocolo,
-                separacao_lote_id = lote_id  # ✅ NOVO: Conecta com separação
+                num_pedido=row.num_pedido,
+                data_pedido=row.data_pedido,
+                cnpj_cpf=row.cnpj_cpf,
+                raz_social_red=row.raz_social_red,
+                nome_cidade=row.nome_cidade,
+                cod_uf=row.cod_uf,
+                valor_saldo_total=row.valor_saldo_total,
+                pallet_total=row.pallet_total,
+                peso_total=row.peso_total,
+                rota=row.rota,
+                sub_rota=row.sub_rota,
+                observ_ped_1=row.observ_ped_1,
+                roteirizacao=row.roteirizacao,
+                expedicao=row.expedicao,
+                agendamento=row.agendamento,
+                protocolo=row.protocolo,
+                separacao_lote_id=lote_id  # ✅ NOVO: Conecta com separação
             )
             # ✨ Usa o novo serviço de normalização
             LocalizacaoService.normalizar_dados_pedido(novo)

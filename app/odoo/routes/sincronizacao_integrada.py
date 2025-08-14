@@ -12,11 +12,9 @@ Data: 2025-07-21
 """
 
 from flask import Blueprint, request, jsonify, render_template, flash, redirect, url_for
-from flask_login import login_required, current_user
-from datetime import datetime
+from flask_login import login_required
 import logging
 
-from app.utils.auth_decorators import require_admin
 from app.odoo.services.sincronizacao_integrada_service import SincronizacaoIntegradaService
 
 logger = logging.getLogger(__name__)
