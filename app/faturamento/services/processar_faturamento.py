@@ -30,7 +30,7 @@ class ProcessadorFaturamento:
     ) -> Optional[Dict[str, Any]]:
         """
         Processa todas as NFs importadas seguindo lógica simplificada
-        COM MELHORIAS: Commits incrementais e tratamento de erros isolados
+        COM MELHORIAS: Commits em lotes e tratamento de erros isolados
         """
         resultado = {
             "processadas": 0,
@@ -61,9 +61,19 @@ class ProcessadorFaturamento:
             # 1. Buscar TODAS as NFs ativas
             nfs_pendentes = self._buscar_nfs_pendentes()
             logger.info(f"📊 Total de NFs para processar: {len(nfs_pendentes)}")
+            
+            # AJUSTE MAIS SEGURO: Processar em lotes com SAVEPOINTS
+            # Lote de 20 é ideal: ~14s por commit, baixo risco de timeout SSL
+            TAMANHO_LOTE_COMMIT = 20  # Commit a cada 20 NFs processadas
+            nfs_processadas_lote = []  # Lista de NFs processadas com sucesso no lote
 
             for idx, nf in enumerate(nfs_pendentes):
+                # Criar SAVEPOINT para cada NF
+                savepoint = None
                 try:
+                    # SEGURANÇA MÁXIMA: Savepoint permite rollback parcial
+                    savepoint = db.session.begin_nested()
+                    
                     logger.info(
                         f"🔄 [{idx+1}/{len(nfs_pendentes)}] Processando NF {nf.numero_nf} - Pedido: {nf.origem}"
                     )
@@ -72,6 +82,7 @@ class ProcessadorFaturamento:
                     if self._tem_movimentacao_com_lote(nf.numero_nf):
                         logger.info(f"✅ NF {nf.numero_nf} já processada com lote - pulando")
                         resultado["ja_processadas"] += 1
+                        savepoint.commit()  # Liberar savepoint
                         continue
 
                     # 1.B - NF Cancelada?
@@ -79,12 +90,8 @@ class ProcessadorFaturamento:
                         self._processar_cancelamento(nf)
                         resultado["canceladas"] += 1
                         logger.info(f"🚫 NF {nf.numero_nf} cancelada - movimentações removidas")
-                        # MELHORIA: Commit incremental para cancelamentos
-                        try:
-                            db.session.commit()
-                        except Exception as e:
-                            logger.error(f"❌ Erro no commit da NF {nf.numero_nf}: {e}")
-                            db.session.rollback()
+                        savepoint.commit()  # Confirmar alterações desta NF
+                        nfs_processadas_lote.append(nf.numero_nf)
                         continue
 
                     # 1.C - Processar NF (com ou sem movimentação "Sem Separação")
@@ -93,16 +100,24 @@ class ProcessadorFaturamento:
                         resultado["processadas"] += 1
                         resultado["movimentacoes_criadas"] += mov_criadas
                         resultado["embarque_items_atualizados"] += emb_atualizados
+                        savepoint.commit()  # Confirmar alterações desta NF
+                        nfs_processadas_lote.append(nf.numero_nf)
+                    else:
+                        # Não processou mas não é erro - fazer commit do savepoint
+                        savepoint.commit()
                         
-                        # MELHORIA: Commit incremental com RETRY para evitar perda por erro SSL
+                    # AJUSTE SEGURO: Commit em lote a cada N NFs para evitar timeout
+                    if len(nfs_processadas_lote) >= TAMANHO_LOTE_COMMIT:
+                        # Fazer commit do lote com retry para SSL
                         commit_sucesso = False
                         max_tentativas = 3
                         
                         for tentativa in range(max_tentativas):
                             try:
                                 db.session.commit()
-                                logger.info(f"✅ NF {nf.numero_nf} commitada com sucesso - {mov_criadas} movimentações criadas")
+                                logger.info(f"✅ Lote {(idx//TAMANHO_LOTE_COMMIT)+1} com {len(nfs_processadas_lote)} NFs commitado com sucesso")
                                 commit_sucesso = True
+                                nfs_processadas_lote = []  # Resetar lista
                                 break
                             except Exception as commit_error:
                                 error_msg = str(commit_error).lower()
@@ -110,7 +125,7 @@ class ProcessadorFaturamento:
                                 # Verificar se é erro SSL recuperável
                                 if 'ssl' in error_msg or 'decryption' in error_msg or 'eof' in error_msg:
                                     if tentativa < max_tentativas - 1:
-                                        logger.warning(f"⚠️ Erro SSL no commit da NF {nf.numero_nf}, tentativa {tentativa + 1}/{max_tentativas}")
+                                        logger.warning(f"⚠️ Erro SSL no commit do lote, tentativa {tentativa + 1}/{max_tentativas}")
                                         # Aguardar antes de tentar novamente
                                         import time
                                         time.sleep(0.5 * (tentativa + 1))  # Delay crescente
@@ -120,31 +135,55 @@ class ProcessadorFaturamento:
                                             db.session.rollback()
                                             db.session.close()
                                             db.engine.dispose()
-                                        except:
+                                        except Exception as e:
+                                            logger.error(f"❌ Erro ao fechar conexão: {e}")
                                             pass
                                     else:
-                                        logger.error(f"❌ Erro SSL persistente após {max_tentativas} tentativas para NF {nf.numero_nf}")
+                                        logger.error(f"❌ Erro SSL persistente após {max_tentativas} tentativas")
                                         db.session.rollback()
-                                        resultado["erros"].append(f"NF {nf.numero_nf}: Erro SSL no commit após {max_tentativas} tentativas")
+                                        resultado["erros"].append(f"Lote ({len(nfs_processadas_lote)} NFs): Erro SSL no commit após {max_tentativas} tentativas")
+                                        nfs_processadas_lote = []
                                 else:
                                     # Erro não relacionado a SSL - não tentar novamente
-                                    logger.error(f"❌ Erro no commit da NF {nf.numero_nf}: {commit_error}")
+                                    logger.error(f"❌ Erro no commit do lote: {commit_error}")
                                     db.session.rollback()
-                                    resultado["erros"].append(f"NF {nf.numero_nf}: Erro no commit")
+                                    resultado["erros"].append(f"Lote ({len(nfs_processadas_lote)} NFs): Erro no commit")
+                                    nfs_processadas_lote = []
                                     break
-                        
-                        if not commit_sucesso:
-                            # Decrementar contadores se o commit falhou
-                            resultado["movimentacoes_criadas"] -= mov_criadas
-                            resultado["embarque_items_atualizados"] -= emb_atualizados
 
                 except Exception as e:
+                    # SEGURANÇA: Rollback apenas do savepoint desta NF
+                    if savepoint and not savepoint.is_active:
+                        # Savepoint já foi commitado, não precisa fazer nada
+                        pass
+                    elif savepoint:
+                        try:
+                            savepoint.rollback()  # Rollback APENAS desta NF
+                            logger.warning(f"⚠️ Rollback do savepoint para NF {nf.numero_nf}")
+                        except:
+                            pass
+                    
                     logger.error(f"❌ Erro ao processar NF {nf.numero_nf}: {str(e)}")
                     resultado["erros"].append(f"NF {nf.numero_nf}: {str(e)}")
-                    # MELHORIA: Rollback apenas desta NF específica
-                    db.session.rollback()
+                    # Continuar com as outras NFs - o savepoint protegeu as anteriores
                     continue
 
+            # AJUSTE SEGURO: Commit final para NFs restantes no último lote
+            if len(nfs_processadas_lote) > 0:
+                try:
+                    db.session.commit()
+                    logger.info(f"✅ Último lote de {len(nfs_processadas_lote)} NFs commitado com sucesso")
+                except Exception as e:
+                    logger.error(f"❌ Erro no commit do último lote: {e}")
+                    # Tentar reconectar
+                    try:
+                        db.session.rollback()
+                        db.session.close()
+                        db.engine.dispose()
+                        resultado["erros"].append(f"Último lote ({len(nfs_processadas_lote)} NFs): Erro no commit")
+                    except:
+                        pass
+            
             # Estatísticas finais
             logger.info(f"✅ Processamento completo: {resultado['processadas']} NFs processadas")
             if resultado.get('movimentacoes_criadas', 0) > 0:

@@ -594,18 +594,23 @@ class FaturamentoService:
                 
                 if resultado_processamento:
                     stats_estoque['processadas'] = resultado_processamento.get('processadas', 0)
-                    stats_estoque['caso1_direto'] = resultado_processamento.get('caso1_direto', 0)
-                    stats_estoque['caso2_parcial'] = resultado_processamento.get('caso2_parcial', 0)
-                    stats_estoque['caso3_cancelado'] = resultado_processamento.get('caso3_cancelado', 0)
+                    stats_estoque['ja_processadas'] = resultado_processamento.get('ja_processadas', 0)
+                    stats_estoque['canceladas'] = resultado_processamento.get('canceladas', 0)
+                    stats_estoque['sem_separacao'] = resultado_processamento.get('sem_separacao', 0)
+                    stats_estoque['com_embarque'] = resultado_processamento.get('com_embarque', 0)
+                    stats_estoque['movimentacoes_criadas'] = resultado_processamento.get('movimentacoes_criadas', 0)
+                    stats_estoque['embarque_items_atualizados'] = resultado_processamento.get('embarque_items_atualizados', 0)
                     stats_estoque['erros_processamento'] = resultado_processamento.get('erros', [])
                     
-                    # Contar movimentações criadas (estimativa: casos 1+2)
-                    stats_estoque['movimentacoes_criadas'] = (
-                        resultado_processamento.get('caso1_direto', 0) +
-                        resultado_processamento.get('caso2_parcial', 0)
-                    )
-                    
-                    logger.info(f"✅ Processamento de estoque concluído: {stats_estoque['processadas']} NFs processadas, {stats_estoque['movimentacoes_criadas']} movimentações criadas")
+                    logger.info(f"""✅ Processamento de estoque concluído:
+                    - NFs processadas: {stats_estoque['processadas']}
+                    - Já processadas: {stats_estoque['ja_processadas']} 
+                    - Canceladas: {stats_estoque['canceladas']}
+                    - Com embarque: {stats_estoque['com_embarque']}
+                    - Sem separação: {stats_estoque['sem_separacao']}
+                    - Movimentações criadas: {stats_estoque['movimentacoes_criadas']}
+                    - Embarques atualizados: {stats_estoque['embarque_items_atualizados']}
+                    """)
                     
                     if stats_estoque['erros_processamento']:
                         logger.warning(f"⚠️ {len(stats_estoque['erros_processamento'])} erros no processamento de estoque")
