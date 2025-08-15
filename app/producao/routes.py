@@ -522,7 +522,7 @@ def processar_importacao_programacao():
         # COMPORTAMENTO: SEMPRE SUBSTITUI - Deletar todos os dados existentes
         try:
             # Limpar TODAS as entradas_previstas de MovimentacaoPrevista
-            from app.estoque.models import MovimentacaoPrevista
+            from app.estoque.models_tempo_real import MovimentacaoPrevista
             
             # Zerar todas as entradas_previstas
             MovimentacaoPrevista.query.update({'entrada_prevista': 0})

@@ -16,6 +16,7 @@ from app.estoque.models import MovimentacaoEstoque
 from app.separacao.models import Separacao
 from app.embarques.models import Embarque, EmbarqueItem
 from app.carteira.models import FaturamentoParcialJustificativa, InconsistenciaFaturamento
+from app.pedidos.models import Pedido
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +198,13 @@ class ProcessadorFaturamento:
                     except Exception as e:
                         logger.error(f"❌ Erro no commit do último lote: {e}")
                         pass
+            
+            # NOVO: Atualizar status dos pedidos para FATURADO
+            logger.info("🔄 Atualizando status dos pedidos para FATURADO...")
+            pedidos_atualizados = self._atualizar_status_pedidos_faturados()
+            if pedidos_atualizados > 0:
+                logger.info(f"✅ {pedidos_atualizados} pedidos atualizados para status FATURADO")
+                resultado["pedidos_atualizados_status"] = pedidos_atualizados
             
             # Estatísticas finais
             logger.info(f"✅ Processamento completo: {resultado['processadas']} NFs processadas")
@@ -764,3 +772,48 @@ class ProcessadorFaturamento:
             inc.resolvida = False
             inc.criado_por = usuario
             db.session.add(inc)
+    
+    def _atualizar_status_pedidos_faturados(self) -> int:
+        """
+        Atualiza o status dos pedidos para FATURADO quando têm NF preenchida
+        e existe faturamento correspondente.
+        
+        Returns:
+            Número de pedidos atualizados
+        """
+        contador = 0
+        
+        try:
+            # Buscar pedidos que têm NF mas não estão com status FATURADO
+            # Incluindo também NF no CD que devem ser marcadas como FATURADO
+            pedidos_com_nf = Pedido.query.filter(
+                Pedido.nf.isnot(None),
+                Pedido.nf != "",
+                Pedido.status != 'FATURADO'
+            ).all()
+            
+            logger.info(f"📊 Encontrados {len(pedidos_com_nf)} pedidos com NF mas sem status FATURADO")
+            
+            for pedido in pedidos_com_nf:
+                # Verificar se existe faturamento para esta NF
+                faturamento_existe = FaturamentoProduto.query.filter_by(
+                    numero_nf=pedido.nf
+                ).first()
+                
+                if faturamento_existe:
+                    status_antigo = pedido.status
+                    pedido.status = 'FATURADO'
+                    contador += 1
+                    logger.info(f"  • Pedido {pedido.num_pedido}: '{status_antigo}' → 'FATURADO' (NF: {pedido.nf})")
+                else:
+                    logger.warning(f"  ⚠️ Pedido {pedido.num_pedido} tem NF {pedido.nf} mas não tem FaturamentoProduto")
+            
+            if contador > 0:
+                db.session.commit()
+                logger.info(f"✅ {contador} pedidos atualizados para status FATURADO")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao atualizar status dos pedidos: {e}")
+            db.session.rollback()
+        
+        return contador

@@ -151,8 +151,7 @@ class AjusteSincronizacaoService:
         # Só busca separações onde o Pedido tem status ABERTO ou COTADO
         seps = db.session.query(
             Separacao.separacao_lote_id,
-            Pedido.status,
-            Pedido.nf
+            Pedido.status
         ).outerjoin(
             Pedido,
             Separacao.separacao_lote_id == Pedido.separacao_lote_id
@@ -166,13 +165,7 @@ class AjusteSincronizacaoService:
             )
         ).distinct().all()
         
-        for lote_id, status_pedido, nf in seps:
-            # PROTEÇÃO ADICIONAL: Verificar se foi faturado
-            if cls._verificar_se_faturado(lote_id):
-                logger.warning(f"🛡️ PROTEÇÃO: Ignorando lote {lote_id} - Separação FATURADA (NF: {nf})")
-                lotes_processados.add(lote_id)
-                continue
-                
+        for lote_id, status_pedido in seps:
             lotes.append({
                 'lote_id': lote_id,
                 'tipo': 'SEPARACAO'
@@ -678,11 +671,6 @@ class AjusteSincronizacaoService:
         Substitui completamente uma separação TOTAL.
         Pega 1 linha existente como modelo, deleta tudo e recria com os novos itens.
         """
-        # PROTEÇÃO: Verificar se foi faturado
-        if cls._verificar_se_faturado(lote_id, num_pedido):
-            logger.warning(f"🛡️ PROTEÇÃO: Não alterando Separacao {lote_id} - Separação FATURADA")
-            return
-            
         # PROTEÇÃO: Verificar se o Pedido permite alteração
         pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
         if pedido and pedido.status not in ['ABERTO', 'COTADO']:
@@ -946,14 +934,10 @@ class AjusteSincronizacaoService:
                         resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} (ABERTO) reduzida em {qtd_consumir}")
                         resultado['qtd_aplicada'] += qtd_consumir
                         
-                        # Se zerou, deletar (mas verificar faturamento primeiro)
+                        # Se zerou, deletar
                         if sep.qtd_saldo <= 0:
-                            if not cls._verificar_se_faturado(sep.separacao_lote_id, num_pedido, cod_produto):
-                                db.session.delete(sep)
-                                resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} removida")
-                            else:
-                                logger.warning(f"🛡️ Separação {sep.separacao_lote_id} zerada mas FATURADA - mantendo registro")
-                                resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} zerada (FATURADA - mantida)")
+                            db.session.delete(sep)
+                            resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} removida")
         
         # 4. Consumir de Separacao COTADA (último recurso)
         if qtd_restante > 0:
@@ -996,14 +980,10 @@ class AjusteSincronizacaoService:
                         )
                         resultado['alerta_id'] = alerta.id
                         
-                        # Se zerou, deletar (mas verificar faturamento primeiro)
+                        # Se zerou, deletar
                         if sep.qtd_saldo <= 0:
-                            if not cls._verificar_se_faturado(sep.separacao_lote_id, num_pedido, cod_produto):
-                                db.session.delete(sep)
-                                resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} removida")
-                            else:
-                                logger.warning(f"🛡️ Separação {sep.separacao_lote_id} zerada mas FATURADA - mantendo registro")
-                                resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} zerada (FATURADA - mantida)")
+                            db.session.delete(sep)
+                            resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} removida")
         
         return resultado
     
@@ -1037,55 +1017,6 @@ class AjusteSincronizacaoService:
         
         return False
     
-
-    @classmethod
-    def _verificar_se_faturado(cls, lote_id: str, num_pedido: str = None, cod_produto: str = None) -> bool:
-        """
-        Verifica se uma separação foi faturada.
-        
-        IMPORTANTE: Uma separação é considerada FATURADA se:
-        1. O Pedido tem NF preenchida E
-        2. Existe registro em FaturamentoProduto com essa NF
-        
-        Args:
-            lote_id: ID do lote de separação
-            num_pedido: Número do pedido (opcional)
-            cod_produto: Código do produto (opcional, para verificação específica)
-            
-        Returns:
-            True se foi faturada, False caso contrário
-        """
-        try:
-            from app.faturamento.models import FaturamentoProduto
-            
-            # Buscar o Pedido pelo lote
-            pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
-            
-            if not pedido or not pedido.nf:
-                return False
-            
-            # Verificar se existe faturamento com essa NF
-            query = FaturamentoProduto.query.filter_by(numero_nf=pedido.nf)
-            
-            # Se especificou produto, verificar esse produto específico
-            if num_pedido and cod_produto:
-                query = query.filter_by(
-                    origem=num_pedido,
-                    cod_produto=cod_produto
-                )
-            
-            faturamento_existe = query.first() is not None
-            
-            if faturamento_existe:
-                logger.info(f"🛡️ Separação {lote_id} está FATURADA (NF: {pedido.nf})")
-            
-            return faturamento_existe
-            
-        except Exception as e:
-            logger.error(f"Erro ao verificar faturamento: {e}")
-            # Na dúvida, proteger (considerar como faturado)
-            return True
-
     @classmethod
     def _gerar_alerta_cotado(cls, lote_id: str, num_pedido: str, 
                             tipo_alteracao: str, detalhes: str,
