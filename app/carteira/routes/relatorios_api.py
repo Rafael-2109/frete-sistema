@@ -114,6 +114,17 @@ def exportar_separacoes():
             Separacao.separacao_lote_id == Pedido.separacao_lote_id
         )
         
+        # Filtrar apenas separações ATIVAS (excluir FATURADO)
+        # Permitir incluir FATURADO apenas se explicitamente solicitado
+        incluir_faturado = data.get('incluir_faturado', False) if data else False
+        if not incluir_faturado:
+            query = query.filter(
+                db.or_(
+                    Pedido.status.in_(['ABERTO', 'COTADO']),
+                    Pedido.status.is_(None)  # Incluir separações sem pedido associado
+                )
+            )
+        
         # Aplicar filtro de datas se fornecido
         if data_inicio and data_fim:
             data_inicio = datetime.strptime(data_inicio, '%Y-%m-%d').date()
@@ -301,11 +312,16 @@ def exportar_carteira_detalhada():
                 PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
             ).scalar() or 0
             
+            # Somar apenas separações ATIVAS (excluir FATURADO)
             qtd_sep = db.session.query(
                 func.sum(Separacao.qtd_saldo)
+            ).join(
+                Pedido,
+                Separacao.separacao_lote_id == Pedido.separacao_lote_id
             ).filter(
                 Separacao.num_pedido == pedido.num_pedido,
-                Separacao.cod_produto == pedido.cod_produto
+                Separacao.cod_produto == pedido.cod_produto,
+                Pedido.status.in_(['ABERTO', 'COTADO'])  # Excluir FATURADO
             ).scalar() or 0
             
             qtd_liquida = float(pedido.qtd_saldo_produto_pedido or 0) - float(qtd_pre_sep) - float(qtd_sep)
