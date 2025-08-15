@@ -25,9 +25,16 @@ def obter_separacoes_completas(num_pedido):
     incluindo dados de embarque quando status = COTADO
     """
     try:
-        # Buscar todas as separações do pedido
-        separacoes = db.session.query(Separacao).filter(
-            Separacao.num_pedido == num_pedido
+        # Buscar apenas separações com status ABERTO ou COTADO (não FATURADO)
+        separacoes = db.session.query(Separacao).join(
+            Pedido,
+            and_(
+                Separacao.num_pedido == Pedido.num_pedido,
+                Separacao.separacao_lote_id == Pedido.separacao_lote_id
+            )
+        ).filter(
+            Separacao.num_pedido == num_pedido,
+            Pedido.status.in_(['ABERTO', 'COTADO'])  # Excluir FATURADO
         ).order_by(Separacao.criado_em.desc()).all()
         
         separacoes_data = []
