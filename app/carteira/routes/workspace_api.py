@@ -112,6 +112,10 @@ def workspace_pedido_real(num_pedido):
                 produto_data['qtd_pre_separacoes'] = float(qtd_pre_separacoes or 0)
                 produto_data['qtd_separacoes'] = float(qtd_separacoes or 0)
                 
+                # Calcular qtd_saldo disponível (quantidade do pedido - separações - pré-separações)
+                qtd_pedido = produto_data.get('qtd_pedido', 0)
+                produto_data['qtd_saldo'] = qtd_pedido - produto_data['qtd_separacoes'] - produto_data['qtd_pre_separacoes']
+                
                 produtos_processados.append(produto_data)
                 valor_total += produto_data["qtd_pedido"] * produto_data["preco_unitario"]
 
