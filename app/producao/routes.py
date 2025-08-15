@@ -286,8 +286,6 @@ def processar_importacao_palletizacao():
         import pandas as pd
         import tempfile
         import os
-        from datetime import datetime
-        from werkzeug.utils import secure_filename
         
         if 'arquivo' not in request.files:
             flash('Nenhum arquivo selecionado!', 'error')
@@ -437,7 +435,6 @@ def processar_importacao_palletizacao():
 def api_estatisticas():
     """API para estatísticas do módulo produção"""
     try:
-        from sqlalchemy import func, inspect
         inspector = inspect(db.engine)
         
         # Estatísticas básicas (apenas de produção)
@@ -469,8 +466,6 @@ def processar_importacao_programacao():
         import pandas as pd
         import tempfile
         import os
-        from datetime import datetime
-        from werkzeug.utils import secure_filename
         
         if 'arquivo' not in request.files:
             flash('Nenhum arquivo selecionado!', 'error')
@@ -1016,7 +1011,6 @@ def api_criar_produto_palletizacao():
     """API para criar produto no cadastro de palletização"""
     try:
         from flask import request
-        import json
         
         data = request.get_json()
         if not data:
@@ -1037,7 +1031,7 @@ def api_criar_produto_palletizacao():
         novo_produto = CadastroPalletizacao()
         novo_produto.cod_produto = cod_produto
         novo_produto.nome_produto = nome_produto
-        novo_produto.palletizacao = float(data.get('palletizacao', 0))
+        novo_produto.palletizacao = float(data.get('palletizacao', 1))
         novo_produto.peso_bruto = float(data.get('peso_bruto', 0))
         novo_produto.altura_cm = float(data.get('altura_cm', 0)) if data.get('altura_cm') else None
         novo_produto.largura_cm = float(data.get('largura_cm', 0)) if data.get('largura_cm') else None

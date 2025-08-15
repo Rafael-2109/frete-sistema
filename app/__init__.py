@@ -684,8 +684,10 @@ def create_app(config_name=None):
     
     # 🔗 Integração TagPlus
     from app.integracoes.tagplus.webhook_routes import tagplus_webhook
+    from app.integracoes.tagplus.oauth_routes import oauth_bp as tagplus_oauth_bp
     app.register_blueprint(tagplus_bp)  # Sem prefixo pois as rotas já definem seus paths
     app.register_blueprint(tagplus_webhook)  # Sem prefixo para manter URLs simples
+    app.register_blueprint(tagplus_oauth_bp)  # Rotas OAuth2
     
     # ✅ INICIALIZAR CLAUDE AI DE FORMA EXPLÍCITA
     try:
