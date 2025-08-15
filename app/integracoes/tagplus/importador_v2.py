@@ -308,11 +308,8 @@ class ImportadorTagPlusV2:
         """Processa uma NF e seus itens"""
         numero_nf = str(nfe_data.get('numero', ''))
         
-        # Verifica se já existe
-        existe = FaturamentoProduto.query.filter_by(numero_nf=numero_nf).first()
-        if existe:
-            logger.debug(f"NF {numero_nf} já existe")
-            return []
+        # Não verifica apenas se a NF existe, pois pode ter múltiplos itens
+        # Vamos verificar item por item mais abaixo
         
         # Extrai cliente
         cliente_data = nfe_data.get('cliente', {})
@@ -330,8 +327,19 @@ class ImportadorTagPlusV2:
         
         # Processa itens
         itens_criados = []
-        for item in nfe_data.get('itens', []):
+        for idx, item in enumerate(nfe_data.get('itens', [])):
             try:
+                # Verifica se este item específico já existe
+                cod_produto = str(item.get('codigo', ''))
+                item_existe = FaturamentoProduto.query.filter_by(
+                    numero_nf=numero_nf,
+                    cod_produto=cod_produto
+                ).first()
+                
+                if item_existe:
+                    logger.debug(f"Item {numero_nf}/{cod_produto} já existe, pulando...")
+                    continue
+                
                 faturamento = FaturamentoProduto(
                     numero_nf=numero_nf,
                     data_fatura=self._parse_data(nfe_data.get('data_emissao')),

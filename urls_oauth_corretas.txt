@@ -1,0 +1,18 @@
+URLs OAUTH2 TAGPLUS - CORRIGIDAS
+=================================
+
+API DE CLIENTES:
+----------------
+https://api.tagplus.com.br/oauth/authorize?response_type=code&client_id=FGDgfhaHfqkZLL9kLtU0wfN71c3hq7AD&redirect_uri=https%3A%2F%2Fsistema-fretes.onrender.com%2Ftagplus%2Foauth%2Fcallback%2Fcliente&scope=read%3Aclientes+write%3Aclientes&state=cliente_auth_123
+
+API DE NOTAS:
+-------------
+https://api.tagplus.com.br/oauth/authorize?response_type=code&client_id=8YZNqaklKj3CfIkOtkoV9ILpCllAtalT&redirect_uri=https%3A%2F%2Fsistema-fretes.onrender.com%2Ftagplus%2Foauth%2Fcallback%2Fnfe&scope=read%3Anfes+read%3Afinanceiros&state=notas_auth_456
+
+IMPORTANTE:
+-----------
+1. Sistema deve estar rodando no Render
+2. URLs de callback agora estão CORRETAS:
+   - /tagplus/oauth/callback/cliente
+   - /tagplus/oauth/callback/nfe
+3. Você PRECISA atualizar as URLs de retorno no painel do TagPlus também!

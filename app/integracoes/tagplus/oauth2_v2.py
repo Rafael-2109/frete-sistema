@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 class TagPlusOAuth2V2:
     """Gerenciador OAuth2 para TagPlus API v2"""
     
-    # URLs do TagPlus
-    AUTH_URL = "https://developers.tagplus.com.br/oauth/authorize"
-    TOKEN_URL = "https://developers.tagplus.com.br/oauth/token"
-    API_BASE = "https://developers.tagplus.com.br/v2"
+    # URLs do TagPlus (corrigidas)
+    AUTH_URL = "https://api.tagplus.com.br/oauth/authorize"
+    TOKEN_URL = "https://api.tagplus.com.br/oauth/token"
+    API_BASE = "https://api.tagplus.com.br/v2"
     
     def __init__(self, api_type='clientes'):
         """
@@ -31,12 +31,12 @@ class TagPlusOAuth2V2:
         if api_type == 'clientes':
             self.client_id = os.environ.get('TAGPLUS_CLIENTES_CLIENT_ID', 'FGDgfhaHfqkZLL9kLtU0wfN71c3hq7AD')
             self.client_secret = os.environ.get('TAGPLUS_CLIENTES_CLIENT_SECRET', 'uNWYSWyOHGFJvJoEdw1H5xgZnCM92Ey7')
-            self.redirect_uri = 'https://sistema-fretes.onrender.com/webhook/tagplus/cliente'
+            self.redirect_uri = 'https://sistema-fretes.onrender.com/tagplus/oauth/callback/cliente'
             self.scopes = 'read:clientes write:clientes'
         else:  # notas
             self.client_id = os.environ.get('TAGPLUS_NOTAS_CLIENT_ID', '8YZNqaklKj3CfIkOtkoV9ILpCllAtalT')
             self.client_secret = os.environ.get('TAGPLUS_NOTAS_CLIENT_SECRET', 'MJHfk8hr3022Y1ETTwqSf0Qsb5Lj6HZe')
-            self.redirect_uri = 'https://sistema-fretes.onrender.com/webhook/tagplus/nfe'
+            self.redirect_uri = 'https://sistema-fretes.onrender.com/tagplus/oauth/callback/nfe'
             self.scopes = 'read:nfes read:financeiros'
         
         # Tokens (armazenados em sessão ou memória)
@@ -211,6 +211,11 @@ class TagPlusOAuth2V2:
         """
         try:
             headers = self.get_headers()
+            
+            # Remove Content-Type para requisições GET
+            if method.upper() == 'GET':
+                headers.pop('Content-Type', None)
+            
             url = f"{self.API_BASE}{endpoint}"
             
             response = requests.request(
