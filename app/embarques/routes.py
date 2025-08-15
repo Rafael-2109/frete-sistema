@@ -101,7 +101,25 @@ def visualizar_embarque(id):
         if action == 'add_item':
             # Código para adicionar item
             dados_portaria = obter_dados_portaria_embarque(embarque.id)
-            return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria)
+            
+            # Buscar dados de impressão
+            from app.pedidos.models import Pedido
+            pedidos_impressos = {}
+            for item in embarque.itens:
+                if item.separacao_lote_id:
+                    pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+                    if pedido:
+                        pedidos_impressos[item.separacao_lote_id] = {
+                            'impresso': pedido.separacao_impressa,
+                            'impresso_em': pedido.separacao_impressa_em,
+                            'impresso_por': pedido.separacao_impressa_por
+                        }
+            
+            return render_template('embarques/visualizar_embarque.html', 
+                                 form=form, 
+                                 embarque=embarque, 
+                                 dados_portaria=dados_portaria,
+                                 pedidos_impressos=pedidos_impressos)
 
         elif action == 'save':
             # 🔧 NOVA LÓGICA: Antes de salvar, remove fretes sem CTe
@@ -342,7 +360,24 @@ def visualizar_embarque(id):
         # Buscar dados da portaria para este embarque
         dados_portaria = obter_dados_portaria_embarque(embarque.id)
         
-        return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria)
+        # Buscar dados de impressão dos pedidos
+        from app.pedidos.models import Pedido
+        pedidos_impressos = {}
+        for item in embarque.itens:
+            if item.separacao_lote_id:
+                pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+                if pedido:
+                    pedidos_impressos[item.separacao_lote_id] = {
+                        'impresso': pedido.separacao_impressa,
+                        'impresso_em': pedido.separacao_impressa_em,
+                        'impresso_por': pedido.separacao_impressa_por
+                    }
+        
+        return render_template('embarques/visualizar_embarque.html', 
+                             form=form, 
+                             embarque=embarque, 
+                             dados_portaria=dados_portaria,
+                             pedidos_impressos=pedidos_impressos)
   
 @embarques_bp.route('/listar_embarques')
 @require_embarques()  # 🔒 VENDEDORES: Apenas com dados próprios
@@ -877,9 +912,18 @@ def imprimir_separacao(embarque_id, separacao_lote_id):
     Gera relatório de impressão da separação
     """
     from app.separacao.models import Separacao
+    from app.pedidos.models import Pedido
     from flask import make_response
     
     embarque = Embarque.query.get_or_404(embarque_id)
+    
+    # Marcar pedido como impresso
+    pedido = Pedido.query.filter_by(separacao_lote_id=separacao_lote_id).first()
+    if pedido and not pedido.separacao_impressa:
+        pedido.separacao_impressa = True
+        pedido.separacao_impressa_em = datetime.now()
+        pedido.separacao_impressa_por = current_user.nome if hasattr(current_user, 'nome') else current_user.email
+        db.session.commit()
     
     # Busca todos os itens da separação com este lote_id
     itens_separacao = Separacao.query.filter_by(separacao_lote_id=separacao_lote_id).all()
@@ -947,6 +991,7 @@ def imprimir_embarque_completo(embarque_id):
     Gera relatório completo: embarque + todas as separações individuais
     """
     from app.separacao.models import Separacao
+    from app.pedidos.models import Pedido
     from flask import make_response
     
     embarque = Embarque.query.get_or_404(embarque_id)
@@ -955,6 +1000,16 @@ def imprimir_embarque_completo(embarque_id):
     if not embarque.data_prevista_embarque:
         flash('⚠️ A Data Prevista de Embarque deve ser preenchida antes de imprimir o relatório completo.', 'warning')
         return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
+    
+    # Marcar todos os pedidos dos itens ativos como impressos
+    for item in embarque.itens:
+        if item.status == 'ativo' and item.separacao_lote_id:
+            pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+            if pedido and not pedido.separacao_impressa:
+                pedido.separacao_impressa = True
+                pedido.separacao_impressa_em = datetime.now()
+                pedido.separacao_impressa_por = current_user.nome if hasattr(current_user, 'nome') else current_user.email
+    db.session.commit()
     
     # Busca todos os lotes únicos de separação vinculados a este embarque
     lotes_separacao = db.session.query(EmbarqueItem.separacao_lote_id).filter(
@@ -1544,8 +1599,8 @@ def alterar_cotacao(embarque_id):
         
         flash(f'🔄 Iniciando alteração da cotação do embarque #{embarque.numero}. {len(pedidos_ids)} pedido(s) selecionado(s).', 'info')
         
-        # Redirecionar para a tela de cotação
-        return redirect(url_for('cotacao.tela_cotacao'))
+        # Redirecionar para a tela de cotação com parâmetro indicando alteração
+        return redirect(url_for('cotacao.tela_cotacao', alterando_embarque=embarque_id))
         
     except Exception as e:
         flash(f'❌ Erro ao iniciar alteração de cotação: {str(e)}', 'danger')

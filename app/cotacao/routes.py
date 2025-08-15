@@ -299,13 +299,21 @@ def tela_cotacao():
         del session['redespacho_ativo']
         print(f"[DEBUG] 🔄 Modo redespacho desativado - voltou para cotação normal")
     
-    # CORREÇÃO: Se não veio de alteração de embarque, limpa informações antigas
-    # Verifica se a requisição não veio da rota de alteração
-    if 'alterando_embarque' in session and request.referrer:
-        # Se não veio da rota de alteração de embarque, limpa
-        if 'alterar_cotacao' not in request.referrer:
+    # SOLUÇÃO ROBUSTA: Verifica se está alterando embarque pelo parâmetro da URL
+    alterando_embarque_id = request.args.get('alterando_embarque')
+    
+    if alterando_embarque_id:
+        # Está vindo da rota de alteração - mantém dados na sessão
+        print(f"[DEBUG] 🔄 Alterando cotação do embarque #{alterando_embarque_id}")
+        # Verifica se os dados na sessão correspondem ao embarque correto
+        if 'alterando_embarque' not in session or session['alterando_embarque'].get('embarque_id') != int(alterando_embarque_id):
+            flash('⚠️ Erro: dados de alteração inconsistentes. Tente novamente.', 'warning')
+            return redirect(url_for('embarques.visualizar_embarque', id=alterando_embarque_id))
+    else:
+        # Não está alterando - limpa dados de alteração se existirem
+        if 'alterando_embarque' in session:
             session.pop('alterando_embarque', None)
-            print(f"[DEBUG] 🔄 Limpando alteração de embarque não relacionada")
+            print(f"[DEBUG] 🔄 Limpando dados de alteração - nova cotação iniciada")
     
     # Inicializa as variáveis que serão usadas no template
     pedidos = []
@@ -395,8 +403,7 @@ def tela_cotacao():
         pedidos_mesmo_estado = (Pedido.query
                                .filter(
                                    (Pedido.cod_uf == uf_busca) |
-                                   ((Pedido.rota == 'RED') & (uf_busca == 'SP'))
-                                )
+                                   ((Pedido.rota == 'RED') & (uf_busca == 'SP')))                                  
                                .filter(~Pedido.id.in_(lista_ids))
                                .filter(Pedido.status == 'ABERTO')  # ✅ Apenas pedidos abertos
                                .all())
@@ -2976,18 +2983,6 @@ def incluir_em_embarque():
         pedidos_nao_incluidos = []
         
         for pedido in pedidos:
-            # ✅ CORREÇÃO: PERMITIR MÚLTIPLOS EMBARQUES PARA O MESMO PEDIDO
-            # Comentado: Verificação que impedia múltiplos embarques
-            # item_existente = EmbarqueItem.query.join(Embarque).filter(
-            #     EmbarqueItem.pedido == pedido.num_pedido,
-            #     EmbarqueItem.status == 'ativo',
-            #     Embarque.status == 'ativo'
-            # ).first()
-            # 
-            # if item_existente:
-            #     flash(f'⚠️ Pedido {pedido.num_pedido} já está no embarque #{item_existente.embarque.numero}', 'warning')
-            #     continue
-            
             # ✅ CORREÇÃO: Busca cidade normalizada para consistência
             cidade_obj = LocalizacaoService.buscar_cidade_unificada(
                 nome=pedido.nome_cidade,

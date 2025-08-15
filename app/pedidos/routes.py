@@ -601,6 +601,97 @@ def editar_pedido(pedido_id):
     
     return render_template('pedidos/editar_pedido.html', form=form, pedido=pedido, contato_agendamento=contato_agendamento)
 
+@pedidos_bp.route('/reset_status/<int:pedido_id>', methods=['POST'])
+@login_required
+def reset_status_pedido(pedido_id):
+    """
+    Reset do status do pedido:
+    1. Limpa NF e nf_cd
+    2. Busca NF em EmbarqueItem ativo
+    3. Se encontrar NF, verifica em FaturamentoProduto
+    4. Define status baseado nos resultados
+    """
+    from app.embarques.models import Embarque, EmbarqueItem
+    from app.faturamento.models import FaturamentoProduto
+    
+    try:
+        pedido = Pedido.query.get_or_404(pedido_id)
+        
+        # Guarda status anterior para log
+        status_anterior = pedido.status
+        nf_anterior = pedido.nf
+        
+        # PASSO 1: Limpar NF e nf_cd
+        pedido.nf = None
+        pedido.nf_cd = False
+        
+        # PASSO 2: Buscar em EmbarqueItem
+        embarque_item = None
+        embarque_ativo = None
+        
+        if pedido.separacao_lote_id:
+            # Busca EmbarqueItem com status ativo e Embarque ativo
+            embarque_item = db.session.query(EmbarqueItem).join(
+                Embarque, EmbarqueItem.embarque_id == Embarque.id
+            ).filter(
+                EmbarqueItem.separacao_lote_id == pedido.separacao_lote_id,
+                EmbarqueItem.status == 'ativo',
+                Embarque.status == 'ativo'
+            ).first()
+            
+            if embarque_item:
+                embarque_ativo = embarque_item.embarque
+        
+        # Processar resultado da busca
+        if embarque_item and embarque_item.nota_fiscal:
+            # CASO 1-A: Encontrou NF no EmbarqueItem
+            pedido.nf = embarque_item.nota_fiscal
+            
+            # PASSO 3: Verificar em FaturamentoProduto
+            faturamento_existe = FaturamentoProduto.query.filter_by(
+                numero_nf=embarque_item.nota_fiscal
+            ).first()
+            
+            if faturamento_existe:
+                # CASO 2-A: NF existe no faturamento
+                pedido.status = 'FATURADO'
+            else:
+                # CASO 2-B: NF não existe no faturamento (mas existe no embarque)
+                pedido.status = 'COTADO'
+                
+        elif embarque_item and embarque_ativo:
+            # CASO 1-B: Encontrou EmbarqueItem ativo mas sem NF
+            pedido.status = 'COTADO'
+            
+        else:
+            # CASO 1-C: Não encontrou EmbarqueItem ativo
+            pedido.status = 'ABERTO'
+        
+        # Salvar alterações
+        db.session.commit()
+        
+        # Log da operação
+        print(f"[RESET STATUS] Pedido {pedido.num_pedido}:")
+        print(f"  - Status: {status_anterior} → {pedido.status}")
+        print(f"  - NF: {nf_anterior} → {pedido.nf}")
+        print(f"  - Embarque ativo: {'Sim' if embarque_ativo else 'Não'}")
+        
+        return jsonify({
+            'success': True,
+            'status_anterior': status_anterior,
+            'status_novo': pedido.status,
+            'nf': pedido.nf,
+            'message': f'Status resetado com sucesso'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERRO RESET STATUS] {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao resetar status: {str(e)}'
+        }), 500
+
 @pedidos_bp.route('/excluir/<int:pedido_id>', methods=['POST'])
 @login_required
 def excluir_pedido(pedido_id):

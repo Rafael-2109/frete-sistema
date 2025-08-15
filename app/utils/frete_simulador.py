@@ -322,38 +322,6 @@ def pedidos_mesmo_uf(pedidos):
 
     return True
 
-
-def normalizar_uf_pedido(pedido):
-    """
-    Normaliza o UF do pedido considerando regras especiais:
-    1. Se rota for RED, sempre retorna SP independente de cidade/UF
-    2. Se cidade for SP, retorna SP
-    3. Se cidade for RJ, retorna RJ
-    4. Caso contrário, usa o UF do pedido
-    """
-    if not pedido:
-        return None
-
-    # Se for RED, é SP e pronto - nem olha cidade/UF
-    if hasattr(pedido, "rota") and pedido.rota and pedido.rota.upper().strip() == "RED":
-        return "SP"
-
-    # Se cidade for SP, considera SP
-    if pedido.nome_cidade and pedido.nome_cidade.upper().strip() == "SP":
-        return "SP"
-
-    # Se cidade for RJ, considera RJ
-    if pedido.nome_cidade and pedido.nome_cidade.upper().strip() == "RJ":
-        return "RJ"
-
-    # Para outros casos, usa o UF do pedido
-    if hasattr(pedido, "cod_uf") and pedido.cod_uf:
-        uf = pedido.cod_uf.upper().strip()
-        return uf
-
-    return None
-
-
 def normalizar_dados_pedido(pedido):
     """
     Normaliza os dados de cidade e UF do pedido.
@@ -553,13 +521,6 @@ def calcular_frete_por_cnpj(pedidos, veiculo_forcado=None):
     
     return resultados
 
-
-# ❌ FUNÇÕES REMOVIDAS - As otimizações agora são feitas em app/cotacao/routes.py
-# - calcular_otimizacoes() - REMOVIDA (substituída pela lógica conservadora)
-# - calcular_otimizacoes_pedido() - REMOVIDA (implementada em cotacao/routes.py)
-# - calcular_fretes_diretos() - REMOVIDA (usava lógica antiga)
-
-
 def buscar_cidade_unificada(pedido=None, cidade=None, uf=None, rota=None):
     """
     Função unificada para busca de cidades que implementa todas as regras:
@@ -617,4 +578,3 @@ def buscar_cidade(pedido):
     Mantida para não quebrar código existente.
     """
     return buscar_cidade_unificada(pedido=pedido)
-

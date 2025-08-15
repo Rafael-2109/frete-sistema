@@ -106,12 +106,21 @@
     </div>
 
     <!-- Botões de ação -->
-    <div class="d-flex justify-content-end mt-3">
-        <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">
-            <i class="fas fa-times"></i> Cancelar
+    <div class="d-flex justify-content-between mt-3">
+        <!-- Botão Reset Status (lado esquerdo) -->
+        <button type="button" class="btn btn-warning" onclick="resetStatusPedido({{ pedido.id }})" 
+                title="Limpa NF e recalcula status baseado em EmbarqueItem e FaturamentoProduto">
+            <i class="fas fa-sync-alt"></i> Reset Status
         </button>
-        <button type="submit" class="btn btn-success">
-            <i class="fas fa-save"></i> Salvar Alterações
-        </button>
+        
+        <!-- Botões padrão (lado direito) -->
+        <div>
+            <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+            <button type="submit" class="btn btn-success">
+                <i class="fas fa-save"></i> Salvar Alterações
+            </button>
+        </div>
     </div>
 </form> 

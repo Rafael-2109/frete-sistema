@@ -9,11 +9,9 @@
             <h2 class="mb-4">
                 <i class="fas fa-sync"></i> Integração TagPlus
                 <div class="float-right">
-                    <a href="{{ url_for('tagplus.pagina_postman') }}" class="btn btn-info">
-                        <i class="fas fa-rocket"></i> Fluxo Postman
-                    </a>
-                    <a href="{{ url_for('tagplus.vincular_nfs') }}" class="btn btn-warning">
-                        <i class="fas fa-link"></i> Vincular NFs sem Separação
+                    <!-- Removido: pagina_postman não existe mais -->
+                    <a href="{{ url_for('tagplus.importar') }}" class="btn btn-warning">
+                        <i class="fas fa-cloud-download-alt"></i> Autorizar OAuth2
                     </a>
                 </div>
             </h2>

@@ -5,7 +5,6 @@ Data: 2025-08-14
 """
 
 import os
-import json
 from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify, session
 from flask_login import login_required, current_user

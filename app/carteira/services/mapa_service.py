@@ -5,18 +5,14 @@ Data: 2025-08-14
 """
 
 import os
-import json
 import hashlib
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import requests
-from flask import current_app
-from sqlalchemy import and_, or_, func
+from sqlalchemy import func
 from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.producao.models import CadastroPalletizacao
-from app.pedidos.models import Pedido
-from app.separacao.models import Separacao
 from app.veiculos.models import Veiculo
 import logging
 

@@ -418,7 +418,8 @@ class CarteiraService:
                     'equipe_vendas': extrair_relacao(pedido.get('team_id'), 1),
                     
                     # 📦 INFORMAÇÕES DO PRODUTO
-                    'nome_produto': extrair_relacao(linha.get('product_id'), 1),
+                    # Usar o nome do produto buscado (mais confiável) ou fallback para o array
+                    'nome_produto': produto.get('name', '') or extrair_relacao(linha.get('product_id'), 1),
                     'unid_medida_produto': extrair_relacao(linha.get('product_uom'), 1),
                     'embalagem_produto': categoria.get('name', ''),  # Categoria do produto
                     'materia_prima_produto': categoria_parent.get('name', ''),  # Sub categoria
@@ -1480,7 +1481,27 @@ class CarteiraService:
                                 setattr(registro_existente, key, value)
                         contador_atualizados += 1
                     else:
-                        # INSERIR novo registro
+                        # INSERIR novo registro - criar produto se não existir
+                        # Verificar se produto existe no cadastro
+                        from app.producao.models import CadastroPalletizacao
+                        
+                        cod_produto = item.get('cod_produto')
+                        if cod_produto:
+                            produto_existe = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+                            if not produto_existe:
+                                # Criar produto com dados básicos
+                                novo_produto = CadastroPalletizacao(
+                                    cod_produto=cod_produto,
+                                    nome_produto=item.get('nome_produto', cod_produto),
+                                    palletizacao=1.0,  # Valor padrão
+                                    peso_bruto=1.0,    # Valor padrão
+                                    created_by='ImportacaoOdoo',
+                                    updated_by='ImportacaoOdoo'
+                                )
+                                db.session.add(novo_produto)
+                                logger.info(f"✅ Produto {cod_produto} criado automaticamente no cadastro")
+                        
+                        # Agora criar o registro na carteira
                         novo_registro = CarteiraPrincipal(**item)
                         db.session.add(novo_registro)
                         contador_inseridos += 1

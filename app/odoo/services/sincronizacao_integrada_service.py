@@ -92,8 +92,25 @@ class SincronizacaoIntegradaService:
                 logger.warning(f"⚠️ Problemas de integridade detectados: {validacao.get('problemas', [])}")
                 resultado_completo['alertas'].extend(validacao.get('problemas', []))
             
+            # ✅ ETAPA 2.5: FORÇAR ATUALIZAÇÃO DE STATUS FATURADO
+            logger.info("🔄 ETAPA 2.5/4: Atualizando status FATURADO dos pedidos...")
+            try:
+                from app import db
+                from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
+                processador = ProcessadorFaturamento()
+                pedidos_atualizados = processador._atualizar_status_pedidos_faturados()
+                
+                if pedidos_atualizados > 0:
+                    logger.info(f"✅ {pedidos_atualizados} pedidos atualizados para status FATURADO")
+                    db.session.commit()  # COMMIT CRÍTICO: Salvar status antes de processar carteira
+                    logger.info("💾 Status FATURADO salvo no banco antes de processar carteira")
+                    
+            except Exception as e:
+                logger.error(f"⚠️ Erro ao atualizar status FATURADO: {e}")
+                # Não é fatal, continuar
+            
             # ✅ ETAPA 3: SINCRONIZAR CARTEIRA COM SEGURANÇA MÁXIMA
-            logger.info("🔄 ETAPA 3/3: Sincronizando CARTEIRA (com faturamento protegido)...")
+            logger.info("🔄 ETAPA 3/4: Sincronizando CARTEIRA (com faturamento protegido)...")
             resultado_completo['etapas_executadas'].append('INICIANDO_CARTEIRA')
             
             resultado_carteira = self.carteira_service.sincronizar_carteira_odoo_com_gestao_quantidades(

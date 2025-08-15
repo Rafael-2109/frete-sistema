@@ -1352,6 +1352,47 @@ function abrirEdicaoPedido(pedidoId) {
         });
 }
 
+// ✅ NOVA FUNÇÃO: Reset Status do Pedido
+function resetStatusPedido(pedidoId) {
+    if (!confirm('⚠️ Tem certeza que deseja resetar o status deste pedido?\n\nIsso irá:\n- Limpar a NF atual\n- Buscar NF em EmbarqueItem ativo\n- Recalcular o status baseado em EmbarqueItem e FaturamentoProduto')) {
+        return;
+    }
+    
+    // Mostrar loading
+    const btnReset = event.target;
+    const textoOriginal = btnReset.innerHTML;
+    btnReset.disabled = true;
+    btnReset.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+    
+    fetch(`/pedidos/reset_status/${pedidoId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Mostrar mensagem de sucesso
+            alert(`✅ Status resetado com sucesso!\n\nStatus anterior: ${data.status_anterior}\nStatus novo: ${data.status_novo}\nNF: ${data.nf || 'Não encontrada'}`);
+            
+            // Recarregar a página para atualizar a lista
+            window.location.reload();
+        } else {
+            alert(`❌ Erro ao resetar status: ${data.message}`);
+            btnReset.disabled = false;
+            btnReset.innerHTML = textoOriginal;
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('❌ Erro ao processar requisição');
+        btnReset.disabled = false;
+        btnReset.innerHTML = textoOriginal;
+    });
+}
+
 // ✅ NOVAS FUNÇÕES: Geração de URLs com preservação de filtros
 window.sort_url = function(campo) {
     const urlParams = new URLSearchParams(window.location.search);

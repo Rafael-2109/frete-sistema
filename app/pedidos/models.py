@@ -40,6 +40,12 @@ class Pedido(db.Model):
     nf = db.Column(db.String(20))
     status = db.Column(db.String(50), default='ABERTO')
     nf_cd = db.Column(db.Boolean, default=False)  # ✅ NOVO: Flag para NF no CD
+    
+    # Controle de impressão da separação
+    separacao_impressa = db.Column(db.Boolean, default=False, nullable=False)
+    separacao_impressa_em = db.Column(db.DateTime, nullable=True)
+    separacao_impressa_por = db.Column(db.String(100), nullable=True)
+    
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     cotacao_id = db.Column(db.Integer, db.ForeignKey('cotacoes.id', name='fk_pedido_cotacao'))

@@ -1044,8 +1044,8 @@ class AjusteSincronizacaoService:
         Verifica se uma separação foi faturada.
         
         IMPORTANTE: Uma separação é considerada FATURADA se:
-        1. O Pedido tem NF preenchida E
-        2. Existe registro em FaturamentoProduto com essa NF
+        1. O Pedido tem status = 'FATURADO' OU
+        2. O Pedido tem NF preenchida E existe registro em FaturamentoProduto com essa NF
         
         Args:
             lote_id: ID do lote de separação
@@ -1061,6 +1061,12 @@ class AjusteSincronizacaoService:
             # Buscar o Pedido pelo lote
             pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
             
+            # PROTEÇÃO 1: Se o status já é FATURADO, não mexer!
+            if pedido and pedido.status == 'FATURADO':
+                logger.info(f"🚫 Separação {lote_id} está FATURADA (status = FATURADO)")
+                return True
+            
+            # PROTEÇÃO 2: Verificar se tem NF e FaturamentoProduto
             if not pedido or not pedido.nf:
                 return False
             
