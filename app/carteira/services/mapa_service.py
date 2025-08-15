@@ -17,6 +17,7 @@ from app.carteira.models import CarteiraPrincipal
 from app.producao.models import CadastroPalletizacao
 from app.pedidos.models import Pedido
 from app.separacao.models import Separacao
+from app.veiculos.models import Veiculo
 import logging
 
 logger = logging.getLogger(__name__)
@@ -271,15 +272,28 @@ class MapaService:
                 })
                 
             # Otimizar rota usando Google Directions API
+            # Se tiver apenas 1 pedido, destino é ele mesmo
+            # Se tiver mais, otimizar e terminar no último
+            if len(waypoints) == 1:
+                destination = waypoints[0]['location']
+                waypoints_param = None
+            else:
+                # Usar o último waypoint como destino (não voltar ao CD)
+                destination = waypoints[-1]['location']
+                waypoints_param = 'optimize:true|' + '|'.join([w['location'] for w in waypoints[:-1]])
+            
             params = {
                 'origin': origem,
-                'destination': origem,  # Retornar à origem
-                'waypoints': 'optimize:true|' + '|'.join([w['location'] for w in waypoints]),
+                'destination': destination,  # Terminar na última entrega
                 'key': self.api_key,
                 'language': 'pt-BR',
                 'mode': 'driving',
-                'units': 'metric'
+                'units': 'metric',
+                'avoid': 'ferries'  # Evitar balsas
             }
+            
+            if waypoints_param:
+                params['waypoints'] = waypoints_param
             
             response = requests.get(self.base_directions_url, params=params, timeout=30)
             
@@ -298,6 +312,16 @@ class MapaService:
                     # Extrair informações da rota
                     total_distance = sum(leg['distance']['value'] for leg in route['legs'])
                     total_duration = sum(leg['duration']['value'] for leg in route['legs'])
+                    
+                    # Calcular peso total e selecionar veículo
+                    peso_total = sum(p['valores']['peso'] for p in pedidos)
+                    veiculo_selecionado = self._selecionar_veiculo_adequado(peso_total)
+                    
+                    # Calcular pedágio estimado
+                    pedagio_estimado = self._calcular_pedagio_estimado(
+                        total_distance / 1000,
+                        veiculo_selecionado
+                    )
                     
                     return {
                         'sucesso': True,
@@ -321,10 +345,18 @@ class MapaService:
                         'estatisticas': {
                             'total_pedidos': len(pedidos),
                             'valor_total': sum(p['valores']['total'] for p in pedidos),
-                            'peso_total': sum(p['valores']['peso'] for p in pedidos),
+                            'peso_total': peso_total,
                             'pallet_total': sum(p['valores']['pallet'] for p in pedidos),
                             'custo_estimado_km': (total_distance / 1000) * 2.5  # R$ 2.50 por km (configurável)
-                        }
+                        },
+                        'veiculo': {
+                            'nome': veiculo_selecionado.nome if veiculo_selecionado else 'Não definido',
+                            'peso_maximo': veiculo_selecionado.peso_maximo if veiculo_selecionado else 0,
+                            'tipo': veiculo_selecionado.tipo_veiculo if veiculo_selecionado else 'Não definido',
+                            'eixos': veiculo_selecionado.qtd_eixos if veiculo_selecionado else 2,
+                            'multiplicador_pedagio': veiculo_selecionado.multiplicador_pedagio if veiculo_selecionado else 1.0
+                        },
+                        'pedagio': pedagio_estimado
                     }
                     
             return {'erro': 'Não foi possível calcular a rota'}
@@ -341,6 +373,89 @@ class MapaService:
         if horas > 0:
             return f"{horas}h {minutos}min"
         return f"{minutos}min"
+    
+    def _selecionar_veiculo_adequado(self, peso_total: float) -> Optional[Veiculo]:
+        """
+        Seleciona o menor veículo capaz de transportar o peso total
+        
+        Args:
+            peso_total: Peso total em kg
+            
+        Returns:
+            Veículo selecionado ou None
+        """
+        try:
+            # Buscar veículos ordenados por peso máximo (menor primeiro)
+            veiculos = Veiculo.query.filter(
+                Veiculo.peso_maximo >= peso_total
+            ).order_by(
+                Veiculo.peso_maximo.asc()
+            ).first()
+            
+            if not veiculos:
+                # Se nenhum veículo comporta, pegar o maior disponível
+                veiculos = Veiculo.query.order_by(
+                    Veiculo.peso_maximo.desc()
+                ).first()
+                
+            return veiculos
+            
+        except Exception as e:
+            logger.error(f"Erro ao selecionar veículo: {str(e)}")
+            return None
+    
+    def _calcular_pedagio_estimado(self, distancia_km: float, veiculo: Optional[Veiculo]) -> Dict[str, Any]:
+        """
+        Calcula estimativa de pedágio baseado na distância e tipo de veículo
+        
+        Args:
+            distancia_km: Distância total em km
+            veiculo: Veículo selecionado
+            
+        Returns:
+            Dicionário com estimativas de pedágio
+        """
+        try:
+            # Estimativas baseadas em médias do Brasil
+            # Praças a cada 40-50km em rodovias pedagiadas
+            # Valor médio por praça para carro: R$ 5-15
+            
+            # Estimar número de praças (conservador)
+            # Considerando que nem toda a rota é pedagiada (aprox 60% em SP)
+            percentual_pedagiado = 0.6
+            distancia_pedagiada = distancia_km * percentual_pedagiado
+            
+            # Uma praça a cada 45km em média
+            num_pracas_estimado = max(1, int(distancia_pedagiada / 45))
+            
+            # Valor base por praça (média SP)
+            valor_base_praca = 8.50  # Valor médio para carro em SP
+            
+            # Aplicar multiplicador do veículo
+            multiplicador = veiculo.multiplicador_pedagio if veiculo else 1.0
+            valor_por_praca = valor_base_praca * multiplicador
+            
+            # Calcular total
+            valor_total = num_pracas_estimado * valor_por_praca
+            
+            return {
+                'estimado': True,
+                'valor_total': round(valor_total, 2),
+                'num_pracas_estimado': num_pracas_estimado,
+                'valor_medio_praca': round(valor_por_praca, 2),
+                'valor_base_carro': valor_base_praca,
+                'multiplicador_veiculo': multiplicador,
+                'distancia_pedagiada_km': round(distancia_pedagiada, 1),
+                'observacao': f'Estimativa para {num_pracas_estimado} praça(s) de pedágio'
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro ao calcular pedágio: {str(e)}")
+            return {
+                'estimado': True,
+                'valor_total': 0,
+                'erro': str(e)
+            }
         
     def analisar_densidade_regional(self, pedido_ids: Optional[List[str]] = None) -> Dict[str, Any]:
         """

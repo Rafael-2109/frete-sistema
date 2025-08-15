@@ -51,7 +51,7 @@ class Frete(db.Model):
     valor_pago = db.Column(db.Float)  # Valor que efetivamente pagamos
     
     # Dados do CTe
-    numero_cte = db.Column(db.String(50), index=True)
+    numero_cte = db.Column(db.String(255), index=True)
     data_emissao_cte = db.Column(db.Date)
     vencimento = db.Column(db.Date)
     

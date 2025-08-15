@@ -62,6 +62,8 @@ def editar_veiculo():
         veiculo_id = int(request.form.get('veiculo_id'))
         nome = request.form.get('nome', '').strip().upper()
         peso_maximo = float(request.form.get('peso_maximo', 0))
+        tipo_veiculo = request.form.get('tipo_veiculo', 'Carro')
+        qtd_eixos = int(request.form.get('qtd_eixos', 2))
         
         # Buscar veículo
         veiculo = Veiculo.query.get_or_404(veiculo_id)
@@ -91,6 +93,14 @@ def editar_veiculo():
         
         veiculo.nome = nome
         veiculo.peso_maximo = peso_maximo
+        veiculo.tipo_veiculo = tipo_veiculo
+        veiculo.qtd_eixos = qtd_eixos
+        
+        # Calcular multiplicador baseado no tipo
+        if tipo_veiculo == 'Carro':
+            veiculo.multiplicador_pedagio = 1.0
+        else:  # Caminhão
+            veiculo.multiplicador_pedagio = float(qtd_eixos)
         
         db.session.commit()
         

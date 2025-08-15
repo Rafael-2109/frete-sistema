@@ -351,28 +351,40 @@
         
         <!-- Estatísticas -->
         <div class="row mb-3">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <div class="stats-card">
                     <div class="stat-value" id="totalPedidos">0</div>
                     <div class="stat-label">Total Pedidos</div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <div class="stats-card">
                     <div class="stat-value" id="valorTotal">R$ 0</div>
                     <div class="stat-label">Valor Total</div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <div class="stats-card">
                     <div class="stat-value" id="pesoTotal">0 kg</div>
                     <div class="stat-label">Peso Total</div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <div class="stats-card">
                     <div class="stat-value" id="palletTotal">0</div>
                     <div class="stat-label">Pallets Total</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stats-card bg-info text-white">
+                    <div class="stat-value" id="veiculoSelecionado">-</div>
+                    <div class="stat-label">Veículo Ideal</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stats-card bg-warning text-dark">
+                    <div class="stat-value" id="pedagioEstimado">R$ 0</div>
+                    <div class="stat-label">Pedágio Estimado</div>
                 </div>
             </div>
         </div>
@@ -849,7 +861,21 @@
                 success: function(response) {
                     if (response.sucesso) {
                         exibirRotaOtimizada(response.rota);
-                        mostrarEstatisticasRota(response.rota, response.estatisticas);
+                        
+                        // Atualizar informações do veículo e pedágio
+                        if (response.veiculo) {
+                            $('#veiculoSelecionado').text(response.veiculo.nome);
+                            $('#veiculoSelecionado').attr('title', 
+                                `Capacidade: ${response.veiculo.peso_maximo} kg | ${response.veiculo.tipo} | ${response.veiculo.eixos} eixos`);
+                        }
+                        
+                        if (response.pedagio) {
+                            $('#pedagioEstimado').text(`R$ ${response.pedagio.valor_total.toFixed(2)}`);
+                            $('#pedagioEstimado').attr('title', 
+                                `${response.pedagio.num_pracas_estimado} praça(s) × R$ ${response.pedagio.valor_medio_praca.toFixed(2)}`);
+                        }
+                        
+                        mostrarEstatisticasRotaCompleta(response.rota, response.estatisticas, response.veiculo, response.pedagio);
                     }
                     hideLoading();
                 },
@@ -860,6 +886,10 @@
             });
         }
         
+        // Variáveis para armazenar marcadores de ordem e pedágio
+        let ordemMarkers = [];
+        let pedagioMarkers = [];
+        
         // Exibir rota otimizada
         function exibirRotaOtimizada(rota) {
             // Limpar rota anterior
@@ -867,18 +897,190 @@
                 rotaPolyline.setMap(null);
             }
             
+            // Limpar marcadores de ordem anteriores
+            ordemMarkers.forEach(marker => marker.setMap(null));
+            ordemMarkers = [];
+            
+            // Limpar marcadores de pedágio anteriores
+            pedagioMarkers.forEach(marker => marker.setMap(null));
+            pedagioMarkers = [];
+            
             // Decodificar polyline
             const path = google.maps.geometry.encoding.decodePath(rota.polyline);
             
-            // Criar nova polyline
+            // Criar nova polyline com cor personalizada
             rotaPolyline = new google.maps.Polyline({
                 path: path,
                 geodesic: true,
-                strokeColor: '#667eea',
-                strokeOpacity: 0.8,
-                strokeWeight: 4,
+                strokeColor: '#10b981',  // Verde esmeralda
+                strokeOpacity: 0.9,
+                strokeWeight: 5,
+                icons: [{
+                    icon: {
+                        path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                        scale: 3,
+                        strokeColor: '#065f46',
+                        strokeWeight: 2,
+                        fillColor: '#10b981',
+                        fillOpacity: 1
+                    },
+                    offset: '100%',
+                    repeat: '150px'  // Setas a cada 150px
+                }],
                 map: map
             });
+            
+            // Adicionar marcadores de ordem e tempo para cada pedido
+            if (rota.ordem_pedidos && rota.legs) {
+                // Array para armazenar tempos acumulados para cada pedido
+                const temposAcumulados = [];
+                let tempoTotal = 0;
+                
+                // Calcular tempo acumulado para cada ponto
+                for (let i = 0; i <= rota.ordem_pedidos.length && i < rota.legs.length; i++) {
+                    if (i === 0) {
+                        // Tempo do CD até o primeiro pedido
+                        const duracaoTexto = rota.legs[0].duracao;
+                        const match = duracaoTexto.match(/\d+/);
+                        if (match) {
+                            tempoTotal = parseInt(match[0]);
+                        }
+                        temposAcumulados.push(tempoTotal);
+                    } else {
+                        // Tempo entre pedidos
+                        const duracaoTexto = rota.legs[i].duracao;
+                        const match = duracaoTexto.match(/\d+/);
+                        if (match) {
+                            tempoTotal += parseInt(match[0]);
+                        }
+                        temposAcumulados.push(tempoTotal);
+                    }
+                }
+                
+                rota.ordem_pedidos.forEach((numPedido, index) => {
+                    // Encontrar o pedido nos dados
+                    const pedido = pedidosData.find(p => p.num_pedido === numPedido);
+                    
+                    if (pedido) {
+                        // Usar o tempo acumulado calculado
+                        const tempoAcumulado = temposAcumulados[index] || 0;
+                        
+                        // Verificar se há outro pedido no mesmo local (mesmo cliente)
+                        let offsetLat = 0;
+                        let offsetLng = 0;
+                        let pedidosNoMesmoLocal = 0;
+                        
+                        // Verificar pedidos anteriores no mesmo CNPJ ou coordenadas muito próximas
+                        for (let j = 0; j < index; j++) {
+                            const outroPedido = pedidosData.find(p => p.num_pedido === rota.ordem_pedidos[j]);
+                            if (outroPedido) {
+                                // Verificar se é o mesmo cliente (CNPJ) ou coordenadas muito próximas
+                                const mesmoCNPJ = outroPedido.cliente.cnpj === pedido.cliente.cnpj;
+                                const distanciaLat = Math.abs(outroPedido.coordenadas.lat - pedido.coordenadas.lat);
+                                const distanciaLng = Math.abs(outroPedido.coordenadas.lng - pedido.coordenadas.lng);
+                                const muitoProximo = distanciaLat < 0.0001 && distanciaLng < 0.0001;
+                                
+                                if (mesmoCNPJ && muitoProximo) {  // Só aplicar offset se for mesmo CNPJ E mesmo local
+                                    pedidosNoMesmoLocal++;
+                                    // Aplicar offset diagonal para separar visualmente
+                                    offsetLat = pedidosNoMesmoLocal * 0.0004;
+                                    offsetLng = pedidosNoMesmoLocal * 0.0004;
+                                }
+                            }
+                        }
+                        
+                        // Criar marcador customizado com ordem (menor tamanho)
+                        const ordemLabel = new google.maps.Marker({
+                            position: {
+                                lat: pedido.coordenadas.lat + offsetLat,
+                                lng: pedido.coordenadas.lng + offsetLng
+                            },
+                            map: map,
+                            icon: {
+                                path: google.maps.SymbolPath.CIRCLE,
+                                scale: 12,  // Reduzido de 20 para 12
+                                fillColor: '#dc2626',  // Vermelho
+                                fillOpacity: 0.9,
+                                strokeColor: '#ffffff',
+                                strokeWeight: 2
+                            },
+                            label: {
+                                text: String(index + 1),
+                                color: '#ffffff',
+                                fontSize: '11px',  // Reduzido de 14px
+                                fontWeight: 'bold'
+                            },
+                            title: `${index + 1}º - ${pedido.num_pedido}`,
+                            zIndex: 1000 + index
+                        });
+                        
+                        // Criar label com tempo estimado (posicionado ACIMA do marcador)
+                        const tempoLabel = new google.maps.Marker({
+                            position: {
+                                lat: pedido.coordenadas.lat + offsetLat + 0.002,  // Bem acima do marcador
+                                lng: pedido.coordenadas.lng + offsetLng
+                            },
+                            map: map,
+                            icon: {
+                                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="90" height="28">
+                                        <rect x="5" y="3" width="80" height="22" rx="11" fill="#1e40af" stroke="#ffffff" stroke-width="1" opacity="0.95"/>
+                                        <text x="45" y="17" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle" font-weight="bold">
+                                            ${tempoAcumulado > 0 ? `${tempoAcumulado} min` : 'PARTIDA'}
+                                        </text>
+                                    </svg>
+                                `),
+                                anchor: new google.maps.Point(45, 25)  // Ancorar na parte inferior do SVG
+                            },
+                            zIndex: 1100 + index  // Maior zIndex para ficar acima
+                        });
+                        
+                        // InfoWindow ao clicar
+                        ordemLabel.addListener('click', () => {
+                            // Verificar se há outros pedidos do mesmo cliente nesta rota
+                            const pedidosMesmoCliente = rota.ordem_pedidos.filter(numPed => {
+                                const p = pedidosData.find(pd => pd.num_pedido === numPed);
+                                return p && p.cliente.cnpj === pedido.cliente.cnpj;
+                            });
+                            
+                            let pedidosInfo = '';
+                            if (pedidosMesmoCliente.length > 1) {
+                                pedidosInfo = `<p class="mb-1"><strong>Pedidos neste local:</strong> ${pedidosMesmoCliente.join(', ')}</p>`;
+                            }
+                            
+                            const infoContent = `
+                                <div style="padding: 10px;">
+                                    <h6 class="mb-2"><strong>${index + 1}ª Entrega</strong></h6>
+                                    <p class="mb-1"><strong>Pedido:</strong> ${pedido.num_pedido}</p>
+                                    <p class="mb-1"><strong>Cliente:</strong> ${pedido.cliente.nome}</p>
+                                    <p class="mb-1"><strong>CNPJ:</strong> ${pedido.cliente.cnpj}</p>
+                                    ${pedidosInfo}
+                                    <p class="mb-1"><strong>Endereço:</strong> ${pedido.endereco.rua}, ${pedido.endereco.numero}</p>
+                                    <p class="mb-1"><strong>Tempo até aqui:</strong> ${tempoAcumulado > 0 ? `${tempoAcumulado} minutos` : 'Ponto de partida'}</p>
+                                    ${index < rota.legs.length ? `<p class="mb-1"><strong>Próximo trecho:</strong> ${rota.legs[index].distancia} - ${rota.legs[index].duracao}</p>` : ''}
+                                    ${pedidosNoMesmoLocal > 0 ? `<div class="alert alert-info mt-2 mb-0"><small>⚠️ Múltiplas entregas neste endereço</small></div>` : ''}
+                                </div>
+                            `;
+                            
+                            if (infoWindow) {
+                                infoWindow.close();
+                            }
+                            
+                            infoWindow = new google.maps.InfoWindow({
+                                content: infoContent
+                            });
+                            
+                            infoWindow.open(map, ordemLabel);
+                        });
+                        
+                        ordemMarkers.push(ordemLabel);
+                        ordemMarkers.push(tempoLabel);
+                    }
+                });
+            }
+            
+            // Adicionar marcadores de pedágio estimados
+            adicionarMarcadoresPedagio(path, rota.distancia_total_km);
             
             // Ajustar bounds
             const bounds = new google.maps.LatLngBounds();
@@ -887,8 +1089,106 @@
             map.fitBounds(bounds);
         }
         
-        // Mostrar estatísticas da rota
+        // Função para adicionar marcadores de pedágio
+        function adicionarMarcadoresPedagio(path, distanciaTotal) {
+            // Estimar praças de pedágio (1 a cada 45km em rodovias pedagiadas)
+            const distanciaPedagiada = distanciaTotal * 0.6; // 60% da rota
+            const numPracas = Math.max(1, Math.floor(distanciaPedagiada / 45));
+            
+            // Distribuir praças ao longo da rota
+            const totalPoints = path.length;
+            const interval = Math.floor(totalPoints / (numPracas + 1));
+            
+            for (let i = 1; i <= numPracas; i++) {
+                const pointIndex = Math.min(i * interval, totalPoints - 1);
+                const position = path[pointIndex];
+                
+                // Criar marcador de pedágio
+                const pedagioMarker = new google.maps.Marker({
+                    position: position,
+                    map: map,
+                    icon: {
+                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+                                <!-- Fundo circular amarelo -->
+                                <circle cx="20" cy="20" r="18" fill="#fbbf24" stroke="#f59e0b" stroke-width="2"/>
+                                <!-- Símbolo de dinheiro -->
+                                <text x="20" y="27" font-family="Arial, sans-serif" font-size="20" fill="#7c2d12" text-anchor="middle" font-weight="bold">$</text>
+                            </svg>
+                        `),
+                        anchor: new google.maps.Point(20, 20),
+                        scaledSize: new google.maps.Size(40, 40)
+                    },
+                    title: `Praça de Pedágio ${i}`,
+                    zIndex: 800
+                });
+                
+                // Adicionar InfoWindow ao clicar
+                pedagioMarker.addListener('click', () => {
+                    const valorEstimado = $('#pedagioEstimado').text();
+                    const veiculoNome = $('#veiculoSelecionado').text();
+                    
+                    const infoContent = `
+                        <div style="padding: 10px;">
+                            <h6 class="mb-2"><strong>🛣️ Praça de Pedágio ${i}</strong></h6>
+                            <p class="mb-1"><strong>Posição estimada:</strong> Km ${Math.round((i * 45) + (Math.random() * 10 - 5))}</p>
+                            <p class="mb-1"><strong>Veículo:</strong> ${veiculoNome || 'Não definido'}</p>
+                            <p class="mb-1"><strong>Valor estimado:</strong> ${valorEstimado ? (parseFloat(valorEstimado.replace('R$ ', '').replace(',', '.')) / numPracas).toFixed(2) : '0.00'}</p>
+                            <div class="alert alert-info mt-2 mb-0">
+                                <small>⚠️ Posição e valor estimados. Consulte rotas oficiais para valores exatos.</small>
+                            </div>
+                        </div>
+                    `;
+                    
+                    if (infoWindow) {
+                        infoWindow.close();
+                    }
+                    
+                    infoWindow = new google.maps.InfoWindow({
+                        content: infoContent,
+                        maxWidth: 300
+                    });
+                    
+                    infoWindow.open(map, pedagioMarker);
+                });
+                
+                // Adicionar label flutuante com valor
+                const valorPorPraca = $('#pedagioEstimado').text() ? 
+                    (parseFloat($('#pedagioEstimado').text().replace('R$ ', '').replace(',', '.')) / numPracas).toFixed(2) : 
+                    '8.50';
+                
+                const labelPedagio = new google.maps.Marker({
+                    position: {
+                        lat: position.lat() - 0.0008,  // Posicionar abaixo
+                        lng: position.lng()
+                    },
+                    map: map,
+                    icon: {
+                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                            <svg xmlns="http://www.w3.org/2000/svg" width="60" height="25">
+                                <rect x="0" y="0" width="60" height="20" rx="10" fill="#fbbf24" opacity="0.9"/>
+                                <text x="30" y="14" font-family="Arial, sans-serif" font-size="11" fill="#7c2d12" text-anchor="middle" font-weight="bold">
+                                    R$ ${valorPorPraca}
+                                </text>
+                            </svg>
+                        `),
+                        anchor: new google.maps.Point(30, 10)
+                    },
+                    zIndex: 799
+                });
+                
+                pedagioMarkers.push(pedagioMarker);
+                pedagioMarkers.push(labelPedagio);
+            }
+        }
+        
+        // Mostrar estatísticas da rota (versão simplificada mantida para compatibilidade)
         function mostrarEstatisticasRota(rota, estatisticas) {
+            mostrarEstatisticasRotaCompleta(rota, estatisticas, null, null);
+        }
+        
+        // Mostrar estatísticas completas da rota com veículo e pedágio
+        function mostrarEstatisticasRotaCompleta(rota, estatisticas, veiculo, pedagio) {
             let legsHtml = '';
             rota.legs.forEach((leg, index) => {
                 legsHtml += `
@@ -900,11 +1200,74 @@
                 `;
             });
             
+            // Seção do veículo
+            let veiculoHtml = '';
+            if (veiculo) {
+                veiculoHtml = `
+                    <h5 class="mt-3">🚚 Veículo Selecionado</h5>
+                    <table class="table table-sm">
+                        <tr>
+                            <td><strong>Veículo:</strong></td>
+                            <td>${veiculo.nome}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Capacidade:</strong></td>
+                            <td>${veiculo.peso_maximo.toLocaleString('pt-BR')} kg</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Tipo:</strong></td>
+                            <td>${veiculo.tipo} (${veiculo.eixos} eixos)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Peso da Carga:</strong></td>
+                            <td>${estatisticas.peso_total.toLocaleString('pt-BR')} kg</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Utilização:</strong></td>
+                            <td>${((estatisticas.peso_total / veiculo.peso_maximo) * 100).toFixed(1)}%</td>
+                        </tr>
+                    </table>
+                `;
+            }
+            
+            // Seção do pedágio
+            let pedagioHtml = '';
+            if (pedagio) {
+                pedagioHtml = `
+                    <h5 class="mt-3">💰 Estimativa de Pedágio</h5>
+                    <table class="table table-sm">
+                        <tr>
+                            <td><strong>Valor Total:</strong></td>
+                            <td class="text-success"><strong>R$ ${pedagio.valor_total.toFixed(2)}</strong></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Praças Estimadas:</strong></td>
+                            <td>${pedagio.num_pracas_estimado}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Valor Médio/Praça:</strong></td>
+                            <td>R$ ${pedagio.valor_medio_praca.toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Distância Pedagiada:</strong></td>
+                            <td>${pedagio.distancia_pedagiada_km} km (60% da rota)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Fator do Veículo:</strong></td>
+                            <td>${pedagio.multiplicador_veiculo}x (base: R$ ${pedagio.valor_base_carro.toFixed(2)})</td>
+                        </tr>
+                    </table>
+                    <div class="alert alert-info mt-2">
+                        <small><i class="fas fa-info-circle"></i> ${pedagio.observacao}</small>
+                    </div>
+                `;
+            }
+            
             Swal.fire({
-                title: 'Rota Otimizada',
+                title: '📍 Rota Otimizada',
                 html: `
                     <div class="text-start">
-                        <h5>Resumo da Rota</h5>
+                        <h5>📊 Resumo da Rota</h5>
                         <table class="table table-sm">
                             <tr>
                                 <td><strong>Distância Total:</strong></td>
@@ -915,7 +1278,7 @@
                                 <td>${rota.tempo_formatado}</td>
                             </tr>
                             <tr>
-                                <td><strong>Custo Estimado:</strong></td>
+                                <td><strong>Custo Combustível:</strong></td>
                                 <td>R$ ${estatisticas.custo_estimado_km.toFixed(2)}</td>
                             </tr>
                             <tr>
@@ -928,12 +1291,15 @@
                             </tr>
                         </table>
                         
-                        <h5 class="mt-3">Ordem de Entrega</h5>
+                        ${veiculoHtml}
+                        ${pedagioHtml}
+                        
+                        <h5 class="mt-3">📦 Ordem de Entrega</h5>
                         <ol>
                             ${rota.ordem_pedidos.map(p => `<li>Pedido ${p}</li>`).join('')}
                         </ol>
                         
-                        <h5 class="mt-3">Trechos</h5>
+                        <h5 class="mt-3">🛣️ Trechos</h5>
                         <table class="table table-sm">
                             <thead>
                                 <tr>
@@ -946,9 +1312,17 @@
                                 ${legsHtml}
                             </tbody>
                         </table>
+                        
+                        <div class="alert alert-warning mt-3">
+                            <strong>💵 Custo Total Estimado:</strong><br>
+                            Combustível: R$ ${estatisticas.custo_estimado_km.toFixed(2)}<br>
+                            Pedágio: R$ ${pedagio ? pedagio.valor_total.toFixed(2) : '0.00'}<br>
+                            <hr>
+                            <strong>TOTAL: R$ ${(estatisticas.custo_estimado_km + (pedagio ? pedagio.valor_total : 0)).toFixed(2)}</strong>
+                        </div>
                     </div>
                 `,
-                width: 600,
+                width: 700,
                 confirmButtonText: 'Fechar'
             });
         }
