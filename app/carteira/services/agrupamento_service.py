@@ -2,7 +2,7 @@
 Service para lógica de agrupamento de pedidos da carteira
 """
 
-from sqlalchemy import func, and_, exists, or_
+from sqlalchemy import func, and_, exists
 from app import db
 from app.carteira.models import CarteiraPrincipal, SaldoStandby
 from app.separacao.models import Separacao
@@ -79,6 +79,7 @@ class AgrupamentoService:
             CarteiraPrincipal.protocolo,
             CarteiraPrincipal.agendamento,
             CarteiraPrincipal.agendamento_confirmado,
+            CarteiraPrincipal.forma_agendamento,
             
             # Agregações conforme especificação
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * 
@@ -123,7 +124,8 @@ class AgrupamentoService:
             CarteiraPrincipal.incoterm,
             CarteiraPrincipal.protocolo,
             CarteiraPrincipal.agendamento,
-            CarteiraPrincipal.agendamento_confirmado
+            CarteiraPrincipal.agendamento_confirmado,
+            CarteiraPrincipal.forma_agendamento
         ).order_by(
             CarteiraPrincipal.rota.asc().nullslast(),      # 1º Rota: menor para maior (A-Z)
             CarteiraPrincipal.sub_rota.asc().nullslast(),  # 2º Sub-rota: menor para maior (A-Z)
@@ -137,7 +139,7 @@ class AgrupamentoService:
             from app.carteira.utils.separacao_utils import buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade
             
             # Calcular informações de separação
-            qtd_separacoes, valor_separacoes, expedicao_separacao_completa = self._calcular_separacoes(pedido.num_pedido)
+            qtd_separacoes, valor_separacoes, dados_separacao_completa = self._calcular_separacoes(pedido.num_pedido)
             
             # Calcular valor do saldo restante
             valor_pedido = float(pedido.valor_total) if pedido.valor_total else 0
@@ -146,8 +148,15 @@ class AgrupamentoService:
             # Determinar se está totalmente em separação
             totalmente_separado = valor_saldo_restante <= 0.01  # Margem de 1 centavo
             
-            # Para separações tipo_envio 'completo', usar a expedição do Pedido ao invés da expedição da CarteiraPrincipal
-            expedicao_final = expedicao_separacao_completa if expedicao_separacao_completa else pedido.expedicao
+            # Para separações tipo_envio 'total', usar dados da separação completa
+            if dados_separacao_completa and dados_separacao_completa['expedicao']:
+                expedicao_final = dados_separacao_completa['expedicao']
+                agendamento_final = dados_separacao_completa['agendamento'] if dados_separacao_completa['agendamento'] else pedido.agendamento
+                protocolo_final = dados_separacao_completa['protocolo'] if dados_separacao_completa['protocolo'] else pedido.protocolo
+            else:
+                expedicao_final = pedido.expedicao
+                agendamento_final = pedido.agendamento
+                protocolo_final = pedido.protocolo
             
             # Buscar rota e sub-rota das localidades
             rota_calculada = buscar_rota_por_uf(pedido.cod_uf) if pedido.cod_uf else None
@@ -171,9 +180,12 @@ class AgrupamentoService:
                 'cod_uf': pedido.cod_uf,
                 'nome_cidade': pedido.nome_cidade,
                 'incoterm': pedido.incoterm,  # Mantém apenas a sigla (CIF, FOB, etc)
-                'protocolo': pedido.protocolo,
-                'agendamento': pedido.agendamento,
+                'protocolo': protocolo_final,  # Usa protocolo da separação completa se existir
+                'protocolo_original': pedido.protocolo,  # Mantém o original para referência
+                'agendamento': agendamento_final,  # Usa agendamento da separação completa se existir
+                'agendamento_original': pedido.agendamento,  # Mantém o original para referência
                 'agendamento_confirmado': pedido.agendamento_confirmado,
+                'forma_agendamento': pedido.forma_agendamento,
                 'valor_total': valor_pedido,
                 'peso_total': float(pedido.peso_total) if pedido.peso_total else 0,
                 'pallet_total': float(pedido.pallet_total) if pedido.pallet_total else 0,
@@ -183,7 +195,7 @@ class AgrupamentoService:
                 'valor_saldo_restante': valor_saldo_restante,
                 'qtd_separacoes': qtd_separacoes,
                 'totalmente_separado': totalmente_separado,
-                'tem_separacao_completa': expedicao_separacao_completa is not None
+                'tem_separacao_completa': dados_separacao_completa and dados_separacao_completa['expedicao'] is not None
             }
             
         except Exception as e:
@@ -191,13 +203,12 @@ class AgrupamentoService:
             return self._criar_pedido_basico(pedido)
     
     def _calcular_separacoes(self, num_pedido):
-        """Calcula quantidade e valor das separações ativas e retorna expedição se tipo_envio for 'completo'"""
+        """Calcula quantidade e valor das separações ativas e retorna dados de separação completa"""
         try:
             from app.carteira.models import PreSeparacaoItem
-            from app.embarques.models import EmbarqueItem
             
             # Contar separacao_lote_id únicos (quantidade de envios para separação)
-            # Inclui FATURADO quando EmbarqueItem tem erro_validacao
+            # Considera apenas pedidos com status DIFERENTE de 'FATURADO'
             qtd_separacoes = db.session.query(
                 func.count(func.distinct(Separacao.separacao_lote_id))
             ).join(
@@ -205,72 +216,62 @@ class AgrupamentoService:
                     Separacao.separacao_lote_id == Pedido.separacao_lote_id,
                     Separacao.num_pedido == Pedido.num_pedido
                 )
-            ).outerjoin(
-                EmbarqueItem, EmbarqueItem.separacao_lote_id == Separacao.separacao_lote_id
             ).filter(
                 Separacao.num_pedido == num_pedido,
-                or_(
-                    # Condição original: ABERTO ou COTADO
-                    Pedido.status.in_(['ABERTO', 'COTADO']),
-                    # Nova condição: FATURADO mas com erro de validação
-                    and_(
-                        Pedido.status == 'FATURADO',
-                        EmbarqueItem.erro_validacao.isnot(None)
-                    )
-                )
+                # Considera apenas pedidos não faturados
+                Pedido.status != 'FATURADO'
             ).scalar() or 0
             
             # Buscar separações para calcular valor total e verificar tipo_envio
-            # Também inclui FATURADO quando tem erro_validacao
+            # Considera apenas pedidos não faturados
             separacoes_ativas = db.session.query(Separacao, Pedido).join(
                 Pedido, and_(
                     Separacao.separacao_lote_id == Pedido.separacao_lote_id,
                     Separacao.num_pedido == Pedido.num_pedido
                 )
-            ).outerjoin(
-                EmbarqueItem, EmbarqueItem.separacao_lote_id == Separacao.separacao_lote_id
             ).filter(
                 Separacao.num_pedido == num_pedido,
-                or_(
-                    # Condição original: ABERTO ou COTADO
-                    Pedido.status.in_(['ABERTO', 'COTADO']),
-                    # Nova condição: FATURADO mas com erro de validação
-                    and_(
-                        Pedido.status == 'FATURADO',
-                        EmbarqueItem.erro_validacao.isnot(None)
-                    )
-                )
+                # Considera apenas pedidos não faturados
+                Pedido.status != 'FATURADO'
             ).all()
             
-            # Calcular valor total das separações e buscar expedição de separação completa
+            # Calcular valor total das separações e buscar dados de separação completa
             valor_separacoes = 0
-            expedicao_separacao_completa = None
+            dados_separacao_completa = {
+                'expedicao': None,
+                'agendamento': None,
+                'protocolo': None
+            }
             
             for sep, ped in separacoes_ativas:
                 if sep.qtd_saldo and sep.valor_saldo:
                     valor_unit = sep.valor_saldo / sep.qtd_saldo if sep.qtd_saldo > 0 else 0
                     valor_separacoes += sep.qtd_saldo * valor_unit
                 
-                # Se encontrar uma separação com tipo_envio 'completo', pegar a expedição do Pedido
-                if sep.tipo_envio == 'total' and ped.expedicao:
-                    expedicao_separacao_completa = ped.expedicao
+                # Se encontrar uma separação com tipo_envio 'total', pegar dados do Pedido
+                if sep.tipo_envio == 'total':
+                    dados_separacao_completa['expedicao'] = ped.expedicao
+                    dados_separacao_completa['agendamento'] = ped.agendamento
+                    dados_separacao_completa['protocolo'] = ped.protocolo
             
             # Buscar pré-separações completas também
-            if not expedicao_separacao_completa:
+            if not dados_separacao_completa['expedicao']:
                 pre_sep_completa = PreSeparacaoItem.query.filter(
                     PreSeparacaoItem.num_pedido == num_pedido,
                     PreSeparacaoItem.tipo_envio == 'total',
                     PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
                 ).first()
                 
-                if pre_sep_completa and pre_sep_completa.data_expedicao_editada:
-                    expedicao_separacao_completa = pre_sep_completa.data_expedicao_editada
+                if pre_sep_completa:
+                    dados_separacao_completa['expedicao'] = pre_sep_completa.data_expedicao_editada
+                    dados_separacao_completa['agendamento'] = pre_sep_completa.data_agendamento_editada
+                    dados_separacao_completa['protocolo'] = pre_sep_completa.protocolo_editado
             
-            return qtd_separacoes, valor_separacoes, expedicao_separacao_completa
+            return qtd_separacoes, valor_separacoes, dados_separacao_completa
             
         except Exception as e:
             logger.warning(f"Erro ao calcular separações para {num_pedido}: {e}")
-            return 0, 0, None
+            return 0, 0, {'expedicao': None, 'agendamento': None, 'protocolo': None}
     
     def _criar_pedido_basico(self, pedido):
         """Cria estrutura básica de pedido em caso de erro"""
@@ -301,6 +302,7 @@ class AgrupamentoService:
             'protocolo': pedido.protocolo,
             'agendamento': pedido.agendamento,
             'agendamento_confirmado': pedido.agendamento_confirmado,
+            'forma_agendamento': pedido.forma_agendamento,
             'valor_total': float(pedido.valor_total) if pedido.valor_total else 0,
             'peso_total': float(pedido.peso_total) if pedido.peso_total else 0,
             'pallet_total': float(pedido.pallet_total) if pedido.pallet_total else 0,

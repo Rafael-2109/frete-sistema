@@ -164,7 +164,7 @@ async function carregarPedidosStandby() {
     semDados.style.display = 'none';
     
     try {
-        const response = await fetch('/carteira/api/carteira/standby/listar');
+        const response = await fetch('/carteira/api/standby/listar');
         const data = await response.json();
         
         if (data.success) {
@@ -213,7 +213,13 @@ function renderizarTabela(pedidos) {
                 <span class="badge badge-tipo-standby bg-info">${pedido.tipo_standby}</span>
             </td>
             <td>
-                <span class="badge ${getBadgeClassStatus(pedido.status_standby)}">${pedido.status_standby}</span>
+                <span class="badge ${getBadgeClassStatus(pedido.status_standby)}" 
+                      style="cursor: pointer;"
+                      onclick="abrirModalObservacoes('${pedido.num_pedido}', ${JSON.stringify(pedido.observacoes || []).replace(/"/g, '&quot;')})"
+                      title="Clique para ver/adicionar observações">
+                    ${pedido.status_standby}
+                    ${pedido.total_observacoes > 0 ? `<i class="fas fa-comment-dots ms-1"></i> (${pedido.total_observacoes})` : ''}
+                </span>
             </td>
             <td class="text-end">${formatarMoeda(pedido.valor_total)}</td>
             <td class="text-end">${formatarNumero(pedido.peso_total, 2)} kg</td>
@@ -265,7 +271,7 @@ function renderizarTabela(pedidos) {
                         <tbody>
                             ${pedido.produtos.map(prod => `
                                 <tr>
-                                    <td>${prod.cod_produto}</td>
+                                    <td>${prod.cod_produto} ${prod.nome_produto ? `- ${prod.nome_produto}` : ''}</td>
                                     <td>${formatarNumero(prod.qtd_saldo, 3)}</td>
                                     <td class="text-end">${formatarMoeda(prod.valor_saldo)}</td>
                                     <td class="text-end">${formatarNumero(prod.peso_saldo, 2)} kg</td>
@@ -315,7 +321,7 @@ async function alterarStatus(numPedido, novoStatus) {
     }
     
     try {
-        const response = await fetch('/carteira/api/carteira/standby/atualizar-status', {
+        const response = await fetch('/carteira/api/standby/atualizar-status', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -418,6 +424,147 @@ function showAlert(type, message) {
     setTimeout(() => {
         alertDiv.remove();
     }, 5000);
+}
+
+// Funções para o modal de observações
+let pedidoAtualObservacoes = null;
+
+function abrirModalObservacoes(numPedido, observacoes) {
+    pedidoAtualObservacoes = numPedido;
+    
+    // Criar modal se não existir
+    let modal = document.getElementById('modalObservacoes');
+    if (!modal) {
+        const modalHtml = `
+            <div class="modal fade" id="modalObservacoes" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-comment-dots"></i> Observações - Pedido <span id="numPedidoModal"></span>
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="listaObservacoes" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+                                <!-- Observações serão listadas aqui -->
+                            </div>
+                            <div class="border-top pt-3">
+                                <h6>Adicionar Nova Observação:</h6>
+                                <div class="mb-3">
+                                    <textarea class="form-control" id="novaObservacao" rows="3" 
+                                              placeholder="Digite sua observação..."></textarea>
+                                </div>
+                                <button type="button" class="btn btn-primary" onclick="salvarObservacao()">
+                                    <i class="fas fa-save"></i> Gravar Observação
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modal = document.getElementById('modalObservacoes');
+    }
+    
+    // Atualizar número do pedido
+    document.getElementById('numPedidoModal').textContent = numPedido;
+    
+    // Limpar campo de nova observação
+    document.getElementById('novaObservacao').value = '';
+    
+    // Mostrar observações existentes
+    const listaObservacoes = document.getElementById('listaObservacoes');
+    if (observacoes && observacoes.length > 0) {
+        listaObservacoes.innerHTML = observacoes.map(obs => `
+            <div class="card mb-2">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <strong>${obs.usuario}</strong>
+                            <small class="text-muted ms-2">${obs.data}</small>
+                        </div>
+                    </div>
+                    <p class="mb-0 mt-1">${obs.texto}</p>
+                </div>
+            </div>
+        `).join('');
+    } else {
+        listaObservacoes.innerHTML = '<p class="text-muted">Nenhuma observação registrada ainda.</p>';
+    }
+    
+    // Mostrar modal
+    const modalBS = new bootstrap.Modal(modal);
+    modalBS.show();
+}
+
+function salvarObservacao() {
+    const observacao = document.getElementById('novaObservacao').value.trim();
+    
+    if (!observacao) {
+        showAlert('warning', 'Por favor, digite uma observação');
+        return;
+    }
+    
+    fetch('/carteira/api/standby/adicionar-observacao', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            num_pedido: pedidoAtualObservacoes,
+            observacao: observacao
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showAlert('success', 'Observação adicionada com sucesso');
+            
+            // Atualizar lista de observações no modal
+            const listaObservacoes = document.getElementById('listaObservacoes');
+            const novaObsHtml = `
+                <div class="card mb-2">
+                    <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>${data.observacao.usuario}</strong>
+                                <small class="text-muted ms-2">${data.observacao.data}</small>
+                            </div>
+                        </div>
+                        <p class="mb-0 mt-1">${data.observacao.texto}</p>
+                    </div>
+                </div>
+            `;
+            
+            if (listaObservacoes.innerHTML.includes('Nenhuma observação')) {
+                listaObservacoes.innerHTML = novaObsHtml;
+            } else {
+                listaObservacoes.insertAdjacentHTML('beforeend', novaObsHtml);
+            }
+            
+            // Limpar campo
+            document.getElementById('novaObservacao').value = '';
+            
+            // Recarregar dados para atualizar contador
+            carregarDados();
+        } else {
+            showAlert('error', 'Erro ao adicionar observação: ' + (data.message || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro na requisição:', error);
+        // Não mostrar alert duplicado se já foi tratado acima
+        if (error.message && error.message.includes('HTTP error')) {
+            showAlert('error', 'Erro de conexão ao adicionar observação');
+        }
+    });
 }
 </script>
 {% endblock %}

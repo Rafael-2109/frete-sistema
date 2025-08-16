@@ -332,8 +332,17 @@
                                             </small>
                                         </div>
                                         {% endif %}
+                                        
+                                        {% if pedido.forma_agendamento and pedido.forma_agendamento != 'SEM AGENDAMENTO' %}
+                                        <div class="agendamento-container mt-1">
+                                            <small class="text-info" style="display: block;">
+                                                <i class="fas fa-phone-alt me-1"></i>
+                                                Agendar por: <strong>{{ pedido.forma_agendamento }}</strong>
+                                            </small>
+                                        </div>
+                                        {% endif %}
 
-                                        {% if not pedido.data_entrega_pedido and not pedido.observ_ped_1 %}
+                                        {% if not pedido.data_entrega_pedido and not pedido.observ_ped_1 and not pedido.forma_agendamento %}
                                         <span class="text-muted">-</span>
                                         {% endif %}
                                     </div>

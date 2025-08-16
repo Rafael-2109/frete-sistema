@@ -39,7 +39,7 @@ window.standbyManager = (function () {
      */
     async function verificarStatusPedido(numPedido) {
         try {
-            const response = await fetch(`/carteira/api/carteira/standby/status/${numPedido}`);
+            const response = await fetch(`/carteira/api/standby/status/${numPedido}`);
             const data = await response.json();
 
             if (data.success && data.em_standby) {
@@ -80,7 +80,7 @@ window.standbyManager = (function () {
 
         // Verificar se já está em standby
         try {
-            const response = await fetch(`/carteira/api/carteira/standby/status/${numPedido}`);
+            const response = await fetch(`/carteira/api/standby/status/${numPedido}`);
             const data = await response.json();
 
             if (data.success && data.em_standby) {
@@ -166,7 +166,7 @@ window.standbyManager = (function () {
         }
 
         try {
-            const response = await fetch('/carteira/api/carteira/standby/criar', {
+            const response = await fetch('/carteira/api/standby/criar', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

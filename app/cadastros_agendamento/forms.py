@@ -11,7 +11,8 @@ class ContatoAgendamentoForm(FlaskForm):
         ('TELEFONE', 'TELEFONE'),
         ('E-MAIL', 'E-MAIL'),
         ('COMERCIAL', 'COMERCIAL'),
-        ('SEM AGENDAMENTO', 'SEM AGENDAMENTO')
+        ('SEM AGENDAMENTO', 'SEM AGENDAMENTO'),
+        ('ODOO', 'ODOO')
     ], validators=[Optional()])
     contato = StringField('Contato', validators=[DataRequired()])
     observacao = TextAreaField('Observação', validators=[Optional()])
@@ -26,7 +27,8 @@ class EditarContatoAgendamentoForm(FlaskForm):
         ('TELEFONE', 'TELEFONE'),
         ('E-MAIL', 'E-MAIL'),
         ('COMERCIAL', 'COMERCIAL'),
-        ('SEM AGENDAMENTO', 'SEM AGENDAMENTO')
+        ('SEM AGENDAMENTO', 'SEM AGENDAMENTO'),
+        ('ODOO', 'ODOO')
     ], validators=[Optional()])
     contato = StringField('Contato', validators=[DataRequired()])
     observacao = TextAreaField('Observação', validators=[Optional()])
@@ -40,7 +42,8 @@ class PesquisarAgendamentoForm(FlaskForm):
         ('TELEFONE', 'TELEFONE'),
         ('E-MAIL', 'E-MAIL'),
         ('COMERCIAL', 'COMERCIAL'),
-        ('SEM AGENDAMENTO', 'SEM AGENDAMENTO')
+        ('SEM AGENDAMENTO', 'SEM AGENDAMENTO'),
+        ('ODOO', 'ODOO')
     ], validators=[Optional()])
     contato = StringField('Contato', validators=[Optional()])
     submit = SubmitField('Buscar')

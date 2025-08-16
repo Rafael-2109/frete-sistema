@@ -50,3 +50,5 @@ Itens:
 - 4350162 - 10
 
 E vice versa.
+psql $DATABASE_URL -c "ALTER TABLE saldo_standby ADD COLUMN observacoes TEXT;"
+python -c "from app import app, db; db.engine.execute('ALTER TABLE saldo_standby ADD COLUMN observacoes TEXT;')"

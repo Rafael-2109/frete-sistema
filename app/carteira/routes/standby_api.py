@@ -14,7 +14,7 @@ from app.carteira.models import CarteiraPrincipal, SaldoStandby
 
 logger = logging.getLogger(__name__)
 
-standby_bp = Blueprint("standby", __name__, url_prefix="/api/carteira/standby")
+standby_bp = Blueprint("standby", __name__, url_prefix="/api/standby")
 
 
 @standby_bp.route("/criar", methods=["POST"])
@@ -47,19 +47,40 @@ def criar_standby():
         if standby_existente:
             return jsonify({"success": False, "message": "Pedido já está em standby"}), 400
 
+        # Importar CadastroPalletizacao para calcular peso e pallet
+        from app.producao.models import CadastroPalletizacao
+        
         # Criar registros de standby para cada item
         registros_criados = []
         for item in itens_carteira:
+            # Buscar dados de palletização para o produto
+            palletizacao = CadastroPalletizacao.query.filter_by(
+                cod_produto=item.cod_produto,
+                ativo=True
+            ).first()
+            
+            # Calcular peso e pallet baseado na palletização
+            qtd_saldo = float(item.qtd_saldo_produto_pedido)
+            
+            if palletizacao:
+                # Usar cálculos da palletização
+                peso_calculado = qtd_saldo * float(palletizacao.peso_bruto) if palletizacao.peso_bruto else item.peso
+                pallet_calculado = qtd_saldo / float(palletizacao.palletizacao) if palletizacao.palletizacao and palletizacao.palletizacao > 0 else item.pallet
+            else:
+                # Usar valores originais se não houver palletização
+                peso_calculado = item.peso
+                pallet_calculado = item.pallet
+            
             novo_standby = SaldoStandby(
                 origem_separacao_lote_id=item.separacao_lote_id or "",
                 num_pedido=item.num_pedido,
                 cod_produto=item.cod_produto,
                 cnpj_cliente=item.cnpj_cpf,
                 nome_cliente=item.raz_social or item.raz_social_red or "",
-                qtd_saldo=item.qtd_saldo_produto_pedido,
-                valor_saldo=Decimal(str(item.qtd_saldo_produto_pedido)) * Decimal(str(item.preco_produto_pedido or 0)),
-                peso_saldo=item.peso,
-                pallet_saldo=item.pallet,
+                qtd_saldo=qtd_saldo,
+                valor_saldo=Decimal(str(qtd_saldo)) * Decimal(str(item.preco_produto_pedido or 0)),
+                peso_saldo=peso_calculado,
+                pallet_saldo=pallet_calculado,
                 data_pedido=item.data_pedido,
                 tipo_standby=tipo_standby,
                 status_standby="ATIVO",
@@ -68,7 +89,7 @@ def criar_standby():
                 ),
             )
             db.session.add(novo_standby)
-            registros_criados.append({"cod_produto": item.cod_produto, "qtd": float(item.qtd_saldo_produto_pedido)})
+            registros_criados.append({"cod_produto": item.cod_produto, "qtd": qtd_saldo})
 
         db.session.commit()
 
@@ -111,6 +132,67 @@ def verificar_status_standby(num_pedido):
 
     except Exception as e:
         logger.error(f"Erro ao verificar status standby: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@standby_bp.route("/adicionar-observacao", methods=["POST"])
+@login_required
+def adicionar_observacao_standby():
+    """Adiciona uma observação ao histórico do pedido em standby"""
+    try:
+        import json
+        from datetime import datetime
+        
+        data = request.get_json()
+        num_pedido = data.get("num_pedido")
+        observacao = data.get("observacao")
+        
+        if not num_pedido or not observacao:
+            return jsonify({"success": False, "message": "Dados incompletos"}), 400
+        
+        # Buscar todos os itens do pedido
+        itens_standby = SaldoStandby.query.filter(
+            SaldoStandby.num_pedido == num_pedido
+        ).all()
+        
+        if not itens_standby:
+            return jsonify({"success": False, "message": "Pedido não encontrado em standby"}), 404
+        
+        # Criar nova entrada de observação
+        nova_observacao = {
+            "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "usuario": current_user.nome if hasattr(current_user, "nome") else "Sistema",
+            "texto": observacao
+        }
+        
+        # Atualizar observações em todos os itens do pedido
+        for item in itens_standby:
+            # Carregar observações existentes ou criar lista vazia
+            if item.observacoes:
+                try:
+                    observacoes_existentes = json.loads(item.observacoes)
+                except (json.JSONDecodeError, ValueError):
+                    observacoes_existentes = []
+            else:
+                observacoes_existentes = []
+            
+            # Adicionar nova observação
+            observacoes_existentes.append(nova_observacao)
+            
+            # Salvar como JSON
+            item.observacoes = json.dumps(observacoes_existentes, ensure_ascii=False)
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": "Observação adicionada com sucesso",
+            "observacao": nova_observacao
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao adicionar observação: {e}")
+        db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
 
 
@@ -181,6 +263,9 @@ def listar_standby():
             .all()
         )
 
+        # Importar CarteiraPrincipal para buscar nome_produto
+        from app.carteira.models import CarteiraPrincipal
+        
         resultado = []
         for pedido in pedidos_standby:
             # Buscar produtos do pedido
@@ -188,9 +273,18 @@ def listar_standby():
 
             produtos_lista = []
             for prod in produtos:
+                # Buscar nome do produto na CarteiraPrincipal
+                item_carteira = CarteiraPrincipal.query.filter_by(
+                    num_pedido=prod.num_pedido,
+                    cod_produto=prod.cod_produto
+                ).first()
+                
+                nome_produto = item_carteira.nome_produto if item_carteira else ""
+                
                 produtos_lista.append(
                     {
                         "cod_produto": prod.cod_produto,
+                        "nome_produto": nome_produto,
                         "qtd_saldo": float(prod.qtd_saldo),
                         "valor_saldo": float(prod.valor_saldo),
                         "peso_saldo": float(prod.peso_saldo) if prod.peso_saldo else 0,
@@ -198,6 +292,16 @@ def listar_standby():
                     }
                 )
 
+            # Buscar observações do primeiro item (são iguais para todos)
+            import json
+            primeiro_item = produtos[0] if produtos else None
+            observacoes = []
+            if primeiro_item and primeiro_item.observacoes:
+                try:
+                    observacoes = json.loads(primeiro_item.observacoes)
+                except (json.JSONDecodeError, ValueError):
+                    observacoes = []
+            
             resultado.append(
                 {
                     "num_pedido": pedido.num_pedido,
@@ -212,6 +316,8 @@ def listar_standby():
                     "pallet_total": float(pedido.pallet_total) if pedido.pallet_total else 0,
                     "total_itens": pedido.total_itens,
                     "produtos": produtos_lista,
+                    "observacoes": observacoes,
+                    "total_observacoes": len(observacoes)
                 }
             )
 

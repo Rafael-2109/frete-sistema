@@ -142,6 +142,9 @@ class CarteiraPrincipal(db.Model):
     estoque_d27 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D27
     estoque_d28 = db.Column(db.Numeric(15, 3), nullable=True)  # Estoque final D28
     
+    # 📞 AGENDAMENTO
+    forma_agendamento = db.Column(db.String(50), nullable=True)  # Portal, Telefone, E-mail, WhatsApp, ODOO, SEM AGENDAMENTO
+    
     # 🛡️ AUDITORIA
     created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
     updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
@@ -582,6 +585,9 @@ class SaldoStandby(db.Model):
     data_resolucao = db.Column(db.DateTime, nullable=True)
     resolvido_por = db.Column(db.String(100), nullable=True)
     observacoes_resolucao = db.Column(db.Text, nullable=True)
+    
+    # 📝 OBSERVAÇÕES CUMULATIVAS
+    observacoes = db.Column(db.Text, nullable=True)  # JSON com histórico de observações
     
     # 🛡️ AUDITORIA
     criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)

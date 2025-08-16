@@ -1581,6 +1581,137 @@ class CarteiraService:
             alertas_pos_sync = self._verificar_alertas_pos_sincronizacao(dados_novos, alertas_pre_sync)
             
             # ============================================================
+            # FASE 10.5: LIMPEZA DE SALDO STANDBY
+            # ============================================================
+            logger.info("🧹 Fase 10.5: Limpeza de SaldoStandby...")
+            try:
+                from app.carteira.models import SaldoStandby
+                
+                # Buscar todos os pedidos ativos na CarteiraPrincipal
+                pedidos_ativos = set(CarteiraPrincipal.query.with_entities(
+                    CarteiraPrincipal.num_pedido
+                ).distinct().all())
+                pedidos_ativos = {p[0] for p in pedidos_ativos}
+                
+                # Buscar pedidos em SaldoStandby que não existem mais na CarteiraPrincipal
+                standby_para_deletar = SaldoStandby.query.filter(
+                    ~SaldoStandby.num_pedido.in_(pedidos_ativos)
+                ).all()
+                
+                contador_standby_deletados = 0
+                for standby in standby_para_deletar:
+                    db.session.delete(standby)
+                    contador_standby_deletados += 1
+                
+                if contador_standby_deletados > 0:
+                    db.session.commit()
+                    logger.info(f"   🗑️ {contador_standby_deletados} registros removidos de SaldoStandby")
+                else:
+                    logger.info("   ✅ Nenhum registro para remover de SaldoStandby")
+                    
+            except Exception as e:
+                logger.warning(f"   ⚠️ Erro ao limpar SaldoStandby: {e}")
+                db.session.rollback()
+            
+            # ============================================================
+            # FASE 10.6: VERIFICAÇÃO E ATUALIZAÇÃO DE CONTATOS AGENDAMENTO
+            # ============================================================
+            logger.info("📞 Fase 10.6: Verificação de Contatos de Agendamento...")
+            try:
+                from app.cadastros_agendamento.models import ContatoAgendamento
+                
+                # Buscar clientes que necessitam agendamento
+                clientes_necessitam_agendamento = CarteiraPrincipal.query.filter(
+                    CarteiraPrincipal.cliente_nec_agendamento == True
+                ).with_entities(CarteiraPrincipal.cnpj_cpf).distinct().all()
+                
+                contador_contatos_criados = 0
+                contador_contatos_atualizados = 0
+                
+                for (cnpj,) in clientes_necessitam_agendamento:
+                    if not cnpj:
+                        continue
+                    
+                    # Verificar se existe ContatoAgendamento para este CNPJ
+                    contato_existente = ContatoAgendamento.query.filter_by(cnpj=cnpj).first()
+                    
+                    if not contato_existente:
+                        # Criar novo registro com forma=ODOO
+                        novo_contato = ContatoAgendamento(
+                            cnpj=cnpj,
+                            forma='ODOO',
+                            contato='Importado do Odoo',
+                            observacao='Cliente necessita agendamento - Configurado automaticamente na importação',
+                            atualizado_em=datetime.now()
+                        )
+                        db.session.add(novo_contato)
+                        contador_contatos_criados += 1
+                        logger.debug(f"   ➕ Criado ContatoAgendamento para CNPJ {cnpj}")
+                        
+                    elif contato_existente.forma == 'SEM AGENDAMENTO':
+                        # Atualizar para forma=ODOO se estava como SEM AGENDAMENTO
+                        contato_existente.forma = 'ODOO'
+                        contato_existente.contato = 'Importado do Odoo'
+                        contato_existente.observacao = 'Atualizado de SEM AGENDAMENTO para ODOO na importação'
+                        contato_existente.atualizado_em = datetime.now()
+                        contador_contatos_atualizados += 1
+                        logger.debug(f"   🔄 Atualizado ContatoAgendamento para CNPJ {cnpj} de 'SEM AGENDAMENTO' para 'ODOO'")
+                    
+                    # Se já existe com outra forma (Portal, Telefone, etc), mantém como está
+                
+                if contador_contatos_criados > 0 or contador_contatos_atualizados > 0:
+                    db.session.commit()
+                    logger.info(f"   ✅ Contatos de Agendamento: {contador_contatos_criados} criados, {contador_contatos_atualizados} atualizados")
+                else:
+                    logger.info("   ✅ Todos os contatos de agendamento já estão configurados corretamente")
+                    
+            except Exception as e:
+                logger.warning(f"   ⚠️ Erro ao verificar Contatos de Agendamento: {e}")
+                db.session.rollback()
+            
+            # ============================================================
+            # FASE 10.7: ATUALIZAR FORMA_AGENDAMENTO NA CARTEIRA
+            # ============================================================
+            logger.info("📝 Fase 10.7: Atualizando forma de agendamento na carteira...")
+            try:
+                from app.cadastros_agendamento.models import ContatoAgendamento
+                
+                # Buscar todos os contatos de agendamento
+                contatos_agendamento = {c.cnpj: c.forma for c in ContatoAgendamento.query.all()}
+                
+                # Atualizar CarteiraPrincipal com a forma de agendamento
+                contador_atualizados_forma = 0
+                registros_carteira = CarteiraPrincipal.query.filter(
+                    CarteiraPrincipal.cnpj_cpf.in_(list(contatos_agendamento.keys()))
+                ).all()
+                
+                for registro in registros_carteira:
+                    forma = contatos_agendamento.get(registro.cnpj_cpf)
+                    if forma and registro.forma_agendamento != forma:
+                        registro.forma_agendamento = forma
+                        contador_atualizados_forma += 1
+                
+                # Limpar forma_agendamento para clientes sem ContatoAgendamento
+                registros_sem_contato = CarteiraPrincipal.query.filter(
+                    ~CarteiraPrincipal.cnpj_cpf.in_(list(contatos_agendamento.keys())),
+                    CarteiraPrincipal.forma_agendamento.isnot(None)
+                ).all()
+                
+                for registro in registros_sem_contato:
+                    registro.forma_agendamento = None
+                    contador_atualizados_forma += 1
+                
+                if contador_atualizados_forma > 0:
+                    db.session.commit()
+                    logger.info(f"   ✅ {contador_atualizados_forma} registros atualizados com forma de agendamento")
+                else:
+                    logger.info("   ✅ Forma de agendamento já está atualizada em todos os registros")
+                    
+            except Exception as e:
+                logger.warning(f"   ⚠️ Erro ao atualizar forma de agendamento: {e}")
+                db.session.rollback()
+            
+            # ============================================================
             # FASE 11: ESTATÍSTICAS FINAIS
             # ============================================================
             fim_operacao = datetime.now()
