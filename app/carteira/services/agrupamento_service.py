@@ -158,10 +158,27 @@ class AgrupamentoService:
                 expedicao_final = dados_separacao_completa['expedicao']
                 agendamento_final = dados_separacao_completa['agendamento'] if dados_separacao_completa['agendamento'] else pedido.agendamento
                 protocolo_final = dados_separacao_completa['protocolo'] if dados_separacao_completa['protocolo'] else pedido.protocolo
+                # Usar agendamento_confirmado da separação se existir
+                agendamento_confirmado_final = dados_separacao_completa.get('agendamento_confirmado', pedido.agendamento_confirmado)
             else:
-                expedicao_final = pedido.expedicao
-                agendamento_final = pedido.agendamento
-                protocolo_final = pedido.protocolo
+                # Verificar se existe pré-separação total
+                from app.carteira.models import PreSeparacaoItem
+                pre_sep_total = db.session.query(PreSeparacaoItem).filter(
+                    PreSeparacaoItem.num_pedido == pedido.num_pedido,
+                    PreSeparacaoItem.tipo_envio == 'total',
+                    PreSeparacaoItem.status.in_(['CRIADO', 'RECOMPOSTO'])
+                ).first()
+                
+                if pre_sep_total:
+                    expedicao_final = pre_sep_total.data_expedicao_editada if pre_sep_total.data_expedicao_editada else pedido.expedicao
+                    agendamento_final = pre_sep_total.data_agendamento_editada if pre_sep_total.data_agendamento_editada else pedido.agendamento
+                    protocolo_final = pre_sep_total.protocolo_editado if pre_sep_total.protocolo_editado else pedido.protocolo
+                    agendamento_confirmado_final = pre_sep_total.agendamento_confirmado if hasattr(pre_sep_total, 'agendamento_confirmado') else pedido.agendamento_confirmado
+                else:
+                    expedicao_final = pedido.expedicao
+                    agendamento_final = pedido.agendamento
+                    protocolo_final = pedido.protocolo
+                    agendamento_confirmado_final = pedido.agendamento_confirmado
             
             # Buscar rota e sub-rota das localidades
             rota_calculada = buscar_rota_por_uf(pedido.cod_uf) if pedido.cod_uf else None
@@ -189,7 +206,7 @@ class AgrupamentoService:
                 'protocolo_original': pedido.protocolo,  # Mantém o original para referência
                 'agendamento': agendamento_final,  # Usa agendamento da separação completa se existir
                 'agendamento_original': pedido.agendamento,  # Mantém o original para referência
-                'agendamento_confirmado': pedido.agendamento_confirmado,
+                'agendamento_confirmado': agendamento_confirmado_final,  # Usa o valor da separação/pré-separação se existir
                 'forma_agendamento': pedido.forma_agendamento,
                 'valor_total': valor_pedido,
                 'peso_total': float(pedido.peso_total) if pedido.peso_total else 0,
@@ -245,7 +262,8 @@ class AgrupamentoService:
             dados_separacao_completa = {
                 'expedicao': None,
                 'agendamento': None,
-                'protocolo': None
+                'protocolo': None,
+                'agendamento_confirmado': False
             }
             
             for sep, ped in separacoes_ativas:
@@ -258,6 +276,7 @@ class AgrupamentoService:
                     dados_separacao_completa['expedicao'] = ped.expedicao
                     dados_separacao_completa['agendamento'] = ped.agendamento
                     dados_separacao_completa['protocolo'] = ped.protocolo
+                    dados_separacao_completa['agendamento_confirmado'] = sep.agendamento_confirmado if hasattr(sep, 'agendamento_confirmado') else False
             
             # Buscar pré-separações completas também
             if not dados_separacao_completa['expedicao']:
@@ -271,6 +290,8 @@ class AgrupamentoService:
                     dados_separacao_completa['expedicao'] = pre_sep_completa.data_expedicao_editada
                     dados_separacao_completa['agendamento'] = pre_sep_completa.data_agendamento_editada
                     dados_separacao_completa['protocolo'] = pre_sep_completa.protocolo_editado
+                    # IMPORTANTE: Incluir também o agendamento_confirmado da pré-separação
+                    dados_separacao_completa['agendamento_confirmado'] = pre_sep_completa.agendamento_confirmado if hasattr(pre_sep_completa, 'agendamento_confirmado') else False
             
             return qtd_separacoes, valor_separacoes, dados_separacao_completa
             

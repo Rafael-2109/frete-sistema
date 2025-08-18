@@ -154,7 +154,8 @@ class SeparacaoManager {
                 body: JSON.stringify({
                     expedicao: dataExpedicao.expedicao,
                     agendamento: dataExpedicao.agendamento,
-                    protocolo: dataExpedicao.protocolo
+                    protocolo: dataExpedicao.protocolo,
+                    agendamento_confirmado: dataExpedicao.agendamento_confirmado || false
                 })
             });
             
@@ -420,6 +421,14 @@ class SeparacaoManager {
                             <label class="form-label">Protocolo (opcional)</label>
                             <input type="text" id="swal-protocolo" class="form-control">
                         </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="swal-agendamento-confirmado">
+                                <label class="form-check-label" for="swal-agendamento-confirmado">
+                                    <i class="fas fa-check-circle text-success"></i> Agenda Confirmada
+                                </label>
+                            </div>
+                        </div>
                     `,
                     showCancelButton: true,
                     confirmButtonText: 'Confirmar',
@@ -433,7 +442,8 @@ class SeparacaoManager {
                         return {
                             expedicao: expedicao,
                             agendamento: document.getElementById('swal-agendamento').value,
-                            protocolo: document.getElementById('swal-protocolo').value
+                            protocolo: document.getElementById('swal-protocolo').value,
+                            agendamento_confirmado: document.getElementById('swal-agendamento-confirmado').checked
                         };
                     }
                 }).then((result) => {

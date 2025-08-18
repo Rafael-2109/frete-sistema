@@ -137,9 +137,12 @@ class WorkspaceMontagem {
                 this.preSeparacoes.set(lote.lote_id, {
                     loteId: lote.lote_id,
                     dataExpedicao: lote.data_expedicao || '',
-                    dataAgendamento: lote.data_agendamento || '',
+                    data_agendamento: lote.data_agendamento || '',  // Usar nome correto do campo
                     protocolo: lote.protocolo || '',
-                    produtos: produtos
+                    agendamento_confirmado: lote.agendamento_confirmado || false,  // Campo faltando!
+                    produtos: produtos,
+                    status: lote.status || 'pre_separacao',
+                    pre_separacao_id: lote.pre_separacao_id
                 });
             } catch (e) {
                 console.warn('Não foi possível registrar lote no mapa de pré-separações:', e);
@@ -251,7 +254,13 @@ class WorkspaceMontagem {
                         <div class="card-body">
                             <div class="info-separacao mb-2">
                                 <small><strong>Expedição:</strong> ${this.formatarData(separacao.expedicao)}</small><br>
-                                <small><strong>Agendamento:</strong> ${separacao.agendamento ? this.formatarData(separacao.agendamento) : '-'}</small><br>
+                                <small><strong>Agendamento:</strong> ${separacao.agendamento ? this.formatarData(separacao.agendamento) : '-'}
+                                    ${separacao.agendamento && separacao.agendamento_confirmado ? 
+                                        '<span class="badge bg-success ms-1"><i class="fas fa-check-circle"></i> Confirmado</span>' : 
+                                        separacao.agendamento && !separacao.agendamento_confirmado ? 
+                                        '<span class="badge bg-warning ms-1"><i class="fas fa-hourglass-half"></i> Aguardando</span>' : ''
+                                    }
+                                </small><br>
                                 <small><strong>Protocolo:</strong> ${separacao.protocolo || '-'}</small>
                             </div>
                             
@@ -848,6 +857,118 @@ class WorkspaceMontagem {
         return workspaceElement ? workspaceElement.dataset.pedido : null;
     }
 
+    async confirmarAgendamentoLote(loteId, tipo) {
+        try {
+            console.log(`🔄 Confirmando agendamento do lote ${loteId} (${tipo})`);
+            
+            let endpoint;
+            if (tipo === 'pre') {
+                // Para pré-separações, precisamos buscar o ID do item
+                const loteData = this.preSeparacoes.get(loteId);
+                if (!loteData || !loteData.pre_separacao_id) {
+                    alert('❌ Não foi possível identificar a pré-separação');
+                    return;
+                }
+                endpoint = `/carteira/api/pre-separacao/${loteData.pre_separacao_id}/confirmar-agendamento`;
+            } else {
+                // Para separações, usar o lote_id
+                endpoint = `/carteira/api/separacao/${loteId}/confirmar-agendamento`;
+            }
+            
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.mostrarFeedback('✅ Agendamento confirmado com sucesso', 'success');
+                
+                // Atualizar dados locais
+                const loteData = this.preSeparacoes.get(loteId);
+                if (loteData) {
+                    loteData.agendamento_confirmado = true;
+                    this.preSeparacoes.set(loteId, loteData);
+                    
+                    // Re-renderizar o card
+                    if (this.loteManager) {
+                        this.loteManager.atualizarCardLote(loteId);
+                    }
+                }
+                
+                // Recarregar dados se necessário
+                await this.carregarDadosPedido();
+            } else {
+                alert('❌ ' + (data.error || 'Erro ao confirmar agendamento'));
+            }
+        } catch (error) {
+            console.error('Erro ao confirmar agendamento:', error);
+            alert('❌ Erro ao confirmar agendamento');
+        }
+    }
+    
+    async reverterAgendamentoLote(loteId, tipo) {
+        try {
+            if (!confirm('Tem certeza que deseja reverter a confirmação do agendamento?')) {
+                return;
+            }
+            
+            console.log(`🔄 Revertendo confirmação do agendamento do lote ${loteId} (${tipo})`);
+            
+            let endpoint;
+            if (tipo === 'pre') {
+                // Para pré-separações, precisamos buscar o ID do item
+                const loteData = this.preSeparacoes.get(loteId);
+                if (!loteData || !loteData.pre_separacao_id) {
+                    alert('❌ Não foi possível identificar a pré-separação');
+                    return;
+                }
+                endpoint = `/carteira/api/pre-separacao/${loteData.pre_separacao_id}/reverter-agendamento`;
+            } else {
+                // Para separações, usar o lote_id
+                endpoint = `/carteira/api/separacao/${loteId}/reverter-agendamento`;
+            }
+            
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.mostrarFeedback('✅ Confirmação de agendamento revertida', 'success');
+                
+                // Atualizar dados locais
+                const loteData = this.preSeparacoes.get(loteId);
+                if (loteData) {
+                    loteData.agendamento_confirmado = false;
+                    this.preSeparacoes.set(loteId, loteData);
+                    
+                    // Re-renderizar o card
+                    if (this.loteManager) {
+                        this.loteManager.atualizarCardLote(loteId);
+                    }
+                }
+                
+                // Recarregar dados se necessário
+                await this.carregarDadosPedido();
+            } else {
+                alert('❌ ' + (data.error || 'Erro ao reverter confirmação'));
+            }
+        } catch (error) {
+            console.error('Erro ao reverter confirmação:', error);
+            alert('❌ Erro ao reverter confirmação');
+        }
+    }
+
 
     abrirDetalhesLote(loteId) {
         console.log(`🔍 Abrir detalhes do lote ${loteId}`);
@@ -1110,24 +1231,16 @@ class WorkspaceMontagem {
             // Buscar dados da pré-separação
             const loteData = this.preSeparacoes.get(loteId);
             if (loteData) {
-                if (loteData.produtos && loteData.produtos.length > 0) {
-                    const primeiroProduto = loteData.produtos[0];
-                    const exp = (primeiroProduto.dataExpedicao || loteData.dataExpedicao || '');
-                    const ag = (primeiroProduto.dataAgendamento || loteData.dataAgendamento || '');
-                    dadosAtuais = {
-                        expedicao: (typeof exp === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(exp)) ? exp : '',
-                        agendamento: (typeof ag === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ag)) ? ag : '',
-                        protocolo: (primeiroProduto.protocolo || loteData.protocolo || '')
-                    };
-                } else {
-                    const exp = loteData.dataExpedicao || '';
-                    const ag = loteData.dataAgendamento || '';
-                    dadosAtuais = {
-                        expedicao: (typeof exp === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(exp)) ? exp : '',
-                        agendamento: (typeof ag === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ag)) ? ag : '',
-                        protocolo: loteData.protocolo || ''
-                    };
-                }
+                // Usar diretamente os campos do loteData, como no card que funciona
+                const exp = loteData.dataExpedicao || loteData.data_expedicao || '';
+                const ag = loteData.data_agendamento || '';
+                
+                dadosAtuais = {
+                    expedicao: (typeof exp === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(exp)) ? exp : '',
+                    agendamento: (typeof ag === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ag)) ? ag : '',
+                    protocolo: loteData.protocolo || '',
+                    agendamento_confirmado: loteData.agendamento_confirmado || false
+                };
             }
         } else {
             // Para separações, buscar dos dados carregados
@@ -1136,7 +1249,8 @@ class WorkspaceMontagem {
                 dadosAtuais = {
                     expedicao: separacao.expedicao || '',
                     agendamento: separacao.agendamento || '',
-                    protocolo: separacao.protocolo || ''
+                    protocolo: separacao.protocolo || '',
+                    agendamento_confirmado: separacao.agendamento_confirmado || false
                 };
             }
         }
@@ -1171,6 +1285,15 @@ class WorkspaceMontagem {
                                            value="${dadosAtuais.protocolo}" 
                                            placeholder="Digite o protocolo">
                                 </div>
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="agendamentoConfirmado" 
+                                               ${dadosAtuais.agendamento_confirmado ? 'checked' : ''}>
+                                        <label class="form-check-label" for="agendamentoConfirmado">
+                                            <i class="fas fa-check-circle text-success"></i> Agenda Confirmada
+                                        </label>
+                                    </div>
+                                </div>
                             </form>
                         </div>
                         <div class="modal-footer">
@@ -1202,6 +1325,7 @@ class WorkspaceMontagem {
         const expedicao = document.getElementById('dataExpedicao').value;
         const agendamento = document.getElementById('dataAgendamento').value;
         const protocolo = document.getElementById('protocolo').value;
+        const agendamentoConfirmado = document.getElementById('agendamentoConfirmado').checked;
 
         if (!expedicao) {
             alert('Data de expedição é obrigatória!');
@@ -1221,7 +1345,8 @@ class WorkspaceMontagem {
                 body: JSON.stringify({
                     expedicao: expedicao,
                     agendamento: agendamento,
-                    protocolo: protocolo
+                    protocolo: protocolo,
+                    agendamento_confirmado: agendamentoConfirmado
                 })
             });
 
@@ -1246,6 +1371,93 @@ class WorkspaceMontagem {
 
     imprimirSeparacao(loteId) {
         window.open(`/carteira/separacao/${loteId}/imprimir`, '_blank');
+    }
+
+    async confirmarAgendamentoLote(loteId, tipo) {
+        try {
+            console.log(`🔄 Confirmando agendamento do lote ${loteId} (${tipo})`);
+            
+            let endpoint;
+            if (tipo === 'pre') {
+                // Para pré-separação, usar endpoint de lote
+                endpoint = `/carteira/api/pre-separacao/lote/${loteId}/confirmar-agendamento`;
+            } else {
+                // Para separação
+                endpoint = `/carteira/api/separacao/${loteId}/confirmar-agendamento`;
+            }
+            
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': this.getCSRFToken()
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.mostrarToast('Agendamento confirmado com sucesso!', 'success');
+                // Recarregar dados
+                location.reload();
+            } else {
+                this.mostrarToast('Erro ao confirmar agendamento: ' + result.error, 'error');
+            }
+        } catch (error) {
+            console.error('Erro ao confirmar agendamento:', error);
+            this.mostrarToast('Erro ao confirmar agendamento', 'error');
+        }
+    }
+    
+    async reverterAgendamentoLote(loteId, tipo) {
+        try {
+            console.log(`🔄 Revertendo confirmação do lote ${loteId} (${tipo})`);
+            
+            let endpoint;
+            if (tipo === 'pre') {
+                // Para pré-separação, usar endpoint de lote
+                endpoint = `/carteira/api/pre-separacao/lote/${loteId}/reverter-agendamento`;
+            } else {
+                // Para separação
+                endpoint = `/carteira/api/separacao/${loteId}/reverter-agendamento`;
+            }
+            
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': this.getCSRFToken()
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.mostrarToast('Confirmação de agendamento revertida!', 'success');
+                // Recarregar dados
+                location.reload();
+            } else {
+                this.mostrarToast('Erro ao reverter confirmação: ' + result.error, 'error');
+            }
+        } catch (error) {
+            console.error('Erro ao reverter confirmação:', error);
+            this.mostrarToast('Erro ao reverter confirmação', 'error');
+        }
+    }
+
+    mostrarToast(mensagem, tipo = 'info') {
+        // Usar SweetAlert2 se disponível, senão usar alert
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: tipo,
+                title: mensagem,
+                toast: true,
+                position: 'top-end',
+                timer: 3000,
+                showConfirmButton: false
+            });
+        } else {
+            const icone = tipo === 'success' ? '✅' : tipo === 'error' ? '❌' : 'ℹ️';
+            alert(`${icone} ${mensagem}`);
+        }
     }
 }
 

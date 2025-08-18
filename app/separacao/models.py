@@ -27,6 +27,7 @@ class Separacao(db.Model):
     roteirizacao = db.Column(db.String(255), nullable=True)
     expedicao = db.Column(db.Date, nullable=True)
     agendamento = db.Column(db.Date, nullable=True)
+    agendamento_confirmado = db.Column(db.Boolean, default=False)  # Flag para confirmação de agendamento
     protocolo = db.Column(db.String(50), nullable=True)
     
     # 🎯 ETAPA 2: CAMPO TIPO DE ENVIO (ADICIONADO NA MIGRAÇÃO)

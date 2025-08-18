@@ -109,6 +109,7 @@ def gerar_separacao_completa_pedido(num_pedido):
         expedicao = data.get("expedicao")
         agendamento = data.get("agendamento")
         protocolo = data.get("protocolo")
+        agendamento_confirmado = data.get("agendamento_confirmado", False)
 
         if not expedicao:
             return jsonify({"success": False, "error": "Data de expedição é obrigatória"}), 400
@@ -191,6 +192,7 @@ def gerar_separacao_completa_pedido(num_pedido):
                 expedicao=expedicao_obj,
                 agendamento=agendamento_obj,
                 protocolo=protocolo,
+                agendamento_confirmado=agendamento_confirmado,
                 tipo_envio=tipo_envio,
                 criado_em=agora_brasil(),
             )
@@ -396,6 +398,7 @@ def transformar_lote_em_separacao(lote_id):
                 expedicao=pre_sep.data_expedicao_editada,
                 agendamento=pre_sep.data_agendamento_editada,
                 protocolo=pre_sep.protocolo_editado,
+                agendamento_confirmado=pre_sep.agendamento_confirmado if hasattr(pre_sep, 'agendamento_confirmado') else False,
                 tipo_envio=pre_sep.tipo_envio,
                 criado_em=agora_brasil(),
             )
@@ -853,6 +856,7 @@ def reverter_separacao(lote_id):
                     data_expedicao_editada=pedido.expedicao if pedido.expedicao else datetime.now().date(),
                     data_agendamento_editada=pedido.agendamento,
                     protocolo_editado=pedido.protocolo,
+                    agendamento_confirmado=sep.agendamento_confirmado if hasattr(sep, 'agendamento_confirmado') else False,
                     tipo_envio=sep.tipo_envio or "total",
                     status="CRIADO",
                     data_criacao=agora_brasil(),
@@ -935,6 +939,7 @@ def atualizar_datas_separacao(lote_id):
         data_expedicao = data.get("expedicao")
         data_agendamento = data.get("agendamento")
         protocolo = data.get("protocolo")
+        agendamento_confirmado = data.get("agendamento_confirmado", False)
 
         if not data_expedicao:
             return jsonify({"success": False, "error": "Data de expedição é obrigatória"}), 400
@@ -1016,11 +1021,15 @@ def atualizar_datas_separacao(lote_id):
             sep.expedicao = data_expedicao_obj
             sep.agendamento = data_agendamento_obj
             sep.protocolo = protocolo
+            if hasattr(sep, 'agendamento_confirmado'):
+                sep.agendamento_confirmado = agendamento_confirmado
 
         # Atualizar também o pedido
         pedido.expedicao = data_expedicao_obj
         pedido.agendamento = data_agendamento_obj
         pedido.protocolo = protocolo
+        if hasattr(pedido, 'agendamento_confirmado'):
+            pedido.agendamento_confirmado = agendamento_confirmado
 
         db.session.commit()
 

@@ -655,6 +655,7 @@ class PreSeparacaoItem(db.Model):
     # Trabalho do usuário preservado
     data_expedicao_editada = db.Column(db.Date, nullable=False)  # ✅ OBRIGATÓRIO para constraint única
     data_agendamento_editada = db.Column(db.Date)
+    agendamento_confirmado = db.Column(db.Boolean, default=False)  # Flag para confirmação de agendamento
     protocolo_editado = db.Column(db.String(50))
     observacoes_usuario = db.Column(db.Text)
     

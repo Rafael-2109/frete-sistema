@@ -344,6 +344,12 @@ def exportar_carteira_detalhada():
             pallet_saldo = qtd_saldo_liquido * pallet_unit
             
             # Linha do pedido
+            # Determinar valor da coluna "Data Agendada"
+            if pedido.agendamento_confirmado:
+                data_agendada = pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else ''
+            else:
+                data_agendada = 'Aguardando Aprovação' if pedido.agendamento else ''
+            
             linha_pedido = {
                 'Tipo': 'PEDIDO',
                 'Lote': '',
@@ -365,7 +371,8 @@ def exportar_carteira_detalhada():
                 'Pallet Saldo': pallet_saldo,
                 'Peso Saldo': peso_saldo,
                 'Data Expedição': pedido.expedicao.strftime('%d/%m/%Y') if pedido.expedicao else '',
-                'Data Agendamento': pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
+                'Entrega Prevista': pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
+                'Data Agendada': data_agendada,
                 'Protocolo': pedido.protocolo or '',
                 'Observações': pedido.observ_ped_1 or '',
                 'Pedido Cliente': pedido.pedido_cliente or '',
@@ -389,6 +396,12 @@ def exportar_carteira_detalhada():
                 peso_pre_sep = float(pre_sep.peso_original_item or 0) if hasattr(pre_sep, 'peso_original_item') else qtd_pre_sep * peso_unit
                 pallet_pre_sep = qtd_pre_sep * pallet_unit  # Calcular proporcional
                 
+                # Determinar valor da coluna "Data Agendada" para pré-separação
+                if pre_sep.agendamento_confirmado:
+                    data_agendada_pre = pre_sep.data_agendamento_editada.strftime('%d/%m/%Y') if pre_sep.data_agendamento_editada else ''
+                else:
+                    data_agendada_pre = 'Aguardando Aprovação' if pre_sep.data_agendamento_editada else ''
+                
                 linha_pre_sep = {
                     'Tipo': 'PRÉ-SEPARAÇÃO',
                     'Lote': pre_sep.separacao_lote_id or '',
@@ -410,7 +423,8 @@ def exportar_carteira_detalhada():
                     'Pallet Saldo': pallet_pre_sep,
                     'Peso Saldo': peso_pre_sep,
                     'Data Expedição': pre_sep.data_expedicao_editada.strftime('%d/%m/%Y') if pre_sep.data_expedicao_editada else '',
-                    'Data Agendamento': pre_sep.data_agendamento_editada.strftime('%d/%m/%Y') if pre_sep.data_agendamento_editada else '',
+                    'Entrega Prevista': pre_sep.data_agendamento_editada.strftime('%d/%m/%Y') if pre_sep.data_agendamento_editada else '',
+                    'Data Agendada': data_agendada_pre,
                     'Protocolo': pre_sep.protocolo_editado or '',
                     'Observações': pre_sep.observacoes_usuario or '',
                     'Pedido Cliente': '',
@@ -438,6 +452,12 @@ def exportar_carteira_detalhada():
                 peso_sep = float(sep.peso or 0)
                 pallet_sep = float(sep.pallet or 0)
                 
+                # Determinar valor da coluna "Data Agendada" para separação
+                if sep.agendamento_confirmado:
+                    data_agendada_sep = sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else ''
+                else:
+                    data_agendada_sep = 'Aguardando Aprovação' if sep.agendamento else ''
+                
                 linha_sep = {
                     'Tipo': 'SEPARAÇÃO',
                     'Lote': sep.separacao_lote_id or '',
@@ -459,7 +479,8 @@ def exportar_carteira_detalhada():
                     'Pallet Saldo': pallet_sep,
                     'Peso Saldo': peso_sep,
                     'Data Expedição': sep.expedicao.strftime('%d/%m/%Y') if sep.expedicao else '',
-                    'Data Agendamento': sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else '',
+                    'Entrega Prevista': sep.agendamento.strftime('%d/%m/%Y') if sep.agendamento else '',
+                    'Data Agendada': data_agendada_sep,
                     'Protocolo': sep.protocolo or '',
                     'Observações': sep.observ_ped_1 or '',
                     'Pedido Cliente': '',

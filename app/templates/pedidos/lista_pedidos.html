@@ -776,8 +776,27 @@
                 <td class="text-center">
                   {% if p.agendamento %}
                     <strong class="text-success">{{ p.agendamento | formatar_data_brasil }}</strong>
+                    <br>
+                    {% if p.agendamento_confirmado %}
+                      <button class="btn btn-sm btn-primary" 
+                              onclick="reverterConfirmacaoAgendamento('{{ p.separacao_lote_id }}', '{{ p.num_pedido }}')" 
+                              title="Clique para reverter confirmação">
+                        <i class="fas fa-check-circle"></i> Confirmado
+                      </button>
+                    {% else %}
+                      <button class="btn btn-sm btn-warning" 
+                              onclick="confirmarAgendamento('{{ p.separacao_lote_id }}', '{{ p.num_pedido }}')" 
+                              title="Clique para confirmar">
+                        <i class="fas fa-hourglass-half"></i> Aguardando
+                      </button>
+                    {% endif %}
                   {% else %}
                     <span class="text-muted">-</span>
+                    <br><button class="btn btn-sm btn-outline-secondary" 
+                            onclick="agendarPedido('{{ p.num_pedido }}')" 
+                            title="Agendar pedido">
+                      <i class="fas fa-calendar-plus"></i> Agendar
+                    </button>
                   {% endif %}
                   {% if p.protocolo %}
                     <br><small class="text-muted"><i class="fas fa-barcode"></i> {{ p.protocolo | formatar_protocolo }}</small>
@@ -1581,6 +1600,375 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+// Funções para confirmação de agendamento
+function confirmarAgendamento(separacaoLoteId, numPedido) {
+    if (!separacaoLoteId) {
+        alert('❌ Este pedido não possui separação para confirmar agendamento.');
+        return;
+    }
+    
+    if (!confirm(`Confirmar agendamento do pedido ${numPedido}?`)) {
+        return;
+    }
+    
+    fetch(`/carteira/api/separacao/${separacaoLoteId}/confirmar-agendamento`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Agendamento confirmado com sucesso!');
+            location.reload();
+        } else {
+            alert('❌ Erro ao confirmar agendamento: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao confirmar agendamento:', error);
+        alert('❌ Erro ao confirmar agendamento');
+    });
+}
+
+function reverterConfirmacaoAgendamento(separacaoLoteId, numPedido) {
+    if (!separacaoLoteId) {
+        alert('❌ Este pedido não possui separação para reverter confirmação.');
+        return;
+    }
+    
+    if (!confirm(`Reverter confirmação de agendamento do pedido ${numPedido}?`)) {
+        return;
+    }
+    
+    fetch(`/carteira/api/separacao/${separacaoLoteId}/reverter-agendamento`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Confirmação de agendamento revertida!');
+            location.reload();
+        } else {
+            alert('❌ Erro ao reverter confirmação: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao reverter confirmação:', error);
+        alert('❌ Erro ao reverter confirmação');
+    });
+}
+
+// Instância global do modal de agendamento
+let agendamentoModal = null;
+
+// Função para agendar pedido - IGUAL ao listar_entregas.html
+window.agendarPedido = function(numPedido) {
+    // Primeiro, garantir que o modal existe
+    if (!document.getElementById('agendamentoModal')) {
+        criarModalAgendamento();
+    }
+    
+    // Inicializar instância do modal se não existir
+    if (!agendamentoModal) {
+        agendamentoModal = new bootstrap.Modal(document.getElementById('agendamentoModal'), {
+            backdrop: 'static',
+            keyboard: true
+        });
+    }
+    
+    // Atualizar dados do modal
+    document.getElementById('num-pedido-modal').textContent = numPedido;
+    document.getElementById('confirmar-agendamento').setAttribute('data-num-pedido', numPedido);
+    
+    // Limpa formulário
+    document.getElementById('form-agendamento-rapido').reset();
+    document.getElementById('criar-confirmado').checked = false;
+    
+    // Carrega histórico de agendamentos
+    carregarHistoricoAgendamentos(numPedido);
+    
+    // Mostra o modal
+    agendamentoModal.show();
+};
+
+// Criar modal de agendamento - IGUAL ao listar_entregas.html
+function criarModalAgendamento() {
+    const modalHtml = `
+        <div class="modal fade" id="agendamentoModal" tabindex="-1" aria-labelledby="agendamentoModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    
+                    <!-- Cabeçalho do Modal -->
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="agendamentoModalLabel">📅 Agendamento Rápido</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <!-- Corpo do Modal -->
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Pedido:</strong> <span id="num-pedido-modal"></span></p>
+                                
+                                <form id="form-agendamento-rapido">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label for="data-agendada" class="form-label">Data Agendada</label>
+                                            <input type="date" id="data-agendada" class="form-control" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="hora-agendada" class="form-label">Hora Agendada</label>
+                                            <input type="time" id="hora-agendada" class="form-control">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mt-3">
+                                        <div class="col-md-6">
+                                            <label for="forma-agendamento" class="form-label">Forma</label>
+                                            <select id="forma-agendamento" class="form-select">
+                                                <option value="">Selecione...</option>
+                                                <option value="Portal">Portal</option>
+                                                <option value="Telefone">Telefone</option>
+                                                <option value="E-mail">E-mail</option>
+                                                <option value="WhatsApp">WhatsApp</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="protocolo-agendamento" class="form-label">Protocolo</label>
+                                            <input type="text" id="protocolo-agendamento" class="form-control" placeholder="Protocolo (opcional)...">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <label for="motivo-agendamento" class="form-label">Motivo</label>
+                                        <textarea id="motivo-agendamento" class="form-control" rows="3" placeholder="Motivo do agendamento..."></textarea>
+                                    </div>
+                                    
+                                    <div class="form-check mt-3">
+                                        <input class="form-check-input" type="checkbox" id="criar-confirmado">
+                                        <label class="form-check-label" for="criar-confirmado">
+                                            ✅ Criar agenda já confirmada
+                                        </label>
+                                    </div>
+                                </form>
+                                
+                                <!-- Área de confirmação do último agendamento -->
+                                <div id="confirmar-ultimo-agendamento" class="mt-3" style="display: none;">
+                                    <hr>
+                                    <h6>🎯 Confirmar Último Agendamento</h6>
+                                    <div id="detalhes-ultimo-agendamento"></div>
+                                    <div class="mt-2">
+                                        <label for="observacoes-confirmacao" class="form-label">Observações da Confirmação</label>
+                                        <textarea id="observacoes-confirmacao" class="form-control" rows="2" placeholder="Observações sobre a confirmação..."></textarea>
+                                    </div>
+                                    <button type="button" class="btn btn-success btn-sm mt-2" id="btn-confirmar-ultimo">
+                                        ✅ Confirmar Agendamento
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <h6>📋 Histórico de Agendamentos</h6>
+                                <div id="historico-agendamentos" class="border p-2" style="height: 400px; overflow-y: auto;">
+                                    <div class="text-center text-muted">
+                                        <i class="fas fa-spinner fa-spin"></i> Carregando histórico...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Rodapé do Modal -->
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" id="confirmar-agendamento">
+                            <i class="fas fa-save"></i> Salvar Agendamento
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Adiciona o modal ao body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Event listener para quando o modal abrir
+    document.getElementById('agendamentoModal').addEventListener('shown.bs.modal', function () {
+        document.getElementById('data-agendada').focus();
+    });
+    
+    // Event listener para confirmar agendamento
+    document.getElementById('confirmar-agendamento').addEventListener('click', salvarAgendamentoPedido);
+    
+    // Event listener para confirmar último agendamento
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.id === 'btn-confirmar-ultimo') {
+            confirmarUltimoAgendamento();
+        }
+    });
+}
+
+// Carregar histórico de agendamentos
+function carregarHistoricoAgendamentos(numPedido) {
+    const historicoDiv = document.getElementById('historico-agendamentos');
+    const confirmarUltimoDiv = document.getElementById('confirmar-ultimo-agendamento');
+    
+    historicoDiv.innerHTML = '<div class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Carregando histórico...</div>';
+    
+    // Fazer chamada para API de histórico de agendamentos do pedido
+    fetch(`/pedidos/api/pedido/${numPedido}/historico-agendamentos`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.agendamentos && data.agendamentos.length > 0) {
+            let html = '';
+            let ultimoAguardando = null;
+            
+            data.agendamentos.forEach((agendamento, index) => {
+                const statusBadge = agendamento.agendamento_confirmado 
+                    ? '<span class="badge bg-success">✅ Confirmado</span>'
+                    : '<span class="badge bg-warning">⏳ Aguardando</span>';
+                
+                // Identifica o último agendamento aguardando
+                if (index === 0 && !agendamento.agendamento_confirmado) {
+                    ultimoAguardando = agendamento;
+                }
+                
+                html += `
+                    <div class="border-bottom pb-2 mb-2">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>${agendamento.agendamento || 'Sem data'}</strong>
+                                ${agendamento.hora_agendamento ? ' às ' + agendamento.hora_agendamento : ''}
+                                <br><small class="text-muted">📋 ${agendamento.protocolo || 'Sem protocolo'}</small>
+                                <br><small class="text-muted">Expedição: ${agendamento.expedicao || 'Não definida'}</small>
+                            </div>
+                            <div>${statusBadge}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            historicoDiv.innerHTML = html;
+            
+            // Mostra área de confirmação se há agendamento aguardando
+            if (ultimoAguardando) {
+                document.getElementById('detalhes-ultimo-agendamento').innerHTML = `
+                    <p><strong>Data:</strong> ${ultimoAguardando.agendamento}${ultimoAguardando.hora_agendamento ? ' às ' + ultimoAguardando.hora_agendamento : ''}</p>
+                    <p><strong>Protocolo:</strong> ${ultimoAguardando.protocolo || 'Sem protocolo'}</p>
+                `;
+                document.getElementById('btn-confirmar-ultimo').setAttribute('data-agendamento-id', ultimoAguardando.id || ultimoAguardando.separacao_lote_id);
+                confirmarUltimoDiv.style.display = 'block';
+            } else {
+                confirmarUltimoDiv.style.display = 'none';
+            }
+        } else {
+            historicoDiv.innerHTML = '<div class="text-center text-muted">Nenhum agendamento registrado</div>';
+            confirmarUltimoDiv.style.display = 'none';
+        }
+    })
+    .catch(err => {
+        console.error('Erro ao carregar histórico:', err);
+        historicoDiv.innerHTML = '<div class="text-center text-muted">Sem histórico disponível</div>';
+        confirmarUltimoDiv.style.display = 'none';
+    });
+}
+
+// Salvar agendamento do pedido
+function salvarAgendamentoPedido() {
+    const numPedido = document.getElementById('confirmar-agendamento').getAttribute('data-num-pedido');
+    const dataAgendada = document.getElementById('data-agendada').value;
+    const horaAgendada = document.getElementById('hora-agendada').value;
+    const formaAgendamento = document.getElementById('forma-agendamento').value;
+    const protocolo = document.getElementById('protocolo-agendamento').value;
+    const motivo = document.getElementById('motivo-agendamento').value;
+    const criarConfirmado = document.getElementById('criar-confirmado').checked;
+    
+    if (!dataAgendada) {
+        alert('❌ Por favor, selecione uma data de agendamento.');
+        return;
+    }
+    
+    // Preparar dados para envio
+    const dados = {
+        agendamento: dataAgendada,
+        hora_agendamento: horaAgendada,
+        protocolo: protocolo,
+        forma_agendamento: formaAgendamento,
+        motivo: motivo,
+        agendamento_confirmado: criarConfirmado
+    };
+    
+    // Fazer chamada para API
+    fetch(`/pedidos/api/pedido/${numPedido}/salvar-agendamento`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
+        },
+        body: JSON.stringify(dados)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Agendamento salvo com sucesso!');
+            agendamentoModal.hide();
+            location.reload();
+        } else {
+            alert('❌ Erro ao salvar agendamento: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao salvar agendamento:', error);
+        alert('❌ Erro ao salvar agendamento');
+    });
+}
+
+// Confirmar último agendamento
+function confirmarUltimoAgendamento() {
+    const agendamentoId = document.getElementById('btn-confirmar-ultimo').getAttribute('data-agendamento-id');
+    const observacoes = document.getElementById('observacoes-confirmacao').value;
+    const numPedido = document.getElementById('num-pedido-modal').textContent;
+    
+    if (!agendamentoId) {
+        alert('❌ ID do agendamento não encontrado');
+        return;
+    }
+    
+    // Fazer chamada para API de confirmação
+    fetch(`/carteira/api/separacao/${agendamentoId}/confirmar-agendamento`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
+        },
+        body: JSON.stringify({
+            observacoes: observacoes
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Agendamento confirmado com sucesso!');
+            agendamentoModal.hide();
+            location.reload();
+        } else {
+            alert('❌ Erro ao confirmar agendamento: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao confirmar agendamento:', error);
+        alert('❌ Erro ao confirmar agendamento');
+    });
+}
 
 // Função para abrir modal de endereço do pedido
 async function abrirModalEnderecoPedido(numPedido) {

@@ -171,7 +171,12 @@ class PreSeparacaoManager {
                 })),
                 totais: lote.totais,
                 status: 'pre_separacao',
-                dataExpedicao: lote.data_expedicao
+                dataExpedicao: lote.data_expedicao,
+                data_agendamento: lote.data_agendamento,
+                agendamento_confirmado: lote.agendamento_confirmado || false,
+                protocolo: lote.protocolo,
+                pre_separacao_id: lote.pre_separacao_id,
+                lote_id: lote.lote_id
             });
         });
 

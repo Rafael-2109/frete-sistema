@@ -225,6 +225,34 @@ class LoteManager {
                             </small>
                         </div>
                     ` : ''}
+                    
+                    ${loteData.data_agendamento ? `
+                        <div class="mt-2 text-center">
+                            <small class="text-muted">
+                                <i class="fas fa-clock me-1"></i>
+                                Agendamento: ${(() => {
+                                    const v = loteData.data_agendamento;
+                                    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+                                        const [y, m, d] = v.split('-');
+                                        return `${d}/${m}/${y}`;
+                                    }
+                                    return (new Date(v)).toLocaleDateString('pt-BR');
+                                })()}
+                                ${loteData.protocolo ? ` - ${loteData.protocolo}` : ''}
+                            </small>
+                            ${loteData.agendamento_confirmado ? `
+                                <br>
+                                <span class="badge bg-success mt-1">
+                                    <i class="fas fa-check-circle me-1"></i> Confirmado
+                                </span>
+                            ` : `
+                                <br>
+                                <span class="badge bg-warning text-dark mt-1">
+                                    <i class="fas fa-hourglass-half me-1"></i> Aguardando
+                                </span>
+                            `}
+                        </div>
+                    ` : ''}
                 </div>
                 
                 <div class="card-footer">
@@ -234,6 +262,17 @@ class LoteManager {
                                 <button class="btn btn-success btn-sm mb-1" 
                                         onclick="workspace.adicionarProdutosSelecionados('${loteData.lote_id}')">
                                     <i class="fas fa-plus-circle me-1"></i> Adicionar Selecionados
+                                </button>
+                            ` : ''}
+                            <button class="btn btn-outline-primary btn-sm mb-1 w-100" 
+                                    onclick="workspace.editarDatasPreSeparacao('${loteData.lote_id}')"
+                                    ${!temProdutos ? 'disabled' : ''}>
+                                <i class="fas fa-calendar-alt me-1"></i> Alterar Datas
+                            </button>
+                            ${loteData.data_agendamento && !loteData.agendamento_confirmado ? `
+                                <button class="btn btn-outline-success btn-sm mb-1 w-100" 
+                                        onclick="workspace.confirmarAgendamentoLote('${loteData.lote_id}', 'pre')">
+                                    <i class="fas fa-calendar-check me-1"></i> Confirmar Agendamento
                                 </button>
                             ` : ''}
                             <div class="btn-group w-100">
@@ -252,7 +291,19 @@ class LoteManager {
                                 </button>
                             </div>
                         </div>
-                    ` : `</div>
+                    ` : `
+                        ${loteData.data_agendamento && !loteData.agendamento_confirmado ? `
+                            <button class="btn btn-outline-success btn-sm mb-1 w-100" 
+                                    onclick="workspace.confirmarAgendamentoLote('${loteData.lote_id}', 'sep')">
+                                <i class="fas fa-calendar-check me-1"></i> Confirmar Agendamento
+                            </button>
+                        ` : ''}
+                        ${loteData.data_agendamento && loteData.agendamento_confirmado ? `
+                            <button class="btn btn-outline-warning btn-sm mb-1 w-100" 
+                                    onclick="workspace.reverterAgendamentoLote('${loteData.lote_id}', 'sep')">
+                                <i class="fas fa-undo me-1"></i> Reverter Confirmação
+                            </button>
+                        ` : ''}
                         <div class="btn-group w-100">
                             <button class="btn btn-outline-primary btn-sm" 
                                     onclick="workspace.editarSeparacao('${loteData.lote_id}')">

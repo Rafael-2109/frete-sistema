@@ -191,9 +191,15 @@ def listar_pre_separacoes(num_pedido):
                     "data_expedicao": (
                         pre_sep.data_expedicao_editada.isoformat() if pre_sep.data_expedicao_editada else None
                     ),
+                    "data_agendamento": (
+                        pre_sep.data_agendamento_editada.isoformat() if pre_sep.data_agendamento_editada else None
+                    ),
+                    "agendamento_confirmado": pre_sep.agendamento_confirmado if hasattr(pre_sep, 'agendamento_confirmado') else False,
+                    "protocolo": pre_sep.protocolo_editado,
                     "status": "pre_separacao",
                     "produtos": [],
                     "totais": {"valor": 0, "peso": 0, "pallet": 0},
+                    "pre_separacao_id": pre_sep.id,  # Add reference to the first pre_separacao_id for the lote
                 }
 
             # Calcular peso e pallet
@@ -268,6 +274,7 @@ def atualizar_datas_pre_separacao(lote_id):
         data_expedicao = data.get("expedicao")
         data_agendamento = data.get("agendamento")
         protocolo = data.get("protocolo")
+        agendamento_confirmado = data.get("agendamento_confirmado", False)
 
         if not data_expedicao:
             return jsonify({"success": False, "error": "Data de expedição é obrigatória"}), 400
@@ -293,6 +300,8 @@ def atualizar_datas_pre_separacao(lote_id):
             pre_sep.data_expedicao_editada = data_expedicao_obj
             pre_sep.data_agendamento_editada = data_agendamento_obj
             pre_sep.protocolo_editado = protocolo
+            if hasattr(pre_sep, 'agendamento_confirmado'):
+                pre_sep.agendamento_confirmado = agendamento_confirmado
 
         db.session.commit()
 

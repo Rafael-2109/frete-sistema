@@ -83,6 +83,7 @@ def obter_separacoes_completas(num_pedido):
                 'expedicao': sep.expedicao.isoformat() if sep.expedicao else None,
                 'agendamento': sep.agendamento.isoformat() if sep.agendamento else None,
                 'protocolo': sep.protocolo,
+                'agendamento_confirmado': sep.agendamento_confirmado if hasattr(sep, 'agendamento_confirmado') else False,
                 'status': pedido.status if pedido else 'ABERTO',
                 'valor_total': valor_total,
                 'peso_total': peso_total,
