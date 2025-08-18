@@ -1,7 +1,7 @@
 """
 Rotas do Dashboard do módulo de Manufatura
 """
-from flask import render_template, jsonify
+from flask import render_template, jsonify, request
 from flask_login import login_required
 from app import db
 from app.manufatura.services.dashboard_service import DashboardService
@@ -69,5 +69,46 @@ def register_dashboard_routes(bp):
             service = DashboardService()
             alertas = service.obter_alertas() if hasattr(service, 'obter_alertas') else {'alertas': []}
             return jsonify(alertas)
+        except Exception as e:
+            return jsonify({'erro': str(e)}), 500
+    
+    @bp.route('/api/dashboard/plano-mestre')
+    @login_required
+    def dashboard_plano_mestre():
+        """API para resumo do plano mestre de produção"""
+        try:
+            mes = request.args.get('mes', datetime.now().month, type=int)
+            ano = request.args.get('ano', datetime.now().year, type=int)
+            
+            service = DashboardService()
+            plano_resumo = service.obter_plano_mestre_resumo(mes, ano)
+            return jsonify(plano_resumo)
+        except Exception as e:
+            return jsonify({'erro': str(e)}), 500
+    
+    @bp.route('/api/dashboard/demanda-ativa')
+    @login_required
+    def dashboard_demanda_ativa():
+        """API para demanda ativa consolidada"""
+        try:
+            from app.manufatura.services.demanda_service import DemandaService
+            
+            mes = request.args.get('mes', datetime.now().month, type=int)
+            ano = request.args.get('ano', datetime.now().year, type=int)
+            cod_produto = request.args.get('cod_produto')
+            
+            service = DemandaService()
+            demanda = service.calcular_demanda_ativa(mes, ano, cod_produto)
+            
+            # Resumo agregado
+            total_demanda = sum(d['qtd_demanda'] for d in demanda)
+            
+            return jsonify({
+                'mes': mes,
+                'ano': ano,
+                'total_demanda': total_demanda,
+                'total_produtos': len(demanda),
+                'detalhes': demanda[:20]  # Limitar a 20 produtos
+            })
         except Exception as e:
             return jsonify({'erro': str(e)}), 500

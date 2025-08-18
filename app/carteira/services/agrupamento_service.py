@@ -86,8 +86,13 @@ class AgrupamentoService:
                     CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * 
                     CadastroPalletizacao.peso_bruto).label('peso_total'),
-            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido / 
-                    CadastroPalletizacao.palletizacao).label('pallet_total'),
+            func.sum(
+                func.coalesce(
+                    CarteiraPrincipal.qtd_saldo_produto_pedido / 
+                    func.nullif(CadastroPalletizacao.palletizacao, 0),
+                    0
+                )
+            ).label('pallet_total'),
             func.count(CarteiraPrincipal.id).label('total_itens')
             
         ).outerjoin(

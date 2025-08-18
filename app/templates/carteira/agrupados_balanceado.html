@@ -78,6 +78,33 @@
                     </div>
                 </div>
 
+                <!-- Badges de Agendamento -->
+                <div class="badges-agendamento-container mb-2">
+                    <div class="d-flex align-items-center">
+                        <span class="text-muted small me-2">Agendamento:</span>
+                        <div class="badges-agendamento-wrapper">
+                            <span class="badge badge-filtro badge-agendamento" 
+                                  style="background-color: transparent; color: #dc3545; border: 2px solid #dc3545;"
+                                  data-tipo="agendamento" 
+                                  data-valor="sem">
+                                <i class="fas fa-times-circle me-1"></i>
+                                Sem Agendamento
+                            </span>
+                            <span class="badge badge-filtro badge-agendamento" 
+                                  style="background-color: transparent; color: #198754; border: 2px solid #198754;"
+                                  data-tipo="agendamento" 
+                                  data-valor="com">
+                                <i class="fas fa-check-circle me-1"></i>
+                                Com Agendamento
+                            </span>
+                        </div>
+                        <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-agendamento"
+                            style="display:none;">
+                            <i class="fas fa-times"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+                
                 <!-- Badges de Rotas + Incoterms -->
                 <div class="badges-filtros-container">
                     <div class="d-flex align-items-center mb-2">
@@ -85,37 +112,51 @@
                         <div class="badges-rotas-wrapper">
                             <!-- Primeira linha de badges (7 badges) -->
                             <div class="badges-linha mb-1">
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
-                                    data-valor="SP">SP</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
-                                    data-valor="RJ">RJ</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
-                                    data-valor="MG">MG</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
-                                    data-valor="ES">ES</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
-                                    data-valor="SUL">SUL</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
-                                    data-valor="MS-MT">MS-MT</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
-                                    data-valor="DF-GO-TO">DF-GO-TO</span>
+                                <span class="badge badge-filtro badge-rota" 
+                                      style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                      data-tipo="rota" data-valor="SP">SP</span>
+                                <span class="badge badge-filtro badge-rota" 
+                                      style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                      data-tipo="rota" data-valor="RJ">RJ</span>
+                                <span class="badge badge-filtro badge-rota" 
+                                      style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                      data-tipo="rota" data-valor="MG">MG</span>
+                                <span class="badge badge-filtro badge-rota" 
+                                      style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                      data-tipo="rota" data-valor="ES">ES</span>
+                                <span class="badge badge-filtro badge-rota" 
+                                      style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                      data-tipo="rota" data-valor="SUL">SUL</span>
+                                <span class="badge badge-filtro badge-rota" 
+                                      style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                      data-tipo="rota" data-valor="MS-MT">MS-MT</span>
+                                <span class="badge badge-filtro badge-rota" 
+                                      style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                      data-tipo="rota" data-valor="DF-GO-TO">DF-GO-TO</span>
                             </div>
                             <!-- Segunda linha de badges (7 badges) -->
                             <div class="badges-linha">
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
-                                    data-valor="BA">BA</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
-                                    data-valor="NE">NE</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
-                                    data-valor="NE2">NE2</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
-                                    data-valor="NO">NO</span>
-                                <span class="badge badge-filtro badge-rota bg-primary text-white" data-tipo="rota"
-                                    data-valor="MARIT.">MARIT.</span>
-                                <span class="badge badge-filtro badge-incoterm bg-warning text-dark"
-                                    data-tipo="incoterm" data-valor="FOB">FOB</span>
-                                <span class="badge badge-filtro badge-incoterm bg-danger text-white"
-                                    data-tipo="incoterm" data-valor="RED">RED</span>
+                                <span class="badge badge-filtro badge-rota" 
+                                      style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                      data-tipo="rota" data-valor="BA">BA</span>
+                                <span class="badge badge-filtro badge-rota" 
+                                      style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                      data-tipo="rota" data-valor="NE">NE</span>
+                                <span class="badge badge-filtro badge-rota" 
+                                      style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                      data-tipo="rota" data-valor="NE2">NE2</span>
+                                <span class="badge badge-filtro badge-rota" 
+                                      style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                      data-tipo="rota" data-valor="NO">NO</span>
+                                <span class="badge badge-filtro badge-rota" 
+                                      style="background-color: transparent; color: #0d6efd; border: 2px solid #0d6efd;"
+                                      data-tipo="rota" data-valor="MARIT.">MARIT.</span>
+                                <span class="badge badge-filtro badge-incoterm" 
+                                      style="background-color: transparent; color: #ffc107; border: 2px solid #ffc107;"
+                                      data-tipo="incoterm" data-valor="FOB">FOB</span>
+                                <span class="badge badge-filtro badge-incoterm" 
+                                      style="background-color: transparent; color: #dc3545; border: 2px solid #dc3545;"
+                                      data-tipo="incoterm" data-valor="RED">RED</span>
                             </div>
                         </div>
                         <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-rotas"
@@ -131,29 +172,39 @@
                             <div class="badges-subrotas-wrapper">
                                 <!-- Primeira linha (subrotas com LITORAL) -->
                                 <div class="badges-linha mb-1">
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
-                                        data-valor="LITORAL - A">Litoral - A</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
-                                        data-valor="LITORAL - B">Litoral - B</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
-                                        data-valor="LITORAL - C">Litoral - C</span>
+                                    <span class="badge badge-filtro badge-subrota" 
+                                          style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                          data-tipo="subrota" data-valor="LITORAL - A">Litoral - A</span>
+                                    <span class="badge badge-filtro badge-subrota" 
+                                          style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                          data-tipo="subrota" data-valor="LITORAL - B">Litoral - B</span>
+                                    <span class="badge badge-filtro badge-subrota" 
+                                          style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                          data-tipo="subrota" data-valor="LITORAL - C">Litoral - C</span>
                                 </div>
                                 <!-- Segunda linha (outras subrotas) -->
                                 <div class="badges-linha">
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
-                                        data-valor="A">A</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
-                                        data-valor="ABC">ABC</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
-                                        data-valor="B">B</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
-                                        data-valor="C">C</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
-                                        data-valor="D">D</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
-                                        data-valor="E">E</span>
-                                    <span class="badge badge-filtro badge-subrota bg-secondary" data-tipo="subrota"
-                                        data-valor="SP">SP</span>
+                                    <span class="badge badge-filtro badge-subrota" 
+                                          style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                          data-tipo="subrota" data-valor="A">A</span>
+                                    <span class="badge badge-filtro badge-subrota" 
+                                          style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                          data-tipo="subrota" data-valor="ABC">ABC</span>
+                                    <span class="badge badge-filtro badge-subrota" 
+                                          style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                          data-tipo="subrota" data-valor="B">B</span>
+                                    <span class="badge badge-filtro badge-subrota" 
+                                          style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                          data-tipo="subrota" data-valor="C">C</span>
+                                    <span class="badge badge-filtro badge-subrota" 
+                                          style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                          data-tipo="subrota" data-valor="D">D</span>
+                                    <span class="badge badge-filtro badge-subrota" 
+                                          style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                          data-tipo="subrota" data-valor="E">E</span>
+                                    <span class="badge badge-filtro badge-subrota" 
+                                          style="background-color: transparent; color: #6c757d; border: 2px solid #6c757d;"
+                                          data-tipo="subrota" data-valor="SP">SP</span>
                                 </div>
                             </div>
                             <button type="button" class="btn btn-link btn-sm text-danger ms-2" id="limpar-subrotas"
@@ -206,6 +257,7 @@
                                 data-equipe="{{ pedido.equipe_vendas or '' }}" data-rota="{{ pedido.rota or '' }}"
                                 data-subrota="{{ pedido.sub_rota or '' }}"
                                 data-incoterm="{{ pedido.incoterm or 'CIF' }}" data-uf="{{ pedido.cod_uf or '' }}"
+                                data-agendamento="{{ 'sem' if (not pedido.forma_agendamento or pedido.forma_agendamento == 'SEM AGENDAMENTO') else 'com' }}"
                                 data-filtro="{{ (pedido.num_pedido + ' ' + (pedido.raz_social_red or '') + ' ' + (pedido.cnpj_cpf or '') + ' ' + (pedido.equipe_vendas or ''))|lower }}">
 
                                 <!-- Botão Expandir -->
@@ -313,7 +365,7 @@
                                 </td>
 
                                 <!-- Data Entrega + Observação -->
-                                <td>
+                                <td class="coluna-entrega-obs">
                                     <div class="entrega-obs-info">
                                         {% if pedido.data_entrega_pedido %}
                                         <div class="mb-1">
@@ -523,6 +575,22 @@
 
 <script>
     {% include 'carteira/js/standby-manager.js' %}
+</script>
+
+<script>
+    {% include 'carteira/js/modal-navigation.js' %}
+</script>
+
+<script>
+    {% include 'carteira/js/ruptura-estoque.js' %}
+</script>
+
+<script>
+    {% include 'carteira/js/modal-cardex-expandido.js' %}
+</script>
+
+<script>
+    {% include 'carteira/js/modal-pedido-detalhes.js' %}
 </script>
 
 <!-- Inicialização -->

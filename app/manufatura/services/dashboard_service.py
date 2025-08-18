@@ -53,6 +53,16 @@ class DashboardService:
             # Taxa de cumprimento
             taxa_cumprimento = (realizado_mes / previsao_mes * 100) if previsao_mes > 0 else 0
             
+            # Plano Mestre - Métricas adicionais
+            planos_mes = PlanoMestreProducao.query.filter_by(
+                data_mes=mes_atual,
+                data_ano=ano_atual
+            ).all()
+            
+            total_reposicao_sugerida = sum(float(p.qtd_reposicao_sugerida or 0) for p in planos_mes)
+            produtos_abaixo_seguranca = sum(1 for p in planos_mes 
+                                           if (p.qtd_estoque or 0) < (p.qtd_estoque_seguranca or 0))
+            
             return {
                 'ordens': {
                     'total': total_ordens,
@@ -71,6 +81,11 @@ class DashboardService:
                     'previsto_mes': float(previsao_mes),
                     'realizado_mes': float(realizado_mes),
                     'taxa_cumprimento': round(taxa_cumprimento, 1)
+                },
+                'plano_mestre': {
+                    'total_reposicao_sugerida': round(total_reposicao_sugerida, 2),
+                    'produtos_abaixo_seguranca': produtos_abaixo_seguranca,
+                    'planos_aprovados': sum(1 for p in planos_mes if p.status_geracao == 'aprovado')
                 }
             }
             
@@ -121,3 +136,32 @@ class DashboardService:
             
         except Exception as e:
             raise Exception(f"Erro ao obter necessidades de compras: {str(e)}")
+    
+    def obter_plano_mestre_resumo(self, mes=None, ano=None):
+        """Obtém resumo do plano mestre de produção"""
+        try:
+            if not mes:
+                mes = datetime.now().month
+            if not ano:
+                ano = datetime.now().year
+            
+            planos = PlanoMestreProducao.query.filter_by(
+                data_mes=mes,
+                data_ano=ano
+            ).order_by(PlanoMestreProducao.qtd_reposicao_sugerida.desc()).limit(20).all()
+            
+            return [{
+                'id': p.id,
+                'cod_produto': p.cod_produto,
+                'nome_produto': p.nome_produto,
+                'qtd_demanda_prevista': float(p.qtd_demanda_prevista or 0),
+                'qtd_estoque': float(p.qtd_estoque or 0),
+                'qtd_estoque_seguranca': float(p.qtd_estoque_seguranca or 0),
+                'qtd_producao_programada': float(p.qtd_producao_programada or 0),
+                'qtd_reposicao_sugerida': float(p.qtd_reposicao_sugerida or 0),
+                'status_geracao': p.status_geracao,
+                'critico': (p.qtd_estoque or 0) < (p.qtd_estoque_seguranca or 0)
+            } for p in planos]
+            
+        except Exception as e:
+            raise Exception(f"Erro ao obter resumo do plano mestre: {str(e)}")

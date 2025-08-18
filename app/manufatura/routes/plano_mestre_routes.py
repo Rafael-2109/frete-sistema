@@ -28,15 +28,28 @@ def register_plano_mestre_routes(bp):
             ano = int(dados.get('ano'))
             
             service = PlanoMestreService()
-            planos = service.gerar_plano_mestre(
+            resultado = service.gerar_plano_mestre(
                 mes, ano,
                 usuario=current_user.username if current_user.is_authenticated else 'Sistema'
             )
             
+            # Ajuste para novo formato de retorno
+            if isinstance(resultado, dict):
+                criados = resultado.get('criados', [])
+                atualizados = resultado.get('atualizados', [])
+                total = len(criados) + len(atualizados)
+                mensagem = f'{len(criados)} planos criados, {len(atualizados)} atualizados'
+            else:
+                # Compatibilidade com versão antiga
+                criados = resultado
+                total = len(resultado)
+                mensagem = f'{total} planos criados'
+            
             return jsonify({
                 'sucesso': True,
-                'mensagem': f'{len(planos)} planos criados',
-                'planos': len(planos)
+                'mensagem': mensagem,
+                'planos_criados': len(criados) if isinstance(resultado, dict) else total,
+                'planos_atualizados': len(atualizados) if isinstance(resultado, dict) else 0
             })
             
         except Exception as e:
@@ -171,4 +184,82 @@ def register_plano_mestre_routes(bp):
             return jsonify(pedidos)
             
         except Exception as e:
+            return jsonify({'erro': str(e)}), 500
+    
+    @bp.route('/api/plano-mestre/atualizar-lote', methods=['POST'])
+    @login_required
+    def atualizar_planos_lote():
+        """Atualiza múltiplos planos mestre de uma vez"""
+        try:
+            dados = request.json
+            planos_atualizados = 0
+            
+            for item in dados.get('planos', []):
+                plano = PlanoMestreProducao.query.get(item['id'])
+                if plano:
+                    if 'qtd_estoque_seguranca' in item:
+                        plano.qtd_estoque_seguranca = item['qtd_estoque_seguranca']
+                    
+                    if 'qtd_lote_ideal' in item:
+                        plano.qtd_lote_ideal = item['qtd_lote_ideal']
+                    
+                    if 'qtd_lote_minimo' in item:
+                        plano.qtd_lote_minimo = item['qtd_lote_minimo']
+                    
+                    # Recalcular reposição sugerida
+                    service = PlanoMestreService()
+                    plano.qtd_reposicao_sugerida = service._calcular_reposicao_sugerida(plano)
+                    
+                    planos_atualizados += 1
+            
+            db.session.commit()
+            
+            return jsonify({
+                'sucesso': True,
+                'planos_atualizados': planos_atualizados
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 500
+    
+    @bp.route('/api/plano-mestre/calcular-producao-programada', methods=['GET'])
+    @login_required
+    def calcular_producao_programada():
+        """Calcula qtd_producao_programada para todos os produtos"""
+        try:
+            mes = request.args.get('mes', datetime.now().month, type=int)
+            ano = request.args.get('ano', datetime.now().year, type=int)
+            
+            service = PlanoMestreService()
+            
+            # Buscar todos os planos do período
+            planos = PlanoMestreProducao.query.filter_by(
+                data_mes=mes,
+                data_ano=ano
+            ).all()
+            
+            atualizados = 0
+            for plano in planos:
+                # Recalcular produção programada
+                producao_programada = service._calcular_producao_programada(
+                    plano.cod_produto, mes, ano
+                )
+                
+                if plano.qtd_producao_programada != producao_programada:
+                    plano.qtd_producao_programada = producao_programada
+                    # Recalcular reposição sugerida
+                    plano.qtd_reposicao_sugerida = service._calcular_reposicao_sugerida(plano)
+                    atualizados += 1
+            
+            db.session.commit()
+            
+            return jsonify({
+                'sucesso': True,
+                'planos_atualizados': atualizados,
+                'total_planos': len(planos)
+            })
+            
+        except Exception as e:
+            db.session.rollback()
             return jsonify({'erro': str(e)}), 500

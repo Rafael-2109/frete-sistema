@@ -1622,7 +1622,7 @@ class CarteiraService:
                 
                 # Buscar clientes que necessitam agendamento
                 clientes_necessitam_agendamento = CarteiraPrincipal.query.filter(
-                    CarteiraPrincipal.cliente_nec_agendamento == True
+                    CarteiraPrincipal.cliente_nec_agendamento == 'Sim'
                 ).with_entities(CarteiraPrincipal.cnpj_cpf).distinct().all()
                 
                 contador_contatos_criados = 0

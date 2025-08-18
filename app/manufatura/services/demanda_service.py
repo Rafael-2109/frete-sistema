@@ -70,6 +70,37 @@ class DemandaService:
             'ano'
         )
         
+        # Demanda de CarteiraPrincipal (saldo sem separação)
+        # Subqueries para excluir itens já em Separacao ou PreSeparacaoItem
+        subquery_sep_pedidos = db.session.query(Separacao.num_pedido).distinct().subquery()
+        subquery_psi_pedidos = db.session.query(PreSeparacaoItem.num_pedido).distinct().subquery()
+        
+        query_filters_cp = []
+        if mes:
+            query_filters_cp.append(extract('month', CarteiraPrincipal.expedicao) == mes)
+        if ano:
+            query_filters_cp.append(extract('year', CarteiraPrincipal.expedicao) == ano)
+        if cod_produto:
+            query_filters_cp.append(CarteiraPrincipal.cod_produto == cod_produto)
+        
+        demanda_carteira = db.session.query(
+            CarteiraPrincipal.cod_produto,
+            CarteiraPrincipal.nome_produto,
+            extract('month', CarteiraPrincipal.expedicao).label('mes'),
+            extract('year', CarteiraPrincipal.expedicao).label('ano'),
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_demanda')
+        ).filter(
+            ~CarteiraPrincipal.num_pedido.in_(subquery_sep_pedidos),
+            ~CarteiraPrincipal.num_pedido.in_(subquery_psi_pedidos),
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
+            *query_filters_cp
+        ).group_by(
+            CarteiraPrincipal.cod_produto,
+            CarteiraPrincipal.nome_produto,
+            'mes',
+            'ano'
+        )
+        
         # Combinar resultados
         resultado = {}
         for item in demanda_separacao.all():
@@ -79,20 +110,38 @@ class DemandaService:
                 'nome_produto': item.nome_produto,
                 'mes': item.mes,
                 'ano': item.ano,
-                'qtd_demanda': float(item.qtd_demanda or 0)
+                'qtd_demanda': float(item.qtd_demanda or 0),
+                'fonte': 'Separacao'
             }
         
         for item in demanda_pre_separacao.all():
             key = (item.cod_produto, item.mes, item.ano)
             if key in resultado:
                 resultado[key]['qtd_demanda'] += float(item.qtd_demanda or 0)
+                resultado[key]['fonte'] = 'Separacao+PreSeparacao'
             else:
                 resultado[key] = {
                     'cod_produto': item.cod_produto,
                     'nome_produto': item.nome_produto,
                     'mes': item.mes,
                     'ano': item.ano,
-                    'qtd_demanda': float(item.qtd_demanda or 0)
+                    'qtd_demanda': float(item.qtd_demanda or 0),
+                    'fonte': 'PreSeparacao'
+                }
+        
+        for item in demanda_carteira.all():
+            key = (item.cod_produto, item.mes, item.ano)
+            if key in resultado:
+                resultado[key]['qtd_demanda'] += float(item.qtd_demanda or 0)
+                resultado[key]['fonte'] += '+Carteira'
+            else:
+                resultado[key] = {
+                    'cod_produto': item.cod_produto,
+                    'nome_produto': item.nome_produto,
+                    'mes': item.mes,
+                    'ano': item.ano,
+                    'qtd_demanda': float(item.qtd_demanda or 0),
+                    'fonte': 'Carteira'
                 }
         
         return list(resultado.values())

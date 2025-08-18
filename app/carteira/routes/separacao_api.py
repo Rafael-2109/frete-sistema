@@ -92,6 +92,19 @@ def gerar_separacao_completa_pedido(num_pedido):
     }
     """
     try:
+        # VALIDAÇÃO: Verificar se já existe separação completa para este pedido
+        from app.separacao.models import Separacao
+        separacao_existente = Separacao.query.filter_by(
+            num_pedido=num_pedido,
+            tipo_envio='total'
+        ).first()
+        
+        if separacao_existente:
+            return jsonify({
+                "success": False, 
+                "error": f"Pedido já possui separação completa (Lote: {separacao_existente.separacao_lote_id})"
+            }), 400
+        
         data = request.get_json()
         expedicao = data.get("expedicao")
         agendamento = data.get("agendamento")

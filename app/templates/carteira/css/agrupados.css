@@ -1,5 +1,6 @@
 /* 🎯 ESTILOS PARA BADGES DE FILTROS */
-.badges-filtros-container {
+.badges-filtros-container,
+.badges-agendamento-container {
     padding: 0.5rem 0;
 }
 
@@ -39,13 +40,87 @@
     font-size: 0.8rem;
     font-weight: 500;
     transition: all 0.2s ease;
-    border: 1px solid transparent;
+    border: 2px solid transparent;
     user-select: none;
 }
 
-.badge-rota:hover {
+.badge-filtro:hover {
     filter: brightness(0.9);
     transform: translateY(-1px);
+}
+
+/* Estados outline (não clicado) */
+.bg-outline-primary {
+    background-color: transparent;
+    color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.bg-outline-secondary {
+    background-color: transparent;
+    color: #6c757d;
+    border-color: #6c757d;
+}
+
+.bg-outline-success {
+    background-color: transparent;
+    color: #198754;
+    border-color: #198754;
+}
+
+.bg-outline-danger {
+    background-color: transparent;
+    color: #dc3545;
+    border-color: #dc3545;
+}
+
+.bg-outline-warning {
+    background-color: transparent;
+    color: #ffc107;
+    border-color: #ffc107;
+}
+
+/* Estados preenchidos (clicado) */
+.badge-filtro.ativo.bg-outline-primary {
+    background-color: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+.badge-filtro.ativo.bg-outline-secondary {
+    background-color: #6c757d;
+    color: white;
+    border-color: #6c757d;
+}
+
+.badge-filtro.ativo.bg-outline-success {
+    background-color: #198754;
+    color: white;
+    border-color: #198754;
+}
+
+.badge-filtro.ativo.bg-outline-danger {
+    background-color: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+
+.badge-filtro.ativo.bg-outline-warning {
+    background-color: #ffc107;
+    color: #000;
+    border-color: #ffc107;
+}
+
+/* Hover nos badges */
+.badge-filtro:hover {
+    opacity: 0.8;
+    transform: scale(1.05);
+}
+
+/* Badge de agendamento específico */
+.badges-agendamento-wrapper {
+    display: inline-flex;
+    gap: 0.5rem;
 }
 
 .badge-rota.active {

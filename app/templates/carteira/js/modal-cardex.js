@@ -24,8 +24,20 @@ class ModalCardex {
                 throw new Error(data.error || 'Erro ao carregar cardex');
             }
 
+            // Criar ID único para esta instância
+            const modalId = `modal-cardex-${codProduto}-${Date.now()}`;
+            
+            // Adicionar à navegação se existe
+            if (window.modalNav) {
+                window.modalNav.pushModal(modalId, `Cardex - ${codProduto}`, {
+                    codProduto: codProduto,
+                    dados: data,
+                    modalId: modalId
+                });
+            }
+
             // Renderizar modal de cardex
-            this.mostrarModalCardex(codProduto, data, dadosProdutos);
+            this.mostrarModalCardex(codProduto, data, dadosProdutos, modalId);
 
         } catch (error) {
             console.error(`❌ Erro ao carregar cardex:`, error);
@@ -33,16 +45,19 @@ class ModalCardex {
         }
     }
 
-    mostrarModalCardex(codProduto, data, dadosProdutos) {
-        // Remover modal existente se houver
-        const modalExistente = document.getElementById('modal-cardex');
-        if (modalExistente) {
-            modalExistente.remove();
+    mostrarModalCardex(codProduto, data, dadosProdutos, modalId) {
+        // Usar o modalId fornecido ou criar um novo
+        if (!modalId) {
+            modalId = `modal-cardex-${codProduto}-${Date.now()}`;
         }
+        
+        // Remover modal anterior do mesmo produto se houver
+        const modaisExistentes = document.querySelectorAll(`[id^="modal-cardex-${codProduto}"]`);
+        modaisExistentes.forEach(m => m.remove());
 
         // Criar modal
         const modal = document.createElement('div');
-        modal.id = 'modal-cardex';
+        modal.id = modalId;
         modal.className = 'modal fade';
         modal.setAttribute('tabindex', '-1');
         modal.innerHTML = this.renderizarModalCardex(codProduto, data, dadosProdutos);
@@ -56,11 +71,25 @@ class ModalCardex {
 
         // Remover modal quando fechar
         modal.addEventListener('hidden.bs.modal', () => {
-            modal.remove();
+            // Notificar navegação ANTES de remover (se não for navegação)
+            if (window.modalNav && !modal._skipNavigation) {
+                window.modalNav.popModal();
+            }
+            // Remover modal do DOM
+            setTimeout(() => {
+                if (modal.parentNode) {
+                    modal.remove();
+                }
+            }, 100);
         });
     }
 
     renderizarModalCardex(codProduto, data, dadosProdutos) {
+        // Garantir que dadosProdutos seja um Map
+        if (!(dadosProdutos instanceof Map)) {
+            dadosProdutos = new Map();
+        }
+        
         const produto = dadosProdutos.get(codProduto);
         const nomeProduto = produto ? produto.nome_produto : codProduto;
 
@@ -137,7 +166,14 @@ class ModalCardex {
                                             <th>Dia</th>
                                             <th>Data</th>
                                             <th class="text-end">Est. Inicial</th>
-                                            <th class="text-end">Saídas</th>
+                                            <th class="text-end">
+                                                Saídas
+                                                <button class="btn btn-sm btn-link text-white p-0 ms-2" 
+                                                        onclick="modalCardex.abrirCardexExpandido('${codProduto}')"
+                                                        title="Ver detalhes de todas as saídas">
+                                                    <i class="fas fa-expand-arrows-alt"></i>
+                                                </button>
+                                            </th>
                                             <th class="text-end">Saldo</th>
                                             <th class="text-end">Produção</th>
                                             <th class="text-end">Est. Final</th>
@@ -275,6 +311,25 @@ class ModalCardex {
             month: '2-digit',
             year: '2-digit'
         });
+    }
+
+    abrirCardexExpandido(codProduto) {
+        console.log(`📊 Abrindo cardex expandido para produto ${codProduto}`);
+        
+        // Verificar se o script do cardex expandido está carregado
+        if (!window.cardexExpandido) {
+            // Carregar script dinamicamente se não estiver carregado
+            const script = document.createElement('script');
+            script.src = '/static/carteira/js/modal-cardex-expandido.js';
+            script.onload = () => {
+                if (window.cardexExpandido) {
+                    window.cardexExpandido.abrirCardexExpandido(codProduto);
+                }
+            };
+            document.head.appendChild(script);
+        } else {
+            window.cardexExpandido.abrirCardexExpandido(codProduto);
+        }
     }
 
     exportarCardex(codProduto) {

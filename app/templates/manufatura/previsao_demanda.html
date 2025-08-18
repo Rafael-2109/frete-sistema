@@ -296,17 +296,28 @@ function gerarPorHistorico() {
     var mes = $('#filtro-mes').val();
     var ano = $('#filtro-ano').val();
     
-    $.post('{{ url_for("manufatura.gerar_previsao_historico") }}', {
-        mes: mes,
-        ano: ano,
-        multiplicador: 1.0
-    })
-    .done(function(response) {
-        alert(response.mensagem);
-        carregarPrevisoes();
-    })
-    .fail(function() {
-        alert('Erro ao gerar previsões');
+    // Obter token CSRF
+    var csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || 
+                    $('meta[name="csrf-token"]').attr('content');
+    
+    $.ajax({
+        url: '{{ url_for("manufatura.gerar_previsao_historico") }}',
+        type: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken
+        },
+        data: {
+            mes: mes,
+            ano: ano,
+            multiplicador: 1.0
+        },
+        success: function(response) {
+            alert(response.mensagem);
+            carregarPrevisoes();
+        },
+        error: function() {
+            alert('Erro ao gerar previsões');
+        }
     });
 }
 

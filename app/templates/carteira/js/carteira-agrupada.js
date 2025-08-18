@@ -66,12 +66,18 @@ class CarteiraAgrupada {
     initBadgesFiltros() {
         // Event listeners para badges
         document.querySelectorAll('.badge-filtro').forEach(badge => {
-            badge.addEventListener('click', (e) => this.toggleBadgeFiltro(e.target));
+            badge.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('🔍 Badge clicado:', badge.dataset.tipo, badge.dataset.valor);
+                this.toggleBadgeFiltro(badge);
+            });
         });
 
         // Botões de limpar
         const limparRotas = document.getElementById('limpar-rotas');
         const limparSubrotas = document.getElementById('limpar-subrotas');
+        const limparAgendamento = document.getElementById('limpar-agendamento');
 
         if (limparRotas) {
             limparRotas.addEventListener('click', () => this.limparFiltrosRotas());
@@ -80,18 +86,30 @@ class CarteiraAgrupada {
         if (limparSubrotas) {
             limparSubrotas.addEventListener('click', () => this.limparFiltrosSubrotas());
         }
+        
+        if (limparAgendamento) {
+            limparAgendamento.addEventListener('click', () => this.limparFiltrosAgendamento());
+        }
+        
+        console.log('✅ Badges de filtros inicializados. Total de badges:', document.querySelectorAll('.badge-filtro').length);
     }
 
     toggleBadgeFiltro(badge) {
         const tipo = badge.dataset.tipo;
         const valor = badge.dataset.valor;
 
-        // Verificar limite de filtros ativos
+        // Tratamento especial para agendamento (exclusivo mútuo)
+        if (tipo === 'agendamento') {
+            this.toggleAgendamento(badge, valor);
+            return;
+        }
+
+        // Verificar limite de filtros ativos (não se aplica a agendamento)
         const totalAtivos = this.filtrosAtivos.rotas.size +
             this.filtrosAtivos.incoterms.size +
             this.filtrosAtivos.subrotas.size;
 
-        const isActive = badge.classList.contains('active');
+        const isActive = badge.classList.contains('ativo');
 
         if (!isActive && totalAtivos >= this.maxFiltrosAtivos) {
             // Mostrar mensagem de limite
@@ -99,27 +117,62 @@ class CarteiraAgrupada {
             return;
         }
 
-        // Toggle do badge
-        badge.classList.toggle('active');
-
-        // Atualizar filtros ativos
-        if (tipo === 'rota') {
-            if (isActive) {
-                this.filtrosAtivos.rotas.delete(valor);
-            } else {
+        // Toggle do badge com classe 'ativo' e estilos
+        badge.classList.toggle('ativo');
+        
+        // Aplicar ou remover estilos visuais
+        if (badge.classList.contains('ativo')) {
+            // Estado ativo (preenchido)
+            if (tipo === 'rota') {
+                badge.style.backgroundColor = '#0d6efd';
+                badge.style.color = 'white';
+                badge.style.borderColor = '#0d6efd';
                 this.filtrosAtivos.rotas.add(valor);
-            }
-        } else if (tipo === 'incoterm') {
-            if (isActive) {
-                this.filtrosAtivos.incoterms.delete(valor);
-            } else {
+                // Se ativou SP, mostrar subrotas
+                if (valor === 'SP') {
+                    this.mostrarSubrotasSP();
+                }
+            } else if (tipo === 'incoterm') {
+                if (valor === 'FOB') {
+                    badge.style.backgroundColor = '#ffc107';
+                    badge.style.color = '#000';
+                    badge.style.borderColor = '#ffc107';
+                } else if (valor === 'RED') {
+                    badge.style.backgroundColor = '#dc3545';
+                    badge.style.color = 'white';
+                    badge.style.borderColor = '#dc3545';
+                }
                 this.filtrosAtivos.incoterms.add(valor);
-            }
-        } else if (tipo === 'subrota') {
-            if (isActive) {
-                this.filtrosAtivos.subrotas.delete(valor);
-            } else {
+            } else if (tipo === 'subrota') {
+                badge.style.backgroundColor = '#6c757d';
+                badge.style.color = 'white';
+                badge.style.borderColor = '#6c757d';
                 this.filtrosAtivos.subrotas.add(valor);
+            }
+        } else {
+            // Estado inativo (outline)
+            badge.style.backgroundColor = 'transparent';
+            if (tipo === 'rota') {
+                badge.style.color = '#0d6efd';
+                badge.style.borderColor = '#0d6efd';
+                this.filtrosAtivos.rotas.delete(valor);
+                // Se desativou SP, esconder subrotas
+                if (valor === 'SP') {
+                    this.esconderSubrotasSP();
+                }
+            } else if (tipo === 'incoterm') {
+                if (valor === 'FOB') {
+                    badge.style.color = '#ffc107';
+                    badge.style.borderColor = '#ffc107';
+                } else if (valor === 'RED') {
+                    badge.style.color = '#dc3545';
+                    badge.style.borderColor = '#dc3545';
+                }
+                this.filtrosAtivos.incoterms.delete(valor);
+            } else if (tipo === 'subrota') {
+                badge.style.color = '#6c757d';
+                badge.style.borderColor = '#6c757d';
+                this.filtrosAtivos.subrotas.delete(valor);
             }
         }
 
@@ -137,22 +190,34 @@ class CarteiraAgrupada {
         const container = document.querySelector('.subrotas-sp-container');
         if (!container) return;
 
-        // Mostrar subrotas se houver pedidos de SP visíveis
-        const pedidosSP = document.querySelectorAll('.pedido-row:not([style*="display: none"])');
-        let temSP = false;
-
-        pedidosSP.forEach(pedido => {
-            if (pedido.dataset.uf === 'SP') {
-                temSP = true;
-            }
-        });
-
-        container.style.display = temSP ? 'block' : 'none';
+        // Mostrar subrotas se rota SP estiver ativa
+        const spAtivo = this.filtrosAtivos.rotas.has('SP');
+        container.style.display = spAtivo ? 'block' : 'none';
+    }
+    
+    mostrarSubrotasSP() {
+        const container = document.querySelector('.subrotas-sp-container');
+        if (container) {
+            container.style.display = 'block';
+        }
+    }
+    
+    esconderSubrotasSP() {
+        const container = document.querySelector('.subrotas-sp-container');
+        if (container) {
+            container.style.display = 'none';
+            // Limpar filtros de subrotas ao esconder
+            document.querySelectorAll('.badge-subrota').forEach(badge => {
+                badge.classList.remove('ativo');
+            });
+            this.filtrosAtivos.subrotas.clear();
+        }
     }
 
     atualizarBotoesLimpar() {
         const limparRotas = document.getElementById('limpar-rotas');
         const limparSubrotas = document.getElementById('limpar-subrotas');
+        const limparAgendamento = document.getElementById('limpar-agendamento');
 
         if (limparRotas) {
             const temFiltrosRotas = this.filtrosAtivos.rotas.size > 0 || this.filtrosAtivos.incoterms.size > 0;
@@ -162,16 +227,73 @@ class CarteiraAgrupada {
         if (limparSubrotas) {
             limparSubrotas.style.display = this.filtrosAtivos.subrotas.size > 0 ? 'inline-block' : 'none';
         }
+        
+        if (limparAgendamento) {
+            limparAgendamento.style.display = this.filtrosAtivos.agendamento ? 'inline-block' : 'none';
+        }
+    }
+
+    toggleAgendamento(badge, valor) {
+        // Remover ativo de todos os badges de agendamento
+        document.querySelectorAll('.badge-agendamento').forEach(b => {
+            b.classList.remove('ativo');
+            // Restaurar estilo outline (não clicado)
+            if (b.dataset.valor === 'sem') {
+                b.style.backgroundColor = 'transparent';
+                b.style.color = '#dc3545';
+                b.style.borderColor = '#dc3545';
+            } else {
+                b.style.backgroundColor = 'transparent';
+                b.style.color = '#198754';
+                b.style.borderColor = '#198754';
+            }
+        });
+        
+        // Se clicou no mesmo que já estava ativo, desativar
+        if (this.filtrosAtivos.agendamento === valor) {
+            this.filtrosAtivos.agendamento = null;
+            document.getElementById('limpar-agendamento').style.display = 'none';
+        } else {
+            // Ativar o novo com estilo preenchido
+            badge.classList.add('ativo');
+            if (valor === 'sem') {
+                badge.style.backgroundColor = '#dc3545';
+                badge.style.color = 'white';
+                badge.style.borderColor = '#dc3545';
+            } else {
+                badge.style.backgroundColor = '#198754';
+                badge.style.color = 'white';
+                badge.style.borderColor = '#198754';
+            }
+            this.filtrosAtivos.agendamento = valor;
+            document.getElementById('limpar-agendamento').style.display = 'inline-block';
+        }
+        
+        this.aplicarFiltros();
     }
 
     limparFiltrosRotas() {
         // Limpar badges de rotas e incoterms
-        document.querySelectorAll('.badge-rota.active, .badge-incoterm.active').forEach(badge => {
-            badge.classList.remove('active');
+        document.querySelectorAll('.badge-rota, .badge-incoterm').forEach(badge => {
+            badge.classList.remove('ativo');
+            badge.style.backgroundColor = 'transparent';
+            
+            // Restaurar cores outline
+            if (badge.classList.contains('badge-rota')) {
+                badge.style.color = '#0d6efd';
+                badge.style.borderColor = '#0d6efd';
+            } else if (badge.dataset.valor === 'FOB') {
+                badge.style.color = '#ffc107';
+                badge.style.borderColor = '#ffc107';
+            } else if (badge.dataset.valor === 'RED') {
+                badge.style.color = '#dc3545';
+                badge.style.borderColor = '#dc3545';
+            }
         });
 
         this.filtrosAtivos.rotas.clear();
         this.filtrosAtivos.incoterms.clear();
+        this.esconderSubrotasSP();
 
         this.atualizarBotoesLimpar();
         this.aplicarFiltros();
@@ -179,14 +301,36 @@ class CarteiraAgrupada {
 
     limparFiltrosSubrotas() {
         // Limpar badges de subrotas
-        document.querySelectorAll('.badge-subrota.active').forEach(badge => {
-            badge.classList.remove('active');
+        document.querySelectorAll('.badge-subrota').forEach(badge => {
+            badge.classList.remove('ativo');
+            badge.style.backgroundColor = 'transparent';
+            badge.style.color = '#6c757d';
+            badge.style.borderColor = '#6c757d';
         });
 
         this.filtrosAtivos.subrotas.clear();
 
         this.atualizarBotoesLimpar();
         this.aplicarFiltros();
+    }
+    
+    limparFiltrosAgendamento() {
+        document.querySelectorAll('.badge-agendamento').forEach(badge => {
+            badge.classList.remove('ativo');
+            badge.style.backgroundColor = 'transparent';
+            
+            // Restaurar cores outline
+            if (badge.dataset.valor === 'sem') {
+                badge.style.color = '#dc3545';
+                badge.style.borderColor = '#dc3545';
+            } else {
+                badge.style.color = '#198754';
+                badge.style.borderColor = '#198754';
+            }
+        });
+        this.filtrosAtivos.agendamento = null;
+        this.aplicarFiltros();
+        document.getElementById('limpar-agendamento').style.display = 'none';
     }
 
     mostrarAlerta(mensagem) {
@@ -255,11 +399,18 @@ class CarteiraAgrupada {
             const rota = linha.dataset.rota || '';
             const subrota = linha.dataset.subrota || '';
             const incoterm = linha.dataset.incoterm || 'CIF';
+            const agendamento = linha.dataset.agendamento || 'sem';
 
             // Aplicar filtros básicos
             const matchBusca = !termoBusca || textoFiltro.includes(termoBusca);
             const matchStatus = !statusSelecionado || status === statusSelecionado;
             const matchEquipe = !equipeSelecionada || equipe === equipeSelecionada;
+            
+            // Filtro de agendamento
+            let matchAgendamento = true;
+            if (this.filtrosAtivos.agendamento) {
+                matchAgendamento = agendamento === this.filtrosAtivos.agendamento;
+            }
 
             let matchBadges = true;
 
@@ -293,7 +444,7 @@ class CarteiraAgrupada {
                 }
             }
 
-            const mostrar = matchBusca && matchStatus && matchEquipe && matchBadges && matchSubrotas;
+            const mostrar = matchBusca && matchStatus && matchEquipe && matchAgendamento && matchBadges && matchSubrotas;
 
             linha.style.display = mostrar ? '' : 'none';
 

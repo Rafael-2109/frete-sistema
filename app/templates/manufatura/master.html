@@ -487,6 +487,46 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <!-- Período de Importação -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <h6>Período de Importação (Opcional)</h6>
+                        <div class="alert alert-info py-2">
+                            <small><i class="bi bi-info-circle"></i> Deixe em branco para importar todo o histórico disponível</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="syncMes" class="form-label">Mês</label>
+                        <select class="form-select" id="syncMes">
+                            <option value="">Todos os meses</option>
+                            <option value="1">Janeiro</option>
+                            <option value="2">Fevereiro</option>
+                            <option value="3">Março</option>
+                            <option value="4">Abril</option>
+                            <option value="5">Maio</option>
+                            <option value="6">Junho</option>
+                            <option value="7">Julho</option>
+                            <option value="8">Agosto</option>
+                            <option value="9">Setembro</option>
+                            <option value="10">Outubro</option>
+                            <option value="11">Novembro</option>
+                            <option value="12">Dezembro</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="syncAno" class="form-label">Ano</label>
+                        <select class="form-select" id="syncAno">
+                            <option value="">Todos os anos</option>
+                            {% for ano in range(2024, 2027) %}
+                            <option value="{{ ano }}">{{ ano }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <!-- Opções de Sincronização -->
                 <div class="row">
                     <div class="col-md-6">
                         <h6>Importar do Odoo</h6>
@@ -506,6 +546,7 @@
                             <input class="form-check-input" type="checkbox" id="syncHistorico">
                             <label class="form-check-label" for="syncHistorico">
                                 Histórico de Pedidos
+                                <small class="text-muted d-block">Usa o período selecionado acima</small>
                             </label>
                         </div>
                     </div>
@@ -554,6 +595,7 @@ let metricas = {};
 document.addEventListener('DOMContentLoaded', function() {
     carregarMetricas();
     verificarAlertas();
+    configurarPeriodoPadrao();
     setInterval(carregarMetricas, 60000); // Atualizar a cada minuto
 });
 
@@ -652,7 +694,15 @@ function executarSincronizacao() {
         etapas.push({ nome: 'Pedidos', endpoint: '/manufatura/api/integracao/pedidos/importar' });
     }
     if (document.getElementById('syncHistorico').checked) {
-        etapas.push({ nome: 'Histórico', endpoint: '/manufatura/api/integracao/historico/importar' });
+        // Incluir período selecionado na importação do histórico
+        const mes = document.getElementById('syncMes').value;
+        const ano = document.getElementById('syncAno').value;
+        
+        etapas.push({ 
+            nome: 'Histórico' + (mes || ano ? ` (${mes ? mes + '/' : ''}${ano || 'Todos'})` : ''),
+            endpoint: '/manufatura/api/integracao/historico/importar',
+            data: { mes: mes, ano: ano }
+        });
     }
     if (document.getElementById('syncOrdensMTO').checked) {
         etapas.push({ nome: 'Ordens MTO', endpoint: '/manufatura/api/ordens-producao/gerar-mto' });
@@ -679,12 +729,21 @@ function executarSincronizacao() {
         // Obter token CSRF
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         
-        fetch(etapa.endpoint, { 
+        // Preparar dados se existirem
+        const fetchOptions = {
             method: 'POST',
             headers: {
                 'X-CSRFToken': csrfToken
             }
-        })
+        };
+        
+        // Adicionar dados JSON se a etapa tiver dados (como período para histórico)
+        if (etapa.data) {
+            fetchOptions.headers['Content-Type'] = 'application/json';
+            fetchOptions.body = JSON.stringify(etapa.data);
+        }
+        
+        fetch(etapa.endpoint, fetchOptions)
             .then(response => response.json())
             .then(data => {
                 progresso += incremento;

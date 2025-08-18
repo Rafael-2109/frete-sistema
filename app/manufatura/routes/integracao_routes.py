@@ -70,9 +70,15 @@ def register_integracao_routes(bp):
             # Import tardio para evitar circular import
             from app.odoo.services.manufatura_service import ManufaturaOdooService
             
+            # Corrigir obtenção de parâmetros
             dados = request.json if request.is_json else request.form
-            mes = dados.get('mes', type=int) if dados else None
-            ano = dados.get('ano', type=int) if dados else None
+            mes = None
+            ano = None
+            
+            if dados:
+                # Converter corretamente para int
+                mes = int(dados.get('mes')) if dados.get('mes') else None
+                ano = int(dados.get('ano')) if dados.get('ano') else None
             
             service = ManufaturaOdooService()
             resultado = service.importar_historico_pedidos(mes, ano)

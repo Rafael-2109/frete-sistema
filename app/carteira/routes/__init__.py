@@ -48,3 +48,6 @@ carteira_bp.register_blueprint(standby_bp)
 # Registrar blueprints de Alertas
 carteira_bp.register_blueprint(alertas_separacao_api)
 carteira_bp.register_blueprint(alertas_visualizacao_bp)
+
+# Importar rotas de ruptura (não é um blueprint separado, usa carteira_bp)
+from . import ruptura_api

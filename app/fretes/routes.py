@@ -1,24 +1,14 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app, session, send_from_directory
 from flask_login import login_required, current_user
 from datetime import datetime
-from sqlalchemy import and_, or_, desc, func
+from sqlalchemy import and_, or_, desc
 import os
-import re
 import logging
-from werkzeug.utils import secure_filename
-
-# Configurar logger
-logger = logging.getLogger(__name__)
 from app.transportadoras.models import Transportadora
 from app.fretes.forms import LancamentoFreteirosForm
-from datetime import datetime
-
-
 from app import db
-
 # 🔒 Importar decoradores de permissão
-from app.utils.auth_decorators import require_financeiro, require_admin, require_profiles
-
+from app.utils.auth_decorators import require_financeiro
 from app.embarques.models import Embarque, EmbarqueItem
 from app.faturamento.models import RelatorioFaturamentoImportado
 from app.fretes.models import (
@@ -29,12 +19,11 @@ from app.fretes.forms import (
     FreteForm, FaturaFreteForm, DespesaExtraForm,
     FiltroFretesForm, LancamentoCteForm, FiltroFaturasForm, FiltroFreteirosForm
 )
-
-from app.transportadoras.models import Transportadora
-
 from app.utils.calculadora_frete import calcular_valor_frete_pela_tabela
 from app.utils.valores_brasileiros import converter_valor_brasileiro
 from app.utils.cnpj_utils import normalizar_cnpj
+# Configurar logger
+logger = logging.getLogger(__name__)
 
 fretes_bp = Blueprint('fretes', __name__, url_prefix='/fretes')
 

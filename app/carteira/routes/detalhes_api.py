@@ -1,5 +1,5 @@
 """
-API para detalhes do pedido - usado no expandir da carteira agrupada
+API para detalhes do pedido - usado no expandir da carteira agrupada e modal de detalhes
 """
 
 from flask import jsonify

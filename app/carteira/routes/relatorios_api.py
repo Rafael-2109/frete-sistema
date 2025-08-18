@@ -4,17 +4,15 @@ Exportação de dados para Excel com filtros de data
 """
 
 from flask import jsonify, request, send_file
-from datetime import datetime, date
-from decimal import Decimal
+from datetime import datetime
 import pandas as pd
 import io
-from sqlalchemy import and_, or_, func
+from sqlalchemy import func
 from app import db
 from app.carteira.main_routes import carteira_bp
 from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
 from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
-from app.faturamento.models import FaturamentoProduto
 import logging
 
 logger = logging.getLogger(__name__)

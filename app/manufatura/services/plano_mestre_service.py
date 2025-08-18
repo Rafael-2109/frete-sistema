@@ -24,6 +24,7 @@ class PlanoMestreService:
         ).all()
         
         planos_criados = []
+        planos_atualizados = []
         
         for previsao in previsoes:
             # Verificar se já existe plano
@@ -33,26 +34,36 @@ class PlanoMestreService:
                 cod_produto=previsao.cod_produto
             ).first()
             
-            if not plano_existe:
-                # Calcular estoque atual
-                estoque_atual = self._calcular_estoque_produto(previsao.cod_produto)
+            # Calcular estoque atual
+            estoque_atual = self._calcular_estoque_produto(previsao.cod_produto)
+            
+            # Calcular produção já programada
+            producao_programada = self._calcular_producao_programada(
+                previsao.cod_produto, mes, ano
+            )
+            
+            # Calcular produção realizada
+            producao_realizada = self._calcular_producao_realizada(
+                previsao.cod_produto, mes, ano
+            )
+            
+            # Buscar parâmetros de produção
+            recursos = RecursosProducao.query.filter_by(
+                cod_produto=previsao.cod_produto
+            ).first()
+            
+            if plano_existe:
+                # Atualizar plano existente
+                plano_existe.qtd_demanda_prevista = previsao.qtd_demanda_prevista
+                plano_existe.qtd_producao_programada = producao_programada
+                plano_existe.qtd_producao_realizada = producao_realizada
+                plano_existe.qtd_estoque = estoque_atual
                 
-                # Calcular produção já programada
-                producao_programada = self._calcular_producao_programada(
-                    previsao.cod_produto, mes, ano
-                )
-                
-                # Calcular produção realizada
-                producao_realizada = self._calcular_producao_realizada(
-                    previsao.cod_produto, mes, ano
-                )
-                
-                # Buscar parâmetros de produção
-                recursos = RecursosProducao.query.filter_by(
-                    cod_produto=previsao.cod_produto
-                ).first()
-                
-                # Criar plano
+                # Recalcular reposição sugerida
+                plano_existe.qtd_reposicao_sugerida = self._calcular_reposicao_sugerida(plano_existe)
+                planos_atualizados.append(plano_existe)
+            else:
+                # Criar novo plano
                 plano = PlanoMestreProducao(
                     data_mes=mes,
                     data_ano=ano,
@@ -76,10 +87,13 @@ class PlanoMestreService:
                 db.session.add(plano)
                 planos_criados.append(plano)
         
-        if planos_criados:
+        if planos_criados or planos_atualizados:
             db.session.commit()
         
-        return planos_criados
+        return {
+            'criados': planos_criados,
+            'atualizados': planos_atualizados
+        }
     
     def _calcular_estoque_produto(self, cod_produto):
         """Calcula estoque atual do produto"""
@@ -133,14 +147,16 @@ class PlanoMestreService:
         return Decimal(str(resultado or 0))
     
     def _calcular_reposicao_sugerida(self, plano):
-        """Calcula quantidade de reposição sugerida"""
+        """Calcula quantidade de reposição sugerida
+        Fórmula: qtd_demanda_prevista + qtd_estoque_seguranca - qtd_estoque - qtd_producao_programada
+        """
         
+        # Conforme escopo: não subtrai qtd_producao_realizada pois já está considerada no estoque
         necessidade = (
             (plano.qtd_demanda_prevista or 0) +
             (plano.qtd_estoque_seguranca or 0) -
             (plano.qtd_estoque or 0) -
-            (plano.qtd_producao_programada or 0) -
-            (plano.qtd_producao_realizada or 0)
+            (plano.qtd_producao_programada or 0)
         )
         
         return max(Decimal('0'), necessidade)
@@ -203,10 +219,12 @@ class PlanoMestreService:
         
         resumo = {
             'total_produtos': len(planos),
-            'total_demanda': sum(p.qtd_demanda_prevista or 0 for p in planos),
-            'total_estoque': sum(p.qtd_estoque or 0 for p in planos),
-            'total_reposicao': sum(p.qtd_reposicao_sugerida or 0 for p in planos),
+            'total_demanda': float(sum(p.qtd_demanda_prevista or 0 for p in planos)),
+            'total_estoque': float(sum(p.qtd_estoque or 0 for p in planos)),
+            'total_reposicao': float(sum(p.qtd_reposicao_sugerida or 0 for p in planos)),
+            'total_producao_programada': float(sum(p.qtd_producao_programada or 0 for p in planos)),
             'produtos_criticos': [],
+            'produtos_reposicao': [],
             'status': {
                 'rascunho': sum(1 for p in planos if p.status_geracao == 'rascunho'),
                 'aprovado': sum(1 for p in planos if p.status_geracao == 'aprovado'),
@@ -224,6 +242,16 @@ class PlanoMestreService:
                     'estoque': float(plano.qtd_estoque or 0),
                     'seguranca': float(plano.qtd_estoque_seguranca or 0),
                     'deficit': float(plano.qtd_estoque_seguranca - plano.qtd_estoque)
+                })
+            
+            # Produtos com necessidade de reposição
+            if plano.qtd_reposicao_sugerida > 0:
+                resumo['produtos_reposicao'].append({
+                    'cod_produto': plano.cod_produto,
+                    'nome_produto': plano.nome_produto,
+                    'qtd_sugerida': float(plano.qtd_reposicao_sugerida or 0),
+                    'qtd_demanda': float(plano.qtd_demanda_prevista or 0),
+                    'qtd_estoque': float(plano.qtd_estoque or 0)
                 })
         
         return resumo

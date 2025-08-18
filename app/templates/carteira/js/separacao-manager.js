@@ -148,7 +148,7 @@ class SeparacaoManager {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'text/html',  // Solicitar parciais HTML
+                    'Accept': 'text/html',  // IMPORTANTE: Solicitar HTML para receber targets
                     'X-CSRFToken': this.getCSRFToken()  // Adicionar CSRF token
                 },
                 body: JSON.stringify({

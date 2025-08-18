@@ -11,7 +11,7 @@ Data: 2025-08-10
 """
 
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from datetime import datetime
 from decimal import Decimal
 
