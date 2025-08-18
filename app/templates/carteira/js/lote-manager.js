@@ -60,10 +60,10 @@ class LoteManager {
         const loteData = this.workspace.preSeparacoes.get(loteId);
         const temProdutos = loteData.produtos.length > 0;
 
-        // Obter status do pedido atual
-        const numPedido = this.workspace.obterNumeroPedido();
-        const statusPedido = this.workspace.statusPedido || 'ABERTO';
-        const mostrarBotaoAdicionar = ['ABERTO', 'COTADO'].includes(statusPedido);
+        // CORREÇÃO: Verificar se há saldo disponível para adicionar produtos
+        // Deve mostrar o botão sempre que houver saldo no pedido
+        // (CarteiraPrincipal - Separações - PreSeparações > 0)
+        const mostrarBotaoAdicionar = true; // Sempre mostrar para novos lotes, a validação é feita ao adicionar
 
         return `
             <div class="card lote-card h-100" data-lote-id="${loteId}">
@@ -146,10 +146,25 @@ class LoteManager {
         const temProdutos = loteData.produtos.length > 0;
         const isPre = loteData.status === 'pre_separacao';
 
-        // Obter status do pedido atual
-        const numPedido = this.workspace.obterNumeroPedido();
-        const statusPedido = this.workspace.statusPedido || 'ABERTO';
-        const mostrarBotaoAdicionar = ['ABERTO', 'COTADO'].includes(statusPedido) && isPre;
+        // DEBUG: Log para verificar o problema
+        console.log('🔍 renderizarCardPreSeparacao:', {
+            loteId: loteData.lote_id,
+            status: loteData.status,
+            isPre: isPre,
+            temProdutos: temProdutos,
+            qtdProdutos: loteData.produtos.length
+        });
+
+        // CORREÇÃO: Verificar se há saldo disponível no pedido
+        // O botão deve aparecer sempre que:
+        // 1. É uma pré-separação (isPre = true)
+        // 2. Existe saldo disponível no pedido (qtd na CarteiraPrincipal - Separações - PreSeparações > 0)
+        
+        // Para pré-separações, sempre mostrar o botão de adicionar
+        // A validação de saldo é feita ao tentar adicionar o produto
+        const mostrarBotaoAdicionar = isPre;
+        
+        console.log('🔍 mostrarBotaoAdicionar:', mostrarBotaoAdicionar);
 
         return `
             <div class="card lote-card h-100" data-lote-id="${loteData.lote_id}">

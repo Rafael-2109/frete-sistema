@@ -570,31 +570,54 @@ def _get_pedido_completo(num_pedido):
         ativo=True
     ).all()
     
-    # Calcular totais
-    pedido.total_itens = len(carteira_itens)
+    # Calcular totais - CORRIGIDO: considerar apenas itens com saldo
+    itens_com_saldo = [item for item in carteira_itens if (item.qtd_saldo_produto_pedido or 0) > 0]
+    pedido.total_itens = len(itens_com_saldo)  # Total de itens COM SALDO
     pedido.itens_separados = len(pedido.separacoes)
     
     # Calcular valor saldo
     pedido.valor_saldo = sum(float(item.qtd_saldo_produto_pedido or 0) * float(item.preco_produto_pedido or 0) 
-                            for item in carteira_itens if (item.qtd_saldo_produto_pedido or 0) > 0)
+                            for item in itens_com_saldo)
     
     # Buscar nome do cliente
     if carteira_itens:
         pedido.cliente_nome = carteira_itens[0].raz_social_red or carteira_itens[0].raz_social or ''
     
-    # Determinar status e cores
-    if pedido.itens_separados == pedido.total_itens and pedido.total_itens > 0:
+    # CORREÇÃO: Calcular saldo real comparando quantidades
+    # Buscar quantidades já separadas por produto
+    produtos_separados = {}
+    for lote_sep in pedido.separacoes:
+        # lote_sep é um objeto com atributo 'itens' que contém as separações reais
+        for item_sep in lote_sep.itens:
+            cod_produto = item_sep.cod_produto
+            if cod_produto:
+                qtd_separada = float(item_sep.qtd_saldo or 0)
+                produtos_separados[cod_produto] = produtos_separados.get(cod_produto, 0) + qtd_separada
+    
+    # Verificar se ainda há saldo disponível
+    tem_saldo_disponivel = False
+    for item in itens_com_saldo:
+        qtd_disponivel = float(item.qtd_saldo_produto_pedido or 0)
+        qtd_separada = produtos_separados.get(item.cod_produto, 0)
+        saldo_restante = qtd_disponivel - qtd_separada
+        
+        if saldo_restante > 0.01:  # Margem de 1 centésimo
+            tem_saldo_disponivel = True
+            break
+    
+    # Determinar status e cores baseado em SALDO REAL
+    if not tem_saldo_disponivel and pedido.total_itens > 0:
         pedido.status = 'COMPLETO'
         pedido.status_cor = 'success'
         pedido.pode_gerar_separacao = False
     elif pedido.itens_separados > 0:
         pedido.status = 'PARCIAL'
         pedido.status_cor = 'warning'
-        pedido.pode_gerar_separacao = True
+        pedido.pode_gerar_separacao = tem_saldo_disponivel  # Só pode gerar se tem saldo
     else:
         pedido.status = 'PENDENTE'
         pedido.status_cor = 'secondary'
-        pedido.pode_gerar_separacao = True
+        pedido.pode_gerar_separacao = tem_saldo_disponivel  # Só pode gerar se tem saldo
     
     return pedido
 

@@ -778,12 +778,45 @@ class ProcessadorFaturamento:
         Atualiza o status dos pedidos para FATURADO quando têm NF preenchida
         e existe faturamento correspondente.
         
+        NOVA FUNCIONALIDADE: Também verifica NFs em EmbarqueItem e atualiza Pedido.nf
+        
         Returns:
             Número de pedidos atualizados
         """
         contador = 0
+        contador_nf_sincronizada = 0
         
         try:
+            # PARTE 1: Sincronizar NFs de EmbarqueItem para Pedido
+            logger.info("🔍 Verificando NFs em EmbarqueItem para sincronizar com Pedido...")
+            
+            # Buscar EmbarqueItems com NF preenchida mas cujo Pedido não tem NF
+            embarque_items_com_nf = db.session.query(EmbarqueItem).join(
+                Pedido,
+                EmbarqueItem.separacao_lote_id == Pedido.separacao_lote_id
+            ).filter(
+                EmbarqueItem.nota_fiscal.isnot(None),
+                EmbarqueItem.nota_fiscal != "",
+                db.or_(
+                    Pedido.nf.is_(None),
+                    Pedido.nf == ""
+                )
+            ).all()
+            
+            logger.info(f"📊 Encontrados {len(embarque_items_com_nf)} EmbarqueItems com NF mas Pedido sem NF")
+            
+            for item in embarque_items_com_nf:
+                pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+                if pedido:
+                    nf_antiga = pedido.nf
+                    pedido.nf = item.nota_fiscal
+                    contador_nf_sincronizada += 1
+                    logger.info(f"  • Pedido {pedido.num_pedido}: NF sincronizada de EmbarqueItem: '{nf_antiga}' → '{item.nota_fiscal}'")
+            
+            if contador_nf_sincronizada > 0:
+                logger.info(f"✅ {contador_nf_sincronizada} NFs sincronizadas de EmbarqueItem para Pedido")
+            
+            # PARTE 2: Atualizar status para FATURADO
             # Buscar pedidos que têm NF mas não estão com status FATURADO
             # Incluindo também NF no CD que devem ser marcadas como FATURADO
             pedidos_com_nf = Pedido.query.filter(
@@ -808,12 +841,49 @@ class ProcessadorFaturamento:
                 else:
                     logger.warning(f"  ⚠️ Pedido {pedido.num_pedido} tem NF {pedido.nf} mas não tem FaturamentoProduto")
             
-            if contador > 0:
+            # PARTE 3: Verificar EmbarqueItems com NF que precisam ter Pedido FATURADO
+            logger.info("🔍 Verificando EmbarqueItems com NF para garantir Pedido FATURADO...")
+            
+            # Buscar EmbarqueItems com NF onde o Pedido não está FATURADO
+            embarque_items_nf_sem_faturado = db.session.query(EmbarqueItem).join(
+                Pedido,
+                EmbarqueItem.separacao_lote_id == Pedido.separacao_lote_id
+            ).filter(
+                EmbarqueItem.nota_fiscal.isnot(None),
+                EmbarqueItem.nota_fiscal != "",
+                Pedido.status != 'FATURADO'
+            ).all()
+            
+            logger.info(f"📊 Encontrados {len(embarque_items_nf_sem_faturado)} EmbarqueItems com NF mas Pedido não FATURADO")
+            
+            for item in embarque_items_nf_sem_faturado:
+                pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
+                if pedido:
+                    # Verificar se existe FaturamentoProduto para esta NF
+                    faturamento_existe = FaturamentoProduto.query.filter_by(
+                        numero_nf=item.nota_fiscal
+                    ).first()
+                    
+                    if faturamento_existe:
+                        status_antigo = pedido.status
+                        pedido.status = 'FATURADO'
+                        
+                        # Garantir que Pedido.nf está preenchido
+                        if not pedido.nf or pedido.nf != item.nota_fiscal:
+                            pedido.nf = item.nota_fiscal
+                            logger.info(f"  • Pedido {pedido.num_pedido}: NF atualizada para '{item.nota_fiscal}'")
+                        
+                        contador += 1
+                        logger.info(f"  • Pedido {pedido.num_pedido}: '{status_antigo}' → 'FATURADO' (NF de EmbarqueItem: {item.nota_fiscal})")
+                    else:
+                        logger.warning(f"  ⚠️ EmbarqueItem com NF {item.nota_fiscal} mas sem FaturamentoProduto (Pedido: {pedido.num_pedido})")
+            
+            if contador > 0 or contador_nf_sincronizada > 0:
                 db.session.commit()
-                logger.info(f"✅ {contador} pedidos atualizados para status FATURADO")
+                logger.info(f"✅ Total: {contador} pedidos atualizados para FATURADO, {contador_nf_sincronizada} NFs sincronizadas")
             
         except Exception as e:
             logger.error(f"❌ Erro ao atualizar status dos pedidos: {e}")
             db.session.rollback()
         
-        return contador
+        return contador + contador_nf_sincronizada
