@@ -23,7 +23,7 @@ from app.utils.localizacao import LocalizacaoService
 from app.utils.frete_simulador import calcular_frete_por_cnpj, buscar_cidade_unificada
 from app.utils.vehicle_utils import normalizar_nome_veiculo
 from app.utils.calculadora_frete import CalculadoraFrete
-
+from app.utils.embarque_numero import obter_proximo_numero_embarque
 # Routes
 # Função centralizada importada inline quando necessário
 
@@ -37,15 +37,6 @@ cotacao_bp = Blueprint("cotacao", __name__, url_prefix="/cotacao")
 
 # LocalizacaoService usa métodos estáticos, não precisa ser instanciado
 
-def obter_nome_cidade_correto(pedido):
-    """
-    Função de compatibilidade - usa LocalizacaoService
-    """
-    return LocalizacaoService.buscar_cidade_unificada(
-        nome=pedido.nome_cidade,
-        uf=pedido.cod_uf,
-        rota=getattr(pedido, 'rota', None)
-    )
 
 def formatar_protocolo(protocolo):
     """
@@ -1532,7 +1523,6 @@ def fechar_frete_grupo():
         }), 500
 
 # Importa função centralizada thread-safe
-from app.utils.embarque_numero import obter_proximo_numero_embarque
 
 @cotacao_bp.route("/otimizar")
 @login_required

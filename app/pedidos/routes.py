@@ -517,13 +517,15 @@ def editar_pedido(pedido_id):
             valores_originais = {
                 'expedicao': pedido.expedicao,
                 'agendamento': pedido.agendamento,
-                'protocolo': pedido.protocolo
+                'protocolo': pedido.protocolo,
+                'agendamento_confirmado': pedido.agendamento_confirmado
             }
             
-            # ✅ ATUALIZA OS CAMPOS DO PEDIDO
+            # ✅ ATUALIZA OS CAMPOS DO PEDIDO (incluindo agendamento_confirmado)
             pedido.expedicao = form.expedicao.data
             pedido.agendamento = form.agendamento.data
             pedido.protocolo = form.protocolo.data
+            pedido.agendamento_confirmado = form.agendamento_confirmado.data
             
             # ✅ SINCRONIZA COM SEPARAÇÃO
             # Busca todas as separações relacionadas ao pedido através do lote
@@ -542,12 +544,13 @@ def editar_pedido(pedido_id):
                     protocolo=valores_originais['protocolo']
                 ).all()
             
-            # Atualiza as separações encontradas
+            # Atualiza as separações encontradas (incluindo agendamento_confirmado)
             separacoes_atualizadas = 0
             for separacao in separacoes_relacionadas:
                 separacao.expedicao = form.expedicao.data
                 separacao.agendamento = form.agendamento.data
                 separacao.protocolo = form.protocolo.data
+                separacao.agendamento_confirmado = form.agendamento_confirmado.data
                 separacoes_atualizadas += 1
             
             # ✅ COMMIT das alterações
@@ -568,6 +571,7 @@ def editar_pedido(pedido_id):
             print(f"  - Expedição: {valores_originais['expedicao']} → {form.expedicao.data}")
             print(f"  - Agendamento: {valores_originais['agendamento']} → {form.agendamento.data}")
             print(f"  - Protocolo: {valores_originais['protocolo']} → {form.protocolo.data}")
+            print(f"  - Agendamento Confirmado: {valores_originais['agendamento_confirmado']} → {form.agendamento_confirmado.data}")
             print(f"  - Separações atualizadas: {separacoes_atualizadas}")
             
             return redirect(url_for('pedidos.lista_pedidos'))
@@ -594,6 +598,7 @@ def editar_pedido(pedido_id):
         form.expedicao.data = pedido.expedicao
         form.agendamento.data = pedido.agendamento
         form.protocolo.data = pedido.protocolo
+        form.agendamento_confirmado.data = pedido.agendamento_confirmado
     
     # ✅ RESPOSTA PARA AJAX (apenas o conteúdo do formulário)
     if request.args.get('ajax'):

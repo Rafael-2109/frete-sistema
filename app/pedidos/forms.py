@@ -39,6 +39,7 @@ class EditarPedidoForm(FlaskForm):
     - Data de expedição
     - Data de agendamento  
     - Protocolo
+    - Confirmação de agendamento
     """
     expedicao = DateField(
         "Data de Expedição", 
@@ -54,5 +55,10 @@ class EditarPedidoForm(FlaskForm):
         "Protocolo", 
         validators=[Optional()],
         description="Número do protocolo de agendamento"
+    )
+    agendamento_confirmado = BooleanField(
+        "Agendamento Confirmado",
+        validators=[Optional()],
+        description="Marque se o agendamento foi confirmado pelo cliente"
     )
     submit = SubmitField("Salvar Alterações")

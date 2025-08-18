@@ -26,6 +26,7 @@ class Pedido(db.Model):
     expedicao = db.Column(db.Date)
     agendamento = db.Column(db.Date)
     protocolo = db.Column(db.String(50))
+    agendamento_confirmado = db.Column(db.Boolean, default=False)  # Novo campo sincronizado com Separacao
 
     transportadora = db.Column(db.String(100))
     valor_frete = db.Column(db.Float)

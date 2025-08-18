@@ -103,6 +103,28 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Checkbox de confirmação de agendamento -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-check mb-3">
+                                    {{ form.agendamento_confirmado(class="form-check-input") }}
+                                    {{ form.agendamento_confirmado.label(class="form-check-label") }}
+                                    {% if form.agendamento_confirmado.description %}
+                                        <div class="form-text">
+                                            <i class="fas fa-info-circle"></i> {{ form.agendamento_confirmado.description }}
+                                        </div>
+                                    {% endif %}
+                                    {% if form.agendamento_confirmado.errors %}
+                                        <div class="text-danger">
+                                            {% for error in form.agendamento_confirmado.errors %}
+                                                <small>{{ error }}</small>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
 
                         <!-- Botões de ação -->
                         <div class="d-flex justify-content-between">
