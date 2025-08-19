@@ -124,7 +124,12 @@ def calcular_fretes_possiveis(
         print(f"[DEBUG] 🎯 CARGA DIRETA: Aplicando lógica de tabela mais cara por transportadora/UF/modalidade")
         
     # Processa todas as transportadoras
-    for at in atendimentos:        
+    for at in atendimentos:
+        # ✅ NOVO: Verificar se transportadora está ativa
+        if hasattr(at, 'transportadora') and hasattr(at.transportadora, 'ativo'):
+            if not at.transportadora.ativo:
+                continue  # Pula transportadoras inativas
+        
         # 🏢 GRUPO EMPRESARIAL: Busca tabelas em todas as transportadoras do grupo
         grupo_ids = grupo_service.obter_transportadoras_grupo(at.transportadora_id)
         
@@ -292,9 +297,8 @@ def pedidos_mesmo_uf(pedidos):
     """
     Verifica se todos os pedidos são do mesmo UF.
     Regras:
-    1. Se rota RED -> Considera SP
-    2. Se rota FOB -> Ignora
-    3. Outros casos -> Usa UF normalizado
+    1. Se rota FOB -> Ignora
+    2. Outros casos -> Usa UF normalizado
     """
     if not pedidos:
         return True
@@ -307,14 +311,7 @@ def pedidos_mesmo_uf(pedidos):
     # Pega o conjunto de UFs normalizados
     ufs = set()
     for pedido in pedidos:
-        if (
-            hasattr(pedido, "rota")
-            and pedido.rota
-            and pedido.rota.upper().strip() == "RED"
-        ):
-            ufs.add("SP")  # RED sempre é SP
-        else:
-            ufs.add(pedido.uf_normalizada)
+        ufs.add(pedido.uf_normalizada)
 
     # Se tem mais de um UF, não permite
     if len(ufs) > 1:
@@ -327,10 +324,9 @@ def normalizar_dados_pedido(pedido):
     Normaliza os dados de cidade e UF do pedido.
     Regras:
     1. Se rota FOB -> Mantém cidade/UF original
-    2. Se rota RED -> GUARULHOS/SP
-    3. Se cidade SP -> SAO PAULO/SP
-    4. Se cidade RJ -> RIO DE JANEIRO/RJ
-    5. Outros casos -> Remove acentos e converte para maiúsculo
+    2. Se cidade SP -> SAO PAULO/SP
+    3. Se cidade RJ -> RIO DE JANEIRO/RJ
+    4. Outros casos -> Remove acentos e converte para maiúsculo
     """
     
     if not pedido:
@@ -345,11 +341,6 @@ def normalizar_dados_pedido(pedido):
         pedido.cidade_normalizada = pedido.nome_cidade
         return
     
-    # Se for RED, força GUARULHOS/SP
-    if hasattr(pedido, 'rota') and pedido.rota and pedido.rota.upper().strip() == 'RED':
-        pedido.cidade_normalizada = 'GUARULHOS'
-        pedido.uf_normalizada = 'SP'
-        return
     
     # Normaliza cidade usando a função unificada
     if pedido.nome_cidade:
@@ -525,10 +516,9 @@ def buscar_cidade_unificada(pedido=None, cidade=None, uf=None, rota=None):
     """
     Função unificada para busca de cidades que implementa todas as regras:
     1. Se rota FOB -> Busca apenas por FOB
-    2. Se rota RED -> Considera como GUARULHOS/SP
-    3. Se cidade SP -> Considera como SAO PAULO
-    4. Se cidade RJ -> Considera como RIO DE JANEIRO
-    5. Normaliza nomes para comparação (maiúsculo, sem acentos)
+    2. Se cidade SP -> Considera como SAO PAULO
+    3. Se cidade RJ -> Considera como RIO DE JANEIRO
+    4. Normaliza nomes para comparação (maiúsculo, sem acentos)
     
     Pode receber:
     - Um objeto pedido
@@ -552,8 +542,8 @@ def buscar_cidade_unificada(pedido=None, cidade=None, uf=None, rota=None):
     # Normaliza a cidade considerando a rota
     cidade_normalizada = normalizar_nome_cidade(cidade, rota)
     if not cidade_normalizada:
+        # Se rota FOB, busca direto por FOB
         if rota and rota.upper() == 'FOB':
-            # Para FOB, busca direto por FOB
             return Cidade.query.filter(
                 func.upper(Cidade.nome) == 'FOB'
             ).first()
@@ -570,11 +560,3 @@ def buscar_cidade_unificada(pedido=None, cidade=None, uf=None, rota=None):
             return cidade_obj
     
     return None
-
-
-def buscar_cidade(pedido):
-    """
-    Função de compatibilidade que usa buscar_cidade_unificada.
-    Mantida para não quebrar código existente.
-    """
-    return buscar_cidade_unificada(pedido=pedido)

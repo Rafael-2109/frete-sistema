@@ -140,6 +140,7 @@
                             <th>Optante</th>
                             <th>Freteiro</th>
                             <th>Condição Pgto</th>
+                            <th>Status</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -159,6 +160,13 @@
                                 {% endif %}
                             </td>
                             <td>{{ transportadora.condicao_pgto or '-' }}</td>
+                            <td>
+                                {% if transportadora.ativo %}
+                                    <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 <button class="btn btn-sm btn-warning" onclick="editarTransportadora({{ transportadora.id }})" title="Editar">
                                     <i class="fas fa-edit"></i> Editar
@@ -245,6 +253,20 @@
                             </div>
                         </div>
                     </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="edit_ativo" name="ativo" checked>
+                                    <label class="form-check-label" for="edit_ativo">
+                                        <strong>Transportadora Ativa para Cotações</strong>
+                                        <br>
+                                        <small class="text-muted">Desmarque para excluir esta transportadora das cotações automáticas</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -277,10 +299,12 @@ function editarTransportadora(id) {
                 // Tratamento seguro para campos boolean
                 const optante = data.transportadora.optante === true || data.transportadora.optante === 'true';
                 const freteiro = data.transportadora.freteiro === true || data.transportadora.freteiro === 'true';
+                const ativo = data.transportadora.ativo !== false; // Default true se não existir
                 
                 document.getElementById('edit_optante').value = optante ? 'True' : 'False';
                 document.getElementById('edit_freteiro').value = freteiro ? 'True' : 'False';
                 document.getElementById('edit_condicao_pgto').value = data.transportadora.condicao_pgto || '';
+                document.getElementById('edit_ativo').checked = ativo;
                 
                 // Abre o modal
                 new bootstrap.Modal(document.getElementById('modalEditarTransportadora')).show();

@@ -13,6 +13,7 @@ class Transportadora(db.Model):
     optante = db.Column(db.Boolean, default=False)  # Sim/Não
     condicao_pgto = db.Column(db.String(50), nullable=True)
     freteiro = db.Column(db.Boolean, default=False)  # Define se é freteiro
+    ativo = db.Column(db.Boolean, default=True, nullable=False)  # Status ativo/inativo para cotações
 
     def __repr__(self):
         return f'<Transportadora {self.razao_social}>'

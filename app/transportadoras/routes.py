@@ -1,15 +1,13 @@
 from flask import render_template, redirect, url_for, flash, request, session, jsonify
-from flask_login import login_required, current_user
+from flask_login import login_required
 from app import db
 from app.transportadoras.forms import TransportadoraForm, ImportarTransportadorasForm
 from app.transportadoras.models import Transportadora
 from app.transportadoras import transportadoras_bp
 from app.utils.importacao.importar_transportadoras import importar_transportadoras
 from app.utils.importacao.utils_importacao import salvar_temp
-import pandas as pd
 from sqlalchemy.exc import IntegrityError
 import traceback
-from datetime import datetime
 
 @transportadoras_bp.route('/', methods=['GET', 'POST'])
 @login_required
@@ -118,7 +116,8 @@ def dados_transportadora(id):
                 'uf': transportadora.uf or '',
                 'optante': optante_valor,
                 'freteiro': freteiro_valor,
-                'condicao_pgto': transportadora.condicao_pgto or ''
+                'condicao_pgto': transportadora.condicao_pgto or '',
+                'ativo': transportadora.ativo if hasattr(transportadora, 'ativo') else True
             }
         })
     except Exception as e:
@@ -155,6 +154,8 @@ def editar_transportadora_ajax(id):
         transportadora.optante = request.form.get('optante') == 'True'
         transportadora.freteiro = request.form.get('freteiro') == 'True'
         transportadora.condicao_pgto = request.form.get('condicao_pgto', '')
+        # Campo ativo - checkbox envia 'on' quando marcado
+        transportadora.ativo = request.form.get('ativo') == 'on'
         
         # TODO: Adicionar campos de auditoria no futuro
         # transportadora.alterado_por = current_user.nome
@@ -181,4 +182,3 @@ def excluir_transportadora(id):
         flash(f'Erro ao excluir transportadora: {str(e)}', 'danger')
     
     return redirect(url_for('transportadoras.cadastrar_transportadora'))
-
