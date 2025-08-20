@@ -43,9 +43,9 @@
                 <div class="col-md-3">
                     <strong>Status:</strong><br>
                     {% if fatura.status_conferencia == 'CONFERIDO' %}
-                        <span class="badge badge-success" style="color: white; background-color: #28a745;">CONFERIDO</span>
+                    <span class="badge bg-success" style="color: white; background-color: #28a745;">CONFERIDO</span>
                     {% else %}
-                        <span class="badge badge-warning" style="color: black; background-color: #ffc107;">PENDENTE</span>
+                    <span class="badge bg-warning" style="color: black; background-color: #ffc107;">PENDENTE</span>
                     {% endif %}
                 </div>
             </div>
@@ -80,25 +80,26 @@
                     <h4 class="text-success">R$ {{ "%.2f"|format(analise_valores.valor_total_pago) }}</h4>
                 </div>
             </div>
-            
+
             <hr>
-            
+
             <div class="row">
                 <div class="col-md-6">
                     <h6>Diferença Fatura vs CTe:</h6>
                     {% if analise_valores.fatura_dentro_tolerancia %}
-                        <span class="badge badge-success badge-lg" style="color: white; background-color: #28a745;">
-                            R$ {{ "%.2f"|format(analise_valores.diferenca_fatura_cte) }} (Dentro da tolerância ≤ R$ 1,00)
-                        </span>
+                    <span class="badge bg-success badge-lg" style="color: white; background-color: #28a745;">
+                        R$ {{ "%.2f"|format(analise_valores.diferenca_fatura_cte) }} (Dentro da tolerância ≤ R$ 1,00)
+                    </span>
                     {% else %}
-                        <span class="badge badge-danger badge-lg" style="color: white; background-color: #dc3545;">
-                            R$ {{ "%.2f"|format(analise_valores.diferenca_fatura_cte) }} (Acima da tolerância > R$ 1,00)
-                        </span>
+                    <span class="badge bg-danger badge-lg" style="color: white; background-color: #dc3545;">
+                        R$ {{ "%.2f"|format(analise_valores.diferenca_fatura_cte) }} (Acima da tolerância > R$ 1,00)
+                    </span>
                     {% endif %}
                 </div>
                 <div class="col-md-6">
                     <strong style="color: black;">Diferença Considerado vs Pago:</strong><br>
-                    <span class="h5" style="color: black;">R$ {{ "%.2f"|format(analise_valores.diferenca_considerado_pago) }}</span>
+                    <span class="h5" style="color: black;">R$ {{
+                        "%.2f"|format(analise_valores.diferenca_considerado_pago) }}</span>
                 </div>
             </div>
         </div>
@@ -129,15 +130,17 @@
                         <tr>
                             <td>
                                 {% if doc.tipo == 'CTe' %}
-                                    <span class="badge badge-primary" style="color: white; background-color: #007bff;">CTe</span>
+                                <span class="badge bg-primary"
+                                    style="color: white; background-color: #007bff;">CTe</span>
                                 {% else %}
-                                    <span class="badge badge-secondary" style="color: white; background-color: #6c757d;">Despesa</span>
+                                <span class="badge bg-secondary"
+                                    style="color: white; background-color: #6c757d;">Despesa</span>
                                 {% endif %}
                             </td>
                             <td>
                                 <strong>{{ doc.numero }}</strong>
                                 {% if doc.tipo == 'Despesa' %}
-                                    <br><small class="text-muted">{{ doc.descricao }}</small>
+                                <br><small class="text-muted">{{ doc.descricao }}</small>
                                 {% endif %}
                             </td>
                             <td class="text-right">R$ {{ "%.2f"|format(doc.valor_cotado) }}</td>
@@ -148,18 +151,21 @@
                             </td>
                             <td class="text-center">
                                 {% if doc.status == 'LANÇADO' %}
-                                    <span class="badge badge-success" style="color: white; background-color: #28a745;">LANÇADO</span>
+                                <span class="badge bg-success"
+                                    style="color: white; background-color: #28a745;">LANÇADO</span>
                                 {% elif doc.status == 'APROVADO' %}
-                                    <span class="badge badge-success" style="color: white; background-color: #28a745;">APROVADO</span>
+                                <span class="badge bg-success"
+                                    style="color: white; background-color: #28a745;">APROVADO</span>
                                 {% else %}
-                                    <span class="badge badge-danger" style="color: white; background-color: #dc3545;">PENDENTE</span>
+                                <span class="badge bg-danger"
+                                    style="color: white; background-color: #dc3545;">PENDENTE</span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if doc.tipo == 'CTe' %}
-                                    {{ doc.cliente }}
+                                {{ doc.cliente }}
                                 {% else %}
-                                    <small class="text-muted">Despesa Extra</small>
+                                <small class="text-muted">Despesa Extra</small>
                                 {% endif %}
                             </td>
                         </tr>
@@ -170,7 +176,8 @@
                             <th colspan="2">TOTAIS:</th>
                             <th class="text-right">R$ {{ "%.2f"|format(analise_valores.valor_total_cte) }}</th>
                             <th class="text-right">R$ {{ "%.2f"|format(analise_valores.valor_total_considerado) }}</th>
-                            <th class="text-right"><strong>R$ {{ "%.2f"|format(analise_valores.valor_total_pago) }}</strong></th>
+                            <th class="text-right"><strong>R$ {{ "%.2f"|format(analise_valores.valor_total_pago)
+                                    }}</strong></th>
                             <th colspan="2"></th>
                         </tr>
                     </tfoot>
@@ -189,17 +196,21 @@
                 <div class="col-md-6">
                     <h6>1. Status dos Documentos:</h6>
                     {% if todos_aprovados %}
-                        <span class="badge badge-success" style="color: white; background-color: #28a745;">✅ Todos os documentos estão APROVADOS/LANÇADOS</span>
+                    <span class="badge bg-success" style="color: white; background-color: #28a745;">✅ Todos os
+                        documentos estão APROVADOS/LANÇADOS</span>
                     {% else %}
-                        <span class="badge badge-danger" style="color: white; background-color: #dc3545;">❌ Há documentos PENDENTES</span>
+                    <span class="badge bg-danger" style="color: white; background-color: #dc3545;">❌ Há documentos
+                        PENDENTES</span>
                     {% endif %}
                 </div>
                 <div class="col-md-6">
                     <h6>2. Tolerância de Valores:</h6>
                     {% if analise_valores.fatura_dentro_tolerancia %}
-                        <span class="badge badge-success" style="color: white; background-color: #28a745;">✅ Diferença dentro da tolerância (≤ R$ 1,00)</span>
+                    <span class="badge bg-success" style="color: white; background-color: #28a745;">✅ Diferença dentro
+                        da tolerância (≤ R$ 1,00)</span>
                     {% else %}
-                        <span class="badge badge-danger" style="color: white; background-color: #dc3545;">❌ Diferença acima da tolerância (> R$ 1,00)</span>
+                    <span class="badge bg-danger" style="color: white; background-color: #dc3545;">❌ Diferença acima da
+                        tolerância (> R$ 1,00)</span>
                     {% endif %}
                 </div>
             </div>
@@ -214,8 +225,8 @@
         </div>
         <div class="card-body">
             <form method="POST" action="{{ url_for('fretes.aprovar_conferencia_fatura', fatura_id=fatura.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
                 <div class="row">
                     <div class="col-md-6">
                         <div class="form-group">
@@ -224,8 +235,8 @@
                                 <div class="input-group-prepend">
                                     <span class="input-group-text">R$</span>
                                 </div>
-                                <input type="text" class="form-control" id="valor_final" name="valor_final" 
-                                       value="{{ "%.2f"|format(analise_valores.valor_total_pago) }}" required>
+                                <input type="text" class="form-control" id="valor_final" name="valor_final" value="{{ "
+                                    %.2f"|format(analise_valores.valor_total_pago) }}" required>
                             </div>
                             <small class="form-text text-muted">
                                 Sugerido: R$ {{ "%.2f"|format(analise_valores.valor_total_pago) }} (Total Pago)
@@ -235,12 +246,12 @@
                     <div class="col-md-6">
                         <div class="form-group">
                             <label for="observacoes">Observações da Conferência:</label>
-                            <textarea class="form-control" id="observacoes" name="observacoes" rows="3" 
-                                      placeholder="Observações sobre a conferência (opcional)"></textarea>
+                            <textarea class="form-control" id="observacoes" name="observacoes" rows="3"
+                                placeholder="Observações sobre a conferência (opcional)"></textarea>
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="alert alert-warning">
                     <h6><i class="fas fa-exclamation-triangle"></i> Atenção:</h6>
                     <p class="mb-0">
@@ -250,9 +261,9 @@
                         <br>• O valor da fatura será atualizado conforme informado
                     </p>
                 </div>
-                
-                <button type="submit" class="btn btn-success btn-lg" 
-                        onclick="return confirm('Confirma a aprovação da conferência desta fatura?')">
+
+                <button type="submit" class="btn btn-success btn-lg"
+                    onclick="return confirm('Confirma a aprovação da conferência desta fatura?')">
                     <i class="fas fa-check-double"></i> Aprovar Conferência
                 </button>
             </form>
@@ -271,22 +282,22 @@
                     Conferida por: <strong>{{ fatura.conferido_por }}</strong><br>
                     Data: {{ fatura.conferido_em | formatar_data_hora_brasil if fatura.conferido_em }}<br>
                     {% if fatura.observacoes_conferencia %}
-                        Observações: {{ fatura.observacoes_conferencia }}
+                    Observações: {{ fatura.observacoes_conferencia }}
                     {% endif %}
                 </p>
             </div>
-            
+
             <!-- Botão para reabrir -->
-            <form method="POST" action="{{ url_for('fretes.reabrir_fatura', fatura_id=fatura.id) }}" 
-                  style="display: inline-block;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <form method="POST" action="{{ url_for('fretes.reabrir_fatura', fatura_id=fatura.id) }}"
+                style="display: inline-block;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                 <div class="form-group">
                     <label for="motivo_reabertura">Motivo da Reabertura:</label>
-                    <input type="text" class="form-control" id="motivo_reabertura" name="motivo_reabertura" 
-                           placeholder="Informe o motivo para reabrir a fatura" required>
+                    <input type="text" class="form-control" id="motivo_reabertura" name="motivo_reabertura"
+                        placeholder="Informe o motivo para reabrir a fatura" required>
                 </div>
-                <button type="submit" class="btn btn-warning" 
-                        onclick="return confirm('Confirma a reabertura desta fatura? Isso liberará todos os CTes e despesas para edição novamente.')">
+                <button type="submit" class="btn btn-warning"
+                    onclick="return confirm('Confirma a reabertura desta fatura? Isso liberará todos os CTes e despesas para edição novamente.')">
                     <i class="fas fa-unlock"></i> Reabrir Fatura
                 </button>
             </form>
@@ -303,10 +314,10 @@
                 <h6>Esta fatura não pode ser aprovada pelos seguintes motivos:</h6>
                 <ul class="mb-0">
                     {% if not todos_aprovados %}
-                        <li>Há documentos com status PENDENTE</li>
+                    <li>Há documentos com status PENDENTE</li>
                     {% endif %}
                     {% if not analise_valores.fatura_dentro_tolerancia %}
-                        <li>Diferença entre valor da fatura e CTes acima da tolerância de R$ 1,00</li>
+                    <li>Diferença entre valor da fatura e CTes acima da tolerância de R$ 1,00</li>
                     {% endif %}
                 </ul>
             </div>
@@ -316,10 +327,10 @@
 </div>
 
 <script>
-// Formatar valor monetário
-document.getElementById('valor_final').addEventListener('input', function(e) {
-    let value = e.target.value.replace(/[^\d,]/g, '');
-    e.target.value = value;
-});
+    // Formatar valor monetário
+    document.getElementById('valor_final').addEventListener('input', function (e) {
+        let value = e.target.value.replace(/[^\d,]/g, '');
+        e.target.value = value;
+    });
 </script>
-{% endblock %} 
+{% endblock %}

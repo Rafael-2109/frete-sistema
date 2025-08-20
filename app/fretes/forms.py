@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from flask_wtf.file import FileField, FileAllowed
+from flask_wtf.file import FileField, FileAllowed, MultipleFileField
 from wtforms import StringField, FloatField, DateField, SelectField, TextAreaField, BooleanField, IntegerField, SubmitField
 from wtforms.validators import DataRequired, Optional, NumberRange, Length, ValidationError
 from app.fretes.models import DespesaExtra
@@ -108,6 +108,12 @@ class DespesaExtraForm(FlaskForm):
     
     # Valores
     valor_despesa = FloatField('Valor da Despesa', validators=[DataRequired(), NumberRange(min=0)])
+    
+    # Anexos de emails
+    emails_anexados = MultipleFileField('Anexar Emails (.msg)', 
+                                       validators=[
+                                           FileAllowed(['msg'], 'Apenas arquivos .msg são permitidos')
+                                       ])
     
     observacoes = TextAreaField('Observações')
     

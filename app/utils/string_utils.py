@@ -21,10 +21,9 @@ def normalizar_nome_cidade(nome, rota=None):
     """
     Normaliza o nome da cidade seguindo as regras:
     1. Se rota FOB -> None (será tratado separadamente)
-    2. Se rota RED -> GUARULHOS/SP
-    3. Se cidade SP -> SAO PAULO
-    4. Se cidade RJ -> RIO DE JANEIRO
-    5. Outros casos -> Remove acentos e converte para maiúsculo
+    2. Se cidade SP -> SAO PAULO
+    3. Se cidade RJ -> RIO DE JANEIRO
+    4. Outros casos -> Remove acentos e converte para maiúsculo
     """
     if not nome:
         return None
@@ -37,8 +36,6 @@ def normalizar_nome_cidade(nome, rota=None):
         rota = rota.strip().upper()
         if rota == 'FOB':
             return None
-        if rota == 'RED':
-            return 'GUARULHOS'
     
     # Casos especiais de cidade
     if nome in ['SP', 'SAO PAULO', 'SÃO PAULO', 'S PAULO', 'S. PAULO']:

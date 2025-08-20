@@ -84,55 +84,58 @@
                 </div>
                 <div class="card-body">
                     {% if despesas_sem_fatura %}
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Frete</th>
-                                        <th>Cliente</th>
-                                        <th>Transportadora</th>
-                                        <th>Tipo Despesa</th>
-                                        <th>Valor</th>
-                                        <th>Vencimento</th>
-                                        <th>Criado em</th>
-                                        <th class="text-center">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for despesa in despesas_sem_fatura %}
-                                    <tr>
-                                        <td><strong>#{{ despesa.id }}</strong></td>
-                                        <td>
-                                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete.id) }}">
-                                                Frete #{{ despesa.frete.id }}
-                                            </a>
-                                        </td>
-                                        <td>{{ despesa.frete.nome_cliente[:25] }}{% if despesa.frete.nome_cliente|length > 25 %}...{% endif %}</td>
-                                        <td>{{ despesa.frete.transportadora.razao_social[:20] }}{% if despesa.frete.transportadora.razao_social|length > 20 %}...{% endif %}</td>
-                                        <td>
-                                            <span class="badge badge-info" style="color: white; background-color: #17a2b8;">{{ despesa.tipo_despesa }}</span>
-                                        </td>
-                                        <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
-                                        <td>{{ despesa.vencimento_despesa | formatar_data_segura if despesa.vencimento_despesa else 'N/A' }}</td>
-                                        <td>{{ despesa.criado_em | formatar_data_hora_brasil }}</td>
-                                        <td class="text-center">
-                                            <a href="{{ url_for('fretes.vincular_despesa_fatura', despesa_id=despesa.id) }}" 
-                                               class="btn btn-success btn-sm" 
-                                               title="Vincular à Fatura">
-                                                <i class="fas fa-link"></i> Vincular
-                                            </a>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Frete</th>
+                                    <th>Cliente</th>
+                                    <th>Transportadora</th>
+                                    <th>Tipo Despesa</th>
+                                    <th>Valor</th>
+                                    <th>Vencimento</th>
+                                    <th>Criado em</th>
+                                    <th class="text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for despesa in despesas_sem_fatura %}
+                                <tr>
+                                    <td><strong>#{{ despesa.id }}</strong></td>
+                                    <td>
+                                        <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete.id) }}">
+                                            Frete #{{ despesa.frete.id }}
+                                        </a>
+                                    </td>
+                                    <td>{{ despesa.frete.nome_cliente[:25] }}{% if despesa.frete.nome_cliente|length >
+                                        25 %}...{% endif %}</td>
+                                    <td>{{ despesa.frete.transportadora.razao_social[:20] }}{% if
+                                        despesa.frete.transportadora.razao_social|length > 20 %}...{% endif %}</td>
+                                    <td>
+                                        <span class="badge bg-info" style="color: white; background-color: #17a2b8;">{{
+                                            despesa.tipo_despesa }}</span>
+                                    </td>
+                                    <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
+                                    <td>{{ despesa.vencimento_despesa | formatar_data_segura if
+                                        despesa.vencimento_despesa else 'N/A' }}</td>
+                                    <td>{{ despesa.criado_em | formatar_data_hora_brasil }}</td>
+                                    <td class="text-center">
+                                        <a href="{{ url_for('fretes.vincular_despesa_fatura', despesa_id=despesa.id) }}"
+                                            class="btn btn-success btn-sm" title="Vincular à Fatura">
+                                            <i class="fas fa-link"></i> Vincular
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                     {% else %}
-                        <div class="alert alert-success">
-                            <i class="fas fa-check-circle"></i>
-                            <strong>Excelente!</strong> Todas as despesas extras já estão vinculadas a faturas.
-                        </div>
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i>
+                        <strong>Excelente!</strong> Todas as despesas extras já estão vinculadas a faturas.
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -151,65 +154,74 @@
                 </div>
                 <div class="card-body">
                     {% if despesas_com_fatura %}
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Frete</th>
-                                        <th>Cliente</th>
-                                        <th>Transportadora</th>
-                                        <th>Tipo Despesa</th>
-                                        <th>Valor</th>
-                                        <th>Fatura</th>
-                                        <th>Vencimento</th>
-                                        <th class="text-center">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for despesa in despesas_com_fatura %}
-                                    <tr>
-                                        <td><strong>#{{ despesa.id }}</strong></td>
-                                        <td>
-                                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete.id) }}">
-                                                Frete #{{ despesa.frete.id }}
-                                            </a>
-                                        </td>
-                                        <td>{{ despesa.frete.nome_cliente[:25] }}{% if despesa.frete.nome_cliente|length > 25 %}...{% endif %}</td>
-                                        <td>{{ despesa.frete.transportadora.razao_social[:20] }}{% if despesa.frete.transportadora.razao_social|length > 20 %}...{% endif %}</td>
-                                        <td>
-                                            <span class="badge badge-success" style="color: white; background-color: #28a745;">{{ despesa.tipo_despesa }}</span>
-                                        </td>
-                                        <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
-                                        <td>
-                                            {% if despesa.observacoes and 'Fatura:' in despesa.observacoes %}
-                                                {% set fatura_info = despesa.observacoes.split('Fatura:')[1].split('|')[0].strip() %}
-                                                <span class="badge badge-primary" style="color: white; background-color: #007bff;">{{ fatura_info }}</span>
-                                            {% else %}
-                                                <span class="text-muted">N/A</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ despesa.vencimento_despesa | formatar_data_segura if despesa.vencimento_despesa else 'N/A' }}</td>
-                                        <td class="text-center">
-                                            <form method="POST" action="{{ url_for('fretes.desvincular_despesa_fatura', despesa_id=despesa.id) }}" 
-                                                  style="display: inline-block;"
-                                                  onsubmit="return confirm('Deseja realmente desvincular esta despesa da fatura?')">
-                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                                <button type="submit" class="btn btn-warning btn-sm" title="Desvincular da Fatura">
-                                                    <i class="fas fa-unlink"></i>
-                                                </button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Frete</th>
+                                    <th>Cliente</th>
+                                    <th>Transportadora</th>
+                                    <th>Tipo Despesa</th>
+                                    <th>Valor</th>
+                                    <th>Fatura</th>
+                                    <th>Vencimento</th>
+                                    <th class="text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for despesa in despesas_com_fatura %}
+                                <tr>
+                                    <td><strong>#{{ despesa.id }}</strong></td>
+                                    <td>
+                                        <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete.id) }}">
+                                            Frete #{{ despesa.frete.id }}
+                                        </a>
+                                    </td>
+                                    <td>{{ despesa.frete.nome_cliente[:25] }}{% if despesa.frete.nome_cliente|length >
+                                        25 %}...{% endif %}</td>
+                                    <td>{{ despesa.frete.transportadora.razao_social[:20] }}{% if
+                                        despesa.frete.transportadora.razao_social|length > 20 %}...{% endif %}</td>
+                                    <td>
+                                        <span class="badge bg-success"
+                                            style="color: white; background-color: #28a745;">{{ despesa.tipo_despesa
+                                            }}</span>
+                                    </td>
+                                    <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
+                                    <td>
+                                        {% if despesa.observacoes and 'Fatura:' in despesa.observacoes %}
+                                        {% set fatura_info =
+                                        despesa.observacoes.split('Fatura:')[1].split('|')[0].strip() %}
+                                        <span class="badge bg-primary"
+                                            style="color: white; background-color: #007bff;">{{ fatura_info }}</span>
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ despesa.vencimento_despesa | formatar_data_segura if
+                                        despesa.vencimento_despesa else 'N/A' }}</td>
+                                    <td class="text-center">
+                                        <form method="POST"
+                                            action="{{ url_for('fretes.desvincular_despesa_fatura', despesa_id=despesa.id) }}"
+                                            style="display: inline-block;"
+                                            onsubmit="return confirm('Deseja realmente desvincular esta despesa da fatura?')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                                            <button type="submit" class="btn btn-warning btn-sm"
+                                                title="Desvincular da Fatura">
+                                                <i class="fas fa-unlink"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                     {% else %}
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle"></i>
-                            <strong>Informação:</strong> Nenhuma despesa extra está vinculada a faturas ainda.
-                        </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Informação:</strong> Nenhuma despesa extra está vinculada a faturas ainda.
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -228,4 +240,4 @@
         </div>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}

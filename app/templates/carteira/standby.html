@@ -14,7 +14,7 @@
                 </h1>
                 <small class="text-muted"><span id="contador-standby">0</span> pedidos em standby</small>
             </div>
-            
+
             <div class="btn-toolbar" role="toolbar">
                 <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary btn-sm">
                     <i class="fas fa-arrow-left me-1"></i> Voltar
@@ -33,11 +33,11 @@
                             <span class="input-group-text">
                                 <i class="fas fa-search"></i>
                             </span>
-                            <input type="text" class="form-control" id="filtro-busca-standby" 
-                                   placeholder="Buscar pedido, cliente, CNPJ...">
+                            <input type="text" class="form-control" id="filtro-busca-standby"
+                                placeholder="Buscar pedido, cliente, CNPJ...">
                         </div>
                     </div>
-                    
+
                     <div class="col-md-3">
                         <select class="form-select form-select-sm" id="filtro-tipo-standby">
                             <option value="">Todos os Tipos</option>
@@ -46,7 +46,7 @@
                             <option value="Aguardar PCP">Aguardar PCP</option>
                         </select>
                     </div>
-                    
+
                     <div class="col-md-3">
                         <select class="form-select form-select-sm" id="filtro-status-standby">
                             <option value="">Todos os Status</option>
@@ -55,7 +55,7 @@
                             <option value="SALDO">Saldo</option>
                         </select>
                     </div>
-                    
+
                     <div class="col-md-2 text-end">
                         <button class="btn btn-primary btn-sm" onclick="carregarPedidosStandby()">
                             <i class="fas fa-sync-alt me-1"></i> Atualizar
@@ -74,7 +74,7 @@
                     <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
                     <p class="mt-2">Carregando pedidos em standby...</p>
                 </div>
-                
+
                 <div id="tabela-standby" style="display: none;">
                     <div class="table-responsive">
                         <table class="table table-hover">
@@ -102,7 +102,7 @@
                         </table>
                     </div>
                 </div>
-                
+
                 <div id="sem-dados-standby" class="text-center p-4" style="display: none;">
                     <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
                     <p class="text-muted">Nenhum pedido em standby encontrado</p>
@@ -115,87 +115,87 @@
 
 {% block styles %}
 <style>
-.btn-status-standby {
-    min-width: 100px;
-    font-size: 0.875rem;
-}
+    .btn-status-standby {
+        min-width: 100px;
+        font-size: 0.875rem;
+    }
 
-.badge-tipo-standby {
-    font-size: 0.875rem;
-    padding: 0.375rem 0.75rem;
-}
+    .badge-tipo-standby {
+        font-size: 0.875rem;
+        padding: 0.375rem 0.75rem;
+    }
 
-.produtos-standby {
-    background-color: #f8f9fa;
-    font-size: 0.875rem;
-}
+    .produtos-standby {
+        background-color: #f8f9fa;
+        font-size: 0.875rem;
+    }
 
-.produtos-standby td {
-    padding: 0.5rem;
-}
+    .produtos-standby td {
+        padding: 0.5rem;
+    }
 
-.btn-acao-standby {
-    margin: 0 2px;
-}
+    .btn-acao-standby {
+        margin: 0 2px;
+    }
 </style>
 {% endblock %}
 
 {% block scripts %}
 <script>
-let pedidosStandby = [];
+    let pedidosStandby = [];
 
-// Carregar pedidos ao iniciar a página
-document.addEventListener('DOMContentLoaded', function() {
-    carregarPedidosStandby();
-    
-    // Configurar filtros
-    document.getElementById('filtro-busca-standby').addEventListener('input', filtrarPedidos);
-    document.getElementById('filtro-tipo-standby').addEventListener('change', filtrarPedidos);
-    document.getElementById('filtro-status-standby').addEventListener('change', filtrarPedidos);
-});
+    // Carregar pedidos ao iniciar a página
+    document.addEventListener('DOMContentLoaded', function () {
+        carregarPedidosStandby();
 
-async function carregarPedidosStandby() {
-    const loading = document.getElementById('loading-standby');
-    const tabela = document.getElementById('tabela-standby');
-    const semDados = document.getElementById('sem-dados-standby');
-    
-    loading.style.display = 'block';
-    tabela.style.display = 'none';
-    semDados.style.display = 'none';
-    
-    try {
-        const response = await fetch('/carteira/api/standby/listar');
-        const data = await response.json();
-        
-        if (data.success) {
-            pedidosStandby = data.pedidos;
-            document.getElementById('contador-standby').textContent = pedidosStandby.length;
-            
-            if (pedidosStandby.length > 0) {
-                renderizarTabela(pedidosStandby);
-                tabela.style.display = 'block';
+        // Configurar filtros
+        document.getElementById('filtro-busca-standby').addEventListener('input', filtrarPedidos);
+        document.getElementById('filtro-tipo-standby').addEventListener('change', filtrarPedidos);
+        document.getElementById('filtro-status-standby').addEventListener('change', filtrarPedidos);
+    });
+
+    async function carregarPedidosStandby() {
+        const loading = document.getElementById('loading-standby');
+        const tabela = document.getElementById('tabela-standby');
+        const semDados = document.getElementById('sem-dados-standby');
+
+        loading.style.display = 'block';
+        tabela.style.display = 'none';
+        semDados.style.display = 'none';
+
+        try {
+            const response = await fetch('/carteira/api/standby/listar');
+            const data = await response.json();
+
+            if (data.success) {
+                pedidosStandby = data.pedidos;
+                document.getElementById('contador-standby').textContent = pedidosStandby.length;
+
+                if (pedidosStandby.length > 0) {
+                    renderizarTabela(pedidosStandby);
+                    tabela.style.display = 'block';
+                } else {
+                    semDados.style.display = 'block';
+                }
             } else {
-                semDados.style.display = 'block';
+                showAlert('error', 'Erro ao carregar pedidos');
             }
-        } else {
+        } catch (error) {
+            console.error('Erro ao carregar standby:', error);
             showAlert('error', 'Erro ao carregar pedidos');
+        } finally {
+            loading.style.display = 'none';
         }
-    } catch (error) {
-        console.error('Erro ao carregar standby:', error);
-        showAlert('error', 'Erro ao carregar pedidos');
-    } finally {
-        loading.style.display = 'none';
     }
-}
 
-function renderizarTabela(pedidos) {
-    const tbody = document.getElementById('tbody-standby');
-    tbody.innerHTML = '';
-    
-    pedidos.forEach(pedido => {
-        // Linha principal do pedido
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
+    function renderizarTabela(pedidos) {
+        const tbody = document.getElementById('tbody-standby');
+        tbody.innerHTML = '';
+
+        pedidos.forEach(pedido => {
+            // Linha principal do pedido
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
             <td>
                 <button class="btn btn-link btn-sm p-0" onclick="toggleProdutos('${pedido.num_pedido}')">
                     <i class="fas fa-chevron-right" id="icon-${pedido.num_pedido}"></i>
@@ -210,7 +210,7 @@ function renderizarTabela(pedidos) {
             </td>
             <td>${pedido.data_pedido || '-'}</td>
             <td>
-                <span class="badge badge-tipo-standby bg-info">${pedido.tipo_standby}</span>
+                <span class="badge bg-tipo-standby bg-info">${pedido.tipo_standby}</span>
             </td>
             <td>
                 <span class="badge ${getBadgeClassStatus(pedido.status_standby)}" 
@@ -247,14 +247,14 @@ function renderizarTabela(pedidos) {
                 </button>
             </td>
         `;
-        tbody.appendChild(tr);
-        
-        // Linha de produtos (oculta)
-        const trProdutos = document.createElement('tr');
-        trProdutos.id = `produtos-${pedido.num_pedido}`;
-        trProdutos.className = 'produtos-standby';
-        trProdutos.style.display = 'none';
-        trProdutos.innerHTML = `
+            tbody.appendChild(tr);
+
+            // Linha de produtos (oculta)
+            const trProdutos = document.createElement('tr');
+            trProdutos.id = `produtos-${pedido.num_pedido}`;
+            trProdutos.className = 'produtos-standby';
+            trProdutos.style.display = 'none';
+            trProdutos.innerHTML = `
             <td colspan="10">
                 <div class="p-3">
                     <h6 class="mb-2">Produtos do Pedido ${pedido.num_pedido}:</h6>
@@ -283,159 +283,159 @@ function renderizarTabela(pedidos) {
                 </div>
             </td>
         `;
-        tbody.appendChild(trProdutos);
-    });
-}
-
-function toggleProdutos(numPedido) {
-    const produtosRow = document.getElementById(`produtos-${numPedido}`);
-    const icon = document.getElementById(`icon-${numPedido}`);
-    
-    if (produtosRow.style.display === 'none') {
-        produtosRow.style.display = 'table-row';
-        icon.className = 'fas fa-chevron-down';
-    } else {
-        produtosRow.style.display = 'none';
-        icon.className = 'fas fa-chevron-right';
-    }
-}
-
-function toggleTodosPedidos() {
-    const todasLinhasProdutos = document.querySelectorAll('.produtos-standby');
-    const primeiraLinha = todasLinhasProdutos[0];
-    const mostrar = primeiraLinha && primeiraLinha.style.display === 'none';
-    
-    todasLinhasProdutos.forEach(linha => {
-        linha.style.display = mostrar ? 'table-row' : 'none';
-        const numPedido = linha.id.replace('produtos-', '');
-        const icon = document.getElementById(`icon-${numPedido}`);
-        if (icon) {
-            icon.className = mostrar ? 'fas fa-chevron-down' : 'fas fa-chevron-right';
-        }
-    });
-}
-
-async function alterarStatus(numPedido, novoStatus) {
-    if (!confirm(`Confirma alterar o status do pedido ${numPedido} para ${novoStatus}?`)) {
-        return;
-    }
-    
-    try {
-        const response = await fetch('/carteira/api/standby/atualizar-status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                num_pedido: numPedido,
-                novo_status: novoStatus
-            })
+            tbody.appendChild(trProdutos);
         });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showAlert('success', data.message);
-            
-            if (novoStatus === 'CONFIRMADO') {
-                // Remover da lista se foi confirmado
-                setTimeout(() => {
-                    carregarPedidosStandby();
-                }, 1500);
-            } else {
-                // Apenas atualizar o status na tabela
-                const pedido = pedidosStandby.find(p => p.num_pedido === numPedido);
-                if (pedido) {
-                    pedido.status_standby = novoStatus;
-                    renderizarTabela(pedidosStandby);
-                }
-            }
-        } else {
-            showAlert('error', data.message || 'Erro ao atualizar status');
-        }
-    } catch (error) {
-        console.error('Erro ao alterar status:', error);
-        showAlert('error', 'Erro ao processar solicitação');
     }
-}
 
-function filtrarPedidos() {
-    const busca = document.getElementById('filtro-busca-standby').value.toLowerCase();
-    const tipo = document.getElementById('filtro-tipo-standby').value;
-    const status = document.getElementById('filtro-status-standby').value;
-    
-    const pedidosFiltrados = pedidosStandby.filter(pedido => {
-        // Filtro de busca
-        if (busca) {
-            const textoBusca = `${pedido.num_pedido} ${pedido.nome_cliente} ${pedido.cnpj_cliente}`.toLowerCase();
-            if (!textoBusca.includes(busca)) return false;
+    function toggleProdutos(numPedido) {
+        const produtosRow = document.getElementById(`produtos-${numPedido}`);
+        const icon = document.getElementById(`icon-${numPedido}`);
+
+        if (produtosRow.style.display === 'none') {
+            produtosRow.style.display = 'table-row';
+            icon.className = 'fas fa-chevron-down';
+        } else {
+            produtosRow.style.display = 'none';
+            icon.className = 'fas fa-chevron-right';
         }
-        
-        // Filtro de tipo
-        if (tipo && pedido.tipo_standby !== tipo) return false;
-        
-        // Filtro de status
-        if (status && pedido.status_standby !== status) return false;
-        
-        return true;
-    });
-    
-    renderizarTabela(pedidosFiltrados);
-}
+    }
 
-function getBadgeClassStatus(status) {
-    const classes = {
-        'ATIVO': 'bg-success',
-        'BLOQ. COML.': 'bg-warning text-dark',
-        'SALDO': 'bg-info'
-    };
-    return classes[status] || 'bg-secondary';
-}
+    function toggleTodosPedidos() {
+        const todasLinhasProdutos = document.querySelectorAll('.produtos-standby');
+        const primeiraLinha = todasLinhasProdutos[0];
+        const mostrar = primeiraLinha && primeiraLinha.style.display === 'none';
 
-function formatarMoeda(valor) {
-    return new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-    }).format(valor);
-}
+        todasLinhasProdutos.forEach(linha => {
+            linha.style.display = mostrar ? 'table-row' : 'none';
+            const numPedido = linha.id.replace('produtos-', '');
+            const icon = document.getElementById(`icon-${numPedido}`);
+            if (icon) {
+                icon.className = mostrar ? 'fas fa-chevron-down' : 'fas fa-chevron-right';
+            }
+        });
+    }
 
-function formatarNumero(valor, decimais = 2) {
-    return parseFloat(valor).toFixed(decimais);
-}
+    async function alterarStatus(numPedido, novoStatus) {
+        if (!confirm(`Confirma alterar o status do pedido ${numPedido} para ${novoStatus}?`)) {
+            return;
+        }
 
-function showAlert(type, message) {
-    const alertTypes = {
-        'success': 'alert-success',
-        'error': 'alert-danger',
-        'warning': 'alert-warning',
-        'info': 'alert-info'
-    };
-    
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert ${alertTypes[type]} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
-    alertDiv.style.zIndex = '9999';
-    alertDiv.innerHTML = `
+        try {
+            const response = await fetch('/carteira/api/standby/atualizar-status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    num_pedido: numPedido,
+                    novo_status: novoStatus
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('success', data.message);
+
+                if (novoStatus === 'CONFIRMADO') {
+                    // Remover da lista se foi confirmado
+                    setTimeout(() => {
+                        carregarPedidosStandby();
+                    }, 1500);
+                } else {
+                    // Apenas atualizar o status na tabela
+                    const pedido = pedidosStandby.find(p => p.num_pedido === numPedido);
+                    if (pedido) {
+                        pedido.status_standby = novoStatus;
+                        renderizarTabela(pedidosStandby);
+                    }
+                }
+            } else {
+                showAlert('error', data.message || 'Erro ao atualizar status');
+            }
+        } catch (error) {
+            console.error('Erro ao alterar status:', error);
+            showAlert('error', 'Erro ao processar solicitação');
+        }
+    }
+
+    function filtrarPedidos() {
+        const busca = document.getElementById('filtro-busca-standby').value.toLowerCase();
+        const tipo = document.getElementById('filtro-tipo-standby').value;
+        const status = document.getElementById('filtro-status-standby').value;
+
+        const pedidosFiltrados = pedidosStandby.filter(pedido => {
+            // Filtro de busca
+            if (busca) {
+                const textoBusca = `${pedido.num_pedido} ${pedido.nome_cliente} ${pedido.cnpj_cliente}`.toLowerCase();
+                if (!textoBusca.includes(busca)) return false;
+            }
+
+            // Filtro de tipo
+            if (tipo && pedido.tipo_standby !== tipo) return false;
+
+            // Filtro de status
+            if (status && pedido.status_standby !== status) return false;
+
+            return true;
+        });
+
+        renderizarTabela(pedidosFiltrados);
+    }
+
+    function getBadgeClassStatus(status) {
+        const classes = {
+            'ATIVO': 'bg-success',
+            'BLOQ. COML.': 'bg-warning text-dark',
+            'SALDO': 'bg-info'
+        };
+        return classes[status] || 'bg-secondary';
+    }
+
+    function formatarMoeda(valor) {
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        }).format(valor);
+    }
+
+    function formatarNumero(valor, decimais = 2) {
+        return parseFloat(valor).toFixed(decimais);
+    }
+
+    function showAlert(type, message) {
+        const alertTypes = {
+            'success': 'alert-success',
+            'error': 'alert-danger',
+            'warning': 'alert-warning',
+            'info': 'alert-info'
+        };
+
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert ${alertTypes[type]} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+        alertDiv.style.zIndex = '9999';
+        alertDiv.innerHTML = `
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
-    
-    document.body.appendChild(alertDiv);
-    
-    setTimeout(() => {
-        alertDiv.remove();
-    }, 5000);
-}
 
-// Funções para o modal de observações
-let pedidoAtualObservacoes = null;
+        document.body.appendChild(alertDiv);
 
-function abrirModalObservacoes(numPedido, observacoes) {
-    pedidoAtualObservacoes = numPedido;
-    
-    // Criar modal se não existir
-    let modal = document.getElementById('modalObservacoes');
-    if (!modal) {
-        const modalHtml = `
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 5000);
+    }
+
+    // Funções para o modal de observações
+    let pedidoAtualObservacoes = null;
+
+    function abrirModalObservacoes(numPedido, observacoes) {
+        pedidoAtualObservacoes = numPedido;
+
+        // Criar modal se não existir
+        let modal = document.getElementById('modalObservacoes');
+        if (!modal) {
+            const modalHtml = `
             <div class="modal fade" id="modalObservacoes" tabindex="-1">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
@@ -464,20 +464,20 @@ function abrirModalObservacoes(numPedido, observacoes) {
                 </div>
             </div>
         `;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        modal = document.getElementById('modalObservacoes');
-    }
-    
-    // Atualizar número do pedido
-    document.getElementById('numPedidoModal').textContent = numPedido;
-    
-    // Limpar campo de nova observação
-    document.getElementById('novaObservacao').value = '';
-    
-    // Mostrar observações existentes
-    const listaObservacoes = document.getElementById('listaObservacoes');
-    if (observacoes && observacoes.length > 0) {
-        listaObservacoes.innerHTML = observacoes.map(obs => `
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            modal = document.getElementById('modalObservacoes');
+        }
+
+        // Atualizar número do pedido
+        document.getElementById('numPedidoModal').textContent = numPedido;
+
+        // Limpar campo de nova observação
+        document.getElementById('novaObservacao').value = '';
+
+        // Mostrar observações existentes
+        const listaObservacoes = document.getElementById('listaObservacoes');
+        if (observacoes && observacoes.length > 0) {
+            listaObservacoes.innerHTML = observacoes.map(obs => `
             <div class="card mb-2">
                 <div class="card-body py-2">
                     <div class="d-flex justify-content-between align-items-start">
@@ -490,46 +490,46 @@ function abrirModalObservacoes(numPedido, observacoes) {
                 </div>
             </div>
         `).join('');
-    } else {
-        listaObservacoes.innerHTML = '<p class="text-muted">Nenhuma observação registrada ainda.</p>';
-    }
-    
-    // Mostrar modal
-    const modalBS = new bootstrap.Modal(modal);
-    modalBS.show();
-}
-
-function salvarObservacao() {
-    const observacao = document.getElementById('novaObservacao').value.trim();
-    
-    if (!observacao) {
-        showAlert('warning', 'Por favor, digite uma observação');
-        return;
-    }
-    
-    fetch('/carteira/api/standby/adicionar-observacao', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            num_pedido: pedidoAtualObservacoes,
-            observacao: observacao
-        })
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        } else {
+            listaObservacoes.innerHTML = '<p class="text-muted">Nenhuma observação registrada ainda.</p>';
         }
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            showAlert('success', 'Observação adicionada com sucesso');
-            
-            // Atualizar lista de observações no modal
-            const listaObservacoes = document.getElementById('listaObservacoes');
-            const novaObsHtml = `
+
+        // Mostrar modal
+        const modalBS = new bootstrap.Modal(modal);
+        modalBS.show();
+    }
+
+    function salvarObservacao() {
+        const observacao = document.getElementById('novaObservacao').value.trim();
+
+        if (!observacao) {
+            showAlert('warning', 'Por favor, digite uma observação');
+            return;
+        }
+
+        fetch('/carteira/api/standby/adicionar-observacao', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                num_pedido: pedidoAtualObservacoes,
+                observacao: observacao
+            })
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    showAlert('success', 'Observação adicionada com sucesso');
+
+                    // Atualizar lista de observações no modal
+                    const listaObservacoes = document.getElementById('listaObservacoes');
+                    const novaObsHtml = `
                 <div class="card mb-2">
                     <div class="card-body py-2">
                         <div class="d-flex justify-content-between align-items-start">
@@ -542,29 +542,29 @@ function salvarObservacao() {
                     </div>
                 </div>
             `;
-            
-            if (listaObservacoes.innerHTML.includes('Nenhuma observação')) {
-                listaObservacoes.innerHTML = novaObsHtml;
-            } else {
-                listaObservacoes.insertAdjacentHTML('beforeend', novaObsHtml);
-            }
-            
-            // Limpar campo
-            document.getElementById('novaObservacao').value = '';
-            
-            // Recarregar dados para atualizar contador
-            carregarDados();
-        } else {
-            showAlert('error', 'Erro ao adicionar observação: ' + (data.message || 'Erro desconhecido'));
-        }
-    })
-    .catch(error => {
-        console.error('Erro na requisição:', error);
-        // Não mostrar alert duplicado se já foi tratado acima
-        if (error.message && error.message.includes('HTTP error')) {
-            showAlert('error', 'Erro de conexão ao adicionar observação');
-        }
-    });
-}
+
+                    if (listaObservacoes.innerHTML.includes('Nenhuma observação')) {
+                        listaObservacoes.innerHTML = novaObsHtml;
+                    } else {
+                        listaObservacoes.insertAdjacentHTML('beforeend', novaObsHtml);
+                    }
+
+                    // Limpar campo
+                    document.getElementById('novaObservacao').value = '';
+
+                    // Recarregar dados para atualizar contador
+                    carregarDados();
+                } else {
+                    showAlert('error', 'Erro ao adicionar observação: ' + (data.message || 'Erro desconhecido'));
+                }
+            })
+            .catch(error => {
+                console.error('Erro na requisição:', error);
+                // Não mostrar alert duplicado se já foi tratado acima
+                if (error.message && error.message.includes('HTTP error')) {
+                    showAlert('error', 'Erro de conexão ao adicionar observação');
+                }
+            });
+    }
 </script>
 {% endblock %}

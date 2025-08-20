@@ -1,0 +1,165 @@
+"""
+Utilitário para processar e armazenar emails .msg
+"""
+import os
+import json
+import extract_msg
+from datetime import datetime
+from werkzeug.utils import secure_filename
+from flask import current_app
+from typing import Optional, Dict, Any
+from app.utils.file_storage import get_file_storage
+
+
+class EmailHandler:
+    """
+    Classe para processar emails .msg usando FileStorage centralizado
+    """
+    
+    def __init__(self):
+        """Inicializa o handler com FileStorage"""
+        self.storage = get_file_storage()
+    
+    def processar_email_msg(self, arquivo_msg) -> Optional[Dict[str, Any]]:
+        """
+        Processa arquivo .msg e extrai metadados
+        
+        Args:
+            arquivo_msg: FileStorage object do Flask
+            
+        Returns:
+            Dict com metadados do email ou None se erro
+        """
+        try:
+            # Salva temporariamente o arquivo
+            temp_path = f"/tmp/{secure_filename(arquivo_msg.filename)}"
+            arquivo_msg.save(temp_path)
+            
+            # Processa o arquivo .msg
+            msg = extract_msg.openMsg(temp_path)
+            
+            # Extrai metadados
+            metadados = {
+                'remetente': msg.sender,
+                'destinatarios': json.dumps(msg.to.split(';')) if msg.to else '[]',
+                'cc': json.dumps(msg.cc.split(';')) if msg.cc else '[]',  # Extrai CC
+                'bcc': json.dumps(msg.bcc.split(';')) if hasattr(msg, 'bcc') and msg.bcc else '[]',  # Extrai BCC (nem sempre visível)
+                'assunto': msg.subject,
+                'data_envio': self._parse_date(msg.date),
+                'tem_anexos': len(msg.attachments) > 0,
+                'qtd_anexos': len(msg.attachments),
+                'conteudo_preview': (msg.body or '')[:500],  # Primeiros 500 chars
+                'tamanho_bytes': os.path.getsize(temp_path)
+            }
+            
+            # Limpa arquivo temporário
+            msg.close()
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            
+            return metadados
+            
+        except Exception as e:
+            current_app.logger.error(f"❌ Erro ao processar email .msg: {str(e)}")
+            # Limpa arquivo temporário em caso de erro
+            if 'temp_path' in locals() and os.path.exists(temp_path):
+                os.remove(temp_path)
+            return None
+    
+    def _parse_date(self, date_str: str) -> Optional[datetime]:
+        """
+        Converte string de data do email para datetime
+        """
+        if not date_str:
+            return None
+            
+        try:
+            # Tenta diferentes formatos comuns
+            formats = [
+                '%a, %d %b %Y %H:%M:%S %z',
+                '%d/%m/%Y %H:%M:%S',
+                '%Y-%m-%d %H:%M:%S'
+            ]
+            
+            for fmt in formats:
+                try:
+                    return datetime.strptime(date_str.strip(), fmt)
+                except:
+                    continue
+            
+            # Se nenhum formato funcionou, tenta parse básico
+            from dateutil import parser
+            return parser.parse(date_str)
+            
+        except Exception as e:
+            current_app.logger.warning(f"⚠️ Não foi possível parsear data: {date_str}")
+            return None
+    
+    def upload_email(self, arquivo_msg, despesa_id: int, usuario: str) -> Optional[str]:
+        """
+        Faz upload do arquivo .msg usando FileStorage centralizado
+        
+        Args:
+            arquivo_msg: FileStorage object
+            despesa_id: ID da despesa
+            usuario: Nome do usuário
+            
+        Returns:
+            Caminho do arquivo ou None se erro
+        """
+        try:
+            # Define pasta e nome do arquivo
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            nome_seguro = secure_filename(arquivo_msg.filename)
+            nome_final = f"{timestamp}_{nome_seguro}"
+            
+            # Usa FileStorage centralizado
+            caminho = self.storage.save_file(
+                file=arquivo_msg,
+                folder=f"fretes/despesas/{despesa_id}/emails",
+                filename=nome_final,
+                allowed_extensions=['msg']
+            )
+            
+            if caminho:
+                current_app.logger.info(f"✅ Email salvo: {caminho}")
+                return caminho
+            else:
+                current_app.logger.error("❌ Falha ao salvar email")
+                return None
+                
+        except Exception as e:
+            current_app.logger.error(f"❌ Erro no upload do email: {str(e)}")
+            return None
+    
+    def get_email_url(self, caminho: str) -> Optional[str]:
+        """
+        Gera URL para acessar o email
+        
+        Args:
+            caminho: Caminho do arquivo
+            
+        Returns:
+            URL para download ou None se erro
+        """
+        try:
+            return self.storage.get_file_url(caminho)
+        except Exception as e:
+            current_app.logger.error(f"❌ Erro ao gerar URL do email: {str(e)}")
+            return None
+    
+    def deletar_email(self, caminho: str) -> bool:
+        """
+        Deleta arquivo de email
+        
+        Args:
+            caminho: Caminho do arquivo
+            
+        Returns:
+            True se sucesso, False se erro
+        """
+        try:
+            return self.storage.delete_file(caminho)
+        except Exception as e:
+            current_app.logger.error(f"❌ Erro ao deletar email: {str(e)}")
+            return False

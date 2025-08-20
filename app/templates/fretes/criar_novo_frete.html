@@ -28,14 +28,16 @@
                             <strong>Embarque:</strong> #{{ frete_data.embarque.numero }}
                         </div>
                         <div class="col-md-3">
-                            <strong>Data:</strong> {{ frete_data.embarque.data_embarque | formatar_data_segura if frete_data.embarque.data_embarque else 'N/A' }}
+                            <strong>Data:</strong> {{ frete_data.embarque.data_embarque | formatar_data_segura if
+                            frete_data.embarque.data_embarque else 'N/A' }}
                         </div>
                         <div class="col-md-3">
                             <strong>Transportadora:</strong> {{ frete_data.embarque.transportadora.razao_social }}
                         </div>
                         <div class="col-md-3">
-                            <strong>Tipo:</strong> 
-                            <span class="badge {% if frete_data.tipo_carga == 'DIRETA' %}badge-info{% else %}badge-warning{% endif %}">
+                            <strong>Tipo:</strong>
+                            <span
+                                class="badge {% if frete_data.tipo_carga == 'DIRETA' %}badge-info{% else %}badge-warning{% endif %}">
                                 {{ frete_data.tipo_carga }}
                             </span>
                         </div>
@@ -56,7 +58,7 @@
                 </div>
                 <div class="card-body">
                     <form action="{{ url_for('fretes.processar_lancamento_frete') }}" method="POST">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                         <input type="hidden" name="embarque_id" value="{{ frete_data.embarque.id }}">
                         <input type="hidden" name="cnpj_cliente" value="{{ frete_data.cnpj_cliente }}">
                         <input type="hidden" name="nome_cliente" value="{{ frete_data.nome_cliente }}">
@@ -78,9 +80,11 @@
                             <div class="col-md-6">
                                 <h6><i class="fas fa-weight"></i> Totais</h6>
                                 <p><strong>Peso Total:</strong> {{ "%.2f"|format(frete_data.peso_total) }} kg</p>
-                                <p><strong>Valor Total NFs:</strong> R$ {{ "%.2f"|format(frete_data.valor_total_nfs) }}</p>
-                                <p><strong>Tipo de Carga:</strong> 
-                                    <span class="badge {% if frete_data.tipo_carga == 'DIRETA' %}badge-info{% else %}badge-warning{% endif %}">
+                                <p><strong>Valor Total NFs:</strong> R$ {{ "%.2f"|format(frete_data.valor_total_nfs) }}
+                                </p>
+                                <p><strong>Tipo de Carga:</strong>
+                                    <span
+                                        class="badge {% if frete_data.tipo_carga == 'DIRETA' %}badge-info{% else %}badge-warning{% endif %}">
                                         {{ frete_data.tipo_carga }}
                                     </span>
                                 </p>
@@ -102,11 +106,11 @@
                                 </thead>
                                 <tbody>
                                     {% for item in frete_data.itens_embarque %}
-                                    <tr {% if item.nota_fiscal == numero_nf_original %}class="table-warning"{% endif %}>
+                                    <tr {% if item.nota_fiscal==numero_nf_original %}class="table-warning" {% endif %}>
                                         <td>
                                             {{ item.nota_fiscal }}
                                             {% if item.nota_fiscal == numero_nf_original %}
-                                                <span class="badge badge-warning">NF Pesquisada</span>
+                                            <span class="badge bg-warning">NF Pesquisada</span>
                                             {% endif %}
                                         </td>
                                         <td>{{ item.pedido }}</td>
@@ -123,7 +127,8 @@
                         <div class="alert alert-info">
                             <h6><i class="fas fa-info-circle"></i> Processo de Criação do Frete</h6>
                             <ul class="mb-0">
-                                <li>O valor do frete será calculado automaticamente com base na tabela gravada no embarque</li>
+                                <li>O valor do frete será calculado automaticamente com base na tabela gravada no
+                                    embarque</li>
                                 <li>Após criar o frete, você poderá lançar o CTe na tela de edição</li>
                                 <li>O frete será vinculado à fatura selecionada</li>
                             </ul>
@@ -147,4 +152,4 @@
         </div>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}

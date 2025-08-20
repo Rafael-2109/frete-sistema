@@ -19,12 +19,14 @@
             <div class="alert alert-info">
                 <h5><i class="fas fa-info-circle"></i> Instruções para Importação</h5>
                 <ul class="mb-0">
-                    <li><strong>COMPORTAMENTO:</strong> Este processo <strong>sempre adiciona</strong> novos registros (não substitui)</li>
+                    <li><strong>COMPORTAMENTO:</strong> Este processo <strong>sempre adiciona</strong> novos registros
+                        (não substitui)</li>
                     <li><strong>Arquivo:</strong> Selecione um arquivo <code>.xlsx</code> ou <code>.csv</code></li>
                     <li><strong>TODOS os campos são obrigatórios</strong></li>
                     <li><strong>Tipos aceitos:</strong> AVARIA, EST INICIAL, DEVOLUÇÃO, PRODUÇÃO, RETRABALHO</li>
                     <li><strong>Formato da data:</strong> DD/MM/AAAA ou AAAA-MM-DD</li>
-                    <li><strong>Validação:</strong> Produtos não cadastrados na palletização serão marcados com flag</li>
+                    <li><strong>Validação:</strong> Produtos não cadastrados na palletização serão marcados com flag
+                    </li>
                 </ul>
             </div>
         </div>
@@ -79,19 +81,19 @@
                     <small class="text-muted">
                         <span class="text-danger">* Todos os campos são obrigatórios</span>
                     </small>
-                    
+
                     <!-- Tipos permitidos -->
                     <div class="mt-3">
                         <h6>Tipos de Movimentação Aceitos:</h6>
                         <div class="row">
                             <div class="col-md-6">
-                                <span class="badge badge-primary me-2">AVARIA</span>
-                                <span class="badge badge-success me-2">EST INICIAL</span>
-                                <span class="badge badge-warning me-2">DEVOLUÇÃO</span>
+                                <span class="badge bg-primary me-2">AVARIA</span>
+                                <span class="badge bg-success me-2">EST INICIAL</span>
+                                <span class="badge bg-warning me-2">DEVOLUÇÃO</span>
                             </div>
                             <div class="col-md-6">
-                                <span class="badge badge-info me-2">PRODUÇÃO</span>
-                                <span class="badge badge-secondary me-2">RETRABALHO</span>
+                                <span class="badge bg-info me-2">PRODUÇÃO</span>
+                                <span class="badge bg-secondary me-2">RETRABALHO</span>
                             </div>
                         </div>
                     </div>
@@ -110,17 +112,13 @@
                 <div class="card-body">
                     <form method="POST" enctype="multipart/form-data" id="uploadForm">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        
+
                         <div class="form-group mb-4">
                             <label for="arquivo" class="form-label">
                                 <i class="fas fa-file-excel"></i> Selecione o arquivo
                             </label>
-                            <input type="file" 
-                                   class="form-control" 
-                                   id="arquivo" 
-                                   name="arquivo" 
-                                   accept=".xlsx,.csv" 
-                                   required>
+                            <input type="file" class="form-control" id="arquivo" name="arquivo" accept=".xlsx,.csv"
+                                required>
                             <small class="form-text text-muted">
                                 Arquivos aceitos: .xlsx, .csv (máximo 15MB)
                             </small>
@@ -128,8 +126,10 @@
 
                         <div class="alert alert-success">
                             <i class="fas fa-plus-circle"></i>
-                            <strong>Processamento:</strong> Todas as movimentações do arquivo serão ADICIONADAS ao estoque existente.
-                            <br><small>Produtos não cadastrados na palletização serão marcados com flag de alerta.</small>
+                            <strong>Processamento:</strong> Todas as movimentações do arquivo serão ADICIONADAS ao
+                            estoque existente.
+                            <br><small>Produtos não cadastrados na palletização serão marcados com flag de
+                                alerta.</small>
                         </div>
 
                         <div class="d-grid gap-2">
@@ -153,8 +153,8 @@
                 <div class="card-body">
                     <h6><i class="fas fa-cog fa-spin"></i> Processando movimentações...</h6>
                     <div class="progress">
-                        <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" 
-                             role="progressbar" style="width: 100%"></div>
+                        <div class="progress-bar bg-success progress-bar-striped progress-bar-animated"
+                            role="progressbar" style="width: 100%"></div>
                     </div>
                     <small class="text-muted mt-2 d-block">Adicionando movimentações ao estoque...</small>
                 </div>
@@ -164,67 +164,67 @@
 </div>
 
 <script>
-document.getElementById('uploadForm').addEventListener('submit', function(e) {
-    const arquivo = document.getElementById('arquivo').files[0];
-    
-    if (!arquivo) {
-        e.preventDefault();
-        alert('Por favor, selecione um arquivo!');
-        return;
-    }
-    
-    // Verificar tamanho (15MB para estoque)
-    if (arquivo.size > 15 * 1024 * 1024) {
-        e.preventDefault();
-        alert('Arquivo muito grande! Máximo permitido: 15MB');
-        return;
-    }
-    
-    // Verificar extensão
-    const extensao = arquivo.name.split('.').pop().toLowerCase();
-    if (!['xlsx', 'csv'].includes(extensao)) {
-        e.preventDefault();
-        alert('Tipo de arquivo não permitido! Use apenas .xlsx ou .csv');
-        return;
-    }
-    
-    // Mostrar progresso
-    document.getElementById('progressSection').style.display = 'block';
-    document.getElementById('btnUpload').disabled = true;
-    document.getElementById('btnUpload').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
-});
+    document.getElementById('uploadForm').addEventListener('submit', function (e) {
+        const arquivo = document.getElementById('arquivo').files[0];
 
-// Validação em tempo real do arquivo
-document.getElementById('arquivo').addEventListener('change', function(e) {
-    const arquivo = e.target.files[0];
-    const btnUpload = document.getElementById('btnUpload');
-    
-    if (arquivo) {
-        const tamanhoMB = (arquivo.size / (1024 * 1024)).toFixed(1);
-        const extensao = arquivo.name.split('.').pop().toLowerCase();
-        
-        if (arquivo.size > 15 * 1024 * 1024) {
-            e.target.setCustomValidity('Arquivo muito grande (máx 15MB)');
-            btnUpload.disabled = true;
-        } else if (!['xlsx', 'csv'].includes(extensao)) {
-            e.target.setCustomValidity('Tipo não permitido (use .xlsx ou .csv)');
-            btnUpload.disabled = true;
-        } else {
-            e.target.setCustomValidity('');
-            btnUpload.disabled = false;
-            
-            // Mostrar informações do arquivo
-            const info = document.createElement('small');
-            info.className = 'text-success';
-            info.innerHTML = '<i class="fas fa-check"></i> ' + arquivo.name + ' (' + tamanhoMB + ' MB)';
-            
-            // Remove info anterior se existir
-            const infoAnterior = e.target.parentNode.querySelector('.text-success');
-            if (infoAnterior) infoAnterior.remove();
-            
-            e.target.parentNode.appendChild(info);
+        if (!arquivo) {
+            e.preventDefault();
+            alert('Por favor, selecione um arquivo!');
+            return;
         }
-    }
-});
+
+        // Verificar tamanho (15MB para estoque)
+        if (arquivo.size > 15 * 1024 * 1024) {
+            e.preventDefault();
+            alert('Arquivo muito grande! Máximo permitido: 15MB');
+            return;
+        }
+
+        // Verificar extensão
+        const extensao = arquivo.name.split('.').pop().toLowerCase();
+        if (!['xlsx', 'csv'].includes(extensao)) {
+            e.preventDefault();
+            alert('Tipo de arquivo não permitido! Use apenas .xlsx ou .csv');
+            return;
+        }
+
+        // Mostrar progresso
+        document.getElementById('progressSection').style.display = 'block';
+        document.getElementById('btnUpload').disabled = true;
+        document.getElementById('btnUpload').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+    });
+
+    // Validação em tempo real do arquivo
+    document.getElementById('arquivo').addEventListener('change', function (e) {
+        const arquivo = e.target.files[0];
+        const btnUpload = document.getElementById('btnUpload');
+
+        if (arquivo) {
+            const tamanhoMB = (arquivo.size / (1024 * 1024)).toFixed(1);
+            const extensao = arquivo.name.split('.').pop().toLowerCase();
+
+            if (arquivo.size > 15 * 1024 * 1024) {
+                e.target.setCustomValidity('Arquivo muito grande (máx 15MB)');
+                btnUpload.disabled = true;
+            } else if (!['xlsx', 'csv'].includes(extensao)) {
+                e.target.setCustomValidity('Tipo não permitido (use .xlsx ou .csv)');
+                btnUpload.disabled = true;
+            } else {
+                e.target.setCustomValidity('');
+                btnUpload.disabled = false;
+
+                // Mostrar informações do arquivo
+                const info = document.createElement('small');
+                info.className = 'text-success';
+                info.innerHTML = '<i class="fas fa-check"></i> ' + arquivo.name + ' (' + tamanhoMB + ' MB)';
+
+                // Remove info anterior se existir
+                const infoAnterior = e.target.parentNode.querySelector('.text-success');
+                if (infoAnterior) infoAnterior.remove();
+
+                e.target.parentNode.appendChild(info);
+            }
+        }
+    });
 </script>
-{% endblock %} 
+{% endblock %}

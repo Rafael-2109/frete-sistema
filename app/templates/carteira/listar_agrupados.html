@@ -9,7 +9,7 @@
             <i class="fas fa-layer-group text-primary"></i>
             Carteira Agrupada por Pedidos
             {% if total_pedidos %}
-            <span class="badge badge-primary">{{ total_pedidos }} pedidos</span>
+            <span class="badge bg-primary">{{ total_pedidos }} pedidos</span>
             {% endif %}
         </h1>
         <div>
@@ -67,7 +67,7 @@
                                 <br><small class="text-muted">{{ pedido.equipe_vendas }}</small>
                                 {% endif %}
                                 {% if pedido.status_pedido %}
-                                <br><span class="badge badge-sm" style="background-color: #495057; color: white;">
+                                <br><span class="badge bg-sm" style="background-color: #495057; color: white;">
                                     {{ pedido.status_pedido }}</span>
                                 {% endif %}
                             </td>
@@ -131,7 +131,7 @@
                                 <strong>{{ pedido.valor_total|valor_br }}</strong>
                                 <br>{{ pedido.peso_total|peso_br }}
                                 <br>{{ pedido.pallet_total|pallet_br }}
-                                <br><span class="badge badge-info">{{ pedido.total_itens }} itens</span>
+                                <br><span class="badge bg-info">{{ pedido.total_itens }} itens</span>
                             </td>
 
                             <!-- Saldo (Total das separações sem NF) -->
@@ -144,7 +144,7 @@
                                 </button>
                                 <br>
                                 {% if pedido.totalmente_separado %}
-                                <span class="badge badge-success">Total em Separação</span>
+                                <span class="badge bg-success">Total em Separação</span>
                                 {% else %}
                                 <strong>{{ pedido.valor_saldo_restante|valor_br }}</strong>
                                 {% endif %}
@@ -198,7 +198,7 @@
                                         <h6 class="mb-0">
                                             <i class="fas fa-list"></i>
                                             Itens do Pedido {{ pedido.num_pedido }}
-                                            <span class="badge badge-info ml-2" id="badge-{{ pedido.num_pedido }}">
+                                            <span class="badge bg-info ml-2" id="badge-{{ pedido.num_pedido }}">
                                                 Carregando...
                                             </span>
                                         </h6>
@@ -223,7 +223,7 @@
                                         <h6 class="mb-0">
                                             <i class="fas fa-boxes"></i>
                                             Separações do Pedido {{ pedido.num_pedido }}
-                                            <span class="badge badge-light ml-2"
+                                            <span class="badge bg-light ml-2"
                                                 id="separacoes-header-badge-{{ pedido.num_pedido }}">
                                                 Carregando...
                                             </span>
@@ -293,7 +293,7 @@
             <div class="modal-header">
                 <h5 class="modal-title" id="modalAgendamentoLabel">
                     <i class="fas fa-calendar-plus"></i> Solicitar Agendamento
-                    <span id="modal-agendamento-pedido" class="badge badge-primary ml-2"></span>
+                    <span id="modal-agendamento-pedido" class="badge bg-primary ml-2"></span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
@@ -538,7 +538,7 @@
             <div class="modal-header">
                 <h5 class="modal-title" id="modalAvaliarEstoquesLabel">
                     <i class="fas fa-chart-bar"></i> Avaliar Estoques do Pedido (28 dias)
-                    <span id="modal-num-pedido-estoques" class="badge badge-primary ml-2"></span>
+                    <span id="modal-num-pedido-estoques" class="badge bg-primary ml-2"></span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
@@ -576,7 +576,7 @@
                                 <div class="row">
                                     <div class="col-md-3">
                                         <strong>Total de Itens:</strong>
-                                        <span id="resumo-total-itens" class="badge badge-info">0</span>
+                                        <span id="resumo-total-itens" class="badge bg-info">0</span>
                                     </div>
                                     <div class="col-md-3">
                                         <strong>Valor Total:</strong>
@@ -588,7 +588,7 @@
                                     </div>
                                     <div class="col-md-3">
                                         <strong>Selecionados:</strong>
-                                        <span id="resumo-selecionados" class="badge badge-warning">0</span>
+                                        <span id="resumo-selecionados" class="badge bg-warning">0</span>
                                     </div>
                                 </div>
                             </div>
@@ -787,7 +787,7 @@
             loadingDiv.style.display = 'block';
             contentDiv.style.display = 'none';
             badge.textContent = 'Carregando...';
-            badge.className = 'badge badge-info ml-2';
+            badge.className = 'badge bg-info ml-2';
 
             // Fazer requisição AJAX para itens editáveis conforme CARTEIRA.csv
             const response = await fetch(`/carteira/api/pedido/${numPedido}/itens-editaveis`);
@@ -806,7 +806,7 @@
 
             // Atualizar badge
             badge.textContent = `${data.itens.length} itens`;
-            badge.className = 'badge badge-success ml-2';
+            badge.className = 'badge bg-success ml-2';
 
             // Mostrar conteúdo
             loadingDiv.style.display = 'none';
@@ -832,7 +832,7 @@
         `;
 
             badge.textContent = 'Erro';
-            badge.className = 'badge badge-danger ml-2';
+            badge.className = 'badge bg-danger ml-2';
 
             loadingDiv.style.display = 'none';
             contentDiv.style.display = 'block';
@@ -1454,7 +1454,7 @@
             </td>
             <td class="text-truncate" style="max-width: 200px;" title="${itemOriginal.nome_produto || ''}">
                 ${itemOriginal.nome_produto || ''}
-                <br><small class="badge badge-info">Pendente</small>
+                <br><small class="badge bg-info">Pendente</small>
             </td>
             <td>
                 <input type="number" 
@@ -1689,7 +1689,7 @@
             loadingDiv.style.display = 'block';
             contentDiv.style.display = 'none';
             badge.textContent = 'Carregando...';
-            badge.className = 'badge badge-light ml-2';
+            badge.className = 'badge bg-light ml-2';
 
             // Fazer requisição AJAX para separações
             const response = await fetch(`/carteira/api/pedido/${numPedido}/separacoes`);
@@ -1709,7 +1709,7 @@
             // Atualizar badge do header
             const totalSep = data.total_separacoes || 0;
             badge.textContent = `${totalSep} separação${totalSep !== 1 ? 'ões' : ''}`;
-            badge.className = totalSep > 0 ? 'badge badge-success ml-2' : 'badge badge-secondary ml-2';
+            badge.className = totalSep > 0 ? 'badge bg-success ml-2' : 'badge bg-secondary ml-2';
 
             // Atualizar badge principal da coluna
             const badgePrincipal = document.getElementById(`separacoes-badge-${numPedido}`);
@@ -1736,7 +1736,7 @@
 
             // Mostrar erro
             badge.textContent = 'Erro';
-            badge.className = 'badge badge-danger ml-2';
+            badge.className = 'badge bg-danger ml-2';
 
             // CORRIGIDO: XSS - criar elementos DOM ao invés de innerHTML com error.message
             const alertDiv = document.createElement('div');
@@ -1882,9 +1882,9 @@
         <!-- Resumo das separações -->
         <div class="alert alert-info mt-2">
             <strong>📦 Resumo:</strong>
-            <span class="badge badge-success ml-2">${data.separacoes_embarcadas} Embarcadas</span>
-            <span class="badge badge-warning ml-2">${data.separacoes_pendentes} Pendentes</span>
-            <span class="badge badge-info ml-2">${data.total_separacoes} Total</span>
+            <span class="badge bg-success ml-2">${data.separacoes_embarcadas} Embarcadas</span>
+            <span class="badge bg-warning ml-2">${data.separacoes_pendentes} Pendentes</span>
+            <span class="badge bg-info ml-2">${data.total_separacoes} Total</span>
         </div>
     `;
 
@@ -2003,7 +2003,7 @@
                 </td>
                 <td class="text-truncate" style="max-width: 200px;" title="${item.nome_produto || ''}">
                     ${item.nome_produto || ''}
-                    ${isPreSeparacao && item.status ? `<br><small class="badge badge-info">${item.status || ''}</small>` : ''}
+                    ${isPreSeparacao && item.status ? `<br><small class="badge bg-info">${item.status || ''}</small>` : ''}
                 </td>
                 <td>
                     ${isPreSeparacao ?
@@ -2778,7 +2778,7 @@
                     </span>
                 </td>
                 <td>
-                    <span class="badge badge-${statusClass}" style="${statusClass === 'danger' ? 'background-color: #dc3545; color: white;' : statusClass === 'warning' ? 'background-color: #ffc107; color: black;' : statusClass === 'success' ? 'background-color: #28a745; color: white;' : 'background-color: #17a2b8; color: white;'}">
+                    <span class="badge bg-${statusClass}" style="${statusClass === 'danger' ? 'background-color: #dc3545; color: white;' : statusClass === 'warning' ? 'background-color: #ffc107; color: black;' : statusClass === 'success' ? 'background-color: #28a745; color: white;' : 'background-color: #17a2b8; color: white;'}">
                         ${status}
                     </span>
                     <br><small class="text-muted">${disponibilidade}% disponível</small>
@@ -2929,7 +2929,7 @@
 
         // Atualizar cor do badge
         const badge = document.getElementById('resumo-selecionados');
-        badge.className = countSelecionados > 0 ? 'badge badge-success ml-2' : 'badge badge-warning ml-2';
+        badge.className = countSelecionados > 0 ? 'badge bg-success ml-2' : 'badge bg-warning ml-2';
     }
 
     /*
@@ -3157,7 +3157,7 @@
             // Projeção resumida
             const projecaoHtml = produto.projecao_resumo && produto.projecao_resumo.length > 0 ?
                 produto.projecao_resumo.map(dia =>
-                    `<span class="badge badge-${getStatusClass(dia.status)} badge-sm">${dia.data}</span>`
+                    `<span class="badge bg-${getStatusClass(dia.status)} badge-sm">${dia.data}</span>`
                 ).join(' ') :
                 '<small class="text-muted">Sem dados</small>';
 
@@ -3171,7 +3171,7 @@
                     ${produto.dia_ruptura === 0 ? '<br><small class="text-danger">Ruptura hoje!</small>' : ''}
                 </td>
                 <td>
-                    <span class="badge badge-${statusD0Class}">
+                    <span class="badge bg-${statusD0Class}">
                         ${formatarStatus(produto.status_d0)}
                     </span>
                 </td>
@@ -3181,7 +3181,7 @@
                     `<br><small class="text-warning">Ruptura D${produto.dia_ruptura}</small>` : ''}
                 </td>
                 <td>
-                    <span class="badge badge-${statusD7Class}">
+                    <span class="badge bg-${statusD7Class}">
                         ${formatarStatus(produto.status_d7)}
                     </span>
                 </td>
@@ -4381,7 +4381,7 @@
 
         // Adicionar badge indicando saldo
         const produtoCell = novaRow.querySelector('td:nth-child(3)');
-        produtoCell.innerHTML += ' <span class="badge badge-info">Saldo</span>';
+        produtoCell.innerHTML += ' <span class="badge bg-info">Saldo</span>';
 
         // Inserir após linha original
         rowOriginal.parentNode.insertBefore(novaRow, rowOriginal.nextSibling);
@@ -4509,7 +4509,7 @@
 
         if (checkboxesMarcados.length === 0) {
             statusSpan.textContent = 'Selecione itens';
-            statusSpan.className = 'badge badge-secondary';
+            statusSpan.className = 'badge bg-secondary';
             btnEnviar.disabled = true;
             return;
         }
@@ -4523,11 +4523,11 @@
 
         if (semExpedicao.length > 0) {
             statusSpan.textContent = `${semExpedicao.length} sem data expedição`;
-            statusSpan.className = 'badge badge-danger';
+            statusSpan.className = 'badge bg-danger';
             btnEnviar.disabled = true;
         } else {
             statusSpan.textContent = 'Pronto para enviar';
-            statusSpan.className = 'badge badge-success';
+            statusSpan.className = 'badge bg-success';
             btnEnviar.disabled = false;
         }
     }
@@ -4965,7 +4965,7 @@
                     const statusBadge = row.querySelector('.badge');
                     if (statusBadge) {
                         statusBadge.textContent = 'ENVIADO_SEPARACAO';
-                        statusBadge.className = 'badge badge-success';
+                        statusBadge.className = 'badge bg-success';
                     }
 
                     // Desabilitar botões
@@ -5035,7 +5035,7 @@
             if (confirmado) {
                 badge.style.display = 'inline-block';
                 badge.innerHTML = '<i class="fas fa-check-circle"></i> Confirmado';
-                badge.className = 'badge badge-success ms-2';
+                badge.className = 'badge bg-success ms-2';
             } else {
                 badge.style.display = 'none';
             }

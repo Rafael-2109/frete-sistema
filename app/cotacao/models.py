@@ -35,6 +35,11 @@ class Cotacao(db.Model):
     icms_incluso = db.Column(db.Boolean, default=False)
     icms_destino = db.Column(db.Float)  # ICMS da cidade de destino
     
+    # ===== NOVOS CAMPOS DE VALORES MÍNIMOS E ICMS =====
+    gris_minimo = db.Column(db.Float, default=0)    # Valor mínimo de GRIS
+    adv_minimo = db.Column(db.Float, default=0)     # Valor mínimo de ADV
+    icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela
+    
     # Relacionamentos
     usuario = db.relationship('Usuario', backref='cotacoes')
     transportadora = db.relationship('Transportadora', backref='cotacoes')
@@ -75,6 +80,11 @@ class CotacaoItem(db.Model):
     valor_cte = db.Column(db.Float)
     icms_incluso = db.Column(db.Boolean, default=False)
     icms_destino = db.Column(db.Float)
+    
+    # ===== NOVOS CAMPOS DE VALORES MÍNIMOS E ICMS =====
+    gris_minimo = db.Column(db.Float, default=0)    # Valor mínimo de GRIS
+    adv_minimo = db.Column(db.Float, default=0)     # Valor mínimo de ADV
+    icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela
 
     # Relacionamentos
     pedido = db.relationship('Pedido', backref=db.backref('cotacao_item', lazy=True))

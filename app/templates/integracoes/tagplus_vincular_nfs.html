@@ -9,10 +9,10 @@
             <h1 class="mb-4">
                 <i class="fas fa-link"></i> Vincular NFs TagPlus sem Separação
             </h1>
-            
+
             <div class="alert alert-info">
-                <i class="fas fa-info-circle"></i> 
-                Esta interface permite vincular manualmente as NFs importadas do TagPlus que não foram automaticamente 
+                <i class="fas fa-info-circle"></i>
+                Esta interface permite vincular manualmente as NFs importadas do TagPlus que não foram automaticamente
                 associadas a uma separação através do sistema de score.
             </div>
 
@@ -57,9 +57,9 @@
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="fas fa-file-invoice"></i> 
+                        <i class="fas fa-file-invoice"></i>
                         NFs Sem Separação Vinculada
-                        <span class="badge badge-secondary" id="total-nfs">{{ nfs_sem_separacao|length }}</span>
+                        <span class="badge bg-secondary" id="total-nfs">{{ nfs_sem_separacao|length }}</span>
                     </h5>
                 </div>
                 <div class="card-body">
@@ -77,9 +77,7 @@
                             </thead>
                             <tbody>
                                 {% for nf in nfs_sem_separacao %}
-                                <tr class="nf-row" 
-                                    data-nf="{{ nf.numero_nf }}"
-                                    data-cnpj="{{ nf.cnpj_cliente }}"
+                                <tr class="nf-row" data-nf="{{ nf.numero_nf }}" data-cnpj="{{ nf.cnpj_cliente }}"
                                     data-data="{{ nf.data_fatura.strftime('%Y-%m-%d') }}">
                                     <td>
                                         <strong>{{ nf.numero_nf }}</strong>
@@ -100,8 +98,8 @@
                                         </ul>
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-primary" 
-                                                onclick="abrirModalVinculacao('{{ nf.numero_nf }}')">
+                                        <button class="btn btn-sm btn-primary"
+                                            onclick="abrirModalVinculacao('{{ nf.numero_nf }}')">
                                             <i class="fas fa-link"></i> Vincular
                                         </button>
                                     </td>
@@ -140,7 +138,7 @@
                 <div class="text-muted mb-2">
                     Selecione o embarque que corresponde a esta NF:
                 </div>
-                
+
                 <div id="loading-candidatos" class="text-center py-3" style="display: none;">
                     <div class="spinner-border text-primary" role="status">
                         <span class="sr-only">Carregando...</span>
@@ -168,7 +166,7 @@
                 </div>
 
                 <div id="sem-candidatos" class="alert alert-warning" style="display: none;">
-                    <i class="fas fa-exclamation-triangle"></i> 
+                    <i class="fas fa-exclamation-triangle"></i>
                     Nenhum embarque candidato encontrado para este CNPJ com os critérios necessários.
                 </div>
             </div>
@@ -176,8 +174,8 @@
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
-                <button type="button" class="btn btn-primary" id="btn-confirmar-vinculo" 
-                        onclick="confirmarVinculacao()" disabled>
+                <button type="button" class="btn btn-primary" id="btn-confirmar-vinculo" onclick="confirmarVinculacao()"
+                    disabled>
                     <i class="fas fa-check"></i> Confirmar Vinculação
                 </button>
             </div>
@@ -186,110 +184,110 @@
 </div>
 
 <script>
-let nfAtual = null;
-let embarqueSelecionado = null;
+    let nfAtual = null;
+    let embarqueSelecionado = null;
 
-// Filtros
-function aplicarFiltros() {
-    const filtroNf = document.getElementById('filtro-nf').value.toLowerCase();
-    const filtroCnpj = document.getElementById('filtro-cnpj').value.toLowerCase();
-    const filtroDataInicio = document.getElementById('filtro-data-inicio').value;
-    const filtroDataFim = document.getElementById('filtro-data-fim').value;
-    
-    const rows = document.querySelectorAll('.nf-row');
-    let visibleCount = 0;
-    
-    rows.forEach(row => {
-        const nf = row.dataset.nf.toLowerCase();
-        const cnpj = row.dataset.cnpj.toLowerCase();
-        const data = row.dataset.data;
-        
-        let mostrar = true;
-        
-        if (filtroNf && !nf.includes(filtroNf)) {
-            mostrar = false;
-        }
-        
-        if (filtroCnpj && !cnpj.includes(filtroCnpj)) {
-            mostrar = false;
-        }
-        
-        if (filtroDataInicio && data < filtroDataInicio) {
-            mostrar = false;
-        }
-        
-        if (filtroDataFim && data > filtroDataFim) {
-            mostrar = false;
-        }
-        
-        row.style.display = mostrar ? '' : 'none';
-        if (mostrar) visibleCount++;
-    });
-    
-    document.getElementById('total-nfs').textContent = visibleCount;
-}
+    // Filtros
+    function aplicarFiltros() {
+        const filtroNf = document.getElementById('filtro-nf').value.toLowerCase();
+        const filtroCnpj = document.getElementById('filtro-cnpj').value.toLowerCase();
+        const filtroDataInicio = document.getElementById('filtro-data-inicio').value;
+        const filtroDataFim = document.getElementById('filtro-data-fim').value;
 
-function limparFiltros() {
-    document.getElementById('filtro-nf').value = '';
-    document.getElementById('filtro-cnpj').value = '';
-    document.getElementById('filtro-data-inicio').value = '';
-    document.getElementById('filtro-data-fim').value = '';
-    aplicarFiltros();
-}
+        const rows = document.querySelectorAll('.nf-row');
+        let visibleCount = 0;
 
-// Modal de vinculação
-function abrirModalVinculacao(numeroNf) {
-    nfAtual = numeroNf;
-    embarqueSelecionado = null;
-    
-    document.getElementById('modal-nf-numero').textContent = numeroNf;
-    document.getElementById('btn-confirmar-vinculo').disabled = true;
-    
-    // Limpa estados anteriores
-    document.getElementById('produtos-nf-lista').innerHTML = '';
-    document.getElementById('candidatos-tbody').innerHTML = '';
-    document.getElementById('loading-candidatos').style.display = 'block';
-    document.getElementById('candidatos-container').style.display = 'none';
-    document.getElementById('sem-candidatos').style.display = 'none';
-    
-    $('#modalVinculacao').modal('show');
-    
-    // Busca candidatos
-    buscarEmbarquesCandidatos(numeroNf);
-}
+        rows.forEach(row => {
+            const nf = row.dataset.nf.toLowerCase();
+            const cnpj = row.dataset.cnpj.toLowerCase();
+            const data = row.dataset.data;
 
-function buscarEmbarquesCandidatos(numeroNf) {
-    fetch('/integracoes/tagplus/api/buscar-embarques-candidatos', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ numero_nf: numeroNf })
-    })
-    .then(response => response.json())
-    .then(data => {
-        document.getElementById('loading-candidatos').style.display = 'none';
-        
-        if (data.success) {
-            // Mostra produtos da NF
-            let produtosHtml = '<ul class="mb-0">';
-            data.produtos_nf.forEach(prod => {
-                produtosHtml += `<li>${prod.cod_produto} - ${prod.nome_produto} (Qtd: ${prod.quantidade})</li>`;
-            });
-            produtosHtml += '</ul>';
-            document.getElementById('produtos-nf-lista').innerHTML = produtosHtml;
-            
-            // Mostra candidatos
-            if (data.candidatos.length > 0) {
-                document.getElementById('candidatos-container').style.display = 'block';
-                
-                let tbody = '';
-                data.candidatos.forEach(cand => {
-                    // Verifica se o produto está na NF
-                    const produtoNaNf = data.produtos_nf.some(p => p.cod_produto === cand.cod_produto);
-                    const rowClass = produtoNaNf ? 'table-success' : '';
-                    
-                    tbody += `
+            let mostrar = true;
+
+            if (filtroNf && !nf.includes(filtroNf)) {
+                mostrar = false;
+            }
+
+            if (filtroCnpj && !cnpj.includes(filtroCnpj)) {
+                mostrar = false;
+            }
+
+            if (filtroDataInicio && data < filtroDataInicio) {
+                mostrar = false;
+            }
+
+            if (filtroDataFim && data > filtroDataFim) {
+                mostrar = false;
+            }
+
+            row.style.display = mostrar ? '' : 'none';
+            if (mostrar) visibleCount++;
+        });
+
+        document.getElementById('total-nfs').textContent = visibleCount;
+    }
+
+    function limparFiltros() {
+        document.getElementById('filtro-nf').value = '';
+        document.getElementById('filtro-cnpj').value = '';
+        document.getElementById('filtro-data-inicio').value = '';
+        document.getElementById('filtro-data-fim').value = '';
+        aplicarFiltros();
+    }
+
+    // Modal de vinculação
+    function abrirModalVinculacao(numeroNf) {
+        nfAtual = numeroNf;
+        embarqueSelecionado = null;
+
+        document.getElementById('modal-nf-numero').textContent = numeroNf;
+        document.getElementById('btn-confirmar-vinculo').disabled = true;
+
+        // Limpa estados anteriores
+        document.getElementById('produtos-nf-lista').innerHTML = '';
+        document.getElementById('candidatos-tbody').innerHTML = '';
+        document.getElementById('loading-candidatos').style.display = 'block';
+        document.getElementById('candidatos-container').style.display = 'none';
+        document.getElementById('sem-candidatos').style.display = 'none';
+
+        $('#modalVinculacao').modal('show');
+
+        // Busca candidatos
+        buscarEmbarquesCandidatos(numeroNf);
+    }
+
+    function buscarEmbarquesCandidatos(numeroNf) {
+        fetch('/integracoes/tagplus/api/buscar-embarques-candidatos', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ numero_nf: numeroNf })
+        })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading-candidatos').style.display = 'none';
+
+                if (data.success) {
+                    // Mostra produtos da NF
+                    let produtosHtml = '<ul class="mb-0">';
+                    data.produtos_nf.forEach(prod => {
+                        produtosHtml += `<li>${prod.cod_produto} - ${prod.nome_produto} (Qtd: ${prod.quantidade})</li>`;
+                    });
+                    produtosHtml += '</ul>';
+                    document.getElementById('produtos-nf-lista').innerHTML = produtosHtml;
+
+                    // Mostra candidatos
+                    if (data.candidatos.length > 0) {
+                        document.getElementById('candidatos-container').style.display = 'block';
+
+                        let tbody = '';
+                        data.candidatos.forEach(cand => {
+                            // Verifica se o produto está na NF
+                            const produtoNaNf = data.produtos_nf.some(p => p.cod_produto === cand.cod_produto);
+                            const rowClass = produtoNaNf ? 'table-success' : '';
+
+                            tbody += `
                         <tr class="${rowClass}">
                             <td>
                                 <input type="radio" name="embarque-candidato" 
@@ -299,7 +297,7 @@ function buscarEmbarquesCandidatos(numeroNf) {
                             <td>${cand.num_pedido}</td>
                             <td>
                                 ${cand.cod_produto} - ${cand.nome_produto}
-                                ${produtoNaNf ? '<span class="badge badge-success">Produto correspondente</span>' : ''}
+                                ${produtoNaNf ? '<span class="badge bg-success">Produto correspondente</span>' : ''}
                             </td>
                             <td>${cand.qtd_separada}</td>
                             <td>${cand.separacao_lote_id}</td>
@@ -307,95 +305,95 @@ function buscarEmbarquesCandidatos(numeroNf) {
                             <td><small>${cand.erro_validacao || '-'}</small></td>
                         </tr>
                     `;
-                });
-                
-                document.getElementById('candidatos-tbody').innerHTML = tbody;
-            } else {
-                document.getElementById('sem-candidatos').style.display = 'block';
-            }
-        } else {
-            alert('Erro ao buscar candidatos: ' + data.message);
+                        });
+
+                        document.getElementById('candidatos-tbody').innerHTML = tbody;
+                    } else {
+                        document.getElementById('sem-candidatos').style.display = 'block';
+                    }
+                } else {
+                    alert('Erro ao buscar candidatos: ' + data.message);
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading-candidatos').style.display = 'none';
+                alert('Erro ao buscar candidatos: ' + error);
+            });
+    }
+
+    function selecionarEmbarque(embarqueItemId) {
+        embarqueSelecionado = embarqueItemId;
+        document.getElementById('btn-confirmar-vinculo').disabled = false;
+    }
+
+    function confirmarVinculacao() {
+        if (!nfAtual || !embarqueSelecionado) {
+            alert('Selecione um embarque para vincular');
+            return;
         }
-    })
-    .catch(error => {
-        document.getElementById('loading-candidatos').style.display = 'none';
-        alert('Erro ao buscar candidatos: ' + error);
-    });
-}
 
-function selecionarEmbarque(embarqueItemId) {
-    embarqueSelecionado = embarqueItemId;
-    document.getElementById('btn-confirmar-vinculo').disabled = false;
-}
+        if (!confirm(`Confirmar vinculação da NF ${nfAtual} ao embarque selecionado?`)) {
+            return;
+        }
 
-function confirmarVinculacao() {
-    if (!nfAtual || !embarqueSelecionado) {
-        alert('Selecione um embarque para vincular');
-        return;
-    }
-    
-    if (!confirm(`Confirmar vinculação da NF ${nfAtual} ao embarque selecionado?`)) {
-        return;
-    }
-    
-    const btn = document.getElementById('btn-confirmar-vinculo');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vinculando...';
-    
-    fetch('/integracoes/tagplus/api/vincular-nf-embarque', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            numero_nf: nfAtual,
-            embarque_item_id: embarqueSelecionado
+        const btn = document.getElementById('btn-confirmar-vinculo');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vinculando...';
+
+        fetch('/integracoes/tagplus/api/vincular-nf-embarque', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                numero_nf: nfAtual,
+                embarque_item_id: embarqueSelecionado
+            })
         })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            $('#modalVinculacao').modal('hide');
-            // Recarrega a página para atualizar a lista
-            window.location.reload();
-        } else {
-            alert('Erro: ' + data.message);
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Vinculação';
-        }
-    })
-    .catch(error => {
-        alert('Erro ao vincular: ' + error);
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Vinculação';
-    });
-}
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    $('#modalVinculacao').modal('hide');
+                    // Recarrega a página para atualizar a lista
+                    window.location.reload();
+                } else {
+                    alert('Erro: ' + data.message);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Vinculação';
+                }
+            })
+            .catch(error => {
+                alert('Erro ao vincular: ' + error);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Vinculação';
+            });
+    }
 
-// Inicialização
-document.addEventListener('DOMContentLoaded', function() {
-    // Adiciona eventos de enter nos filtros
-    document.getElementById('filtro-nf').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') aplicarFiltros();
+    // Inicialização
+    document.addEventListener('DOMContentLoaded', function () {
+        // Adiciona eventos de enter nos filtros
+        document.getElementById('filtro-nf').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') aplicarFiltros();
+        });
+
+        document.getElementById('filtro-cnpj').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') aplicarFiltros();
+        });
     });
-    
-    document.getElementById('filtro-cnpj').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') aplicarFiltros();
-    });
-});
 </script>
 
 <style>
-.table-success {
-    background-color: #d4edda !important;
-}
+    .table-success {
+        background-color: #d4edda !important;
+    }
 
-.nf-row {
-    cursor: pointer;
-}
+    .nf-row {
+        cursor: pointer;
+    }
 
-.nf-row:hover {
-    background-color: #f8f9fa;
-}
+    .nf-row:hover {
+        background-color: #f8f9fa;
+    }
 </style>
 {% endblock %}

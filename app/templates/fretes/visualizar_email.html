@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block title %}Visualizar Email - {{ email.assunto or 'Sem assunto' }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-envelope"></i> Visualizar Email
+                <small class="text-muted">Despesa #{{ despesa.id }}</small>
+            </h1>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.index') }}">Fretes</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete_id) }}">Frete #{{ despesa.frete_id }}</a></li>
+            <li class="breadcrumb-item active">Email</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Metadados do Email -->
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-gradient bg-primary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-envelope-open me-2"></i>
+                        <span class="fw-bold">{{ email.assunto or 'Email sem assunto' }}</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Cabeçalho do email com estilo melhorado -->
+                    <div class="email-header bg-light rounded p-3 mb-4">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <!-- Remetente -->
+                                <div class="mb-3">
+                                    <span class="text-muted small text-uppercase">Remetente</span><br>
+                                    <strong class="text-dark">
+                                        <i class="far fa-user me-1"></i>
+                                        {{ email.remetente or 'Remetente desconhecido' }}
+                                    </strong>
+                                </div>
+                                
+                                <!-- Destinatários -->
+                                <div class="mb-3">
+                                    <span class="text-muted small text-uppercase">Destinatários</span><br>
+                                    {% if email.destinatarios %}
+                                        {# Trata destinatários como string JSON #}
+                                        {% if email.destinatarios.startswith('[') and email.destinatarios.endswith(']') %}
+                                            {# Remove colchetes e aspas, depois divide #}
+                                            {% set clean_dest = email.destinatarios[1:-1] %}
+                                            {% set clean_dest = clean_dest.replace("'", "").replace('"', '') %}
+                                            {% set dest_list = clean_dest.split(',') %}
+                                            <div class="mt-1">
+                                                {% for dest in dest_list %}
+                                                    {% if dest.strip() %}
+                                                        <span class="badge bg-primary me-1 mb-1">
+                                                            <i class="far fa-envelope me-1"></i>
+                                                            {{ dest.strip() }}
+                                                        </span>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </div>
+                                        {% elif ';' in email.destinatarios %}
+                                            {# Separado por ponto-vírgula #}
+                                            <div class="mt-1">
+                                                {% for dest in email.destinatarios.split(';') %}
+                                                    {% if dest.strip() %}
+                                                        <span class="badge bg-primary me-1 mb-1">
+                                                            <i class="far fa-envelope me-1"></i>
+                                                            {{ dest.strip() }}
+                                                        </span>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            {# Email único ou formato desconhecido #}
+                                            <strong class="text-dark">{{ email.destinatarios }}</strong>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">Não informado</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- CC (Com cópia) -->
+                                {% if email.cc and email.cc != '[]' %}
+                                <div class="mb-3">
+                                    <span class="text-muted small text-uppercase">Com Cópia (CC)</span><br>
+                                    {# Trata CC como string JSON #}
+                                    {% if email.cc.startswith('[') and email.cc.endswith(']') %}
+                                        {# Remove colchetes e aspas, depois divide #}
+                                        {% set clean_cc = email.cc[1:-1] %}
+                                        {% set clean_cc = clean_cc.replace("'", "").replace('"', '') %}
+                                        {% set cc_list = clean_cc.split(',') %}
+                                        <div class="mt-1">
+                                            {% for cc_email in cc_list %}
+                                                {% if cc_email.strip() %}
+                                                    <span class="badge bg-info me-1 mb-1">
+                                                        <i class="far fa-envelope me-1"></i>
+                                                        {{ cc_email.strip() }}
+                                                    </span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    {% elif ';' in email.cc %}
+                                        {# Separado por ponto-vírgula #}
+                                        <div class="mt-1">
+                                            {% for cc_email in email.cc.split(';') %}
+                                                {% if cc_email.strip() %}
+                                                    <span class="badge bg-info me-1 mb-1">
+                                                        <i class="far fa-envelope me-1"></i>
+                                                        {{ cc_email.strip() }}
+                                                    </span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        {# Email único #}
+                                        {% if email.cc %}
+                                            <strong class="text-dark">{{ email.cc }}</strong>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                
+                                <!-- BCC (Cópia oculta) - Raramente disponível -->
+                                {% if email.bcc and email.bcc != '[]' %}
+                                <div class="mb-3">
+                                    <span class="text-muted small text-uppercase">Cópia Oculta (BCC)</span><br>
+                                    {# Trata BCC como string JSON #}
+                                    {% if email.bcc.startswith('[') and email.bcc.endswith(']') %}
+                                        {# Remove colchetes e aspas, depois divide #}
+                                        {% set clean_bcc = email.bcc[1:-1] %}
+                                        {% set clean_bcc = clean_bcc.replace("'", "").replace('"', '') %}
+                                        {% set bcc_list = clean_bcc.split(',') %}
+                                        <div class="mt-1">
+                                            {% for bcc_email in bcc_list %}
+                                                {% if bcc_email.strip() %}
+                                                    <span class="badge bg-secondary me-1 mb-1">
+                                                        <i class="fas fa-eye-slash me-1"></i>
+                                                        {{ bcc_email.strip() }}
+                                                    </span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        {# Email único #}
+                                        {% if email.bcc %}
+                                            <strong class="text-dark">{{ email.bcc }}</strong>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <!-- Data de Envio -->
+                                <div class="mb-3">
+                                    <span class="text-muted small text-uppercase">Data de Envio</span><br>
+                                    <strong class="text-dark">
+                                        {% if email.data_envio %}
+                                            <i class="far fa-calendar-alt me-1"></i>
+                                            {{ email.data_envio.strftime('%d/%m/%Y às %H:%M') }}
+                                        {% else %}
+                                            <span class="text-muted">Não informado</span>
+                                        {% endif %}
+                                    </strong>
+                                </div>
+                                
+                                <!-- Anexos -->
+                                <div class="mb-3">
+                                    <span class="text-muted small text-uppercase">Anexos no Email Original</span><br>
+                                    {% if email.tem_anexos %}
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="fas fa-paperclip me-1"></i>
+                                            {{ email.qtd_anexos }} arquivo(s) anexado(s)
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-light text-muted border">
+                                            <i class="far fa-file me-1"></i>
+                                            Sem anexos
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Informações adicionais -->
+                        <div class="row mt-3 pt-3 border-top">
+                            <div class="col-md-4">
+                                <small class="text-muted">
+                                    <i class="fas fa-database me-1"></i>
+                                    Tamanho: <strong>{{ (email.tamanho_bytes / 1024) | round(2) }} KB</strong>
+                                </small>
+                            </div>
+                            <div class="col-md-4">
+                                <small class="text-muted">
+                                    <i class="far fa-clock me-1"></i>
+                                    Anexado em: <strong>{{ email.criado_em.strftime('%d/%m/%Y %H:%M') }}</strong>
+                                </small>
+                            </div>
+                            <div class="col-md-4">
+                                <small class="text-muted">
+                                    <i class="far fa-user me-1"></i>
+                                    Por: <strong>{{ email.criado_por or 'Sistema' }}</strong>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Preview do conteúdo -->
+                    <div class="mb-4">
+                        <h6 class="text-muted mb-3">
+                            <i class="far fa-file-alt me-1"></i>
+                            Preview do Conteúdo
+                        </h6>
+                        <div class="border rounded p-3 bg-white" style="max-height: 400px; overflow-y: auto;">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: 0.9rem;">{{ email.conteudo_preview or 'Conteúdo não disponível para visualização' }}</pre>
+                        </div>
+                    </div>
+
+                    <!-- Botões de ação -->
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <a href="{{ url_for('emails.download_email', email_id=email.id) }}" 
+                               class="btn btn-primary">
+                                <i class="fas fa-download me-2"></i>
+                                Baixar Arquivo .msg
+                            </a>
+                            <button type="button" class="btn btn-outline-danger ms-2" 
+                                    onclick="confirmarExclusao({{ email.id }})">
+                                <i class="fas fa-trash me-2"></i>
+                                Excluir Email
+                            </button>
+                        </div>
+                        <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete_id) }}" 
+                           class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>
+                            Voltar ao Frete
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações da Despesa e Outros Emails -->
+        <div class="col-md-4">
+            <!-- Card da Despesa -->
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-file-invoice-dollar me-2"></i>
+                        Despesa Relacionada
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-5">Tipo:</dt>
+                        <dd class="col-7">{{ despesa.tipo_despesa }}</dd>
+                        
+                        <dt class="col-5">Setor:</dt>
+                        <dd class="col-7">{{ despesa.setor_responsavel }}</dd>
+                        
+                        <dt class="col-5">Valor:</dt>
+                        <dd class="col-7">
+                            <strong class="text-primary">R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong>
+                        </dd>
+                        
+                        <dt class="col-5">Documento:</dt>
+                        <dd class="col-7">{{ despesa.numero_documento }}</dd>
+                    </dl>
+                    
+                    <hr>
+                    
+                    <a href="{{ url_for('fretes.visualizar_frete', frete_id=despesa.frete_id) }}" 
+                       class="btn btn-sm btn-outline-info w-100">
+                        <i class="fas fa-truck me-2"></i>
+                        Ver Frete Completo
+                    </a>
+                </div>
+            </div>
+
+            <!-- Outros Emails da Despesa -->
+            {% if outros_emails %}
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-envelope me-2"></i>
+                        Outros Emails da Despesa
+                    </h6>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for outro_email in outros_emails %}
+                    <a href="{{ url_for('emails.visualizar_email', email_id=outro_email.id) }}" 
+                       class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <small class="mb-1 text-truncate">
+                                <i class="far fa-envelope me-1"></i>
+                                {{ outro_email.assunto[:30] or 'Sem assunto' }}{% if outro_email.assunto and outro_email.assunto|length > 30 %}...{% endif %}
+                            </small>
+                        </div>
+                        <p class="mb-1 small text-muted">
+                            De: {{ outro_email.remetente[:25] or '-' }}{% if outro_email.remetente and outro_email.remetente|length > 25 %}...{% endif %}
+                        </p>
+                        <small class="text-muted">
+                            {{ outro_email.data_envio.strftime('%d/%m/%Y') if outro_email.data_envio else '-' }}
+                        </small>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function confirmarExclusao(emailId) {
+    if (confirm('Tem certeza que deseja excluir este email? Esta ação não pode ser desfeita.')) {
+        window.location.href = `/fretes/emails/${emailId}/excluir`;
+    }
+}
+</script>
+{% endblock %}

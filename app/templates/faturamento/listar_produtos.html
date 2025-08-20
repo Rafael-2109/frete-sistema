@@ -36,43 +36,47 @@
                 </div>
                 <div class="card-body">
                     <form method="GET" id="filtrosForm">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <label for="data_inicio">Data Início:</label>
-                                <input type="date" class="form-control" id="data_inicio" name="data_inicio" 
-                                       value="{{ filtros.data_inicio if filtros else request.args.get('data_inicio', '') }}">
+                                <input type="date" class="form-control" id="data_inicio" name="data_inicio"
+                                    value="{{ filtros.data_inicio if filtros else request.args.get('data_inicio', '') }}">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="data_fim">Data Fim:</label>
-                                <input type="date" class="form-control" id="data_fim" name="data_fim" 
-                                       value="{{ filtros.data_fim if filtros else request.args.get('data_fim', '') }}">
+                                <input type="date" class="form-control" id="data_fim" name="data_fim"
+                                    value="{{ filtros.data_fim if filtros else request.args.get('data_fim', '') }}">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="numero_nf">Número NF:</label>
-                                <input type="text" class="form-control" id="numero_nf" name="numero_nf" 
-                                       placeholder="Ex: 123456" value="{{ filtros.numero_nf if filtros and filtros.numero_nf else request.args.get('numero_nf', '') }}">
+                                <input type="text" class="form-control" id="numero_nf" name="numero_nf"
+                                    placeholder="Ex: 123456"
+                                    value="{{ filtros.numero_nf if filtros and filtros.numero_nf else request.args.get('numero_nf', '') }}">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="cod_produto">Código Produto:</label>
-                                <input type="text" class="form-control" id="cod_produto" name="cod_produto" 
-                                       placeholder="Ex: 4320162" value="{{ filtros.cod_produto if filtros else request.args.get('cod_produto', '') }}">
+                                <input type="text" class="form-control" id="cod_produto" name="cod_produto"
+                                    placeholder="Ex: 4320162"
+                                    value="{{ filtros.cod_produto if filtros else request.args.get('cod_produto', '') }}">
                             </div>
                         </div>
                         <div class="row">
                             <div class="col-md-4 mb-3">
                                 <label for="nome_cliente">Cliente:</label>
-                                <input type="text" class="form-control" id="nome_cliente" name="nome_cliente" 
-                                       placeholder="Nome do cliente" value="{{ filtros.nome_cliente if filtros else request.args.get('nome_cliente', '') }}">
+                                <input type="text" class="form-control" id="nome_cliente" name="nome_cliente"
+                                    placeholder="Nome do cliente"
+                                    value="{{ filtros.nome_cliente if filtros else request.args.get('nome_cliente', '') }}">
                             </div>
                             <div class="col-md-2 mb-3">
                                 <label for="estado">UF:</label>
                                 <select class="form-control" id="estado" name="estado">
                                     <option value="">Todos</option>
                                     {% if ufs_disponiveis %}
-                                        {% for uf in ufs_disponiveis %}
-                                        <option value="{{ uf }}" {% if (filtros and filtros.estado == uf) or request.args.get('estado') == uf %}selected{% endif %}>{{ uf }}</option>
-                                        {% endfor %}
+                                    {% for uf in ufs_disponiveis %}
+                                    <option value="{{ uf }}" {% if (filtros and filtros.estado==uf) or
+                                        request.args.get('estado')==uf %}selected{% endif %}>{{ uf }}</option>
+                                    {% endfor %}
                                     {% endif %}
                                 </select>
                             </div>
@@ -81,9 +85,10 @@
                                 <select class="form-control" id="vendedor" name="vendedor">
                                     <option value="">Todos</option>
                                     {% if vendedores_disponiveis %}
-                                        {% for v in vendedores_disponiveis %}
-                                        <option value="{{ v }}" {% if (filtros and filtros.vendedor == v) or request.args.get('vendedor') == v %}selected{% endif %}>{{ v }}</option>
-                                        {% endfor %}
+                                    {% for v in vendedores_disponiveis %}
+                                    <option value="{{ v }}" {% if (filtros and filtros.vendedor==v) or
+                                        request.args.get('vendedor')==v %}selected{% endif %}>{{ v }}</option>
+                                    {% endfor %}
                                     {% endif %}
                                 </select>
                             </div>
@@ -92,9 +97,10 @@
                                 <select class="form-control" id="incoterm" name="incoterm">
                                     <option value="">Todos</option>
                                     {% if incoterms_disponiveis %}
-                                        {% for inc in incoterms_disponiveis %}
-                                        <option value="{{ inc }}" {% if (filtros and filtros.incoterm == inc) or request.args.get('incoterm') == inc %}selected{% endif %}>{{ inc }}</option>
-                                        {% endfor %}
+                                    {% for inc in incoterms_disponiveis %}
+                                    <option value="{{ inc }}" {% if (filtros and filtros.incoterm==inc) or
+                                        request.args.get('incoterm')==inc %}selected{% endif %}>{{ inc }}</option>
+                                    {% endfor %}
                                     {% endif %}
                                 </select>
                             </div>
@@ -102,8 +108,9 @@
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <label for="municipio">Município:</label>
-                                <input type="text" class="form-control" id="municipio" name="municipio" 
-                                       placeholder="Nome do município" value="{{ filtros.municipio if filtros else request.args.get('municipio', '') }}">
+                                <input type="text" class="form-control" id="municipio" name="municipio"
+                                    placeholder="Nome do município"
+                                    value="{{ filtros.municipio if filtros else request.args.get('municipio', '') }}">
                             </div>
                         </div>
                         <div class="row">
@@ -111,7 +118,8 @@
                                 <button type="submit" class="btn btn-primary">
                                     <i class="fas fa-search"></i> Pesquisar
                                 </button>
-                                <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="btn btn-secondary">
+                                <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}"
+                                    class="btn btn-secondary">
                                     <i class="fas fa-eraser"></i> Limpar Filtros
                                 </a>
                             </div>
@@ -176,22 +184,23 @@
                     <h5 class="card-title mb-0">
                         <i class="fas fa-table"></i> Lista de Produtos Faturados
                         {% if total_registros_filtrados > 0 %}
-                        <span class="badge badge-primary">{{ total_registros_filtrados }} registros</span>
+                        <span class="badge bg-primary">{{ total_registros_filtrados }} registros</span>
                         {% endif %}
                     </h5>
-                    
+
                     <!-- ✅ CONTROLE DE PAGINAÇÃO -->
                     {% if pagination and pagination.pages > 1 %}
                     <div class="d-flex align-items-center">
                         <label class="mr-2 mb-0">Itens por página:</label>
-                        <select class="form-control form-control-sm" style="width: 80px;" onchange="changePerPage(this.value)">
-                            <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
-                            <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                            <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-                            <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+                        <select class="form-control form-control-sm" style="width: 80px;"
+                            onchange="changePerPage(this.value)">
+                            <option value="20" {% if per_page==20 %}selected{% endif %}>20</option>
+                            <option value="50" {% if per_page==50 %}selected{% endif %}>50</option>
+                            <option value="100" {% if per_page==100 %}selected{% endif %}>100</option>
+                            <option value="200" {% if per_page==200 %}selected{% endif %}>200</option>
                         </select>
                         <span class="ml-3 text-muted">
-                            Página {{ pagination.page }} de {{ pagination.pages }} 
+                            Página {{ pagination.page }} de {{ pagination.pages }}
                             ({{ pagination.total }} total)
                         </span>
                     </div>
@@ -199,134 +208,144 @@
                 </div>
                 <div class="card-body">
                     {% if produtos %}
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover" id="tabelaProdutos">
-                                <thead class="thead-light">
-                                    <tr>
-                                        <th style="width: 80px;">NF</th>
-                                        <th style="width: 100px;">Data Fatura</th>
-                                        <th style="width: 100px;"></th>Cliente</th>
-                                        <th style="width: 100px;">UF/Municipio</th>
-                                        <th style="width: 80px;">Código</th>
-                                        <th style="width: 380px;">Nome Produto</th>
-                                        <th style="width: 70px;">Qtd</th>
-                                        <th style="width: 90px;">Preço Unit.</th>
-                                        <th style="width: 100px;">Valor Total</th>
-                                        <th style="width: 200px;">Vendedor</th>
-                                        <th style="width: 100px;">Incoterm</th>
-                                        <th style="width: 100px;">Origem</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for produto in produtos %}
-                                    <tr>
-                                        <td>
-                                            <strong>{{ produto.numero_nf | string | replace('.0', '') }}</strong>
-                                        </td>
-                                        <td>{{ produto.data_fatura | formatar_data_brasil }}</td>
-                                        <td>
-                                            <small>{{ produto.nome_cliente[:50] }}{% if produto.nome_cliente|length > 50 %}...{% endif %}</small>
-                                        </td>
-                                        <td>
-                                            {% if produto.municipio %}
-                                            <span class="fw-bold text-secondary">{{ produto.estado }}/{{ produto.municipio }}</span>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover" id="tabelaProdutos">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width: 80px;">NF</th>
+                                    <th style="width: 100px;">Data Fatura</th>
+                                    <th style="width: 100px;"></th>Cliente</th>
+                                    <th style="width: 100px;">UF/Municipio</th>
+                                    <th style="width: 80px;">Código</th>
+                                    <th style="width: 380px;">Nome Produto</th>
+                                    <th style="width: 70px;">Qtd</th>
+                                    <th style="width: 90px;">Preço Unit.</th>
+                                    <th style="width: 100px;">Valor Total</th>
+                                    <th style="width: 200px;">Vendedor</th>
+                                    <th style="width: 100px;">Incoterm</th>
+                                    <th style="width: 100px;">Origem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for produto in produtos %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ produto.numero_nf | string | replace('.0', '') }}</strong>
+                                    </td>
+                                    <td>{{ produto.data_fatura | formatar_data_brasil }}</td>
+                                    <td>
+                                        <small>{{ produto.nome_cliente[:50] }}{% if produto.nome_cliente|length > 50
+                                            %}...{% endif %}</small>
+                                    </td>
+                                    <td>
+                                        {% if produto.municipio %}
+                                        <span class="fw-bold text-secondary">{{ produto.estado }}/{{ produto.municipio
+                                            }}</span>
                                         {% else %}
-                                            <span class="text-muted">-</span>
+                                        <span class="text-muted">-</span>
                                         {% endif %}
 
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-dark text-white">{{ produto.cod_produto }}</span>
-                                        </td>
-                                        <td>
-                                            <small>{{ produto.nome_produto[:70] }}{% if produto.nome_produto|length > 70 %}...{% endif %}</small>
-                                        </td>
-                                        <td>
-                                            <span class="fw-bold text-primary">{{ produto.qtd_produto_faturado | numero_br }}</span>
-                                        </td>
-                                        <td>{{ produto.preco_produto_faturado | valor_br }}</td>
-                                        <td>
-                                            <strong>{{ produto.valor_produto_faturado | valor_br }}</strong>
-                                        </td>
-                                        <td>
-                                            {% if produto.vendedor %}
-                                                <small>{{ produto.vendedor }}</small>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if produto.incoterm %}
-                                                <small class="fw-bold text-info">{{ produto.incoterm[:8] }}{% if produto.incoterm|length > 8 %}...{% endif %}</small>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if produto.origem %}
-                                                <small>{{ produto.origem }}</small>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Paginação -->
-                        {% if pagination %}
-                        <nav aria-label="Navegação da página">
-                            <ul class="pagination justify-content-center">
-                                {% if pagination.has_prev %}
-                                <li class="page-item">
-                                    {% set prev_args = request.args.copy() %}
-                                    {% set _ = prev_args.pop('page', None) %}
-                                    <a class="page-link" href="{{ url_for('faturamento.listar_faturamento_produtos', page=pagination.prev_num, **prev_args) }}">Anterior</a>
-                                </li>
-                                {% endif %}
-
-                                {% for page_num in pagination.iter_pages() %}
-                                    {% if page_num %}
-                                        {% if page_num != pagination.page %}
-                                        <li class="page-item">
-                                            {% set page_args = request.args.copy() %}
-                                            {% set _ = page_args.pop('page', None) %}
-                                            <a class="page-link" href="{{ url_for('faturamento.listar_faturamento_produtos', page=page_num, **page_args) }}">{{ page_num }}</a>
-                                        </li>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-dark text-white">{{ produto.cod_produto }}</span>
+                                    </td>
+                                    <td>
+                                        <small>{{ produto.nome_produto[:70] }}{% if produto.nome_produto|length > 70
+                                            %}...{% endif %}</small>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-primary">{{ produto.qtd_produto_faturado | numero_br
+                                            }}</span>
+                                    </td>
+                                    <td>{{ produto.preco_produto_faturado | valor_br }}</td>
+                                    <td>
+                                        <strong>{{ produto.valor_produto_faturado | valor_br }}</strong>
+                                    </td>
+                                    <td>
+                                        {% if produto.vendedor %}
+                                        <small>{{ produto.vendedor }}</small>
                                         {% else %}
-                                        <li class="page-item active">
-                                            <span class="page-link">{{ page_num }}</span>
-                                        </li>
+                                        <span class="text-muted">-</span>
                                         {% endif %}
-                                    {% else %}
-                                    <li class="page-item disabled">
-                                        <span class="page-link">…</span>
-                                    </li>
-                                    {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if produto.incoterm %}
+                                        <small class="fw-bold text-info">{{ produto.incoterm[:8] }}{% if
+                                            produto.incoterm|length > 8 %}...{% endif %}</small>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if produto.origem %}
+                                        <small>{{ produto.origem }}</small>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
                                 {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
 
-                                {% if pagination.has_next %}
-                                <li class="page-item">
-                                    {% set next_args = request.args.copy() %}
-                                    {% set _ = next_args.pop('page', None) %}
-                                    <a class="page-link" href="{{ url_for('faturamento.listar_faturamento_produtos', page=pagination.next_num, **next_args) }}">Próximo</a>
-                                </li>
-                                {% endif %}
-                            </ul>
-                        </nav>
-                        {% endif %}
+                    <!-- Paginação -->
+                    {% if pagination %}
+                    <nav aria-label="Navegação da página">
+                        <ul class="pagination justify-content-center">
+                            {% if pagination.has_prev %}
+                            <li class="page-item">
+                                {% set prev_args = request.args.copy() %}
+                                {% set _ = prev_args.pop('page', None) %}
+                                <a class="page-link"
+                                    href="{{ url_for('faturamento.listar_faturamento_produtos', page=pagination.prev_num, **prev_args) }}">Anterior</a>
+                            </li>
+                            {% endif %}
+
+                            {% for page_num in pagination.iter_pages() %}
+                            {% if page_num %}
+                            {% if page_num != pagination.page %}
+                            <li class="page-item">
+                                {% set page_args = request.args.copy() %}
+                                {% set _ = page_args.pop('page', None) %}
+                                <a class="page-link"
+                                    href="{{ url_for('faturamento.listar_faturamento_produtos', page=page_num, **page_args) }}">{{
+                                    page_num }}</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% endif %}
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">…</span>
+                            </li>
+                            {% endif %}
+                            {% endfor %}
+
+                            {% if pagination.has_next %}
+                            <li class="page-item">
+                                {% set next_args = request.args.copy() %}
+                                {% set _ = next_args.pop('page', None) %}
+                                <a class="page-link"
+                                    href="{{ url_for('faturamento.listar_faturamento_produtos', page=pagination.next_num, **next_args) }}">Próximo</a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
 
                     {% else %}
-                        <div class="text-center py-5">
-                            <i class="fas fa-file-invoice-dollar fa-4x text-muted"></i>
-                            <h4 class="text-muted mt-3">Nenhum registro encontrado</h4>
-                            <p class="text-muted">Não há dados de faturamento por produto ou os filtros não retornaram resultados.</p>
-                            <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="btn btn-primary">
-                                <i class="fas fa-file-excel"></i> Importar Dados de Faturamento
-                            </a>
-                        </div>
+                    <div class="text-center py-5">
+                        <i class="fas fa-file-invoice-dollar fa-4x text-muted"></i>
+                        <h4 class="text-muted mt-3">Nenhum registro encontrado</h4>
+                        <p class="text-muted">Não há dados de faturamento por produto ou os filtros não retornaram
+                            resultados.</p>
+                        <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="btn btn-primary">
+                            <i class="fas fa-file-excel"></i> Importar Dados de Faturamento
+                        </a>
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -335,31 +354,31 @@
 </div>
 
 <script>
-// ✅ FUNÇÃO PARA ALTERAR ITENS POR PÁGINA
-function changePerPage(newPerPage) {
-    const currentUrl = new URL(window.location);
-    currentUrl.searchParams.set('per_page', newPerPage);
-    currentUrl.searchParams.set('page', '1'); // Reset para primeira página
-    window.location.href = currentUrl.toString();
-}
+    // ✅ FUNÇÃO PARA ALTERAR ITENS POR PÁGINA
+    function changePerPage(newPerPage) {
+        const currentUrl = new URL(window.location);
+        currentUrl.searchParams.set('per_page', newPerPage);
+        currentUrl.searchParams.set('page', '1'); // Reset para primeira página
+        window.location.href = currentUrl.toString();
+    }
 
-// Remove auto-submit - user will click search button
-// This prevents unwanted submits while typing or selecting
+    // Remove auto-submit - user will click search button
+    // This prevents unwanted submits while typing or selecting
 
-// Função para exportar Excel
-function exportarExcel() {
-    const params = new URLSearchParams(window.location.search);
-    params.set('export', 'excel');
-    window.location.href = '{{ url_for("faturamento.listar_faturamento_produtos") }}?' + params.toString();
-}
+    // Função para exportar Excel
+    function exportarExcel() {
+        const params = new URLSearchParams(window.location.search);
+        params.set('export', 'excel');
+        window.location.href = '{{ url_for("faturamento.listar_faturamento_produtos") }}?' + params.toString();
+    }
 
-// Tooltips nos códigos de produto - Bootstrap 5
-$(document).ready(function() {
-    // Bootstrap 5 - Inicializar tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+    // Tooltips nos códigos de produto - Bootstrap 5
+    $(document).ready(function () {
+        // Bootstrap 5 - Inicializar tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
     });
-});
 </script>
-{% endblock %} 
+{% endblock %}

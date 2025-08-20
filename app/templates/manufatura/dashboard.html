@@ -106,19 +106,22 @@
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-3 mb-3">
-                            <a href="{{ url_for('manufatura.previsao_demanda') }}" class="btn btn-outline-primary btn-block">
+                            <a href="{{ url_for('manufatura.previsao_demanda') }}"
+                                class="btn btn-outline-primary btn-block">
                                 <i class="fas fa-chart-line me-2"></i>
                                 Previsão de Demanda
                             </a>
                         </div>
                         <div class="col-md-3 mb-3">
-                            <a href="{{ url_for('manufatura.ordens_producao') }}" class="btn btn-outline-success btn-block">
+                            <a href="{{ url_for('manufatura.ordens_producao') }}"
+                                class="btn btn-outline-success btn-block">
                                 <i class="fas fa-tasks me-2"></i>
                                 Ordens de Produção
                             </a>
                         </div>
                         <div class="col-md-3 mb-3">
-                            <a href="{{ url_for('manufatura.requisicoes_compras') }}" class="btn btn-outline-warning btn-block">
+                            <a href="{{ url_for('manufatura.requisicoes_compras') }}"
+                                class="btn btn-outline-warning btn-block">
                                 <i class="fas fa-shopping-basket me-2"></i>
                                 Requisições de Compras
                             </a>
@@ -208,92 +211,92 @@
 </div>
 
 <script>
-$(document).ready(function() {
-    // Carregar métricas
-    function carregarMetricas() {
-        $.get('{{ url_for("manufatura.dashboard_metricas") }}')
-            .done(function(data) {
-                $('#ordens-abertas').text(data.ordens.abertas);
-                $('#necessidades-pendentes').text(data.compras.necessidades_pendentes);
-                $('#taxa-cumprimento').text(data.previsao.taxa_cumprimento + '%');
-                $('#ordens-concluidas').text(data.ordens.concluidas_mes);
-            })
-            .fail(function() {
-                $('.card-body .h5').text('Erro');
-            });
-    }
-
-    // Carregar ordens abertas
-    function carregarOrdensAbertas() {
-        $.get('{{ url_for("manufatura.dashboard_ordens_abertas") }}')
-            .done(function(ordens) {
-                var tbody = $('#tabela-ordens-abertas tbody');
-                tbody.empty();
-                
-                if (ordens.length === 0) {
-                    tbody.append('<tr><td colspan="4" class="text-center">Nenhuma ordem aberta</td></tr>');
-                    return;
-                }
-                
-                ordens.forEach(function(ordem) {
-                    var statusBadge = {
-                        'Planejada': 'badge-secondary',
-                        'Liberada': 'badge-info',
-                        'Em Produção': 'badge-warning'
-                    }[ordem.status] || 'badge-secondary';
-                    
-                    var tr = $('<tr>');
-                    tr.append('<td>' + ordem.numero_ordem + '</td>');
-                    tr.append('<td>' + ordem.cod_produto + '<br><small>' + ordem.nome_produto + '</small></td>');
-                    tr.append('<td><span class="badge ' + statusBadge + '">' + ordem.status + '</span></td>');
-                    tr.append('<td><div class="progress"><div class="progress-bar" style="width: ' + ordem.progresso + '%">' + ordem.progresso + '%</div></div></td>');
-                    tbody.append(tr);
+    $(document).ready(function () {
+        // Carregar métricas
+        function carregarMetricas() {
+            $.get('{{ url_for("manufatura.dashboard_metricas") }}')
+                .done(function (data) {
+                    $('#ordens-abertas').text(data.ordens.abertas);
+                    $('#necessidades-pendentes').text(data.compras.necessidades_pendentes);
+                    $('#taxa-cumprimento').text(data.previsao.taxa_cumprimento + '%');
+                    $('#ordens-concluidas').text(data.ordens.concluidas_mes);
+                })
+                .fail(function () {
+                    $('.card-body .h5').text('Erro');
                 });
-            })
-            .fail(function() {
-                $('#tabela-ordens-abertas tbody').html('<tr><td colspan="4" class="text-center text-danger">Erro ao carregar</td></tr>');
-            });
-    }
+        }
 
-    // Carregar necessidades
-    function carregarNecessidades() {
-        $.get('{{ url_for("manufatura.dashboard_necessidades") }}')
-            .done(function(necessidades) {
-                var tbody = $('#tabela-necessidades tbody');
-                tbody.empty();
-                
-                if (necessidades.length === 0) {
-                    tbody.append('<tr><td colspan="4" class="text-center">Nenhuma necessidade urgente</td></tr>');
-                    return;
-                }
-                
-                necessidades.forEach(function(item) {
-                    var tr = $('<tr>');
-                    if (item.urgente) tr.addClass('table-danger');
-                    
-                    tr.append('<td>' + item.cod_produto + '<br><small>' + item.nome_produto + '</small></td>');
-                    tr.append('<td>' + item.qtd_necessaria.toFixed(2) + '</td>');
-                    tr.append('<td>' + item.data_necessidade + '</td>');
-                    tr.append('<td>' + (item.urgente ? '<span class="badge badge-danger">Urgente</span>' : '<span class="badge badge-warning">' + item.dias_restantes + ' dias</span>') + '</td>');
-                    tbody.append(tr);
+        // Carregar ordens abertas
+        function carregarOrdensAbertas() {
+            $.get('{{ url_for("manufatura.dashboard_ordens_abertas") }}')
+                .done(function (ordens) {
+                    var tbody = $('#tabela-ordens-abertas tbody');
+                    tbody.empty();
+
+                    if (ordens.length === 0) {
+                        tbody.append('<tr><td colspan="4" class="text-center">Nenhuma ordem aberta</td></tr>');
+                        return;
+                    }
+
+                    ordens.forEach(function (ordem) {
+                        var statusBadge = {
+                            'Planejada': 'badge-secondary',
+                            'Liberada': 'badge-info',
+                            'Em Produção': 'badge-warning'
+                        }[ordem.status] || 'badge-secondary';
+
+                        var tr = $('<tr>');
+                        tr.append('<td>' + ordem.numero_ordem + '</td>');
+                        tr.append('<td>' + ordem.cod_produto + '<br><small>' + ordem.nome_produto + '</small></td>');
+                        tr.append('<td><span class="badge ' + statusBadge + '">' + ordem.status + '</span></td>');
+                        tr.append('<td><div class="progress"><div class="progress-bar" style="width: ' + ordem.progresso + '%">' + ordem.progresso + '%</div></div></td>');
+                        tbody.append(tr);
+                    });
+                })
+                .fail(function () {
+                    $('#tabela-ordens-abertas tbody').html('<tr><td colspan="4" class="text-center text-danger">Erro ao carregar</td></tr>');
                 });
-            })
-            .fail(function() {
-                $('#tabela-necessidades tbody').html('<tr><td colspan="4" class="text-center text-danger">Erro ao carregar</td></tr>');
-            });
-    }
+        }
 
-    // Carregar dados ao iniciar
-    carregarMetricas();
-    carregarOrdensAbertas();
-    carregarNecessidades();
-    
-    // Atualizar a cada 30 segundos
-    setInterval(function() {
+        // Carregar necessidades
+        function carregarNecessidades() {
+            $.get('{{ url_for("manufatura.dashboard_necessidades") }}')
+                .done(function (necessidades) {
+                    var tbody = $('#tabela-necessidades tbody');
+                    tbody.empty();
+
+                    if (necessidades.length === 0) {
+                        tbody.append('<tr><td colspan="4" class="text-center">Nenhuma necessidade urgente</td></tr>');
+                        return;
+                    }
+
+                    necessidades.forEach(function (item) {
+                        var tr = $('<tr>');
+                        if (item.urgente) tr.addClass('table-danger');
+
+                        tr.append('<td>' + item.cod_produto + '<br><small>' + item.nome_produto + '</small></td>');
+                        tr.append('<td>' + item.qtd_necessaria.toFixed(2) + '</td>');
+                        tr.append('<td>' + item.data_necessidade + '</td>');
+                        tr.append('<td>' + (item.urgente ? '<span class="badge bg-danger">Urgente</span>' : '<span class="badge bg-warning">' + item.dias_restantes + ' dias</span>') + '</td>');
+                        tbody.append(tr);
+                    });
+                })
+                .fail(function () {
+                    $('#tabela-necessidades tbody').html('<tr><td colspan="4" class="text-center text-danger">Erro ao carregar</td></tr>');
+                });
+        }
+
+        // Carregar dados ao iniciar
         carregarMetricas();
         carregarOrdensAbertas();
         carregarNecessidades();
-    }, 30000);
-});
+
+        // Atualizar a cada 30 segundos
+        setInterval(function () {
+            carregarMetricas();
+            carregarOrdensAbertas();
+            carregarNecessidades();
+        }, 30000);
+    });
 </script>
 {% endblock %}

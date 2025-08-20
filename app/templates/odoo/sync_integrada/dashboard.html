@@ -10,11 +10,11 @@
                 <div class="card-header bg-success text-white">
                     <h4 class="mb-0">
                         <i class="fas fa-shield-alt"></i> Sincronização Integrada Segura
-                        <span class="badge badge-light text-success ml-2">SEQUÊNCIA AUTOMÁTICA</span>
+                        <span class="badge bg-light text-success ml-2">SEQUÊNCIA AUTOMÁTICA</span>
                     </h4>
                 </div>
                 <div class="card-body">
-                    
+
                     <!-- ✅ EXPLICAÇÃO DA SEQUÊNCIA SEGURA -->
                     <div class="row mb-4">
                         <div class="col-12">
@@ -23,7 +23,8 @@
                                     <i class="fas fa-check-circle"></i> Sequência Automática Segura
                                 </h5>
                                 <p class="mb-2">
-                                    Este botão executa automaticamente a sincronização na <strong>sequência CORRETA</strong> 
+                                    Este botão executa automaticamente a sincronização na <strong>sequência
+                                        CORRETA</strong>
                                     para eliminar qualquer risco de perda de dados:
                                 </p>
                                 <ol class="mb-2">
@@ -38,41 +39,44 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- 📊 STATUS ATUAL DO SISTEMA -->
                     <div class="row mb-4">
                         <div class="col-md-6">
-                            <div class="card border-{{ 'success' if status.nivel_risco == 'BAIXO' else ('warning' if status.nivel_risco == 'MÉDIO' else 'danger') }}">
-                                <div class="card-header bg-{{ 'success' if status.nivel_risco == 'BAIXO' else ('warning' if status.nivel_risco == 'MÉDIO' else 'danger') }} text-white">
+                            <div
+                                class="card border-{{ 'success' if status.nivel_risco == 'BAIXO' else ('warning' if status.nivel_risco == 'MÉDIO' else 'danger') }}">
+                                <div
+                                    class="card-header bg-{{ 'success' if status.nivel_risco == 'BAIXO' else ('warning' if status.nivel_risco == 'MÉDIO' else 'danger') }} text-white">
                                     <h6 class="mb-0"><i class="fas fa-chart-line"></i> Status do Sistema</h6>
                                 </div>
                                 <div class="card-body">
                                     <div class="mb-3">
                                         <strong>Nível de Risco:</strong>
-                                        <span class="badge badge-{{ 'success' if status.nivel_risco == 'BAIXO' else ('warning' if status.nivel_risco == 'MÉDIO' else 'danger') }}">
+                                        <span
+                                            class="badge bg-{{ 'success' if status.nivel_risco == 'BAIXO' else ('warning' if status.nivel_risco == 'MÉDIO' else 'danger') }}">
                                             {{ status.nivel_risco }}
                                         </span>
                                     </div>
-                                    
+
                                     {% if status.ultima_sync_faturamento %}
                                     <div class="mb-2">
                                         <small class="text-muted">Último Faturamento:</small><br>
                                         <strong>{{ status.ultima_sync_faturamento }}</strong>
                                     </div>
                                     {% endif %}
-                                    
+
                                     {% if status.ultima_sync_carteira %}
                                     <div class="mb-2">
                                         <small class="text-muted">Última Carteira:</small><br>
                                         <strong>{{ status.ultima_sync_carteira }}</strong>
                                     </div>
                                     {% endif %}
-                                    
+
                                     <div class="mt-3">
                                         <small class="text-muted">Recomendação:</small><br>
                                         <strong>{{ status.recomendacao }}</strong>
                                     </div>
-                                    
+
                                     {% if status.alertas %}
                                     <div class="mt-3">
                                         <small class="text-muted">Alertas:</small>
@@ -86,7 +90,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <!-- 🔄 BOTÃO PRINCIPAL DE SINCRONIZAÇÃO -->
                             <div class="card border-primary">
@@ -95,13 +99,14 @@
                                 </div>
                                 <div class="card-body text-center">
                                     {% if status.pode_sincronizar %}
-                                    
-                                    <form method="POST" action="{{ url_for('sync_integrada.executar_sincronizacao_segura') }}" 
-                                          onsubmit="return confirmarSincronizacaoSegura()">
-                                          
+
+                                    <form method="POST"
+                                        action="{{ url_for('sync_integrada.executar_sincronizacao_segura') }}"
+                                        onsubmit="return confirmarSincronizacaoSegura()">
+
                                         <div class="form-check mb-3">
-                                            <input class="form-check-input" type="checkbox" name="usar_filtro_carteira" 
-                                                   id="filtro_carteira" checked>
+                                            <input class="form-check-input" type="checkbox" name="usar_filtro_carteira"
+                                                id="filtro_carteira" checked>
                                             <label class="form-check-label" for="filtro_carteira">
                                                 <strong>Filtrar Carteira Pendente</strong>
                                                 <small class="text-muted d-block">
@@ -109,17 +114,17 @@
                                                 </small>
                                             </label>
                                         </div>
-                                        
+
                                         <button type="submit" class="btn btn-success btn-lg" id="btn-sync-seguro">
                                             <i class="fas fa-shield-alt"></i>
                                             <strong>SINCRONIZAR TUDO (SEGURO)</strong>
                                             <small class="d-block mt-1">🔄 Faturamento → Carteira</small>
                                         </button>
-                                        
+
                                     </form>
-                                    
+
                                     <hr>
-                                    
+
                                     <!-- ✅ VANTAGENS DA SINCRONIZAÇÃO SEGURA -->
                                     <div class="text-left">
                                         <small class="text-muted">
@@ -131,27 +136,29 @@
                                             ✅ Um clique apenas
                                         </small>
                                     </div>
-                                    
+
                                     {% else %}
-                                    
+
                                     <div class="alert alert-danger">
                                         <i class="fas fa-exclamation-triangle"></i>
                                         <strong>Sincronização Bloqueada</strong>
-                                        <p class="mb-1">{{ status.get('erro', 'Sistema não permite sincronização no momento') }}</p>
+                                        <p class="mb-1">{{ status.get('erro', 'Sistema não permite sincronização no
+                                            momento') }}</p>
                                     </div>
-                                    
+
                                     {% endif %}
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- 🎯 COMPARAÇÃO: ANTES vs AGORA -->
                     <div class="row">
                         <div class="col-12">
                             <div class="card">
                                 <div class="card-header bg-info text-white">
-                                    <h6 class="mb-0"><i class="fas fa-balance-scale"></i> Comparação: Processo Anterior vs Processo Seguro</h6>
+                                    <h6 class="mb-0"><i class="fas fa-balance-scale"></i> Comparação: Processo Anterior
+                                        vs Processo Seguro</h6>
                                 </div>
                                 <div class="card-body">
                                     <div class="row">
@@ -190,7 +197,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                 </div>
             </div>
         </div>
@@ -199,8 +206,8 @@
 
 <!-- 🚀 SISTEMA DE CONFIRMAÇÃO E FEEDBACK -->
 <script>
-function confirmarSincronizacaoSegura() {
-    const confirmMsg = `🔄 SINCRONIZAÇÃO INTEGRADA SEGURA
+    function confirmarSincronizacaoSegura() {
+        const confirmMsg = `🔄 SINCRONIZAÇÃO INTEGRADA SEGURA
 
 ✅ SEQUÊNCIA AUTOMÁTICA:
 1. 📊 FATURAMENTO sincronizado primeiro
@@ -218,40 +225,40 @@ Esta é a forma MAIS SEGURA de sincronizar.
 
 Executar sincronização integrada segura?`;
 
-    return confirm(confirmMsg);
-}
+        return confirm(confirmMsg);
+    }
 
-// Feedback visual durante operação
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.querySelector('form');
-    const btnSync = document.getElementById('btn-sync-seguro');
-    
-    if (form && btnSync) {
-        form.addEventListener('submit', function(e) {
-            // Alterar botão para mostrar progresso
-            btnSync.innerHTML = `
+    // Feedback visual durante operação
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.querySelector('form');
+        const btnSync = document.getElementById('btn-sync-seguro');
+
+        if (form && btnSync) {
+            form.addEventListener('submit', function (e) {
+                // Alterar botão para mostrar progresso
+                btnSync.innerHTML = `
                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                 <strong>SINCRONIZANDO...</strong>
                 <small class="d-block mt-1">⏳ Executando sequência segura...</small>
             `;
-            btnSync.disabled = true;
-            btnSync.className = 'btn btn-warning btn-lg';
-            
-            // Timeout de segurança
-            setTimeout(function() {
-                if (btnSync.disabled) {
-                    btnSync.innerHTML = `
+                btnSync.disabled = true;
+                btnSync.className = 'btn btn-warning btn-lg';
+
+                // Timeout de segurança
+                setTimeout(function () {
+                    if (btnSync.disabled) {
+                        btnSync.innerHTML = `
                         <i class="fas fa-shield-alt"></i>
                         <strong>SINCRONIZAR TUDO (SEGURO)</strong>
                         <small class="d-block mt-1">🔄 Faturamento → Carteira</small>
                     `;
-                    btnSync.disabled = false;
-                    btnSync.className = 'btn btn-success btn-lg';
-                }
-            }, 60000); // 60 segundos
-        });
-    }
-});
+                        btnSync.disabled = false;
+                        btnSync.className = 'btn btn-success btn-lg';
+                    }
+                }, 60000); // 60 segundos
+            });
+        }
+    });
 </script>
 
 {% endblock %}

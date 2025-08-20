@@ -24,6 +24,7 @@ from app.utils.frete_simulador import calcular_frete_por_cnpj, buscar_cidade_uni
 from app.utils.vehicle_utils import normalizar_nome_veiculo
 from app.utils.calculadora_frete import CalculadoraFrete
 from app.utils.embarque_numero import obter_proximo_numero_embarque
+from app.utils.tabela_frete_manager import TabelaFreteManager  # ✅ NOVO: Gerenciador centralizado de campos
 # Routes
 # Função centralizada importada inline quando necessário
 
@@ -393,8 +394,7 @@ def tela_cotacao():
         print(f"[DEBUG] Buscando pedidos com UF={uf_busca}")
         pedidos_mesmo_estado = (Pedido.query
                                .filter(
-                                   (Pedido.cod_uf == uf_busca) |
-                                   ((Pedido.rota == 'RED') & (uf_busca == 'SP')))                                  
+                                   (Pedido.cod_uf == uf_busca))                                        
                                .filter(~Pedido.id.in_(lista_ids))
                                .filter(Pedido.status == 'ABERTO')  # ✅ Apenas pedidos abertos
                                .all())
@@ -509,6 +509,9 @@ def tela_cotacao():
                         pallets_grupo = sum(p.pallet_total or 0 for p in pedidos_cnpj)
                         
                         # Adiciona apenas a melhor opção à lista da transportadora
+                        # Usa TabelaFreteManager para preparar campos da tabela
+                        dados_tabela_opcao = TabelaFreteManager.preparar_dados_tabela(melhor_opcao)
+                        
                         opcao_completa = {
                             'cnpj': cnpj,
                             'razao_social': pedidos_cnpj[0].raz_social_red if pedidos_cnpj else '',
@@ -520,19 +523,8 @@ def tela_cotacao():
                             'valor_total': melhor_opcao['valor_total'],
                             'valor_liquido': melhor_opcao['valor_liquido'],
                             'frete_kg': melhor_opcao['valor_liquido'] / peso_grupo if peso_grupo > 0 else float('inf'),
-                            'nome_tabela': melhor_opcao.get('nome_tabela', ''),
-                            'modalidade': melhor_opcao.get('modalidade', 'FRETE PESO'),
-                            'valor_kg': melhor_opcao.get('valor_kg', 0),
-                            'icms': melhor_opcao.get('icms', 0),
-                            'percentual_gris': melhor_opcao.get('percentual_gris', 0),
-                            'pedagio_por_100kg': melhor_opcao.get('pedagio_por_100kg', 0),
-                            'valor_tas': melhor_opcao.get('valor_tas', 0),
-                            'percentual_adv': melhor_opcao.get('percentual_adv', 0),
-                            'percentual_rca': melhor_opcao.get('percentual_rca', 0),
-                            'valor_despacho': melhor_opcao.get('valor_despacho', 0),
-                            'valor_cte': melhor_opcao.get('valor_cte', 0),
-                            'icms_incluso': melhor_opcao.get('icms_incluso', False),
-                            'icms_destino': melhor_opcao.get('icms_destino', 0)
+                            **dados_tabela_opcao,  # Inclui todos os campos da tabela
+                            'icms_destino': melhor_opcao.get('icms_destino', 0)  # icms_destino separado
                         }
                         opcoes_transporte['fracionada'][transportadora_id]['cnpjs'].append(opcao_completa)
                     
@@ -558,12 +550,13 @@ def tela_cotacao():
                         
                         # Adiciona TODAS as opções para este CNPJ
                         for opcao in todas_opcoes:
+                            # Usa TabelaFreteManager para preparar campos da tabela
+                            dados_tabela_opcao = TabelaFreteManager.preparar_dados_tabela(opcao)
+                            
                             opcao_completa = {
                                 'cnpj': cnpj,
                                 'transportadora_id': opcao.get('transportadora_id'),
                                 'transportadora': opcao.get('transportadora'),
-                                'nome_tabela': opcao.get('nome_tabela', ''),
-                                'modalidade': opcao.get('modalidade', 'FRETE PESO'),
                                 'valor_total': opcao.get('valor_total', 0),
                                 'valor_liquido': opcao.get('valor_liquido', 0),
                                 'frete_kg': opcao.get('valor_liquido', 0) / peso_grupo if peso_grupo > 0 else 0,
@@ -573,17 +566,8 @@ def tela_cotacao():
                                 'cidade': opcao.get('cidade', ''),
                                 'uf': opcao.get('uf', ''),
                                 'razao_social': pedidos_cnpj[0].raz_social_red if pedidos_cnpj else '',
-                                'valor_kg': opcao.get('valor_kg', 0),
-                                'icms': opcao.get('icms', 0),
-                                'percentual_gris': opcao.get('percentual_gris', 0),
-                                'pedagio_por_100kg': opcao.get('pedagio_por_100kg', 0),
-                                'valor_tas': opcao.get('valor_tas', 0),
-                                'percentual_adv': opcao.get('percentual_adv', 0),
-                                'percentual_rca': opcao.get('percentual_rca', 0),
-                                'valor_despacho': opcao.get('valor_despacho', 0),
-                                'valor_cte': opcao.get('valor_cte', 0),
-                                'icms_incluso': opcao.get('icms_incluso', False),
-                                'icms_destino': opcao.get('icms_destino', 0)
+                                **dados_tabela_opcao,  # Inclui todos os campos da tabela
+                                'icms_destino': opcao.get('icms_destino', 0)  # icms_destino separado
                             }
                             opcoes_por_cnpj[cnpj].append(opcao_completa)
                             print(f"[DEBUG]   - {opcao.get('transportadora')}: R${opcao.get('valor_liquido', 0):.2f}")
@@ -602,44 +586,6 @@ def tela_cotacao():
                 'fracionada': {}
             }
 
-    # 🔧 CORREÇÃO GARANTIDA: Força preparação do opcoes_por_cnpj para o modal
-    print(f"[DEBUG] 🔧 VERIFICANDO opcoes_por_cnpj: {len(opcoes_por_cnpj)} CNPJs")
-    if not opcoes_por_cnpj and resultados and 'fracionadas' in resultados:
-        print("[DEBUG] 🔧 opcoes_por_cnpj estava vazio, criando agora...")
-        opcoes_por_cnpj = {}
-        
-        for cnpj, todas_opcoes in resultados['fracionadas'].items():
-            if isinstance(todas_opcoes, list) and todas_opcoes:
-                opcoes_por_cnpj[cnpj] = []
-                
-                # Calcula dados do grupo deste CNPJ
-                pedidos_cnpj = [p for p in pedidos if p.cnpj_cpf == cnpj]
-                peso_grupo = sum(p.peso_total or 0 for p in pedidos_cnpj)
-                valor_grupo = sum(p.valor_saldo_total or 0 for p in pedidos_cnpj)
-                
-                print(f"[DEBUG] 🔧 CORREÇÃO - CNPJ {cnpj}: {len(todas_opcoes)} opções")
-                
-                for opcao in todas_opcoes:
-                    opcao_completa = {
-                        'cnpj': cnpj,
-                        'transportadora_id': opcao.get('transportadora_id'),
-                        'transportadora': opcao.get('transportadora'),
-                        'nome_tabela': opcao.get('nome_tabela', ''),
-                        'modalidade': opcao.get('modalidade', 'FRETE PESO'),
-                        'valor_total': opcao.get('valor_total', 0),
-                        'valor_liquido': opcao.get('valor_liquido', 0),
-                        'frete_kg': opcao.get('valor_liquido', 0) / peso_grupo if peso_grupo > 0 else 0,
-                        'peso_grupo': peso_grupo,
-                        'valor_grupo': valor_grupo,
-                        'pallets_grupo': sum(p.pallet_total or 0 for p in pedidos_cnpj),
-                        'cidade': opcao.get('cidade', ''),
-                        'uf': opcao.get('uf', ''),
-                        'razao_social': pedidos_cnpj[0].raz_social_red if pedidos_cnpj else ''
-                    }
-                    opcoes_por_cnpj[cnpj].append(opcao_completa)
-                    print(f"[DEBUG] 🔧 → {opcao.get('transportadora')}: R${opcao.get('valor_liquido', 0):.2f}")
-        
-        print(f"[DEBUG] 🔧 CORREÇÃO FINAL: {len(opcoes_por_cnpj)} CNPJs preparados")
 
     # Debug final antes de enviar para o template
     print(f"[DEBUG] 🎯 ENVIANDO PARA TEMPLATE: opcoes_por_cnpj com {len(opcoes_por_cnpj)} CNPJs")
@@ -689,9 +635,13 @@ def tela_cotacao():
                                     capacidade_restante = veiculo.peso_maximo - peso_atual
                                     
                                     # ✅ NOVA LÓGICA: Calcula acréscimo de valor (sempre positivo ou zero)
-                                    valor_embarque_atual = embarque.tabela_valor_kg * peso_atual if embarque.tabela_valor_kg else 0
+                                    # Extrai dados da tabela do embarque usando TabelaFreteManager
+                                    dados_tabela_embarque = TabelaFreteManager.preparar_dados_tabela(embarque)
+                                    valor_kg_embarque = dados_tabela_embarque.get('valor_kg', 0)
+                                    
+                                    valor_embarque_atual = valor_kg_embarque * peso_atual if valor_kg_embarque else 0
                                     valor_cotacao = opcao_direta.get('valor_liquido', 0)
-                                    valor_embarque_com_cotacao = embarque.tabela_valor_kg * (peso_atual + peso_total) if embarque.tabela_valor_kg else 0
+                                    valor_embarque_com_cotacao = valor_kg_embarque * (peso_atual + peso_total) if valor_kg_embarque else 0
                                     
                                     # Acréscimo = diferença entre valor total com inclusão vs valor atual + valor da cotação separada
                                     acrescimo_valor = max(0, valor_embarque_com_cotacao - valor_embarque_atual - valor_cotacao)
@@ -921,7 +871,7 @@ def fechar_frete():
             for pedido_data in pedidos_data:
                 pedido = Pedido.query.get(pedido_data.get('id'))
                 if pedido:
-                    uf_destino = 'SP' if pedido.rota and pedido.rota.upper().strip() == 'RED' else pedido.cod_uf
+                    uf_destino = pedido.cod_uf
                     break
             print(f"[DEBUG] 📍 COTAÇÃO NORMAL: UF destino = {uf_destino}")
 
@@ -980,25 +930,9 @@ def fechar_frete():
                         print(f"[DEBUG] ✅ ICMS {cidade_destino.nome}/{uf_destino}: {icms_destino}%")
                         break
 
-        # Prepara dados da tabela usando sempre os dados da sessão (COM TODOS OS VALORES)
-        dados_tabela = {
-            'modalidade': opcao_escolhida.get('modalidade'),
-            'nome_tabela': opcao_escolhida.get('nome_tabela'),
-            'valor_kg': opcao_escolhida.get('valor_kg', 0),
-            'percentual_valor': opcao_escolhida.get('percentual_valor', 0),
-            'frete_minimo_valor': opcao_escolhida.get('frete_minimo_valor', 0),
-            'frete_minimo_peso': opcao_escolhida.get('frete_minimo_peso', 0),
-            'icms': icms_destino,
-            'percentual_gris': opcao_escolhida.get('percentual_gris', 0),
-            'pedagio_por_100kg': opcao_escolhida.get('pedagio_por_100kg', 0),
-            'valor_tas': opcao_escolhida.get('valor_tas', 0),
-            'percentual_adv': opcao_escolhida.get('percentual_adv', 0),
-            'percentual_rca': opcao_escolhida.get('percentual_rca', 0),
-            'valor_despacho': opcao_escolhida.get('valor_despacho', 0),
-            'valor_cte': opcao_escolhida.get('valor_cte', 0),
-            'icms_incluso': opcao_escolhida.get('icms_incluso', False),
-            'icms_destino': icms_destino
-        }
+        # ✅ REFATORADO: Usa TabelaFreteManager
+        dados_tabela = TabelaFreteManager.preparar_dados_tabela(opcao_escolhida)
+        dados_tabela['icms_destino'] = icms_destino
         
         print(f"[DEBUG] ✅ DADOS DA TABELA COMPLETOS PREPARADOS:")
         print(f"[DEBUG]   - Nome tabela: {dados_tabela.get('nome_tabela')}")
@@ -1011,20 +945,14 @@ def fechar_frete():
         
         # Se encontrou tabela no banco, usa alguns dados dela
         if tabela:
-            dados_tabela.update({
-                'valor_kg': tabela.valor_kg or dados_tabela['valor_kg'],
-                'percentual_valor': tabela.percentual_valor or dados_tabela['percentual_valor'],
-                'frete_minimo_valor': tabela.frete_minimo_valor or dados_tabela['frete_minimo_valor'],
-                'frete_minimo_peso': tabela.frete_minimo_peso or dados_tabela['frete_minimo_peso'],
-                'percentual_gris': tabela.percentual_gris or dados_tabela['percentual_gris'],
-                'pedagio_por_100kg': tabela.pedagio_por_100kg or dados_tabela['pedagio_por_100kg'],
-                'valor_tas': tabela.valor_tas or dados_tabela['valor_tas'],
-                'percentual_adv': tabela.percentual_adv or dados_tabela['percentual_adv'],
-                'percentual_rca': tabela.percentual_rca or dados_tabela['percentual_rca'],
-                'valor_despacho': tabela.valor_despacho or dados_tabela['valor_despacho'],
-                'valor_cte': tabela.valor_cte or dados_tabela['valor_cte'],
-                'icms_incluso': tabela.icms_incluso
-            })
+            # Usa TabelaFreteManager para extrair dados da TabelaFrete do banco
+            dados_banco = TabelaFreteManager.preparar_dados_tabela(tabela)
+            
+            # Atualiza apenas com valores não-zero do banco
+            for campo, valor in dados_banco.items():
+                if valor and (not dados_tabela.get(campo) or dados_tabela.get(campo) == 0):
+                    dados_tabela[campo] = valor
+            
             print(f"[DEBUG] ✅ Dados complementados com tabela do banco")
 
         print(f"[DEBUG] Dados da tabela finais: {dados_tabela}")
@@ -1079,21 +1007,9 @@ def fechar_frete():
             # ✅ LIMPA E ATUALIZA DADOS DA TABELA NO LOCAL CORRETO
             if tipo == 'DIRETA':
                 # ✅ CARGA DIRETA: Limpa dados antigos e atualiza no EMBARQUE
-                embarque_existente.modalidade = dados_tabela.get('modalidade')
-                embarque_existente.tabela_nome_tabela = dados_tabela.get('nome_tabela')
-                embarque_existente.tabela_valor_kg = dados_tabela.get('valor_kg')
-                embarque_existente.tabela_percentual_valor = dados_tabela.get('percentual_valor')
-                embarque_existente.tabela_frete_minimo_valor = dados_tabela.get('frete_minimo_valor')
-                embarque_existente.tabela_frete_minimo_peso = dados_tabela.get('frete_minimo_peso')
-                embarque_existente.tabela_icms = dados_tabela.get('icms')
-                embarque_existente.tabela_percentual_gris = dados_tabela.get('percentual_gris')
-                embarque_existente.tabela_pedagio_por_100kg = dados_tabela.get('pedagio_por_100kg')
-                embarque_existente.tabela_valor_tas = dados_tabela.get('valor_tas')
-                embarque_existente.tabela_percentual_adv = dados_tabela.get('percentual_adv')
-                embarque_existente.tabela_percentual_rca = dados_tabela.get('percentual_rca')
-                embarque_existente.tabela_valor_despacho = dados_tabela.get('valor_despacho')
-                embarque_existente.tabela_valor_cte = dados_tabela.get('valor_cte')
-                embarque_existente.tabela_icms_incluso = dados_tabela.get('icms_incluso', False)
+                # Usa TabelaFreteManager para atribuir campos da tabela de frete
+                TabelaFreteManager.atribuir_campos_objeto(embarque_existente, dados_tabela)
+                # icms_destino é atribuído separadamente (vem de localidades)
                 embarque_existente.icms_destino = dados_tabela.get('icms_destino')
                 
                 print(f"[DEBUG] 🔄 CARGA DIRETA: Dados da tabela atualizados no EMBARQUE")
@@ -1102,21 +1018,9 @@ def fechar_frete():
             if tipo == 'FRACIONADA':
                 for item in embarque_existente.itens:
                     if item.status == 'ativo':  # Só atualiza itens ativos
-                        item.modalidade = dados_tabela.get('modalidade')
-                        item.tabela_nome_tabela = dados_tabela.get('nome_tabela')
-                        item.tabela_valor_kg = dados_tabela.get('valor_kg')
-                        item.tabela_percentual_valor = dados_tabela.get('percentual_valor')
-                        item.tabela_frete_minimo_valor = dados_tabela.get('frete_minimo_valor')
-                        item.tabela_frete_minimo_peso = dados_tabela.get('frete_minimo_peso')
-                        item.tabela_icms = dados_tabela.get('icms')
-                        item.tabela_percentual_gris = dados_tabela.get('percentual_gris')
-                        item.tabela_pedagio_por_100kg = dados_tabela.get('pedagio_por_100kg')
-                        item.tabela_valor_tas = dados_tabela.get('valor_tas')
-                        item.tabela_percentual_adv = dados_tabela.get('percentual_adv')
-                        item.tabela_percentual_rca = dados_tabela.get('percentual_rca')
-                        item.tabela_valor_despacho = dados_tabela.get('valor_despacho')
-                        item.tabela_valor_cte = dados_tabela.get('valor_cte')
-                        item.tabela_icms_incluso = dados_tabela.get('icms_incluso', False)
+                        # Usa TabelaFreteManager para atribuir campos da tabela de frete
+                        TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
+                        # icms_destino é atribuído separadamente (vem de localidades)
                         item.icms_destino = dados_tabela.get('icms_destino')
                         
                         print(f"[DEBUG] 🔄 CARGA FRACIONADA: Dados da tabela atualizados no ITEM {item.pedido}")
@@ -1185,21 +1089,9 @@ def fechar_frete():
             # ✅ CORREÇÃO PRINCIPAL: SALVA DADOS DA TABELA NO LOCAL CORRETO
             if tipo == 'DIRETA':
                 # ✅ CARGA DIRETA: Dados da tabela vão para o EMBARQUE
-                embarque.modalidade = dados_tabela.get('modalidade')
-                embarque.tabela_nome_tabela = dados_tabela.get('nome_tabela')
-                embarque.tabela_valor_kg = dados_tabela.get('valor_kg')
-                embarque.tabela_percentual_valor = dados_tabela.get('percentual_valor')
-                embarque.tabela_frete_minimo_valor = dados_tabela.get('frete_minimo_valor')
-                embarque.tabela_frete_minimo_peso = dados_tabela.get('frete_minimo_peso')
-                embarque.tabela_icms = dados_tabela.get('icms')
-                embarque.tabela_percentual_gris = dados_tabela.get('percentual_gris')
-                embarque.tabela_pedagio_por_100kg = dados_tabela.get('pedagio_por_100kg')
-                embarque.tabela_valor_tas = dados_tabela.get('valor_tas')
-                embarque.tabela_percentual_adv = dados_tabela.get('percentual_adv')
-                embarque.tabela_percentual_rca = dados_tabela.get('percentual_rca')
-                embarque.tabela_valor_despacho = dados_tabela.get('valor_despacho')
-                embarque.tabela_valor_cte = dados_tabela.get('valor_cte')
-                embarque.tabela_icms_incluso = dados_tabela.get('icms_incluso', False)
+                # Usa TabelaFreteManager para atribuir campos da tabela de frete
+                TabelaFreteManager.atribuir_campos_objeto(embarque, dados_tabela)
+                # icms_destino é atribuído separadamente (vem de localidades)
                 embarque.icms_destino = dados_tabela.get('icms_destino')
                 
                 print(f"[DEBUG] ✅ CARGA DIRETA: Dados da tabela salvos no EMBARQUE")
@@ -1213,7 +1105,7 @@ def fechar_frete():
                 if not pedido:
                     continue
 
-                uf_correto = 'SP' if pedido.rota and pedido.rota.upper().strip() == 'RED' else pedido.cod_uf
+                uf_correto = pedido.cod_uf
                 
                 # ✅ ESTRATÉGIA CODIGO IBGE: Usa código IBGE se disponível, senão usa normalização
                 cidade_formatada = None
@@ -1254,21 +1146,9 @@ def fechar_frete():
                 
                 # ✅ CORREÇÃO: CARGA FRACIONADA - Dados da tabela vão para os EMBARQUE_ITENS
                 if tipo == 'FRACIONADA':
-                    item.modalidade = dados_tabela.get('modalidade')
-                    item.tabela_nome_tabela = dados_tabela.get('nome_tabela')
-                    item.tabela_valor_kg = dados_tabela.get('valor_kg')
-                    item.tabela_percentual_valor = dados_tabela.get('percentual_valor')
-                    item.tabela_frete_minimo_valor = dados_tabela.get('frete_minimo_valor')
-                    item.tabela_frete_minimo_peso = dados_tabela.get('frete_minimo_peso')
-                    item.tabela_icms = dados_tabela.get('icms')
-                    item.tabela_percentual_gris = dados_tabela.get('percentual_gris')
-                    item.tabela_pedagio_por_100kg = dados_tabela.get('pedagio_por_100kg')
-                    item.tabela_valor_tas = dados_tabela.get('valor_tas')
-                    item.tabela_percentual_adv = dados_tabela.get('percentual_adv')
-                    item.tabela_percentual_rca = dados_tabela.get('percentual_rca')
-                    item.tabela_valor_despacho = dados_tabela.get('valor_despacho')
-                    item.tabela_valor_cte = dados_tabela.get('valor_cte')
-                    item.tabela_icms_incluso = dados_tabela.get('icms_incluso', False)
+                    # Usa TabelaFreteManager para atribuir campos da tabela de frete
+                    TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
+                    # icms_destino é atribuído separadamente (vem de localidades)
                     item.icms_destino = dados_tabela.get('icms_destino')
                     
                     print(f"[DEBUG] ✅ CARGA FRACIONADA: Dados da tabela salvos no EMBARQUE_ITEM {pedido.num_pedido}")
@@ -1406,23 +1286,10 @@ def fechar_frete_grupo():
                             melhor_opcao = opcoes_cnpj[0]
                         
                         if melhor_opcao:
-                            dados_tabela_por_cnpj[cnpj] = {
-                                'modalidade': melhor_opcao.get('modalidade', 'FRETE PESO'),
-                                'nome_tabela': melhor_opcao.get('nome_tabela', ''),
-                                'valor_kg': melhor_opcao.get('valor_kg', 0),
-                                'percentual_valor': melhor_opcao.get('percentual_valor', 0),
-                                'frete_minimo_valor': melhor_opcao.get('frete_minimo_valor', 0),
-                                'frete_minimo_peso': melhor_opcao.get('frete_minimo_peso', 0),
-                                'percentual_gris': melhor_opcao.get('percentual_gris', 0),
-                                'pedagio_por_100kg': melhor_opcao.get('pedagio_por_100kg', 0),
-                                'valor_tas': melhor_opcao.get('valor_tas', 0),
-                                'percentual_adv': melhor_opcao.get('percentual_adv', 0),
-                                'percentual_rca': melhor_opcao.get('percentual_rca', 0),
-                                'valor_despacho': melhor_opcao.get('valor_despacho', 0),
-                                'valor_cte': melhor_opcao.get('valor_cte', 0),
-                                'icms_destino': melhor_opcao.get('icms_destino', 0),
-                                'icms_incluso': melhor_opcao.get('icms_incluso', False)
-                            }
+                            # ✅ REFATORADO: Usa TabelaFreteManager para campos da TABELA
+                            dados_tabela_por_cnpj[cnpj] = TabelaFreteManager.preparar_dados_tabela(melhor_opcao)
+                            # icms_destino vem do cálculo anterior (não é campo da tabela de frete)
+                            dados_tabela_por_cnpj[cnpj]['icms_destino'] = melhor_opcao.get('icms_destino', 0)
                             print(f"[DEBUG] Dados da tabela para CNPJ {cnpj}: {dados_tabela_por_cnpj[cnpj]}")
         
         # Cria embarque
@@ -1448,7 +1315,7 @@ def fechar_frete_grupo():
 
         # Cria EmbarqueItems
         for pedido in todos_pedidos:
-            uf_correto = 'SP' if pedido.rota and pedido.rota.upper().strip() == 'RED' else pedido.cod_uf
+            uf_correto = pedido.cod_uf
             
             # ✅ ESTRATÉGIA CODIGO IBGE: Usa código IBGE se disponível, senão usa normalização
             cidade_formatada = None
@@ -1483,25 +1350,15 @@ def fechar_frete_grupo():
                 data_agenda=formatar_data_brasileira(pedido.agendamento)
             )
             
-            # ✅ CORREÇÃO: PARA CARGAS FRACIONADAS, SALVA DADOS DA TABELA NO EMBARQUE_ITEM
+            # ✅ REFATORADO: Usa TabelaFreteManager - 1 linha substitui 16!
             if tipo == 'FRACIONADA' and pedido.cnpj_cpf in dados_tabela_por_cnpj:
                 dados_tabela = dados_tabela_por_cnpj[pedido.cnpj_cpf]
                 
-                item.modalidade = dados_tabela.get('modalidade')
-                item.tabela_nome_tabela = dados_tabela.get('nome_tabela')
-                item.tabela_valor_kg = dados_tabela.get('valor_kg')
-                item.tabela_percentual_valor = dados_tabela.get('percentual_valor')
-                item.tabela_frete_minimo_valor = dados_tabela.get('frete_minimo_valor')
-                item.tabela_frete_minimo_peso = dados_tabela.get('frete_minimo_peso')
-                item.tabela_percentual_gris = dados_tabela.get('percentual_gris')
-                item.tabela_pedagio_por_100kg = dados_tabela.get('pedagio_por_100kg')
-                item.tabela_valor_tas = dados_tabela.get('valor_tas')
-                item.tabela_percentual_adv = dados_tabela.get('percentual_adv')
-                item.tabela_percentual_rca = dados_tabela.get('percentual_rca')
-                item.tabela_valor_despacho = dados_tabela.get('valor_despacho')
-                item.tabela_valor_cte = dados_tabela.get('valor_cte')
-                item.icms_destino = dados_tabela.get('icms_destino')
-                item.tabela_icms_incluso = dados_tabela.get('icms_incluso', False)
+                # Atribui campos da TABELA DE FRETE
+                TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
+                
+                # icms_destino vem de CIDADE, não da tabela de frete
+                item.icms_destino = dados_tabela.get('icms_destino', 0)
                 
                 print(f"[DEBUG] ✅ CARGA FRACIONADA: Dados COMPLETOS da tabela salvos no EMBARQUE_ITEM {pedido.num_pedido} (CNPJ: {pedido.cnpj_cpf})")
             
@@ -1598,8 +1455,7 @@ def otimizar():
                     sub_rotas_atuais.add(p.sub_rota)
             
             query_redespacho = Pedido.query.filter(
-                (Pedido.cod_uf == 'SP') |
-                (Pedido.rota == 'RED')  # RED também vai para SP/Guarulhos
+                (Pedido.cod_uf == 'SP') 
             ).filter(~Pedido.id.in_(lista_ids)).filter(
                 Pedido.status == 'ABERTO'
             ).filter(
@@ -1622,7 +1478,7 @@ def otimizar():
             sub_rotas_atuais = set()
             for pedido in pedidos:
                 # Aplica regras de UF e cidade
-                uf_efetivo = 'SP' if pedido.rota and pedido.rota.upper().strip() == 'RED' else pedido.cod_uf
+                uf_efetivo = pedido.cod_uf
                 pedidos_ufs.add(uf_efetivo)
                 
                 # Coleta sub_rotas
@@ -1636,8 +1492,7 @@ def otimizar():
             pedidos_mesmo_uf = []
             if uf_principal:
                 query_normal = Pedido.query.filter(
-                    (Pedido.cod_uf == uf_principal) |
-                    ((Pedido.rota == 'RED') & (uf_principal == 'SP'))
+                    (Pedido.cod_uf == uf_principal)
                 ).filter(~Pedido.id.in_(lista_ids)).filter(
                     Pedido.status == 'ABERTO'
                 ).filter(
@@ -1823,22 +1678,8 @@ def resumo_frete(cotacao_id):
             # ✅ CARGA DIRETA: Dados da tabela estão no EMBARQUE
             print(f"[DEBUG] 📦 CARGA DIRETA: Buscando dados da tabela no embarque")
             
-            dados_tabela = {
-                'modalidade': getattr(embarque, 'modalidade', 'FRETE PESO'),
-                'valor_kg': getattr(embarque, 'tabela_valor_kg', 0),
-                'percentual_valor': getattr(embarque, 'tabela_percentual_valor', 0),
-                'frete_minimo_valor': getattr(embarque, 'tabela_frete_minimo_valor', 0),
-                'frete_minimo_peso': getattr(embarque, 'tabela_frete_minimo_peso', 0),
-                'percentual_gris': getattr(embarque, 'tabela_percentual_gris', 0),
-                'pedagio_por_100kg': getattr(embarque, 'tabela_pedagio_por_100kg', 0),
-                'valor_tas': getattr(embarque, 'tabela_valor_tas', 0),
-                'percentual_adv': getattr(embarque, 'tabela_percentual_adv', 0),
-                'percentual_rca': getattr(embarque, 'tabela_percentual_rca', 0),
-                'valor_despacho': getattr(embarque, 'tabela_valor_despacho', 0),
-                'valor_cte': getattr(embarque, 'tabela_valor_cte', 0),
-                'icms_destino': getattr(embarque, 'icms_destino', 0),
-                'icms_incluso': getattr(embarque, 'tabela_icms_incluso', False)
-            }
+            # ✅ REFATORADO: Usa TabelaFreteManager
+            dados_tabela = TabelaFreteManager.preparar_dados_tabela(embarque)
             
             # Calcula frete para toda a carga
             resultado_frete = CalculadoraFrete.calcular_frete_unificado(
@@ -1883,22 +1724,10 @@ def resumo_frete(cotacao_id):
                 
                 # Pega dados da tabela (são iguais para o mesmo CNPJ)
                 if not itens_por_cnpj_calculo[cnpj]['dados_tabela'] and hasattr(item, 'tabela_nome_tabela') and item.tabela_nome_tabela:
-                    itens_por_cnpj_calculo[cnpj]['dados_tabela'] = {
-                        'modalidade': getattr(item, 'modalidade', 'FRETE PESO'),
-                        'valor_kg': getattr(item, 'tabela_valor_kg', 0),
-                        'percentual_valor': getattr(item, 'tabela_percentual_valor', 0),
-                        'frete_minimo_valor': getattr(item, 'tabela_frete_minimo_valor', 0),
-                        'frete_minimo_peso': getattr(item, 'tabela_frete_minimo_peso', 0),
-                        'percentual_gris': getattr(item, 'tabela_percentual_gris', 0),
-                        'pedagio_por_100kg': getattr(item, 'tabela_pedagio_por_100kg', 0),
-                        'valor_tas': getattr(item, 'tabela_valor_tas', 0),
-                        'percentual_adv': getattr(item, 'tabela_percentual_adv', 0),
-                        'percentual_rca': getattr(item, 'tabela_percentual_rca', 0),
-                        'valor_despacho': getattr(item, 'tabela_valor_despacho', 0),
-                        'valor_cte': getattr(item, 'tabela_valor_cte', 0),
-                        'icms_destino': getattr(item, 'icms_destino', 0),
-                        'icms_incluso': getattr(item, 'tabela_icms_incluso', False)
-                    }
+                    # Usa TabelaFreteManager para extrair dados do item
+                    itens_por_cnpj_calculo[cnpj]['dados_tabela'] = TabelaFreteManager.preparar_dados_tabela(item)
+                    # Adiciona icms_destino separadamente
+                    itens_por_cnpj_calculo[cnpj]['dados_tabela']['icms_destino'] = getattr(item, 'icms_destino', 0)
             
             # Calcula frete para cada CNPJ usando totais do CNPJ
             valor_frete_bruto = 0
@@ -1928,22 +1757,10 @@ def resumo_frete(cotacao_id):
                 else:
                     # Fallback: Dados do embarque ou cálculo básico
                     if embarque and hasattr(embarque, 'tabela_nome_tabela') and embarque.tabela_nome_tabela:
-                        dados_tabela_fallback = {
-                            'modalidade': getattr(embarque, 'modalidade', 'FRETE PESO'),
-                            'valor_kg': getattr(embarque, 'tabela_valor_kg', 0),
-                            'percentual_valor': getattr(embarque, 'tabela_percentual_valor', 0),
-                            'frete_minimo_valor': getattr(embarque, 'tabela_frete_minimo_valor', 0),
-                            'frete_minimo_peso': getattr(embarque, 'tabela_frete_minimo_peso', 0),
-                            'percentual_gris': getattr(embarque, 'tabela_percentual_gris', 0),
-                            'pedagio_por_100kg': getattr(embarque, 'tabela_pedagio_por_100kg', 0),
-                            'valor_tas': getattr(embarque, 'tabela_valor_tas', 0),
-                            'percentual_adv': getattr(embarque, 'tabela_percentual_adv', 0),
-                            'percentual_rca': getattr(embarque, 'tabela_percentual_rca', 0),
-                            'valor_despacho': getattr(embarque, 'tabela_valor_despacho', 0),
-                            'valor_cte': getattr(embarque, 'tabela_valor_cte', 0),
-                            'icms_destino': getattr(embarque, 'icms_destino', 0),
-                            'icms_incluso': getattr(embarque, 'tabela_icms_incluso', False)
-                        }
+                        # Usa TabelaFreteManager para extrair dados do embarque
+                        dados_tabela_fallback = TabelaFreteManager.preparar_dados_tabela(embarque)
+                        # Adiciona icms_destino separadamente
+                        dados_tabela_fallback['icms_destino'] = getattr(embarque, 'icms_destino', 0)
                         
                         resultado_frete_cnpj = CalculadoraFrete.calcular_frete_unificado(
                             peso=peso_cnpj,
@@ -2024,16 +1841,18 @@ def resumo_frete(cotacao_id):
             # ✅ PREENCHE DADOS DA TABELA DO LOCAL CORRETO
             if embarque and embarque.tipo_carga == 'DIRETA':
                 # Para carga direta, usa dados do embarque
-                item.nome_tabela = getattr(embarque, 'tabela_nome_tabela', 'N/A')
-                item.modalidade = getattr(embarque, 'modalidade', 'FRETE PESO')
-                item.valor_kg = getattr(embarque, 'tabela_valor_kg', 0)
+                dados_tabela_temp = TabelaFreteManager.preparar_dados_tabela(embarque)
+                item.nome_tabela = dados_tabela_temp.get('nome_tabela', 'N/A')
+                item.modalidade = dados_tabela_temp.get('modalidade', 'FRETE PESO')
+                item.valor_kg = dados_tabela_temp.get('valor_kg', 0)
                 item.icms_destino = getattr(embarque, 'icms_destino', 0)
             else:
                 # Para carga fracionada, usa dados do próprio item
                 if not hasattr(item, 'nome_tabela') or not item.nome_tabela:
-                    item.nome_tabela = getattr(item, 'tabela_nome_tabela', 'N/A')
-                    item.modalidade = getattr(item, 'modalidade', 'FRETE PESO')
-                    item.valor_kg = getattr(item, 'tabela_valor_kg', 0)
+                    dados_tabela_temp = TabelaFreteManager.preparar_dados_tabela(item)
+                    item.nome_tabela = dados_tabela_temp.get('nome_tabela', 'N/A')
+                    item.modalidade = dados_tabela_temp.get('modalidade', 'FRETE PESO')
+                    item.valor_kg = dados_tabela_temp.get('valor_kg', 0)
                     item.icms_destino = getattr(item, 'icms_destino', 0)
             
             if cnpj not in itens_por_cnpj:
@@ -2096,23 +1915,10 @@ def resumo_frete(cotacao_id):
         else:
             # Para carga fracionada: recalcula o frete específico para este CNPJ
             if grupo['itens'] and hasattr(grupo['itens'][0], 'tabela_nome_tabela') and grupo['itens'][0].tabela_nome_tabela:
-                # Usa dados da tabela salvos no item
-                dados_tabela_cnpj = {
-                    'modalidade': getattr(grupo['itens'][0], 'modalidade', 'FRETE PESO'),
-                    'valor_kg': getattr(grupo['itens'][0], 'tabela_valor_kg', 0),
-                    'percentual_valor': getattr(grupo['itens'][0], 'tabela_percentual_valor', 0),
-                    'frete_minimo_valor': getattr(grupo['itens'][0], 'tabela_frete_minimo_valor', 0),
-                    'frete_minimo_peso': getattr(grupo['itens'][0], 'tabela_frete_minimo_peso', 0),
-                    'percentual_gris': getattr(grupo['itens'][0], 'tabela_percentual_gris', 0),
-                    'pedagio_por_100kg': getattr(grupo['itens'][0], 'tabela_pedagio_por_100kg', 0),
-                    'valor_tas': getattr(grupo['itens'][0], 'tabela_valor_tas', 0),
-                    'percentual_adv': getattr(grupo['itens'][0], 'tabela_percentual_adv', 0),
-                    'percentual_rca': getattr(grupo['itens'][0], 'tabela_percentual_rca', 0),
-                    'valor_despacho': getattr(grupo['itens'][0], 'tabela_valor_despacho', 0),
-                    'valor_cte': getattr(grupo['itens'][0], 'tabela_valor_cte', 0),
-                    'icms_destino': getattr(grupo['itens'][0], 'icms_destino', 0),
-                    'icms_incluso': getattr(grupo['itens'][0], 'tabela_icms_incluso', False)
-                }
+                # Usa dados da tabela salvos no item - extrai com TabelaFreteManager
+                dados_tabela_cnpj = TabelaFreteManager.preparar_dados_tabela(grupo['itens'][0])
+                # Adiciona icms_destino separadamente
+                dados_tabela_cnpj['icms_destino'] = getattr(grupo['itens'][0], 'icms_destino', 0)
                 
                 resultado_cnpj = CalculadoraFrete.calcular_frete_unificado(
                     peso=grupo['peso_total'],
@@ -2172,13 +1978,8 @@ def calcular_frete_otimizacao_conservadora(pedidos):
         for pedido in pedidos:
             LocalizacaoService.normalizar_dados_pedido(pedido)
         
-        # Verifica se todos são do mesmo UF (considerando RED -> SP)
-        ufs_encontrados = set()
-        for pedido in pedidos:
-            if hasattr(pedido, 'rota') and pedido.rota and pedido.rota.upper().strip() == 'RED':
-                ufs_encontrados.add('SP')
-            else:
-                ufs_encontrados.add(pedido.cod_uf)
+        # Verifica se todos são do mesmo UF
+        ufs_encontrados = set(pedido.cod_uf for pedido in pedidos)
         
         if len(ufs_encontrados) > 1:
             print(f"[DEBUG] ❌ Pedidos de UFs diferentes: {ufs_encontrados}")
@@ -2215,11 +2016,8 @@ def calcular_frete_otimizacao_conservadora(pedidos):
         # REGRA 8: Lista todas as cidades dos pedidos cotados
         cidades_cotadas = set()
         for pedido in pedidos:
-            # Considera conversão RED -> Guarulhos/SP
-            if hasattr(pedido, 'rota') and pedido.rota and pedido.rota.upper().strip() == 'RED':
-                cidade = buscar_cidade_unificada(cidade='Guarulhos', uf='SP', rota='RED')
-            else:
-                cidade = buscar_cidade_unificada(pedido=pedido)
+            # Busca cidade do pedido
+            cidade = buscar_cidade_unificada(pedido=pedido)
             
             if cidade:
                 cidades_cotadas.add(cidade.id)
@@ -2329,22 +2127,10 @@ def calcular_frete_otimizacao_conservadora(pedidos):
                 
                 # Calcula frete com esta tabela
                 try:
-                    dados_tabela = {
-                        'modalidade': modalidade,
-                        'valor_kg': tabela.valor_kg or 0,
-                        'percentual_valor': tabela.percentual_valor or 0,
-                        'frete_minimo_valor': tabela.frete_minimo_valor or 0,
-                        'frete_minimo_peso': tabela.frete_minimo_peso or 0,
-                        'percentual_gris': tabela.percentual_gris or 0,
-                        'pedagio_por_100kg': tabela.pedagio_por_100kg or 0,
-                        'valor_tas': tabela.valor_tas or 0,
-                        'percentual_adv': tabela.percentual_adv or 0,
-                        'percentual_rca': tabela.percentual_rca or 0,
-                        'valor_despacho': tabela.valor_despacho or 0,
-                        'valor_cte': tabela.valor_cte or 0,
-                        'icms_destino': cidade_icms,
-                        'icms_incluso': tabela.icms_incluso or False
-                    }
+                    # Usa TabelaFreteManager para extrair dados da tabela
+                    dados_tabela = TabelaFreteManager.preparar_dados_tabela(tabela)
+                    dados_tabela['modalidade'] = modalidade  # Sobrescreve com a modalidade específica
+                    dados_tabela['icms_destino'] = cidade_icms  # ICMS vem da cidade
                     
                     resultado = CalculadoraFrete.calcular_frete_unificado(
                         peso=peso_total,
@@ -3037,20 +2823,10 @@ def incluir_em_embarque():
                     # Se encontrou a melhor opção deste CNPJ para a transportadora
                     if melhor_opcao_cnpj:
                         # Usa os dados da tabela específica da cotação deste CNPJ
-                        novo_item.modalidade = melhor_opcao_cnpj.get('modalidade', 'FRETE PESO')
-                        novo_item.tabela_nome_tabela = melhor_opcao_cnpj.get('nome_tabela', '')
-                        novo_item.tabela_valor_kg = melhor_opcao_cnpj.get('valor_kg', 0)
-                        novo_item.tabela_percentual_valor = melhor_opcao_cnpj.get('percentual_valor', 0)
-                        novo_item.tabela_frete_minimo_valor = melhor_opcao_cnpj.get('frete_minimo_valor', 0)
-                        novo_item.tabela_frete_minimo_peso = melhor_opcao_cnpj.get('frete_minimo_peso', 0)
-                        novo_item.tabela_percentual_gris = melhor_opcao_cnpj.get('percentual_gris', 0)
-                        novo_item.tabela_pedagio_por_100kg = melhor_opcao_cnpj.get('pedagio_por_100kg', 0)
-                        novo_item.tabela_valor_tas = melhor_opcao_cnpj.get('valor_tas', 0)
-                        novo_item.tabela_percentual_adv = melhor_opcao_cnpj.get('percentual_adv', 0)
-                        novo_item.tabela_percentual_rca = melhor_opcao_cnpj.get('percentual_rca', 0)
-                        novo_item.tabela_valor_despacho = melhor_opcao_cnpj.get('valor_despacho', 0)
-                        novo_item.tabela_valor_cte = melhor_opcao_cnpj.get('valor_cte', 0)
-                        novo_item.tabela_icms_incluso = melhor_opcao_cnpj.get('icms_incluso', False)
+                        # Prepara dados e atribui usando TabelaFreteManager
+                        dados_tabela_temp = TabelaFreteManager.preparar_dados_tabela(melhor_opcao_cnpj)
+                        TabelaFreteManager.atribuir_campos_objeto(novo_item, dados_tabela_temp)
+                        # icms_destino é atribuído separadamente (vem de localidades)
                         novo_item.icms_destino = melhor_opcao_cnpj.get('icms_destino', 0)
                         
                         dados_tabela_encontrados = True

@@ -14,6 +14,19 @@ class Transportadora(db.Model):
     condicao_pgto = db.Column(db.String(50), nullable=True)
     freteiro = db.Column(db.Boolean, default=False)  # Define se é freteiro
     ativo = db.Column(db.Boolean, default=True, nullable=False)  # Status ativo/inativo para cotações
+    
+    # ===== NOVOS CAMPOS DE CONTROLE DE CÁLCULO DE FRETE =====
+    # Campos que devem ser aplicados APÓS comparação com frete mínimo
+    aplica_gris_pos_minimo = db.Column(db.Boolean, default=False)     # Se True, GRIS é aplicado após frete mínimo
+    aplica_adv_pos_minimo = db.Column(db.Boolean, default=False)      # Se True, ADV é aplicado após frete mínimo
+    aplica_rca_pos_minimo = db.Column(db.Boolean, default=False)      # Se True, RCA é aplicado após frete mínimo
+    aplica_pedagio_pos_minimo = db.Column(db.Boolean, default=False)  # Se True, Pedágio é aplicado após frete mínimo
+    aplica_despacho_pos_minimo = db.Column(db.Boolean, default=False) # Se True, Despacho é aplicado após frete mínimo
+    aplica_cte_pos_minimo = db.Column(db.Boolean, default=False)      # Se True, CTE é aplicado após frete mínimo
+    aplica_tas_pos_minimo = db.Column(db.Boolean, default=False)      # Se True, TAS é aplicado após frete mínimo
+    
+    # Tipo de cálculo de pedágio
+    pedagio_por_fracao = db.Column(db.Boolean, default=True)  # True = arredonda para cima, False = usa valor exato
 
     def __repr__(self):
         return f'<Transportadora {self.razao_social}>'

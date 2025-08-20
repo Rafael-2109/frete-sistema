@@ -87,10 +87,36 @@
             </div>
 
             <div class="row mb-3">
-                <div class="col-md-4">{{ form.percentual_gris.label(class="form-label") }}{{ form.percentual_gris(class="form-control") }}</div>
-                <div class="col-md-4">{{ form.percentual_adv.label(class="form-label") }}{{ form.percentual_adv(class="form-control") }}</div>
-                <div class="col-md-4">{{ form.percentual_rca.label(class="form-label") }}{{ form.percentual_rca(class="form-control") }}</div>
-                <div class="col-md-4">{{ form.pedagio_por_100kg.label(class="form-label") }}{{ form.pedagio_por_100kg(class="form-control") }}</div>
+                <div class="col-md-3">{{ form.percentual_gris.label(class="form-label") }}{{ form.percentual_gris(class="form-control") }}</div>
+                <div class="col-md-3">{{ form.percentual_adv.label(class="form-label") }}{{ form.percentual_adv(class="form-control") }}</div>
+                <div class="col-md-3">{{ form.percentual_rca.label(class="form-label") }}{{ form.percentual_rca(class="form-control") }}</div>
+                <div class="col-md-3">{{ form.pedagio_por_100kg.label(class="form-label") }}{{ form.pedagio_por_100kg(class="form-control") }}</div>
+            </div>
+            
+            <!-- Novos campos de valores mínimos -->
+            <h5 class="mt-4">Valores Mínimos e ICMS Próprio</h5>
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">GRIS Mínimo (R$)</label>
+                    <input type="number" name="gris_minimo" class="form-control" step="0.01" min="0" 
+                           value="{{ tabela.gris_minimo if tabela and tabela.gris_minimo else '0' }}"
+                           placeholder="Valor mínimo de GRIS">
+                    <small class="text-muted">Usa o maior entre o calculado e este valor</small>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">ADV Mínimo (R$)</label>
+                    <input type="number" name="adv_minimo" class="form-control" step="0.01" min="0" 
+                           value="{{ tabela.adv_minimo if tabela and tabela.adv_minimo else '0' }}"
+                           placeholder="Valor mínimo de Ad Valorem">
+                    <small class="text-muted">Usa o maior entre o calculado e este valor</small>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">ICMS Próprio (%)</label>
+                    <input type="number" name="icms_proprio" class="form-control" step="0.01" min="0" max="100"
+                           value="{{ tabela.icms_proprio if tabela and tabela.icms_proprio else '' }}"
+                           placeholder="Deixe vazio para usar ICMS da cidade">
+                    <small class="text-muted">Substitui o ICMS da cidade se informado</small>
+                </div>
             </div>
 
             <div class="row mb-4">

@@ -15,6 +15,8 @@ from app.fretes.models import (
     FreteLancado, Frete, FaturaFrete, DespesaExtra, 
     ContaCorrenteTransportadora, AprovacaoFrete
 )
+from app.fretes.email_models import EmailAnexado
+from app.utils.email_handler import EmailHandler
 from app.fretes.forms import (
     FreteForm, FaturaFreteForm, DespesaExtraForm,
     FiltroFretesForm, LancamentoCteForm, FiltroFaturasForm, FiltroFreteirosForm
@@ -22,6 +24,7 @@ from app.fretes.forms import (
 from app.utils.calculadora_frete import calcular_valor_frete_pela_tabela
 from app.utils.valores_brasileiros import converter_valor_brasileiro
 from app.utils.cnpj_utils import normalizar_cnpj
+from app.utils.tabela_frete_manager import TabelaFreteManager
 # Configurar logger
 logger = logging.getLogger(__name__)
 
@@ -351,24 +354,8 @@ def processar_lancamento_frete():
         # Pega dados da tabela conforme tipo de carga
         if tipo_carga == 'DIRETA':
             # Para carga direta, dados vêm do embarque
-            tabela_dados = {
-                'modalidade': embarque.modalidade,
-                'nome_tabela': embarque.tabela_nome_tabela,
-                'valor_kg': embarque.tabela_valor_kg,
-                'percentual_valor': embarque.tabela_percentual_valor,
-                'frete_minimo_valor': embarque.tabela_frete_minimo_valor,
-                'frete_minimo_peso': embarque.tabela_frete_minimo_peso,
-                'icms': embarque.tabela_icms,
-                'percentual_gris': embarque.tabela_percentual_gris,
-                'pedagio_por_100kg': embarque.tabela_pedagio_por_100kg,
-                'valor_tas': embarque.tabela_valor_tas,
-                'percentual_adv': embarque.tabela_percentual_adv,
-                'percentual_rca': embarque.tabela_percentual_rca,
-                'valor_despacho': embarque.tabela_valor_despacho,
-                'valor_cte': embarque.tabela_valor_cte,
-                'icms_incluso': embarque.tabela_icms_incluso,
-                'icms_destino': embarque.icms_destino or 0
-            }
+            tabela_dados = TabelaFreteManager.preparar_dados_tabela(embarque)
+            tabela_dados['icms_destino'] = embarque.icms_destino or 0
         else:
             # Para carga fracionada, dados vêm de qualquer item do CNPJ
             item_referencia = EmbarqueItem.query.filter(
@@ -378,24 +365,8 @@ def processar_lancamento_frete():
                 )
             ).first()
             
-            tabela_dados = {
-                'modalidade': item_referencia.modalidade,
-                'nome_tabela': item_referencia.tabela_nome_tabela,
-                'valor_kg': item_referencia.tabela_valor_kg,
-                'percentual_valor': item_referencia.tabela_percentual_valor,
-                'frete_minimo_valor': item_referencia.tabela_frete_minimo_valor,
-                'frete_minimo_peso': item_referencia.tabela_frete_minimo_peso,
-                'icms': item_referencia.tabela_icms,
-                'percentual_gris': item_referencia.tabela_percentual_gris,
-                'pedagio_por_100kg': item_referencia.tabela_pedagio_por_100kg,
-                'valor_tas': item_referencia.tabela_valor_tas,
-                'percentual_adv': item_referencia.tabela_percentual_adv,
-                'percentual_rca': item_referencia.tabela_percentual_rca,
-                'valor_despacho': item_referencia.tabela_valor_despacho,
-                'valor_cte': item_referencia.tabela_valor_cte,
-                'icms_incluso': item_referencia.tabela_icms_incluso,
-                'icms_destino': item_referencia.icms_destino or 0
-            }
+            tabela_dados = TabelaFreteManager.preparar_dados_tabela(item_referencia)
+            tabela_dados['icms_destino'] = item_referencia.icms_destino or 0
         
         # Calcula valor cotado usando a tabela
         valor_cotado = calcular_valor_frete_pela_tabela(tabela_dados, peso_total, valor_total_nfs)
@@ -414,22 +385,6 @@ def processar_lancamento_frete():
             valor_total_nfs=valor_total_nfs,
             quantidade_nfs=quantidade_nfs,
             numeros_nfs=numeros_nfs,
-            # Dados da tabela
-            tabela_nome_tabela=tabela_dados['nome_tabela'],
-            tabela_valor_kg=tabela_dados['valor_kg'],
-            tabela_percentual_valor=tabela_dados['percentual_valor'],
-            tabela_frete_minimo_valor=tabela_dados['frete_minimo_valor'],
-            tabela_frete_minimo_peso=tabela_dados['frete_minimo_peso'],
-            tabela_icms=tabela_dados['icms'],
-            tabela_percentual_gris=tabela_dados['percentual_gris'],
-            tabela_pedagio_por_100kg=tabela_dados['pedagio_por_100kg'],
-            tabela_valor_tas=tabela_dados['valor_tas'],
-            tabela_percentual_adv=tabela_dados['percentual_adv'],
-            tabela_percentual_rca=tabela_dados['percentual_rca'],
-            tabela_valor_despacho=tabela_dados['valor_despacho'],
-            tabela_valor_cte=tabela_dados['valor_cte'],
-            tabela_icms_incluso=tabela_dados['icms_incluso'],
-            tabela_icms_destino=tabela_dados['icms_destino'],
             # Valores
             valor_cotado=valor_cotado,
             valor_considerado=valor_cotado,  # Inicialmente igual ao cotado
@@ -440,6 +395,10 @@ def processar_lancamento_frete():
             lancado_em=datetime.utcnow(),
             lancado_por=current_user.nome
         )
+        
+        # Atribui campos da tabela usando TabelaFreteManager
+        TabelaFreteManager.atribuir_campos_objeto(novo_frete, tabela_dados)
+        novo_frete.tabela_icms_destino = tabela_dados['icms_destino']
         
         db.session.add(novo_frete)
         db.session.commit()
@@ -458,14 +417,22 @@ def processar_lancamento_frete():
 @login_required
 def visualizar_frete(frete_id):
     """Visualiza detalhes de um frete específico"""
+    from app.fretes.email_models import EmailAnexado
+    
     frete = Frete.query.get_or_404(frete_id)
     despesas_extras = DespesaExtra.query.filter_by(frete_id=frete_id).all()
     movimentacoes_conta = ContaCorrenteTransportadora.query.filter_by(frete_id=frete_id).all()
     
+    # Buscar emails anexados às despesas deste frete
+    emails_anexados = EmailAnexado.query.join(DespesaExtra).filter(
+        DespesaExtra.frete_id == frete_id
+    ).all()
+    
     return render_template('fretes/visualizar_frete.html',
                          frete=frete,
                          despesas_extras=despesas_extras,
-                         movimentacoes_conta=movimentacoes_conta)
+                         movimentacoes_conta=movimentacoes_conta,
+                         emails_anexados=emails_anexados)
 
 @fretes_bp.route('/<int:frete_id>/editar', methods=['GET', 'POST'])
 @login_required
@@ -582,85 +549,136 @@ def editar_frete(frete_id):
     
     return render_template('fretes/editar_frete.html', form=form, frete=frete)
 
-@fretes_bp.route('/<int:frete_id>/analise_diferencas')
+@fretes_bp.route('/analise-diferencas/<int:frete_id>')
 @login_required
 def analise_diferencas(frete_id):
-    """Mostra análise detalhada das diferenças com dados da tabela"""
+    """Mostra análise detalhada das diferenças com dados da tabela - VERSÃO ATUALIZADA"""
     frete = Frete.query.get_or_404(frete_id)
     
-    # Dados da tabela usada no cálculo
-    tabela_dados = {
-        'nome_tabela': frete.tabela_nome_tabela,
-        'valor_kg': frete.tabela_valor_kg,
-        'percentual_valor': frete.tabela_percentual_valor,
-        'frete_minimo_valor': frete.tabela_frete_minimo_valor,
-        'frete_minimo_peso': frete.tabela_frete_minimo_peso,
-        'icms': frete.tabela_icms,
-        'percentual_gris': frete.tabela_percentual_gris,
-        'pedagio_por_100kg': frete.tabela_pedagio_por_100kg,
-        'valor_tas': frete.tabela_valor_tas,
-        'percentual_adv': frete.tabela_percentual_adv,
-        'percentual_rca': frete.tabela_percentual_rca,
-        'valor_despacho': frete.tabela_valor_despacho,
-        'valor_cte': frete.tabela_valor_cte,
-        'icms_incluso': frete.tabela_icms_incluso,
-        'icms_destino': frete.tabela_icms_destino
-    }
+    # Importações necessárias
+    from app.utils.tabela_frete_manager import TabelaFreteManager
+    from app.utils.calculadora_frete import CalculadoraFrete
     
-    # Calcula cada componente do frete separadamente
+    # Preparar dados da tabela usando o manager
+    tabela_dados = TabelaFreteManager.preparar_dados_tabela(frete)
+    tabela_dados['icms_destino'] = frete.tabela_icms_destino
+    tabela_dados['transportadora_optante'] = frete.transportadora.optante if frete.transportadora else True
+    
+    # Dados básicos para cálculo
     peso_real = frete.peso_total
     valor_mercadoria = frete.valor_total_nfs
     
-    # ✅ PESO CONSIDERADO (real vs mínimo) - CORRETO conforme calculadora_frete.py
-    peso_minimo_tabela = frete.tabela_frete_minimo_peso or 0
-    peso_considerado = max(peso_real, peso_minimo_tabela)
+    # Buscar configuração da transportadora
+    transportadora_config = {
+        'aplica_gris_pos_minimo': False,
+        'aplica_adv_pos_minimo': False,
+        'aplica_rca_pos_minimo': False,
+        'aplica_pedagio_pos_minimo': False,
+        'aplica_tas_pos_minimo': False,
+        'aplica_despacho_pos_minimo': False,
+        'aplica_cte_pos_minimo': False,
+        'pedagio_por_fracao': True
+    }
     
-    # ✅ COMPONENTES BÁSICOS - CORRETO: SOMA peso + valor (não max)
+    if frete.transportadora:
+        # Buscar configurações reais da transportadora
+        transp = frete.transportadora
+        if hasattr(transp, 'aplica_gris_pos_minimo'):
+            transportadora_config = {
+                'aplica_gris_pos_minimo': transp.aplica_gris_pos_minimo or False,
+                'aplica_adv_pos_minimo': transp.aplica_adv_pos_minimo or False,
+                'aplica_rca_pos_minimo': transp.aplica_rca_pos_minimo or False,
+                'aplica_pedagio_pos_minimo': transp.aplica_pedagio_pos_minimo or False,
+                'aplica_tas_pos_minimo': transp.aplica_tas_pos_minimo or False,
+                'aplica_despacho_pos_minimo': transp.aplica_despacho_pos_minimo or False,
+                'aplica_cte_pos_minimo': transp.aplica_cte_pos_minimo or False,
+                'pedagio_por_fracao': transp.pedagio_por_fracao if hasattr(transp, 'pedagio_por_fracao') else True
+            }
+    
+    # Usar calculadora centralizada para obter resultado detalhado
+    resultado_calculo = CalculadoraFrete.calcular_frete_unificado(
+        peso=peso_real,
+        valor_mercadoria=valor_mercadoria,
+        tabela_dados=tabela_dados,  # CORREÇÃO: dados_tabela -> tabela_dados
+        transportadora_optante=tabela_dados.get('transportadora_optante', True),
+        transportadora_config=transportadora_config,
+        cidade={'icms': tabela_dados.get('icms_destino', 0)},
+        codigo_ibge=None
+    )
+    
+    # Extrair detalhes do cálculo
+    detalhes = resultado_calculo.get('detalhes', {})
+    
+    # DEBUG: Imprimir valores recebidos da calculadora
+    print("\n" + "="*60)
+    print("DEBUG - VALORES RECEBIDOS DA CALCULADORA:")
+    print(f"  peso_para_calculo: {detalhes.get('peso_para_calculo', 0)}")
+    print(f"  frete_base: {detalhes.get('frete_base', 0)}")
+    print(f"  gris: {detalhes.get('gris', 0)}")
+    print(f"  adv: {detalhes.get('adv', 0)}")
+    print(f"  rca: {detalhes.get('rca', 0)}")
+    print(f"  pedagio: {detalhes.get('pedagio', 0)}")
+    print(f"  componentes_antes_minimo: {detalhes.get('componentes_antes_minimo', 0)}")
+    print(f"  frete_liquido_antes_minimo: {detalhes.get('frete_liquido_antes_minimo', 0)}")
+    print("="*60 + "\n")
+    
+    # ========== COMPONENTES DETALHADOS ==========
+    
+    # Peso considerado
+    peso_minimo_tabela = frete.tabela_frete_minimo_peso or 0
+    peso_considerado = detalhes.get('peso_para_calculo', peso_real)
+    
+    # Frete base (peso + valor)
     frete_peso = (peso_considerado * (frete.tabela_valor_kg or 0)) if frete.tabela_valor_kg else 0
     frete_valor = (valor_mercadoria * ((frete.tabela_percentual_valor or 0) / 100)) if frete.tabela_percentual_valor else 0
+    frete_base = detalhes.get('frete_base', frete_peso + frete_valor)
     
-    # ✅ FRETE BASE - CORRETO: SOMA peso + valor conforme calculadora_frete.py linha 143
-    frete_base = frete_peso + frete_valor
+    # Componentes adicionais (com valores mínimos aplicados)
+    gris = detalhes.get('gris', 0)
+    adv = detalhes.get('adv', 0)
+    rca = detalhes.get('rca', 0)
+    pedagio = detalhes.get('pedagio', 0)
+    tas = detalhes.get('valor_tas', 0)
+    despacho = detalhes.get('valor_despacho', 0)
+    valor_cte_tabela = detalhes.get('valor_cte', 0)
     
-    # ✅ COMPONENTES ADICIONAIS - CORRETO: todos sobre valor da mercadoria conforme calculadora_frete.py
-    gris = (valor_mercadoria * ((frete.tabela_percentual_gris or 0) / 100)) if frete.tabela_percentual_gris else 0
-    adv = (valor_mercadoria * ((frete.tabela_percentual_adv or 0) / 100)) if frete.tabela_percentual_adv else 0
-    rca = (valor_mercadoria * ((frete.tabela_percentual_rca or 0) / 100)) if frete.tabela_percentual_rca else 0
+    # Componentes antes e depois do mínimo
+    componentes_antes = detalhes.get('componentes_antes_minimo', 0)
+    componentes_depois = detalhes.get('componentes_apos_minimo', 0)
     
-    # ✅ PEDÁGIO - CORRETO: por frações de 100kg conforme calculadora_frete.py
-    if frete.tabela_pedagio_por_100kg and peso_considerado > 0:
-        fracoes_100kg = int((peso_considerado - 1) // 100) + 1  # Arredonda para cima
-        pedagio = fracoes_100kg * frete.tabela_pedagio_por_100kg
-    else:
-        pedagio = 0
+    # Totais
+    total_liquido_antes_minimo = detalhes.get('frete_liquido_antes_minimo', 0)
+    total_liquido = resultado_calculo.get('valor_bruto', 0)  # Valor sem ICMS após mínimo
+    total_bruto_cotacao = resultado_calculo.get('valor_com_icms', 0)
+    valor_liquido_transportadora = resultado_calculo.get('valor_liquido', 0)
     
-    # ✅ VALORES FIXOS - CORRETO: conforme calculadora_frete.py
-    tas = frete.tabela_valor_tas or 0
-    despacho = frete.tabela_valor_despacho or 0
-    valor_cte_tabela = frete.tabela_valor_cte or 0
+    # ICMS
+    percentual_icms_cotacao = resultado_calculo.get('icms_aplicado', 0)
+    valor_icms_cotacao = total_bruto_cotacao - total_liquido if percentual_icms_cotacao > 0 else 0
     
-    # ✅ TOTAL LÍQUIDO (sem ICMS) - ANTES do valor mínimo
-    total_liquido_antes_minimo = frete_base + gris + adv + rca + pedagio + tas + despacho + valor_cte_tabela
-    
-    # ✅ APLICA VALOR MÍNIMO AO TOTAL LÍQUIDO - CORRETO conforme calculadora_frete.py linha 218
+    # Ajuste de mínimo
     frete_minimo_valor = frete.tabela_frete_minimo_valor or 0
-    total_liquido = max(total_liquido_antes_minimo, frete_minimo_valor)
-    ajuste_minimo_valor = total_liquido if total_liquido > total_liquido_antes_minimo else 0
+    ajuste_minimo_valor = max(0, frete_minimo_valor - total_liquido_antes_minimo)
     
-    # ✅ ICMS correto (usando icms_destino) - percentual já está em decimal
-    percentual_icms_cotacao = frete.tabela_icms_destino or 0
-    
-    # Total bruto com ICMS embutido (se houver ICMS)
-    if percentual_icms_cotacao > 0:
-        # Fórmula: valor_com_icms = valor_sem_icms / (1 - icms_decimal)
-        total_bruto_cotacao = total_liquido / (1 - percentual_icms_cotacao)
-        valor_icms_cotacao = total_bruto_cotacao - total_liquido
+    # Informações sobre pedágio
+    if frete.tabela_pedagio_por_100kg and peso_considerado > 0:
+        if transportadora_config.get('pedagio_por_fracao', True):
+            # Por fração (arredonda para cima)
+            fracoes_100kg = int((peso_considerado - 1) // 100) + 1
+            tipo_pedagio = "por fração"
+        else:
+            # Direto (valor exato)
+            fracoes_100kg = peso_considerado / 100
+            tipo_pedagio = "direto"
     else:
-        total_bruto_cotacao = total_liquido
-        valor_icms_cotacao = 0
-
+        fracoes_100kg = 0
+        tipo_pedagio = "não aplicado"
     
-    # ✅ MONTANDO ESTRUTURA CORRETA para o template conforme calculadora_frete.py
+    # ========== MONTAGEM DOS COMPONENTES PARA VISUALIZAÇÃO ==========
+    
+    # Contador para indexar apenas componentes tipo 'valor' (que terão campos de entrada)
+    input_index = 0
+    
     componentes = [
         {
             'nome': 'Peso Considerado',
@@ -674,135 +692,227 @@ def analise_diferencas(frete_id):
         {
             'nome': 'Frete por Peso',
             'valor_tabela': f'R$ {frete.tabela_valor_kg or 0:.4f}/kg',
-            'valor_usado': f'{peso_considerado:.2f} kg' if (frete.tabela_valor_kg or 0) > 0 else '-',
-            'formula': f'{peso_considerado:.2f} × {frete.tabela_valor_kg or 0:.4f}' if (frete.tabela_valor_kg or 0) > 0 else '-',
+            'valor_usado': f'{peso_considerado:.2f} kg',
+            'formula': f'{peso_considerado:.2f} × {frete.tabela_valor_kg or 0:.4f}',
             'valor_calculado': frete_peso,
             'unidade': 'R$',
-            'tipo': 'valor'
+            'tipo': 'valor',
+            'input_index': 0,  # Adiciona índice para o campo de entrada
+            'pos_minimo': False  # Sempre antes
         },
         {
             'nome': 'Frete por Valor (%)',
             'valor_tabela': f'{frete.tabela_percentual_valor or 0:.2f}%',
-            'valor_usado': f'R$ {valor_mercadoria:.2f}' if (frete.tabela_percentual_valor or 0) > 0 else '-',
-            'formula': f'{valor_mercadoria:.2f} × {frete.tabela_percentual_valor or 0:.2f}%' if (frete.tabela_percentual_valor or 0) > 0 else '-',
+            'valor_usado': f'R$ {valor_mercadoria:.2f}',
+            'formula': f'{valor_mercadoria:.2f} × {frete.tabela_percentual_valor or 0:.2f}%',
             'valor_calculado': frete_valor,
             'unidade': 'R$',
-            'tipo': 'valor'
+            'tipo': 'valor',
+            'input_index': 1,  # Adiciona índice para o campo de entrada
+            'pos_minimo': False  # Sempre antes
         },
         {
-            'nome': 'Frete Base (SOMA)',
+            'nome': 'Frete Base',
             'valor_tabela': 'Peso + Valor',
             'valor_usado': f'R$ {frete_peso:.2f} + R$ {frete_valor:.2f}',
             'formula': f'{frete_peso:.2f} + {frete_valor:.2f}',
             'valor_calculado': frete_base,
             'unidade': 'R$',
-            'tipo': 'subtotal'
-        },
-        {
-            'nome': 'GRIS (% s/ Mercadoria)',
-            'valor_tabela': f'{frete.tabela_percentual_gris or 0:.2f}%',
-            'valor_usado': f'R$ {valor_mercadoria:.2f}' if (frete.tabela_percentual_gris or 0) > 0 else '-',
-            'formula': f'{valor_mercadoria:.2f} × {frete.tabela_percentual_gris or 0:.2f}%' if (frete.tabela_percentual_gris or 0) > 0 else '-',
-            'valor_calculado': gris,
-            'unidade': 'R$',
-            'tipo': 'valor'
-        },
-        {
-            'nome': 'ADV (% s/ Mercadoria)',
-            'valor_tabela': f'{frete.tabela_percentual_adv or 0:.2f}%',
-            'valor_usado': f'R$ {valor_mercadoria:.2f}' if (frete.tabela_percentual_adv or 0) > 0 else '-',
-            'formula': f'{valor_mercadoria:.2f} × {frete.tabela_percentual_adv or 0:.2f}%' if (frete.tabela_percentual_adv or 0) > 0 else '-',
-            'valor_calculado': adv,
-            'unidade': 'R$',
-            'tipo': 'valor'
-        },
-        {
-            'nome': 'RCA (% s/ Mercadoria)',
-            'valor_tabela': f'{frete.tabela_percentual_rca or 0:.2f}%',
-            'valor_usado': f'R$ {valor_mercadoria:.2f}' if (frete.tabela_percentual_rca or 0) > 0 else '-',
-            'formula': f'{valor_mercadoria:.2f} × {frete.tabela_percentual_rca or 0:.2f}%' if (frete.tabela_percentual_rca or 0) > 0 else '-',
-            'valor_calculado': rca,
-            'unidade': 'R$',
-            'tipo': 'valor'
-        },
-        {
-            'nome': 'Pedágio (por fração 100kg)',
-            'valor_tabela': f'R$ {frete.tabela_pedagio_por_100kg or 0:.2f}/100kg',
-            'valor_usado': f'{peso_considerado:.2f} kg = {fracoes_100kg if frete.tabela_pedagio_por_100kg else 0} frações' if (frete.tabela_pedagio_por_100kg or 0) > 0 else '-',
-            'formula': f'{fracoes_100kg if frete.tabela_pedagio_por_100kg else 0} frações × R$ {frete.tabela_pedagio_por_100kg or 0:.2f}' if (frete.tabela_pedagio_por_100kg or 0) > 0 else '-',
-            'valor_calculado': pedagio,
-            'unidade': 'R$',
-            'tipo': 'valor'
-        },
-        {
-            'nome': 'TAS (fixo)',
-            'valor_tabela': f'R$ {tas:.2f}',
-            'valor_usado': 'Valor fixo' if tas > 0 else '-',
-            'formula': 'Valor fixo' if tas > 0 else '-',
-            'valor_calculado': tas,
-            'unidade': 'R$',
-            'tipo': 'valor'
-        },
-        {
-            'nome': 'Despacho (fixo)',
-            'valor_tabela': f'R$ {despacho:.2f}',
-            'valor_usado': 'Valor fixo' if despacho > 0 else '-',
-            'formula': 'Valor fixo' if despacho > 0 else '-',
-            'valor_calculado': despacho,
-            'unidade': 'R$',
-            'tipo': 'valor'
-        },
-        {
-            'nome': 'Valor CTe (fixo)',
-            'valor_tabela': f'R$ {valor_cte_tabela:.2f}',
-            'valor_usado': 'Valor fixo' if valor_cte_tabela > 0 else '-',
-            'formula': 'Valor fixo' if valor_cte_tabela > 0 else '-',
-            'valor_calculado': valor_cte_tabela,
-            'unidade': 'R$',
-            'tipo': 'valor'
-        },
-        {
-            'nome': 'Total Antes Mínimo',
-            'valor_tabela': 'Soma componentes',
-            'valor_usado': 'Calculado',
-            'formula': 'Base + GRIS + ADV + RCA + Pedágio + TAS + Despacho + CTe',
-            'valor_calculado': total_liquido_antes_minimo,
-            'unidade': 'R$',
-            'tipo': 'subtotal'
-        },
-        {
-            'nome': 'Ajuste Valor Mínimo',
-            'valor_tabela': f'Mín: R$ {frete_minimo_valor:.2f}',
-            'valor_usado': f'R$ {total_liquido_antes_minimo:.2f}',
-            'formula': f'max({total_liquido_antes_minimo:.2f}, {frete_minimo_valor:.2f})',
-            'valor_calculado': ajuste_minimo_valor,
-            'unidade': 'R$',
-            'tipo': 'ajuste',
-            'observacao': 'Ajuste aplicado' if ajuste_minimo_valor > 0 else 'Não aplicado'
+            'tipo': 'subtotal',
+            'pos_minimo': False  # Sempre antes
         }
     ]
+    
+    # GRIS com indicação de mínimo e posição
+    gris_minimo = tabela_dados.get('gris_minimo', 0)
+    gris_calculado = (valor_mercadoria * ((frete.tabela_percentual_gris or 0) / 100)) if frete.tabela_percentual_gris else 0
+    componentes.append({
+        'nome': f'GRIS {"(PÓS-MÍNIMO)" if transportadora_config["aplica_gris_pos_minimo"] else ""}',
+        'valor_tabela': f'{frete.tabela_percentual_gris or 0:.2f}% (Mín: R$ {gris_minimo:.2f})',
+        'valor_usado': f'R$ {valor_mercadoria:.2f}',
+        'formula': f'max({valor_mercadoria:.2f} × {frete.tabela_percentual_gris or 0:.2f}%, {gris_minimo:.2f})',
+        'valor_calculado': gris,
+        'unidade': 'R$',
+        'tipo': 'valor',
+        'input_index': 2,  # Terceiro campo de entrada
+        'pos_minimo': transportadora_config['aplica_gris_pos_minimo'],
+        'tem_minimo': gris_minimo > 0,
+        'valor_sem_minimo': gris_calculado
+    })
+    
+    # ADV com indicação de mínimo e posição
+    adv_minimo = tabela_dados.get('adv_minimo', 0)
+    adv_calculado = (valor_mercadoria * ((frete.tabela_percentual_adv or 0) / 100)) if frete.tabela_percentual_adv else 0
+    componentes.append({
+        'nome': f'ADV {"(PÓS-MÍNIMO)" if transportadora_config["aplica_adv_pos_minimo"] else ""}',
+        'valor_tabela': f'{frete.tabela_percentual_adv or 0:.2f}% (Mín: R$ {adv_minimo:.2f})',
+        'valor_usado': f'R$ {valor_mercadoria:.2f}',
+        'formula': f'max({valor_mercadoria:.2f} × {frete.tabela_percentual_adv or 0:.2f}%, {adv_minimo:.2f})',
+        'valor_calculado': adv,
+        'unidade': 'R$',
+        'tipo': 'valor',
+        'input_index': 3,  # Quarto campo de entrada
+        'pos_minimo': transportadora_config['aplica_adv_pos_minimo'],
+        'tem_minimo': adv_minimo > 0,
+        'valor_sem_minimo': adv_calculado
+    })
+    
+    # RCA
+    componentes.append({
+        'nome': f'RCA {"(PÓS-MÍNIMO)" if transportadora_config["aplica_rca_pos_minimo"] else ""}',
+        'valor_tabela': f'{frete.tabela_percentual_rca or 0:.2f}%',
+        'valor_usado': f'R$ {valor_mercadoria:.2f}',
+        'formula': f'{valor_mercadoria:.2f} × {frete.tabela_percentual_rca or 0:.2f}%',
+        'valor_calculado': rca,
+        'unidade': 'R$',
+        'tipo': 'valor',
+        'input_index': 4,  # Quinto campo de entrada
+        'pos_minimo': transportadora_config['aplica_rca_pos_minimo']
+    })
+    
+    # Pedágio com tipo de cálculo
+    componentes.append({
+        'nome': f'Pedágio ({tipo_pedagio}) {"(PÓS-MÍNIMO)" if transportadora_config["aplica_pedagio_pos_minimo"] else ""}',
+        'valor_tabela': f'R$ {frete.tabela_pedagio_por_100kg or 0:.2f}/100kg',
+        'valor_usado': f'{peso_considerado:.2f} kg = {fracoes_100kg:.2f} {"frações" if transportadora_config["pedagio_por_fracao"] else "× 100kg"}',
+        'formula': f'{fracoes_100kg:.2f} × R$ {frete.tabela_pedagio_por_100kg or 0:.2f}',
+        'valor_calculado': pedagio,
+        'unidade': 'R$',
+        'tipo': 'valor',
+        'input_index': 5,  # Sexto campo de entrada
+        'pos_minimo': transportadora_config['aplica_pedagio_pos_minimo']
+    })
+    
+    # Valores fixos - Sempre mostrar todos para consistência
+    current_input_index = 6  # Começa em 6 após os componentes anteriores
+    for nome, valor, campo_config in [
+        ('TAS', tas, 'aplica_tas_pos_minimo'),
+        ('Despacho', despacho, 'aplica_despacho_pos_minimo'),
+        ('CT-e', valor_cte_tabela, 'aplica_cte_pos_minimo')
+    ]:
+        # Sempre adicionar o componente (mesmo se zero) para consistência com Frete por Peso/Valor
+        componentes.append({
+            'nome': f'{nome} (fixo) {"(PÓS-MÍNIMO)" if transportadora_config[campo_config] else ""}',
+            'valor_tabela': f'R$ {valor:.2f}',
+            'valor_usado': 'Valor fixo',
+            'formula': 'Valor fixo',
+            'valor_calculado': valor,
+            'unidade': 'R$',
+            'tipo': 'valor',
+            'input_index': current_input_index,  # Adiciona índice incrementado
+            'pos_minimo': transportadora_config[campo_config]
+        })
+        current_input_index += 1  # Incrementa para o próximo
+    
+    # Subtotal antes do mínimo
+    componentes.append({
+        'nome': 'Subtotal ANTES do Mínimo',
+        'valor_tabela': 'Componentes pré-mínimo',
+        'valor_usado': f'Base + componentes',
+        'formula': f'Base ({frete_base:.2f}) + Componentes ({componentes_antes:.2f})',
+        'valor_calculado': total_liquido_antes_minimo,
+        'unidade': 'R$',
+        'tipo': 'subtotal_pre'
+    })
+    
+    # Aplicação do frete mínimo
+    componentes.append({
+        'nome': 'Aplicação Frete Mínimo',
+        'valor_tabela': f'Mín: R$ {frete_minimo_valor:.2f}',
+        'valor_usado': f'R$ {total_liquido_antes_minimo:.2f}',
+        'formula': f'max({total_liquido_antes_minimo:.2f}, {frete_minimo_valor:.2f})',
+        'valor_calculado': max(total_liquido_antes_minimo, frete_minimo_valor),
+        'unidade': 'R$',
+        'tipo': 'ajuste',
+        'observacao': f'Ajuste de R$ {ajuste_minimo_valor:.2f}' if ajuste_minimo_valor > 0 else 'Sem ajuste'
+    })
+    
+    # Componentes pós-mínimo (se houver)
+    if componentes_depois > 0:
+        componentes.append({
+            'nome': 'Componentes PÓS-MÍNIMO',
+            'valor_tabela': 'Soma pós-mínimo',
+            'valor_usado': 'Calculado',
+            'formula': 'Componentes aplicados após mínimo',
+            'valor_calculado': componentes_depois,
+            'unidade': 'R$',
+            'tipo': 'subtotal_pos'
+        })
+    
+    # Total líquido final
+    componentes.append({
+        'nome': 'TOTAL LÍQUIDO (sem ICMS)',
+        'valor_tabela': 'Final',
+        'valor_usado': 'Calculado',
+        'formula': f'Após mínimo ({max(total_liquido_antes_minimo, frete_minimo_valor):.2f}) + Pós ({componentes_depois:.2f})',
+        'valor_calculado': total_liquido,
+        'unidade': 'R$',
+        'tipo': 'total'
+    })
+    
+    # ICMS
+    icms_proprio = tabela_dados.get('icms_proprio')
+    fonte_icms = "ICMS Tabela Comercial" if icms_proprio and icms_proprio > 0 else "ICMS Legislação"
+    
+    if percentual_icms_cotacao > 0:
+        componentes.append({
+            'nome': f'{fonte_icms}',
+            'valor_tabela': f'{percentual_icms_cotacao * 100:.2f}%',
+            'valor_usado': f'R$ {total_liquido:.2f}',
+            'formula': f'{total_liquido:.2f} / (1 - {percentual_icms_cotacao:.4f}) - {total_liquido:.2f}',
+            'valor_calculado': valor_icms_cotacao,
+            'unidade': 'R$',
+            'tipo': 'icms',
+            'fonte': fonte_icms
+        })
+    
+    # Total bruto
+    componentes.append({
+        'nome': 'TOTAL BRUTO (com ICMS)',
+        'valor_tabela': 'Final',
+        'valor_usado': 'Calculado',
+        'formula': f'{total_liquido:.2f} + {valor_icms_cotacao:.2f}',
+        'valor_calculado': total_bruto_cotacao,
+        'unidade': 'R$',
+        'tipo': 'total_final'
+    })
+    
+    # Informações adicionais sobre a configuração
+    configuracao_info = {
+        'transportadora_optante': tabela_dados.get('transportadora_optante', True),
+        'icms_proprio': icms_proprio,
+        'fonte_icms': fonte_icms,
+        'componentes_pre': componentes_antes,
+        'componentes_pos': componentes_depois,
+        'pedagio_tipo': tipo_pedagio,
+        'tem_ajuste_minimo': ajuste_minimo_valor > 0,
+        'valor_ajuste': ajuste_minimo_valor
+    }
     
     # Resumos
     resumo_cotacao = {
         'total_liquido': total_liquido,
         'percentual_icms': percentual_icms_cotacao,
         'valor_icms': valor_icms_cotacao,
-        'total_bruto': total_bruto_cotacao
+        'total_bruto': total_bruto_cotacao,
+        'valor_liquido_transportadora': valor_liquido_transportadora
     }
     
     resumo_cte = {
-        'total_liquido': None,  # Para preenchimento manual
-        'percentual_icms': None,  # Para preenchimento manual
-        'valor_icms': None,  # Calculado automaticamente
-        'total_bruto': frete.valor_cte  # Valor informado no CTe
+        'total_liquido': None,
+        'percentual_icms': None,
+        'valor_icms': None,
+        'total_bruto': frete.valor_cte
     }
     
     return render_template('fretes/analise_diferencas.html', 
                          frete=frete,
-                         tabela_dados=tabela_dados,
                          componentes=componentes,
+                         tabela_dados=tabela_dados,
                          resumo_cotacao=resumo_cotacao,
-                         resumo_cte=resumo_cte)
+                         resumo_cte=resumo_cte,
+                         configuracao_info=configuracao_info,
+                         transportadora_config=transportadora_config)
 
 # =================== FATURAS DE FRETE ===================
 
@@ -990,7 +1100,8 @@ def conferir_fatura(fatura_id):
             try:
                 fatura_info = despesa.observacoes.split('Fatura:')[1].split('|')[0].strip()
                 cliente_obs = f"Despesa Extra (Fatura: {fatura_info})"
-            except:
+            except Exception as e:
+                print(f"Erro ao processar despesa #{despesa.id}: {str(e)}")
                 cliente_obs = "Despesa Extra"
         
         documentos_status.append({
@@ -1368,29 +1479,84 @@ def nova_despesa_extra_por_nf():
 @login_required
 def criar_despesa_extra_frete(frete_id):
     """Etapa 2: Criar despesa extra para frete selecionado"""
+    from app.utils.email_handler import EmailHandler
+    from app.fretes.email_models import EmailAnexado
+    
     frete = Frete.query.get_or_404(frete_id)
     form = DespesaExtraForm()
     
     if form.validate_on_submit():
+        # Cria e salva a despesa imediatamente
         despesa = DespesaExtra(
             frete_id=frete_id,
             tipo_despesa=form.tipo_despesa.data,
             setor_responsavel=form.setor_responsavel.data,
             motivo_despesa=form.motivo_despesa.data,
-            # ✅ CORRIGIDO: Formulário simplificado não tem tipo_documento
             tipo_documento='PENDENTE_DOCUMENTO',  # Será definido ao vincular fatura
-            numero_documento='PENDENTE_FATURA',  # ✅ OBRIGATÓRIO: FATURA PRIMEIRO, DOCUMENTO DEPOIS
+            numero_documento='PENDENTE_FATURA',  # OBRIGATÓRIO: FATURA PRIMEIRO, DOCUMENTO DEPOIS
             valor_despesa=form.valor_despesa.data,
-            vencimento_despesa=None,  # ✅ CORRIGIDO: Formulário simplificado não tem vencimento
+            vencimento_despesa=None,
             observacoes=form.observacoes.data,
             criado_por=current_user.nome
         )
         
-        # Armazena na sessão para confirmar
-        session['despesa_data'] = despesa.__dict__
+        # Salva a despesa primeiro para obter o ID
+        db.session.add(despesa)
+        db.session.commit()
         
-        # Redireciona para confirmação/pergunta sobre fatura
-        return redirect(url_for('fretes.confirmar_despesa_extra'))
+        # Processa e salva emails anexados IMEDIATAMENTE
+        emails_salvos = 0
+        if form.emails_anexados.data:
+            email_handler = EmailHandler()
+            
+            for arquivo_email in form.emails_anexados.data:
+                if arquivo_email and arquivo_email.filename:
+                    try:
+                        # Processa metadados
+                        metadados = email_handler.processar_email_msg(arquivo_email)
+                        
+                        # Faz upload para S3/local
+                        arquivo_email.seek(0)  # Volta ao início do arquivo
+                        caminho = email_handler.upload_email(
+                            arquivo_email, 
+                            despesa.id,
+                            current_user.nome
+                        )
+                        
+                        if caminho and metadados:
+                            # Salva no banco de dados
+                            email_anexado = EmailAnexado(
+                                despesa_extra_id=despesa.id,
+                                nome_arquivo=arquivo_email.filename,
+                                caminho_s3=caminho,
+                                tamanho_bytes=metadados.get('tamanho_bytes', 0),
+                                remetente=metadados.get('remetente'),
+                                destinatarios=metadados.get('destinatarios', '[]'),
+                                cc=metadados.get('cc', '[]'),  # Salva CC
+                                bcc=metadados.get('bcc', '[]'),  # Salva BCC
+                                assunto=metadados.get('assunto'),
+                                data_envio=metadados.get('data_envio'),
+                                tem_anexos=metadados.get('tem_anexos', False),
+                                qtd_anexos=metadados.get('qtd_anexos', 0),
+                                conteudo_preview=metadados.get('conteudo_preview'),
+                                criado_por=current_user.nome
+                            )
+                            db.session.add(email_anexado)
+                            emails_salvos += 1
+                            
+                    except Exception as e:
+                        current_app.logger.error(f"Erro ao processar email {arquivo_email.filename}: {str(e)}")
+                        flash(f'⚠️ Erro ao processar email {arquivo_email.filename}', 'warning')
+            
+            # Commit dos emails
+            if emails_salvos > 0:
+                db.session.commit()
+                flash(f'✅ {emails_salvos} email(s) anexado(s) com sucesso!', 'success')
+        
+        flash('Despesa extra cadastrada com sucesso!', 'success')
+        
+        # Redireciona direto para visualização do frete
+        return redirect(url_for('fretes.visualizar_frete', frete_id=frete_id))
     
     return render_template('fretes/criar_despesa_extra_frete.html', 
                          form=form, frete=frete)
@@ -1399,11 +1565,16 @@ def criar_despesa_extra_frete(frete_id):
 @fretes_bp.route('/despesas/confirmar', methods=['GET', 'POST'])
 @login_required
 def confirmar_despesa_extra():
-    """Etapa 3: Confirma despesa e pergunta sobre fatura"""
-    despesa_data = session.get('despesa_data')
+    """Etapa 3: Pergunta sobre fatura para despesa já criada"""
+    despesa_id = session.get('despesa_criada_id')
     
-    if not despesa_data:
-        flash('Dados da despesa não encontrados. Reinicie o processo.', 'error')
+    if not despesa_id:
+        flash('Despesa não encontrada. Reinicie o processo.', 'error')
+        return redirect(url_for('fretes.nova_despesa_extra_por_nf'))
+    
+    despesa = DespesaExtra.query.get(despesa_id)
+    if not despesa:
+        flash('Despesa não encontrada no banco.', 'error')
         return redirect(url_for('fretes.nova_despesa_extra_por_nf'))
     
     frete = Frete.query.get(despesa_data['frete_id'])
@@ -1433,8 +1604,17 @@ def confirmar_despesa_extra():
                 db.session.add(despesa)
                 db.session.commit()
                 
+                # Processa emails anexados após criar a despesa
+                if session.get('emails_temporarios'):
+                    # NOTA: Como os arquivos não persistem entre requests,
+                    # precisamos processar os emails ANTES de redirecionar
+                    # Esta é uma limitação do fluxo atual
+                    flash('⚠️ Os emails devem ser anexados diretamente no formulário de criação.', 'warning')
+                
                 # Limpa dados da sessão
                 session.pop('despesa_data', None)
+                session.pop('emails_temporarios', None)
+                session.pop('emails_para_anexar', None)
                 
                 flash('Despesa extra cadastrada com sucesso!', 'success')
                 return redirect(url_for('fretes.visualizar_frete', frete_id=frete.id))
@@ -1981,24 +2161,10 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario='Sistema'):
             # considerando valor total e peso total dos itens do embarque
             
             # Busca dados da tabela do embarque
-            tabela_dados = {
-                'modalidade': embarque.modalidade,
-                'nome_tabela': embarque.tabela_nome_tabela,
-                'valor_kg': embarque.tabela_valor_kg,
-                'percentual_valor': embarque.tabela_percentual_valor,
-                'frete_minimo_valor': embarque.tabela_frete_minimo_valor,
-                'frete_minimo_peso': embarque.tabela_frete_minimo_peso,
-                'icms': embarque.tabela_icms,
-                'percentual_gris': embarque.tabela_percentual_gris,
-                'pedagio_por_100kg': embarque.tabela_pedagio_por_100kg,
-                'valor_tas': embarque.tabela_valor_tas,
-                'percentual_adv': embarque.tabela_percentual_adv,
-                'percentual_rca': embarque.tabela_percentual_rca,
-                'valor_despacho': embarque.tabela_valor_despacho,
-                'valor_cte': embarque.tabela_valor_cte,
-                'icms_incluso': embarque.tabela_icms_incluso,
-                'icms_destino': embarque.icms_destino or 0
-            }
+            from app.utils.tabela_frete_manager import TabelaFreteManager
+            
+            tabela_dados = TabelaFreteManager.preparar_dados_tabela(embarque)
+            tabela_dados['icms_destino'] = embarque.icms_destino or 0
             
             # ✅ CORREÇÃO: Calcula totais do embarque inteiro (apenas itens ATIVOS)
             todas_nfs_embarque = []
@@ -2027,25 +2193,11 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario='Sistema'):
             # considerando valor e peso total do CNPJ dos itens do embarque
             
             # Pega dados da tabela de qualquer item do CNPJ (são iguais)
+            from app.utils.tabela_frete_manager import TabelaFreteManager
+            
             item_ref = itens_embarque_cnpj[0]
-            tabela_dados = {
-                'modalidade': item_ref.modalidade,
-                'nome_tabela': item_ref.tabela_nome_tabela,
-                'valor_kg': item_ref.tabela_valor_kg,
-                'percentual_valor': item_ref.tabela_percentual_valor,
-                'frete_minimo_valor': item_ref.tabela_frete_minimo_valor,
-                'frete_minimo_peso': item_ref.tabela_frete_minimo_peso,
-                'icms': item_ref.tabela_icms,
-                'percentual_gris': item_ref.tabela_percentual_gris,
-                'pedagio_por_100kg': item_ref.tabela_pedagio_por_100kg,
-                'valor_tas': item_ref.tabela_valor_tas,
-                'percentual_adv': item_ref.tabela_percentual_adv,
-                'percentual_rca': item_ref.tabela_percentual_rca,
-                'valor_despacho': item_ref.tabela_valor_despacho,
-                'valor_cte': item_ref.tabela_valor_cte,
-                'icms_incluso': item_ref.tabela_icms_incluso,
-                'icms_destino': item_ref.icms_destino or 0
-            }
+            tabela_dados = TabelaFreteManager.preparar_dados_tabela(item_ref)
+            tabela_dados['icms_destino'] = item_ref.icms_destino or 0
             
             # Calcula frete usando valor e peso total do CNPJ
             valor_cotado = calcular_valor_frete_pela_tabela(tabela_dados, peso_total_cnpj, valor_total_cnpj)
@@ -2064,22 +2216,6 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario='Sistema'):
             valor_total_nfs=valor_total_cnpj,
             quantidade_nfs=len(itens_embarque_cnpj),
             numeros_nfs=numeros_nfs,
-            # Dados da tabela
-            tabela_nome_tabela=tabela_dados['nome_tabela'],
-            tabela_valor_kg=tabela_dados['valor_kg'],
-            tabela_percentual_valor=tabela_dados['percentual_valor'],
-            tabela_frete_minimo_valor=tabela_dados['frete_minimo_valor'],
-            tabela_frete_minimo_peso=tabela_dados['frete_minimo_peso'],
-            tabela_icms=tabela_dados['icms'],
-            tabela_percentual_gris=tabela_dados['percentual_gris'],
-            tabela_pedagio_por_100kg=tabela_dados['pedagio_por_100kg'],
-            tabela_valor_tas=tabela_dados['valor_tas'],
-            tabela_percentual_adv=tabela_dados['percentual_adv'],
-            tabela_percentual_rca=tabela_dados['percentual_rca'],
-            tabela_valor_despacho=tabela_dados['valor_despacho'],
-            tabela_valor_cte=tabela_dados['valor_cte'],
-            tabela_icms_incluso=tabela_dados['icms_incluso'],
-            tabela_icms_destino=tabela_dados['icms_destino'],
             # Valores
             valor_cotado=valor_cotado,
             valor_considerado=valor_cotado,
@@ -2090,6 +2226,10 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario='Sistema'):
             lancado_em=datetime.utcnow(),
             lancado_por=usuario
         )
+        
+        # Atribui campos da tabela usando TabelaFreteManager
+        TabelaFreteManager.atribuir_campos_objeto(novo_frete, tabela_dados)
+        novo_frete.tabela_icms_destino = tabela_dados['icms_destino']
         
         db.session.add(novo_frete)
         db.session.commit()
@@ -3176,3 +3316,73 @@ def emitir_fatura_freteiro(transportadora_id):
     
     flash('Dados inválidos no formulário', 'danger')
     return redirect(url_for('fretes.lancamento_freteiros'))
+
+
+@fretes_bp.route('/despesa/<int:despesa_id>/anexar-email-ajax', methods=['POST'])
+@login_required
+def anexar_email_ajax(despesa_id):
+    """Rota AJAX para anexar email a uma despesa extra"""
+    try:
+        # Busca a despesa
+        despesa = DespesaExtra.query.get_or_404(despesa_id)
+        
+        # Verifica se foi enviado um arquivo
+        if 'arquivo_email' not in request.files:
+            return jsonify({'success': False, 'message': 'Nenhum arquivo enviado'}), 400
+        
+        arquivo_email = request.files['arquivo_email']
+        
+        if arquivo_email.filename == '':
+            return jsonify({'success': False, 'message': 'Nenhum arquivo selecionado'}), 400
+        
+        # Verifica extensão
+        if not arquivo_email.filename.lower().endswith('.msg'):
+            return jsonify({'success': False, 'message': 'Arquivo deve ser .msg'}), 400
+        
+        # Processa o email
+        email_handler = EmailHandler()
+        metadados = email_handler.processar_email_msg(arquivo_email)
+        
+        if not metadados:
+            return jsonify({'success': False, 'message': 'Erro ao processar email'}), 500
+        
+        # Faz upload do arquivo
+        caminho = email_handler.upload_email(arquivo_email, despesa.id, current_user.nome)
+        
+        if not caminho:
+            return jsonify({'success': False, 'message': 'Erro ao fazer upload do email'}), 500
+        
+        # Cria registro no banco
+        email_anexado = EmailAnexado(
+            despesa_extra_id=despesa.id,
+            nome_arquivo=arquivo_email.filename,
+            caminho_s3=caminho,
+            tamanho_bytes=metadados.get('tamanho_bytes', 0),
+            remetente=metadados.get('remetente', ''),
+            destinatarios=metadados.get('destinatarios', '[]'),
+            cc=metadados.get('cc', '[]'),
+            bcc=metadados.get('bcc', '[]'),
+            assunto=metadados.get('assunto', ''),
+            data_envio=metadados.get('data_envio'),
+            tem_anexos=metadados.get('tem_anexos', False),
+            qtd_anexos=metadados.get('qtd_anexos', 0),
+            conteudo_preview=metadados.get('conteudo_preview', ''),
+            criado_por=current_user.nome
+        )
+        
+        db.session.add(email_anexado)
+        db.session.commit()
+        
+        current_app.logger.info(f"✅ Email anexado com sucesso à despesa #{despesa_id} por {current_user.nome}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Email anexado com sucesso',
+            'email_id': email_anexado.id,
+            'total_emails': len(despesa.emails_anexados)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"❌ Erro ao anexar email: {str(e)}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500

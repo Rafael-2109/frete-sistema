@@ -23,29 +23,32 @@
                 </div>
                 <div class="card-body">
                     <form method="POST">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                         {{ form.hidden_tag() }}
-                        
+
                         <!-- Seleção de Fatura (obrigatório) -->
                         <div class="form-group mb-3">
                             <label class="form-label">Fatura de Frete</label>
                             <select name="fatura_frete_id" class="form-control" required>
                                 <option value="">Selecione uma fatura</option>
                                 {% for fatura in faturas_disponiveis %}
-                                    <option value="{{ fatura.id }}" {% if fatura_preselecionada_id and fatura.id == fatura_preselecionada_id %}selected{% endif %}>
-                                        {{ fatura.numero_fatura }} - {{ fatura.transportadora.razao_social }} - R$ {{ "%.2f"|format(fatura.valor_total_fatura) }}
-                                    </option>
+                                <option value="{{ fatura.id }}" {% if fatura_preselecionada_id and
+                                    fatura.id==fatura_preselecionada_id %}selected{% endif %}>
+                                    {{ fatura.numero_fatura }} - {{ fatura.transportadora.razao_social }} - R$ {{
+                                    "%.2f"|format(fatura.valor_total_fatura) }}
+                                </option>
                                 {% endfor %}
                             </select>
                             <small class="form-text text-muted">
-                                CTe será vinculado a esta fatura. 
+                                CTe será vinculado a esta fatura.
                                 <a href="{{ url_for('fretes.nova_fatura') }}" target="_blank">Criar nova fatura</a>
                                 {% if fatura_preselecionada_id %}
-                                    <br><span class="text-success"><i class="fas fa-check"></i> Fatura pré-selecionada automaticamente</span>
+                                <br><span class="text-success"><i class="fas fa-check"></i> Fatura pré-selecionada
+                                    automaticamente</span>
                                 {% endif %}
                             </small>
                         </div>
-                        
+
                         <div class="form-group">
                             {{ form.numero_nf.label(class="form-label") }}
                             {{ form.numero_nf(class="form-control") }}
@@ -60,7 +63,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="col-md-6">
             <div class="card bg-light">
                 <div class="card-header">
@@ -97,14 +100,16 @@
                             <strong>Embarque:</strong> #{{ embarque_encontrado.numero }}
                         </div>
                         <div class="col-md-3">
-                            <strong>Data:</strong> {{ embarque_encontrado.data_embarque | formatar_data_segura if embarque_encontrado.data_embarque else 'N/A' }}
+                            <strong>Data:</strong> {{ embarque_encontrado.data_embarque | formatar_data_segura if
+                            embarque_encontrado.data_embarque else 'N/A' }}
                         </div>
                         <div class="col-md-3">
                             <strong>Transportadora:</strong> {{ embarque_encontrado.transportadora.razao_social }}
                         </div>
                         <div class="col-md-3">
-                            <strong>Tipo:</strong> 
-                            <span class="badge {% if embarque_encontrado.tipo_carga == 'DIRETA' %}badge-info{% else %}badge-warning{% endif %}">
+                            <strong>Tipo:</strong>
+                            <span
+                                class="badge {% if embarque_encontrado.tipo_carga == 'DIRETA' %}badge-info{% else %}badge-warning{% endif %}">
                                 {{ embarque_encontrado.tipo_carga }}
                             </span>
                         </div>
@@ -127,10 +132,11 @@
                 </div>
                 <div class="card-body">
                     <p class="mb-3">
-                        <strong>Foram encontrados {{ fretes_existentes|length }} frete(s) que já contêm a NF informada.</strong><br>
+                        <strong>Foram encontrados {{ fretes_existentes|length }} frete(s) que já contêm a NF
+                            informada.</strong><br>
                         Escolha um dos fretes abaixo para lançar o CTe ou verificar se já foi lançado:
                     </p>
-                    
+
                     <div class="table-responsive">
                         <table class="table table-hover">
                             <thead>
@@ -152,47 +158,59 @@
                                     <td title="{{ frete.nome_cliente }}">{{ frete.nome_cliente[:25] }}...</td>
                                     <td>{{ frete.cnpj_cliente }}</td>
                                     <td>
-                                        <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}" target="_blank">
+                                        <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}"
+                                            target="_blank">
                                             #{{ frete.embarque.numero }}
                                         </a>
                                     </td>
                                     <td>
                                         {% if frete.numero_cte %}
-                                            <span class="badge badge-success" style="color: white; background-color: #28a745;">{{ frete.numero_cte }}</span>
+                                        <span class="badge bg-success"
+                                            style="color: white; background-color: #28a745;">{{ frete.numero_cte
+                                            }}</span>
                                         {% else %}
-                                            <span class="badge badge-warning" style="color: #212529; background-color: #ffc107;">Pendente</span>
+                                        <span class="badge bg-warning"
+                                            style="color: #212529; background-color: #ffc107;">Pendente</span>
                                         {% endif %}
                                     </td>
                                     <td>R$ {{ "%.2f"|format(frete.valor_cotado) }}</td>
                                     <td>
                                         {% if frete.status == 'PENDENTE' %}
-                                            <span class="badge badge-warning" style="color: #212529; background-color: #ffc107;">{{ frete.status }}</span>
+                                        <span class="badge bg-warning"
+                                            style="color: #212529; background-color: #ffc107;">{{ frete.status }}</span>
                                         {% elif frete.status == 'EM_TRATATIVA' %}
-                                            <span class="badge badge-info" style="color: white; background-color: #17a2b8;">EM TRATATIVA</span>
+                                        <span class="badge bg-info" style="color: white; background-color: #17a2b8;">EM
+                                            TRATATIVA</span>
                                         {% elif frete.status == 'APROVADO' %}
-                                            <span class="badge badge-success" style="color: white; background-color: #28a745;">{{ frete.status }}</span>
+                                        <span class="badge bg-success"
+                                            style="color: white; background-color: #28a745;">{{ frete.status }}</span>
                                         {% elif frete.status == 'LANCADO' %}
-                                            <span class="badge badge-dark" style="color: white; background-color: #343a40;">{{ frete.status }}</span>
+                                        <span class="badge bg-dark" style="color: white; background-color: #343a40;">{{
+                                            frete.status }}</span>
                                         {% else %}
-                                            <span class="badge badge-secondary" style="color: white; background-color: #6c757d;">{{ frete.status }}</span>
+                                        <span class="badge bg-secondary"
+                                            style="color: white; background-color: #6c757d;">{{ frete.status }}</span>
                                         {% endif %}
                                     </td>
                                     <td>
                                         {% if frete.numero_cte %}
-                                            <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}" 
-                                               class="btn btn-sm btn-info">
-                                                <i class="fas fa-eye"></i> Visualizar
-                                            </a>
+                                        <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}"
+                                            class="btn btn-sm btn-info">
+                                            <i class="fas fa-eye"></i> Visualizar
+                                        </a>
                                         {% else %}
-                                            <form method="POST" action="{{ url_for('fretes.processar_cte_frete_existente') }}" style="display: inline;">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                                {{ form.hidden_tag() }}
-                                                <input type="hidden" name="frete_id" value="{{ frete.id }}">
-                                                <input type="hidden" name="fatura_frete_id" value="{{ request.form.get('fatura_frete_id') or fatura_preselecionada_id }}">
-                                                <button type="submit" class="btn btn-sm btn-primary">
-                                                    <i class="fas fa-edit"></i> Lançar CTe
-                                                </button>
-                                            </form>
+                                        <form method="POST"
+                                            action="{{ url_for('fretes.processar_cte_frete_existente') }}"
+                                            style="display: inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                                            {{ form.hidden_tag() }}
+                                            <input type="hidden" name="frete_id" value="{{ frete.id }}">
+                                            <input type="hidden" name="fatura_frete_id"
+                                                value="{{ request.form.get('fatura_frete_id') or fatura_preselecionada_id }}">
+                                            <button type="submit" class="btn btn-sm btn-primary">
+                                                <i class="fas fa-edit"></i> Lançar CTe
+                                            </button>
+                                        </form>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -200,7 +218,7 @@
                             </tbody>
                         </table>
                     </div>
-                    
+
                     <div class="alert alert-info mt-3">
                         <strong><i class="fas fa-info-circle"></i> Orientação:</strong><br>
                         • Se um frete já possui CTe lançado, você pode visualizá-lo<br>
@@ -229,7 +247,7 @@
                     <h6>Novo Processo Conforme Especificação:</h6>
                     <ol>
                         <li><strong>Busca por NF:</strong> Digite o número de uma nota fiscal</li>
-                        <li><strong>Sistema busca fretes existentes:</strong> 
+                        <li><strong>Sistema busca fretes existentes:</strong>
                             <ul>
                                 <li>Se encontrar fretes que já contêm essa NF, mostra lista para você escolher</li>
                                 <li>Se não encontrar fretes, oferece criação de novo frete</li>
@@ -237,11 +255,13 @@
                         </li>
                         <li><strong>Lançamento do CTe:</strong>
                             <ul>
-                                <li><strong>Frete existente:</strong> Redireciona para edição do frete para preencher CTe</li>
+                                <li><strong>Frete existente:</strong> Redireciona para edição do frete para preencher
+                                    CTe</li>
                                 <li><strong>Novo frete:</strong> Cria o frete e depois permite lançar CTe</li>
                             </ul>
                         </li>
-                        <li><strong>Conferência:</strong> Sistema compara valor CTe com valor cotado e mostra diferenças</li>
+                        <li><strong>Conferência:</strong> Sistema compara valor CTe com valor cotado e mostra diferenças
+                        </li>
                     </ol>
 
                     <div class="row mt-4">
@@ -274,4 +294,4 @@
     </div>
     {% endif %}
 </div>
-{% endblock %} 
+{% endblock %}

@@ -6,7 +6,7 @@
 <div class="container-fluid">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">
-            <i class="fas fa-list text-primary"></i> 
+            <i class="fas fa-list text-primary"></i>
             Carteira Principal de Pedidos
         </h1>
         <div>
@@ -26,32 +26,32 @@
         </div>
         <div class="card-body">
             <form method="GET" id="form-filtros">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                 <div class="row">
                     <div class="col-md-2 mb-3">
                         <label for="num_pedido" class="form-label">Número Pedido</label>
-                        <input type="text" class="form-control" id="num_pedido" name="num_pedido" 
-                               value="{{ num_pedido }}" placeholder="Ex: PED001">
+                        <input type="text" class="form-control" id="num_pedido" name="num_pedido"
+                            value="{{ num_pedido }}" placeholder="Ex: PED001">
                     </div>
                     <div class="col-md-2 mb-3">
                         <label for="cod_produto" class="form-label">Código Produto</label>
-                        <input type="text" class="form-control" id="cod_produto" name="cod_produto" 
-                               value="{{ cod_produto }}" placeholder="Ex: PROD001">
+                        <input type="text" class="form-control" id="cod_produto" name="cod_produto"
+                            value="{{ cod_produto }}" placeholder="Ex: PROD001">
                     </div>
                     <div class="col-md-2 mb-3">
                         <label for="vendedor" class="form-label">Vendedor</label>
-                        <input type="text" class="form-control" id="vendedor" name="vendedor" 
-                               value="{{ vendedor }}" placeholder="Ex: João">
+                        <input type="text" class="form-control" id="vendedor" name="vendedor" value="{{ vendedor }}"
+                            placeholder="Ex: João">
                     </div>
                     <div class="col-md-2 mb-3">
                         <label for="status" class="form-label">Status</label>
-                        <input type="text" class="form-control" id="status" name="status" 
-                               value="{{ status }}" placeholder="Ex: Pedido de venda" style="color: #000 !important;">
+                        <input type="text" class="form-control" id="status" name="status" value="{{ status }}"
+                            placeholder="Ex: Pedido de venda" style="color: #000 !important;">
                     </div>
                     <div class="col-md-3 mb-3">
                         <label for="cliente" class="form-label">Cliente</label>
-                        <input type="text" class="form-control" id="cliente" name="cliente" 
-                               value="{{ cliente }}" placeholder="Ex: Cliente LTDA">
+                        <input type="text" class="form-control" id="cliente" name="cliente" value="{{ cliente }}"
+                            placeholder="Ex: Cliente LTDA">
                     </div>
                     <div class="col-md-1 mb-3 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary btn-sm me-2">
@@ -73,7 +73,7 @@
                 <i class="fas fa-table"></i> Itens da Carteira
             </h6>
             {% if itens and itens.items %}
-            <span class="badge badge-info">
+            <span class="badge bg-info">
                 {{ itens.total }} itens encontrados
             </span>
             {% endif %}
@@ -85,58 +85,69 @@
                     <thead class="thead-light">
                         <tr>
                             <th>
-                                <a href="javascript:void(0)" onclick="ordenarPor('vendedor')" class="text-decoration-none text-dark">
+                                <a href="javascript:void(0)" onclick="ordenarPor('vendedor')"
+                                    class="text-decoration-none text-dark">
                                     Vendedor <i class="fas fa-sort"></i>
                                 </a>
                             </th>
                             <th>
-                                <a href="javascript:void(0)" onclick="ordenarPor('num_pedido')" class="text-decoration-none text-dark">
+                                <a href="javascript:void(0)" onclick="ordenarPor('num_pedido')"
+                                    class="text-decoration-none text-dark">
                                     Pedido <i class="fas fa-sort"></i>
                                 </a>
                             </th>
                             <th>
-                                <a href="javascript:void(0)" onclick="ordenarPor('data_pedido')" class="text-decoration-none text-dark">
+                                <a href="javascript:void(0)" onclick="ordenarPor('data_pedido')"
+                                    class="text-decoration-none text-dark">
                                     Pdd / Ent <i class="fas fa-sort"></i>
                                 </a>
                             </th>
                             <th>
-                                <a href="javascript:void(0)" onclick="ordenarPor('raz_social')" class="text-decoration-none text-dark">
+                                <a href="javascript:void(0)" onclick="ordenarPor('raz_social')"
+                                    class="text-decoration-none text-dark">
                                     Cliente <i class="fas fa-sort"></i>
                                 </a>
                             </th>
                             <th>
-                                <a href="javascript:void(0)" onclick="ordenarPor('cod_uf')" class="text-decoration-none text-dark">
+                                <a href="javascript:void(0)" onclick="ordenarPor('cod_uf')"
+                                    class="text-decoration-none text-dark">
                                     UF/Município <i class="fas fa-sort"></i>
                                 </a>
                             </th>
                             <th>
-                                <a href="javascript:void(0)" onclick="ordenarPor('rota')" class="text-decoration-none text-dark">
+                                <a href="javascript:void(0)" onclick="ordenarPor('rota')"
+                                    class="text-decoration-none text-dark">
                                     Rota/Sub-Rota <i class="fas fa-sort"></i>
                                 </a>
                             </th>
                             <th>
-                                <a href="javascript:void(0)" onclick="ordenarPor('cod_produto')" class="text-decoration-none text-dark">
+                                <a href="javascript:void(0)" onclick="ordenarPor('cod_produto')"
+                                    class="text-decoration-none text-dark">
                                     Produto <i class="fas fa-sort"></i>
                                 </a>
                             </th>
                             <th class="text-right">
-                                <a href="javascript:void(0)" onclick="ordenarPor('qtd_saldo_produto_pedido')" class="text-decoration-none text-dark">
+                                <a href="javascript:void(0)" onclick="ordenarPor('qtd_saldo_produto_pedido')"
+                                    class="text-decoration-none text-dark">
                                     Saldo <i class="fas fa-sort"></i>
                                 </a>
                             </th>
                             <th class="text-right">
-                                <a href="javascript:void(0)" onclick="ordenarPor('preco_produto_pedido')" class="text-decoration-none text-dark">
+                                <a href="javascript:void(0)" onclick="ordenarPor('preco_produto_pedido')"
+                                    class="text-decoration-none text-dark">
                                     Valor <i class="fas fa-sort"></i>
                                 </a>
                             </th>
                             <th class="text-center">Peso/Pallet</th>
                             <th class="text-center">
-                                <a href="javascript:void(0)" onclick="ordenarPor('expedicao')" class="text-decoration-none text-dark">
+                                <a href="javascript:void(0)" onclick="ordenarPor('expedicao')"
+                                    class="text-decoration-none text-dark">
                                     Expedição <i class="fas fa-sort"></i>
                                 </a>
                             </th>
                             <th class="text-center">
-                                <a href="javascript:void(0)" onclick="ordenarPor('agendamento')" class="text-decoration-none text-dark">
+                                <a href="javascript:void(0)" onclick="ordenarPor('agendamento')"
+                                    class="text-decoration-none text-dark">
                                     Agendamento <i class="fas fa-sort"></i>
                                 </a>
                             </th>
@@ -161,25 +172,30 @@
                                 <!-- Status como badge embaixo do pedido -->
                                 <br>
                                 {% if item.status_pedido %}
-                                    {% if item.status_pedido == 'Cotação' %}
-                                    <span class="badge" style="background-color: #007bff; color: white;">{{ item.status_pedido }}</span>
-                                    {% elif item.status_pedido == 'Pedido de venda' %}
-                                    <span class="badge" style="background-color: #28a745; color: white;">{{ item.status_pedido }}</span>
-                                    {% else %}
-                                    <span class="badge" style="background-color: #6c757d; color: white;">{{ item.status_pedido }}</span>
-                                    {% endif %}
+                                {% if item.status_pedido == 'Cotação' %}
+                                <span class="badge" style="background-color: #007bff; color: white;">{{
+                                    item.status_pedido }}</span>
+                                {% elif item.status_pedido == 'Pedido de venda' %}
+                                <span class="badge" style="background-color: #28a745; color: white;">{{
+                                    item.status_pedido }}</span>
+                                {% else %}
+                                <span class="badge" style="background-color: #6c757d; color: white;">{{
+                                    item.status_pedido }}</span>
+                                {% endif %}
                                 {% else %}
                                 <span class="badge" style="background-color: #6c757d; color: white;">Sem Status</span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if item.data_pedido %}
-                                <span class="badge" style="background-color: #6c757d; color: white;">{{ item.data_pedido|formatar_data_brasil }}</span>
+                                <span class="badge" style="background-color: #6c757d; color: white;">{{
+                                    item.data_pedido|formatar_data_brasil }}</span>
                                 {% else %}
                                 <span class="badge" style="background-color: #f8f9fa; color: #6c757d;">-</span>
                                 {% endif %}
                                 {% if item.data_entrega_pedido %}
-                                <br><span class="badge" style="background-color: #007bff; color: white;">{{ item.data_entrega_pedido|formatar_data_brasil }}</span>
+                                <br><span class="badge" style="background-color: #007bff; color: white;">{{
+                                    item.data_entrega_pedido|formatar_data_brasil }}</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -191,19 +207,23 @@
                             <td>
                                 <strong>{{ item.cod_uf or '-' }}/{{ item.incoterm or '-' }}</strong>
                                 {% if item.nome_cidade %}
-                                <br><span class="badge" style="background-color: #17a2b8; color: white; cursor: pointer;" onclick="abrirModalEndereco('{{ item.id }}')">
+                                <br><span class="badge"
+                                    style="background-color: #17a2b8; color: white; cursor: pointer;"
+                                    onclick="abrirModalEndereco('{{ item.id }}')">
                                     {{ item.nome_cidade }}
                                 </span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if item.rota %}
-                                <span class="badge" style="background-color: #28a745; color: white;">{{ item.rota }}</span>
+                                <span class="badge" style="background-color: #28a745; color: white;">{{ item.rota
+                                    }}</span>
                                 {% else %}
                                 <span class="badge" style="background-color: #6c757d; color: white;">-</span>
                                 {% endif %}
                                 {% if item.sub_rota %}
-                                <br><span class="badge" style="background-color: #ffc107; color: black;">{{ item.sub_rota }}</span>
+                                <br><span class="badge" style="background-color: #ffc107; color: black;">{{
+                                    item.sub_rota }}</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -215,13 +235,16 @@
                             <td class="text-center">
                                 <strong>{{ item.qtd_saldo_produto_pedido|numero_br }}</strong>
                                 {% if item.qtd_cancelada_produto_pedido and item.qtd_cancelada_produto_pedido > 0 %}
-                                <br><small class="text-muted">Cancel: {{ item.qtd_cancelada_produto_pedido|numero_br }}</small>
+                                <br><small class="text-muted">Cancel: {{ item.qtd_cancelada_produto_pedido|numero_br
+                                    }}</small>
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                {% set valor_total = (item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido or 0) %}
+                                {% set valor_total = (item.qtd_saldo_produto_pedido or 0) * (item.preco_produto_pedido
+                                or 0) %}
                                 <strong>{{ "{:,.0f}"|format(valor_total) }}</strong>
-                                <br><small class="text-muted">{{ "{:,.0f}"|format(item.preco_produto_pedido) if item.preco_produto_pedido else '-' }}/un</small>
+                                <br><small class="text-muted">{{ "{:,.0f}"|format(item.preco_produto_pedido) if
+                                    item.preco_produto_pedido else '-' }}/un</small>
                             </td>
                             <td class="text-center">
                                 {% if item.peso or item.pallet %}
@@ -240,52 +263,61 @@
                             </td>
                             <td class="text-center">
                                 {% if item.expedicao %}
-                                <span class="badge" style="background-color: #ffc107; color: black;">{{ item.expedicao|formatar_data_brasil }}</span>
+                                <span class="badge" style="background-color: #ffc107; color: black;">{{
+                                    item.expedicao|formatar_data_brasil }}</span>
                                 {% else %}
                                 <span class="badge" style="background-color: #f8f9fa; color: #6c757d;">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
                                 <!-- Implementação com cores baseadas na confirmação -->
-                                {% set precisa_agendamento = item.cliente_nec_agendamento == 'Sim' or (contatos_agendamento.get(item.cnpj_cpf) and contatos_agendamento.get(item.cnpj_cpf).forma and contatos_agendamento.get(item.cnpj_cpf).forma != 'SEM AGENDAMENTO') %}
-                                
+                                {% set precisa_agendamento = item.cliente_nec_agendamento == 'Sim' or
+                                (contatos_agendamento.get(item.cnpj_cpf) and
+                                contatos_agendamento.get(item.cnpj_cpf).forma and
+                                contatos_agendamento.get(item.cnpj_cpf).forma != 'SEM AGENDAMENTO') %}
+
                                 {% if item.agendamento %}
-                                    <!-- Tem agendamento - cor baseada na confirmação -->
-                                    {% if item.agendamento_confirmado %}
-                                        <!-- Agendamento confirmado - azul -->
-                                        <button class="btn btn-sm btn-primary w-100 text-white" onclick="abrirModalAgendamento('{{ item.id }}', '{{ item.num_pedido }}')">
-                                            📅 {{ item.agendamento|formatar_data_brasil }}
-                                            {% if item.protocolo %}
-                                            <br><small>📋 {{ item.protocolo }}</small>
-                                            {% endif %}
-                                        </button>
-                                    {% else %}
-                                        <!-- Agendamento não confirmado - amarelo com check verde -->
-                                        <div class="d-flex align-items-center justify-content-center">
-                                            <button class="btn btn-sm btn-warning text-dark flex-grow-1 me-1" onclick="abrirModalAgendamento('{{ item.id }}', '{{ item.num_pedido }}')">
-                                                📅 {{ item.agendamento|formatar_data_brasil }}
-                                                {% if item.protocolo %}
-                                                <br><small>📋 {{ item.protocolo }}</small>
-                                                {% endif %}
-                                            </button>
-                                            <button class="btn btn-sm btn-success" onclick="confirmarAgendamento('{{ item.id }}')" title="Confirmar agendamento">
-                                                ✅
-                                            </button>
-                                        </div>
+                                <!-- Tem agendamento - cor baseada na confirmação -->
+                                {% if item.agendamento_confirmado %}
+                                <!-- Agendamento confirmado - azul -->
+                                <button class="btn btn-sm btn-primary w-100 text-white"
+                                    onclick="abrirModalAgendamento('{{ item.id }}', '{{ item.num_pedido }}')">
+                                    📅 {{ item.agendamento|formatar_data_brasil }}
+                                    {% if item.protocolo %}
+                                    <br><small>📋 {{ item.protocolo }}</small>
                                     {% endif %}
-                                {% elif precisa_agendamento %}
-                                    <!-- Precisa agendamento mas não tem - mostrar botão Agendar -->
-                                    <button class="btn btn-sm btn-warning w-100" onclick="abrirModalAgendamento('{{ item.id }}', '{{ item.num_pedido }}')">
-                                        ➕ Agendar
-                                    </button>
+                                </button>
                                 {% else %}
-                                    <!-- Não precisa agendamento -->
-                                    <span class="badge" style="background-color: #f8f9fa; color: #6c757d;">-</span>
+                                <!-- Agendamento não confirmado - amarelo com check verde -->
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <button class="btn btn-sm btn-warning text-dark flex-grow-1 me-1"
+                                        onclick="abrirModalAgendamento('{{ item.id }}', '{{ item.num_pedido }}')">
+                                        📅 {{ item.agendamento|formatar_data_brasil }}
+                                        {% if item.protocolo %}
+                                        <br><small>📋 {{ item.protocolo }}</small>
+                                        {% endif %}
+                                    </button>
+                                    <button class="btn btn-sm btn-success"
+                                        onclick="confirmarAgendamento('{{ item.id }}')" title="Confirmar agendamento">
+                                        ✅
+                                    </button>
+                                </div>
+                                {% endif %}
+                                {% elif precisa_agendamento %}
+                                <!-- Precisa agendamento mas não tem - mostrar botão Agendar -->
+                                <button class="btn btn-sm btn-warning w-100"
+                                    onclick="abrirModalAgendamento('{{ item.id }}', '{{ item.num_pedido }}')">
+                                    ➕ Agendar
+                                </button>
+                                {% else %}
+                                <!-- Não precisa agendamento -->
+                                <span class="badge" style="background-color: #f8f9fa; color: #6c757d;">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
                                 {% if item.separacao_lote_id %}
-                                <span class="badge" style="background-color: #28a745; color: white;" title="Vinculado ao lote {{ item.separacao_lote_id }}">
+                                <span class="badge" style="background-color: #28a745; color: white;"
+                                    title="Vinculado ao lote {{ item.separacao_lote_id }}">
                                     <i class="fas fa-link"></i> #{{ item.separacao_lote_id }}
                                 </span>
                                 {% else %}
@@ -295,8 +327,8 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                <button class="btn btn-info btn-sm" onclick="verDetalhes({{ item.id }})" 
-                                        title="Ver detalhes completos">
+                                <button class="btn btn-info btn-sm" onclick="verDetalhes({{ item.id }})"
+                                    title="Ver detalhes completos">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </td>
@@ -319,23 +351,23 @@
                     {% endif %}
 
                     {% for page_num in itens.iter_pages() %}
-                        {% if page_num %}
-                            {% if page_num != itens.page %}
-                            <li class="page-item">
-                                <a class="page-link" href="javascript:void(0)" onclick="irParaPagina({{ page_num }})">
-                                    {{ page_num }}
-                                </a>
-                            </li>
-                            {% else %}
-                            <li class="page-item active">
-                                <span class="page-link">{{ page_num }}</span>
-                            </li>
-                            {% endif %}
-                        {% else %}
-                        <li class="page-item disabled">
-                            <span class="page-link">...</span>
-                        </li>
-                        {% endif %}
+                    {% if page_num %}
+                    {% if page_num != itens.page %}
+                    <li class="page-item">
+                        <a class="page-link" href="javascript:void(0)" onclick="irParaPagina({{ page_num }})">
+                            {{ page_num }}
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                    {% endif %}
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                    {% endif %}
                     {% endfor %}
 
                     {% if itens.has_next %}
@@ -353,7 +385,8 @@
             <div class="text-center py-5">
                 <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
                 <h5>Sistema Não Inicializado</h5>
-                <p class="text-muted">O sistema de carteira ainda não foi inicializado. Execute a migração do banco de dados.</p>
+                <p class="text-muted">O sistema de carteira ainda não foi inicializado. Execute a migração do banco de
+                    dados.</p>
                 <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary">
                     <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
                 </a>
@@ -495,7 +528,8 @@
                         </div>
                         <div class="col-md-3">
                             <label for="protocolo_agendamento" class="form-label">Protocolo</label>
-                            <input type="text" class="form-control" id="protocolo_agendamento" placeholder="Protocolo...">
+                            <input type="text" class="form-control" id="protocolo_agendamento"
+                                placeholder="Protocolo...">
                         </div>
                     </div>
 
@@ -515,7 +549,8 @@
                             <input class="form-check-input" type="checkbox" id="aplicar_todos_itens">
                             <label class="form-check-label" for="aplicar_todos_itens">
                                 <strong>Aplicar a todos os itens do pedido</strong>
-                                <br><small class="text-muted">Aplicará o agendamento a todos os itens deste pedido na carteira</small>
+                                <br><small class="text-muted">Aplicará o agendamento a todos os itens deste pedido na
+                                    carteira</small>
                             </label>
                         </div>
                     </div>
@@ -532,107 +567,107 @@
 </div>
 
 <script>
-// 📊 PARÂMETROS GLOBAIS PARA ORDENAÇÃO E PAGINAÇÃO
-let currentSort = null;
-let currentOrder = 'asc';
+    // 📊 PARÂMETROS GLOBAIS PARA ORDENAÇÃO E PAGINAÇÃO
+    let currentSort = null;
+    let currentOrder = 'asc';
 
-// 🔄 FUNÇÃO PARA ORDENAÇÃO INTELIGENTE BIDIRECIONAL
-function ordenarPor(campo) {
-    // Verificar se é o mesmo campo clicado novamente
-    const urlParams = new URLSearchParams(window.location.search);
-    const currentSortUrl = urlParams.get('sort');
-    const currentOrderUrl = urlParams.get('order') || 'asc';
-    
-    // Alternar ordem se clicou no mesmo campo
-    if (currentSortUrl === campo) {
-        currentOrder = currentOrderUrl === 'asc' ? 'desc' : 'asc';
-    } else {
-        currentSort = campo;
-        currentOrder = 'asc';
+    // 🔄 FUNÇÃO PARA ORDENAÇÃO INTELIGENTE BIDIRECIONAL
+    function ordenarPor(campo) {
+        // Verificar se é o mesmo campo clicado novamente
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentSortUrl = urlParams.get('sort');
+        const currentOrderUrl = urlParams.get('order') || 'asc';
+
+        // Alternar ordem se clicou no mesmo campo
+        if (currentSortUrl === campo) {
+            currentOrder = currentOrderUrl === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSort = campo;
+            currentOrder = 'asc';
+        }
+
+        // Submeter formulário com parâmetros de ordenação
+        const form = document.getElementById('form-filtros');
+
+        // Remover campos de ordenação existentes
+        const existingSort = form.querySelector('input[name="sort"]');
+        const existingOrder = form.querySelector('input[name="order"]');
+        if (existingSort) existingSort.remove();
+        if (existingOrder) existingOrder.remove();
+
+        // Adicionar novos campos de ordenação
+        const sortInput = document.createElement('input');
+        sortInput.type = 'hidden';
+        sortInput.name = 'sort';
+        sortInput.value = campo;
+        form.appendChild(sortInput);
+
+        const orderInput = document.createElement('input');
+        orderInput.type = 'hidden';
+        orderInput.name = 'order';
+        orderInput.value = currentOrder;
+        form.appendChild(orderInput);
+
+        // Submeter formulário
+        form.submit();
     }
-    
-    // Submeter formulário com parâmetros de ordenação
-    const form = document.getElementById('form-filtros');
-    
-    // Remover campos de ordenação existentes
-    const existingSort = form.querySelector('input[name="sort"]');
-    const existingOrder = form.querySelector('input[name="order"]');
-    if (existingSort) existingSort.remove();
-    if (existingOrder) existingOrder.remove();
-    
-    // Adicionar novos campos de ordenação
-    const sortInput = document.createElement('input');
-    sortInput.type = 'hidden';
-    sortInput.name = 'sort';
-    sortInput.value = campo;
-    form.appendChild(sortInput);
-    
-    const orderInput = document.createElement('input');
-    orderInput.type = 'hidden';
-    orderInput.name = 'order';
-    orderInput.value = currentOrder;
-    form.appendChild(orderInput);
-    
-    // Submeter formulário
-    form.submit();
-}
 
-// 📄 FUNÇÃO PARA PAGINAÇÃO INTELIGENTE
-function irParaPagina(pagina) {
-    const form = document.getElementById('form-filtros');
-    
-    // Remover campo de página existente
-    const existingPage = form.querySelector('input[name="page"]');
-    if (existingPage) existingPage.remove();
-    
-    // Adicionar novo campo de página
-    const pageInput = document.createElement('input');
-    pageInput.type = 'hidden';
-    pageInput.name = 'page';
-    pageInput.value = pagina;
-    form.appendChild(pageInput);
-    
-    // Submeter formulário
-    form.submit();
-}
+    // 📄 FUNÇÃO PARA PAGINAÇÃO INTELIGENTE
+    function irParaPagina(pagina) {
+        const form = document.getElementById('form-filtros');
 
-function verDetalhes(itemId) {
-    const modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
-    const conteudo = document.getElementById('conteudo-detalhes');
-    
-    // Mostrar loading
-    conteudo.innerHTML = `
+        // Remover campo de página existente
+        const existingPage = form.querySelector('input[name="page"]');
+        if (existingPage) existingPage.remove();
+
+        // Adicionar novo campo de página
+        const pageInput = document.createElement('input');
+        pageInput.type = 'hidden';
+        pageInput.name = 'page';
+        pageInput.value = pagina;
+        form.appendChild(pageInput);
+
+        // Submeter formulário
+        form.submit();
+    }
+
+    function verDetalhes(itemId) {
+        const modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
+        const conteudo = document.getElementById('conteudo-detalhes');
+
+        // Mostrar loading
+        conteudo.innerHTML = `
         <div class="text-center">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Carregando...</span>
             </div>
         </div>
     `;
-    
-    modal.show();
-    
-    // Buscar detalhes via API
-    fetch(`/carteira/api/item/${itemId}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                conteudo.innerHTML = `
+
+        modal.show();
+
+        // Buscar detalhes via API
+        fetch(`/carteira/api/item/${itemId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    conteudo.innerHTML = `
                     <div class="alert alert-danger">
                         <i class="fas fa-exclamation-triangle"></i> Erro: ${data.error}
                     </div>
                 `;
-            } else {
-                // Status geral com cores
-                const statusColors = {
-                    'OK': 'success',
-                    'PENDENTE': 'warning',
-                    'PARCIAL': 'info',
-                    'ATENCAO': 'warning',
-                    'CRITICO': 'danger'
-                };
-                const statusColor = statusColors[data.indicadores.status_geral.status] || 'secondary';
-                
-                conteudo.innerHTML = `
+                } else {
+                    // Status geral com cores
+                    const statusColors = {
+                        'OK': 'success',
+                        'PENDENTE': 'warning',
+                        'PARCIAL': 'info',
+                        'ATENCAO': 'warning',
+                        'CRITICO': 'danger'
+                    };
+                    const statusColor = statusColors[data.indicadores.status_geral.status] || 'secondary';
+
+                    conteudo.innerHTML = `
                     <!-- Status Geral -->
                     <div class="row mb-3">
                         <div class="col-12">
@@ -650,13 +685,13 @@ function verDetalhes(itemId) {
                         <div class="col-md-6">
                             <h6><i class="fas fa-info-circle text-primary"></i> Informações Básicas</h6>
                             <table class="table table-sm table-borderless">
-                                <tr><td><strong>Pedido:</strong></td><td><span class="badge badge-primary">${data.num_pedido}</span></td></tr>
+                                <tr><td><strong>Pedido:</strong></td><td><span class="badge bg-primary">${data.num_pedido}</span></td></tr>
                                 <tr><td><strong>Produto:</strong></td><td>${data.cod_produto}</td></tr>
                                 <tr><td><strong>Descrição:</strong></td><td>${data.nome_produto}</td></tr>
                                 <tr><td><strong>Cliente:</strong></td><td>${data.raz_social_red || data.raz_social}</td></tr>
                                 <tr><td><strong>Cidade/UF:</strong></td><td>${data.municipio || '-'}/${data.estado || '-'}</td></tr>
                                 <tr><td><strong>Vendedor:</strong></td><td>${data.vendedor || '-'}</td></tr>
-                                <tr><td><strong>Status:</strong></td><td><span class="badge badge-secondary">${data.status_pedido || '-'}</span></td></tr>
+                                <tr><td><strong>Status:</strong></td><td><span class="badge bg-secondary">${data.status_pedido || '-'}</span></td></tr>
                             </table>
                         </div>
                         <div class="col-md-6">
@@ -678,16 +713,16 @@ function verDetalhes(itemId) {
                         <div class="col-md-6">
                             <h6><i class="fas fa-calendar text-warning"></i> Datas e Prazos</h6>
                             <table class="table table-sm table-borderless">
-                                <tr><td><strong>Expedição:</strong></td><td>${data.expedicao ? '<span class="badge badge-warning">' + data.expedicao + '</span>' : '-'}</td></tr>
-                                <tr><td><strong>Agendamento:</strong></td><td>${data.agendamento ? '<span class="badge badge-info">' + data.agendamento + '</span>' : '-'}</td></tr>
-                                <tr><td><strong>Data Entrega:</strong></td><td>${data.data_entrega_pedido ? '<span class="badge badge-success">' + data.data_entrega_pedido + '</span>' : '-'}</td></tr>
+                                <tr><td><strong>Expedição:</strong></td><td>${data.expedicao ? '<span class="badge bg-warning">' + data.expedicao + '</span>' : '-'}</td></tr>
+                                <tr><td><strong>Agendamento:</strong></td><td>${data.agendamento ? '<span class="badge bg-info">' + data.agendamento + '</span>' : '-'}</td></tr>
+                                <tr><td><strong>Data Entrega:</strong></td><td>${data.data_entrega_pedido ? '<span class="badge bg-success">' + data.data_entrega_pedido + '</span>' : '-'}</td></tr>
                                 <tr><td><strong>Protocolo:</strong></td><td>${data.protocolo || '-'}</td></tr>
                             </table>
                         </div>
                         <div class="col-md-6">
                             <h6><i class="fas fa-phone text-info"></i> Agendamento do Cliente</h6>
                             <table class="table table-sm table-borderless">
-                                <tr><td><strong>Precisa Agendamento:</strong></td><td>${data.agendamento_info.precisa_agendamento ? '<span class="badge badge-warning">Sim</span>' : '<span class="badge badge-success">Não</span>'}</td></tr>
+                                <tr><td><strong>Precisa Agendamento:</strong></td><td>${data.agendamento_info.precisa_agendamento ? '<span class="badge bg-warning">Sim</span>' : '<span class="badge bg-success">Não</span>'}</td></tr>
                                 <tr><td><strong>Forma:</strong></td><td>${data.agendamento_info.forma_agendamento || '-'}</td></tr>
                                 <tr><td><strong>Contato:</strong></td><td>${data.agendamento_info.contato || '-'}</td></tr>
                                 <tr><td><strong>Observação:</strong></td><td><small>${data.agendamento_info.observacao || '-'}</small></td></tr>
@@ -700,22 +735,22 @@ function verDetalhes(itemId) {
                         <div class="col-md-6">
                             <h6><i class="fas fa-boxes text-primary"></i> Situação do Estoque</h6>
                             <table class="table table-sm table-borderless">
-                                <tr><td><strong>Saldo Atual:</strong></td><td><span class="badge badge-${data.estoque.disponivel ? 'success' : 'danger'}">${data.estoque.saldo_atual.toFixed(2)}</span></td></tr>
+                                <tr><td><strong>Saldo Atual:</strong></td><td><span class="badge bg-${data.estoque.disponivel ? 'success' : 'danger'}">${data.estoque.saldo_atual.toFixed(2)}</span></td></tr>
                                 <tr><td><strong>Necessário:</strong></td><td>${data.qtd_saldo_produto_pedido.toFixed(2)}</td></tr>
-                                <tr><td><strong>Disponível:</strong></td><td>${data.estoque.disponivel ? '<span class="badge badge-success">Sim</span>' : '<span class="badge badge-danger">Não</span>'}</td></tr>
-                                <tr><td><strong>Previsão Ruptura:</strong></td><td><span class="badge badge-${data.estoque.status_ruptura === 'OK' ? 'success' : data.estoque.status_ruptura === 'CRÍTICO' ? 'danger' : 'warning'}">${data.estoque.previsao_ruptura.toFixed(2)}</span></td></tr>
-                                <tr><td><strong>Status Estoque:</strong></td><td><span class="badge badge-${data.estoque.status_ruptura === 'OK' ? 'success' : data.estoque.status_ruptura === 'CRÍTICO' ? 'danger' : 'warning'}">${data.estoque.status_ruptura}</span></td></tr>
+                                <tr><td><strong>Disponível:</strong></td><td>${data.estoque.disponivel ? '<span class="badge bg-success">Sim</span>' : '<span class="badge bg-danger">Não</span>'}</td></tr>
+                                <tr><td><strong>Previsão Ruptura:</strong></td><td><span class="badge bg-${data.estoque.status_ruptura === 'OK' ? 'success' : data.estoque.status_ruptura === 'CRÍTICO' ? 'danger' : 'warning'}">${data.estoque.previsao_ruptura.toFixed(2)}</span></td></tr>
+                                <tr><td><strong>Status Estoque:</strong></td><td><span class="badge bg-${data.estoque.status_ruptura === 'OK' ? 'success' : data.estoque.status_ruptura === 'CRÍTICO' ? 'danger' : 'warning'}">${data.estoque.status_ruptura}</span></td></tr>
                             </table>
                         </div>
                         <div class="col-md-6">
                             <h6><i class="fas fa-cut text-success"></i> Situação da Separação</h6>
                             <table class="table table-sm table-borderless">
-                                <tr><td><strong>Tem Separação:</strong></td><td>${data.separacao_info.tem_separacao ? '<span class="badge badge-success">Sim</span>' : '<span class="badge badge-secondary">Não</span>'}</td></tr>
-                                <tr><td><strong>Lote ID:</strong></td><td>${data.separacao_info.lote_id ? '<span class="badge badge-info">#' + data.separacao_info.lote_id + '</span>' : '-'}</td></tr>
+                                <tr><td><strong>Tem Separação:</strong></td><td>${data.separacao_info.tem_separacao ? '<span class="badge bg-success">Sim</span>' : '<span class="badge bg-secondary">Não</span>'}</td></tr>
+                                <tr><td><strong>Lote ID:</strong></td><td>${data.separacao_info.lote_id ? '<span class="badge bg-info">#' + data.separacao_info.lote_id + '</span>' : '-'}</td></tr>
                                 <tr><td><strong>Qtd Separada:</strong></td><td>${data.separacao_info.qtd_separada.toFixed(2)}</td></tr>
                                 <tr><td><strong>Peso Separado:</strong></td><td>${data.separacao_info.peso_separado.toFixed(2)} kg</td></tr>
                                 <tr><td><strong>Pallets Separados:</strong></td><td>${data.separacao_info.pallet_separado.toFixed(2)}</td></tr>
-                                <tr><td><strong>% Separado:</strong></td><td><span class="badge badge-${data.separacao_info.separacao_completa ? 'success' : 'warning'}">${data.separacao_info.percentual_separado.toFixed(1)}%</span></td></tr>
+                                <tr><td><strong>% Separado:</strong></td><td><span class="badge bg-${data.separacao_info.separacao_completa ? 'success' : 'warning'}">${data.separacao_info.percentual_separado.toFixed(1)}%</span></td></tr>
                             </table>
                         </div>
                     </div>
@@ -733,15 +768,15 @@ function verDetalhes(itemId) {
                                         </div>
                                         <div class="col-md-3">
                                             <small><strong>Estoque:</strong></small><br>
-                                            <span class="badge badge-${data.indicadores.estoque_suficiente ? 'success' : 'danger'}">${data.indicadores.estoque_suficiente ? 'Suficiente' : 'Insuficiente'}</span>
+                                            <span class="badge bg-${data.indicadores.estoque_suficiente ? 'success' : 'danger'}">${data.indicadores.estoque_suficiente ? 'Suficiente' : 'Insuficiente'}</span>
                                         </div>
                                         <div class="col-md-3">
                                             <small><strong>Agendamento:</strong></small><br>
-                                            <span class="badge badge-${data.indicadores.necessita_agendamento ? 'warning' : 'success'}">${data.indicadores.necessita_agendamento ? 'Necessário' : 'Não precisa'}</span>
+                                            <span class="badge bg-${data.indicadores.necessita_agendamento ? 'warning' : 'success'}">${data.indicadores.necessita_agendamento ? 'Necessário' : 'Não precisa'}</span>
                                         </div>
                                         <div class="col-md-3">
                                             <small><strong>Separação:</strong></small><br>
-                                            <span class="badge badge-${data.indicadores.separacao_completa ? 'success' : data.indicadores.tem_separacao_vinculada ? 'warning' : 'secondary'}">${data.indicadores.separacao_completa ? 'Completa' : data.indicadores.tem_separacao_vinculada ? 'Parcial' : 'Pendente'}</span>
+                                            <span class="badge bg-${data.indicadores.separacao_completa ? 'success' : data.indicadores.tem_separacao_vinculada ? 'warning' : 'secondary'}">${data.indicadores.separacao_completa ? 'Completa' : data.indicadores.tem_separacao_vinculada ? 'Parcial' : 'Pendente'}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -749,274 +784,284 @@ function verDetalhes(itemId) {
                         </div>
                     </div>
                 `;
-            }
-        })
-        .catch(error => {
-            conteudo.innerHTML = `
+                }
+            })
+            .catch(error => {
+                conteudo.innerHTML = `
                 <div class="alert alert-danger">
                     <i class="fas fa-exclamation-triangle"></i> Erro ao carregar detalhes: ${error.message}
                 </div>
             `;
-        });
+            });
 
-                
 
-}
 
-// 🔄 FUNÇÃO PARA CONFIRMAR AGENDAMENTO DIRETAMENTE
-function confirmarAgendamento(itemId) {
-    if (!confirm('Confirmar este agendamento?')) {
-        return;
     }
-    
-    const dados = {
-        agenda_confirmada: true
-    };
-    
-    fetch('/carteira/item/' + itemId + '/agendamento', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(dados)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Agendamento confirmado com sucesso!');
-            location.reload(); // Recarregar página para mostrar mudanças
-        } else {
-            alert('Erro ao confirmar agendamento: ' + (data.error || 'Erro desconhecido'));
+
+    // 🔄 FUNÇÃO PARA CONFIRMAR AGENDAMENTO DIRETAMENTE
+    function confirmarAgendamento(itemId) {
+        if (!confirm('Confirmar este agendamento?')) {
+            return;
         }
-    })
-    .catch(error => {
-        console.error('Erro ao confirmar agendamento:', error);
-        alert('Erro ao confirmar agendamento');
-    });
-}
 
-function abrirModalAgendamento(itemId, numPedido) {
-    // Buscar dados do item via AJAX
-    fetch('/carteira/item/' + itemId + '/agendamento')
-        .then(response => response.json())
-        .then(data => {
-            // Preencher informações básicas
-            document.getElementById('modal_pedido').textContent = numPedido;
-            document.getElementById('modal_cliente_nome').textContent = data.raz_social_red || data.raz_social || '-';
-            
-            // Determinar necessidade de agendamento e badges
-            let badgesHtml = '';
-            let temContato = false;
-            
-            // A.1 - ERP Integrado (cliente_nec_agendamento = "Sim")
-            if (data.cliente_nec_agendamento === 'Sim') {
-                badgesHtml += '<span class="badge badge-primary me-2" style="background-color: #007bff; color: white;">ERP</span>';
-            }
-            
-            // A.2 - Sistema (ContatoAgendamento existe e forma != "SEM AGENDAMENTO")
-            if (data.contato_agendamento && data.contato_agendamento.forma && data.contato_agendamento.forma !== 'SEM AGENDAMENTO') {
-                badgesHtml += '<span class="badge badge-success me-2" style="background-color: #28a745; color: white;">Sistema</span>';
-                temContato = true;
-            }
-            
-            document.getElementById('badges_necessidade').innerHTML = badgesHtml || '<span class="badge" style="background-color: #6c757d; color: white;">Sem necessidade</span>';
-            
-            // B - Dados do contato se existir
-            if (temContato) {
-                document.getElementById('contato_forma').textContent = data.contato_agendamento.forma || '-';
-                document.getElementById('contato_info').textContent = data.contato_agendamento.contato || '-';
-                document.getElementById('contato_obs').textContent = data.contato_agendamento.observacao || '-';
-                document.getElementById('dados_contato').style.display = 'block';
-            } else {
-                document.getElementById('dados_contato').style.display = 'none';
-            }
-            
-            // C - Preencher campos se já tem agendamento
-            if (data.agendamento) {
-                document.getElementById('data_agendamento').value = data.agendamento;
-            }
-            // PRÉ-PREENCHER data_entrega mesmo se não tiver agendamento
-            if (data.data_entrega_pedido) {
-                document.getElementById('data_entrega').value = data.data_entrega_pedido;
-            }
-            if (data.hora_agendamento) {
-                document.getElementById('hora_agendamento').value = data.hora_agendamento;
-            }
-            if (data.protocolo) {
-                document.getElementById('protocolo_agendamento').value = data.protocolo;
-            }
-            if (data.agendamento_confirmado) {
-                document.getElementById('agenda_confirmada').checked = data.agendamento_confirmado;
-            }
-            
-            // Guardar ID do item para salvar
-            document.getElementById('formAgendamento').setAttribute('data-item-id', itemId);
-            
-            // Mostrar modal
-            const modal = new bootstrap.Modal(document.getElementById('modalAgendamento'));
-            modal.show();
+        const dados = {
+            agenda_confirmada: true
+        };
+
+        fetch('/carteira/item/' + itemId + '/agendamento', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(dados)
         })
-        .catch(error => {
-            console.error('Erro ao buscar dados do agendamento:', error);
-            alert('Erro ao carregar dados do agendamento');
-        });
-}
-
-function salvarAgendamento() {
-    const itemId = document.getElementById('formAgendamento').getAttribute('data-item-id');
-    const dataAgendamento = document.getElementById('data_agendamento').value;
-    const dataEntrega = document.getElementById('data_entrega').value;
-    const horaAgendamento = document.getElementById('hora_agendamento').value;
-    const protocoloAgendamento = document.getElementById('protocolo_agendamento').value;
-    const agendaConfirmada = document.getElementById('agenda_confirmada').checked;
-    const aplicarTodos = document.getElementById('aplicar_todos_itens').checked;
-    
-    if (!dataAgendamento) {
-        alert('Data do agendamento é obrigatória');
-        return;
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Agendamento confirmado com sucesso!');
+                    location.reload(); // Recarregar página para mostrar mudanças
+                } else {
+                    alert('Erro ao confirmar agendamento: ' + (data.error || 'Erro desconhecido'));
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao confirmar agendamento:', error);
+                alert('Erro ao confirmar agendamento');
+            });
     }
-    
-    const dados = {
-        data_agendamento: dataAgendamento,
-        data_entrega: dataEntrega,
-        hora_agendamento: horaAgendamento,
-        protocolo: protocoloAgendamento,
-        agenda_confirmada: agendaConfirmada,
-        aplicar_todos: aplicarTodos
-    };
-    
-    fetch('/carteira/item/' + itemId + '/agendamento', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(dados)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message || 'Agendamento salvo com sucesso!');
-            const modal = bootstrap.Modal.getInstance(document.getElementById('modalAgendamento'));
-            modal.hide();
-            location.reload(); // Recarregar página para mostrar mudanças
-        } else {
-            alert('Erro ao salvar agendamento: ' + (data.error || 'Erro desconhecido'));
-        }
-    })
-    .catch(error => {
-        console.error('Erro ao salvar agendamento:', error);
-        alert('Erro ao salvar agendamento');
-    });
-}
 
-function abrirModalEndereco(itemId) {
-    // Buscar dados do item via AJAX
-    fetch('/carteira/item/' + itemId + '/endereco')
-        .then(response => response.json())
-        .then(data => {
-            // Preencher dados do cliente
-            document.getElementById('modal_cliente_uf').textContent = data.estado || '-';
-            document.getElementById('modal_cliente_municipio').textContent = data.municipio || '-';
-            
-            // Preencher dados do endereço de entrega
-            document.getElementById('modal_cnpj_endereco').textContent = data.cnpj_endereco_ent || '-';
-            document.getElementById('modal_empresa_endereco').textContent = data.empresa_endereco_ent || '-';
-            document.getElementById('modal_uf_endereco').textContent = data.cod_uf || '-';
-            document.getElementById('modal_municipio_endereco').textContent = data.nome_cidade || '-';
-            document.getElementById('modal_bairro_endereco').textContent = data.bairro_endereco_ent || '-';
-            document.getElementById('modal_cep_endereco').textContent = data.cep_endereco_ent || '-';
-            
-            // Combinar rua e endereço
-            let ruaCompleta = '';
-            if (data.rua_endereco_ent && data.endereco_ent) {
-                ruaCompleta = data.rua_endereco_ent + ' / ' + data.endereco_ent;
-            } else if (data.rua_endereco_ent) {
-                ruaCompleta = data.rua_endereco_ent;
-            } else if (data.endereco_ent) {
-                ruaCompleta = data.endereco_ent;
-            }
-            document.getElementById('modal_rua_endereco').textContent = ruaCompleta || '-';
-            
-            document.getElementById('modal_telefone_endereco').textContent = data.telefone_endereco_ent || '-';
-            
-            // Mostrar modal
-            const modal = new bootstrap.Modal(document.getElementById('modalEndereco'));
-            modal.show();
+    function abrirModalAgendamento(itemId, numPedido) {
+        // Buscar dados do item via AJAX
+        fetch('/carteira/item/' + itemId + '/agendamento')
+            .then(response => response.json())
+            .then(data => {
+                // Preencher informações básicas
+                document.getElementById('modal_pedido').textContent = numPedido;
+                document.getElementById('modal_cliente_nome').textContent = data.raz_social_red || data.raz_social || '-';
+
+                // Determinar necessidade de agendamento e badges
+                let badgesHtml = '';
+                let temContato = false;
+
+                // A.1 - ERP Integrado (cliente_nec_agendamento = "Sim")
+                if (data.cliente_nec_agendamento === 'Sim') {
+                    badgesHtml += '<span class="badge bg-primary me-2" style="background-color: #007bff; color: white;">ERP</span>';
+                }
+
+                // A.2 - Sistema (ContatoAgendamento existe e forma != "SEM AGENDAMENTO")
+                if (data.contato_agendamento && data.contato_agendamento.forma && data.contato_agendamento.forma !== 'SEM AGENDAMENTO') {
+                    badgesHtml += '<span class="badge bg-success me-2" style="background-color: #28a745; color: white;">Sistema</span>';
+                    temContato = true;
+                }
+
+                document.getElementById('badges_necessidade').innerHTML = badgesHtml || '<span class="badge" style="background-color: #6c757d; color: white;">Sem necessidade</span>';
+
+                // B - Dados do contato se existir
+                if (temContato) {
+                    document.getElementById('contato_forma').textContent = data.contato_agendamento.forma || '-';
+                    document.getElementById('contato_info').textContent = data.contato_agendamento.contato || '-';
+                    document.getElementById('contato_obs').textContent = data.contato_agendamento.observacao || '-';
+                    document.getElementById('dados_contato').style.display = 'block';
+                } else {
+                    document.getElementById('dados_contato').style.display = 'none';
+                }
+
+                // C - Preencher campos se já tem agendamento
+                if (data.agendamento) {
+                    document.getElementById('data_agendamento').value = data.agendamento;
+                }
+                // PRÉ-PREENCHER data_entrega mesmo se não tiver agendamento
+                if (data.data_entrega_pedido) {
+                    document.getElementById('data_entrega').value = data.data_entrega_pedido;
+                }
+                if (data.hora_agendamento) {
+                    document.getElementById('hora_agendamento').value = data.hora_agendamento;
+                }
+                if (data.protocolo) {
+                    document.getElementById('protocolo_agendamento').value = data.protocolo;
+                }
+                if (data.agendamento_confirmado) {
+                    document.getElementById('agenda_confirmada').checked = data.agendamento_confirmado;
+                }
+
+                // Guardar ID do item para salvar
+                document.getElementById('formAgendamento').setAttribute('data-item-id', itemId);
+
+                // Mostrar modal
+                const modal = new bootstrap.Modal(document.getElementById('modalAgendamento'));
+                modal.show();
+            })
+            .catch(error => {
+                console.error('Erro ao buscar dados do agendamento:', error);
+                alert('Erro ao carregar dados do agendamento');
+            });
+    }
+
+    function salvarAgendamento() {
+        const itemId = document.getElementById('formAgendamento').getAttribute('data-item-id');
+        const dataAgendamento = document.getElementById('data_agendamento').value;
+        const dataEntrega = document.getElementById('data_entrega').value;
+        const horaAgendamento = document.getElementById('hora_agendamento').value;
+        const protocoloAgendamento = document.getElementById('protocolo_agendamento').value;
+        const agendaConfirmada = document.getElementById('agenda_confirmada').checked;
+        const aplicarTodos = document.getElementById('aplicar_todos_itens').checked;
+
+        if (!dataAgendamento) {
+            alert('Data do agendamento é obrigatória');
+            return;
+        }
+
+        const dados = {
+            data_agendamento: dataAgendamento,
+            data_entrega: dataEntrega,
+            hora_agendamento: horaAgendamento,
+            protocolo: protocoloAgendamento,
+            agenda_confirmada: agendaConfirmada,
+            aplicar_todos: aplicarTodos
+        };
+
+        fetch('/carteira/item/' + itemId + '/agendamento', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(dados)
         })
-        .catch(error => {
-            console.error('Erro ao buscar dados do endereço:', error);
-            alert('Erro ao carregar dados do endereço');
-        });
-}
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message || 'Agendamento salvo com sucesso!');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalAgendamento'));
+                    modal.hide();
+                    location.reload(); // Recarregar página para mostrar mudanças
+                } else {
+                    alert('Erro ao salvar agendamento: ' + (data.error || 'Erro desconhecido'));
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao salvar agendamento:', error);
+                alert('Erro ao salvar agendamento');
+            });
+    }
+
+    function abrirModalEndereco(itemId) {
+        // Buscar dados do item via AJAX
+        fetch('/carteira/item/' + itemId + '/endereco')
+            .then(response => response.json())
+            .then(data => {
+                // Preencher dados do cliente
+                document.getElementById('modal_cliente_uf').textContent = data.estado || '-';
+                document.getElementById('modal_cliente_municipio').textContent = data.municipio || '-';
+
+                // Preencher dados do endereço de entrega
+                document.getElementById('modal_cnpj_endereco').textContent = data.cnpj_endereco_ent || '-';
+                document.getElementById('modal_empresa_endereco').textContent = data.empresa_endereco_ent || '-';
+                document.getElementById('modal_uf_endereco').textContent = data.cod_uf || '-';
+                document.getElementById('modal_municipio_endereco').textContent = data.nome_cidade || '-';
+                document.getElementById('modal_bairro_endereco').textContent = data.bairro_endereco_ent || '-';
+                document.getElementById('modal_cep_endereco').textContent = data.cep_endereco_ent || '-';
+
+                // Combinar rua e endereço
+                let ruaCompleta = '';
+                if (data.rua_endereco_ent && data.endereco_ent) {
+                    ruaCompleta = data.rua_endereco_ent + ' / ' + data.endereco_ent;
+                } else if (data.rua_endereco_ent) {
+                    ruaCompleta = data.rua_endereco_ent;
+                } else if (data.endereco_ent) {
+                    ruaCompleta = data.endereco_ent;
+                }
+                document.getElementById('modal_rua_endereco').textContent = ruaCompleta || '-';
+
+                document.getElementById('modal_telefone_endereco').textContent = data.telefone_endereco_ent || '-';
+
+                // Mostrar modal
+                const modal = new bootstrap.Modal(document.getElementById('modalEndereco'));
+                modal.show();
+            })
+            .catch(error => {
+                console.error('Erro ao buscar dados do endereço:', error);
+                alert('Erro ao carregar dados do endereço');
+            });
+    }
 </script>
 
 <style>
-.table th {
-    border-top: none;
-    font-size: 0.85rem;
-    color: #333 !important;
-}
-.table td {
-    font-size: 0.85rem;
-    vertical-align: middle;
-    color: #333 !important;
-}
-.badge {
-    font-size: 0.75rem;
-}
-.text-truncate {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
+    .table th {
+        border-top: none;
+        font-size: 0.85rem;
+        color: #333 !important;
+    }
 
-/* Forçar cor de texto visível */
-.form-control {
-    color: #333 !important;
-}
-.form-label {
-    color: #333 !important;
-}
-.text-muted {
-    color: #6c757d !important;
-}
-small.text-muted {
-    color: #6c757d !important;
-}
+    .table td {
+        font-size: 0.85rem;
+        vertical-align: middle;
+        color: #333 !important;
+    }
 
-/* Bordas coloridas para status */
-.border-left-success {
-    border-left: 0.25rem solid #1cc88a !important;
-}
-.border-left-warning {
-    border-left: 0.25rem solid #f6c23e !important;
-}
-.border-left-danger {
-    border-left: 0.25rem solid #e74a3b !important;
-}
-.border-left-info {
-    border-left: 0.25rem solid #36b9cc !important;
-}
-.border-left-secondary {
-    border-left: 0.25rem solid #858796 !important;
-}
+    .badge {
+        font-size: 0.75rem;
+    }
 
-/* Melhorar tabelas no modal */
-.table-borderless td {
-    border: none;
-    padding: 0.25rem 0.5rem;
-}
+    .text-truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 
-/* Cards no modal */
-.modal-body .card {
-    margin-bottom: 0;
-}
+    /* Forçar cor de texto visível */
+    .form-control {
+        color: #333 !important;
+    }
 
-/* Corrigir badges secondary com fundo branco */
-.badge[style*="background-color: #6c757d"] {
-    background-color: #6c757d !important;
-    color: white !important;
-}
+    .form-label {
+        color: #333 !important;
+    }
+
+    .text-muted {
+        color: #6c757d !important;
+    }
+
+    small.text-muted {
+        color: #6c757d !important;
+    }
+
+    /* Bordas coloridas para status */
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+
+    .border-left-secondary {
+        border-left: 0.25rem solid #858796 !important;
+    }
+
+    /* Melhorar tabelas no modal */
+    .table-borderless td {
+        border: none;
+        padding: 0.25rem 0.5rem;
+    }
+
+    /* Cards no modal */
+    .modal-body .card {
+        margin-bottom: 0;
+    }
+
+    /* Corrigir badges secondary com fundo branco */
+    .badge[style*="background-color: #6c757d"] {
+        background-color: #6c757d !important;
+        color: white !important;
+    }
 </style>
 
-{% endblock %} 
+{% endblock %}

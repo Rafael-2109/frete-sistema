@@ -28,6 +28,11 @@ class TabelaFrete(db.Model):
     valor_tas = db.Column(db.Float)
 
     icms_incluso = db.Column(db.Boolean, default=False)
+    
+    # ===== NOVOS CAMPOS DE VALORES MÍNIMOS E ICMS =====
+    gris_minimo = db.Column(db.Float, default=0)    # Valor mínimo de GRIS (usa o maior entre calculado e mínimo)
+    adv_minimo = db.Column(db.Float, default=0)     # Valor mínimo de ADV (usa o maior entre calculado e mínimo)
+    icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela (substitui ICMS da cidade se informado)
 
     criado_por = db.Column(db.String(120), nullable=False)  # usuário que criou a tabela
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)  # horário do cadastro automático
@@ -129,6 +134,11 @@ class HistoricoTabelaFrete(db.Model):
     valor_tas = db.Column(db.Float) #Fixo
 
     icms_incluso = db.Column(db.Boolean, default=False)
+    
+    # ===== NOVOS CAMPOS DE VALORES MÍNIMOS E ICMS =====
+    gris_minimo = db.Column(db.Float, default=0)    # Valor mínimo de GRIS
+    adv_minimo = db.Column(db.Float, default=0)     # Valor mínimo de ADV
+    icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela
 
     criado_por = db.Column(db.String(120), nullable=False)  # usuário que criou a tabela
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)  # horário do cadastro automático

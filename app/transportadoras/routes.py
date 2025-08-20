@@ -182,3 +182,59 @@ def excluir_transportadora(id):
         flash(f'Erro ao excluir transportadora: {str(e)}', 'danger')
     
     return redirect(url_for('transportadoras.cadastrar_transportadora'))
+
+@transportadoras_bp.route('/config-frete/<int:id>', methods=['GET'])
+@login_required
+def obter_config_frete(id):
+    """Obtém configurações de cálculo de frete da transportadora"""
+    try:
+        transportadora = Transportadora.query.get_or_404(id)
+        
+        # Retorna as configurações atuais
+        config = {
+            'aplica_gris_pos_minimo': transportadora.aplica_gris_pos_minimo or False,
+            'aplica_adv_pos_minimo': transportadora.aplica_adv_pos_minimo or False,
+            'aplica_rca_pos_minimo': transportadora.aplica_rca_pos_minimo or False,
+            'aplica_pedagio_pos_minimo': transportadora.aplica_pedagio_pos_minimo or False,
+            'aplica_tas_pos_minimo': transportadora.aplica_tas_pos_minimo or False,
+            'aplica_despacho_pos_minimo': transportadora.aplica_despacho_pos_minimo or False,
+            'aplica_cte_pos_minimo': transportadora.aplica_cte_pos_minimo or False,
+            'pedagio_por_fracao': transportadora.pedagio_por_fracao if transportadora.pedagio_por_fracao is not None else True
+        }
+        
+        return jsonify({
+            'success': True,
+            'transportadora': {
+                'id': transportadora.id,
+                'razao_social': transportadora.razao_social
+            },
+            'config': config
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@transportadoras_bp.route('/config-frete/<int:id>', methods=['POST'])
+@login_required
+def salvar_config_frete(id):
+    """Salva configurações de cálculo de frete da transportadora"""
+    try:
+        transportadora = Transportadora.query.get_or_404(id)
+        data = request.get_json()
+        
+        # Atualiza as configurações
+        transportadora.aplica_gris_pos_minimo = data.get('aplica_gris_pos_minimo', False)
+        transportadora.aplica_adv_pos_minimo = data.get('aplica_adv_pos_minimo', False)
+        transportadora.aplica_rca_pos_minimo = data.get('aplica_rca_pos_minimo', False)
+        transportadora.aplica_pedagio_pos_minimo = data.get('aplica_pedagio_pos_minimo', False)
+        transportadora.aplica_tas_pos_minimo = data.get('aplica_tas_pos_minimo', False)
+        transportadora.aplica_despacho_pos_minimo = data.get('aplica_despacho_pos_minimo', False)
+        transportadora.aplica_cte_pos_minimo = data.get('aplica_cte_pos_minimo', False)
+        transportadora.pedagio_por_fracao = data.get('pedagio_por_fracao', True)
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Configuração salva com sucesso!'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Erro ao salvar configuração: {str(e)}'})

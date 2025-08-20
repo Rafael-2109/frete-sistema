@@ -7,19 +7,22 @@
     <div class="row">
         <div class="col-md-12">
             <h2>📄 Upload de Canhotos em Lote</h2>
-            <p class="text-muted">Anexe múltiplos canhotos de uma vez. Os arquivos serão identificados pelo número da NF no nome do arquivo.</p>
-            
+            <p class="text-muted">Anexe múltiplos canhotos de uma vez. Os arquivos serão identificados pelo número da NF
+                no nome do arquivo.</p>
+
             <!-- Instruções -->
             <div class="alert alert-info">
                 <h5><i class="fas fa-info-circle"></i> Como usar:</h5>
                 <ul>
-                    <li><strong>Nome dos arquivos:</strong> Deve conter o número da NF (ex: <code>133526.jpeg</code>, <code>NF_135260.png</code>)</li>
+                    <li><strong>Nome dos arquivos:</strong> Deve conter o número da NF (ex: <code>133526.jpeg</code>,
+                        <code>NF_135260.png</code>)</li>
                     <li><strong>Formatos aceitos:</strong> JPG, PNG, PDF</li>
-                    <li><strong>Processamento:</strong> O sistema extrairá automaticamente o número da NF do nome do arquivo</li>
+                    <li><strong>Processamento:</strong> O sistema extrairá automaticamente o número da NF do nome do
+                        arquivo</li>
                     <li><strong>Duplicatas:</strong> Se já existir um canhoto para a NF, ele será substituído</li>
                 </ul>
             </div>
-            
+
             <!-- Formulário de Upload -->
             <div class="card">
                 <div class="card-header">
@@ -30,35 +33,30 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="form-group">
                             <label for="canhotos">Arquivos de Canhoto:</label>
-                            <input type="file" 
-                                   class="form-control-file" 
-                                   id="canhotos" 
-                                   name="canhotos" 
-                                   multiple 
-                                   accept=".jpg,.jpeg,.png,.pdf"
-                                   required>
+                            <input type="file" class="form-control-file" id="canhotos" name="canhotos" multiple
+                                accept=".jpg,.jpeg,.png,.pdf" required>
                             <small class="form-text text-muted">
                                 Selecione múltiplos arquivos de uma vez. Formatos: JPG, PNG, PDF
                             </small>
                         </div>
-                        
+
                         <!-- Pré-visualização dos arquivos selecionados -->
                         <div id="preview-container" class="mt-3" style="display: none;">
                             <h6>Arquivos selecionados:</h6>
                             <div id="file-list" class="mb-3"></div>
                         </div>
-                        
+
                         <button type="submit" class="btn btn-primary btn-lg">
                             <i class="fas fa-upload"></i> Fazer Upload dos Canhotos
                         </button>
-                        
+
                         <a href="{{ url_for('monitoramento.listar_entregas') }}" class="btn btn-secondary ml-2">
                             <i class="fas fa-arrow-left"></i> Voltar
                         </a>
                     </form>
                 </div>
             </div>
-            
+
             <!-- Exemplos -->
             <div class="card mt-4">
                 <div class="card-header">
@@ -91,32 +89,32 @@
 </div>
 
 <script>
-document.getElementById('canhotos').addEventListener('change', function(e) {
-    const files = e.target.files;
-    const previewContainer = document.getElementById('preview-container');
-    const fileList = document.getElementById('file-list');
-    
-    if (files.length > 0) {
-        previewContainer.style.display = 'block';
-        fileList.innerHTML = '';
-        
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const fileName = file.name;
-            
-            // Extrair número da NF
-            const nameWithoutExt = fileName.split('.')[0];
-            const numbers = nameWithoutExt.match(/\d+/);
-            const nfNumber = numbers ? numbers[0] : 'Não encontrado';
-            
-            // Criar elemento de preview
-            const fileItem = document.createElement('div');
-            fileItem.className = 'border p-2 mb-2 rounded';
-            
-            const statusClass = numbers ? 'text-success' : 'text-danger';
-            const statusIcon = numbers ? '✅' : '❌';
-            
-            fileItem.innerHTML = `
+    document.getElementById('canhotos').addEventListener('change', function (e) {
+        const files = e.target.files;
+        const previewContainer = document.getElementById('preview-container');
+        const fileList = document.getElementById('file-list');
+
+        if (files.length > 0) {
+            previewContainer.style.display = 'block';
+            fileList.innerHTML = '';
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileName = file.name;
+
+                // Extrair número da NF
+                const nameWithoutExt = fileName.split('.')[0];
+                const numbers = nameWithoutExt.match(/\d+/);
+                const nfNumber = numbers ? numbers[0] : 'Não encontrado';
+
+                // Criar elemento de preview
+                const fileItem = document.createElement('div');
+                fileItem.className = 'border p-2 mb-2 rounded';
+
+                const statusClass = numbers ? 'text-success' : 'text-danger';
+                const statusIcon = numbers ? '✅' : '❌';
+
+                fileItem.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <strong>${fileName}</strong>
@@ -124,15 +122,15 @@ document.getElementById('canhotos').addEventListener('change', function(e) {
                             ${statusIcon} NF identificada: ${nfNumber}
                         </small>
                     </div>
-                    <span class="badge badge-secondary">${(file.size / 1024).toFixed(1)} KB</span>
+                    <span class="badge bg-secondary">${(file.size / 1024).toFixed(1)} KB</span>
                 </div>
             `;
-            
-            fileList.appendChild(fileItem);
+
+                fileList.appendChild(fileItem);
+            }
+        } else {
+            previewContainer.style.display = 'none';
         }
-    } else {
-        previewContainer.style.display = 'none';
-    }
-});
+    });
 </script>
-{% endblock %} 
+{% endblock %}

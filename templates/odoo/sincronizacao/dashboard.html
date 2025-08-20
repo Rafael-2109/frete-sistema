@@ -16,7 +16,8 @@
                     <!-- Alerta de Sequência Segura -->
                     <div class="alert alert-info">
                         <h5><i class="fas fa-shield-alt"></i> Sequência Segura de Sincronização</h5>
-                        <p class="mb-2">Este sistema executa a sincronização na ordem correta para evitar perda de dados:</p>
+                        <p class="mb-2">Este sistema executa a sincronização na ordem correta para evitar perda de
+                            dados:</p>
                         <ol class="mb-0">
                             <li><strong>Faturamento</strong> - Importa NFs faturadas primeiro</li>
                             <li><strong>Validação</strong> - Verifica separações cotadas</li>
@@ -28,8 +29,10 @@
                     {% if status_risco %}
                     <div class="row mb-4">
                         <div class="col-md-12">
-                            <div class="card border-{{ 'danger' if status_risco.nivel == 'alto' else 'warning' if status_risco.nivel == 'medio' else 'success' }}">
-                                <div class="card-header bg-{{ 'danger' if status_risco.nivel == 'alto' else 'warning' if status_risco.nivel == 'medio' else 'success' }} text-white">
+                            <div
+                                class="card border-{{ 'danger' if status_risco.nivel == 'alto' else 'warning' if status_risco.nivel == 'medio' else 'success' }}">
+                                <div
+                                    class="card-header bg-{{ 'danger' if status_risco.nivel == 'alto' else 'warning' if status_risco.nivel == 'medio' else 'success' }} text-white">
                                     <h5 class="mb-0">
                                         <i class="fas fa-exclamation-triangle"></i> Status de Risco Operacional
                                     </h5>
@@ -38,19 +41,22 @@
                                     <div class="row">
                                         <div class="col-md-4">
                                             <h6>Nível de Risco:</h6>
-                                            <span class="badge badge-{{ 'danger' if status_risco.nivel == 'alto' else 'warning' if status_risco.nivel == 'medio' else 'success' }} p-2">
+                                            <span
+                                                class="badge bg-{{ 'danger' if status_risco.nivel == 'alto' else 'warning' if status_risco.nivel == 'medio' else 'success' }} p-2">
                                                 {{ status_risco.nivel|upper }}
                                             </span>
                                         </div>
                                         <div class="col-md-4">
                                             <h6>NFs Pendentes:</h6>
-                                            <span class="text-{{ 'danger' if status_risco.nfs_pendentes > 50 else 'warning' if status_risco.nfs_pendentes > 10 else 'success' }}">
+                                            <span
+                                                class="text-{{ 'danger' if status_risco.nfs_pendentes > 50 else 'warning' if status_risco.nfs_pendentes > 10 else 'success' }}">
                                                 {{ status_risco.nfs_pendentes }}
                                             </span>
                                         </div>
                                         <div class="col-md-4">
                                             <h6>Cotações Abertas:</h6>
-                                            <span class="text-{{ 'danger' if status_risco.cotacoes_abertas > 20 else 'warning' if status_risco.cotacoes_abertas > 5 else 'success' }}">
+                                            <span
+                                                class="text-{{ 'danger' if status_risco.cotacoes_abertas > 20 else 'warning' if status_risco.cotacoes_abertas > 5 else 'success' }}">
                                                 {{ status_risco.cotacoes_abertas }}
                                             </span>
                                         </div>
@@ -68,14 +74,14 @@
                     <!-- Botão de Sincronização -->
                     <div class="row mb-4">
                         <div class="col-md-12 text-center">
-                            <form method="POST" action="{{ url_for('sincronizacao_odoo.executar_sincronizacao') }}" 
-                                  onsubmit="return confirmarSincronizacao();">
+                            <form method="POST" action="{{ url_for('sincronizacao_odoo.executar_sincronizacao') }}"
+                                onsubmit="return confirmarSincronizacao();">
                                 <button type="submit" class="btn btn-primary btn-lg" id="btnSincronizar">
                                     <i class="fas fa-sync-alt"></i> Executar Sincronização Integrada
                                 </button>
                             </form>
                             <p class="text-muted mt-2">
-                                <i class="fas fa-info-circle"></i> 
+                                <i class="fas fa-info-circle"></i>
                                 A sincronização pode levar alguns minutos. Não feche esta página.
                             </p>
                         </div>
@@ -93,7 +99,8 @@
                                     <div class="row">
                                         <div class="col-md-3">
                                             <strong>Data/Hora:</strong><br>
-                                            {{ ultima_sync.data.strftime('%d/%m/%Y %H:%M:%S') if ultima_sync.data else 'Nunca' }}
+                                            {{ ultima_sync.data.strftime('%d/%m/%Y %H:%M:%S') if ultima_sync.data else
+                                            'Nunca' }}
                                         </div>
                                         <div class="col-md-3">
                                             <strong>Usuário:</strong><br>
@@ -102,16 +109,17 @@
                                         <div class="col-md-3">
                                             <strong>Status:</strong><br>
                                             {% if ultima_sync.sucesso %}
-                                                <span class="badge badge-success">Sucesso</span>
+                                            <span class="badge bg-success">Sucesso</span>
                                             {% elif ultima_sync.sucesso == False %}
-                                                <span class="badge badge-danger">Erro</span>
+                                            <span class="badge bg-danger">Erro</span>
                                             {% else %}
-                                                <span class="badge badge-secondary">-</span>
+                                            <span class="badge bg-secondary">-</span>
                                             {% endif %}
                                         </div>
                                         <div class="col-md-3">
                                             <strong>Tempo Total:</strong><br>
-                                            {{ ultima_sync.detalhes.tempo_total|round(1) if ultima_sync.detalhes.tempo_total else '-' }}s
+                                            {{ ultima_sync.detalhes.tempo_total|round(1) if
+                                            ultima_sync.detalhes.tempo_total else '-' }}s
                                         </div>
                                     </div>
                                 </div>
@@ -126,14 +134,19 @@
                             <div class="card bg-light">
                                 <div class="card-body">
                                     <h5><i class="fas fa-question-circle"></i> Por que a sequência importa?</h5>
-                                    <p>A ordem correta de sincronização é crítica para manter a integridade dos dados:</p>
+                                    <p>A ordem correta de sincronização é crítica para manter a integridade dos dados:
+                                    </p>
                                     <ul>
-                                        <li><strong>Faturamento primeiro:</strong> Garante que todas as NFs estejam no sistema antes de atualizar pedidos</li>
-                                        <li><strong>Validação:</strong> Protege separações cotadas de perderem suas referências</li>
-                                        <li><strong>Carteira por último:</strong> Evita que pedidos faturados voltem a aparecer como pendentes</li>
+                                        <li><strong>Faturamento primeiro:</strong> Garante que todas as NFs estejam no
+                                            sistema antes de atualizar pedidos</li>
+                                        <li><strong>Validação:</strong> Protege separações cotadas de perderem suas
+                                            referências</li>
+                                        <li><strong>Carteira por último:</strong> Evita que pedidos faturados voltem a
+                                            aparecer como pendentes</li>
                                     </ul>
                                     <p class="mb-0">
-                                        <strong>Atenção:</strong> Sempre use este sistema integrado ao invés de sincronizar módulos individualmente.
+                                        <strong>Atenção:</strong> Sempre use este sistema integrado ao invés de
+                                        sincronizar módulos individualmente.
                                     </p>
                                 </div>
                             </div>
@@ -146,37 +159,37 @@
 </div>
 
 <script>
-function confirmarSincronizacao() {
-    // Verificar nível de risco
-    {% if status_risco and status_risco.nivel == 'alto' %}
-    if (!confirm('⚠️ ATENÇÃO: Nível de risco ALTO detectado!\n\n' +
-                  'Existem {{ status_risco.nfs_pendentes }} NFs pendentes e ' +
-                  '{{ status_risco.cotacoes_abertas }} cotações abertas.\n\n' +
-                  'Tem certeza que deseja continuar?')) {
-        return false;
-    }
-    {% endif %}
-    
-    // Desabilitar botão para evitar duplo clique
-    document.getElementById('btnSincronizar').disabled = true;
-    document.getElementById('btnSincronizar').innerHTML = 
-        '<i class="fas fa-spinner fa-spin"></i> Sincronizando... Aguarde';
-    
-    return true;
-}
+    function confirmarSincronizacao() {
+        // Verificar nível de risco
+        {% if status_risco and status_risco.nivel == 'alto' %}
+        if (!confirm('⚠️ ATENÇÃO: Nível de risco ALTO detectado!\n\n' +
+            'Existem {{ status_risco.nfs_pendentes }} NFs pendentes e ' +
+            '{{ status_risco.cotacoes_abertas }} cotações abertas.\n\n' +
+            'Tem certeza que deseja continuar?')) {
+            return false;
+        }
+        {% endif %}
 
-// Atualizar status periodicamente
-setInterval(function() {
-    fetch('{{ url_for("sincronizacao_odoo.api_status_sincronizacao") }}')
-        .then(response => response.json())
-        .then(data => {
-            if (data.sucesso && data.dados.em_execucao) {
-                document.getElementById('btnSincronizar').disabled = true;
-                document.getElementById('btnSincronizar').innerHTML = 
-                    '<i class="fas fa-spinner fa-spin"></i> Sincronização em andamento...';
-            }
-        })
-        .catch(error => console.error('Erro ao verificar status:', error));
-}, 5000); // A cada 5 segundos
+        // Desabilitar botão para evitar duplo clique
+        document.getElementById('btnSincronizar').disabled = true;
+        document.getElementById('btnSincronizar').innerHTML =
+            '<i class="fas fa-spinner fa-spin"></i> Sincronizando... Aguarde';
+
+        return true;
+    }
+
+    // Atualizar status periodicamente
+    setInterval(function () {
+        fetch('{{ url_for("sincronizacao_odoo.api_status_sincronizacao") }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso && data.dados.em_execucao) {
+                    document.getElementById('btnSincronizar').disabled = true;
+                    document.getElementById('btnSincronizar').innerHTML =
+                        '<i class="fas fa-spinner fa-spin"></i> Sincronização em andamento...';
+                }
+            })
+            .catch(error => console.error('Erro ao verificar status:', error));
+    }, 5000); // A cada 5 segundos
 </script>
 {% endblock %}

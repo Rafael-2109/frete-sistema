@@ -14,6 +14,7 @@ from flask import jsonify
 import uuid  # ✅ ADICIONADO: Para gerar lotes únicos
 from app.utils.embarque_numero import obter_proximo_numero_embarque
 from datetime import datetime
+from app.utils.tabela_frete_manager import TabelaFreteManager
 
 
 
@@ -1128,6 +1129,11 @@ def processar_cotacao_manual():
         pallet_total = sum(p.pallet_total or 0 for p in pedidos)
 
         # Cria a cotação manual
+        from app.utils.tabela_frete_manager import TabelaFreteManager
+        
+        # Prepara dados da cotação manual
+        dados_cotacao = TabelaFreteManager.preparar_cotacao_manual(valor_frete, modalidade, icms_incluso=True)
+        
         cotacao = Cotacao(
             usuario_id=1,  # Ajustar conforme seu sistema de usuários
             transportadora_id=transportadora_id,
@@ -1137,22 +1143,7 @@ def processar_cotacao_manual():
             tipo_carga='DIRETA',  # ✅ CORRIGIDO: DIRETA ao invés de MANUAL
             valor_total=valor_total,
             peso_total=peso_total,
-            modalidade=modalidade,
-            nome_tabela='Cotação Manual',
-            frete_minimo_valor=valor_frete,  # Usa o valor manual como frete_minimo_valor
-            valor_kg=0,
-            percentual_valor=0,
-            frete_minimo_peso=0,
-            icms=0,
-            percentual_gris=0,
-            pedagio_por_100kg=0,
-            valor_tas=0,
-            percentual_adv=0,
-            percentual_rca=0,
-            valor_despacho=0,
-            valor_cte=0,
-            icms_incluso=True,  # ✅ CORRIGIDO: True para cotação manual
-            icms_destino=0
+            **dados_cotacao  # Desempacota todos os campos da tabela
         )
         db.session.add(cotacao)
         db.session.flush()  # Para obter o ID da cotação
@@ -1166,22 +1157,7 @@ def processar_cotacao_manual():
                 cliente=pedido.raz_social_red,
                 peso=pedido.peso_total or 0,
                 valor=pedido.valor_saldo_total or 0,
-                modalidade=modalidade,
-                nome_tabela='Cotação Manual',
-                frete_minimo_valor=valor_frete,  # Usa o valor manual
-                valor_kg=0,
-                percentual_valor=0,
-                frete_minimo_peso=0,
-                icms=0,
-                percentual_gris=0,
-                pedagio_por_100kg=0,
-                valor_tas=0,
-                percentual_adv=0,
-                percentual_rca=0,
-                valor_despacho=0,
-                valor_cte=0,
-                icms_incluso=True,  # ✅ CORRIGIDO: True para cotação manual
-                icms_destino=0
+                **dados_cotacao  # Reutiliza os mesmos dados da cotação
             )
             db.session.add(cotacao_item)
 
@@ -1196,26 +1172,12 @@ def processar_cotacao_manual():
             peso_total=peso_total,
             tipo_carga='DIRETA',  # ✅ CORRIGIDO: DIRETA para seguir lógica de carga direta
             cotacao_id=cotacao.id,
-            modalidade=modalidade,
-            # ✅ CORRIGIDO: Dados da tabela no nível do Embarque (como carga direta)
-            tabela_nome_tabela='Cotação Manual',
-            tabela_frete_minimo_valor=valor_frete,  # Apenas este campo preenchido
-            tabela_valor_kg=0,
-            tabela_percentual_valor=0,
-            tabela_frete_minimo_peso=0,
-            tabela_icms=0,
-            tabela_percentual_gris=0,
-            tabela_pedagio_por_100kg=0,
-            tabela_valor_tas=0,
-            tabela_percentual_adv=0,
-            tabela_percentual_rca=0,
-            tabela_valor_despacho=0,
-            tabela_valor_cte=0,
-            tabela_icms_incluso=True,  # ✅ CORRIGIDO: ICMS incluso
-            icms_destino=0,
             transportadora_optante=False,
             criado_por='Sistema'
         )
+        # Atribui campos da tabela usando TabelaFreteManager
+        TabelaFreteManager.atribuir_campos_objeto(embarque, dados_cotacao)
+        embarque.icms_destino = 0
         db.session.add(embarque)
         db.session.flush()  # Para obter o ID do embarque
 
@@ -1227,6 +1189,9 @@ def processar_cotacao_manual():
             # ✅ NOVO: Usa nome correto da cidade ou fallback para o nome normalizado
             nome_cidade_correto = cidade_correta.nome if cidade_correta else pedido.cidade_normalizada or pedido.nome_cidade
             uf_correto = cidade_correta.uf if cidade_correta else pedido.uf_normalizada or pedido.cod_uf
+            
+            # Prepara dados vazios para EmbarqueItem (DIRETA não usa tabela nos itens)
+            dados_vazio = TabelaFreteManager.preparar_cotacao_vazia()
             
             embarque_item = EmbarqueItem(
                 embarque_id=embarque.id,
@@ -1241,27 +1206,13 @@ def processar_cotacao_manual():
                 uf_destino=uf_correto,
                 cidade_destino=nome_cidade_correto,
                 cotacao_id=cotacao.id,
-                volumes=None,  # Deixa volumes em branco para preenchimento manual
+                volumes=None  # Deixa volumes em branco para preenchimento manual
                 # ✅ CORRIGIDO: Cotação manual é DIRETA - dados da tabela ficam apenas no Embarque
                 # EmbarqueItem não precisa dos campos de tabela
-                modalidade=None,
-                tabela_nome_tabela=None,
-                tabela_frete_minimo_valor=None,
-                tabela_valor_kg=None,
-                tabela_percentual_valor=None,
-                tabela_frete_minimo_peso=None,
-                tabela_icms=None,
-                tabela_percentual_gris=None,
-                tabela_pedagio_por_100kg=None,
-                tabela_valor_tas=None,
-                tabela_percentual_adv=None,
-                tabela_percentual_rca=None,
-                tabela_valor_despacho=None,
-                tabela_valor_cte=None,
-                tabela_icms_incluso=None,
-                icms_destino=None
-                # ✅ REMOVIDO: transportadora_optante (campo não existe em EmbarqueItem)
             )
+            # Atribui campos vazios usando TabelaFreteManager
+            TabelaFreteManager.atribuir_campos_objeto(embarque_item, dados_vazio)
+            embarque_item.icms_destino = None
             db.session.add(embarque_item)
 
         # ✅ CORRIGIDO: Atualiza todos os pedidos após criar os itens
@@ -1395,6 +1346,9 @@ def embarque_fob():
             nome_cidade_correto = cidade_correta.nome if cidade_correta else pedido.cidade_normalizada or pedido.nome_cidade
             uf_correto = cidade_correta.uf if cidade_correta else pedido.uf_normalizada or pedido.cod_uf
             
+            # Prepara dados vazios para EmbarqueItem (FOB não usa tabela)
+            dados_vazio = TabelaFreteManager.preparar_cotacao_vazia()
+            
             embarque_item = EmbarqueItem(
                 embarque_id=embarque.id,
                 separacao_lote_id=pedido.separacao_lote_id,
@@ -1408,26 +1362,12 @@ def embarque_fob():
                 uf_destino=uf_correto,
                 cidade_destino=nome_cidade_correto,
                 cotacao_id=None,  # SEM COTAÇÃO para FOB
-                volumes=None,  # Deixa volumes em branco para preenchimento manual
+                volumes=None  # Deixa volumes em branco para preenchimento manual
                 # ✅ SEM DADOS DE TABELA (FOB não usa tabelas)
-                modalidade=None,
-                tabela_nome_tabela=None,
-                tabela_frete_minimo_valor=None,
-                tabela_valor_kg=None,
-                tabela_percentual_valor=None,
-                tabela_frete_minimo_peso=None,
-                tabela_icms=None,
-                tabela_percentual_gris=None,
-                tabela_pedagio_por_100kg=None,
-                tabela_valor_tas=None,
-                tabela_percentual_adv=None,
-                tabela_percentual_rca=None,
-                tabela_valor_despacho=None,
-                tabela_valor_cte=None,
-                tabela_icms_incluso=None,
-                icms_destino=None
-                # ✅ REMOVIDO: transportadora_optante (campo não existe em EmbarqueItem)
             )
+            # Atribui campos vazios usando TabelaFreteManager
+            TabelaFreteManager.atribuir_campos_objeto(embarque_item, dados_vazio)
+            embarque_item.icms_destino = None
             db.session.add(embarque_item)
 
         # ✅ CORRIGIDO: Atualiza todos os pedidos após criar os itens FOB
@@ -1437,6 +1377,9 @@ def embarque_fob():
             if not pedido.cotacao_id:
                 # Cria uma cotação FOB fictícia se não existir
                 from app.cotacao.models import Cotacao
+                # Prepara dados para cotação FOB
+                dados_fob = TabelaFreteManager.preparar_cotacao_fob()
+                
                 cotacao_fob = Cotacao(
                     usuario_id=1,  # Sistema
                     transportadora_id=transportadora_fob.id,
@@ -1446,22 +1389,7 @@ def embarque_fob():
                     tipo_carga='FOB',
                     valor_total=sum(p.valor_saldo_total or 0 for p in pedidos),
                     peso_total=sum(p.peso_total or 0 for p in pedidos),
-                    modalidade='FOB',
-                    nome_tabela='FOB - COLETA',
-                    frete_minimo_valor=0,
-                    valor_kg=0,
-                    percentual_valor=0,
-                    frete_minimo_peso=0,
-                    icms=0,
-                    percentual_gris=0,
-                    pedagio_por_100kg=0,
-                    valor_tas=0,
-                    percentual_adv=0,
-                    percentual_rca=0,
-                    valor_despacho=0,
-                    valor_cte=0,
-                    icms_incluso=False,
-                    icms_destino=0
+                    **dados_fob  # Desempacota todos os campos FOB
                 )
                 db.session.add(cotacao_fob)
                 db.session.flush()

@@ -57,6 +57,11 @@ class Embarque(db.Model):
     tabela_valor_cte = db.Column(db.Float)
     tabela_icms_incluso = db.Column(db.Boolean, default=False)
     
+    # ===== NOVOS CAMPOS DE VALORES MÍNIMOS E ICMS =====
+    tabela_gris_minimo = db.Column(db.Float, default=0)    # Valor mínimo de GRIS
+    tabela_adv_minimo = db.Column(db.Float, default=0)     # Valor mínimo de ADV
+    tabela_icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela
+    
     # Campos para cálculo do ICMS
     icms_destino = db.Column(db.Float)
     transportadora_optante = db.Column(db.Boolean)
@@ -204,6 +209,11 @@ class EmbarqueItem(db.Model):
     tabela_valor_cte = db.Column(db.Float)
     tabela_icms_incluso = db.Column(db.Boolean, default=False)
     icms_destino = db.Column(db.Float)
+    
+    # ===== NOVOS CAMPOS DE VALORES MÍNIMOS E ICMS =====
+    tabela_gris_minimo = db.Column(db.Float, default=0)    # Valor mínimo de GRIS
+    tabela_adv_minimo = db.Column(db.Float, default=0)     # Valor mínimo de ADV
+    tabela_icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela
 
     # Campo para armazenar erros de validação
     erro_validacao = db.Column(db.String(500), nullable=True)  # Armazena erros como "CNPJ_DIFERENTE", etc.

@@ -8,7 +8,7 @@
         <div class="col-12">
             <h1 class="h3 mb-4">
                 <i class="fas fa-gavel"></i> Aprovar Frete #{{ frete.id }}
-                <span class="badge badge-warning ml-2">EM TRATATIVA</span>
+                <span class="badge bg-warning ml-2">EM TRATATIVA</span>
             </h1>
         </div>
     </div>
@@ -54,7 +54,8 @@
                 <div class="card-body">
                     <p>{{ aprovacao.motivo_solicitacao or "Não informado" }}</p>
                     <small class="text-muted">
-                        Solicitado por {{ aprovacao.solicitado_por }} em {{ aprovacao.solicitado_em | formatar_data_hora_brasil }}
+                        Solicitado por {{ aprovacao.solicitado_por }} em {{ aprovacao.solicitado_em |
+                        formatar_data_hora_brasil }}
                     </small>
                 </div>
             </div>
@@ -85,9 +86,9 @@
                                     <h6 class="text-muted">Considerado</h6>
                                     <h5 class="text-info">
                                         {% if frete.valor_considerado %}
-                                            R$ {{ "%.2f"|format(frete.valor_considerado) }}
+                                        R$ {{ "%.2f"|format(frete.valor_considerado) }}
                                         {% else %}
-                                            -
+                                        -
                                         {% endif %}
                                     </h5>
                                 </div>
@@ -99,9 +100,9 @@
                                     <h6 class="text-muted">Pago</h6>
                                     <h5 class="text-success">
                                         {% if frete.valor_pago %}
-                                            R$ {{ "%.2f"|format(frete.valor_pago) }}
+                                        R$ {{ "%.2f"|format(frete.valor_pago) }}
                                         {% else %}
-                                            -
+                                        -
                                         {% endif %}
                                     </h5>
                                 </div>
@@ -119,15 +120,15 @@
                     </h5>
                 </div>
                 <div class="card-body text-center">
-                    <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}" 
-                       class="btn btn-outline-primary" target="_blank">
+                    <a href="{{ url_for('fretes.visualizar_frete', frete_id=frete.id) }}"
+                        class="btn btn-outline-primary" target="_blank">
                         <i class="fas fa-external-link-alt"></i> Ver Detalhes do Frete
                     </a>
                     {% if frete.numero_cte %}
-                        <a href="{{ url_for('fretes.analise_diferencas', frete_id=frete.id) }}" 
-                           class="btn btn-outline-info" target="_blank">
-                            <i class="fas fa-chart-line"></i> Análise de Diferenças
-                        </a>
+                    <a href="{{ url_for('fretes.analise_diferencas', frete_id=frete.id) }}" class="btn btn-outline-info"
+                        target="_blank">
+                        <i class="fas fa-chart-line"></i> Análise de Diferenças
+                    </a>
                     {% endif %}
                 </div>
             </div>
@@ -138,7 +139,7 @@
     <div class="row">
         <div class="col-12">
             <form method="POST">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                 <!-- Caso A: Diferença entre Considerado e Cotado -->
                 {% if caso_a %}
                 <div class="card mb-4">
@@ -161,8 +162,10 @@
                                 </div>
                                 <div class="col-md-4 text-center">
                                     <strong>Diferença</strong><br>
-                                    <span class="h4 {% if caso_a.diferenca > 0 %}text-danger{% else %}text-success{% endif %}">
-                                        {% if caso_a.diferenca > 0 %}+{% endif %}R$ {{ "%.2f"|format(caso_a.diferenca) }}
+                                    <span
+                                        class="h4 {% if caso_a.diferenca > 0 %}text-danger{% else %}text-success{% endif %}">
+                                        {% if caso_a.diferenca > 0 %}+{% endif %}R$ {{ "%.2f"|format(caso_a.diferenca)
+                                        }}
                                     </span>
                                 </div>
                             </div>
@@ -193,21 +196,26 @@
                                 </div>
                                 <div class="col-md-4 text-center">
                                     <strong>Diferença</strong><br>
-                                    <span class="h4 {% if caso_b.diferenca > 0 %}text-danger{% else %}text-success{% endif %}">
-                                        {% if caso_b.diferenca > 0 %}+{% endif %}R$ {{ "%.2f"|format(caso_b.diferenca) }}
+                                    <span
+                                        class="h4 {% if caso_b.diferenca > 0 %}text-danger{% else %}text-success{% endif %}">
+                                        {% if caso_b.diferenca > 0 %}+{% endif %}R$ {{ "%.2f"|format(caso_b.diferenca)
+                                        }}
                                     </span>
                                 </div>
                             </div>
-                            
+
                             <div class="mt-3">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="lancar_diferenca" id="lancar_diferenca" checked>
+                                    <input class="form-check-input" type="checkbox" name="lancar_diferenca"
+                                        id="lancar_diferenca" checked>
                                     <label class="form-check-label" for="lancar_diferenca">
                                         <strong>
                                             {% if caso_b.diferenca > 0 %}
-                                                Lançar um DÉBITO da transportadora de R$ {{ "%.2f"|format(caso_b.diferenca) }}
+                                            Lançar um DÉBITO da transportadora de R$ {{ "%.2f"|format(caso_b.diferenca)
+                                            }}
                                             {% else %}
-                                                Lançar um CRÉDITO da transportadora de R$ {{ "%.2f"|format(abs(caso_b.diferenca)) }}
+                                            Lançar um CRÉDITO da transportadora de R$ {{
+                                            "%.2f"|format(abs(caso_b.diferenca)) }}
                                             {% endif %}
                                         </strong>
                                     </label>
@@ -228,8 +236,8 @@
                     <div class="card-body">
                         <div class="form-group">
                             <label for="observacoes">Justificativa da decisão:</label>
-                            <textarea class="form-control" id="observacoes" name="observacoes" rows="3" 
-                                      placeholder="Descreva o motivo da aprovação ou rejeição..."></textarea>
+                            <textarea class="form-control" id="observacoes" name="observacoes" rows="3"
+                                placeholder="Descreva o motivo da aprovação ou rejeição..."></textarea>
                         </div>
                     </div>
                 </div>
@@ -254,28 +262,28 @@
 </div>
 
 <script>
-$(document).ready(function() {
-    // Confirmação antes de aprovar/rejeitar
-    $('button[name="acao"]').click(function(e) {
-        const acao = $(this).val();
-        const observacoes = $('#observacoes').val().trim();
-        
-        if (observacoes === '') {
-            e.preventDefault();
-            alert('Por favor, preencha as observações da aprovação.');
-            $('#observacoes').focus();
-            return false;
-        }
-        
-        const confirmMsg = acao === 'APROVAR' ? 
-            'Tem certeza que deseja APROVAR este frete?' : 
-            'Tem certeza que deseja REJEITAR este frete?';
-            
-        if (!confirm(confirmMsg)) {
-            e.preventDefault();
-            return false;
-        }
+    $(document).ready(function () {
+        // Confirmação antes de aprovar/rejeitar
+        $('button[name="acao"]').click(function (e) {
+            const acao = $(this).val();
+            const observacoes = $('#observacoes').val().trim();
+
+            if (observacoes === '') {
+                e.preventDefault();
+                alert('Por favor, preencha as observações da aprovação.');
+                $('#observacoes').focus();
+                return false;
+            }
+
+            const confirmMsg = acao === 'APROVAR' ?
+                'Tem certeza que deseja APROVAR este frete?' :
+                'Tem certeza que deseja REJEITAR este frete?';
+
+            if (!confirm(confirmMsg)) {
+                e.preventDefault();
+                return false;
+            }
+        });
     });
-});
 </script>
-{% endblock %} 
+{% endblock %}

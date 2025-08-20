@@ -112,8 +112,8 @@
             </div>
             <div class="modal-body">
                 <div class="progress">
-                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                         role="progressbar" style="width: 0%"></div>
+                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated"
+                        role="progressbar" style="width: 0%"></div>
                 </div>
                 <p id="progress-text" class="mt-2 mb-0">Iniciando...</p>
             </div>
@@ -124,134 +124,134 @@
 
 {% block scripts %}
 <script>
-$(document).ready(function() {
-    let dadosCarregados = [];
-    let itensSelecionados = new Set();
-    
-    // Configurar CSRF token para todas as requisições AJAX
-    $.ajaxSetup({
-        beforeSend: function(xhr, settings) {
-            if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
-                xhr.setRequestHeader("X-CSRFToken", "{{ csrf_token() }}");
-            }
-        }
-    });
+    $(document).ready(function () {
+        let dadosCarregados = [];
+        let itensSelecionados = new Set();
 
-    // Carregar dados pendentes
-    $('#btn-carregar').click(function() {
-        carregarDadosPendentes();
-    });
-
-    // Selecionar todos com NF
-    $('#btn-selecionar-todos').click(function() {
-        $('.check-item').each(function() {
-            if ($(this).data('tem-nf')) {
-                $(this).prop('checked', true);
-                itensSelecionados.add($(this).val());
+        // Configurar CSRF token para todas as requisições AJAX
+        $.ajaxSetup({
+            beforeSend: function (xhr, settings) {
+                if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                    xhr.setRequestHeader("X-CSRFToken", "{{ csrf_token() }}");
+                }
             }
         });
-        atualizarContadores();
-    });
 
-    // Desselecionar todos
-    $('#btn-desselecionar-todos').click(function() {
-        $('.check-item').prop('checked', false);
-        itensSelecionados.clear();
-        atualizarContadores();
-    });
+        // Carregar dados pendentes
+        $('#btn-carregar').click(function () {
+            carregarDadosPendentes();
+        });
 
-    // Checkbox selecionar todos
-    $('#check-todos').change(function() {
-        const isChecked = $(this).prop('checked');
-        $('.check-item').each(function() {
-            if ($(this).data('tem-nf')) {
-                $(this).prop('checked', isChecked);
-                if (isChecked) {
+        // Selecionar todos com NF
+        $('#btn-selecionar-todos').click(function () {
+            $('.check-item').each(function () {
+                if ($(this).data('tem-nf')) {
+                    $(this).prop('checked', true);
                     itensSelecionados.add($(this).val());
-                } else {
-                    itensSelecionados.delete($(this).val());
                 }
+            });
+            atualizarContadores();
+        });
+
+        // Desselecionar todos
+        $('#btn-desselecionar-todos').click(function () {
+            $('.check-item').prop('checked', false);
+            itensSelecionados.clear();
+            atualizarContadores();
+        });
+
+        // Checkbox selecionar todos
+        $('#check-todos').change(function () {
+            const isChecked = $(this).prop('checked');
+            $('.check-item').each(function () {
+                if ($(this).data('tem-nf')) {
+                    $(this).prop('checked', isChecked);
+                    if (isChecked) {
+                        itensSelecionados.add($(this).val());
+                    } else {
+                        itensSelecionados.delete($(this).val());
+                    }
+                }
+            });
+            atualizarContadores();
+        });
+
+        // Atualizar selecionados
+        $('#btn-atualizar-selecionados').click(function () {
+            if (itensSelecionados.size === 0) {
+                alert('Selecione pelo menos um item para atualizar');
+                return;
+            }
+
+            if (confirm(`Confirma a atualização de ${itensSelecionados.size} item(ns)?`)) {
+                atualizarItens(Array.from(itensSelecionados));
             }
         });
-        atualizarContadores();
-    });
 
-    // Atualizar selecionados
-    $('#btn-atualizar-selecionados').click(function() {
-        if (itensSelecionados.size === 0) {
-            alert('Selecione pelo menos um item para atualizar');
-            return;
+        // Atualizar todos
+        $('#btn-atualizar-todos').click(function () {
+            const itensComNf = dadosCarregados
+                .filter(item => item.encontrou_nf)
+                .map(item => item.embarque_item_id);
+
+            if (itensComNf.length === 0) {
+                alert('Não há itens com NF encontrada para atualizar');
+                return;
+            }
+
+            if (confirm(`Confirma a atualização de TODOS os ${itensComNf.length} itens com NF encontrada?`)) {
+                atualizarItens(itensComNf);
+            }
+        });
+
+        function carregarDadosPendentes() {
+            $('#btn-carregar').prop('disabled', true);
+            $('#tbody-preview').html('<tr><td colspan="9" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>');
+
+            $.get('{{ url_for("atualizar_nf.api_preview_nf_pendentes") }}')
+                .done(function (response) {
+                    if (response.sucesso) {
+                        dadosCarregados = response.items;
+                        renderizarTabela();
+                        habilitarBotoes();
+                    } else {
+                        alert('Erro ao carregar dados: ' + response.erro);
+                    }
+                })
+                .fail(function () {
+                    alert('Erro ao comunicar com o servidor');
+                })
+                .always(function () {
+                    $('#btn-carregar').prop('disabled', false);
+                });
         }
 
-        if (confirm(`Confirma a atualização de ${itensSelecionados.size} item(ns)?`)) {
-            atualizarItens(Array.from(itensSelecionados));
-        }
-    });
+        function renderizarTabela() {
+            const tbody = $('#tbody-preview');
+            tbody.empty();
 
-    // Atualizar todos
-    $('#btn-atualizar-todos').click(function() {
-        const itensComNf = dadosCarregados
-            .filter(item => item.encontrou_nf)
-            .map(item => item.embarque_item_id);
+            if (dadosCarregados.length === 0) {
+                tbody.html('<tr><td colspan="9" class="text-center text-muted">Nenhum item pendente encontrado</td></tr>');
+                return;
+            }
 
-        if (itensComNf.length === 0) {
-            alert('Não há itens com NF encontrada para atualizar');
-            return;
-        }
+            let totalComNf = 0;
+            let totalSemNf = 0;
 
-        if (confirm(`Confirma a atualização de TODOS os ${itensComNf.length} itens com NF encontrada?`)) {
-            atualizarItens(itensComNf);
-        }
-    });
+            dadosCarregados.forEach(function (item) {
+                const temNf = item.encontrou_nf;
+                if (temNf) totalComNf++; else totalSemNf++;
 
-    function carregarDadosPendentes() {
-        $('#btn-carregar').prop('disabled', true);
-        $('#tbody-preview').html('<tr><td colspan="9" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>');
+                const statusBadge = temNf
+                    ? '<span class="badge bg-success">NF Encontrada</span>'
+                    : '<span class="badge bg-warning">NF Não Encontrada</span>';
 
-        $.get('{{ url_for("atualizar_nf.api_preview_nf_pendentes") }}')
-            .done(function(response) {
-                if (response.sucesso) {
-                    dadosCarregados = response.items;
-                    renderizarTabela();
-                    habilitarBotoes();
-                } else {
-                    alert('Erro ao carregar dados: ' + response.erro);
-                }
-            })
-            .fail(function() {
-                alert('Erro ao comunicar com o servidor');
-            })
-            .always(function() {
-                $('#btn-carregar').prop('disabled', false);
-            });
-    }
+                const checkbox = temNf
+                    ? `<input type="checkbox" class="check-item" value="${item.embarque_item_id}" data-tem-nf="true">`
+                    : '<input type="checkbox" disabled>';
 
-    function renderizarTabela() {
-        const tbody = $('#tbody-preview');
-        tbody.empty();
-
-        if (dadosCarregados.length === 0) {
-            tbody.html('<tr><td colspan="9" class="text-center text-muted">Nenhum item pendente encontrado</td></tr>');
-            return;
-        }
-
-        let totalComNf = 0;
-        let totalSemNf = 0;
-
-        dadosCarregados.forEach(function(item) {
-            const temNf = item.encontrou_nf;
-            if (temNf) totalComNf++; else totalSemNf++;
-
-            const statusBadge = temNf 
-                ? '<span class="badge badge-success">NF Encontrada</span>'
-                : '<span class="badge badge-warning">NF Não Encontrada</span>';
-
-            const checkbox = temNf 
-                ? `<input type="checkbox" class="check-item" value="${item.embarque_item_id}" data-tem-nf="true">`
-                : '<input type="checkbox" disabled>';
-
-            const tr = $('<tr>');
-            tr.html(`
+                const tr = $('<tr>');
+                tr.html(`
                 <td>${checkbox}</td>
                 <td>${item.embarque.id} - ${formatarData(item.embarque.data_embarque)}</td>
                 <td>${item.separacao_lote_id || '-'}</td>
@@ -263,81 +263,81 @@ $(document).ready(function() {
                 <td>${statusBadge}</td>
             `);
 
-            tbody.append(tr);
-        });
+                tbody.append(tr);
+            });
 
-        // Atualizar contadores
-        $('#total-pendentes').text(dadosCarregados.length);
-        $('#total-com-nf').text(totalComNf);
-        $('#total-sem-nf').text(totalSemNf);
+            // Atualizar contadores
+            $('#total-pendentes').text(dadosCarregados.length);
+            $('#total-com-nf').text(totalComNf);
+            $('#total-sem-nf').text(totalSemNf);
 
-        // Event handler para checkboxes individuais
-        $('.check-item').change(function() {
-            const itemId = $(this).val();
-            if ($(this).prop('checked')) {
-                itensSelecionados.add(itemId);
-            } else {
-                itensSelecionados.delete(itemId);
-            }
-            atualizarContadores();
-        });
-    }
+            // Event handler para checkboxes individuais
+            $('.check-item').change(function () {
+                const itemId = $(this).val();
+                if ($(this).prop('checked')) {
+                    itensSelecionados.add(itemId);
+                } else {
+                    itensSelecionados.delete(itemId);
+                }
+                atualizarContadores();
+            });
+        }
 
-    function habilitarBotoes() {
-        $('#btn-selecionar-todos').prop('disabled', false);
-        $('#btn-desselecionar-todos').prop('disabled', false);
-        $('#btn-atualizar-selecionados').prop('disabled', false);
-        $('#btn-atualizar-todos').prop('disabled', false);
-        $('#check-todos').prop('disabled', false);
-    }
+        function habilitarBotoes() {
+            $('#btn-selecionar-todos').prop('disabled', false);
+            $('#btn-desselecionar-todos').prop('disabled', false);
+            $('#btn-atualizar-selecionados').prop('disabled', false);
+            $('#btn-atualizar-todos').prop('disabled', false);
+            $('#check-todos').prop('disabled', false);
+        }
 
-    function atualizarContadores() {
-        $('#total-selecionados').text(itensSelecionados.size);
-        $('#btn-atualizar-selecionados').prop('disabled', itensSelecionados.size === 0);
-    }
+        function atualizarContadores() {
+            $('#total-selecionados').text(itensSelecionados.size);
+            $('#btn-atualizar-selecionados').prop('disabled', itensSelecionados.size === 0);
+        }
 
-    function atualizarItens(itemIds) {
-        $('#modalProgresso').modal('show');
-        $('#progress-bar').css('width', '0%');
-        $('#progress-text').text('Atualizando notas fiscais...');
+        function atualizarItens(itemIds) {
+            $('#modalProgresso').modal('show');
+            $('#progress-bar').css('width', '0%');
+            $('#progress-text').text('Atualizando notas fiscais...');
 
-        $.ajax({
-            url: '{{ url_for("atualizar_nf.api_atualizar_nf_selecionados") }}',
-            method: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({ item_ids: itemIds }),
-            success: function(response) {
-                if (response.sucesso) {
-                    const relatorio = response.relatorio;
-                    $('#progress-bar').css('width', '100%');
-                    $('#progress-text').html(`
+            $.ajax({
+                url: '{{ url_for("atualizar_nf.api_atualizar_nf_selecionados") }}',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ item_ids: itemIds }),
+                success: function (response) {
+                    if (response.sucesso) {
+                        const relatorio = response.relatorio;
+                        $('#progress-bar').css('width', '100%');
+                        $('#progress-text').html(`
                         <strong>Processo concluído!</strong><br>
                         Atualizados: ${relatorio.total_atualizados}<br>
                         Erros: ${relatorio.total_erros}
                     `);
 
-                    setTimeout(function() {
+                        setTimeout(function () {
+                            $('#modalProgresso').modal('hide');
+                            carregarDadosPendentes();
+                            itensSelecionados.clear();
+                        }, 2000);
+                    } else {
                         $('#modalProgresso').modal('hide');
-                        carregarDadosPendentes();
-                        itensSelecionados.clear();
-                    }, 2000);
-                } else {
+                        alert('Erro ao atualizar: ' + response.erro);
+                    }
+                },
+                error: function () {
                     $('#modalProgresso').modal('hide');
-                    alert('Erro ao atualizar: ' + response.erro);
+                    alert('Erro ao comunicar com o servidor');
                 }
-            },
-            error: function() {
-                $('#modalProgresso').modal('hide');
-                alert('Erro ao comunicar com o servidor');
-            }
-        });
-    }
+            });
+        }
 
-    function formatarData(dataStr) {
-        if (!dataStr) return '-';
-        const data = new Date(dataStr);
-        return data.toLocaleDateString('pt-BR');
-    }
-});
+        function formatarData(dataStr) {
+            if (!dataStr) return '-';
+            const data = new Date(dataStr);
+            return data.toLocaleDateString('pt-BR');
+        }
+    });
 </script>
 {% endblock %}

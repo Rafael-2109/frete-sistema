@@ -14,9 +14,11 @@
                     <a href="{{ url_for('monitoramento.listar_entregas') }}" class="btn btn-secondary">
                         <i class="fas fa-arrow-left"></i> Voltar
                     </a>
-                    <form method="POST" action="{{ url_for('monitoramento.sincronizar_todas_entregas_manual') }}" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <button type="submit" class="btn btn-primary" onclick="return confirm('Confirma a sincronização de todas as entregas? Esta operação pode demorar alguns minutos.')"
+                    <form method="POST" action="{{ url_for('monitoramento.sincronizar_todas_entregas_manual') }}"
+                        class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        <button type="submit" class="btn btn-primary"
+                            onclick="return confirm('Confirma a sincronização de todas as entregas? Esta operação pode demorar alguns minutos.')"
                             <i class="fas fa-sync"></i> Sincronizar Todas
                         </button>
                     </form>
@@ -144,7 +146,7 @@
                                     </td>
                                     <td>{{ diagnosticos.total_entregas }}</td>
                                     <td>
-                                        <span class="badge badge-primary">Base</span>
+                                        <span class="badge bg-primary">Base</span>
                                     </td>
                                 </tr>
                                 <tr>
@@ -155,9 +157,9 @@
                                     <td>{{ diagnosticos.entregas_sem_embarque }}</td>
                                     <td>
                                         {% if diagnosticos.entregas_sem_embarque > 0 %}
-                                            <span class="badge badge-warning">Atenção</span>
+                                        <span class="badge bg-warning">Atenção</span>
                                         {% else %}
-                                            <span class="badge badge-success">OK</span>
+                                        <span class="badge bg-success">OK</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -169,9 +171,9 @@
                                     <td>{{ diagnosticos.nfs_cd_ativo }}</td>
                                     <td>
                                         {% if diagnosticos.nfs_cd_ativo > 0 %}
-                                            <span class="badge badge-danger">Reprocessar</span>
+                                        <span class="badge bg-danger">Reprocessar</span>
                                         {% else %}
-                                            <span class="badge badge-success">OK</span>
+                                        <span class="badge bg-success">OK</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -183,9 +185,9 @@
                                     <td>{{ diagnosticos.entregas_sem_data_embarque }}</td>
                                     <td>
                                         {% if diagnosticos.entregas_sem_data_embarque > 0 %}
-                                            <span class="badge badge-info">Verificar</span>
+                                        <span class="badge bg-info">Verificar</span>
                                         {% else %}
-                                            <span class="badge badge-success">OK</span>
+                                        <span class="badge bg-success">OK</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -197,9 +199,9 @@
                                     <td>{{ diagnosticos.nfs_nao_importadas }}</td>
                                     <td>
                                         {% if diagnosticos.nfs_nao_importadas > 0 %}
-                                            <span class="badge badge-secondary">Pendente</span>
+                                        <span class="badge bg-secondary">Pendente</span>
                                         {% else %}
-                                            <span class="badge badge-success">OK</span>
+                                        <span class="badge bg-success">OK</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -225,34 +227,34 @@
                                 <br>
                                 <small class="text-muted">Atualização da data de saída do caminhão</small>
                             </div>
-                            <span class="badge badge-success badge-pill">✅ Implementado</span>
+                            <span class="badge bg-success badge-pill">✅ Implementado</span>
                         </div>
-                        
+
                         <div class="list-group-item d-flex justify-content-between align-items-center">
                             <div>
                                 <strong>Item 2-c:</strong> Alimentação do Monitoramento
                                 <br>
                                 <small class="text-muted">Transportadora, agenda, protocolo, lead time</small>
                             </div>
-                            <span class="badge badge-success badge-pill">✅ Implementado</span>
+                            <span class="badge bg-success badge-pill">✅ Implementado</span>
                         </div>
-                        
+
                         <div class="list-group-item d-flex justify-content-between align-items-center">
                             <div>
                                 <strong>Item 2-d:</strong> NF no CD
                                 <br>
                                 <small class="text-muted">Status "NF no CD" e reprocessamento</small>
                             </div>
-                            <span class="badge badge-success badge-pill">✅ Implementado</span>
+                            <span class="badge bg-success badge-pill">✅ Implementado</span>
                         </div>
-                        
+
                         <div class="list-group-item d-flex justify-content-between align-items-center">
                             <div>
                                 <strong>Sync NF→Pedido:</strong> Sincronização Automática
                                 <br>
                                 <small class="text-muted">NF do embarque sincroniza com pedido</small>
                             </div>
-                            <span class="badge badge-success badge-pill">✅ Novo</span>
+                            <span class="badge bg-success badge-pill">✅ Novo</span>
                         </div>
                     </div>
                 </div>
@@ -276,37 +278,44 @@
                                 <div class="card-body text-center">
                                     <i class="fas fa-sync fa-2x text-primary mb-2"></i>
                                     <h6>Sincronização Completa</h6>
-                                    <p class="small text-muted">Sincroniza todas as entregas com dados do faturamento e embarques</p>
-                                    <form method="POST" action="{{ url_for('monitoramento.sincronizar_todas_entregas_manual') }}">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                        <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Confirma a sincronização? Esta operação pode demorar.')">
+                                    <p class="small text-muted">Sincroniza todas as entregas com dados do faturamento e
+                                        embarques</p>
+                                    <form method="POST"
+                                        action="{{ url_for('monitoramento.sincronizar_todas_entregas_manual') }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                                        <button type="submit" class="btn btn-primary btn-sm"
+                                            onclick="return confirm('Confirma a sincronização? Esta operação pode demorar.')">
                                             Executar
                                         </button>
                                     </form>
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-4 mb-3">
                             <div class="card bg-light">
                                 <div class="card-body text-center">
                                     <i class="fas fa-list fa-2x text-success mb-2"></i>
                                     <h6>Ver Entregas</h6>
-                                    <p class="small text-muted">Visualizar listagem completa das entregas monitoradas</p>
-                                    <a href="{{ url_for('monitoramento.listar_entregas') }}" class="btn btn-success btn-sm">
+                                    <p class="small text-muted">Visualizar listagem completa das entregas monitoradas
+                                    </p>
+                                    <a href="{{ url_for('monitoramento.listar_entregas') }}"
+                                        class="btn btn-success btn-sm">
                                         Acessar
                                     </a>
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-4 mb-3">
                             <div class="card bg-light">
                                 <div class="card-body text-center">
                                     <i class="fas fa-chart-bar fa-2x text-info mb-2"></i>
                                     <h6>Atualizar Diagnóstico</h6>
-                                    <p class="small text-muted">Recarregar esta página para obter dados mais recentes</p>
-                                    <a href="{{ url_for('monitoramento.diagnosticar_monitoramento') }}" class="btn btn-info btn-sm">
+                                    <p class="small text-muted">Recarregar esta página para obter dados mais recentes
+                                    </p>
+                                    <a href="{{ url_for('monitoramento.diagnosticar_monitoramento') }}"
+                                        class="btn btn-info btn-sm">
                                         Atualizar
                                     </a>
                                 </div>
@@ -320,24 +329,29 @@
 </div>
 
 <style>
-.border-left-primary {
-    border-left: 0.25rem solid #4e73df !important;
-}
-.border-left-warning {
-    border-left: 0.25rem solid #f6c23e !important;
-}
-.border-left-danger {
-    border-left: 0.25rem solid #e74a3b !important;
-}
-.border-left-info {
-    border-left: 0.25rem solid #36b9cc !important;
-}
-.card {
-    transition: all 0.3s;
-}
-.card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
-}
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+
+    .card {
+        transition: all 0.3s;
+    }
+
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+    }
 </style>
-{% endblock %} 
+{% endblock %}

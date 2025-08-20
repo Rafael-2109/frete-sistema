@@ -568,6 +568,7 @@ def create_app(config_name=None):
     from app.veiculos.routes import veiculos_bp
     from app.vinculos.routes import vinculos_bp
     from app.fretes.routes import fretes_bp
+    from app.fretes.email_routes import emails_bp
     from app.financeiro.routes import financeiro_bp
     from app.cadastros_agendamento.routes import cadastros_agendamento_bp
     from app.separacao.routes import separacao_bp
@@ -619,6 +620,7 @@ def create_app(config_name=None):
     app.register_blueprint(veiculos_bp)
     app.register_blueprint(vinculos_bp)
     app.register_blueprint(fretes_bp)
+    app.register_blueprint(emails_bp)
     app.register_blueprint(financeiro_bp)
     app.register_blueprint(cadastros_agendamento_bp)
     app.register_blueprint(separacao_bp)

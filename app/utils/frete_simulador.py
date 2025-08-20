@@ -9,6 +9,8 @@ from app.veiculos.models import Veiculo
 from app.utils.string_utils import normalizar_nome_cidade, remover_acentos
 from app.utils.vehicle_utils import normalizar_nome_veiculo
 from app.utils.grupo_empresarial import grupo_service
+from app.utils.calculadora_frete import CalculadoraFrete  # Nova importação
+from app.utils.tabela_frete_manager import TabelaFreteManager  # Usar o manager centralizado
 from app import db
 
 
@@ -158,52 +160,47 @@ def calcular_fretes_possiveis(
                 if capacidade and peso_final > capacidade:
                     continue
 
-            # ✅ LÓGICA ÚNICA DE CÁLCULO DE FRETE
+            # ✅ INTEGRAÇÃO COM CALCULADORA CENTRALIZADA
             
-            # 1. Determinar peso para cálculo (peso real vs peso mínimo)
-            peso_para_calculo = max(peso_final, tf.frete_minimo_peso or 0)
+            # Usar TabelaFreteManager para preparar dados (já inclui novos campos!)
+            dados_tabela = TabelaFreteManager.preparar_dados_tabela(tf)
             
-            # 2. Calcular frete base SOMANDO peso + valor
-            frete_peso = (tf.valor_kg or 0) * peso_para_calculo
-            frete_valor = (tf.percentual_valor or 0) * valor_final / 100
-            frete_base = frete_peso + frete_valor  # SOMA peso + valor
+            # Adicionar informação da transportadora para cálculo do líquido
+            dados_tabela['transportadora_optante'] = at.transportadora.optante
             
-            # 3. Calcular adicionais sobre valor da mercadoria
-            gris = (tf.percentual_gris or 0) * valor_final / 100
-            adv = (tf.percentual_adv or 0) * valor_final / 100
-            rca = (tf.percentual_rca or 0) * valor_final / 100
+            # Configuração da transportadora (novos campos de quando aplicar componentes)
+            transportadora_config = None
+            if hasattr(at.transportadora, 'aplica_gris_pos_minimo'):
+                transportadora_config = {
+                    'aplica_gris_pos_minimo': at.transportadora.aplica_gris_pos_minimo or False,
+                    'aplica_adv_pos_minimo': at.transportadora.aplica_adv_pos_minimo or False,
+                    'aplica_rca_pos_minimo': at.transportadora.aplica_rca_pos_minimo or False,
+                    'aplica_pedagio_pos_minimo': at.transportadora.aplica_pedagio_pos_minimo or False,
+                    'aplica_tas_pos_minimo': at.transportadora.aplica_tas_pos_minimo or False,
+                    'aplica_despacho_pos_minimo': at.transportadora.aplica_despacho_pos_minimo or False,
+                    'aplica_cte_pos_minimo': at.transportadora.aplica_cte_pos_minimo or False,
+                    'pedagio_por_fracao': at.transportadora.pedagio_por_fracao if hasattr(at.transportadora, 'pedagio_por_fracao') else True
+                }
             
-            # 4. Calcular pedágio sobre peso para cálculo (por frações de 100kg)
-            if tf.pedagio_por_100kg and peso_para_calculo > 0:
-                fracoes_100kg = int((peso_para_calculo - 1) // 100) + 1  # Arredonda para cima
-                pedagio = fracoes_100kg * tf.pedagio_por_100kg
-            else:
-                pedagio = 0
+            # Chamar calculadora centralizada
+            resultado_calculo = CalculadoraFrete.calcular_frete_unificado(
+                peso=peso_final,
+                valor_mercadoria=valor_final,
+                tabela_dados=dados_tabela,  # CORREÇÃO: dados_tabela -> tabela_dados
+                transportadora_optante=at.transportadora.optante,
+                transportadora_config=transportadora_config,
+                cidade={'icms': cidade_icms} if cidade_icms else None,
+                codigo_ibge=cidade_codigo_ibge
+            )
             
-            # 5. Somar valores fixos
-            fixos = (tf.valor_despacho or 0) + (tf.valor_cte or 0) + (tf.valor_tas or 0)
-            
-            # 6. Total líquido SEM ICMS
-            frete_liquido = frete_base + gris + adv + rca + pedagio + fixos
-            
-            # 7. Aplicar frete mínimo VALOR no frete líquido
-            frete_final_liquido = max(frete_liquido, tf.frete_minimo_valor or 0)
-            
-            # 8. Aplicar ICMS apenas no final (se não estiver incluso)
-            frete_com_icms = frete_final_liquido
-            if not tf.icms_incluso:
-                if cidade_icms < 1 and cidade_icms > 0:
-                    frete_com_icms = frete_final_liquido / (1 - cidade_icms)
+            # Extrair valores do resultado
+            frete_com_icms = resultado_calculo['valor_com_icms']
+            valor_liquido = resultado_calculo['valor_liquido']
 
             # Só inclui se tiver algum valor
             if frete_com_icms > 0:
-                # 9. Calcular valor líquido - se não for optante, desconta ICMS
-                valor_liquido = frete_com_icms
-                if not at.transportadora.optante:
-                    if cidade_icms < 1 and cidade_icms > 0:
-                        valor_liquido = frete_com_icms * (1 - cidade_icms)
                 
-                # Cria opção calculada
+                # Cria opção calculada com todos os dados necessários
                 opcao_calculada = {
                     "transportadora": at.transportadora.razao_social,
                     "transportadora_id": at.transportadora.id,
@@ -212,23 +209,16 @@ def calcular_fretes_possiveis(
                     "valor_total": round(frete_com_icms, 2),
                     "valor_liquido": round(valor_liquido, 2),
                     "nome_tabela": at.nome_tabela,
-                    # ✅ CORREÇÃO: Adiciona TODOS os dados da tabela
-                    "valor_kg": tf.valor_kg or 0,
-                    "percentual_valor": tf.percentual_valor or 0,
-                    "frete_minimo_valor": tf.frete_minimo_valor or 0,
-                    "frete_minimo_peso": tf.frete_minimo_peso or 0,
-                    "percentual_gris": tf.percentual_gris or 0,
-                    "pedagio_por_100kg": tf.pedagio_por_100kg or 0,
-                    "valor_tas": tf.valor_tas or 0,
-                    "percentual_adv": tf.percentual_adv or 0,
-                    "percentual_rca": tf.percentual_rca or 0,
-                    "valor_despacho": tf.valor_despacho or 0,
-                    "valor_cte": tf.valor_cte or 0,
-                    "icms_incluso": tf.icms_incluso or False,
                     "icms_destino": cidade_icms,
                     "cidade": cidade_nome,
-                    "uf": cidade_uf
+                    "uf": cidade_uf,
+                    # Detalhes do cálculo (útil para debug)
+                    "detalhes_calculo": resultado_calculo.get('detalhes', {})
                 }
+                
+                # Adicionar todos os campos da tabela usando o que já foi preparado
+                # Isso garante que TODOS os campos (incluindo novos) estejam presentes
+                opcao_calculada.update(dados_tabela)
                 
                 # ✅ APLICA LÓGICA ESPECÍFICA POR TIPO DE CARGA
                 if tipo_carga == "DIRETA":

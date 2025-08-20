@@ -171,6 +171,9 @@
                                 <button class="btn btn-sm btn-warning" onclick="editarTransportadora({{ transportadora.id }})" title="Editar">
                                     <i class="fas fa-edit"></i> Editar
                                 </button>
+                                <button class="btn btn-sm btn-info" onclick="configurarFrete({{ transportadora.id }})" title="Configurar Cálculo de Frete">
+                                    <i class="fas fa-calculator"></i> Config. Frete
+                                </button>
                                 <a href="{{ url_for('transportadoras.excluir_transportadora', id=transportadora.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Tem certeza que deseja excluir esta transportadora?')" title="Excluir">
                                     <i class="fas fa-trash"></i> Excluir
                                 </a>
@@ -180,6 +183,203 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Configuração de Cálculo de Frete -->
+<div class="modal fade" id="modalConfigurarFrete" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-calculator"></i> Configuração de Cálculo de Frete - 
+                    <span id="config_transportadora_nome"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formConfigurarFrete">
+                <div class="modal-body">
+                    <input type="hidden" id="config_id" name="id">
+                    
+                    <!-- Explicação Geral -->
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> Como funciona esta configuração?</h6>
+                        <p class="mb-2">Por padrão, todos os componentes do frete são calculados e somados ANTES de aplicar o frete mínimo.</p>
+                        <p class="mb-0">Ao marcar uma opção abaixo, o componente será aplicado APÓS o frete mínimo, ou seja:</p>
+                        <ol class="mb-0">
+                            <li>Calcula-se o frete base + componentes não marcados</li>
+                            <li>Aplica-se o frete mínimo</li>
+                            <li>DEPOIS adiciona-se os componentes marcados</li>
+                        </ol>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- Coluna 1: Taxas Percentuais -->
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-secondary text-white">
+                                    <h6 class="mb-0"><i class="fas fa-percentage"></i> Taxas Percentuais</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="config_aplica_gris_pos_minimo" name="aplica_gris_pos_minimo">
+                                        <label class="form-check-label" for="config_aplica_gris_pos_minimo">
+                                            <strong>GRIS após frete mínimo</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                GRIS (Gerenciamento de Risco) será calculado e adicionado APÓS aplicar o frete mínimo.
+                                                <br>Útil quando a transportadora cobra GRIS sobre o valor final do frete.
+                                            </small>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="config_aplica_adv_pos_minimo" name="aplica_adv_pos_minimo">
+                                        <label class="form-check-label" for="config_aplica_adv_pos_minimo">
+                                            <strong>Ad Valorem após frete mínimo</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                Ad Valorem será calculado e adicionado APÓS aplicar o frete mínimo.
+                                                <br>Comum em cargas de alto valor onde o seguro é calculado sobre o frete final.
+                                            </small>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="config_aplica_rca_pos_minimo" name="aplica_rca_pos_minimo">
+                                        <label class="form-check-label" for="config_aplica_rca_pos_minimo">
+                                            <strong>RCA após frete mínimo</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                RCA (Seguro Fluvial) será calculado e adicionado APÓS aplicar o frete mínimo.
+                                                <br>Aplicável em rotas que envolvem transporte fluvial.
+                                            </small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Coluna 2: Taxas Fixas -->
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-secondary text-white">
+                                    <h6 class="mb-0"><i class="fas fa-dollar-sign"></i> Taxas Fixas</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="config_aplica_tas_pos_minimo" name="aplica_tas_pos_minimo">
+                                        <label class="form-check-label" for="config_aplica_tas_pos_minimo">
+                                            <strong>TAS após frete mínimo</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                Taxa de Administração será adicionada APÓS aplicar o frete mínimo.
+                                                <br>Algumas transportadoras cobram TAS independente do valor do frete.
+                                            </small>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="config_aplica_despacho_pos_minimo" name="aplica_despacho_pos_minimo">
+                                        <label class="form-check-label" for="config_aplica_despacho_pos_minimo">
+                                            <strong>Despacho após frete mínimo</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                Taxa de Despacho será adicionada APÓS aplicar o frete mínimo.
+                                                <br>Taxa fixa cobrada para processamento de documentação.
+                                            </small>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="config_aplica_cte_pos_minimo" name="aplica_cte_pos_minimo">
+                                        <label class="form-check-label" for="config_aplica_cte_pos_minimo">
+                                            <strong>CT-e após frete mínimo</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                Taxa de emissão de CT-e será adicionada APÓS aplicar o frete mínimo.
+                                                <br>Custo fixo para emissão do Conhecimento de Transporte Eletrônico.
+                                            </small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Pedágio -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-secondary text-white">
+                            <h6 class="mb-0"><i class="fas fa-road"></i> Configuração de Pedágio</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="config_aplica_pedagio_pos_minimo" name="aplica_pedagio_pos_minimo">
+                                        <label class="form-check-label" for="config_aplica_pedagio_pos_minimo">
+                                            <strong>Pedágio após frete mínimo</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                Pedágio será calculado e adicionado APÓS aplicar o frete mínimo.
+                                                <br>Algumas transportadoras cobram pedágio separadamente do frete base.
+                                            </small>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="config_pedagio_por_fracao" name="pedagio_por_fracao" checked>
+                                        <label class="form-check-label" for="config_pedagio_por_fracao">
+                                            <strong>Pedágio por fração de 100kg</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                <strong>Marcado:</strong> 550kg = 6 frações (arredonda para cima)<br>
+                                                <strong>Desmarcado:</strong> 550kg = 5.5 frações (valor exato)
+                                            </small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Exemplo de Cálculo -->
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-calculator"></i> Exemplo de Cálculo:</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Configuração Padrão (tudo ANTES):</strong>
+                                <ol class="mb-0 small">
+                                    <li>Frete Base: R$ 100</li>
+                                    <li>+ GRIS (2%): R$ 20</li>
+                                    <li>+ Pedágio: R$ 30</li>
+                                    <li>= Total: R$ 150</li>
+                                    <li>Aplica Mínimo (R$ 200): <strong>R$ 200</strong></li>
+                                </ol>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Com GRIS após mínimo:</strong>
+                                <ol class="mb-0 small">
+                                    <li>Frete Base: R$ 100</li>
+                                    <li>+ Pedágio: R$ 30</li>
+                                    <li>= Subtotal: R$ 130</li>
+                                    <li>Aplica Mínimo (R$ 200): R$ 200</li>
+                                    <li>+ GRIS (2% de R$ 1000): R$ 20</li>
+                                    <li>= Total Final: <strong>R$ 220</strong></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Configuração
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -278,6 +478,86 @@
 </div>
 
 <script>
+// Função para configurar cálculo de frete
+function configurarFrete(id) {
+    // Busca os dados da transportadora e suas configurações
+    fetch(`/transportadoras/config-frete/${id}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Preenche o nome da transportadora
+                document.getElementById('config_transportadora_nome').textContent = data.transportadora.razao_social;
+                document.getElementById('config_id').value = data.transportadora.id;
+                
+                // Preenche as configurações
+                document.getElementById('config_aplica_gris_pos_minimo').checked = data.config.aplica_gris_pos_minimo || false;
+                document.getElementById('config_aplica_adv_pos_minimo').checked = data.config.aplica_adv_pos_minimo || false;
+                document.getElementById('config_aplica_rca_pos_minimo').checked = data.config.aplica_rca_pos_minimo || false;
+                document.getElementById('config_aplica_pedagio_pos_minimo').checked = data.config.aplica_pedagio_pos_minimo || false;
+                document.getElementById('config_aplica_tas_pos_minimo').checked = data.config.aplica_tas_pos_minimo || false;
+                document.getElementById('config_aplica_despacho_pos_minimo').checked = data.config.aplica_despacho_pos_minimo || false;
+                document.getElementById('config_aplica_cte_pos_minimo').checked = data.config.aplica_cte_pos_minimo || false;
+                document.getElementById('config_pedagio_por_fracao').checked = data.config.pedagio_por_fracao !== false; // Default true
+                
+                // Abre o modal
+                new bootstrap.Modal(document.getElementById('modalConfigurarFrete')).show();
+            } else {
+                alert('Erro ao carregar configurações: ' + (data.message || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao carregar configurações. Verifique o console para mais detalhes.');
+        });
+}
+
+// Submit do formulário de configuração
+document.getElementById('formConfigurarFrete').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const id = formData.get('id');
+    
+    // Converte checkboxes para valores booleanos
+    const config = {
+        aplica_gris_pos_minimo: formData.get('aplica_gris_pos_minimo') === 'on',
+        aplica_adv_pos_minimo: formData.get('aplica_adv_pos_minimo') === 'on',
+        aplica_rca_pos_minimo: formData.get('aplica_rca_pos_minimo') === 'on',
+        aplica_pedagio_pos_minimo: formData.get('aplica_pedagio_pos_minimo') === 'on',
+        aplica_tas_pos_minimo: formData.get('aplica_tas_pos_minimo') === 'on',
+        aplica_despacho_pos_minimo: formData.get('aplica_despacho_pos_minimo') === 'on',
+        aplica_cte_pos_minimo: formData.get('aplica_cte_pos_minimo') === 'on',
+        pedagio_por_fracao: formData.get('pedagio_por_fracao') === 'on'
+    };
+    
+    fetch(`/transportadoras/config-frete/${id}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(config)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Configuração salva com sucesso!');
+            bootstrap.Modal.getInstance(document.getElementById('modalConfigurarFrete')).hide();
+        } else {
+            alert('Erro: ' + (data.message || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao salvar configuração');
+    });
+});
+
 function editarTransportadora(id) {
     // Busca os dados da transportadora
     fetch(`/transportadoras/dados/${id}`)

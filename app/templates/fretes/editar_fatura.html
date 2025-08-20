@@ -28,14 +28,14 @@
         </div>
         <div class="card-body">
             <form method="POST">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
                 <div class="row">
                     <div class="col-md-6">
                         <div class="form-group">
                             <label for="numero_fatura">Número da Fatura *</label>
-                            <input type="text" class="form-control" id="numero_fatura" name="numero_fatura" 
-                                   value="{{ fatura.numero_fatura }}" required>
+                            <input type="text" class="form-control" id="numero_fatura" name="numero_fatura"
+                                value="{{ fatura.numero_fatura }}" required>
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -44,10 +44,10 @@
                             <select class="form-control" id="transportadora_id" name="transportadora_id" required>
                                 <option value="">Selecione a transportadora</option>
                                 {% for transportadora in transportadoras %}
-                                    <option value="{{ transportadora.id }}" 
-                                            {% if transportadora.id == fatura.transportadora_id %}selected{% endif %}>
-                                        {{ transportadora.razao_social }}
-                                    </option>
+                                <option value="{{ transportadora.id }}" {% if
+                                    transportadora.id==fatura.transportadora_id %}selected{% endif %}>
+                                    {{ transportadora.razao_social }}
+                                </option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -58,8 +58,9 @@
                     <div class="col-md-4">
                         <div class="form-group">
                             <label for="data_emissao">Data de Emissão *</label>
-                            <input type="date" class="form-control" id="data_emissao" name="data_emissao" 
-                                   value="{{ fatura.data_emissao | formatar_data_hora_brasil if fatura.data_emissao }}" required>
+                            <input type="date" class="form-control" id="data_emissao" name="data_emissao"
+                                value="{{ fatura.data_emissao | formatar_data_hora_brasil if fatura.data_emissao }}"
+                                required>
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -69,16 +70,17 @@
                                 <div class="input-group-prepend">
                                     <span class="input-group-text">R$</span>
                                 </div>
-                                <input type="text" class="form-control" id="valor_total_fatura" name="valor_total_fatura" 
-                                       value="{{ '%.2f'|format(fatura.valor_total_fatura) }}" required>
+                                <input type="text" class="form-control" id="valor_total_fatura"
+                                    name="valor_total_fatura" value="{{ '%.2f'|format(fatura.valor_total_fatura) }}"
+                                    required>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="form-group">
                             <label for="vencimento">Vencimento</label>
-                            <input type="date" class="form-control" id="vencimento" name="vencimento" 
-                                   value="{{ fatura.vencimento | formatar_data_hora_brasil if fatura.vencimento }}">
+                            <input type="date" class="form-control" id="vencimento" name="vencimento"
+                                value="{{ fatura.vencimento | formatar_data_hora_brasil if fatura.vencimento }}">
                         </div>
                     </div>
                 </div>
@@ -90,38 +92,43 @@
                         <div class="col-md-3">
                             <strong style="color: black;">Status Conferência:</strong><br>
                             {% if fatura.status_conferencia == 'CONFERIDO' %}
-                                <span class="badge badge-success" style="color: white; background-color: #28a745;">CONFERIDO</span>
+                            <span class="badge bg-success"
+                                style="color: white; background-color: #28a745;">CONFERIDO</span>
                             {% elif fatura.status_conferencia == 'EM_CONFERENCIA' %}
-                                <span class="badge badge-warning" style="color: #212529; background-color: #ffc107;">EM CONFERÊNCIA</span>
+                            <span class="badge bg-warning" style="color: #212529; background-color: #ffc107;">EM
+                                CONFERÊNCIA</span>
                             {% else %}
-                                <span class="badge badge-secondary" style="color: white; background-color: #6c757d;">PENDENTE</span>
+                            <span class="badge bg-secondary"
+                                style="color: white; background-color: #6c757d;">PENDENTE</span>
                             {% endif %}
                         </div>
                         <div class="col-md-3">
                             <strong style="color: black;">Fretes Vinculados:</strong><br>
-                            <span class="badge badge-primary" style="color: white; background-color: #007bff;">{{ fatura.total_fretes() }} frete(s)</span>
+                            <span class="badge bg-primary" style="color: white; background-color: #007bff;">{{
+                                fatura.total_fretes() }} frete(s)</span>
                             {% if fatura.total_despesas_extras() > 0 %}
-                                <br><span class="badge badge-warning" style="color: #212529; background-color: #ffc107;">{{ fatura.total_despesas_extras() }} despesa(s)</span>
+                            <br><span class="badge bg-warning" style="color: #212529; background-color: #ffc107;">{{
+                                fatura.total_despesas_extras() }} despesa(s)</span>
                             {% endif %}
                         </div>
                         <div class="col-md-3">
                             <strong style="color: black;">Valores:</strong><br>
-                            <small style="color: black;">Fretes: R$ {{ "%.2f"|format(fatura.valor_total_fretes()) }}</small>
+                            <small style="color: black;">Fretes: R$ {{ "%.2f"|format(fatura.valor_total_fretes())
+                                }}</small>
                             {% if fatura.total_despesas_extras() > 0 %}
-                                <br><small style="color: black;">Despesas: R$ {{ "%.2f"|format(fatura.valor_total_despesas_extras()) }}</small>
+                            <br><small style="color: black;">Despesas: R$ {{
+                                "%.2f"|format(fatura.valor_total_despesas_extras()) }}</small>
                             {% endif %}
                         </div>
                         <div class="col-md-3">
                             <strong style="color: black;">Anexo:</strong><br>
                             {% if fatura.arquivo_pdf %}
-                                <a href="{{ url_for('fretes.download_pdf_fatura', fatura_id=fatura.id) }}" 
-                                   target="_blank" 
-                                   class="btn btn-sm btn-outline-primary" 
-                                   title="Visualizar Anexo">
-                                    <i class="fas fa-file-pdf"></i> PDF
-                                </a>
+                            <a href="{{ url_for('fretes.download_pdf_fatura', fatura_id=fatura.id) }}" target="_blank"
+                                class="btn btn-sm btn-outline-primary" title="Visualizar Anexo">
+                                <i class="fas fa-file-pdf"></i> PDF
+                            </a>
                             {% else %}
-                                <span class="text-muted small">Sem anexo</span>
+                            <span class="text-muted small">Sem anexo</span>
                             {% endif %}
                         </div>
                     </div>
@@ -165,11 +172,14 @@
                             <td>R$ {{ "%.2f"|format(frete.valor_cte or 0) }}</td>
                             <td>
                                 {% if frete.status == 'CONFERIDO' %}
-                                    <span class="badge badge-success" style="color: white; background-color: #28a745;">{{ frete.status }}</span>
+                                <span class="badge bg-success" style="color: white; background-color: #28a745;">{{
+                                    frete.status }}</span>
                                 {% elif frete.status == 'LANCADO' %}
-                                    <span class="badge badge-primary" style="color: white; background-color: #007bff;">{{ frete.status }}</span>
+                                <span class="badge bg-primary" style="color: white; background-color: #007bff;">{{
+                                    frete.status }}</span>
                                 {% else %}
-                                    <span class="badge badge-secondary" style="color: white; background-color: #6c757d;">{{ frete.status }}</span>
+                                <span class="badge bg-secondary" style="color: white; background-color: #6c757d;">{{
+                                    frete.status }}</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -185,7 +195,8 @@
     {% if fatura.total_despesas_extras() > 0 %}
     <div class="card mt-4">
         <div class="card-header bg-warning text-dark">
-            <h5 class="mb-0"><i class="fas fa-exclamation-circle"></i> Despesas Extras Vinculadas ({{ fatura.total_despesas_extras() }})</h5>
+            <h5 class="mb-0"><i class="fas fa-exclamation-circle"></i> Despesas Extras Vinculadas ({{
+                fatura.total_despesas_extras() }})</h5>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -205,7 +216,7 @@
                         <tr>
                             <td><strong>#{{ despesa.id }}</strong></td>
                             <td>
-                                <span class="badge badge-info" style="color: white; background-color: #17a2b8;">
+                                <span class="badge bg-info" style="color: white; background-color: #17a2b8;">
                                     {{ despesa.tipo_despesa }}
                                 </span>
                             </td>
@@ -216,7 +227,8 @@
                             </td>
                             <td>{{ despesa.numero_documento or 'Pendente' }}</td>
                             <td><strong>R$ {{ "%.2f"|format(despesa.valor_despesa) }}</strong></td>
-                            <td>{{ despesa.vencimento_despesa | formatar_data_segura if despesa.vencimento_despesa else 'N/A' }}</td>
+                            <td>{{ despesa.vencimento_despesa | formatar_data_segura if despesa.vencimento_despesa else
+                                'N/A' }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -228,10 +240,10 @@
 </div>
 
 <script>
-// Formatação do valor monetário
-document.getElementById('valor_total_fatura').addEventListener('input', function(e) {
-    let value = e.target.value.replace(/[^\d,]/g, '');
-    e.target.value = value;
-});
+    // Formatação do valor monetário
+    document.getElementById('valor_total_fatura').addEventListener('input', function (e) {
+        let value = e.target.value.replace(/[^\d,]/g, '');
+        e.target.value = value;
+    });
 </script>
-{% endblock %} 
+{% endblock %}

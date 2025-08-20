@@ -64,9 +64,9 @@
                                     <h6 class="text-muted">Valor CTe</h6>
                                     <h4 class="text-info">
                                         {% if frete.valor_cte %}
-                                            R$ {{ "%.2f"|format(frete.valor_cte) }}
+                                        R$ {{ "%.2f"|format(frete.valor_cte) }}
                                         {% else %}
-                                            -
+                                        -
                                         {% endif %}
                                     </h4>
                                 </div>
@@ -78,9 +78,9 @@
                                     <h6 class="text-muted">Valor Considerado</h6>
                                     <h4 class="text-warning">
                                         {% if frete.valor_considerado %}
-                                            R$ {{ "%.2f"|format(frete.valor_considerado) }}
+                                        R$ {{ "%.2f"|format(frete.valor_considerado) }}
                                         {% else %}
-                                            -
+                                        -
                                         {% endif %}
                                     </h4>
                                 </div>
@@ -92,9 +92,9 @@
                                     <h6 class="text-muted">Valor Pago</h6>
                                     <h4 class="text-dark">
                                         {% if frete.valor_pago %}
-                                            R$ {{ "%.2f"|format(frete.valor_pago) }}
+                                        R$ {{ "%.2f"|format(frete.valor_pago) }}
                                         {% else %}
-                                            -
+                                        -
                                         {% endif %}
                                     </h4>
                                 </div>
@@ -107,13 +107,14 @@
                         <h6><i class="fas fa-exclamation-triangle"></i> Motivo da Solicitação</h6>
                         <p class="mb-0">{{ aprovacao.motivo_solicitacao or "Não informado" }}</p>
                         <small class="text-muted">
-                            Solicitado por {{ aprovacao.solicitado_por }} em {{ aprovacao.solicitado_em | formatar_data_hora_brasil }}
+                            Solicitado por {{ aprovacao.solicitado_por }} em {{ aprovacao.solicitado_em |
+                            formatar_data_hora_brasil }}
                         </small>
                     </div>
 
                     <!-- Formulário de aprovação -->
                     <form method="POST">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                         {{ form.hidden_tag() }}
 
                         <div class="form-group">
@@ -132,12 +133,12 @@
                                 <i class="fas fa-arrow-left"></i> Voltar
                             </a>
                             <div>
-                                <button type="submit" class="btn btn-success btn-lg me-2" 
-                                        onclick="document.getElementById('status').value='APROVADO'">
+                                <button type="submit" class="btn btn-success btn-lg me-2"
+                                    onclick="document.getElementById('status').value='APROVADO'">
                                     <i class="fas fa-check"></i> Aprovar
                                 </button>
-                                <button type="submit" class="btn btn-danger btn-lg" 
-                                        onclick="document.getElementById('status').value='REJEITADO'">
+                                <button type="submit" class="btn btn-danger btn-lg"
+                                    onclick="document.getElementById('status').value='REJEITADO'">
                                     <i class="fas fa-times"></i> Rejeitar
                                 </button>
                             </div>
@@ -158,13 +159,15 @@
                 </div>
                 <div class="card-body">
                     {% if frete.valor_cte and frete.valor_cotado %}
-                        <p><strong>CTe vs Cotado:</strong><br>
-                        <span class="badge badge-info">{{ frete.classificacao_valor_cte_cotado() }}</span></p>
+                    <p><strong>CTe vs Cotado:</strong><br>
+                        <span class="badge bg-info">{{ frete.classificacao_valor_cte_cotado() }}</span>
+                    </p>
                     {% endif %}
-                    
+
                     {% if frete.valor_pago and frete.valor_considerado %}
-                        <p><strong>Pago vs Considerado:</strong><br>
-                        <span class="badge badge-warning">{{ frete.classificacao_valor_pago_considerado() }}</span></p>
+                    <p><strong>Pago vs Considerado:</strong><br>
+                        <span class="badge bg-warning">{{ frete.classificacao_valor_pago_considerado() }}</span>
+                    </p>
                     {% endif %}
                 </div>
             </div>
@@ -178,19 +181,21 @@
                 </div>
                 <div class="card-body">
                     {% if frete.valor_cte and frete.valor_cotado %}
-                        {% set diff_cte = frete.diferenca_cotado_cte() %}
-                        <p><strong>CTe - Cotado:</strong><br>
+                    {% set diff_cte = frete.diferenca_cotado_cte() %}
+                    <p><strong>CTe - Cotado:</strong><br>
                         <span class="{% if diff_cte > 0 %}text-danger{% elif diff_cte < 0 %}text-success{% endif %}">
                             {% if diff_cte > 0 %}+{% endif %}R$ {{ "%.2f"|format(diff_cte) }}
-                        </span></p>
+                        </span>
+                    </p>
                     {% endif %}
-                    
+
                     {% if frete.valor_pago and frete.valor_considerado %}
-                        {% set diff_pago = frete.diferenca_considerado_pago() %}
-                        <p><strong>Pago - Considerado:</strong><br>
+                    {% set diff_pago = frete.diferenca_considerado_pago() %}
+                    <p><strong>Pago - Considerado:</strong><br>
                         <span class="{% if diff_pago > 0 %}text-danger{% elif diff_pago < 0 %}text-success{% endif %}">
                             {% if diff_pago > 0 %}+{% endif %}R$ {{ "%.2f"|format(diff_pago) }}
-                        </span></p>
+                        </span>
+                    </p>
                     {% endif %}
                 </div>
             </div>
@@ -199,15 +204,15 @@
 </div>
 
 <script>
-$(document).ready(function() {
-    // Define o status quando clicar nos botões
-    $('.btn-success').click(function() {
-        $('#status').val('APROVADO');
+    $(document).ready(function () {
+        // Define o status quando clicar nos botões
+        $('.btn-success').click(function () {
+            $('#status').val('APROVADO');
+        });
+
+        $('.btn-danger').click(function () {
+            $('#status').val('REJEITADO');
+        });
     });
-    
-    $('.btn-danger').click(function() {
-        $('#status').val('REJEITADO');
-    });
-});
 </script>
-{% endblock %} 
+{% endblock %}

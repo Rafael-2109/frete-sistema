@@ -38,50 +38,31 @@ def cadastrar_tabela_frete():
 
     if form.validate_on_submit():
         try:
+            from app.utils.tabela_frete_manager import TabelaFreteManager
+            
+            # Prepara dados do formulário
+            dados_tabela = TabelaFreteManager.preparar_dados_formulario(form, float_or_none)
+            
+            # Cria TabelaFrete
             nova = TabelaFrete(
                 transportadora_id=form.transportadora.data,
                 uf_origem=form.uf_origem.data,
                 uf_destino=form.uf_destino.data,
-                nome_tabela=form.nome_tabela.data.upper(),
                 tipo_carga=form.tipo_carga.data,
-                modalidade=form.modalidade.data.upper() if form.modalidade.data else '',
-                valor_kg=float_or_none(form.valor_kg.data),
-                frete_minimo_peso=float_or_none(form.frete_minimo_peso.data),
-                percentual_valor=float_or_none(form.percentual_valor.data),
-                frete_minimo_valor=float_or_none(form.frete_minimo_valor.data),
-                percentual_gris=float_or_none(form.percentual_gris.data),
-                percentual_adv=float_or_none(form.percentual_adv.data),
-                percentual_rca=float_or_none(form.percentual_rca.data),
-                pedagio_por_100kg=float_or_none(form.pedagio_por_100kg.data),
-                valor_despacho=float_or_none(form.valor_despacho.data),
-                valor_cte=float_or_none(form.valor_cte.data),
-                valor_tas=float_or_none(form.valor_tas.data),
-                icms_incluso=form.icms_incluso.data,
                 criado_por=current_user.nome
             )
+            TabelaFreteManager.atribuir_campos_tabela(nova, dados_tabela)
             db.session.add(nova)
 
+            # Cria HistoricoTabelaFrete
             historico = HistoricoTabelaFrete(
                 transportadora_id=form.transportadora.data,
                 uf_origem=form.uf_origem.data,
                 uf_destino=form.uf_destino.data,
-                nome_tabela=form.nome_tabela.data.upper(),
                 tipo_carga=form.tipo_carga.data,
-                modalidade=form.modalidade.data.upper() if form.modalidade.data else '',
-                valor_kg=float_or_none(form.valor_kg.data),
-                frete_minimo_peso=float_or_none(form.frete_minimo_peso.data),
-                percentual_valor=float_or_none(form.percentual_valor.data),
-                frete_minimo_valor=float_or_none(form.frete_minimo_valor.data),
-                percentual_gris=float_or_none(form.percentual_gris.data),
-                percentual_adv=float_or_none(form.percentual_adv.data),
-                percentual_rca=float_or_none(form.percentual_rca.data),
-                pedagio_por_100kg=float_or_none(form.pedagio_por_100kg.data),
-                valor_despacho=float_or_none(form.valor_despacho.data),
-                valor_cte=float_or_none(form.valor_cte.data),
-                valor_tas=float_or_none(form.valor_tas.data),
-                icms_incluso=form.icms_incluso.data,
                 criado_por=current_user.nome
             )
+            TabelaFreteManager.atribuir_campos_tabela(historico, dados_tabela)
             db.session.add(historico)
 
             db.session.commit()
@@ -234,66 +215,38 @@ def importar_tabela_frete():
                     modalidade=modalidade
                 ).first()
 
+                from app.utils.tabela_frete_manager import TabelaFreteManager
+                
+                # Prepara dados do CSV
+                dados_csv = TabelaFreteManager.preparar_dados_csv(row, limpar_valor)
+                dados_csv['modalidade'] = modalidade  # Usa modalidade processada
+                dados_csv['nome_tabela'] = nome_tabela  # Usa nome_tabela processado
+                
                 if tabela_frete:
-                    
-                    tabela_frete.frete_minimo_valor = round(limpar_valor(row.get('VALOR')), 2)
-                    tabela_frete.frete_minimo_peso = round(limpar_valor(row.get('PESO')), 2)
-                    tabela_frete.valor_kg = round(limpar_valor(row.get('FRETE PESO')), 6)
-                    tabela_frete.percentual_valor = round(limpar_valor(row.get('FRETE VALOR')) * 100, 4)
-                    tabela_frete.percentual_gris = round(limpar_valor(row.get('GRIS')) * 100, 4)
-                    tabela_frete.percentual_adv = round(limpar_valor(row.get('ADV')) * 100, 4)
-                    tabela_frete.percentual_rca = round(limpar_valor(row.get('RCA SEGURO FLUVIAL %')) * 100, 4)
-                    tabela_frete.valor_despacho = round(limpar_valor(row.get('DESPACHO / CTE / TAS')), 2)
-                    tabela_frete.valor_cte = round(limpar_valor(row.get('CTE')), 2)
-                    tabela_frete.valor_tas = round(limpar_valor(row.get('TAS')), 2)
-                    tabela_frete.pedagio_por_100kg = round(limpar_valor(row.get('PEDAGIO FRAÇÃO 100 KGS')), 2)
-                    tabela_frete.icms_incluso = True if str(row.get('INC.')).strip().upper() == 'S' else False
+                    # Atualiza tabela existente
+                    TabelaFreteManager.atribuir_campos_tabela(tabela_frete, dados_csv)
                     tabela_frete.criado_por = current_user.nome    
                 else:
+                    # Cria nova tabela
                     tabela_frete = TabelaFrete(
                         transportadora_id=transportadora.id,
                         uf_origem=str(row['ORIGEM']).strip(),
                         uf_destino=uf_destino,
-                        nome_tabela=nome_tabela,
                         tipo_carga=tipo_carga,
-                        modalidade=modalidade,
-                        frete_minimo_valor=round(limpar_valor(row.get('VALOR')), 2),
-                        frete_minimo_peso=round(limpar_valor(row.get('PESO')), 2),
-                        valor_kg=round(limpar_valor(row.get('FRETE PESO')), 6),
-                        percentual_valor=round(limpar_valor(row.get('FRETE VALOR')) * 100, 4),
-                        percentual_gris=round(limpar_valor(row.get('GRIS')) * 100, 4),
-                        percentual_adv=round(limpar_valor(row.get('ADV')) * 100, 4),
-                        percentual_rca=round(limpar_valor(row.get('RCA SEGURO FLUVIAL %')) * 100, 4),
-                        valor_despacho=round(limpar_valor(row.get('DESPACHO / CTE / TAS')), 2),
-                        valor_cte=round(limpar_valor(row.get('CTE')), 2),
-                        valor_tas=round(limpar_valor(row.get('TAS')), 2),
-                        pedagio_por_100kg=round(limpar_valor(row.get('PEDAGIO FRAÇÃO 100 KGS')), 2),
-                        icms_incluso=True if str(row.get('INC.')).strip().upper() == 'S' else False,
                         criado_por=current_user.nome
                     )
+                    TabelaFreteManager.atribuir_campos_tabela(tabela_frete, dados_csv)
                     db.session.add(tabela_frete)
 
+                # Cria histórico
                 historico = HistoricoTabelaFrete(
                     transportadora_id=transportadora.id,
                     uf_origem=str(row['ORIGEM']).strip(),
                     uf_destino=uf_destino,
-                    nome_tabela=nome_tabela,
                     tipo_carga=tipo_carga,
-                    modalidade=modalidade,
-                    frete_minimo_valor=round(limpar_valor(row.get('VALOR')), 2),
-                    frete_minimo_peso=round(limpar_valor(row.get('PESO')), 2),
-                    valor_kg=round(limpar_valor(row.get('FRETE PESO')), 6),
-                    percentual_valor=round(limpar_valor(row.get('FRETE VALOR')) * 100, 4),
-                    percentual_gris=round(limpar_valor(row.get('GRIS')) * 100, 4),
-                    percentual_adv=round(limpar_valor(row.get('ADV')) * 100, 4),
-                    percentual_rca=round(limpar_valor(row.get('RCA SEGURO FLUVIAL %')) * 100, 4),
-                    valor_despacho=round(limpar_valor(row.get('DESPACHO / CTE / TAS')), 2),
-                    valor_cte=round(limpar_valor(row.get('CTE')), 2),
-                    valor_tas=round(limpar_valor(row.get('TAS')), 2),
-                    pedagio_por_100kg=round(limpar_valor(row.get('PEDAGIO FRAÇÃO 100 KGS')), 2),
-                    icms_incluso=True if str(row.get('INC.')).strip().upper() == 'S' else False,
                     criado_por=current_user.nome
                 )
+                TabelaFreteManager.atribuir_campos_tabela(historico, dados_csv)
                 db.session.add(historico)
                 sucesso += 1
                 print(f"✅ Tabela criada/atualizada com sucesso (linha {index + 2})")
@@ -395,26 +348,26 @@ def historico_tabelas():
 
     # Mapeia 'nome_coluna' => model.coluna
     sortable_columns = {
-        'transportadora':     Transportadora.razao_social,
-        'uf_origem':          HistoricoTabelaFrete.uf_origem,
-        'uf_destino':         HistoricoTabelaFrete.uf_destino,
-        'nome_tabela':        HistoricoTabelaFrete.nome_tabela,
-        'tipo_carga':         HistoricoTabelaFrete.tipo_carga,
-        'modalidade':         HistoricoTabelaFrete.modalidade,
+        'transportadora': Transportadora.razao_social,
+        'uf_origem': HistoricoTabelaFrete.uf_origem,
+        'uf_destino': HistoricoTabelaFrete.uf_destino,
+        'nome_tabela': HistoricoTabelaFrete.nome_tabela,
+        'tipo_carga': HistoricoTabelaFrete.tipo_carga,
+        'modalidade': HistoricoTabelaFrete.modalidade,
         'frete_minimo_valor': HistoricoTabelaFrete.frete_minimo_valor,
-        'frete_minimo_peso':  HistoricoTabelaFrete.frete_minimo_peso,
-        'valor_kg':           HistoricoTabelaFrete.valor_kg,
-        'percentual_valor':   HistoricoTabelaFrete.percentual_valor,
-        'percentual_gris':    HistoricoTabelaFrete.percentual_gris,
-        'percentual_adv':     HistoricoTabelaFrete.percentual_adv,
-        'percentual_rca':     HistoricoTabelaFrete.percentual_rca,
-        'valor_despacho':     HistoricoTabelaFrete.valor_despacho,
-        'valor_cte':          HistoricoTabelaFrete.valor_cte,
-        'valor_tas':          HistoricoTabelaFrete.valor_tas,
-        'pedagio_por_100kg':  HistoricoTabelaFrete.pedagio_por_100kg,
-        'icms_incluso':       HistoricoTabelaFrete.icms_incluso,
-        'criado_por':         HistoricoTabelaFrete.criado_por,
-        'criado_em':          HistoricoTabelaFrete.criado_em
+        'frete_minimo_peso': HistoricoTabelaFrete.frete_minimo_peso,
+        'valor_kg': HistoricoTabelaFrete.valor_kg,
+        'percentual_valor': HistoricoTabelaFrete.percentual_valor,
+        'percentual_gris': HistoricoTabelaFrete.percentual_gris,
+        'percentual_adv': HistoricoTabelaFrete.percentual_adv,
+        'percentual_rca': HistoricoTabelaFrete.percentual_rca,
+        'valor_despacho': HistoricoTabelaFrete.valor_despacho,
+        'valor_cte': HistoricoTabelaFrete.valor_cte,
+        'valor_tas': HistoricoTabelaFrete.valor_tas,
+        'pedagio_por_100kg': HistoricoTabelaFrete.pedagio_por_100kg,
+        'icms_incluso': HistoricoTabelaFrete.icms_incluso,
+        'criado_por': HistoricoTabelaFrete.criado_por,
+        'criado_em': HistoricoTabelaFrete.criado_em
     }
 
     if sort in sortable_columns:
@@ -455,7 +408,6 @@ def historico_tabelas():
 @login_required
 def listar_todas_tabelas():
     try:
-        from app.utils.logging_config import log_performance, log_database_query
         import time
         
         start_time = time.time()
@@ -484,7 +436,6 @@ def listar_todas_tabelas():
     if cidade:
         # Filtra tabelas que atendem à cidade através dos vínculos
         from app.vinculos.models import CidadeAtendida
-        from app.localidades.models import Cidade
         
         # Subconsulta para encontrar tabelas que atendem a cidade especificada
         subquery_cidades = db.session.query(CidadeAtendida.nome_tabela, CidadeAtendida.transportadora_id).join(
@@ -591,26 +542,26 @@ def listar_todas_tabelas():
 
     # Mapeia colunas
     sortable_columns = {
-        'transportadora':     Transportadora.razao_social,
-        'uf_origem':          TabelaFrete.uf_origem,
-        'uf_destino':         TabelaFrete.uf_destino,
-        'nome_tabela':        TabelaFrete.nome_tabela,
-        'tipo_carga':         TabelaFrete.tipo_carga,
-        'modalidade':         TabelaFrete.modalidade,
+        'transportadora': Transportadora.razao_social,
+        'uf_origem': TabelaFrete.uf_origem,
+        'uf_destino': TabelaFrete.uf_destino,
+        'nome_tabela': TabelaFrete.nome_tabela,
+        'tipo_carga': TabelaFrete.tipo_carga,
+        'modalidade': TabelaFrete.modalidade,
         'frete_minimo_valor': TabelaFrete.frete_minimo_valor,
-        'frete_minimo_peso':  TabelaFrete.frete_minimo_peso,
-        'valor_kg':           TabelaFrete.valor_kg,
-        'percentual_valor':   TabelaFrete.percentual_valor,
-        'percentual_gris':    TabelaFrete.percentual_gris,
-        'percentual_adv':     TabelaFrete.percentual_adv,
-        'percentual_rca':     TabelaFrete.percentual_rca,
-        'valor_despacho':     TabelaFrete.valor_despacho,
-        'valor_cte':          TabelaFrete.valor_cte,
-        'valor_tas':          TabelaFrete.valor_tas,
-        'pedagio_por_100kg':  TabelaFrete.pedagio_por_100kg,
-        'icms_incluso':       TabelaFrete.icms_incluso,
-        'criado_por':         TabelaFrete.criado_por,
-        'criado_em':          TabelaFrete.criado_em
+        'frete_minimo_peso': TabelaFrete.frete_minimo_peso,
+        'valor_kg': TabelaFrete.valor_kg,
+        'percentual_valor': TabelaFrete.percentual_valor,
+        'percentual_gris': TabelaFrete.percentual_gris,
+        'percentual_adv': TabelaFrete.percentual_adv,
+        'percentual_rca': TabelaFrete.percentual_rca,
+        'valor_despacho': TabelaFrete.valor_despacho,
+        'valor_cte': TabelaFrete.valor_cte,
+        'valor_tas': TabelaFrete.valor_tas,
+        'pedagio_por_100kg': TabelaFrete.pedagio_por_100kg,
+        'icms_incluso': TabelaFrete.icms_incluso,
+        'criado_por': TabelaFrete.criado_por,
+        'criado_em': TabelaFrete.criado_em
     }
 
     if sort in sortable_columns:
@@ -704,29 +655,24 @@ def editar_tabela_frete(tabela_id):
                     logger.warning(f"⚠️ Valor numérico inválido: {value}, usando 0.0")
                     return 0.0
             
-            # Atualizar campos com sanitização
+            from app.utils.tabela_frete_manager import TabelaFreteManager
+            
+            # Atualizar campos básicos com sanitização
             tabela.transportadora_id = form.transportadora.data
             tabela.uf_origem = sanitize_string(form.uf_origem.data)
             tabela.uf_destino = sanitize_string(form.uf_destino.data)
-            tabela.nome_tabela = sanitize_string(form.nome_tabela.data)
             tabela.tipo_carga = sanitize_string(form.tipo_carga.data)
-            tabela.modalidade = sanitize_string(form.modalidade.data)
-
-            # Atualizar campos numéricos com validação
-            tabela.valor_kg = safe_float(form.valor_kg.data)
-            tabela.frete_minimo_peso = safe_float(form.frete_minimo_peso.data)
-            tabela.percentual_valor = safe_float(form.percentual_valor.data)
-            tabela.frete_minimo_valor = safe_float(form.frete_minimo_valor.data)
-            tabela.percentual_gris = safe_float(form.percentual_gris.data)
-            tabela.percentual_adv = safe_float(form.percentual_adv.data)
-            tabela.percentual_rca = safe_float(form.percentual_rca.data)
-            tabela.pedagio_por_100kg = safe_float(form.pedagio_por_100kg.data)
-            tabela.valor_despacho = safe_float(form.valor_despacho.data)
-            tabela.valor_cte = safe_float(form.valor_cte.data)
-            tabela.valor_tas = safe_float(form.valor_tas.data)
-
-            tabela.icms_incluso = form.icms_incluso.data
             tabela.criado_por = sanitize_string(current_user.nome)
+            
+            # Prepara e atribui campos de frete usando TabelaFreteManager
+            dados_tabela = TabelaFreteManager.preparar_dados_formulario(form, safe_float)
+            # Aplica sanitização no nome_tabela e modalidade
+            if 'nome_tabela' in dados_tabela:
+                dados_tabela['nome_tabela'] = sanitize_string(dados_tabela['nome_tabela'])
+            if 'modalidade' in dados_tabela:
+                dados_tabela['modalidade'] = sanitize_string(dados_tabela['modalidade'])
+            
+            TabelaFreteManager.atribuir_campos_tabela(tabela, dados_tabela)
 
             logger.info(f"💾 Salvando alterações da tabela {tabela_id}")
             db.session.commit()
@@ -858,7 +804,8 @@ def gerar_template_frete():
                         try:
                             if len(str(cell.value)) > max_length:
                                 max_length = len(str(cell.value))
-                        except:
+                        except Exception as e:
+                            print(f"Erro ao ajustar largura da coluna {column_letter}: {str(e)}")
                             pass
                     adjusted_width = min(max_length + 2, 50)
                     worksheet.column_dimensions[column_letter].width = adjusted_width
@@ -901,9 +848,3 @@ def gerar_template_frete():
                 flash(f'Erro no campo {field}: {error}', 'error')
     
     return render_template('tabelas/gerar_template_frete.html', form=form)
-
-
-
-
-
-

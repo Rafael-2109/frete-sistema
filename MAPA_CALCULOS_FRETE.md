@@ -307,8 +307,7 @@ Como discutido, implementar em Transportadora:
 
 - `CLAUDE.md` - Nomes corretos dos campos
 - `MAPA_FLUXOS_COTACAO.md` - Fluxo detalhado de cotação
-- `migrations/` - Histórico de mudanças no banco
-- `tests/` - Testes de cálculo (se existirem)
+
 
 ---
 

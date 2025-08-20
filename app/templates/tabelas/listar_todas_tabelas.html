@@ -328,6 +328,45 @@
             </a>
           </th>
 
+          <!-- GRIS Mínimo -->
+          {% set next_dir = 'desc' if current_sort == 'gris_minimo' and current_dir == 'asc' else 'asc' %}
+          <th>
+            <a href="?sort=gris_minimo&direction={{ next_dir }}">
+              GRIS Mín.
+              {% if current_sort == 'gris_minimo' %}
+                <span class="badge text-light">
+                  {{ '↑' if current_dir == 'asc' else '↓' }}
+                </span>
+              {% endif %}
+            </a>
+          </th>
+
+          <!-- ADV Mínimo -->
+          {% set next_dir = 'desc' if current_sort == 'adv_minimo' and current_dir == 'asc' else 'asc' %}
+          <th>
+            <a href="?sort=adv_minimo&direction={{ next_dir }}">
+              ADV Mín.
+              {% if current_sort == 'adv_minimo' %}
+                <span class="badge text-light">
+                  {{ '↑' if current_dir == 'asc' else '↓' }}
+                </span>
+              {% endif %}
+            </a>
+          </th>
+
+          <!-- ICMS Próprio -->
+          {% set next_dir = 'desc' if current_sort == 'icms_proprio' and current_dir == 'asc' else 'asc' %}
+          <th>
+            <a href="?sort=icms_proprio&direction={{ next_dir }}">
+              ICMS Próp.
+              {% if current_sort == 'icms_proprio' %}
+                <span class="badge text-light">
+                  {{ '↑' if current_dir == 'asc' else '↓' }}
+                </span>
+              {% endif %}
+            </a>
+          </th>
+
           <!-- Criado Por -->
           {% set next_dir = 'desc' if current_sort == 'criado_por' and current_dir == 'asc' else 'asc' %}
           <th>
@@ -387,6 +426,27 @@
           <td>R$ {{ "%.2f"|format(tabela.valor_tas or 0) }}</td>
           <td>R$ {{ "%.2f"|format(tabela.pedagio_por_100kg or 0) }}</td>
           <td>{{ 'Sim' if tabela.icms_incluso else 'Não' }}</td>
+          <td>
+            {% if tabela.gris_minimo %}
+              R$ {{ "%.2f"|format(tabela.gris_minimo) }}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>
+            {% if tabela.adv_minimo %}
+              R$ {{ "%.2f"|format(tabela.adv_minimo) }}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>
+            {% if tabela.icms_proprio %}
+              {{ "%.2f"|format(tabela.icms_proprio) }}%
+            {% else %}
+              -
+            {% endif %}
+          </td>
           <td>{{ tabela.criado_por }}</td>
           <td>{{ tabela.criado_em | formatar_data_hora_brasil }}</td>
         </tr>

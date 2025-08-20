@@ -117,42 +117,42 @@
         <div class="col-12">
             <h4><i class="fas fa-bolt"></i> Ações Rápidas</h4>
         </div>
-        
+
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
             <a href="{{ url_for('producao.listar_programacao') }}" class="btn btn-success btn-lg btn-block">
                 <i class="fas fa-list"></i><br>
                 Programação<br>de Produção
             </a>
         </div>
-        
+
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
             <a href="{{ url_for('producao.listar_palletizacao') }}" class="btn btn-warning btn-lg btn-block text-dark">
                 <i class="fas fa-weight-hanging"></i><br>
                 Cadastro<br>Palletização
             </a>
         </div>
-        
+
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
             <a href="{{ url_for('producao.importar_programacao') }}" class="btn btn-primary btn-lg btn-block">
                 <i class="fas fa-file-excel"></i><br>
                 Importar<br>Programação
             </a>
         </div>
-        
+
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
             <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-info btn-lg btn-block">
                 <i class="fas fa-file-excel"></i><br>
                 Importar<br>Palletização
             </a>
         </div>
-        
+
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
             <a href="#" onclick="exportarRelatoriosProducao()" class="btn btn-secondary btn-lg btn-block">
                 <i class="fas fa-chart-bar"></i><br>
                 Relatórios<br>Produção
             </a>
         </div>
-        
+
         <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
             <a href="{{ url_for('carteira.index') }}" class="btn btn-outline-dark btn-lg btn-block">
                 <i class="fas fa-arrow-left"></i><br>
@@ -172,58 +172,58 @@
                 </div>
                 <div class="card-body">
                     {% if programacao_recente %}
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Data Programação</th>
-                                        <th>Código Produto</th>
-                                        <th>Nome Produto</th>
-                                        <th>Qtd Programada</th>
-                                        <th>Linha Produção</th>
-                                        <th>Cliente/Marca</th>
-                                        <th>Observações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for item in programacao_recente %}
-                                    <tr>
-                                        <td>{{ item.data_programacao | formatar_data_brasil }}</td>
-                                        <td>
-                                            <strong>{{ item.cod_produto }}</strong>
-                                        </td>
-                                        <td>{{ item.nome_produto[:40] }}...</td>
-                                        <td>
-                                            <span class="badge badge-primary">{{ item.qtd_programada | numero_br }}</span>
-                                        </td>
-                                        <td>
-                                            {% if item.linha_producao %}
-                                                <span class="badge badge-info">{{ item.linha_producao }}</span>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ item.cliente_produto or '-' }}</td>
-                                        <td>
-                                            {% if item.observacao_pcp %}
-                                                <small>{{ item.observacao_pcp[:30] }}...</small>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Data Programação</th>
+                                    <th>Código Produto</th>
+                                    <th>Nome Produto</th>
+                                    <th>Qtd Programada</th>
+                                    <th>Linha Produção</th>
+                                    <th>Cliente/Marca</th>
+                                    <th>Observações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in programacao_recente %}
+                                <tr>
+                                    <td>{{ item.data_programacao | formatar_data_brasil }}</td>
+                                    <td>
+                                        <strong>{{ item.cod_produto }}</strong>
+                                    </td>
+                                    <td>{{ item.nome_produto[:40] }}...</td>
+                                    <td>
+                                        <span class="badge bg-primary">{{ item.qtd_programada | numero_br }}</span>
+                                    </td>
+                                    <td>
+                                        {% if item.linha_producao %}
+                                        <span class="badge bg-info">{{ item.linha_producao }}</span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.cliente_produto or '-' }}</td>
+                                    <td>
+                                        {% if item.observacao_pcp %}
+                                        <small>{{ item.observacao_pcp[:30] }}...</small>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                     {% else %}
-                        <div class="text-center py-4">
-                            <i class="fas fa-calendar-times fa-3x text-muted"></i>
-                            <p class="text-muted mt-2">Nenhuma programação encontrada.</p>
-                            <a href="{{ url_for('producao.importar_programacao') }}" class="btn btn-primary">
-                                <i class="fas fa-file-excel"></i> Importar Programação
-                            </a>
-                        </div>
+                    <div class="text-center py-4">
+                        <i class="fas fa-calendar-times fa-3x text-muted"></i>
+                        <p class="text-muted mt-2">Nenhuma programação encontrada.</p>
+                        <a href="{{ url_for('producao.importar_programacao') }}" class="btn btn-primary">
+                            <i class="fas fa-file-excel"></i> Importar Programação
+                        </a>
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -241,68 +241,68 @@
                 </div>
                 <div class="card-body">
                     {% if palletizacao_recente %}
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Código Produto</th>
-                                        <th>Nome Produto</th>
-                                        <th>Palletização</th>
-                                        <th>Peso Bruto (kg)</th>
-                                        <th>Dimensões (cm)</th>
-                                        <th>Volume (m³)</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for item in palletizacao_recente %}
-                                    <tr>
-                                        <td>
-                                            <strong>{{ item.cod_produto }}</strong>
-                                        </td>
-                                        <td>{{ item.nome_produto[:40] }}...</td>
-                                        <td>
-                                            <span class="badge badge-warning">{{ item.palletizacao | numero_br }}</span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-info">{{ item.peso_bruto | numero_br }}</span>
-                                        </td>
-                                        <td>
-                                            {% if item.altura_cm and item.largura_cm and item.comprimento_cm %}
-                                                <small>
-                                                    {{ item.altura_cm }}×{{ item.largura_cm }}×{{ item.comprimento_cm }}
-                                                </small>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if item.volume_m3 %}
-                                                <span class="badge badge-secondary">{{ "%.3f"|format(item.volume_m3) }}</span>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if item.ativo %}
-                                                <span class="badge badge-success">✅ Ativo</span>
-                                            {% else %}
-                                                <span class="badge badge-secondary">❌ Inativo</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Código Produto</th>
+                                    <th>Nome Produto</th>
+                                    <th>Palletização</th>
+                                    <th>Peso Bruto (kg)</th>
+                                    <th>Dimensões (cm)</th>
+                                    <th>Volume (m³)</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in palletizacao_recente %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ item.cod_produto }}</strong>
+                                    </td>
+                                    <td>{{ item.nome_produto[:40] }}...</td>
+                                    <td>
+                                        <span class="badge bg-warning">{{ item.palletizacao | numero_br }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ item.peso_bruto | numero_br }}</span>
+                                    </td>
+                                    <td>
+                                        {% if item.altura_cm and item.largura_cm and item.comprimento_cm %}
+                                        <small>
+                                            {{ item.altura_cm }}×{{ item.largura_cm }}×{{ item.comprimento_cm }}
+                                        </small>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.volume_m3 %}
+                                        <span class="badge bg-secondary">{{ "%.3f"|format(item.volume_m3) }}</span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.ativo %}
+                                        <span class="badge bg-success">✅ Ativo</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">❌ Inativo</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                     {% else %}
-                        <div class="text-center py-4">
-                            <i class="fas fa-weight-hanging fa-3x text-muted"></i>
-                            <p class="text-muted mt-2">Nenhum produto palletizado encontrado.</p>
-                            <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-warning text-dark">
-                                <i class="fas fa-file-excel"></i> Importar Palletização
-                            </a>
-                        </div>
+                    <div class="text-center py-4">
+                        <i class="fas fa-weight-hanging fa-3x text-muted"></i>
+                        <p class="text-muted mt-2">Nenhum produto palletizado encontrado.</p>
+                        <a href="{{ url_for('producao.importar_palletizacao') }}" class="btn btn-warning text-dark">
+                            <i class="fas fa-file-excel"></i> Importar Palletização
+                        </a>
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -312,13 +312,13 @@
 
 <!-- Script para exportação de relatórios -->
 <script>
-function exportarRelatoriosProducao() {
-    // Mostrar loading ou confirmação
-    if (confirm('Deseja exportar os relatórios de Estoque e Movimentações Previstas?')) {
-        // Fazer download do relatório
-        window.location.href = '/producao/relatorios/exportar';
+    function exportarRelatoriosProducao() {
+        // Mostrar loading ou confirmação
+        if (confirm('Deseja exportar os relatórios de Estoque e Movimentações Previstas?')) {
+            // Fazer download do relatório
+            window.location.href = '/producao/relatorios/exportar';
+        }
     }
-}
 </script>
 
-{% endblock %} 
+{% endblock %}

@@ -7,7 +7,6 @@ import tempfile
 from sqlalchemy import func
 import logging
 
-
 from collections import defaultdict
 
 import re

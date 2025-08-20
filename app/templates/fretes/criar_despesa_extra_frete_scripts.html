@@ -1,0 +1,44 @@
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Preview de arquivos selecionados
+    const emailInput = document.getElementById('emails_anexados');
+    const emailsPreview = document.getElementById('emails-preview');
+    const emailsList = document.getElementById('emails-list');
+    const customFileLabel = document.querySelector('.custom-file-label');
+    
+    if (emailInput) {
+        emailInput.addEventListener('change', function(e) {
+            const files = e.target.files;
+            
+            if (files.length > 0) {
+                emailsPreview.style.display = 'block';
+                emailsList.innerHTML = '';
+                
+                // Atualiza label
+                if (files.length === 1) {
+                    customFileLabel.textContent = files[0].name;
+                } else {
+                    customFileLabel.textContent = `${files.length} arquivos selecionados`;
+                }
+                
+                // Lista arquivos
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <i class="fas fa-envelope"></i> 
+                        <strong>${file.name}</strong> 
+                        <small class="text-muted">(${(file.size / 1024).toFixed(2)} KB)</small>
+                    `;
+                    emailsList.appendChild(li);
+                }
+            } else {
+                emailsPreview.style.display = 'none';
+                customFileLabel.textContent = 'Selecionar arquivos .msg...';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

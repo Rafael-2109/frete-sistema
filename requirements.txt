@@ -102,3 +102,8 @@ httpx==0.28.1
 aioredis==2.0.1  # Para async Redis
 python-json-logger==2.0.7  # Para JSON logging
 xlsxwriter==3.2.5
+
+# ==========================================
+# EMAIL PROCESSING
+# ==========================================
+extract-msg==0.45.0  # Para ler arquivos .msg do Outlook

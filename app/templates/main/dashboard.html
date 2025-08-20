@@ -98,11 +98,12 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow border-left-success">
-                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-gradient-success">
+                <div
+                    class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-gradient-success">
                     <h6 class="m-0 font-weight-bold text-white">🏭 Carteira & Produção</h6>
                     <div>
-                        <span class="badge badge-light">✅ 6 MÓDULOS</span>
-                        <span class="badge badge-warning ms-1">NOVO</span>
+                        <span class="badge bg-light">✅ 6 MÓDULOS</span>
+                        <span class="badge bg-warning ms-1">NOVO</span>
                     </div>
                 </div>
                 <div class="card-body">
@@ -110,7 +111,8 @@
                         <div class="col-md-8">
                             <h5 class="text-dark mb-2">Sistema Completo de Gestão</h5>
                             <p class="text-muted mb-3">
-                                Acesse os <strong>6 novos módulos</strong> para gestão completa da carteira de pedidos, produção, estoque, faturamento e rotas de entrega.
+                                Acesse os <strong>6 novos módulos</strong> para gestão completa da carteira de pedidos,
+                                produção, estoque, faturamento e rotas de entrega.
                             </p>
                             <div class="row">
                                 <div class="col-md-4">
@@ -138,26 +140,28 @@
                                 <i class="fas fa-industry fa-3x text-success mb-2"></i>
                                 <p class="text-muted small">Sistema Integrado</p>
                             </div>
-                                                         <div class="btn-group-vertical w-100" role="group">
-                                 <a href="{{ url_for('carteira.index') }}" class="btn btn-success btn-sm">
-                                     <i class="fas fa-clipboard-list"></i> 📋 Carteira de Pedidos
-                                 </a>
-                                 <a href="{{ url_for('producao.index') }}" class="btn btn-success btn-sm">
-                                     <i class="fas fa-tachometer-alt"></i> Dashboard Produção
-                                 </a>
-                                 <a href="{{ url_for('estoque.index') }}" class="btn btn-info btn-sm">
-                                     <i class="fas fa-warehouse"></i> Dashboard Estoque
-                                 </a>
-                                 <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="btn btn-primary btn-sm">
-                                     <i class="fas fa-receipt"></i> Faturamento por Produto
-                                 </a>
-                                <button type="button" class="btn btn-outline-success btn-sm" onclick="mostrarModulosCarteira()">
+                            <div class="btn-group-vertical w-100" role="group">
+                                <a href="{{ url_for('carteira.index') }}" class="btn btn-success btn-sm">
+                                    <i class="fas fa-clipboard-list"></i> 📋 Carteira de Pedidos
+                                </a>
+                                <a href="{{ url_for('producao.index') }}" class="btn btn-success btn-sm">
+                                    <i class="fas fa-tachometer-alt"></i> Dashboard Produção
+                                </a>
+                                <a href="{{ url_for('estoque.index') }}" class="btn btn-info btn-sm">
+                                    <i class="fas fa-warehouse"></i> Dashboard Estoque
+                                </a>
+                                <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}"
+                                    class="btn btn-primary btn-sm">
+                                    <i class="fas fa-receipt"></i> Faturamento por Produto
+                                </a>
+                                <button type="button" class="btn btn-outline-success btn-sm"
+                                    onclick="mostrarModulosCarteira()">
                                     <i class="fas fa-list"></i> Ver Todos os Módulos
                                 </button>
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Lista completa oculta inicialmente -->
                     <div id="modulos-carteira" class="mt-4" style="display: none;">
                         <hr>
@@ -170,38 +174,43 @@
                                     </div>
                                     <div class="card-body p-2">
                                         <div class="list-group list-group-flush">
-                                            <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}" class="list-group-item list-group-item-action py-2">
-                                            <i class="fas fa-layer-group text-warning"></i> Carteira Agrupada
-                                            <span class="badge badge-success ml-2">NOVO</span>
-                                        </a>
+                                            <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}"
+                                                class="list-group-item list-group-item-action py-2">
+                                                <i class="fas fa-layer-group text-warning"></i> Carteira Agrupada
+                                                <span class="badge bg-success ml-2">NOVO</span>
+                                            </a>
                                             <!-- Links removidos - funcionalidades desativadas após limpeza carteira -->
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="card border-success mb-3">
                                     <div class="card-header bg-success text-white">
                                         <h6 class="mb-0">🏭 Produção</h6>
                                     </div>
                                     <div class="card-body p-2">
                                         <div class="list-group list-group-flush">
-                                            <a href="{{ url_for('producao.listar_programacao') }}" class="list-group-item list-group-item-action py-2">
-                                                <i class="fas fa-calendar-check text-primary"></i> Programação de Produção
+                                            <a href="{{ url_for('producao.listar_programacao') }}"
+                                                class="list-group-item list-group-item-action py-2">
+                                                <i class="fas fa-calendar-check text-primary"></i> Programação de
+                                                Produção
                                             </a>
-                                            <a href="{{ url_for('producao.listar_palletizacao') }}" class="list-group-item list-group-item-action py-2">
+                                            <a href="{{ url_for('producao.listar_palletizacao') }}"
+                                                class="list-group-item list-group-item-action py-2">
                                                 <i class="fas fa-cubes text-warning"></i> Cadastro de Palletização
                                             </a>
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="card border-info mb-3">
                                     <div class="card-header bg-info text-white">
                                         <h6 class="mb-0">📦 Estoque</h6>
                                     </div>
                                     <div class="card-body p-2">
                                         <div class="list-group list-group-flush">
-                                            <a href="{{ url_for('estoque.listar_movimentacoes') }}" class="list-group-item list-group-item-action py-2">
+                                            <a href="{{ url_for('estoque.listar_movimentacoes') }}"
+                                                class="list-group-item list-group-item-action py-2">
                                                 <i class="fas fa-exchange-alt text-info"></i> Movimentações de Estoque
                                             </a>
                                         </div>
@@ -215,23 +224,26 @@
                                     </div>
                                     <div class="card-body p-2">
                                         <div class="list-group list-group-flush">
-                                            <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="list-group-item list-group-item-action py-2">
+                                            <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}"
+                                                class="list-group-item list-group-item-action py-2">
                                                 <i class="fas fa-receipt text-success"></i> Faturamento por Produto
                                             </a>
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="card border-warning mb-3">
                                     <div class="card-header bg-warning text-dark">
                                         <h6 class="mb-0">🗺️ Rotas</h6>
                                     </div>
                                     <div class="card-body p-2">
                                         <div class="list-group list-group-flush">
-                                            <a href="{{ url_for('localidades.listar_rotas') }}" class="list-group-item list-group-item-action py-2">
+                                            <a href="{{ url_for('localidades.listar_rotas') }}"
+                                                class="list-group-item list-group-item-action py-2">
                                                 <i class="fas fa-route text-warning"></i> Cadastro de Rotas
                                             </a>
-                                            <a href="{{ url_for('localidades.listar_sub_rotas') }}" class="list-group-item list-group-item-action py-2">
+                                            <a href="{{ url_for('localidades.listar_sub_rotas') }}"
+                                                class="list-group-item list-group-item-action py-2">
                                                 <i class="fas fa-map-marker-alt text-danger"></i> Cadastro de Sub-rotas
                                             </a>
                                         </div>
@@ -262,11 +274,12 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow border-left-dark">
-                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-gradient-dark">
+                <div
+                    class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-gradient-dark">
                     <h6 class="m-0 font-weight-bold text-black">🤖 Claude AI - MCP v4.0</h6>
                     <div>
-                        <span class="badge badge-success text-black">✅ ATIVO</span>
-                        <span class="badge badge-info text-black ms-1">11 Ferramentas</span>
+                        <span class="badge bg-success text-black">✅ ATIVO</span>
+                        <span class="badge bg-info text-black ms-1">11 Ferramentas</span>
                     </div>
                 </div>
                 <div class="card-body">
@@ -274,7 +287,9 @@
                         <div class="col-md-8">
                             <h5 class="text-dark mb-2">Sistema Inteligente Avançado</h5>
                             <p class="text-muted mb-3">
-                                Consulte dados em <strong>linguagem natural</strong>, detecte anomalias, analise tendências e otimize rotas usando inteligência artificial conectada aos dados reais do sistema.
+                                Consulte dados em <strong>linguagem natural</strong>, detecte anomalias, analise
+                                tendências e otimize rotas usando inteligência artificial conectada aos dados reais do
+                                sistema.
                             </p>
                             <div class="row">
                             </div>
@@ -300,7 +315,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Exemplos ocultos inicialmente -->
                     <div id="exemplos-mcp" class="mt-4" style="display: none;">
                         <hr>
@@ -379,7 +394,7 @@
                     <p class="text-muted mb-3">
                         Acesse o sistema inteligente com processamento de linguagem natural avançado.
                     </p>
-                    
+
                     <div class="mb-3">
                         <strong>💬 Exemplos de consultas:</strong>
                         <ul class="mt-2 text-sm">
@@ -389,7 +404,7 @@
                             <li>"Embarques ativos"</li>
                         </ul>
                     </div>
-                    
+
                     <div class="btn-group-vertical w-100">
                         <a href="/claude-ai/v4/dashboard" class="btn btn-primary btn-sm">
                             <i class="fas fa-tachometer-alt"></i> Dashboard v4.0
@@ -408,102 +423,102 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // 🚀 Carrega dados iniciais
-    carregarEstatisticas();
-    carregarUltimosEmbarques();
-    
-    // Event listener para consulta de cliente
-    document.getElementById('form-consulta-cliente').addEventListener('submit', function(e) {
-        e.preventDefault();
-        consultarCliente();
+    document.addEventListener('DOMContentLoaded', function () {
+        // 🚀 Carrega dados iniciais
+        carregarEstatisticas();
+        carregarUltimosEmbarques();
+
+        // Event listener para consulta de cliente
+        document.getElementById('form-consulta-cliente').addEventListener('submit', function (e) {
+            e.preventDefault();
+            consultarCliente();
+        });
     });
-});
 
-// 📊 Função para carregar estatísticas via API interna
-async function carregarEstatisticas() {
-    try {
-        const response = await fetch('/api/estatisticas-internas');
-        const data = await response.json();
-        
-        if (data.success) {
-            const stats = data.data;
-            
-            // Atualiza os cards
-            // Embarques pendentes (sem data de embarque)
-            document.getElementById('total-embarques').textContent = stats.embarques.pendentes || '0';
-            
-            // Fretes pendentes
-            document.getElementById('fretes-pendentes').textContent = stats.fretes.pendentes_aprovacao || '0';
-            
-            // Pedidos abertos - será calculado na API
-            document.getElementById('pedidos-abertos').textContent = stats.pedidos?.abertos || '0';
-            
-            // Entregas pendentes (já vem calculado da API)
-            document.getElementById('entregas-pendentes').textContent = stats.entregas.pendentes || '0';
+    // 📊 Função para carregar estatísticas via API interna
+    async function carregarEstatisticas() {
+        try {
+            const response = await fetch('/api/estatisticas-internas');
+            const data = await response.json();
+
+            if (data.success) {
+                const stats = data.data;
+
+                // Atualiza os cards
+                // Embarques pendentes (sem data de embarque)
+                document.getElementById('total-embarques').textContent = stats.embarques.pendentes || '0';
+
+                // Fretes pendentes
+                document.getElementById('fretes-pendentes').textContent = stats.fretes.pendentes_aprovacao || '0';
+
+                // Pedidos abertos - será calculado na API
+                document.getElementById('pedidos-abertos').textContent = stats.pedidos?.abertos || '0';
+
+                // Entregas pendentes (já vem calculado da API)
+                document.getElementById('entregas-pendentes').textContent = stats.entregas.pendentes || '0';
+            }
+        } catch (error) {
+            console.error('Erro ao carregar estatísticas:', error);
+            // Fallback visual
+            document.getElementById('total-embarques').innerHTML = '<span class="text-danger">Erro</span>';
+            document.getElementById('fretes-pendentes').innerHTML = '<span class="text-danger">Erro</span>';
+            document.getElementById('pedidos-abertos').innerHTML = '<span class="text-danger">Erro</span>';
+            document.getElementById('entregas-pendentes').innerHTML = '<span class="text-danger">Erro</span>';
         }
-    } catch (error) {
-        console.error('Erro ao carregar estatísticas:', error);
-        // Fallback visual
-        document.getElementById('total-embarques').innerHTML = '<span class="text-danger">Erro</span>';
-        document.getElementById('fretes-pendentes').innerHTML = '<span class="text-danger">Erro</span>';
-        document.getElementById('pedidos-abertos').innerHTML = '<span class="text-danger">Erro</span>';
-        document.getElementById('entregas-pendentes').innerHTML = '<span class="text-danger">Erro</span>';
     }
-}
 
-// 📋 Função para carregar últimos embarques via API interna
-async function carregarUltimosEmbarques() {
-    try {
-        const response = await fetch('/api/embarques-internos?limite=8');
-        const data = await response.json();
-        
-        if (data.success) {
-            const tbody = document.getElementById('tbody-embarques');
-            tbody.innerHTML = '';
-            
-            data.data.forEach(embarque => {
-                const row = `
+    // 📋 Função para carregar últimos embarques via API interna
+    async function carregarUltimosEmbarques() {
+        try {
+            const response = await fetch('/api/embarques-internos?limite=8');
+            const data = await response.json();
+
+            if (data.success) {
+                const tbody = document.getElementById('tbody-embarques');
+                tbody.innerHTML = '';
+
+                data.data.forEach(embarque => {
+                    const row = `
                     <tr>
                         <td><strong>#${embarque.numero}</strong></td>
                         <td>
-                            <span class="badge badge-${embarque.status === 'ativo' ? 'success' : 'secondary'}">
+                            <span class="badge bg-${embarque.status === 'ativo' ? 'success' : 'secondary'}">
                                 ${embarque.status}
                             </span>
                         </td>
                         <td>${embarque.transportadora || 'N/A'}</td>
                         <td>${embarque.data_embarque ? new Date(embarque.data_embarque).toLocaleDateString('pt-BR') : 'N/A'}</td>
                         <td>
-                            <span class="badge badge-info">${embarque.total_fretes} fretes</span>
+                            <span class="badge bg-info">${embarque.total_fretes} fretes</span>
                         </td>
                     </tr>
                 `;
-                tbody.innerHTML += row;
-            });
-            
-            document.getElementById('loading-embarques').style.display = 'none';
-            document.getElementById('tabela-embarques').style.display = 'block';
-        }
-    } catch (error) {
-        console.error('Erro ao carregar embarques:', error);
-        document.getElementById('loading-embarques').innerHTML = '<span class="text-danger">Erro ao carregar dados</span>';
-    }
-}
+                    tbody.innerHTML += row;
+                });
 
-// 🔍 Função para consultar cliente via API (TEMPORARIAMENTE DESABILITADA)
-async function consultarCliente() {
-    const nomeCliente = document.getElementById('cliente-nome').value.trim();
-    
-    if (!nomeCliente) {
-        alert('Digite o nome do cliente');
-        return;
+                document.getElementById('loading-embarques').style.display = 'none';
+                document.getElementById('tabela-embarques').style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Erro ao carregar embarques:', error);
+            document.getElementById('loading-embarques').innerHTML = '<span class="text-danger">Erro ao carregar dados</span>';
+        }
     }
-    
-    // Funcionalidade temporariamente desabilitada
-    const resultadoDiv = document.getElementById('resultado-consulta');
-    const dadosDiv = document.getElementById('dados-cliente');
-    
-    dadosDiv.innerHTML = `
+
+    // 🔍 Função para consultar cliente via API (TEMPORARIAMENTE DESABILITADA)
+    async function consultarCliente() {
+        const nomeCliente = document.getElementById('cliente-nome').value.trim();
+
+        if (!nomeCliente) {
+            alert('Digite o nome do cliente');
+            return;
+        }
+
+        // Funcionalidade temporariamente desabilitada
+        const resultadoDiv = document.getElementById('resultado-consulta');
+        const dadosDiv = document.getElementById('dados-cliente');
+
+        dadosDiv.innerHTML = `
         <div class="alert alert-warning">
             <i class="fas fa-wrench"></i> 
             <strong>Funcionalidade em manutenção</strong><br>
@@ -511,59 +526,59 @@ async function consultarCliente() {
             Use o menu "Pedidos > Lista de Pedidos" para consultar informações de clientes.
         </div>
     `;
-    resultadoDiv.style.display = 'block';
-}
-
-// 📥 Função para download de Excel via API (TEMPORARIAMENTE DESABILITADA)
-function downloadExcelCliente() {
-    alert('Funcionalidade temporariamente indisponível. Use o menu "Relatórios" para exportar dados.');
-}
-
-// 🔄 Função para recarregar todos os dados
-function recarregarDados() {
-    carregarEstatisticas();
-    carregarUltimosEmbarques();
-}
-
-// 🔄 Auto-refresh a cada 5 minutos
-setInterval(function() {
-    carregarEstatisticas();
-    carregarUltimosEmbarques();
-}, 5 * 60 * 1000);
-
-// 🤖 Função para mostrar/ocultar exemplos MCP
-function mostrarExemplos() {
-    const exemploDiv = document.getElementById('exemplos-mcp');
-    const botao = event.target;
-    
-    if (exemploDiv.style.display === 'none') {
-        exemploDiv.style.display = 'block';
-        botao.innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar Exemplos';
-        
-        // Scroll suave para os exemplos
-        exemploDiv.scrollIntoView({ behavior: 'smooth' });
-    } else {
-        exemploDiv.style.display = 'none';
-        botao.innerHTML = '<i class="fas fa-lightbulb"></i> Ver Exemplos';
+        resultadoDiv.style.display = 'block';
     }
-}
 
-// 🏭 Função para mostrar/ocultar módulos da carteira
-function mostrarModulosCarteira() {
-    const modulosDiv = document.getElementById('modulos-carteira');
-    const botao = event.target;
-    
-    if (modulosDiv.style.display === 'none') {
-        modulosDiv.style.display = 'block';
-        botao.innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar Módulos';
-        
-        // Scroll suave para os módulos
-        modulosDiv.scrollIntoView({ behavior: 'smooth' });
-    } else {
-        modulosDiv.style.display = 'none';
-        botao.innerHTML = '<i class="fas fa-list"></i> Ver Todos os Módulos';
+    // 📥 Função para download de Excel via API (TEMPORARIAMENTE DESABILITADA)
+    function downloadExcelCliente() {
+        alert('Funcionalidade temporariamente indisponível. Use o menu "Relatórios" para exportar dados.');
     }
-}
+
+    // 🔄 Função para recarregar todos os dados
+    function recarregarDados() {
+        carregarEstatisticas();
+        carregarUltimosEmbarques();
+    }
+
+    // 🔄 Auto-refresh a cada 5 minutos
+    setInterval(function () {
+        carregarEstatisticas();
+        carregarUltimosEmbarques();
+    }, 5 * 60 * 1000);
+
+    // 🤖 Função para mostrar/ocultar exemplos MCP
+    function mostrarExemplos() {
+        const exemploDiv = document.getElementById('exemplos-mcp');
+        const botao = event.target;
+
+        if (exemploDiv.style.display === 'none') {
+            exemploDiv.style.display = 'block';
+            botao.innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar Exemplos';
+
+            // Scroll suave para os exemplos
+            exemploDiv.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            exemploDiv.style.display = 'none';
+            botao.innerHTML = '<i class="fas fa-lightbulb"></i> Ver Exemplos';
+        }
+    }
+
+    // 🏭 Função para mostrar/ocultar módulos da carteira
+    function mostrarModulosCarteira() {
+        const modulosDiv = document.getElementById('modulos-carteira');
+        const botao = event.target;
+
+        if (modulosDiv.style.display === 'none') {
+            modulosDiv.style.display = 'block';
+            botao.innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar Módulos';
+
+            // Scroll suave para os módulos
+            modulosDiv.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            modulosDiv.style.display = 'none';
+            botao.innerHTML = '<i class="fas fa-list"></i> Ver Todos os Módulos';
+        }
+    }
 </script>
 
 {% endblock %}

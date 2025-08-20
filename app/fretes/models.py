@@ -44,6 +44,11 @@ class Frete(db.Model):
     tabela_icms_incluso = db.Column(db.Boolean, default=False)
     tabela_icms_destino = db.Column(db.Float)
     
+    # ===== NOVOS CAMPOS DE VALORES MÍNIMOS E ICMS =====
+    tabela_gris_minimo = db.Column(db.Float, default=0)    # Valor mínimo de GRIS
+    tabela_adv_minimo = db.Column(db.Float, default=0)     # Valor mínimo de ADV
+    tabela_icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela
+    
     # OS 4 TIPOS DE VALORES DO FRETE
     valor_cotado = db.Column(db.Float, nullable=False)  # Calculado automaticamente pela tabela
     valor_cte = db.Column(db.Float)  # Valor cobrado pela transportadora
