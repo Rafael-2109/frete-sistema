@@ -8,7 +8,13 @@ echo "=== INICIANDO DEPLOY NO RENDER ==="
 echo "Instalando dependências..."
 pip install -r requirements.txt
 
-# 2. Instalar modelo spaCy português
+# 2. Instalar Playwright e navegadores (para Portal Atacadão)
+echo "Instalando Playwright..."
+pip install playwright
+playwright install chromium
+playwright install-deps chromium || echo "Dependências instaladas pelo Render"
+
+# 3. Instalar modelo spaCy português
 echo "Instalando modelo spaCy português..."
 python -m spacy download pt_core_news_sm || echo "spaCy pode não estar instalado, continuando..."
 

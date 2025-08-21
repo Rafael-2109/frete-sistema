@@ -333,6 +333,30 @@ class WorkspaceMontagem {
                                 </div>
                             </div>
                             
+                            <!-- Botões do Portal -->
+                            <div class="portal-actions border-top pt-2 mt-2">
+                                <div class="d-flex gap-1 justify-content-center flex-wrap">
+                                    <button class="btn btn-success btn-sm" 
+                                            data-lote="${separacao.separacao_lote_id}"
+                                            data-agendamento="${separacao.agendamento || ''}"
+                                            onclick="workspace.agendarNoPortal(this.dataset.lote, this.dataset.agendamento)"
+                                            title="Agendar no portal do cliente">
+                                        <i class="fas fa-calendar-plus"></i> Portal
+                                    </button>
+                                    <button class="btn btn-info btn-sm"
+                                            data-lote="${separacao.separacao_lote_id}"
+                                            onclick="workspace.verificarPortal(this.dataset.lote)"
+                                            title="Verificar status no portal">
+                                        <i class="fas fa-search"></i> Status
+                                    </button>
+                                    ${separacao.protocolo ? `
+                                        <span class="badge bg-success align-self-center">
+                                            <i class="fas fa-check-circle"></i> ${separacao.protocolo}
+                                        </span>
+                                    ` : ''}
+                                </div>
+                            </div>
+                            
                             ${separacao.status === 'COTADO' && separacao.embarque ? `
                                 <div class="alert alert-info p-2 mt-2 mb-0">
                                     <small>
@@ -1441,6 +1465,61 @@ class WorkspaceMontagem {
             console.error('Erro ao reverter confirmação:', error);
             this.mostrarToast('Erro ao reverter confirmação', 'error');
         }
+    }
+
+    // Funções do Portal
+    async agendarNoPortal(loteId, dataAgendamento) {
+        console.log(`📅 Agendando lote ${loteId} no portal`);
+        
+        // Redirecionar para o modalSeparacoes se existir
+        if (window.modalSeparacoes && typeof window.modalSeparacoes.agendarNoPortal === 'function') {
+            return window.modalSeparacoes.agendarNoPortal(loteId, dataAgendamento);
+        }
+        
+        // Caso contrário, mostrar mensagem
+        this.mostrarToast('Abrindo portal de agendamento...', 'info');
+        
+        // Fazer requisição direta
+        try {
+            const response = await fetch('/portal/api/solicitar-agendamento', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                },
+                body: JSON.stringify({
+                    lote_id: loteId,
+                    tipo: 'separacao',
+                    portal: 'atacadao',  // TODO: detectar dinamicamente
+                    data_agendamento: dataAgendamento || new Date().toISOString().split('T')[0]
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.mostrarToast(`Agendamento realizado! Protocolo: ${data.protocolo || 'Aguardando'}`, 'success');
+                // Recarregar para mostrar o protocolo
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                this.mostrarToast(`Erro: ${data.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('Erro ao agendar:', error);
+            this.mostrarToast('Erro ao comunicar com o portal', 'error');
+        }
+    }
+    
+    async verificarPortal(loteId) {
+        console.log(`🔍 Verificando lote ${loteId} no portal`);
+        
+        // Redirecionar para o modalSeparacoes se existir
+        if (window.modalSeparacoes && typeof window.modalSeparacoes.verificarPortal === 'function') {
+            return window.modalSeparacoes.verificarPortal(loteId);
+        }
+        
+        // Caso contrário, abrir em nova aba
+        window.open(`/portal/api/comparar-portal/${loteId}`, '_blank');
     }
 
     mostrarToast(mensagem, tipo = 'info') {

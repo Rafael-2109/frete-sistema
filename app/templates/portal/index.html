@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Portal de Agendamento{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="row">
+        <div class="col-12">
+            <h2>
+                <i class="fas fa-calendar-check"></i> Portal de Agendamento
+                <button class="btn btn-primary float-right" onclick="extrairConfirmacoes()">
+                    <i class="fas fa-sync"></i> Extrair Confirmações
+                </button>
+            </h2>
+            <hr>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Total</h5>
+                    <h2 class="text-primary">{{ stats.total }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Aguardando</h5>
+                    <h2 class="text-warning">{{ stats.aguardando }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Confirmados</h5>
+                    <h2 class="text-success">{{ stats.confirmado }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Erros</h5>
+                    <h2 class="text-danger">{{ stats.erro }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Integrações -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Integrações Recentes</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Portal</th>
+                                    <th>Lote</th>
+                                    <th>Tipo</th>
+                                    <th>Protocolo</th>
+                                    <th>Status</th>
+                                    <th>Data Agendamento</th>
+                                    <th>Solicitado em</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for integracao in integracoes %}
+                                <tr>
+                                    <td>{{ integracao.id }}</td>
+                                    <td>
+                                        <span class="badge bg-info">
+                                            {{ integracao.portal|upper }}
+                                        </span>
+                                    </td>
+                                    <td>{{ integracao.lote_id }}</td>
+                                    <td>{{ integracao.tipo_lote }}</td>
+                                    <td>
+                                        {% if integracao.protocolo %}
+                                            <code>{{ integracao.protocolo }}</code>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if integracao.status == 'confirmado' %}
+                                            <span class="badge bg-success">Confirmado</span>
+                                        {% elif integracao.status == 'aguardando_confirmacao' %}
+                                            <span class="badge bg-warning">Aguardando</span>
+                                        {% elif integracao.status == 'processando' %}
+                                            <span class="badge bg-info">Processando</span>
+                                        {% elif integracao.status == 'erro' %}
+                                            <span class="badge bg-danger">Erro</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ integracao.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if integracao.data_agendamento %}
+                                            {{ integracao.data_agendamento.strftime('%d/%m/%Y') }}
+                                            {% if integracao.hora_agendamento %}
+                                                {{ integracao.hora_agendamento.strftime('%H:%M') }}
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ integracao.criado_em.strftime('%d/%m %H:%M') }}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info" 
+                                                onclick="verificarStatus({{ integracao.id }})"
+                                                title="Verificar Status">
+                                            <i class="fas fa-sync"></i>
+                                        </button>
+                                        {% if integracao.ultimo_erro %}
+                                        <button class="btn btn-sm btn-warning"
+                                                onclick="verErro('{{ integracao.ultimo_erro|e }}')"
+                                                title="Ver Erro">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                        </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function verificarStatus(integracaoId) {
+    $.get(`/portal/api/verificar-status/${integracaoId}`)
+        .done(function(data) {
+            if (data.success) {
+                Swal.fire({
+                    title: 'Status da Integração',
+                    html: `
+                        <p><strong>Status:</strong> ${data.status}</p>
+                        <p><strong>Protocolo:</strong> ${data.protocolo || '-'}</p>
+                        <p><strong>Data Agendamento:</strong> ${data.data_agendamento || '-'}</p>
+                        <p><strong>Data Confirmação:</strong> ${data.data_confirmacao || '-'}</p>
+                    `,
+                    icon: 'info'
+                });
+            } else {
+                Swal.fire('Erro', data.message, 'error');
+            }
+        })
+        .fail(function() {
+            Swal.fire('Erro', 'Erro ao verificar status', 'error');
+        });
+}
+
+function verErro(erro) {
+    Swal.fire({
+        title: 'Erro na Integração',
+        text: erro,
+        icon: 'error'
+    });
+}
+
+function extrairConfirmacoes() {
+    Swal.fire({
+        title: 'Extraindo confirmações...',
+        text: 'Aguarde enquanto verificamos os portais',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    $.get('/portal/api/extrair-confirmacoes')
+        .done(function(data) {
+            if (data.success) {
+                Swal.fire({
+                    title: 'Extração Concluída',
+                    html: `<p>${data.confirmacoes} confirmações processadas</p>`,
+                    icon: 'success'
+                }).then(() => {
+                    location.reload();
+                });
+            } else {
+                Swal.fire('Erro', data.message, 'error');
+            }
+        })
+        .fail(function() {
+            Swal.fire('Erro', 'Erro ao extrair confirmações', 'error');
+        });
+}
+</script>
+{% endblock %}
+
+

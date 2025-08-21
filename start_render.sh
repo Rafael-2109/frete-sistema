@@ -4,6 +4,38 @@
 
 echo " Configurando ambiente do Render..."
 
+# 🔧 INSTALAR DEPENDÊNCIAS DO CHROME/SELENIUM SE NECESSÁRIO
+echo " Verificando dependências do Chrome..."
+if ! ldconfig -p | grep -q libnss3; then
+    echo " Instalando dependências do Chrome/Selenium..."
+    apt-get update && apt-get install -y \
+        libnss3 \
+        libnspr4 \
+        libnssutil3 \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libcups2 \
+        libdrm2 \
+        libdbus-1-3 \
+        libatspi2.0-0 \
+        libx11-6 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxext6 \
+        libxfixes3 \
+        libxrandr2 \
+        libgbm1 \
+        libxcb1 \
+        libxkbcommon0 \
+        libpango-1.0-0 \
+        libcairo2 \
+        libasound2 \
+        chromium-browser \
+        2>/dev/null || echo " Aviso: Algumas dependências não puderam ser instaladas"
+else
+    echo " ✅ Dependências do Chrome já instaladas"
+fi
+
 # Configurar encoding UTF-8
 export PYTHONIOENCODING=utf-8
 export LANG=C.UTF-8

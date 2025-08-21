@@ -519,6 +519,7 @@ class ProcessadorFaturamento:
     def _criar_movimentacao_sem_separacao(self, nf: RelatorioFaturamentoImportado, usuario: str) -> int:
         """
         Cria movimentação 'Sem Separação'
+        MUDANÇA: Também tenta encontrar e sincronizar Separação correspondente
         Retorna: quantidade de movimentações criadas
         """
         movimentacoes_criadas = 0
@@ -535,6 +536,17 @@ class ProcessadorFaturamento:
 
         produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
         logger.info(f"📦 Criando {len(produtos)} movimentações 'Sem Separação' para NF {nf.numero_nf}")
+        
+        # NOVA LÓGICA: Tentar encontrar Separação correspondente mesmo sem lote
+        # Buscar Pedido pela origem (num_pedido)
+        from app.pedidos.models import Pedido
+        pedidos = Pedido.query.filter_by(num_pedido=nf.origem).all()
+        
+        for pedido in pedidos:
+            if pedido.separacao_lote_id and pedido.nf == nf.numero_nf:
+                logger.info(f"🔄 Encontrada Separação para sincronizar: lote {pedido.separacao_lote_id}")
+                self._sincronizar_separacao_com_nf(pedido.separacao_lote_id, nf.numero_nf, nf.origem, produtos)
+                break
 
         for produto in produtos:
             try:
@@ -559,6 +571,7 @@ class ProcessadorFaturamento:
     def _criar_movimentacao_com_lote(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str) -> int:
         """
         Cria movimentação com lote de separação e marca Pedido como FATURADO
+        MUDANÇA: Também sincroniza quantidades com Separação
         Retorna: quantidade de movimentações criadas
         """
         movimentacoes_criadas = 0
@@ -574,6 +587,12 @@ class ProcessadorFaturamento:
             if pedido.status != 'FATURADO':
                 pedido.status = 'FATURADO'
                 logger.info(f"✅ Pedido {pedido.num_pedido} marcado como FATURADO ao criar movimentação (lote {lote_id})")
+            
+            # NOVA LÓGICA: Sincronizar quantidades com Separação
+            # Validação: Separacao JOIN Pedido por separacao_lote_id, Pedido.nf = FaturamentoProduto.numero_nf
+            if pedido.nf == nf.numero_nf and pedido.num_pedido == nf.origem:
+                logger.info(f"🔄 SINCRONIZANDO quantidades de NF {nf.numero_nf} com Separações do lote {lote_id}")
+                self._sincronizar_separacao_com_nf(lote_id, nf.numero_nf, nf.origem, produtos)
         else:
             logger.warning(f"⚠️ Pedido não encontrado para lote {lote_id} ao criar movimentação")
 
@@ -611,6 +630,97 @@ class ProcessadorFaturamento:
         
         logger.info(f"✅ {movimentacoes_criadas} movimentações com lote preparadas para NF {nf.numero_nf}")        
         return movimentacoes_criadas
+
+    def _sincronizar_separacao_com_nf(self, lote_id: str, numero_nf: str, num_pedido: str, produtos_nf: List[FaturamentoProduto]):
+        """
+        NOVA FUNÇÃO: Sincroniza quantidades da NF com as Separações
+        Importante: Atualiza as quantidades nas Separações com os valores faturados
+        
+        Args:
+            lote_id: ID do lote de separação
+            numero_nf: Número da NF
+            num_pedido: Número do pedido (origem)
+            produtos_nf: Lista de produtos da NF
+        """
+        try:
+            logger.info(f"🔄 Sincronizando Separações do lote {lote_id} com NF {numero_nf}")
+            
+            # Buscar todas as separações do lote e pedido
+            separacoes = Separacao.query.filter_by(
+                separacao_lote_id=lote_id,
+                num_pedido=num_pedido
+            ).all()
+            
+            if not separacoes:
+                logger.warning(f"⚠️ Nenhuma separação encontrada para lote {lote_id} e pedido {num_pedido}")
+                return
+            
+            # Criar dicionário de produtos da NF para fácil acesso
+            produtos_nf_dict = {}
+            for prod in produtos_nf:
+                if prod.cod_produto not in produtos_nf_dict:
+                    produtos_nf_dict[prod.cod_produto] = {
+                        'qtd': 0,
+                        'valor': 0,
+                        'peso': 0
+                    }
+                produtos_nf_dict[prod.cod_produto]['qtd'] += float(prod.qtd_produto_faturado or 0)
+                produtos_nf_dict[prod.cod_produto]['valor'] += float(prod.valor_produto_faturado or 0)
+                produtos_nf_dict[prod.cod_produto]['peso'] += float(prod.peso_total or 0)
+            
+            # Atualizar cada separação com os valores da NF
+            separacoes_atualizadas = 0
+            for sep in separacoes:
+                if sep.cod_produto in produtos_nf_dict:
+                    dados_nf = produtos_nf_dict[sep.cod_produto]
+                    
+                    # Guardar valores antigos para log
+                    qtd_antiga = float(sep.qtd_saldo or 0)
+                    valor_antigo = float(sep.valor_saldo or 0)
+                    
+                    # Atualizar com valores da NF
+                    sep.qtd_saldo = dados_nf['qtd']
+                    sep.valor_saldo = dados_nf['valor']
+                    sep.peso = dados_nf['peso']
+                    
+                    # Marcar como sincronizado
+                    sep.sincronizado_nf = True
+                    sep.numero_nf = numero_nf
+                    sep.data_sincronizacao = datetime.now()
+                    
+                    # Calcular pallets se possível
+                    from app.producao.models import CadastroPalletizacao
+                    palletizacao = CadastroPalletizacao.query.filter_by(
+                        cod_produto=sep.cod_produto
+                    ).first()
+                    
+                    if palletizacao and palletizacao.palletizacao and palletizacao.palletizacao > 0:
+                        sep.pallet = dados_nf['qtd'] / float(palletizacao.palletizacao)
+                    
+                    separacoes_atualizadas += 1
+                    
+                    # Log da atualização
+                    if qtd_antiga != dados_nf['qtd']:
+                        logger.info(f"  ✓ {sep.cod_produto}: qtd {qtd_antiga} → {dados_nf['qtd']}")
+                else:
+                    # Produto não está na NF - zerar quantidades
+                    if sep.qtd_saldo > 0:
+                        logger.info(f"  ⚠️ {sep.cod_produto}: não consta na NF - zerando (era {sep.qtd_saldo})")
+                        sep.qtd_saldo = 0
+                        sep.valor_saldo = 0
+                        sep.peso = 0
+                        sep.pallet = 0
+                        # Marcar como zerado por sincronização
+                        sep.zerado_por_sync = True
+                        sep.data_zeragem = datetime.now()
+                        sep.sincronizado_nf = True
+                        sep.numero_nf = numero_nf
+                        sep.data_sincronizacao = datetime.now()
+            
+            logger.info(f"✅ {separacoes_atualizadas} separações sincronizadas com NF {numero_nf}")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao sincronizar separações com NF {numero_nf}: {e}")
 
     def _criar_justificativa_divergencia(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str):
         """

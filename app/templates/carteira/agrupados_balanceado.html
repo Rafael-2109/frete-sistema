@@ -516,13 +516,8 @@
 
 {% block styles %}
 <style>
-    {
-        % include 'carteira/css/agrupados.css' %
-    }
-
-        {
-        % include 'carteira/css/workspace-montagem.css' %
-    }
+    {% include 'carteira/css/agrupados.css' %}
+    {% include 'carteira/css/workspace-montagem.css' %}
 </style>
 {% endblock %}
 

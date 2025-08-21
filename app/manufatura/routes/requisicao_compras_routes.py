@@ -77,7 +77,7 @@ def register_requisicao_compras_routes(bp):
             requisicao = RequisicaoCompras.query.get_or_404(id)
             
             requisicao.status = 'Requisitada'
-            requisicao.usuario_requisicao_criacao = current_user.username if current_user.is_authenticated else 'PCP'
+            requisicao.usuario_requisicao_criacao = current_user.nome if current_user.is_authenticated else 'PCP'
             requisicao.data_requisicao_criacao = datetime.now().date()
             
             db.session.commit()

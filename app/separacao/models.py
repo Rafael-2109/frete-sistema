@@ -32,6 +32,13 @@ class Separacao(db.Model):
     
     # 🎯 ETAPA 2: CAMPO TIPO DE ENVIO (ADICIONADO NA MIGRAÇÃO)
     tipo_envio = db.Column(db.String(10), default='total', nullable=True)  # total, parcial
+    
+    # 🔄 CAMPOS DE CONTROLE DE SINCRONIZAÇÃO (FASE 3)
+    sincronizado_nf = db.Column(db.Boolean, default=False, nullable=True)  # Indica se foi sincronizado com NF
+    numero_nf = db.Column(db.String(20), nullable=True)  # NF associada quando sincronizada
+    data_sincronizacao = db.Column(db.DateTime, nullable=True)  # Data/hora da sincronização
+    zerado_por_sync = db.Column(db.Boolean, default=False, nullable=True)  # Indica se foi zerado por sincronização
+    data_zeragem = db.Column(db.DateTime, nullable=True)  # Data/hora quando foi zerado
 
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 

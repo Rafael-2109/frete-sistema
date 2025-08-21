@@ -622,11 +622,17 @@ class AjusteSincronizacaoService:
             'versao_carteira_recomposta': modelo.versao_carteira_recomposta
         }
         
-        # 3. Deletar TODOS os itens existentes
-        PreSeparacaoItem.query.filter_by(
+        # 3. MUDANÇA: ZERAR quantidades ao invés de deletar
+        logger.info(f"🔄 ZERANDO quantidades de PreSeparacaoItem {lote_id} ao invés de deletar")
+        pre_seps_zeradas = PreSeparacaoItem.query.filter_by(
             separacao_lote_id=lote_id,
             num_pedido=num_pedido
-        ).delete()
+        ).all()
+        
+        for pre_sep in pre_seps_zeradas:
+            pre_sep.qtd_selecionada_usuario = Decimal('0')
+            pre_sep.qtd_restante_calculada = Decimal('0')
+            logger.debug(f"  Zerado PreSeparacao: {pre_sep.cod_produto}")
         
         # 4. Criar novos itens usando o modelo + dados do Odoo
         for item_odoo in itens_odoo:
@@ -676,7 +682,7 @@ class AjusteSincronizacaoService:
     def _substituir_separacao_total(cls, num_pedido: str, lote_id: str, itens_odoo: List[Dict]):
         """
         Substitui completamente uma separação TOTAL.
-        Pega 1 linha existente como modelo, deleta tudo e recria com os novos itens.
+        MUDANÇA: Ao invés de deletar, ZERA as quantidades para preservar histórico.
         """
         # PROTEÇÃO: Verificar se foi faturado
         if cls._verificar_se_faturado(lote_id, num_pedido):
@@ -687,6 +693,15 @@ class AjusteSincronizacaoService:
         pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
         if pedido and pedido.status not in ['ABERTO', 'COTADO']:
             logger.warning(f"🛡️ PROTEÇÃO: Não alterando Separacao {lote_id} - Pedido com status '{pedido.status}'")
+            return
+        
+        # NOVA PROTEÇÃO: Verificar se já foi sincronizado com NF
+        separacao_sync = Separacao.query.filter_by(
+            separacao_lote_id=lote_id,
+            sincronizado_nf=True
+        ).first()
+        if separacao_sync:
+            logger.warning(f"🛡️ PROTEÇÃO: Não alterando Separacao {lote_id} - Já sincronizada com NF {separacao_sync.numero_nf}")
             return
             
         # 1. Pegar primeira linha existente como modelo
@@ -718,11 +733,22 @@ class AjusteSincronizacaoService:
             'criado_em': modelo.criado_em
         }
         
-        # 3. Deletar TODOS os itens existentes
-        Separacao.query.filter_by(
+        # 3. MUDANÇA: ZERAR quantidades ao invés de deletar
+        logger.info(f"🔄 ZERANDO quantidades de Separacao {lote_id} ao invés de deletar")
+        separacoes_zeradas = Separacao.query.filter_by(
             separacao_lote_id=lote_id,
             num_pedido=num_pedido
-        ).delete()
+        ).all()
+        
+        for sep in separacoes_zeradas:
+            sep.qtd_saldo = 0
+            sep.valor_saldo = 0
+            sep.peso = 0
+            sep.pallet = 0
+            # Marcar com flags de controle
+            sep.zerado_por_sync = True
+            sep.data_zeragem = datetime.now(timezone.utc)
+            logger.debug(f"  Zerado: {sep.cod_produto}")
         
         # Importar CadastroPalletizacao uma vez
         from app.producao.models import CadastroPalletizacao
@@ -911,10 +937,10 @@ class AjusteSincronizacaoService:
                     resultado['operacoes'].append(f"Pré-separação {pre_sep.separacao_lote_id} reduzida em {qtd_consumir}")
                     resultado['qtd_aplicada'] += qtd_consumir
                     
-                    # Se zerou, deletar
+                    # Se zerou, manter registro zerado
                     if pre_sep.qtd_selecionada_usuario <= 0:
-                        db.session.delete(pre_sep)
-                        resultado['operacoes'].append(f"Pré-separação {pre_sep.separacao_lote_id} removida")
+                        logger.info(f"🔄 Pré-separação {pre_sep.separacao_lote_id} zerada - mantendo registro")
+                        resultado['operacoes'].append(f"Pré-separação {pre_sep.separacao_lote_id} zerada (preservada)")
         
         # 3. Consumir de Separacao não COTADA
         if qtd_restante > 0:
@@ -946,14 +972,10 @@ class AjusteSincronizacaoService:
                         resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} (ABERTO) reduzida em {qtd_consumir}")
                         resultado['qtd_aplicada'] += qtd_consumir
                         
-                        # Se zerou, deletar (mas verificar faturamento primeiro)
+                        # Se zerou, manter registro zerado (não deletar mais)
                         if sep.qtd_saldo <= 0:
-                            if not cls._verificar_se_faturado(sep.separacao_lote_id, num_pedido, cod_produto):
-                                db.session.delete(sep)
-                                resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} removida")
-                            else:
-                                logger.warning(f"🛡️ Separação {sep.separacao_lote_id} zerada mas FATURADA - mantendo registro")
-                                resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} zerada (FATURADA - mantida)")
+                            logger.info(f"🔄 Separação {sep.separacao_lote_id} zerada - mantendo registro para histórico")
+                            resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} zerada (preservada para histórico)")
         
         # 4. Consumir de Separacao COTADA (último recurso)
         if qtd_restante > 0:
@@ -996,14 +1018,10 @@ class AjusteSincronizacaoService:
                         )
                         resultado['alerta_id'] = alerta.id
                         
-                        # Se zerou, deletar (mas verificar faturamento primeiro)
+                        # Se zerou, manter registro zerado (não deletar mais)
                         if sep.qtd_saldo <= 0:
-                            if not cls._verificar_se_faturado(sep.separacao_lote_id, num_pedido, cod_produto):
-                                db.session.delete(sep)
-                                resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} removida")
-                            else:
-                                logger.warning(f"🛡️ Separação {sep.separacao_lote_id} zerada mas FATURADA - mantendo registro")
-                                resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} zerada (FATURADA - mantida)")
+                            logger.info(f"🔄 Separação {sep.separacao_lote_id} zerada - mantendo registro para histórico")
+                            resultado['operacoes'].append(f"Separação {sep.separacao_lote_id} zerada (preservada para histórico)")
         
         return resultado
     

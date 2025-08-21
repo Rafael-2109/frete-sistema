@@ -70,6 +70,9 @@ class ModalSeparacoes {
     renderizarSeparacoes() {
         const container = document.getElementById('modal-separacoes-content');
         
+        console.log(`🎨 Renderizando ${this.separacoes.length} separações`);
+        console.log('📦 Dados das separações:', this.separacoes);
+        
         if (this.separacoes.length === 0) {
             container.innerHTML = `
                 <div class="alert alert-info text-center">
@@ -124,6 +127,11 @@ class ModalSeparacoes {
 
         // Renderizar cada separação
         separacoesPagina.forEach((separacao, index) => {
+            console.log(`🔍 Separação ${index + 1}:`, {
+                lote_id: separacao.separacao_lote_id,
+                protocolo: separacao.protocolo,
+                status: separacao.status
+            });
             html += this.renderizarSeparacao(separacao, inicio + index + 1);
         });
 
@@ -267,6 +275,39 @@ class ModalSeparacoes {
                             </tfoot>
                         </table>
                     </div>
+                    
+                    <!-- Botões do Portal -->
+                    <div class="mt-3">
+                        <div class="alert alert-light border">
+                            <h6 class="alert-heading mb-2">
+                                <i class="fas fa-globe me-1"></i> Portal do Cliente
+                            </h6>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn btn-success btn-sm" 
+                                        data-lote="${separacao.separacao_lote_id}"
+                                        data-agendamento="${separacao.agendamento || ''}"
+                                        onclick="window.modalSeparacoes.agendarNoPortal(this.dataset.lote, this.dataset.agendamento)">
+                                    <i class="fas fa-calendar-plus me-1"></i> Agendar no Portal
+                                </button>
+                                <button class="btn btn-info btn-sm"
+                                        data-lote="${separacao.separacao_lote_id}"
+                                        onclick="window.modalSeparacoes.verificarPortal(this.dataset.lote)">
+                                    <i class="fas fa-search me-1"></i> Verificar Portal
+                                </button>
+                                ${separacao.protocolo ? `
+                                    <span class="badge bg-success align-self-center ms-auto">
+                                        <i class="fas fa-check-circle me-1"></i> 
+                                        Protocolo: ${separacao.protocolo}
+                                    </span>
+                                ` : `
+                                    <span class="badge bg-secondary align-self-center ms-auto">
+                                        <i class="fas fa-clock me-1"></i> 
+                                        Aguardando agendamento
+                                    </span>
+                                `}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -384,7 +425,9 @@ class ModalSeparacoes {
 
     formatarData(data) {
         if (!data) return '-';
-        const d = new Date(data + 'T00:00:00');
+        // Aceita formatos: '2025-08-20', '2025-08-20T10:30:00', etc
+        const d = new Date(data);
+        if (isNaN(d.getTime())) return '-';
         return d.toLocaleDateString('pt-BR');
     }
 
@@ -400,6 +443,310 @@ class ModalSeparacoes {
             });
             
             btnToggle.textContent = isHidden ? 'Ver menos' : 'Ver todos';
+        }
+    }
+
+    // Funções do Portal
+    async agendarNoPortal(loteId, dataAgendamento) {
+        console.log(`📅 Agendando lote ${loteId} no portal`);
+        
+        // Se não tem data de agendamento, solicitar ao usuário
+        if (!dataAgendamento || dataAgendamento === '') {
+            const { value: data } = await Swal.fire({
+                title: 'Data de Agendamento',
+                input: 'date',
+                inputLabel: 'Selecione a data para agendamento',
+                inputPlaceholder: 'dd/mm/aaaa',
+                inputAttributes: {
+                    min: new Date().toISOString().split('T')[0]
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Continuar',
+                cancelButtonText: 'Cancelar'
+            });
+
+            if (!data) {
+                return;
+            }
+            dataAgendamento = data;
+        }
+
+        // Mostrar loading
+        Swal.fire({
+            title: 'Processando...',
+            text: 'Realizando agendamento no portal do cliente',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            const response = await fetch('/portal/api/solicitar-agendamento', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
+                },
+                body: JSON.stringify({
+                    lote_id: loteId,
+                    tipo: 'separacao',  // Campo obrigatório
+                    portal: 'atacadao', // Campo obrigatório - TODO: detectar dinamicamente
+                    data_agendamento: dataAgendamento
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Agendamento Realizado!',
+                    html: `
+                        <p><strong>Protocolo:</strong> ${data.protocolo || 'Aguardando confirmação'}</p>
+                        <p>${data.message}</p>
+                    `,
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    // Recarregar as separações para mostrar o protocolo
+                    const numPedido = document.getElementById('modal-pedido-numero').textContent;
+                    this.carregarSeparacoes(numPedido);
+                });
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro no Agendamento',
+                    text: data.message || 'Erro ao processar agendamento',
+                    confirmButtonText: 'OK'
+                });
+            }
+        } catch (error) {
+            console.error('Erro ao agendar:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: 'Erro ao comunicar com o servidor',
+                confirmButtonText: 'OK'
+            });
+        }
+    }
+
+    async verificarPortal(loteId) {
+        console.log(`🔍 Verificando lote ${loteId} no portal`);
+        
+        // Criar e mostrar modal de comparação
+        this.criarModalComparacao();
+        
+        // Carregar dados
+        await this.carregarDadosComparacao(loteId);
+    }
+
+    criarModalComparacao() {
+        // Remover modal existente se houver
+        const existingModal = document.getElementById('modalComparacaoPortal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'modalComparacaoPortal';
+        modal.className = 'modal fade';
+        modal.setAttribute('tabindex', '-1');
+        modal.innerHTML = `
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-exchange-alt"></i> Comparação: Separação × Portal
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="comparacao-loading" class="text-center p-4">
+                            <i class="fas fa-spinner fa-spin fa-2x"></i>
+                            <p class="mt-2">Carregando dados do portal...</p>
+                        </div>
+                        <div id="comparacao-content" style="display: none;">
+                            <!-- Conteúdo será inserido aqui -->
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" onclick="window.modalSeparacoes.extrairConfirmacoes()">
+                            <i class="fas fa-sync me-1"></i> Extrair Confirmações
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        
+        // Mostrar modal
+        const modalElement = new bootstrap.Modal(modal);
+        modalElement.show();
+    }
+
+    async carregarDadosComparacao(loteId) {
+        try {
+            // Buscar dados da separação
+            const response = await fetch(`/portal/api/comparar-portal/${loteId}`);
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.message || 'Erro ao carregar dados');
+            }
+
+            // Renderizar comparação
+            this.renderizarComparacao(data);
+
+        } catch (error) {
+            console.error('Erro ao carregar comparação:', error);
+            document.getElementById('comparacao-content').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    ${error.message || 'Erro ao carregar dados do portal'}
+                </div>
+            `;
+            document.getElementById('comparacao-loading').style.display = 'none';
+            document.getElementById('comparacao-content').style.display = 'block';
+        }
+    }
+
+    renderizarComparacao(data) {
+        const content = document.getElementById('comparacao-content');
+        
+        let html = `
+            <div class="row">
+                <!-- Lado Esquerdo: Separação -->
+                <div class="col-md-6">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0">
+                                <i class="fas fa-boxes"></i> Separação (Sistema)
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Produto</th>
+                                        <th>Qtd</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.separacao.produtos.map(p => `
+                                        <tr>
+                                            <td>${p.cod_produto}</td>
+                                            <td>${p.nome_produto}</td>
+                                            <td>${p.quantidade}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lado Direito: Portal -->
+                <div class="col-md-6">
+                    <div class="card border-success">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0">
+                                <i class="fas fa-globe"></i> Portal (${data.portal || 'Atacadão'})
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            ${data.portal_data ? `
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Código</th>
+                                            <th>Mercadoria</th>
+                                            <th>Qtd</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.portal_data.produtos.map(p => `
+                                            <tr>
+                                                <td>${p.codigo}</td>
+                                                <td>${p.mercadoria}</td>
+                                                <td>${p.quantidade}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                                
+                                ${data.portal_data.protocolo ? `
+                                    <div class="alert alert-success mt-3">
+                                        <i class="fas fa-check-circle"></i>
+                                        <strong>Protocolo:</strong> ${data.portal_data.protocolo}
+                                    </div>
+                                ` : ''}
+                            ` : `
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Nenhum agendamento encontrado no portal
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Divergências -->
+            ${data.divergencias && data.divergencias.length > 0 ? `
+                <div class="alert alert-warning mt-3">
+                    <h6><i class="fas fa-exclamation-triangle"></i> Divergências Encontradas:</h6>
+                    <ul class="mb-0">
+                        ${data.divergencias.map(d => `<li>${d}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : `
+                <div class="alert alert-success mt-3">
+                    <i class="fas fa-check-circle"></i> 
+                    Todos os produtos conferem!
+                </div>
+            `}
+        `;
+
+        content.innerHTML = html;
+        document.getElementById('comparacao-loading').style.display = 'none';
+        document.getElementById('comparacao-content').style.display = 'block';
+    }
+
+    async extrairConfirmacoes() {
+        Swal.fire({
+            title: 'Extraindo confirmações...',
+            text: 'Consultando o portal do cliente',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            const response = await fetch('/portal/api/extrair-confirmacoes');
+            const data = await response.json();
+
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Confirmações Extraídas',
+                    text: `${data.confirmacoes} confirmações processadas`,
+                    confirmButtonText: 'OK'
+                });
+            } else {
+                throw new Error(data.message);
+            }
+        } catch (error) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: error.message || 'Erro ao extrair confirmações',
+                confirmButtonText: 'OK'
+            });
         }
     }
 }

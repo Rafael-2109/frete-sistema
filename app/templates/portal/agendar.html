@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block title %}Agendar Lote - Portal{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="row">
+        <div class="col-12">
+            <h2>
+                <i class="fas fa-calendar-plus"></i> Agendar Lote no Portal
+                <a href="{{ url_for('portal.index') }}" class="btn btn-secondary float-right">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </h2>
+            <hr>
+        </div>
+    </div>
+
+    <!-- Informações do Lote -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Informações do Lote</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Lote ID:</strong> {{ lote_id }}</p>
+                    <p><strong>Tipo:</strong> {{ tipo_lote|upper }}</p>
+                    <p><strong>CNPJ Cliente:</strong> {{ cnpj }}</p>
+                    <p><strong>Portal:</strong> 
+                        <span class="badge badge-primary">{{ portal|upper }}</span>
+                    </p>
+                    {% if grupo %}
+                    <p><strong>Grupo:</strong> {{ grupo|upper }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">Status da Integração</h5>
+                </div>
+                <div class="card-body">
+                    {% if integracao_existente %}
+                        <div class="alert alert-info">
+                            <strong>Integração já existe!</strong><br>
+                            Status: {{ integracao_existente.status }}<br>
+                            {% if integracao_existente.protocolo %}
+                            Protocolo: <code>{{ integracao_existente.protocolo }}</code><br>
+                            {% endif %}
+                            {% if integracao_existente.data_agendamento %}
+                            Data Agendamento: {{ integracao_existente.data_agendamento.strftime('%d/%m/%Y') }}
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-secondary">
+                            Nenhuma integração realizada ainda
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário de Agendamento -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Dados do Agendamento</h5>
+                </div>
+                <div class="card-body">
+                    <form id="formAgendamento">
+                        <input type="hidden" id="lote_id" value="{{ lote_id }}">
+                        
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="data_agendamento">Data de Agendamento *</label>
+                                    <input type="date" class="form-control" id="data_agendamento" 
+                                           required min="{{ date.today() }}">
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="hora_agendamento">Hora (opcional)</label>
+                                    <input type="time" class="form-control" id="hora_agendamento">
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="transportadora">Transportadora *</label>
+                                    <select class="form-control" id="transportadora" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="PROPRIA">Própria</option>
+                                        <option value="TERCEIRA">Terceira</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="tipo_veiculo">Tipo de Veículo *</label>
+                                    <select class="form-control" id="tipo_veiculo" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="Truck">Truck</option>
+                                        <option value="Carreta">Carreta</option>
+                                        <option value="Bitrem">Bitrem</option>
+                                        <option value="Rodotrem">Rodotrem</option>
+                                        <option value="3/4">3/4</option>
+                                        <option value="Toco">Toco</option>
+                                        <option value="VUC">VUC</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="observacoes">Observações</label>
+                                    <textarea class="form-control" id="observacoes" rows="2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-success btn-lg">
+                                    <i class="fas fa-paper-plane"></i> Solicitar Agendamento
+                                </button>
+                                
+                                {% if integracao_existente and integracao_existente.protocolo %}
+                                <button type="button" class="btn btn-info btn-lg ml-2"
+                                        onclick="verificarStatus({{ integracao_existente.id }})">
+                                    <i class="fas fa-sync"></i> Verificar Status
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instruções -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Instruções</h5>
+                </div>
+                <div class="card-body">
+                    <ol>
+                        <li>Certifique-se de que o Chrome está rodando com debug:
+                            <code>google-chrome --remote-debugging-port=9222</code>
+                        </li>
+                        <li>Faça login manual no portal {{ portal|upper }} antes de solicitar o agendamento</li>
+                        <li>Preencha todos os campos obrigatórios (*)</li>
+                        <li>Clique em "Solicitar Agendamento" e aguarde o processamento</li>
+                        <li>O protocolo será exibido após a conclusão</li>
+                        <li>Use "Verificar Status" para consultar confirmações posteriores</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$('#formAgendamento').on('submit', function(e) {
+    e.preventDefault();
+    
+    const dados = {
+        lote_id: $('#lote_id').val(),
+        data_agendamento: $('#data_agendamento').val(),
+        hora_agendamento: $('#hora_agendamento').val(),
+        transportadora: $('#transportadora').val(),
+        tipo_veiculo: $('#tipo_veiculo').val(),
+        observacoes: $('#observacoes').val()
+    };
+    
+    Swal.fire({
+        title: 'Processando...',
+        text: 'Aguarde enquanto realizamos o agendamento no portal',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    $.ajax({
+        url: '/portal/api/solicitar-agendamento',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(dados),
+        success: function(response) {
+            if (response.success) {
+                Swal.fire({
+                    title: 'Agendamento Solicitado!',
+                    html: `
+                        <p>Protocolo: <strong>${response.protocolo || 'Aguardando...'}</strong></p>
+                        <p>${response.message}</p>
+                    `,
+                    icon: 'success'
+                }).then(() => {
+                    location.reload();
+                });
+            } else {
+                Swal.fire('Erro', response.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            const response = xhr.responseJSON || {};
+            Swal.fire('Erro', response.message || 'Erro ao processar agendamento', 'error');
+        }
+    });
+});
+
+function verificarStatus(integracaoId) {
+    $.get(`/portal/api/verificar-status/${integracaoId}`)
+        .done(function(data) {
+            if (data.success) {
+                Swal.fire({
+                    title: 'Status da Integração',
+                    html: `
+                        <p><strong>Status:</strong> ${data.status}</p>
+                        <p><strong>Protocolo:</strong> ${data.protocolo || '-'}</p>
+                        <p><strong>Data Agendamento:</strong> ${data.data_agendamento || '-'}</p>
+                        <p><strong>Data Confirmação:</strong> ${data.data_confirmacao || '-'}</p>
+                    `,
+                    icon: 'info'
+                });
+            } else {
+                Swal.fire('Erro', data.message, 'error');
+            }
+        })
+        .fail(function() {
+            Swal.fire('Erro', 'Erro ao verificar status', 'error');
+        });
+}
+</script>
+{% endblock %}

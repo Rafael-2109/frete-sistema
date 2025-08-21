@@ -673,6 +673,14 @@ def create_app(config_name=None):
     from app.carteira.routes.mapa_routes import bp as mapa_bp
     app.register_blueprint(mapa_bp)
     
+    # 🌐 Portal de Integração com Clientes (Atacadão, Sendas, Tenda)
+    try:
+        from app.portal import portal_bp
+        app.register_blueprint(portal_bp)
+        app.logger.info("✅ Portal de integração registrado com sucesso")
+    except ImportError as e:
+        app.logger.warning(f"⚠️ Portal de integração não disponível: {e}")
+    
     app.register_blueprint(estoque_bp)
     
     app.register_blueprint(producao_bp)

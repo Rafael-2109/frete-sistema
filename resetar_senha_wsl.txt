@@ -1,0 +1,61 @@
+# INSTRUÇÕES PARA RESETAR SENHA DO WSL
+
+## 1. NO WINDOWS (PowerShell como Administrador):
+
+# Primeiro, descubra o nome da sua distribuição:
+wsl -l -v
+
+# Vai mostrar algo como:
+#   NAME      STATE    VERSION
+# * Ubuntu    Running  2
+
+# Então execute (substitua "Ubuntu" pelo nome da sua distro se for diferente):
+wsl -d Ubuntu -u root
+
+# Isso vai entrar no WSL como root (sem pedir senha)
+
+## 2. AGORA VOCÊ ESTÁ NO WSL COMO ROOT, EXECUTE:
+
+# Resetar a senha do seu usuário:
+passwd rafaelnascimento
+
+# Digite a nova senha 2 vezes quando solicitado
+# Escolha algo simples como: 123456
+
+# Sair do modo root:
+exit
+
+## 3. TESTE A NOVA SENHA:
+
+# De volta ao WSL normal, teste:
+sudo ls
+
+# Digite a senha nova que você criou
+
+## 4. SE TUDO FUNCIONOU:
+
+# Instale as dependências do Playwright:
+sudo apt-get update
+sudo apt-get install -y libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2
+
+# Ou mais simples:
+sudo playwright install-deps chromium
+
+---
+
+## MÉTODO ALTERNATIVO (se o acima não funcionar):
+
+No PowerShell do Windows como Admin:
+
+# Definir o usuário padrão como root temporariamente:
+ubuntu config --default-user root
+
+# Abrir o WSL (vai entrar como root):
+wsl
+
+# Resetar a senha:
+passwd rafaelnascimento
+
+# Voltar o usuário padrão:
+exit
+ubuntu config --default-user rafaelnascimento

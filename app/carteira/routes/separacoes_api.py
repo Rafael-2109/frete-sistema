@@ -76,6 +76,9 @@ def obter_separacoes_completas(num_pedido):
                     'pallet': float(prod.pallet or 0)
                 })
             
+            # Protocolo já vem direto da Separacao
+            # Não precisa buscar de outra tabela!
+            
             # Dados básicos da separação com totais corretos
             sep_data = {
                 'separacao_lote_id': sep.separacao_lote_id,

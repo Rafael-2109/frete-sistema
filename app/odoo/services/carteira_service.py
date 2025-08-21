@@ -715,9 +715,7 @@ class CarteiraService:
         logger.debug(f"Status mapeado: {status_odoo} → {status_traduzido}")
         return status_traduzido
 
-    # ============================================================================
     # 🔧 MÉTODOS AUXILIARES CRÍTICOS PARA OPERAÇÃO COMPLETA
-    # ============================================================================
     
     def _verificar_riscos_pre_sincronizacao(self):
         """
@@ -1143,26 +1141,20 @@ class CarteiraService:
             from app import db
             logger.info("🚀 INICIANDO SINCRONIZAÇÃO OPERACIONAL COMPLETA COM GESTÃO INTELIGENTE")
             
-            # ============================================================
             # ETAPA 1: VERIFICAÇÃO PRÉ-SINCRONIZAÇÃO (ALERTAS CRÍTICOS)
-            # ============================================================
             logger.info("🔍 ETAPA 1: Verificação pré-sincronização...")
             alertas_pre_sync = self._verificar_riscos_pre_sincronizacao()
             
             if alertas_pre_sync.get('alertas_criticos'):
                 logger.warning(f"🚨 ALERTAS CRÍTICOS DETECTADOS: {len(alertas_pre_sync['alertas_criticos'])} separações cotadas")
             
-            # ============================================================
             # ETAPA 2: BACKUP AUTOMÁTICO DE PRÉ-SEPARAÇÕES
-            # ============================================================
             logger.info("💾 ETAPA 2: Backup automático de pré-separações...")
             backup_result = self._criar_backup_pre_separacoes()
             
             logger.info(f"✅ Backup criado: {backup_result['total_backups']} pré-separações preservadas")
             
-            # ============================================================
             # FASE 3: ANÁLISE - Carregar estado atual em memória
-            # ============================================================
             logger.info("📊 Fase 3: Analisando estado atual da carteira...")
             
             # Criar índice do estado atual usando campos CORRETOS
@@ -1191,9 +1183,7 @@ class CarteiraService:
             logger.info(f"✅ {registros_atuais} registros Odoo indexados na memória")
             logger.info(f"🛡️ {registros_nao_odoo} registros não-Odoo protegidos")
             
-            # ============================================================
             # FASE 2: BUSCAR DADOS NOVOS DO ODOO
-            # ============================================================
             logger.info("🔄 Fase 2: Buscando dados atualizados do Odoo...")
             
             resultado_odoo = self.obter_carteira_pendente()
@@ -1223,9 +1213,7 @@ class CarteiraService:
             
             logger.info(f"✅ {len(dados_novos)} registros obtidos do Odoo")
             
-            # ============================================================
             # FASE 3: CALCULAR DIFERENÇAS
-            # ============================================================
             logger.info("🔍 Fase 3: Calculando diferenças de quantidade...")
             
             reducoes = []
@@ -1274,9 +1262,7 @@ class CarteiraService:
             logger.info(f"   ➕ {len(novos_itens)} novos itens")
             logger.info(f"   ➖ {len(itens_removidos)} itens removidos")
             
-            # ============================================================
             # FASE 3.5: PROCESSAR PEDIDOS ALTERADOS COM NOVO SERVIÇO UNIFICADO
-            # ============================================================
             
             # Importar o novo serviço unificado
             from app.odoo.services.ajuste_sincronizacao_service import AjusteSincronizacaoService
@@ -1376,9 +1362,7 @@ class CarteiraService:
             if alertas_totais:
                 logger.warning(f"🚨 Total de {len(alertas_totais)} alertas gerados para separações COTADAS alteradas")
             
-            # ============================================================
             # FASE 7: ATUALIZAR CARTEIRA (Delete + Insert)
-            # ============================================================
             logger.info("💾 Fase 7: Atualizando carteira principal...")
             
             # Sanitizar dados antes de inserir
@@ -1547,17 +1531,13 @@ class CarteiraService:
             logger.info(f"✅ {contador_inseridos} novos registros inseridos")
             logger.info(f"🔄 {contador_atualizados} registros atualizados")
             
-            # ============================================================
             # FASE 8: COMMIT FINAL (já feito incrementalmente)
-            # ============================================================
             logger.info("💾 Fase 8: Todas as alterações já salvas incrementalmente")
             
             logger.info("🔄 Fase 9: Recompondo pré-separações...")
             recomposicao_result = self._recompor_pre_separacoes_automaticamente()
             
-            # ============================================================
             # FASE 9.5: ATUALIZAR DADOS DE SEPARAÇÃO/PEDIDO/PRÉ-SEPARAÇÃO
-            # ============================================================
             logger.info("🔄 Fase 9.5: Atualizando dados de Separação/Pedido/Pré-Separação...")
             try:
                 from app.carteira.services.atualizar_dados_service import AtualizarDadosService
@@ -1574,15 +1554,11 @@ class CarteiraService:
                 logger.error(f"❌ Erro ao atualizar dados de Separação/Pedido: {str(e)}")
                 # Não interromper o fluxo principal
             
-            # ============================================================
             # FASE 10: VERIFICAÇÃO PÓS-SINCRONIZAÇÃO E ALERTAS
-            # ============================================================
             logger.info("🔍 Fase 10: Verificação pós-sincronização...")
             alertas_pos_sync = self._verificar_alertas_pos_sincronizacao(dados_novos, alertas_pre_sync)
             
-            # ============================================================
             # FASE 10.5: LIMPEZA DE SALDO STANDBY
-            # ============================================================
             logger.info("🧹 Fase 10.5: Limpeza de SaldoStandby...")
             try:
                 from app.carteira.models import SaldoStandby
@@ -1613,9 +1589,7 @@ class CarteiraService:
                 logger.warning(f"   ⚠️ Erro ao limpar SaldoStandby: {e}")
                 db.session.rollback()
             
-            # ============================================================
             # FASE 10.6: VERIFICAÇÃO E ATUALIZAÇÃO DE CONTATOS AGENDAMENTO
-            # ============================================================
             logger.info("📞 Fase 10.6: Verificação de Contatos de Agendamento...")
             try:
                 from app.cadastros_agendamento.models import ContatoAgendamento
@@ -1669,9 +1643,7 @@ class CarteiraService:
                 logger.warning(f"   ⚠️ Erro ao verificar Contatos de Agendamento: {e}")
                 db.session.rollback()
             
-            # ============================================================
             # FASE 10.7: ATUALIZAR FORMA_AGENDAMENTO NA CARTEIRA
-            # ============================================================
             logger.info("📝 Fase 10.7: Atualizando forma de agendamento na carteira...")
             try:
                 from app.cadastros_agendamento.models import ContatoAgendamento
@@ -1711,9 +1683,7 @@ class CarteiraService:
                 logger.warning(f"   ⚠️ Erro ao atualizar forma de agendamento: {e}")
                 db.session.rollback()
             
-            # ============================================================
             # FASE 11: ESTATÍSTICAS FINAIS
-            # ============================================================
             fim_operacao = datetime.now()
             tempo_total = (fim_operacao - inicio_operacao).total_seconds()
             

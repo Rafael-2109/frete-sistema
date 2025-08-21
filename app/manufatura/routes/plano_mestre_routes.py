@@ -30,7 +30,7 @@ def register_plano_mestre_routes(bp):
             service = PlanoMestreService()
             resultado = service.gerar_plano_mestre(
                 mes, ano,
-                usuario=current_user.username if current_user.is_authenticated else 'Sistema'
+                usuario=current_user.nome if current_user.is_authenticated else 'Sistema'
             )
             
             # Ajuste para novo formato de retorno
@@ -127,7 +127,7 @@ def register_plano_mestre_routes(bp):
             service = PlanoMestreService()
             plano = service.aprovar_plano(
                 id,
-                usuario=current_user.username if current_user.is_authenticated else 'Sistema'
+                usuario=current_user.nome if current_user.is_authenticated else 'Sistema'
             )
             
             return jsonify({

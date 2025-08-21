@@ -60,7 +60,7 @@ def register_previsao_demanda_routes(bp):
                 nome_produto=dados.get('nome_produto'),
                 qtd_demanda_prevista=dados['qtd_prevista'],
                 disparo_producao=dados.get('disparo_producao', 'MTS'),
-                criado_por=current_user.username if current_user.is_authenticated else 'Sistema'
+                criado_por=current_user.nome if current_user.is_authenticated else 'Sistema'
             )
             
             db.session.add(previsao)
