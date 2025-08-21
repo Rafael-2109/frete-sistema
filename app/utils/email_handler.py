@@ -38,19 +38,20 @@ class EmailHandler:
             # Processa o arquivo .msg
             msg = extract_msg.openMsg(temp_path)
             
-            # Extrai metadados
+            # Extrai metadados (garantindo str)
             metadados = {
-                'remetente': msg.sender,
-                'destinatarios': json.dumps(msg.to.split(';')) if msg.to else '[]',
-                'cc': json.dumps(msg.cc.split(';')) if msg.cc else '[]',  # Extrai CC
-                'bcc': json.dumps(msg.bcc.split(';')) if hasattr(msg, 'bcc') and msg.bcc else '[]',  # Extrai BCC (nem sempre visível)
-                'assunto': msg.subject,
-                'data_envio': self._parse_date(msg.date),
+                'remetente': str(msg.sender or ''),
+                'destinatarios': json.dumps(str(msg.to or '').split(';')) if msg.to else '[]',
+                'cc': json.dumps(str(msg.cc or '').split(';')) if msg.cc else '[]',
+                'bcc': json.dumps(str(msg.bcc or '').split(';')) if hasattr(msg, 'bcc') and msg.bcc else '[]',
+                'assunto': str(msg.subject or ''),
+                'data_envio': self._parse_date(str(msg.date) if msg.date else ''),
                 'tem_anexos': len(msg.attachments) > 0,
                 'qtd_anexos': len(msg.attachments),
-                'conteudo_preview': (msg.body or '')[:500],  # Primeiros 500 chars
+                'conteudo_preview': str(msg.body or '')[:500],
                 'tamanho_bytes': os.path.getsize(temp_path)
             }
+
             
             # Limpa arquivo temporário
             msg.close()
@@ -84,7 +85,8 @@ class EmailHandler:
             for fmt in formats:
                 try:
                     return datetime.strptime(date_str.strip(), fmt)
-                except:
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Erro ao parsear data: {date_str} - {str(e)}")
                     continue
             
             # Se nenhum formato funcionou, tenta parse básico

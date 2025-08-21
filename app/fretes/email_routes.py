@@ -1,8 +1,8 @@
 """
 Rotas para gerenciamento de emails anexados às despesas
 """
-from flask import Blueprint, render_template, redirect, url_for, flash, send_file, current_app, request, jsonify
-from flask_login import login_required, current_user
+from flask import Blueprint, render_template, redirect, url_for, flash, send_file, current_app
+from flask_login import login_required
 from app import db
 from app.fretes.models import DespesaExtra
 from app.fretes.email_models import EmailAnexado
