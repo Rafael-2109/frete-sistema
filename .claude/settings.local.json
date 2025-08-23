@@ -2,9 +2,10 @@
   "permissions": {
     "allow": [
       "mcp__ruv-swarm",
-      "mcp__claude-flow"
+      "mcp__claude-flow",
+      "Bash(python3:*)"
     ],
     "deny": []
   },
-  "outputStyle": "precision-engineer"
+  "outputStyle": "Precision Engineer"
 }

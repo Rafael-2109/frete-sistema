@@ -2192,3 +2192,67 @@ def sincronizar_agendamento_pedido(entrega):
     except Exception as e:
         db.session.rollback()
         return False, f"Erro ao sincronizar agendamento: {str(e)}"
+
+# ===========================
+# API Routes
+# ===========================
+
+@monitoramento_bp.route('/api/entrega/<int:entrega_id>')
+@login_required
+@allow_vendedor_own_data()
+def api_get_entrega(entrega_id):
+    """
+    Retorna dados de uma entrega específica
+    """
+    entrega = EntregaMonitorada.query.get_or_404(entrega_id)
+    
+    # Verificar se vendedor tem acesso
+    vendedor_filtro = get_vendedor_filter_query()
+    if vendedor_filtro and vendedor_filtro != "ACESSO_NEGADO":
+        if not (entrega.vendedor and vendedor_filtro.lower() in entrega.vendedor.lower()):
+            return jsonify({'error': 'Acesso negado'}), 403
+    
+    return jsonify({
+        'entrega': {
+            'id': entrega.id,
+            'numero_nf': entrega.numero_nf,
+            'cliente': entrega.cliente,
+            'cnpj_cliente': entrega.cnpj_cliente,
+            'transportadora': entrega.transportadora,
+            'municipio': entrega.municipio,
+            'uf': entrega.uf,
+            'vendedor': entrega.vendedor,
+            'valor_nf': entrega.valor_nf,
+            'data_faturamento': entrega.data_faturamento.strftime('%Y-%m-%d') if entrega.data_faturamento else None,
+            'data_embarque': entrega.data_embarque.strftime('%Y-%m-%d') if entrega.data_embarque else None,
+            'data_entrega_prevista': entrega.data_entrega_prevista.strftime('%Y-%m-%d') if entrega.data_entrega_prevista else None,
+            'data_agenda': entrega.data_agenda.strftime('%Y-%m-%d') if entrega.data_agenda else None,
+            'entregue': entrega.entregue,
+            'reagendar': entrega.reagendar,
+            'motivo_reagendamento': entrega.motivo_reagendamento,
+            'observacao_operacional': entrega.observacao_operacional,
+            'pendencia_financeira': entrega.pendencia_financeira,
+            'resposta_financeiro': entrega.resposta_financeiro,
+        }
+    })
+
+@monitoramento_bp.route('/api/entrega/<int:entrega_id>/dados')
+@login_required
+def api_get_entrega_dados(entrega_id):
+    """
+    Retorna dados completos de uma entrega incluindo separacao_lote_id
+    """
+    entrega = EntregaMonitorada.query.get_or_404(entrega_id)
+    
+    return jsonify({
+        'id': entrega.id,
+        'numero_nf': entrega.numero_nf,
+        'cliente': entrega.cliente,
+        'cnpj_cliente': entrega.cnpj_cliente,
+        'separacao_lote_id': entrega.separacao_lote_id,
+        'data_agenda': entrega.data_agenda.isoformat() if entrega.data_agenda else None,
+        'municipio': entrega.municipio,
+        'uf': entrega.uf,
+        'transportadora': entrega.transportadora,
+        'vendedor': entrega.vendedor
+    })

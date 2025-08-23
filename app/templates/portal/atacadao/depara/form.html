@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if mapeamento else 'Novo' }} Mapeamento De-Para{% endblock %}
+
+{% block content %}
+<div class="container mt-3">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exchange-alt"></i> 
+                        {{ 'Editar' if mapeamento else 'Novo' }} Mapeamento De-Para
+                    </h5>
+                </div>
+                
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="row">
+                            <!-- Nosso Produto -->
+                            <div class="col-md-6">
+                                <h6 class="text-primary">Nosso Produto</h6>
+                                
+                                <div class="form-group">
+                                    <label for="codigo_nosso">Código <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="codigo_nosso" 
+                                               name="codigo_nosso"
+                                               value="{{ mapeamento.codigo_nosso if mapeamento else '' }}"
+                                               required>
+                                        <div class="input-group-append">
+                                            <button type="button" 
+                                                    class="btn btn-outline-secondary"
+                                                    id="buscar_produto">
+                                                <i class="fas fa-search"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="descricao_nosso">Descrição</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="descricao_nosso" 
+                                           name="descricao_nosso"
+                                           value="{{ mapeamento.descricao_nosso if mapeamento else '' }}"
+                                           readonly>
+                                    <small class="text-muted">Preenchido automaticamente ao buscar o código</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Produto Atacadão -->
+                            <div class="col-md-6">
+                                <h6 class="text-success">Produto Atacadão</h6>
+                                
+                                <div class="form-group">
+                                    <label for="codigo_atacadao">Código <span class="text-danger">*</span></label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="codigo_atacadao" 
+                                           name="codigo_atacadao"
+                                           value="{{ mapeamento.codigo_atacadao if mapeamento else '' }}"
+                                           required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="descricao_atacadao">Descrição <span class="text-danger">*</span></label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="descricao_atacadao" 
+                                           name="descricao_atacadao"
+                                           value="{{ mapeamento.descricao_atacadao if mapeamento else '' }}"
+                                           required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="row">
+                            <!-- Configurações Adicionais -->
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="cnpj_cliente">CNPJ Cliente</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="cnpj_cliente" 
+                                           name="cnpj_cliente"
+                                           value="{{ mapeamento.cnpj_cliente if mapeamento else '' }}"
+                                           placeholder="Opcional - para mapeamento específico">
+                                    <small class="text-muted">Deixe vazio para aplicar a todos os clientes</small>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="fator_conversao">Fator de Conversão</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="fator_conversao" 
+                                           name="fator_conversao"
+                                           value="{{ mapeamento.fator_conversao if mapeamento else '1.0' }}"
+                                           step="0.0001"
+                                           min="0.0001">
+                                    <small class="text-muted">Multiplicador da quantidade (padrão: 1.0)</small>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Status</label>
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" 
+                                               class="custom-control-input" 
+                                               id="ativo" 
+                                               name="ativo"
+                                               {% if not mapeamento or mapeamento.ativo %}checked{% endif %}>
+                                        <label class="custom-control-label" for="ativo">
+                                            Mapeamento Ativo
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="observacoes">Observações</label>
+                            <textarea class="form-control" 
+                                      id="observacoes" 
+                                      name="observacoes" 
+                                      rows="3">{{ mapeamento.observacoes if mapeamento else '' }}</textarea>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="form-group text-center">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> Salvar
+                            </button>
+                            <a href="{{ url_for('portal.portal_depara.index') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                        
+                        {% if mapeamento %}
+                        <div class="text-muted text-center">
+                            <small>
+                                Criado em: {{ mapeamento.criado_em.strftime('%d/%m/%Y %H:%M') if mapeamento.criado_em else '-' }}
+                                {% if mapeamento.criado_por %}
+                                    por {{ mapeamento.criado_por }}
+                                {% endif %}
+                                {% if mapeamento.atualizado_em %}
+                                    <br>Última atualização: {{ mapeamento.atualizado_em.strftime('%d/%m/%Y %H:%M') }}
+                                {% endif %}
+                            </small>
+                        </div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Buscar produto nosso
+    $('#buscar_produto, #codigo_nosso').on('click blur', function(e) {
+        if (e.type === 'blur' && e.target.id !== 'codigo_nosso') return;
+        
+        const codigo = $('#codigo_nosso').val().trim();
+        
+        if (codigo) {
+            $.ajax({
+                url: `/portal/portal/atacadao/depara/buscar_produto_nosso/${codigo}`,
+                method: 'GET',
+                success: function(response) {
+                    if (response.success) {
+                        $('#descricao_nosso').val(response.descricao);
+                    } else {
+                        $('#descricao_nosso').val('');
+                        console.log('Produto não encontrado em CadastroPalletizacao');
+                    }
+                },
+                error: function() {
+                    $('#descricao_nosso').val('');
+                }
+            });
+        }
+    });
+    
+    // Máscara para CNPJ
+    $('#cnpj_cliente').on('input', function() {
+        let value = $(this).val().replace(/\D/g, '');
+        if (value.length > 14) value = value.substr(0, 14);
+        
+        if (value.length > 12) {
+            value = value.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/, '$1.$2.$3/$4-$5');
+        } else if (value.length > 8) {
+            value = value.replace(/^(\d{2})(\d{3})(\d{3})(\d{4}).*/, '$1.$2.$3/$4');
+        } else if (value.length > 5) {
+            value = value.replace(/^(\d{2})(\d{3})(\d{3}).*/, '$1.$2.$3');
+        } else if (value.length > 2) {
+            value = value.replace(/^(\d{2})(\d{3}).*/, '$1.$2');
+        }
+        
+        $(this).val(value);
+    });
+});
+</script>
+{% endblock %}

@@ -143,7 +143,8 @@ class SessionManager:
                 
                 logger.info(f"Página de login detectada (selector: {selector})")
                 return True
-            except:
+            except Exception as e:
+                logger.error(f"Erro ao verificar indicador: {e}")
                 continue
         
         return False
@@ -164,7 +165,8 @@ class SessionManager:
                 else:
                     driver.locator(selector).first
                 return True
-            except:
+            except Exception as e:
+                logger.error(f"Erro ao verificar indicador: {e}")
                 continue
         
         # Se não encontrou indicadores, assumir que sessão é válida

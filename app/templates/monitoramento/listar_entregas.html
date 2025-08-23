@@ -1243,6 +1243,31 @@ body {
         <div class="row">
           <div class="col-md-6">
             <p><strong>NF:</strong> <span id="nf-agendamento-modal"></span></p>
+            <p><strong>Cliente:</strong> <span id="cliente-agendamento-modal"></span></p>
+            <p><strong>CNPJ:</strong> <span id="cnpj-agendamento-modal"></span></p>
+            
+            <!-- Botões de Portal (aparece apenas para clientes com portal) -->
+            <div id="botoes-portal" style="display: none;" class="mb-3">
+              <div class="alert alert-info">
+                <strong>🌐 Portal Disponível:</strong> <span id="nome-portal"></span>
+              </div>
+              <div class="d-grid gap-2">
+                <button type="button" class="btn btn-primary" id="btn-agendar-portal">
+                  📅 Agendar no Portal
+                </button>
+                <button type="button" class="btn btn-info" id="btn-verificar-protocolo">
+                  🔍 Verificar Protocolo no Portal
+                </button>
+              </div>
+              <hr>
+            </div>
+            
+            <!-- Mensagem para portais não disponíveis -->
+            <div id="portal-indisponivel" style="display: none;" class="mb-3">
+              <div class="alert alert-warning">
+                <strong>⚠️ Portal não disponível:</strong> <span id="mensagem-portal"></span>
+              </div>
+            </div>
             
             <form id="form-agendamento-rapido">
               <div class="row">
@@ -1622,6 +1647,54 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('nf-agendamento-modal').textContent = numeroNf;
     document.getElementById('confirmar-agendamento').setAttribute('data-entrega-id', entregaId);
     
+    // Buscar dados da entrega para verificar portal
+    fetch(`/monitoramento/api/entrega/${entregaId}`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.entrega) {
+        // Preencher dados do cliente
+        document.getElementById('cliente-agendamento-modal').textContent = data.entrega.cliente || '';
+        document.getElementById('cnpj-agendamento-modal').textContent = data.entrega.cnpj_cliente || '';
+        
+        // Verificar se cliente tem portal usando prefixo CNPJ
+        const cnpj = data.entrega.cnpj_cliente || '';
+        const cnpjLimpo = cnpj.replace(/\D/g, '');
+        const prefixoCnpj = cnpjLimpo.substring(0, 8);
+        
+        // Resetar displays
+        document.getElementById('botoes-portal').style.display = 'none';
+        document.getElementById('portal-indisponivel').style.display = 'none';
+        
+        // Verificar grupos empresariais
+        if (['93209765', '75315333', '00063960'].includes(prefixoCnpj)) {
+          // Cliente Atacadão
+          document.getElementById('botoes-portal').style.display = 'block';
+          document.getElementById('nome-portal').textContent = 'Portal Atacadão';
+          
+          // Configurar botões para Atacadão
+          document.getElementById('btn-agendar-portal').onclick = function() {
+            agendarNoPortalAtacadao(entregaId, numeroNf);
+          };
+          document.getElementById('btn-verificar-protocolo').onclick = function() {
+            verificarProtocoloNoPortal(entregaId);
+          };
+          
+        } else if (prefixoCnpj === '01157555') {
+          // Cliente Tenda
+          document.getElementById('portal-indisponivel').style.display = 'block';
+          document.getElementById('mensagem-portal').textContent = 'Portal do Tenda ainda não disponível';
+          
+        } else if (prefixoCnpj === '06057223') {
+          // Cliente Assaí
+          document.getElementById('portal-indisponivel').style.display = 'block';
+          document.getElementById('mensagem-portal').textContent = 'Portal do Assaí ainda não disponível';
+        }
+      }
+    })
+    .catch(error => {
+      console.error('Erro ao buscar dados da entrega:', error);
+    });
+    
     // Limpa formulário
     document.getElementById('form-agendamento-rapido').reset();
     document.getElementById('criar-confirmado').checked = false;
@@ -1632,6 +1705,221 @@ document.addEventListener('DOMContentLoaded', function() {
     // Usa a instância global do modal
     agendamentoModal.show();
   };
+  
+  // Função para agendar no Portal Atacadão
+  function agendarNoPortalAtacadao(entregaId, numeroNf) {
+    // Mostrar modal de agendamento
+    $('#modalAgendamentoPortal').modal('show');
+    $('#modalAgendamentoPortal #entrega_id_portal').val(entregaId);
+    $('#modalAgendamentoPortal #numero_nf_portal').val(numeroNf);
+    
+    // Preencher informações da NF no modal
+    $('#modalAgendamentoPortal .nf-info').html(`
+      <div class="alert alert-info">
+        <strong>NF: ${numeroNf}</strong> - Agendamento no Portal Atacadão
+      </div>
+    `);
+    
+    // Limpar campos do formulário
+    $('#formAgendamentoPortal')[0].reset();
+    $('#formAgendamentoPortal #entrega_id_portal').val(entregaId);
+    $('#formAgendamentoPortal #numero_nf_portal').val(numeroNf);
+  }
+  
+  // Função para verificar protocolo no portal
+  function verificarProtocoloNoPortal(entregaId) {
+    // Buscar o protocolo do último agendamento carregado
+    fetch(`/monitoramento/${entregaId}/historico_agendamentos`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.agendamentos && data.agendamentos.length > 0) {
+        // Pegar o protocolo do agendamento mais recente
+        const ultimoAgendamento = data.agendamentos[0];
+        const protocolo = ultimoAgendamento.protocolo_agendamento;
+        
+        if (!protocolo) {
+          alert('❌ Este agendamento não possui protocolo registrado.');
+          return;
+        }
+        
+        // Buscar separacao_lote_id da entrega
+        fetch(`/monitoramento/api/entrega/${entregaId}/dados`)
+        .then(response => response.json())
+        .then(entregaData => {
+          if (!entregaData.separacao_lote_id) {
+            alert('❌ Esta entrega não possui lote de separação associado.');
+            return;
+          }
+          
+          // Mostrar loading
+          const btn = document.getElementById('btn-verificar-protocolo');
+          const textoOriginal = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Verificando...';
+          
+          // Chamar API de verificação de protocolo (URL correta com prefixo do blueprint)
+          fetch('/portal/atacadao/api/verificar-protocolo-portal', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+              protocolo: protocolo,
+              lote_id: entregaData.separacao_lote_id
+            })
+          })
+          .then(response => response.json())
+          .then(result => {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+            
+            if (result.success) {
+              let mensagem = `📋 Protocolo: ${result.protocolo}\n`;
+              mensagem += `📊 Status: ${result.status_text || 'Não identificado'}\n`;
+              
+              if (result.agendamento_confirmado) {
+                mensagem += `✅ Agendamento CONFIRMADO\n`;
+                if (result.data_aprovada) {
+                  mensagem += `📅 Data aprovada: ${result.data_aprovada}\n`;
+                }
+                
+                // 🆕 Se confirmou, mostrar mensagem de sucesso e recarregar após mostrar modal
+                if (result.status_text && result.status_text.includes('Aguardando check-in')) {
+                  setTimeout(() => {
+                    if (confirm('✅ Agendamento confirmado automaticamente no sistema!\n\nDeseja recarregar a página para ver as atualizações?')) {
+                      location.reload();
+                    }
+                  }, 2000);
+                }
+              } else {
+                mensagem += `⏳ Aguardando aprovação\n`;
+              }
+              
+              if (result.produtos_portal && result.produtos_portal.length > 0) {
+                mensagem += `\n📦 Produtos no portal: ${result.produtos_portal.length}\n`;
+                result.produtos_portal.forEach(prod => {
+                  mensagem += `  - ${prod.codigo}: ${prod.mercadoria} (Qtd: ${prod.quantidade})\n`;
+                });
+              }
+              
+              if (result.divergencias && result.divergencias.length > 0) {
+                mensagem += `\n⚠️ Divergências encontradas:\n`;
+                result.divergencias.forEach(div => {
+                  mensagem += `  - ${div}\n`;
+                });
+              }
+              
+              // Mostrar resultado em modal melhor
+              mostrarResultadoVerificacao(result);
+            } else {
+              alert(`❌ ${result.message || 'Erro ao verificar protocolo'}`);
+            }
+          })
+          .catch(error => {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+            console.error('Erro ao verificar protocolo:', error);
+            alert('❌ Erro ao verificar protocolo no portal');
+          });
+        })
+        .catch(error => {
+          console.error('Erro ao buscar dados da entrega:', error);
+          alert('❌ Erro ao buscar dados da entrega');
+        });
+      } else {
+        alert('❌ Nenhum agendamento encontrado para esta entrega.');
+      }
+    })
+    .catch(error => {
+      console.error('Erro ao buscar histórico:', error);
+      alert('❌ Erro ao buscar histórico de agendamentos');
+    });
+  }
+  
+  // Função para mostrar resultado da verificação em formato mais amigável
+  function mostrarResultadoVerificacao(resultado) {
+    // Criar modal ou div com resultado formatado
+    let html = '<div class="modal fade" id="resultadoVerificacaoModal" tabindex="-1">';
+    html += '<div class="modal-dialog modal-lg"><div class="modal-content">';
+    html += '<div class="modal-header">';
+    html += '<h5 class="modal-title">🔍 Resultado da Verificação no Portal</h5>';
+    html += '<button type="button" class="btn-close" data-bs-dismiss="modal"></button>';
+    html += '</div><div class="modal-body">';
+    
+    // Status do agendamento
+    html += '<div class="alert ' + (resultado.agendamento_confirmado ? 'alert-success' : 'alert-warning') + '">';
+    html += '<h6>📋 Protocolo: ' + resultado.protocolo + '</h6>';
+    html += '<p class="mb-1">Status no Portal: <strong>' + (resultado.status_text || 'Não identificado') + '</strong></p>';
+    if (resultado.agendamento_confirmado) {
+      html += '<p class="mb-0">✅ <strong>Agendamento CONFIRMADO</strong>';
+      if (resultado.data_aprovada) {
+        html += ' para <strong>' + resultado.data_aprovada + '</strong>';
+      }
+      html += '</p>';
+      
+      // 🆕 Adicionar informação sobre atualização automática
+      if (resultado.status_text && resultado.status_text.includes('Aguardando check-in')) {
+        html += '<hr class="my-2">';
+        html += '<p class="mb-0 text-success"><small>✅ O agendamento foi automaticamente confirmado no sistema!</small></p>';
+        html += '<p class="mb-0 text-success"><small>📊 Status atualizado de "Aguardando" para "Confirmado"</small></p>';
+      }
+    } else {
+      // Apenas mostrar linha adicional se for "Aguardando aprovação" especificamente
+      if (resultado.status_text && resultado.status_text.includes('Aguardando aprovação')) {
+        html += '<p class="mb-0">⏳ <strong>Aguardando aprovação</strong></p>';
+        html += '<p class="mb-0"><small>O agendamento ainda não foi aprovado no portal do cliente.</small></p>';
+      }
+      // Para outros status, não adicionar nada - o status_text já está sendo mostrado acima
+    }
+    html += '</div>';
+    
+    // Produtos
+    if (resultado.produtos_unificados && resultado.produtos_unificados.length > 0) {
+      html += '<h6>📦 Comparação de Produtos:</h6>';
+      html += '<table class="table table-sm">';
+      html += '<thead><tr><th>Código</th><th>Descrição</th><th>Qtd Sistema</th><th>Qtd Portal</th><th>Diferença</th></tr></thead>';
+      html += '<tbody>';
+      resultado.produtos_unificados.forEach(prod => {
+        const temDivergencia = prod.tem_divergencia;
+        html += '<tr class="' + (temDivergencia ? 'table-warning' : '') + '">';
+        html += '<td>' + prod.codigo_nosso + '</td>';
+        html += '<td>' + prod.descricao_nossa + '</td>';
+        html += '<td>' + prod.qtd_separacao.toFixed(2) + '</td>';
+        html += '<td>' + prod.qtd_agendamento.toFixed(2) + '</td>';
+        html += '<td>' + (temDivergencia ? '<span class="text-danger">' + prod.diferenca.toFixed(2) + '</span>' : '✅') + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    
+    // Produtos não mapeados
+    if (resultado.produtos_nao_mapeados && resultado.produtos_nao_mapeados.length > 0) {
+      html += '<div class="alert alert-warning">';
+      html += '<h6>⚠️ Produtos sem DE-PARA configurado:</h6>';
+      resultado.produtos_nao_mapeados.forEach(prod => {
+        html += '<p class="mb-1">' + prod.codigo_atacadao + ' - ' + prod.descricao + ' (Qtd: ' + prod.quantidade + ')</p>';
+      });
+      html += '</div>';
+    }
+    
+    html += '</div><div class="modal-footer">';
+    html += '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>';
+    html += '</div></div></div></div>';
+    
+    // Adicionar modal ao body e mostrar
+    const modalContainer = document.createElement('div');
+    modalContainer.innerHTML = html;
+    document.body.appendChild(modalContainer);
+    
+    const modal = new bootstrap.Modal(document.getElementById('resultadoVerificacaoModal'));
+    modal.show();
+    
+    // Remover modal do DOM após fechar
+    document.getElementById('resultadoVerificacaoModal').addEventListener('hidden.bs.modal', function() {
+      modalContainer.remove();
+    });
+  }
 
   // Carregar histórico de agendamentos
   function carregarHistoricoAgendamentos(entregaId) {
@@ -1868,7 +2156,151 @@ document.addEventListener('DOMContentLoaded', function() {
       alert('❌ Erro na requisição.');
     });
   });
+
+  // Função para processar agendamento no portal via numero_nf
+  $('#formAgendamentoPortal').on('submit', function(e) {
+    e.preventDefault();
+    
+    const numeroNf = $('#numero_nf_portal').val();
+    const dados = {
+      numero_nf: numeroNf,
+      data_agendamento: $('#data_agendamento_portal').val(),
+      hora_agendamento: $('#hora_agendamento_portal').val(),
+      transportadora: $('#transportadora_portal').val(),
+      tipo_veiculo: $('#tipo_veiculo_portal').val(),
+      observacoes: $('#observacoes_portal').val()
+    };
+    
+    // Mostrar loading
+    Swal.fire({
+      title: 'Processando...',
+      text: 'Aguarde enquanto realizamos o agendamento no portal',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+    
+    // Chamar nova API
+    $.ajax({
+      url: '/portal/api/solicitar-agendamento-nf',
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(dados),
+      success: function(response) {
+        if (response.success) {
+          Swal.fire({
+            title: 'Agendamento Solicitado!',
+            html: `
+              <p>Protocolo: <strong>${response.protocolo || 'Aguardando...'}</strong></p>
+              <p>${response.message}</p>
+            `,
+            icon: 'success'
+          }).then(() => {
+            $('#modalAgendamentoPortal').modal('hide');
+            location.reload();
+          });
+        } else {
+          Swal.fire('Erro', response.message, 'error');
+        }
+      },
+      error: function(xhr) {
+        const response = xhr.responseJSON || {};
+        Swal.fire('Erro', response.message || 'Erro ao processar agendamento', 'error');
+      }
+    });
+  });
 </script>
+
+<!-- Modal de Agendamento no Portal -->
+<div class="modal fade" id="modalAgendamentoPortal" tabindex="-1" aria-labelledby="modalAgendamentoPortalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="modalAgendamentoPortalLabel">
+          <i class="fas fa-calendar-plus"></i> Agendar no Portal Atacadão
+        </h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="nf-info"></div>
+        
+        <form id="formAgendamentoPortal">
+          <input type="hidden" id="entrega_id_portal" name="entrega_id">
+          <input type="hidden" id="numero_nf_portal" name="numero_nf">
+          
+          <div class="row">
+            <div class="col-md-6">
+              <div class="form-group">
+                <label for="data_agendamento_portal">Data de Agendamento *</label>
+                <input type="date" class="form-control" id="data_agendamento_portal" required>
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <div class="form-group">
+                <label for="hora_agendamento_portal">Hora (opcional)</label>
+                <input type="time" class="form-control" id="hora_agendamento_portal">
+              </div>
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6">
+              <div class="form-group">
+                <label for="transportadora_portal">Transportadora *</label>
+                <select class="form-control" id="transportadora_portal" required>
+                  <option value="">Selecione...</option>
+                  <option value="PROPRIA">Própria</option>
+                  <option value="TERCEIRA">Terceira</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <div class="form-group">
+                <label for="tipo_veiculo_portal">Tipo de Veículo *</label>
+                <select class="form-control" id="tipo_veiculo_portal" required>
+                  <option value="">Selecione...</option>
+                  <option value="Truck">Truck</option>
+                  <option value="Carreta">Carreta</option>
+                  <option value="Bitrem">Bitrem</option>
+                  <option value="Rodotrem">Rodotrem</option>
+                  <option value="3/4">3/4</option>
+                  <option value="Toco">Toco</option>
+                  <option value="VUC">VUC</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-12">
+              <div class="form-group">
+                <label for="observacoes_portal">Observações</label>
+                <textarea class="form-control" id="observacoes_portal" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+          
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> 
+            <strong>Importante:</strong> Certifique-se de que o Chrome está rodando com debug e você já fez login no portal Atacadão.
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+        <button type="submit" form="formAgendamentoPortal" class="btn btn-success">
+          <i class="fas fa-paper-plane"></i> Solicitar Agendamento
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 </div> <!-- fim pagination-container -->
 

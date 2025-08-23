@@ -95,7 +95,8 @@ class BrowserPool:
                 logger.info(f"Fechando browser {browser_id} (temporário ou muito usado)")
                 try:
                     browser_info['browser'].close()
-                except:
+                except Exception as e:
+                    logger.error(f"Erro ao fechar browser: {e}")
                     pass
             else:
                 # Devolver ao pool
@@ -122,7 +123,8 @@ class BrowserPool:
             try:
                 item = self.available.get_nowait()
                 temp_items.append(item)
-            except:
+            except Exception as e:
+                logger.error(f"Erro ao processar item: {e}")
                 break
         
         # Processar cada item
@@ -132,7 +134,8 @@ class BrowserPool:
                 logger.info(f"Reciclando browser {browser_info['id']} (idade > {self.max_age_minutes} min)")
                 try:
                     browser_info['browser'].close()
-                except:
+                except Exception as e:
+                    logger.error(f"Erro ao fechar browser: {e}")
                     pass
                 
                 # Criar novo
@@ -175,7 +178,8 @@ class BrowserPool:
             for browser_info in self.in_use.values():
                 try:
                     browser_info['browser'].close()
-                except:
+                except Exception as e:
+                    logger.error(f"Erro ao fechar browser: {e}")
                     pass
         
         # Fechar browsers disponíveis
@@ -183,7 +187,8 @@ class BrowserPool:
             try:
                 browser_info = self.available.get_nowait()
                 browser_info['browser'].close()
-            except:
+            except Exception as e:
+                logger.error(f"Erro ao fechar browser: {e}")
                 break
         
         logger.info("Pool de browsers encerrado")

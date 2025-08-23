@@ -1,0 +1,1 @@
+Visto que não possuia data disponivel, o seletor de horario estava "disabled", portanto não foi possivel escolher um horario.

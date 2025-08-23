@@ -350,6 +350,13 @@ class WorkspaceMontagem {
                                         <i class="fas fa-search"></i> Status
                                     </button>
                                     ${separacao.protocolo ? `
+                                        <button class="btn btn-warning btn-sm"
+                                                data-lote="${separacao.separacao_lote_id}"
+                                                data-protocolo="${separacao.protocolo}"
+                                                onclick="workspace.verificarProtocoloNoPortal(this.dataset.lote, this.dataset.protocolo)"
+                                                title="Verificar protocolo no portal">
+                                            <i class="fas fa-sync"></i> Verificar Protocolo
+                                        </button>
                                         <span class="badge bg-success align-self-center">
                                             <i class="fas fa-check-circle"></i> ${separacao.protocolo}
                                         </span>
@@ -1520,6 +1527,66 @@ class WorkspaceMontagem {
         
         // Caso contrário, abrir em nova aba
         window.open(`/portal/api/comparar-portal/${loteId}`, '_blank');
+    }
+
+    async verificarProtocoloNoPortal(loteId, protocolo) {
+        console.log(`🔍 Verificando protocolo ${protocolo} no portal para lote ${loteId}`);
+        
+        // Redirecionar para o modalSeparacoes se existir
+        if (window.modalSeparacoes && typeof window.modalSeparacoes.verificarProtocoloNoPortal === 'function') {
+            return window.modalSeparacoes.verificarProtocoloNoPortal(loteId, protocolo);
+        }
+        
+        // Caso contrário, implementar localmente
+        this.mostrarToast('Verificando protocolo no portal...', 'info');
+        
+        try {
+            const response = await fetch('/portal/atacadao/api/verificar-protocolo-portal', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
+                },
+                body: JSON.stringify({
+                    lote_id: loteId,
+                    protocolo: protocolo
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Mostrar resultado
+                let mensagem = `Protocolo: ${protocolo}\n`;
+                mensagem += `Status: ${data.agendamento_confirmado ? 'Confirmado' : 'Aguardando'}\n`;
+                if (data.data_aprovada) {
+                    mensagem += `Data aprovada: ${data.data_aprovada}\n`;
+                }
+                if (data.produtos_portal && data.produtos_portal.length > 0) {
+                    mensagem += `\nProdutos no portal: ${data.produtos_portal.length}`;
+                }
+                
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: 'Verificação do Protocolo',
+                        html: mensagem.replace(/\n/g, '<br>'),
+                        icon: data.agendamento_confirmado ? 'success' : 'info'
+                    });
+                } else {
+                    alert(mensagem);
+                }
+                
+                // Se confirmado, atualizar página
+                if (data.agendamento_confirmado) {
+                    setTimeout(() => location.reload(), 3000);
+                }
+            } else {
+                this.mostrarToast(`Erro: ${data.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('Erro ao verificar protocolo:', error);
+            this.mostrarToast('Erro ao verificar protocolo', 'error');
+        }
     }
 
     mostrarToast(mensagem, tipo = 'info') {

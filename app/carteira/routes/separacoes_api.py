@@ -144,3 +144,108 @@ def obter_separacoes_completas(num_pedido):
             'success': False,
             'error': str(e)
         }), 500
+
+
+@carteira_bp.route('/api/verificar-protocolo-portal', methods=['POST'])
+@login_required
+def verificar_protocolo_portal():
+    """
+    Rota proxy para verificar protocolo no portal
+    Redireciona para o módulo portal/atacadao
+    """
+    from flask import request
+    from app.portal.atacadao.verificacao_protocolo import VerificadorProtocoloAtacadao
+    
+    try:
+        data = request.get_json()
+        lote_id = data.get('lote_id')
+        protocolo = data.get('protocolo')
+        
+        if not protocolo:
+            return jsonify({
+                'success': False,
+                'message': 'Protocolo é obrigatório'
+            })
+        
+        logger.info(f"Verificando protocolo {protocolo} via carteira API")
+        
+        # Usar a classe verificadora
+        verificador = VerificadorProtocoloAtacadao()
+        resultado = verificador.verificar_protocolo_completo(protocolo, lote_id)
+        
+        # Se tem confirmação e data, atualizar separação
+        if resultado.get('success') and lote_id and resultado.get('agendamento_confirmado') and resultado.get('data_aprovada'):
+            try:
+                from datetime import datetime
+                separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
+                for sep in separacoes:
+                    sep.agendamento_confirmado = True
+                    sep.agendamento = datetime.strptime(resultado['data_aprovada'], '%Y-%m-%d').date()
+                db.session.commit()
+                logger.info(f"Separação atualizada com confirmação do agendamento")
+            except Exception as e:
+                logger.error(f"Erro ao atualizar separação: {e}")
+                db.session.rollback()
+        
+        return jsonify(resultado)
+        
+    except Exception as e:
+        logger.error(f"Erro na verificação de protocolo: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao verificar protocolo: {str(e)}'
+        }), 500
+
+
+@carteira_bp.route('/api/atualizar-status-separacao', methods=['POST'])
+@login_required
+def atualizar_status_separacao():
+    """
+    Atualiza status da separação com dados do portal
+    """
+    from flask import request
+    from datetime import datetime
+    
+    try:
+        data = request.get_json()
+        lote_id = data.get('lote_id')
+        agendamento = data.get('agendamento')
+        agendamento_confirmado = data.get('agendamento_confirmado', False)
+        
+        if not lote_id:
+            return jsonify({
+                'success': False,
+                'message': 'Lote ID é obrigatório'
+            })
+        
+        # Buscar e atualizar separações
+        separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
+        if not separacoes:
+            return jsonify({
+                'success': False,
+                'message': 'Separação não encontrada'
+            })
+        
+        for sep in separacoes:
+            if agendamento:
+                # Converter string para date se necessário
+                if isinstance(agendamento, str):
+                    sep.agendamento = datetime.strptime(agendamento, '%Y-%m-%d').date()
+                else:
+                    sep.agendamento = agendamento
+            sep.agendamento_confirmado = agendamento_confirmado
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Status atualizado com sucesso'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao atualizar status: {e}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao atualizar status: {str(e)}'
+        }), 500

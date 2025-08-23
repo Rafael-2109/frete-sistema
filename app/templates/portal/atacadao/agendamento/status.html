@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block title %}Status de Agendamento - Portal Atacadão{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar-check"></i> Status de Agendamento - Portal Atacadão
+                    </h5>
+                </div>
+                
+                <div class="card-body">
+                    <!-- Formulário de busca -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <input type="text" 
+                                       id="lote_id" 
+                                       class="form-control" 
+                                       placeholder="Digite o ID do Lote de Separação...">
+                                <div class="input-group-append">
+                                    <button class="btn btn-primary" onclick="verificarStatus()">
+                                        <i class="fas fa-search"></i> Verificar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Área de resultados -->
+                    <div id="resultado" style="display: none;">
+                        <!-- Status De-Para -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-exchange-alt"></i> Status De-Para
+                                </h6>
+                            </div>
+                            <div class="card-body" id="status-depara">
+                                <!-- Preenchido via JavaScript -->
+                            </div>
+                        </div>
+                        
+                        <!-- Dados para Agendamento -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-clipboard-list"></i> Dados para Agendamento
+                                </h6>
+                            </div>
+                            <div class="card-body" id="dados-agendamento">
+                                <!-- Preenchido via JavaScript -->
+                            </div>
+                        </div>
+                        
+                        <!-- Ações -->
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-tools"></i> Ações
+                                </h6>
+                            </div>
+                            <div class="card-body" id="acoes">
+                                <!-- Preenchido via JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function verificarStatus() {
+    const loteId = $('#lote_id').val().trim();
+    
+    if (!loteId) {
+        alert('Digite o ID do lote');
+        return;
+    }
+    
+    // Verificar De-Para
+    $.ajax({
+        url: `/portal/atacadao/agendamento/verificar_depara/${loteId}`,
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                mostrarStatusDePara(response);
+                buscarDadosAgendamento(loteId);
+            } else {
+                alert('Erro: ' + response.message);
+            }
+        },
+        error: function() {
+            alert('Erro ao verificar status');
+        }
+    });
+}
+
+function mostrarStatusDePara(data) {
+    let html = '';
+    
+    if (data.sem_depara === 0) {
+        html = `
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i> 
+                Todos os ${data.total_produtos} produtos têm De-Para cadastrado!
+            </div>
+        `;
+    } else {
+        html = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                ${data.sem_depara} de ${data.total_produtos} produtos SEM De-Para cadastrado
+            </div>
+            <h6>Produtos sem De-Para:</h6>
+            <ul class="list-group">
+        `;
+        
+        data.produtos_sem_depara.forEach(function(prod) {
+            html += `
+                <li class="list-group-item">
+                    <strong>${prod.codigo}</strong> - ${prod.descricao}
+                    <a href="/portal/atacadao/depara/novo?codigo=${prod.codigo}" 
+                       class="btn btn-sm btn-warning float-right" target="_blank">
+                        <i class="fas fa-plus"></i> Cadastrar De-Para
+                    </a>
+                </li>
+            `;
+        });
+        
+        html += '</ul>';
+    }
+    
+    $('#status-depara').html(html);
+    $('#resultado').show();
+}
+
+function buscarDadosAgendamento(loteId) {
+    $.ajax({
+        url: `/portal/atacadao/agendamento/preparar/${loteId}`,
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                mostrarDadosAgendamento(response);
+            }
+        }
+    });
+}
+
+function mostrarDadosAgendamento(data) {
+    let html = '';
+    
+    if (data.produtos.length > 0) {
+        html = `
+            <p><strong>Data de Agendamento:</strong> ${data.data_agendamento || 'Não definida'}</p>
+            <p><strong>Produtos Convertidos:</strong> ${data.total_convertidos} de ${data.total_itens}</p>
+            
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Cód. Atacadão</th>
+                        <th>Descrição</th>
+                        <th>Quantidade</th>
+                        <th>Pallets</th>
+                        <th>Fator</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        data.produtos.forEach(function(prod) {
+            html += `
+                <tr>
+                    <td>${prod.codigo_atacadao}</td>
+                    <td>${prod.descricao_atacadao}</td>
+                    <td>${prod.quantidade.toFixed(2)}</td>
+                    <td>${prod.pallets}</td>
+                    <td>${prod.fator_conversao}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                </tbody>
+            </table>
+        `;
+    } else {
+        html = '<div class="alert alert-warning">Nenhum produto com De-Para para agendar</div>';
+    }
+    
+    $('#dados-agendamento').html(html);
+    
+    // Mostrar ações
+    let acoesHtml = `
+        <button class="btn btn-primary" onclick="abrirPortalAgendamento('${data.lote_id}')">
+            <i class="fas fa-external-link-alt"></i> Abrir Portal Atacadão
+        </button>
+        
+        <button class="btn btn-success ml-2" onclick="gravarProtocolo('${data.lote_id}')">
+            <i class="fas fa-save"></i> Gravar Protocolo
+        </button>
+        
+        <button class="btn btn-info ml-2" onclick="confirmarAgendamento('${data.lote_id}')">
+            <i class="fas fa-check"></i> Confirmar Agendamento
+        </button>
+    `;
+    
+    $('#acoes').html(acoesHtml);
+}
+
+function gravarProtocolo(loteId) {
+    const protocolo = prompt('Digite o protocolo de agendamento:');
+    
+    if (!protocolo) return;
+    
+    $.ajax({
+        url: '/portal/atacadao/agendamento/gravar_protocolo',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            lote_id: loteId,
+            protocolo: protocolo
+        }),
+        headers: {
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        success: function(response) {
+            if (response.success) {
+                alert(response.message);
+                verificarStatus(); // Recarregar
+            } else {
+                alert('Erro: ' + response.message);
+            }
+        }
+    });
+}
+
+function confirmarAgendamento(loteId) {
+    if (!confirm('Confirmar que o agendamento foi realizado com sucesso?')) return;
+    
+    $.ajax({
+        url: '/portal/atacadao/agendamento/confirmar_agendamento',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            lote_id: loteId
+        }),
+        headers: {
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        success: function(response) {
+            if (response.success) {
+                alert(response.message);
+                verificarStatus(); // Recarregar
+            } else {
+                alert('Erro: ' + response.message);
+            }
+        }
+    });
+}
+
+function abrirPortalAgendamento(loteId) {
+    // Aqui você pode adicionar a lógica para abrir o portal ou executar o script de automação
+    alert('Funcionalidade de automação do portal será integrada aqui.\nLote: ' + loteId);
+}
+</script>
+{% endblock %}

@@ -41,6 +41,7 @@ class Pedido(db.Model):
     nf = db.Column(db.String(20))
     status = db.Column(db.String(50), default='ABERTO')
     nf_cd = db.Column(db.Boolean, default=False)  # ✅ NOVO: Flag para NF no CD
+    pedido_cliente = db.Column(db.String(100), nullable=True)  # ✅ NOVO: Pedido de Compra do Cliente
     
     # Controle de impressão da separação
     separacao_impressa = db.Column(db.Boolean, default=False, nullable=False)

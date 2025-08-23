@@ -63,10 +63,17 @@ ATACADAO_CONFIG = {
     
     'veiculos_permitidos': {
         '6': 'Kombi/Van - (Cód.: 1 - Máx: 5 paletes)',
-        '5': 'F4000-3/4 - Baú - (Cód.: 3 - Máx: 10 paletes)',
-        '11': 'Toco-Baú - (Cód.: 4 - Máx: 24 paletes)',
-        '8': 'Truck-Baú - (Cód.: 5 - Máx: 75 paletes)',
-        '2': 'Carreta-Baú - (Cód.: 7 - Máx: 80 paletes)'
+        '5': 'F4000-3/4 - Baú - (Cód.: 3 - Máx: 10 paletes) - Até 2.000 kg',
+        '11': 'Toco-Baú - (Cód.: 4 - Máx: 24 paletes) - Até 4.000 kg',
+        '8': 'Truck-Baú - (Cód.: 5 - Máx: 75 paletes) - Até 7.000 kg',
+        '2': 'Carreta-Baú - (Cód.: 7 - Máx: 80 paletes) - Acima de 7.000 kg'
+    },
+    
+    'regras_veiculo_por_peso': {
+        'ate_2000': '5',    # F4000-3/4
+        'ate_4000': '11',   # Toco-Baú
+        'ate_7000': '8',    # Truck-Baú
+        'acima_7000': '2'   # Carreta-Baú
     },
     
     'valores_padrao': {

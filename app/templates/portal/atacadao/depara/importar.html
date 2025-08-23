@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Importar Planilha De-Para{% endblock %}
+
+{% block content %}
+<div class="container mt-3">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-excel"></i> Importar Planilha De-Para
+                    </h5>
+                </div>
+                
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> Instruções</h6>
+                        <p>A planilha deve conter as seguintes colunas (nomes exatos, sem distinção de maiúsculas):</p>
+                        <ul>
+                            <li><strong>cod atacadao</strong> - Código do produto no Atacadão (obrigatório)</li>
+                            <li><strong>descricao atacadao</strong> - Descrição do produto no Atacadão (obrigatório)</li>
+                            <li><strong>nosso cod</strong> - Nosso código do produto (obrigatório)</li>
+                        </ul>
+                        <p class="mb-0">A descrição do nosso produto será buscada automaticamente em CadastroPalletizacao.</p>
+                    </div>
+                    
+                    <form method="POST" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label for="arquivo">Selecione o arquivo</label>
+                            <div class="custom-file">
+                                <input type="file" 
+                                       class="custom-file-input" 
+                                       id="arquivo" 
+                                       name="arquivo"
+                                       accept=".xlsx,.xls,.csv"
+                                       required>
+                                <label class="custom-file-label" for="arquivo">
+                                    Escolher arquivo...
+                                </label>
+                            </div>
+                            <small class="form-text text-muted">
+                                Formatos aceitos: Excel (.xlsx, .xls) ou CSV (.csv)
+                            </small>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <strong>Atenção:</strong>
+                            <ul class="mb-0">
+                                <li>Se o mapeamento já existir (mesmo código nosso + código atacadão), será atualizado</li>
+                                <li>Novos mapeamentos serão criados automaticamente</li>
+                                <li>Todos os mapeamentos importados serão marcados como ativos</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- Modelo de planilha -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">Exemplo de Planilha</h6>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>cod atacadao</th>
+                                            <th>descricao atacadao</th>
+                                            <th>nosso cod</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>35640</td>
+                                            <td>ARROZ TIPO 1 5KG</td>
+                                            <td>ARR001</td>
+                                        </tr>
+                                        <tr>
+                                            <td>35641</td>
+                                            <td>FEIJÃO PRETO 1KG</td>
+                                            <td>FEJ002</td>
+                                        </tr>
+                                        <tr>
+                                            <td>35642</td>
+                                            <td>AÇÚCAR CRISTAL 5KG</td>
+                                            <td>ACU003</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                
+                                <a href="#" id="baixar_modelo" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-download"></i> Baixar Modelo de Planilha
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group text-center">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-upload"></i> Importar Planilha
+                            </button>
+                            <a href="{{ url_for('portal.portal_depara.index') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Atualizar nome do arquivo selecionado
+    $('.custom-file-input').on('change', function() {
+        let fileName = $(this).val().split('\\').pop();
+        $(this).siblings('.custom-file-label').addClass('selected').html(fileName || 'Escolher arquivo...');
+    });
+    
+    // Baixar modelo de planilha
+    $('#baixar_modelo').click(function(e) {
+        e.preventDefault();
+        
+        // Criar CSV de exemplo
+        const csvContent = "cod atacadao,descricao atacadao,nosso cod\n" +
+                          "35640,ARROZ TIPO 1 5KG,ARR001\n" +
+                          "35641,FEIJÃO PRETO 1KG,FEJ002\n" +
+                          "35642,AÇÚCAR CRISTAL 5KG,ACU003";
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'modelo_depara_atacadao.csv');
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+});
+</script>
+{% endblock %}

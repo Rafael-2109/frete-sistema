@@ -12,7 +12,6 @@ Objetivo: Recuperar separações deletadas pela função anterior com bug
 import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-from decimal import Decimal
 import uuid
 from app import db
 from app.separacao.models import Separacao

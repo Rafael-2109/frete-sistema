@@ -193,6 +193,7 @@ def gerar_separacao_completa_pedido(num_pedido):
                 agendamento=agendamento_obj,
                 protocolo=protocolo,
                 agendamento_confirmado=agendamento_confirmado,
+                pedido_cliente=item.pedido_cliente,  # 🆕 Incluir pedido_cliente diretamente da CarteiraPrincipal
                 tipo_envio=tipo_envio,
                 criado_em=agora_brasil(),
             )
@@ -227,6 +228,13 @@ def gerar_separacao_completa_pedido(num_pedido):
             # Se por algum motivo já existe, remover
             db.session.delete(pedido_existente)
 
+        # Buscar pedido_cliente da CarteiraPrincipal usando apenas num_pedido
+        item_carteira = CarteiraPrincipal.query.filter_by(
+            num_pedido=num_pedido,
+            ativo=True
+        ).first()
+        pedido_cliente = item_carteira.pedido_cliente if item_carteira else None
+        
         # Criar novo pedido
         novo_pedido = Pedido(
             separacao_lote_id=lote_id,
@@ -245,6 +253,7 @@ def gerar_separacao_completa_pedido(num_pedido):
             expedicao=expedicao_obj,
             agendamento=agendamento_obj,
             protocolo=protocolo,
+            pedido_cliente=pedido_cliente,  # ✅ NOVO: Incluir pedido_cliente
             status="ABERTO",  # Sempre começa como ABERTO
         )
 
@@ -399,6 +408,7 @@ def transformar_lote_em_separacao(lote_id):
                 agendamento=pre_sep.data_agendamento_editada,
                 protocolo=pre_sep.protocolo_editado,
                 agendamento_confirmado=pre_sep.agendamento_confirmado if hasattr(pre_sep, 'agendamento_confirmado') else False,
+                pedido_cliente=item_carteira.pedido_cliente,  # 🆕 Incluir pedido_cliente diretamente da CarteiraPrincipal
                 tipo_envio=pre_sep.tipo_envio,
                 criado_em=agora_brasil(),
             )
@@ -428,6 +438,13 @@ def transformar_lote_em_separacao(lote_id):
             # Se por algum motivo já existe, remover
             db.session.delete(pedido_existente)
 
+        # Buscar pedido_cliente da CarteiraPrincipal usando apenas num_pedido
+        item_carteira = CarteiraPrincipal.query.filter_by(
+            num_pedido=num_pedido,
+            ativo=True
+        ).first()
+        pedido_cliente = item_carteira.pedido_cliente if item_carteira else None
+
         # Criar novo pedido
         novo_pedido = Pedido(
             separacao_lote_id=separacao_lote_id,
@@ -446,6 +463,7 @@ def transformar_lote_em_separacao(lote_id):
             expedicao=pre_separacoes[0].data_expedicao_editada,
             agendamento=pre_separacoes[0].data_agendamento_editada,
             protocolo=pre_separacoes[0].protocolo_editado,
+            pedido_cliente=pedido_cliente,  # ✅ NOVO: Incluir pedido_cliente
             status="ABERTO",  # Sempre começa como ABERTO
         )
 

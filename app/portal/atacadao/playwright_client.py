@@ -4,19 +4,36 @@ Localizado na pasta CORRETA: app/portal/atacadao/
 """
 
 import os
-from datetime import datetime
+import time
+from datetime import datetime, date
+from pathlib import Path
 from playwright.sync_api import sync_playwright
 import logging
 from .config import ATACADAO_CONFIG
+from dotenv import load_dotenv
+
+# Carregar variáveis de ambiente
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 class AtacadaoPlaywrightClient:
     """Cliente Playwright para o portal Atacadao (Hodie Booking)"""
     
-    def __init__(self, headless=True):
+    def __init__(self, headless=True): 
         self.headless = headless
-        self.storage_file = "storage_state_atacadao.json"
+        # Path absoluto para o storage_state - usar raiz do projeto
+        # Primeiro tentar no diretório raiz (onde geralmente está)
+        root_storage = Path.cwd() / "storage_state_atacadao.json"
+        # Se não existir, usar o diretório do módulo
+        module_storage = Path(__file__).resolve().parent / "storage_state_atacadao.json"
+        
+        if root_storage.exists():
+            self.storage_file = str(root_storage)
+            logger.info(f"Usando storage_state do raiz: {self.storage_file}")
+        else:
+            self.storage_file = str(module_storage)
+            logger.info(f"Usando storage_state do módulo: {self.storage_file}")
         self.config = ATACADAO_CONFIG  # USANDO CONFIG CORRETO
         self.playwright = None
         self.browser = None
@@ -27,24 +44,22 @@ class AtacadaoPlaywrightClient:
         """Inicia sessao do Playwright com ou sem login salvo"""
         self.playwright = sync_playwright().start()
         
-        # Configuracoes do navegador
+        # Configuracoes do navegador - IGUAL AO SCRIPT QUE FUNCIONA
+        # REMOVIDO: args=['--disable-blink-features=AutomationControlled']
         self.browser = self.playwright.chromium.launch(
-            headless=self.headless,
-            args=['--disable-blink-features=AutomationControlled']
+            headless=self.headless
         )
         
-        # Contexto com sessao salva ou novo
+        # Contexto com sessao salva ou novo - IGUAL AO SCRIPT QUE FUNCIONA
+        # REMOVIDO: viewport={'width': 1280, 'height': 720}
         if os.path.exists(self.storage_file) and not salvar_login:
             logger.info(f"Carregando sessao salva de {self.storage_file}")
             self.context = self.browser.new_context(
-                storage_state=self.storage_file,
-                viewport={'width': 1280, 'height': 720}
+                storage_state=self.storage_file
             )
         else:
             logger.info("Criando nova sessao")
-            self.context = self.browser.new_context(
-                viewport={'width': 1280, 'height': 720}
-            )
+            self.context = self.browser.new_context()
         
         self.page = self.context.new_page()
     
@@ -76,6 +91,149 @@ class AtacadaoPlaywrightClient:
         
         self.fechar()
         return True
+    
+    def fazer_login_com_captcha(self):
+        """
+        Faz login automaticamente preenchendo credenciais do .env
+        Abre navegador visível para o usuário resolver o CAPTCHA
+        """
+        try:
+            # Verificar se tem credenciais no .env
+            usuario = os.environ.get('ATACADAO_USUARIO')
+            senha = os.environ.get('ATACADAO_SENHA')
+            
+            if not usuario or not senha:
+                logger.warning("Credenciais não encontradas no .env - usando login manual")
+                return self.fazer_login_manual()
+            
+            logger.info("Iniciando login com CAPTCHA...")
+            print("\n" + "="*60)
+            print("🔐 LOGIN AUTOMÁTICO COM CAPTCHA")
+            print("="*60)
+            print(f"\n✅ Usuário: {usuario}")
+            print("✅ Senha: ****")
+            print("\n📌 Os campos serão preenchidos automaticamente")
+            print("🔍 Você só precisa:")
+            print("   1. Resolver o CAPTCHA")
+            print("   2. Clicar em ENTRAR")
+            print("\n⏳ Aguardando até 5 minutos...")
+            print("="*60 + "\n")
+            
+            # Fechar sessão atual se existir
+            if self.page:
+                self.fechar()
+            
+            # Iniciar em modo visível - IGUAL AO SCRIPT QUE FUNCIONA
+            self.headless = False
+            self.playwright = sync_playwright().start()
+            self.browser = self.playwright.chromium.launch(
+                headless=True
+                # REMOVIDO: args=['--disable-blink-features=AutomationControlled']
+            )
+            
+            # Criar contexto novo (sem sessão antiga) - IGUAL AO SCRIPT QUE FUNCIONA
+            # REMOVIDO: viewport={'width': 1280, 'height': 720}
+            self.context = self.browser.new_context()
+            self.page = self.context.new_page()
+            
+            # Navegar para login
+            url_login = self.config['urls']['login']
+            logger.info(f"Navegando para: {url_login}")
+            self.page.goto(url_login)
+            
+            # WAIT ADAPTATIVO - Aguardar página de login carregar
+            self.aguardar_elemento_visivel('#email, #username, input[type="email"]', timeout_ms=1000)
+            
+            # Pré-preencher credenciais
+            logger.info("Preenchendo credenciais...")
+            
+            # Tentar diferentes seletores para email
+            seletores_email = [
+                'input[type="email"]',
+                'input[name="email"]',
+                'input[name="username"]',
+                'input[placeholder*="mail" i]',
+                '#email',
+                '#username'
+            ]
+            
+            for seletor in seletores_email:
+                try:
+                    if self.page.locator(seletor).count() > 0:
+                        self.page.locator(seletor).first.fill(usuario)
+                        logger.info(f"Email preenchido com seletor: {seletor}")
+                        break
+                except Exception:
+                    continue
+            
+            # Tentar diferentes seletores para senha
+            seletores_senha = [
+                'input[type="password"]',
+                'input[name="password"]',
+                'input[name="senha"]',
+                '#password'
+            ]
+            
+            for seletor in seletores_senha:
+                try:
+                    if self.page.locator(seletor).count() > 0:
+                        self.page.locator(seletor).first.fill(senha)
+                        logger.info(f"Senha preenchida com seletor: {seletor}")
+                        break
+                except Exception:
+                    continue
+            
+            print("\n✅ Credenciais preenchidas!")
+            print("👉 Por favor, resolva o CAPTCHA e clique em ENTRAR\n")
+            
+            # Aguardar login com timeout de 5 minutos
+            inicio = time.time()
+            timeout_segundos = 300
+            login_sucesso = False
+            
+            while time.time() - inicio < timeout_segundos:
+                try:
+                    # Verificar se saiu da página de login
+                    url_atual = self.page.url
+                    
+                    if 'login' not in url_atual.lower():
+                        # Verificar se chegou em página autenticada
+                        if '/pedidos' in url_atual or '/dashboard' in url_atual:
+                            logger.info("Login detectado!")
+                            login_sucesso = True
+                            break
+                    
+                    # Verificar indicadores de login
+                    for selector in ['.user-menu', 'a[href*="logout"]', '#usuario-logado']:
+                        if self.page.locator(selector).count() > 0:
+                            logger.info(f"Login detectado via {selector}")
+                            login_sucesso = True
+                            break
+                    
+                    if login_sucesso:
+                        break
+                    
+                    time.sleep(2)
+                    
+                except Exception:
+                    pass
+            
+            if login_sucesso:
+                # Salvar sessão
+                self.context.storage_state(path=self.storage_file)
+                logger.info(f"Sessão salva em {self.storage_file}")
+                print("\n✅ LOGIN REALIZADO COM SUCESSO!")
+                print(f"📁 Sessão salva para uso futuro")
+                print("="*60 + "\n")
+                return True
+            else:
+                print("\n❌ Timeout - Login não foi completado em 5 minutos")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Erro no login com CAPTCHA: {e}")
+            print(f"\n❌ Erro: {e}")
+            return False
     
     def verificar_login(self):
         """Verifica se esta logado no portal"""
@@ -109,6 +267,281 @@ class AtacadaoPlaywrightClient:
             logger.error(f"Erro ao verificar login: {e}")
             return False
     
+    def _garantir_sessao(self):
+        """Garante que a sessão está válida antes de operações POST"""
+        # Se não tem página, criar uma
+        if not self.page:
+            logger.info("Nenhuma sessão ativa. Iniciando...")
+            self.iniciar_sessao(salvar_login=False)
+        
+        # Verificar se está logado
+        if not self.verificar_login():
+            logger.info("Sessão inválida ou expirada. Tentando login interativo...")
+            
+            # Fechar sessão atual
+            self.fechar()
+            
+            # Fazer login com CAPTCHA (usa credenciais do .env)
+            if self.fazer_login_com_captcha():
+                logger.info("Login realizado com sucesso. Reiniciando sessão...")
+                # Reiniciar com a nova sessão salva
+                self.iniciar_sessao(salvar_login=False)
+                
+                # Verificar se funcionou
+                if self.verificar_login():
+                    logger.info("Sessão válida estabelecida!")
+                    return True
+                else:
+                    logger.error("Login ainda inválido após sucesso do CAPTCHA")
+                    return False
+            else:
+                logger.error("Usuário não completou o login com CAPTCHA")
+                return False
+        
+        # Sessão já válida
+        return True
+    
+    def aguardar_com_retry(self, condicao_func, timeout_ms=5000, intervalo_ms=200, descricao="operação"):
+        """
+        Aguarda uma condição com retry rápido
+        
+        Args:
+            condicao_func: Função que retorna True quando a condição é satisfeita
+            timeout_ms: Timeout total em milissegundos (padrão 5000ms = 5s)
+            intervalo_ms: Intervalo entre tentativas em ms (padrão 200ms)
+            descricao: Descrição da operação para log
+        
+        Returns:
+            True se a condição foi satisfeita, False se deu timeout
+        """
+        import time
+        tempo_inicial = time.time()
+        timeout_segundos = timeout_ms / 1000.0
+        intervalo_segundos = intervalo_ms / 1000.0
+        
+        tentativa = 0
+        while (time.time() - tempo_inicial) < timeout_segundos:
+            tentativa += 1
+            
+            try:
+                if condicao_func():
+                    logger.info(f"✅ {descricao} - sucesso na tentativa {tentativa} após {(time.time() - tempo_inicial)*1000:.0f}ms")
+                    return True
+            except Exception as e:
+                logger.debug(f"Tentativa {tentativa} falhou: {e}")
+            
+            # Aguardar intervalo antes da próxima tentativa
+            time.sleep(intervalo_segundos)
+        
+        logger.warning(f"⚠️ {descricao} - timeout após {tentativa} tentativas em {timeout_ms}ms")
+        return False
+    
+    def aguardar_com_retry_progressivo(self, condicao_func, timeout_ms=5000, 
+                                       inicial_ms=300, max_intervalo_ms=1000, 
+                                       descricao="operação"):
+        """
+        Aguarda com retry progressivo (backoff) - ADAPTATIVO À VELOCIDADE DO NAVEGADOR
+        
+        Args:
+            condicao_func: Função que retorna True quando pronto
+            timeout_ms: Timeout total (default 5000ms)
+            inicial_ms: Intervalo inicial (default 300ms)
+            max_intervalo_ms: Intervalo máximo (default 1000ms)
+            descricao: Descrição para log
+        
+        Returns:
+            True se sucesso, False se timeout
+        """
+        import time
+        tempo_inicial = time.time()
+        timeout_segundos = timeout_ms / 1000.0
+        intervalo_atual_ms = inicial_ms
+        tentativa = 0
+        
+        while (time.time() - tempo_inicial) < timeout_segundos:
+            tentativa += 1
+            tempo_decorrido_ms = (time.time() - tempo_inicial) * 1000
+            
+            try:
+                if condicao_func():
+                    logger.info(f"✅ {descricao} - sucesso na tentativa {tentativa} "
+                              f"após {tempo_decorrido_ms:.0f}ms (economizou {timeout_ms - tempo_decorrido_ms:.0f}ms)")
+                    return True
+            except Exception as e:
+                logger.debug(f"Tentativa {tentativa} ({tempo_decorrido_ms:.0f}ms): {e}")
+            
+            # Aguardar com backoff progressivo
+            time.sleep(intervalo_atual_ms / 1000.0)
+            
+            # Aumentar intervalo progressivamente (até o máximo)
+            intervalo_atual_ms = min(intervalo_atual_ms * 1.5, max_intervalo_ms)
+        
+        logger.warning(f"⚠️ {descricao} - timeout após {tentativa} tentativas "
+                      f"em {(time.time() - tempo_inicial)*1000:.0f}ms")
+        return False
+    
+    def aguardar_elemento_visivel(self, seletor, timeout_ms=3000):
+        """
+        Helper específico para aguardar elementos ficarem visíveis
+        ADAPTATIVO - para assim que o elemento aparece
+        """
+        def elemento_visivel():
+            try:
+                return self.page.locator(seletor).is_visible()
+            except:
+                return False
+        
+        return self.aguardar_com_retry_progressivo(
+            elemento_visivel,
+            timeout_ms=timeout_ms,
+            inicial_ms=200,  # Check rápido a cada 200ms
+            max_intervalo_ms=500,  # Máximo 500ms entre checks
+            descricao=f"Elemento '{seletor}' ficar visível"
+        )
+    
+    def _capturar_protocolo_apos_salvar(self, timeout_ms=5000):
+        """Captura protocolo com retry rápido"""
+        inicio = time.time()
+        timeout_s = timeout_ms / 1000
+        tentativa = 0
+        
+        while (time.time() - inicio) < timeout_s:
+            tentativa += 1
+            
+            try:
+                # Pequeno scroll para forçar renderização (100ms total)
+                self.page.evaluate("window.scrollBy(0, 50)")
+                self.page.wait_for_timeout(50)
+                self.page.evaluate("window.scrollBy(0, -50)")
+                self.page.wait_for_timeout(50)
+                
+                # Estratégia 1: Link "ACOMPANHE AGENDAMENTO" (mais rápido)
+                links = self.page.locator('a[href*="/agendamentos/"]').all()
+                for link in links[:3]:  # Verificar apenas os 3 primeiros
+                    href = link.get_attribute('href')
+                    if href and '/agendamentos/' in href:
+                        protocolo = href.split('/agendamentos/')[-1].split('/')[0].split('?')[0]
+                        if protocolo and protocolo.isdigit():
+                            logger.info(f"✅ Protocolo capturado: {protocolo}")
+                            return protocolo
+                
+                # Estratégia 2: URL atual
+                if '/agendamentos/' in self.page.url:
+                    protocolo = self.page.url.split('/agendamentos/')[-1].split('/')[0].split('?')[0]
+                    if protocolo and protocolo.isdigit():
+                        logger.info(f"✅ Protocolo da URL: {protocolo}")
+                        return protocolo
+                
+            except Exception:
+                pass
+            
+            # Aguardar 200ms antes da próxima tentativa
+            self.page.wait_for_timeout(200)
+        
+        logger.warning(f"⚠️ Protocolo não capturado após {tentativa} tentativas")
+        return None
+    
+    def _clicar_salvar(self):
+        """Clica no botão Salvar - COM DIAGNÓSTICO DETALHADO"""
+        
+        logger.info("🔍 Analisando botões de salvar na página...")
+        
+        # 1. Verificar se o botão #salvar existe e suas propriedades
+        botao_salvar = self.page.locator('#salvar')
+        if botao_salvar.count() > 0:
+            logger.info(f"✅ Botão #salvar encontrado!")
+            
+            # Verificar se está visível
+            is_visible = botao_salvar.is_visible()
+            logger.info(f"   - Visível: {is_visible}")
+            
+            # Verificar se está habilitado
+            is_enabled = botao_salvar.is_enabled()
+            logger.info(f"   - Habilitado: {is_enabled}")
+            
+            # Verificar classes
+            classes = botao_salvar.get_attribute('class')
+            logger.info(f"   - Classes: {classes}")
+            
+            # Verificar style
+            style = botao_salvar.get_attribute('style')
+            logger.info(f"   - Style: {style}")
+            
+            # Verificar se tem onclick
+            onclick = botao_salvar.get_attribute('onclick')
+            logger.info(f"   - OnClick: {onclick}")
+            
+            # Screenshot do botão antes de clicar
+            if is_visible:
+                try:
+                    botao_salvar.screenshot(path=f"botao_salvar_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+                    logger.info("   📸 Screenshot do botão salvo")
+                except Exception:
+                    pass
+            
+            # FORÇAR CLIQUE DE VÁRIAS FORMAS
+            logger.info("🎯 Tentando clicar no botão Salvar...")
+            
+            # Método 1: Click normal
+            try:
+                botao_salvar.click()
+                logger.info("   ✅ Click normal executado")
+                self.page.wait_for_timeout(500)  # Aguardar meio segundo
+                
+                # Verificar se mudou de página
+                current_url = self.page.url
+                logger.info(f"   URL após click: {current_url}")
+                
+                return True
+            except Exception as e:
+                logger.warning(f"   ⚠️ Click normal falhou: {e}")
+                
+                # Método 2: Click com JavaScript
+                try:
+                    logger.info("   Tentando click via JavaScript...")
+                    self.page.evaluate('document.querySelector("#salvar").click()')
+                    logger.info("   ✅ Click JavaScript executado")
+                    self.page.wait_for_timeout(500)
+                    return True
+                except Exception as e2:
+                    logger.warning(f"   ⚠️ Click JavaScript falhou: {e2}")
+                    
+                    # Método 3: Força jQuery click
+                    try:
+                        logger.info("   Tentando click via jQuery...")
+                        self.page.evaluate('$("#salvar").click()')
+                        logger.info("   ✅ Click jQuery executado")
+                        self.page.wait_for_timeout(500)
+                        return True
+                    except Exception as e3:
+                        logger.error(f"   ❌ Todos os métodos falharam: {e3}")
+                        return False
+        
+        # Se não encontrou #salvar, procurar alternativas
+        logger.warning("❌ Botão #salvar não encontrado, procurando alternativas...")
+        
+        # Procurar TODOS os botões possíveis na página
+        botoes_possiveis = self.page.locator('button, div.btn-panel, a.btn, input[type="submit"], div[onclick], button[onclick]').all()
+        logger.info(f"Encontrados {len(botoes_possiveis)} elementos clicáveis")
+        
+        for idx, botao in enumerate(botoes_possiveis):
+            try:
+                text = botao.text_content() or ""
+                if "salvar" in text.lower():
+                    logger.info(f"   Botão {idx}: {text.strip()[:50]}")
+                    
+                    # Tentar clicar
+                    if botao.is_visible():
+                        botao.click()
+                        logger.info(f"   ✅ Clicado no botão: {text.strip()}")
+                        return True
+            except Exception:
+                continue
+        
+        logger.error("❌ Nenhum botão de salvar encontrado!")
+        return False
+
+    
     def buscar_pedido(self, numero_pedido):
         """Busca um pedido no portal"""
         try:
@@ -124,43 +557,42 @@ class AtacadaoPlaywrightClient:
                 if filtro_toggle.is_visible():
                     filtro_toggle.click()
                     logger.info("Clicando no toggle de filtros")
-                    self.page.wait_for_timeout(1500)  # Aguardar animacao do collapse
                     
-                    # Verificar se abriu verificando se o campo esta visivel
-                    if not self.page.locator('#nr_pedido').is_visible():
+                    # WAIT ADAPTATIVO - Aguardar campo de filtro ficar visível
+                    campo_visivel = self.aguardar_elemento_visivel('#nr_pedido', timeout_ms=1000)
+                    
+                    if not campo_visivel:
                         # Tentar clicar novamente
                         logger.info("Campo ainda nao visivel, clicando novamente...")
                         filtro_toggle.click()
-                        self.page.wait_for_timeout(1500)
+                        # WAIT ADAPTATIVO - Segunda tentativa
+                        self.aguardar_elemento_visivel('#nr_pedido', timeout_ms=1000)
                         
             except Exception as e:
                 logger.warning(f"Erro ao abrir filtros: {e}")
                 # Continuar, pode ja estar aberto
             
-            # LIMPAR FILTROS DE DATA
-            logger.info("Limpando filtros de data...")
+            # CORREÇÃO: Limpar APENAS o botão específico do campo dthr_elaboracao
+            logger.info("Limpando filtro de data de elaboração...")
             try:
-                # Procurar botoes de limpar data (X)
-                botoes_limpar = self.page.locator('button[data-action="remove"]').all()
-                for botao in botoes_limpar:
-                    if botao.is_visible():
-                        botao.click()
-                        logger.info("Filtro de data limpo")
-                        self.page.wait_for_timeout(500)
-            except:
-                pass  # Se nao encontrar, continua
-            
-            # Limpar campos de data diretamente se existirem
-            try:
-                # Limpar data de elaboracao
-                if self.page.locator('#dthr_elaboracao').is_visible():
-                    self.page.fill('#dthr_elaboracao', '')
-                # Limpar outros campos de data que possam existir
-                if self.page.locator('#data_inicio').is_visible():
-                    self.page.fill('#data_inicio', '')
-                if self.page.locator('#data_fim').is_visible():
-                    self.page.fill('#data_fim', '')
-            except:
+                # Usar seletor ESPECÍFICO com DOIS atributos para garantir elemento correto
+                botao_limpar_especifico = self.page.locator(
+                    'button[data-target_daterangepicker="dthr_elaboracao"][data-action="remove"]'
+                )
+                
+                if botao_limpar_especifico.count() > 0:
+                    try:
+                        # Aguardar estar visível com timeout curto
+                        botao_limpar_especifico.wait_for(state="visible", timeout=2000)
+                        botao_limpar_especifico.click()
+                        self.page.wait_for_timeout(300)  # Pausa mínima após clique
+                        logger.info("✅ Filtro dthr_elaboracao limpo com sucesso")
+                    except Exception as e:
+                        logger.debug(f"Botão não ficou visível no tempo esperado: {e}")
+                else:
+                    logger.debug("Botão de limpar dthr_elaboracao não encontrado, continuando...")
+            except Exception as e:
+                logger.warning(f"Erro ao limpar filtro de data: {e} - continuando sem limpar")
                 pass
             
             # Verificar se o campo esta visivel apos abrir filtros
@@ -172,8 +604,10 @@ class AtacadaoPlaywrightClient:
                 try:
                     # Forcar clique no primeiro elemento que pareca ser o toggle
                     self.page.locator('a[data-toggle="collapse"]').first.click()
-                    self.page.wait_for_timeout(1000)
-                except:
+                    # WAIT ADAPTATIVO - Aguardar filtros abrirem
+                    self.aguardar_elemento_visivel(campo_pedido, timeout_ms=1000)
+                except Exception as e:
+                    logger.error(f"Erro ao abrir filtros novamente: {e}")
                     pass
             
             # Preencher campo de busca
@@ -190,110 +624,63 @@ class AtacadaoPlaywrightClient:
             self.page.wait_for_selector(botao_filtrar, timeout=5000)
             self.page.click(botao_filtrar)
             
-            # Aguardar resultado COM RETRY
+            # Aguardar resultado COM RETRY RÁPIDO
             logger.info("Aguardando resultado da busca...")
             
-            # Tentar multiplas vezes para garantir que o resultado carregue
-            max_tentativas = 5
-            pedido_encontrado = False
-            
-            for tentativa in range(max_tentativas):
-                logger.info(f"Tentativa {tentativa + 1} de {max_tentativas}...")
-                
-                # Aguardar um tempo antes de verificar
-                self.page.wait_for_timeout(3000 if tentativa == 0 else 5000)
-                
-                # IMPORTANTE: Verificar na coluna correta "N pedido original"
-                # A segunda coluna (indice 1) contem o pedido original
-                linhas_tabela = self.page.locator('table tbody tr').count()
-                if linhas_tabela > 0:
-                    linhas = self.page.locator('table tbody tr').all()
-                    for linha in linhas:
+            # Usar retry rápido - verificar a cada 200ms por até 5 segundos
+            def tem_resultados():
+                linhas = self.page.locator('table tbody tr').count()
+                if linhas > 0:
+                    # Verificar se tem o pedido específico
+                    todas_linhas = self.page.locator('table tbody tr').all()
+                    for linha in todas_linhas:
                         colunas = linha.locator('td').all()
                         if len(colunas) >= 2:
-                            # Segunda coluna e "N pedido original"
+                            # Segunda coluna é "N° pedido original"
                             pedido_original = colunas[1].text_content().strip()
                             if pedido_original == numero_pedido:
-                                logger.info(f"Pedido {numero_pedido} encontrado na coluna 'N pedido original'!")
-                                pedido_encontrado = True
-                                # Clicar no link desta linha
-                                link_exibir = linha.locator('a[title="Exibir"]')
-                                if link_exibir.count() > 0:
-                                    link_exibir.click()
-                                    logger.info(f"Pedido {numero_pedido} aberto com sucesso")
-                                    self.page.wait_for_load_state('networkidle', timeout=10000)
-                                    return True
-                                break
-                    
-                    if pedido_encontrado:
-                        break
+                                return True
+                return False
+            
+            pedido_encontrado = self.aguardar_com_retry(
+                tem_resultados, 
+                timeout_ms=5000, 
+                intervalo_ms=200, 
+                descricao=f"Busca do pedido {numero_pedido}"
+            )
+            
+            if not pedido_encontrado:
+                # Se não encontrou com retry rápido, tentar mais uma vez clicando em filtrar novamente
+                logger.info("Pedido não encontrado no primeiro retry, tentando novamente...")
+                self.page.click(botao_filtrar)
                 
-                # Verificar se tem mensagem de vazio
-                content = self.page.content()
-                if "Nenhum registro encontrado" in content or "Nenhum dado disponivel" in content:
-                    # Se esta vazio, tentar clicar em filtrar novamente
-                    if tentativa < max_tentativas - 1:
-                        logger.info("Tabela vazia, tentando filtrar novamente...")
-                        self.page.click(botao_filtrar)
-                    else:
-                        logger.warning("Tabela continua vazia apos todas tentativas")
-                        break
+                pedido_encontrado = self.aguardar_com_retry(
+                    tem_resultados, 
+                    timeout_ms=3000, 
+                    intervalo_ms=200, 
+                    descricao=f"Segunda tentativa - pedido {numero_pedido}"
+                )
                 
-                # Se nao encontrou nem resultado nem mensagem de vazio, aguardar mais
-                if tentativa < max_tentativas - 1:
-                    logger.info("Aguardando carregamento...")
-                    try:
-                        self.page.wait_for_load_state('networkidle', timeout=5000)
-                    except:
-                        pass
             
-            # Screenshot para debug
-            self.page.screenshot(path=f"busca_pedido_{numero_pedido}_resultado.png")
-            logger.info(f"Screenshot salvo: busca_pedido_{numero_pedido}_resultado.png")
-            
-            # Verificar se ha resultados
-            link_exibir = self.config['seletores']['link_exibir_pedido']
-            
-            # Verificar se encontrou algum link
-            if self.page.locator(link_exibir).count() > 0:
-                try:
-                    # Clicar no primeiro link encontrado
-                    self.page.locator(link_exibir).first.click()
-                    logger.info(f" Pedido {numero_pedido} encontrado e aberto")
-                    
-                    # Aguardar carregar a pagina do pedido
-                    self.page.wait_for_load_state('networkidle', timeout=10000)
-                    return True
-                except Exception as e:
-                    logger.error(f"Erro ao clicar no link: {e}")
-                    return False
+            if pedido_encontrado:
+                # Pedido encontrado, agora abrir ele
+                linhas = self.page.locator('table tbody tr').all()
+                for linha in linhas:
+                    colunas = linha.locator('td').all()
+                    if len(colunas) >= 2:
+                        pedido_original = colunas[1].text_content().strip()
+                        if pedido_original == numero_pedido:
+                            # Clicar no link desta linha
+                            link_exibir = linha.locator('a[title="Exibir"]')
+                            if link_exibir.count() > 0:
+                                link_exibir.click()
+                                logger.info(f"Pedido {numero_pedido} aberto com sucesso")
+                                self.page.wait_for_load_state('networkidle', timeout=10000)
+                                return True
+                            break
             else:
-                # Nao encontrou resultado
-                logger.warning(f" Pedido {numero_pedido} nao encontrado apos {max_tentativas} tentativas")
-                
-                # Como alternativa, se tivermos um mapeamento de pedidos para IDs, podemos tentar URL direta
-                # Por exemplo, voce mencionou que 606833 corresponde ao ID 912933499
-                pedido_id_map = {
-                    '606833': '912933499',  # Voce forneceu este mapeamento
-                    '109561': '912933499',  # Mesmo ID para o pedido filial
-                }
-                
-                if numero_pedido in pedido_id_map:
-                    pedido_id = pedido_id_map[numero_pedido]
-                    url_direta = f"{self.config['urls']['base']}/pedidos/{pedido_id}"
-                    logger.info(f"Tentando URL direta: {url_direta}")
-                    
-                    try:
-                        self.page.goto(url_direta, timeout=15000)
-                        self.page.wait_for_load_state('networkidle', timeout=10000)
-                        
-                        # Verificar se chegou no pedido
-                        if f"/pedidos/{pedido_id}" in self.page.url:
-                            logger.info(f" Pedido aberto via URL direta!")
-                            return True
-                    except:
-                        pass
-                
+                # Não encontrou o pedido
+                logger.warning(f"Pedido {numero_pedido} não encontrado na busca")
                 return False
                 
         except Exception as e:
@@ -303,11 +690,19 @@ class AtacadaoPlaywrightClient:
     def criar_agendamento(self, dados):
         """Cria um agendamento no portal seguindo o fluxo real"""
         try:
-            # 1. Verificar login
-            if not self.verificar_login():
+            # GARANTIR SESSÃO VÁLIDA (com login automático se necessário)
+            if not self._garantir_sessao():
                 return {
                     'success': False,
-                    'message': 'Sessao expirada. Execute: python configurar_sessao_atacadao.py'
+                    'message': 'Não foi possível estabelecer sessão válida.'
+                }
+            
+            # 1. Verificar login (já deve estar válido após _garantir_sessao)
+            if not self.verificar_login():
+                logger.error("Sessão ainda inválida após tentativa de login")
+                return {
+                    'success': False,
+                    'message': 'Não foi possível fazer login. Verifique as credenciais no .env'
                 }
             
             # 2. Buscar o pedido
@@ -319,97 +714,339 @@ class AtacadaoPlaywrightClient:
                 }
             
             logger.info(f"Buscando pedido {pedido_cliente}...")
-            if not self.buscar_pedido(pedido_cliente):
+            # Usar método robusto que busca na coluna correta
+            if not self.buscar_pedido_robusto(pedido_cliente):
                 return {
                     'success': False,
                     'message': f'Pedido {pedido_cliente} nao encontrado no portal'
                 }
             
             # 3. Solicitar agendamento
+            # DIAGNÓSTICO: Verificar URL antes de clicar
+            url_antes = self.page.url
+            logger.info(f"📍 URL ANTES de solicitar: {url_antes}")
+            
+            # Screenshot antes
+            self.page.screenshot(path=f"antes_solicitar_{pedido_cliente}.png")
+            
             botao_solicitar = self.config['seletores']['botao_solicitar_agendamento']
             self.page.wait_for_selector(botao_solicitar)
             self.page.click(botao_solicitar)
             
+            # WAIT ADAPTATIVO - Para assim que o formulário abrir
+            logger.info("⏳ Aguardando formulário abrir (adaptativo até 3s)...")
+            
+            # Aguardar campo de data ficar visível (indica que formulário abriu)
+            formulario_aberto = self.aguardar_elemento_visivel(
+                'input[name="data_desejada"]', 
+                timeout_ms=3000  # Mesmo timeout de antes, mas adaptativo
+            )
+            
+            if not formulario_aberto:
+                # Fallback: tentar aguardar qualquer campo do formulário
+                logger.warning("Campo data_desejada não encontrado, tentando alternativas...")
+                formulario_aberto = self.aguardar_elemento_visivel(
+                    '#leadtime_minimo, input[name="leadtime_minimo"]',
+                    timeout_ms=2000
+                )
+            
             logger.info("Formulario de agendamento aberto")
             self.page.wait_for_load_state('networkidle')
             
+            # DIAGNÓSTICO: Verificar URL depois
+            url_depois = self.page.url
+            logger.info(f"📍 URL DEPOIS de solicitar: {url_depois}")
+            
+            # Screenshot depois
+            self.page.screenshot(path=f"depois_solicitar_{pedido_cliente}.png")
+            
             # 4. Preencher formulario
             
-            # 4.1 PRIMEIRA DATA: Data desejada de agendamento
+            # 4.1 PRIMEIRA DATA: Data desejada de agendamento (IGUAL AO SCRIPT QUE FUNCIONA)
             if dados.get('data_agendamento'):
                 data_agendamento = dados['data_agendamento']
-                data_iso = dados.get('data_agendamento_iso', '')
+                # Garantir formato DD/MM/AAAA
+                if isinstance(data_agendamento, (datetime, date)):
+                    data_agendamento = data_agendamento.strftime('%d/%m/%Y')
+                
+                # Converter para ISO também (como no script que funciona)
+                data_iso = ""
+                if data_agendamento and '/' in data_agendamento:
+                    partes = data_agendamento.split('/')
+                    if len(partes) == 3:
+                        data_iso = f"{partes[2]}-{partes[1]}-{partes[0]}"  # YYYY-MM-DD
+                    else:
+                        logger.warning(f"Formato de data inválido: {data_agendamento}")
+                        # Tentar usar a data como está
+                        data_iso = data_agendamento
+                else:
+                    # CONVERTER DATA ISO PARA FORMATO BR
+                    if data_agendamento and '-' in str(data_agendamento):
+                        # Formato ISO (YYYY-MM-DD) para BR (DD/MM/YYYY)
+                        try:
+                            partes_iso = str(data_agendamento).split('-')
+                            if len(partes_iso) == 3:
+                                data_iso = data_agendamento  # Manter ISO original
+                                data_agendamento = f"{partes_iso[2]}/{partes_iso[1]}/{partes_iso[0]}"  # Converter para BR
+                                logger.info(f"Data convertida de ISO para BR: {data_iso} → {data_agendamento}")
+                            else:
+                                logger.warning(f"Formato de data ISO inválido: {data_agendamento}")
+                                data_iso = data_agendamento or ""
+                        except Exception as e:
+                            logger.error(f"Erro ao converter data: {e}")
+                            data_iso = data_agendamento or ""
+                    else:
+                        logger.warning(f"Data sem formato DD/MM/AAAA: {data_agendamento}")
+                        data_iso = data_agendamento or ""
                 
                 logger.info(f"Preenchendo data desejada: {data_agendamento}")
+                
+                # Verificar campos
+                campo_data_iso = self.page.locator('input[name="data_desejada_iso"]')
+                campo_data_visivel = self.page.locator('input[name="data_desejada"]')
+                
                 try:
-                    # Metodo 1: Clicar e digitar
-                    campo_data = self.page.locator('input[name="data_desejada"]')
-                    if campo_data.count() > 0:
-                        campo_data.click()
-                        self.page.wait_for_timeout(500)
+                    # Método 1: Clicar e digitar (IGUAL ao script que funciona)
+                    if campo_data_visivel.count() > 0:
+                        logger.info("   Clicando no campo de data desejada...")
+                        campo_data_visivel.click()
+                        self.page.wait_for_timeout(200)  # Reduzido para otimizar interação
+                        
+                        # Limpar campo usando Ctrl+A e Delete
                         self.page.keyboard.press('Control+A')
                         self.page.keyboard.press('Delete')
-                        self.page.wait_for_timeout(500)
-                        self.page.keyboard.type(data_agendamento)
-                        self.page.keyboard.press('Tab')
+                        self.page.wait_for_timeout(200)  # Reduzido para otimizar interação
                         
-                    # Preencher campo ISO tambem
-                    self.page.evaluate(f'''
-                        document.querySelector('input[name="data_desejada_iso"]').value = "{data_iso}";
-                        document.querySelector('input[name="data_desejada"]').value = "{data_agendamento}";
-                    ''')
-                    logger.info(" Data desejada preenchida")
+                        # Digitar a data
+                        logger.info(f"   Digitando data: {data_agendamento}")
+                        self.page.keyboard.type(data_agendamento)
+                        
+                        # VERIFICAR se a data foi digitada corretamente
+                        def data_foi_digitada():
+                            try:
+                                valor_atual = campo_data_visivel.input_value()
+                                return valor_atual == data_agendamento
+                            except:
+                                return False
+                        
+                        # Aguardar confirmação que digitou
+                        digitou_ok = self.aguardar_com_retry(
+                            data_foi_digitada,
+                            timeout_ms=1000,
+                            intervalo_ms=100,
+                            descricao="Data ser digitada corretamente"
+                        )
+                        
+                        if digitou_ok:
+                            # Sair do campo
+                            self.page.keyboard.press('Tab')
+                            logger.info(f"   ✅ Data confirmada: {data_agendamento}")
+                        else:
+                            # Fallback: wait fixo mínimo
+                            self.page.wait_for_timeout(300)
+                            self.page.keyboard.press('Tab')
+                            logger.info(f"   ⚠️ Data digitada (sem confirmação): {data_agendamento}")
+                    
+                    # Método 2: Se houver campo ISO, preencher também (IGUAL ao script)
+                    if campo_data_iso.count() > 0:
+                        self.page.evaluate(f'document.querySelector(\'input[name="data_desejada_iso"]\').value = "{data_iso}"')
+                        self.page.evaluate(f'document.querySelector(\'input[name="data_desejada"]\').value = "{data_agendamento}"')
+                        logger.info(f"   ✅ Data desejada preenchida via JavaScript: {data_agendamento}")
+                        
                 except Exception as e:
-                    logger.warning(f"Erro ao preencher data desejada: {e}")
+                    logger.warning(f"   ⚠️ Erro ao preencher data desejada: {e}")
+                    
+                    # Método 3: Forçar via JavaScript (fallback)
+                    logger.info("   Tentando método alternativo...")
+                    script = f"""
+                        var campo = document.querySelector('input[name="data_desejada"]');
+                        if (campo) {{
+                            campo.value = '{data_agendamento}';
+                            campo.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            campo.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        }}
+                        var campoIso = document.querySelector('input[name="data_desejada_iso"]');
+                        if (campoIso) {{
+                            campoIso.value = '{data_iso}';
+                        }}
+                    """
+                    self.page.evaluate(script)
+                    logger.info(f"   ✅ Data desejada forçada via JavaScript: {data_agendamento}")
                 
                 # 4.2 SEGUNDA DATA: Disponibilidade de entrega (leadtime_minimo)
                 logger.info(f"Preenchendo disponibilidade de entrega: {data_agendamento}")
-                try:
-                    campo_leadtime = self.page.locator('input[name="leadtime_minimo"]')
-                    if campo_leadtime.count() > 0:
+                
+                campo_leadtime = self.page.locator('input[name="leadtime_minimo"]')
+                campo_leadtime_iso = self.page.locator('input[name="leadtime_minimo_iso"]')
+                
+                if campo_leadtime.count() > 0:
+                    try:
+                        # Método 1: Clicar e digitar
+                        logger.info("   Clicando no campo de disponibilidade de entrega...")
                         campo_leadtime.click()
-                        self.page.wait_for_timeout(500)
+                        self.page.wait_for_timeout(200)  # Reduzido para otimizar interação
+                        
+                        # Limpar e digitar
                         self.page.keyboard.press('Control+A')
                         self.page.keyboard.press('Delete')
-                        self.page.wait_for_timeout(500)
-                        self.page.keyboard.type(data_agendamento)
-                        self.page.keyboard.press('Tab')
+                        self.page.wait_for_timeout(200)  # Reduzido para otimizar interação
                         
-                        # Preencher campo ISO tambem
-                        self.page.evaluate(f'''
-                            document.querySelector('input[name="leadtime_minimo_iso"]').value = "{data_iso}";
-                            document.querySelector('input[name="leadtime_minimo"]').value = "{data_agendamento}";
-                        ''')
-                        logger.info(" Disponibilidade de entrega preenchida")
-                except Exception as e:
-                    logger.warning(f"Campo leadtime_minimo nao encontrado ou erro: {e}")
+                        logger.info(f"   Digitando data: {data_agendamento}")
+                        self.page.keyboard.type(data_agendamento)
+                        
+                        # VERIFICAR se a data foi digitada corretamente
+                        def leadtime_foi_digitado():
+                            try:
+                                valor_atual = campo_leadtime.input_value()
+                                return valor_atual == data_agendamento
+                            except:
+                                return False
+                        
+                        # Aguardar confirmação que digitou
+                        digitou_ok = self.aguardar_com_retry(
+                            leadtime_foi_digitado,
+                            timeout_ms=1000,
+                            intervalo_ms=100,
+                            descricao="Leadtime ser digitado corretamente"
+                        )
+                        
+                        if digitou_ok:
+                            # Sair do campo
+                            self.page.keyboard.press('Tab')
+                            logger.info(f"   ✅ Disponibilidade confirmada: {data_agendamento}")
+                        else:
+                            # Fallback: wait fixo mínimo
+                            self.page.wait_for_timeout(300)
+                            self.page.keyboard.press('Tab')
+                            logger.info(f"   ⚠️ Disponibilidade digitada (sem confirmação): {data_agendamento}")
+                        
+                        # Preencher campo ISO também
+                        if campo_leadtime_iso.count() > 0:
+                            self.page.evaluate(f'document.querySelector(\'input[name="leadtime_minimo_iso"]\').value = "{data_iso}"')
+                            self.page.evaluate(f'document.querySelector(\'input[name="leadtime_minimo"]\').value = "{data_agendamento}"')
+                            
+                    except Exception as e:
+                        logger.warning(f"   ⚠️ Erro ao preencher disponibilidade: {e}")
+                        # Forçar via JavaScript
+                        script = f"""
+                            var campo = document.querySelector('input[name="leadtime_minimo"]');
+                            if (campo) {{
+                                campo.value = '{data_agendamento}';
+                                campo.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            }}
+                            var campoIso = document.querySelector('input[name="leadtime_minimo_iso"]');
+                            if (campoIso) {{
+                                campoIso.value = '{data_iso}';
+                            }}
+                        """
+                        self.page.evaluate(script)
+                        logger.info(f"   ✅ Disponibilidade forçada via JavaScript: {data_agendamento}")
+                else:
+                    logger.warning("   ⚠️ Campo leadtime_minimo não encontrado")
             
             # 4.3 Transportadora (usar padrao Agregado)
-            if self.page.locator(self.config['seletores']['botao_buscar_transportadora']).is_visible():
+            # Primeiro verificar se transportadora já está preenchida
+            campo_transportadora = self.page.locator('#id_transportadora, #transportadora')
+            transportadora_preenchida = False
+            
+            try:
+                valor_transportadora = campo_transportadora.input_value() if campo_transportadora.count() > 0 else ""
+                transportadora_preenchida = valor_transportadora != "" and valor_transportadora != "0"
+            except:
+                pass
+            
+            if not transportadora_preenchida and self.page.locator(self.config['seletores']['botao_buscar_transportadora']).is_visible():
                 logger.info("Selecionando transportadora...")
                 self.page.click(self.config['seletores']['botao_buscar_transportadora'])
-                self.page.wait_for_timeout(2000)
                 
-                # Selecionar Agregado
-                radio_agregado = self.page.locator('input[type="radio"][id="1"]')
-                if radio_agregado.count() > 0:
-                    radio_agregado.click()
-                    self.page.wait_for_timeout(500)
+                # WAIT MAIS ROBUSTO - Aguardar modal estar COMPLETAMENTE aberto
+                # Não só visível, mas também interativo
+                def modal_pronto():
+                    try:
+                        # Modal deve estar visível
+                        modal_visivel = self.page.locator('.modal.show, .modal.in, #modal-transportadoras').is_visible()
+                        # Radio button deve estar visível e clicável
+                        radio_visivel = self.page.locator('input[type="radio"][id="1"], input[type="radio"][value*="Agregado"]').is_visible()
+                        # Botão selecionar deve existir
+                        botao_existe = self.page.locator('.modal-footer button.selecionar').count() > 0
+                        
+                        return modal_visivel and radio_visivel and botao_existe
+                    except:
+                        return False
                 
-                # IMPORTANTE: Clicar no botao Selecionar do modal-footer
-                # Pode haver multiplos botoes "Selecionar"
-                botao_selecionar = self.page.locator('.modal-footer button.btn-primary.selecionar')
-                if botao_selecionar.count() > 0:
-                    if botao_selecionar.count() > 1:
-                        # Se houver mais de um, pegar o visivel
-                        for i in range(botao_selecionar.count()):
-                            if botao_selecionar.nth(i).is_visible():
-                                botao_selecionar.nth(i).click()
-                                break
-                    else:
-                        botao_selecionar.click()
-                    logger.info(" Transportadora Agregado selecionada")
-                    self.page.wait_for_timeout(1000)
+                modal_aberto = self.aguardar_com_retry_progressivo(
+                    modal_pronto,
+                    timeout_ms=2000,  # Aumentado para 2s
+                    inicial_ms=300,
+                    max_intervalo_ms=500,
+                    descricao="Modal de transportadora abrir completamente"
+                )
+                
+                if modal_aberto:
+                    # Aguardar um pouco mais para garantir que animação terminou
+                    self.page.wait_for_timeout(300)  # Wait mínimo de segurança
+                    
+                    # Selecionar Agregado
+                    radio_agregado = self.page.locator('input[type="radio"][id="1"]')
+                    if radio_agregado.count() > 0:
+                        radio_agregado.click()
+                        
+                        # VERIFICAR se radio foi marcado
+                        def radio_marcado():
+                            try:
+                                return radio_agregado.is_checked()
+                            except:
+                                return False
+                        
+                        self.aguardar_com_retry(
+                            radio_marcado,
+                            timeout_ms=1000,
+                            intervalo_ms=100,
+                            descricao="Radio button Agregado ser marcado"
+                        )
+                    
+                    # IMPORTANTE: Clicar no botao Selecionar do modal-footer
+                    botao_selecionar = self.page.locator('.modal-footer button.btn-primary.selecionar')
+                    if botao_selecionar.count() > 0:
+                        if botao_selecionar.count() > 1:
+                            # Se houver mais de um, pegar o visivel
+                            for i in range(botao_selecionar.count()):
+                                if botao_selecionar.nth(i).is_visible():
+                                    botao_selecionar.nth(i).click()
+                                    break
+                        else:
+                            botao_selecionar.click()
+                        
+                        logger.info(" Transportadora Agregado selecionada")
+                        
+                        # Aguardar um momento para o JavaScript processar
+                        self.page.wait_for_timeout(200)
+                        
+                        # VERIFICAR se transportadora foi preenchida no formulário
+                        def transportadora_foi_preenchida():
+                            try:
+                                valor = self.page.locator('#id_transportadora, #transportadora').input_value()
+                                # Verificar se tem valor e não é "0" ou vazio
+                                return valor != "" and valor != "0"
+                            except:
+                                return False
+                        
+                        preencheu = self.aguardar_com_retry_progressivo(
+                            transportadora_foi_preenchida,
+                            timeout_ms=2000,
+                            inicial_ms=200,
+                            max_intervalo_ms=500,
+                            descricao="Campo transportadora ser preenchido"
+                        )
+                        
+                        if preencheu:
+                            logger.info("✅ Transportadora confirmada no formulário")
+                        else:
+                            logger.warning("⚠️ Transportadora pode não ter sido preenchida corretamente")
+                else:
+                    logger.warning("⚠️ Modal de transportadora não abriu corretamente")
+            elif transportadora_preenchida:
+                logger.info(f"✅ Transportadora já preenchida: {valor_transportadora}")
             
             # 4.4 Tipo de carga (pode estar desabilitado)
             logger.info("Verificando tipo de carga...")
@@ -422,141 +1059,281 @@ class AtacadaoPlaywrightClient:
                 else:
                     logger.info("⚠️ Tipo de carga ja definido (campo desabilitado)")
             
-            # 4.5 Tipo de veiculo
-            tipo_veiculo = dados.get('tipo_veiculo', '11')  # Default: Toco-Bau (value="11")
+            # 4.5 Tipo de veiculo - Determinar automaticamente pelo peso
+            peso_total = dados.get('peso_total', 0)
+            
+            # Se não foi fornecido tipo_veiculo ou peso_total, usar o método para determinar
+            if peso_total and not dados.get('tipo_veiculo_manual'):
+                tipo_veiculo = self.determinar_tipo_veiculo_por_peso(peso_total)
+            else:
+                tipo_veiculo = dados.get('tipo_veiculo', '11')  # Default: Toco-Bau se não tiver peso
+            
             logger.info(f"Selecionando tipo de veiculo: {tipo_veiculo}")
             select_veiculo = self.page.locator('select[name="tipo_veiculo"]')
             if select_veiculo.count() > 0:
                 try:
                     select_veiculo.select_option(value=tipo_veiculo)
-                    logger.info(" Tipo de veiculo selecionado")
+                    logger.info(f"✅ Tipo de veiculo selecionado: ID {tipo_veiculo}")
                 except Exception as e:
                     logger.warning(f"Erro ao selecionar veiculo: {e}")
             
-            # 4.6 Preencher quantidades dos produtos (se fornecido)
+            # 4.6 Preencher quantidades dos produtos (SIMPLES como no script funcional)
+            logger.info("Preenchendo quantidades dos produtos...")
+            
+            # Criar mapa de produtos da separação
+            produtos_separacao = {}
             if dados.get('produtos'):
-                logger.info("Preenchendo quantidades dos produtos...")
                 for produto in dados['produtos']:
-                    codigo = produto.get('codigo')
+                    codigo = str(produto.get('codigo'))
                     quantidade = produto.get('quantidade', 0)
+                    produtos_separacao[codigo] = int(quantidade)
+            
+            # Preencher cada linha da tabela
+            linhas_produtos = self.page.locator('table tbody tr').all()
+            for linha in linhas_produtos:
+                # Pegar código do produto (primeira coluna)
+                codigo = linha.locator('td').first.text_content().strip()
+                
+                # Campo de quantidade
+                campo_qtd = linha.locator('input[name*="qtd_alocada"]')
+                
+                if campo_qtd.count() > 0:
+                    if codigo in produtos_separacao:
+                        # Produto está na separação
+                        qtd = produtos_separacao[codigo]
+                        campo_qtd.fill(str(qtd))
+                        logger.info(f"✅ Produto {codigo}: {qtd} unidades")
+                    else:
+                        # Produto NÃO está na separação - zerar
+                        campo_qtd.fill('0')
+                        logger.info(f"❌ Produto {codigo}: 0 (não na separação)")
+            
+            # 5. NÃO MEXER NO MODO DE EDIÇÃO (como o script que funciona)
+            # REMOVIDO: window.f_editando = true (estava quebrando o formulário)
+            # REMOVIDO: checkbox agendar_depois (script funcional não mexe nisso)
+            
+            # 6. DIAGNÓSTICO: Verificar campos hidden e valores do formulário
+            logger.info("🔍 Verificando campos do formulário antes de salvar...")
+            
+            # Verificar se há campos hidden com ID do pedido
+            campos_pedido = self.page.evaluate("""
+                () => {
+                    const inputs = document.querySelectorAll('input[name*="pedido"], input[name*="id_pedido"], input[type="hidden"]');
+                    const valores = {};
+                    inputs.forEach(input => {
+                        valores[input.name || input.id] = input.value;
+                    });
+                    return valores;
+                }
+            """)
+            logger.info(f"📋 Campos do formulário: {campos_pedido}")
+            
+            # WAIT INTELIGENTE DE ESTABILIZAÇÃO - Adaptativo
+            # Verifica se formulário está pronto em vez de esperar tempo fixo
+            logger.info("⏳ Aguardando formulário estabilizar (adaptativo)...")
+            
+            def formulario_pronto_para_salvar():
+                """Verifica se formulário está pronto para salvar"""
+                try:
+                    # Verificar se campos críticos estão preenchidos
+                    data_ok = self.page.locator('input[name="data_desejada"]').input_value() != ''
+                    transp_ok = self.page.locator('#id_transportadora').input_value() != ''
                     
-                    # Procurar o produto na tabela
-                    linhas_produtos = self.page.locator('table tbody tr').all()
-                    for linha in linhas_produtos:
-                        codigo_atual = linha.locator('td').first.text_content().strip()
-                        if codigo_atual == codigo:
-                            campo_qtd = linha.locator('input[name*="qtd_alocada"]')
-                            if campo_qtd.count() > 0:
-                                campo_qtd.fill(str(quantidade))
-                                logger.info(f" Produto {codigo}: {quantidade} unidades")
-                            break
+                    # Verificar se não há erros visíveis
+                    tem_erro = self.page.locator('.has-error, .erro, .invalid').count() > 0
+                    
+                    # Verificar se botão salvar está habilitado
+                    botao_habilitado = self.page.locator('#salvar').is_enabled()
+                    
+                    return data_ok and transp_ok and not tem_erro and botao_habilitado
+                except:
+                    return False
+            
+            # Primeiro wait curto para casos rápidos
+            self.page.wait_for_timeout(300)  # 300ms mínimo de segurança
+            
+            # Depois verificar se está pronto com retry progressivo
+            formulario_estavel = self.aguardar_com_retry_progressivo(
+                formulario_pronto_para_salvar,
+                timeout_ms=4700,  # 300ms + 4700ms = 5000ms total máximo
+                inicial_ms=400,
+                max_intervalo_ms=800,
+                descricao="Formulário estabilizar e ficar pronto"
+            )
+            
+            if not formulario_estavel:
+                logger.warning("⚠️ Formulário pode não estar completamente estável")
+                # Wait adicional de segurança se não estabilizou
+                self.page.wait_for_timeout(500)
             
             # Screenshot antes de salvar
             self.page.screenshot(path=f"agendamento_{datetime.now().strftime('%Y%m%d_%H%M%S')}_antes.png")
             
-            # 5. Salvar
-            botao_salvar = self.config['seletores']['botao_salvar']  # #salvar
-            self.page.click(botao_salvar)
-            logger.info("Formulario enviado, aguardando resposta...")
+            logger.info("🎯 Salvando formulário...")
             
-            # 6. Aguardar modal de sucesso ou erro
-            try:
-                # Aguardar modal de sucesso
-                modal_sucesso = self.config['seletores']['modal_sucesso']  # #regSucesso
-                self.page.wait_for_selector(modal_sucesso, timeout=20000)
+            # Clicar em Salvar (método simples que funciona)
+            if not self._clicar_salvar():
+                logger.error("❌ Não conseguiu clicar no botão Salvar")
+                return {'success': False, 'message': 'Impossível clicar no botão Salvar'}
+            
+            # AGUARDAR RESPOSTA COM RETRY RÁPIDO
+            logger.info("Aguardando resposta...")
+            
+            # Aguardar redirecionamento ou modal com retry rápido (max 3 segundos)
+            for i in range(4):  # 15 x 200ms = 3 segundos
+                self.page.wait_for_timeout(500)
                 
-                # Clicar em "Nao incluir NF agora"
-                botao_nao = self.config['seletores']['botao_nao_incluir_nf']  # #btnNao
-                if self.page.locator(botao_nao).is_visible():
-                    self.page.click(botao_nao)
-                    logger.info("Optou por nao incluir NF agora")
-                
-                # Aguardar redirecionamento
-                self.page.wait_for_load_state('networkidle')
-                self.page.wait_for_timeout(3000)
-                
-                # Extrair protocolo - MUTIPLOS METODOS
-                protocolo = None
-                current_url = self.page.url
-                logger.info(f"URL apos salvar: {current_url}")
-                
-                # METODO 1: Extrair da URL apos redirecionamento
-                if "/agendamentos/" in current_url:
-                    protocolo = current_url.split("/agendamentos/")[-1].split("/")[0].split("?")[0]
-                    logger.info(f" Protocolo extraido da URL: {protocolo}")
-                elif "/cargas/" in current_url:
-                    # Se voltou para a pagina da carga, procurar o link do agendamento
-                    logger.info("Pagina redirecionou para carga, procurando link do agendamento...")
-                    link_acompanhe = self.page.locator('a[href*="/agendamentos/"]:has-text("ACOMPANHE")')
-                    if link_acompanhe.count() == 0:
-                        link_acompanhe = self.page.locator('a[href*="/agendamentos/"]').first
+                # Verificar se mudou de URL
+                if "/cargas/" in self.page.url or "/agendamentos/" in self.page.url:
+                    logger.info("✅ Redirecionamento detectado!")
+                    break
                     
-                    if link_acompanhe.count() > 0:
-                        href = link_acompanhe.get_attribute('href')
-                        if href and "/agendamentos/" in href:
-                            protocolo = href.split("/agendamentos/")[-1].split("/")[0].split("?")[0]
-                            logger.info(f" Protocolo extraido do link: {protocolo}")
-                
-                # METODO 2: Procurar no HTML
-                if not protocolo:
-                    logger.info("Procurando protocolo no HTML...")
-                    links_agendamento = self.page.locator('a[href*="/agendamentos/"]').all()
-                    for link in links_agendamento:
-                        href = link.get_attribute('href')
-                        if href and "/agendamentos/" in href:
-                            protocolo_temp = href.split("/agendamentos/")[-1].split("/")[0].split("?")[0]
-                            if protocolo_temp and protocolo_temp.isdigit():
-                                protocolo = protocolo_temp
-                                logger.info(f" Protocolo encontrado em link: {protocolo}")
-                                break
-                
-                # METODO 3: Procurar por padrao de protocolo
-                if not protocolo:
-                    import re
-                    page_content = self.page.content()
-                    padrao_protocolo = re.compile(r'\b\d{13}\b')
-                    matches = padrao_protocolo.findall(page_content)
-                    for match in matches:
-                        if match.startswith(('25', '24', '23')):
-                            protocolo = match
-                            logger.info(f" Protocolo encontrado por padrao: {protocolo}")
-                            break
-                
-                if protocolo:
-                    # Screenshot do protocolo
-                    self.page.screenshot(path=f"protocolo_{protocolo}.png")
+                # Verificar modal de sucesso
+                if self.page.locator('#regSucesso').count() > 0:
+                    logger.info("✅ Modal de sucesso detectado!")
                     
-                    return {
-                        'success': True,
-                        'protocolo': protocolo.strip() if isinstance(protocolo, str) else protocolo,
-                        'message': 'Agendamento realizado com sucesso',
-                        'url': current_url
-                    }
-                else:
-                    # Screenshot para debug
-                    self.page.screenshot(path=f"agendamento_sem_protocolo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
-                    return {
-                        'success': True,  # Pode ter sido criado mesmo sem capturar protocolo
-                        'message': 'Agendamento pode ter sido criado mas protocolo nao capturado',
-                        'url': current_url
-                    }
-                    
-            except Exception as e:
-                # Verificar se houve erro
-                logger.error(f"Erro ao aguardar resposta: {e}")
+                    # Clicar em "Não incluir NF agora" rapidamente
+                    if self.page.locator('#btnNao').count() > 0:
+                        try:
+                            self.page.locator('#btnNao').click(timeout=200)
+                            logger.info("Optou por não incluir NF agora")
+                        except Exception as e:
+                            logger.warning(f"Erro ao clicar em #btnNao: {e}")
+                            pass
+                    self.page.wait_for_timeout(200)
+                    break
                 
-                # Screenshot de erro
-                self.page.screenshot(path=f"erro_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+            # VERIFICAR REDIRECIONAMENTO (copiado do script original - linhas 551-570)
+            current_url = self.page.url
+            logger.info(f"URL atual: {current_url}")
+            
+            # Verificar se redirecionou para /cargas/ ou /agendamentos/
+            if "/cargas/" in current_url or "/agendamentos/" in current_url:
+                logger.info("✅ Redirecionou após salvar!")
+            
+            # CAPTURAR PROTOCOLO (método do script original - linhas 541-570)
+            logger.info("Capturando protocolo...")
+            protocolo = None
+            
+            # Verificar URL atual
+            if "/agendamentos/" in current_url:
+                # Extrair o protocolo da URL (linha 556 do script original)
+                protocolo = current_url.split("/agendamentos/")[-1].split("/")[0].split("?")[0]
+                logger.info(f"✅ Protocolo extraído da URL: {protocolo}")
+            elif "/cargas/" in current_url:
+                # Se voltou para a página da carga, procurar o link do agendamento (linha 561-569)
+                logger.info("Página redirecionou para carga, procurando link do agendamento...")
+                link_acompanhe = self.page.locator('a[href*="/agendamentos/"]:has-text("ACOMPANHE")')
+                if link_acompanhe.count() == 0:
+                    link_acompanhe = self.page.locator('a[href*="/agendamentos/"]').first
                 
-                # Tentar capturar mensagem de erro
-                erro_msg = "Erro desconhecido"
-                if self.page.locator(".alert-danger").is_visible():
-                    erro_msg = self.page.text_content(".alert-danger")
+                if link_acompanhe.count() > 0:
+                    href = link_acompanhe.get_attribute('href')
+                    if href and "/agendamentos/" in href:
+                        protocolo = href.split("/agendamentos/")[-1].split("/")[0].split("?")[0]
+                        logger.info(f"✅ Protocolo extraído do link: {protocolo}")
+            
+            # Se não encontrou, usar método robusto
+            if not protocolo:
+                protocolo = self._capturar_protocolo_apos_salvar(timeout_ms=20000)
+            
+            
+            # Retornar resultado
+            if protocolo:
+                # Screenshot de sucesso
+                self.page.screenshot(path=f"sucesso_agendamento_{protocolo}.png")
+                logger.info(f"✅✅✅ AGENDAMENTO CRIADO COM SUCESSO! Protocolo: {protocolo}")
                 
                 return {
-                    'success': False,
-                    'message': f'Erro no portal: {erro_msg}'
+                    'success': True,
+                    'protocolo': protocolo.strip() if isinstance(protocolo, str) else protocolo,
+                    'message': f'Agendamento realizado com sucesso! Protocolo: {protocolo}',
+                    'url': self.page.url
                 }
+            else:
+                # Tentar capturar informações adicionais para debug
+                logger.warning("⚠️ Protocolo não capturado, verificando se agendamento foi criado...")
+                
+                # Screenshot detalhado para debug
+                screenshot_path = f"agendamento_debug_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                self.page.screenshot(path=screenshot_path, full_page=True)
+                logger.info(f"Screenshot salvo: {screenshot_path}")
+                
+                # Verificar se está na página de carga com número de carga
+                numero_carga = None
+                try:
+                    # Procurar número da carga de várias formas
+                    seletores_carga = [
+                        '.box-numero-carga .valor',
+                        '[class*="numero-carga"]',
+                        'span:has-text("Carga:")',
+                        'div:has-text("Número da Carga")'
+                    ]
+                    
+                    for seletor in seletores_carga:
+                        element = self.page.locator(seletor)
+                        if element.count() > 0:
+                            texto = element.first.text_content()
+                            # Extrair apenas números
+                            import re
+                            numeros = re.findall(r'\d+', texto)
+                            if numeros:
+                                numero_carga = numeros[0]
+                                logger.info(f"Número da carga encontrado: {numero_carga}")
+                                break
+                except Exception as e:
+                    logger.debug(f"Erro ao buscar número da carga: {e}")
+                
+                # Verificar se há mensagem de sucesso na página (sem logar HTML inteiro)
+                mensagem_sucesso = None
+                try:
+                    seletores_sucesso = [
+                        '.alert-success',
+                        '.success-message',
+                        '.modal-body:has-text("agendamento realizado")'
+                    ]
+                    
+                    for seletor in seletores_sucesso:
+                        element = self.page.locator(seletor)
+                        if element.count() > 0:
+                            # Limitar o texto capturado para evitar poluir logs
+                            texto = element.first.text_content().strip()
+                            if texto and len(texto) < 200:  # Só logar se for mensagem curta
+                                mensagem_sucesso = texto
+                                logger.info(f"Mensagem de sucesso encontrada (tamanho: {len(texto)} chars)")
+                            break
+                except Exception as e:
+                    logger.debug(f"Nenhuma mensagem de sucesso específica encontrada")
+                    pass
+                
+                # Verificar se URL indica sucesso
+                current_url = self.page.url
+                url_sucesso = "/cargas/" in current_url or "/agendamentos/" in current_url
+                
+                # Se tem número de carga ou mensagem de sucesso ou URL de sucesso
+                if numero_carga or mensagem_sucesso or url_sucesso:
+                    return {
+                        'success': True,
+                        'protocolo': None,
+                        'message': f'Agendamento aparentemente criado mas protocolo não capturado. '
+                                   f'{"Carga: " + numero_carga if numero_carga else ""} '
+                                   f'Verifique manualmente no portal.',
+                        'url': current_url,
+                        'numero_carga': numero_carga,
+                        'screenshot': screenshot_path
+                    }
+                else:
+                    # Capturar informações mínimas para debug (sem HTML)
+                    page_title = self.page.title()
+                    
+                    return {
+                        'success': False,
+                        'message': f'Não foi possível confirmar se o agendamento foi criado. '
+                                   f'Título da página: {page_title}. '
+                                   f'Verifique o screenshot: {screenshot_path}',
+                        'url': current_url,
+                        'screenshot': screenshot_path
+                    }
                 
         except Exception as e:
             logger.error(f"Erro ao criar agendamento: {e}")
@@ -626,13 +1403,19 @@ class AtacadaoPlaywrightClient:
                 }
             
             # Aguardar formulario abrir
-            self.page.wait_for_timeout(3000)
+            self.page.wait_for_timeout(500)  # Reduzido para otimizar
             
-            # 4. Preencher datas (2 campos)
+            # 4. Preencher datas (2 campos) e calcular peso total
+            # Calcular peso total se tiver produtos
+            peso_total = 0
+            if produtos:
+                for produto in produtos:
+                    peso_produto = float(produto.get('peso', 0))
+                    peso_total += peso_produto
+            
             dados = {
                 'data_agendamento': data_agendamento,
-                'data_agendamento_iso': self._converter_data_iso(data_agendamento),
-                'tipo_veiculo': '11',  # Toco-Bau
+                'peso_total': peso_total,  # Passa o peso total para determinar tipo de veículo
                 'produtos': produtos or []
             }
             
@@ -660,15 +1443,22 @@ class AtacadaoPlaywrightClient:
             filtro_toggle = self.page.locator('a[data-toggle="collapse"][data-target="#filtros-collapse"]')
             if filtro_toggle.is_visible():
                 filtro_toggle.click()
-                self.page.wait_for_timeout(1500)
+                # WAIT ADAPTATIVO - Aguardar filtros abrirem completamente
+                self.aguardar_elemento_visivel('#nr_pedido', timeout_ms=1500)
             
-            # Limpar filtros de data
-            logger.info("Limpando filtros de data...")
-            botoes_limpar = self.page.locator('button[data-action="remove"]').all()
-            for botao in botoes_limpar:
-                if botao.is_visible():
-                    botao.click()
-                    self.page.wait_for_timeout(500)
+            # CORREÇÃO: Limpar apenas o filtro específico
+            logger.info("Limpando filtro de data de elaboração...")
+            try:
+                botao_limpar = self.page.locator(
+                    'button[data-target_daterangepicker="dthr_elaboracao"][data-action="remove"]'
+                )
+                if botao_limpar.is_visible(timeout=2000):
+                    botao_limpar.click()
+                    self.page.wait_for_timeout(300)
+                    logger.info("✅ Filtro dthr_elaboracao limpo")
+            except Exception as e:
+                logger.error(f"Erro ao limpar filtro de data: {e}")
+                logger.debug("Botão de limpar não encontrado, continuando...")
             
             # Preencher numero do pedido
             logger.info(f"Buscando pedido {numero_pedido}...")
@@ -681,8 +1471,8 @@ class AtacadaoPlaywrightClient:
                 # Clicar em filtrar
                 self.page.click('#enviarFiltros')
                 
-                # Aguardar resposta
-                self.page.wait_for_timeout(5000 if tentativa > 0 else 3000)
+                # Aguardar resposta (tempo reduzido)
+                self.page.wait_for_timeout(500 if tentativa == 0 else 300)
                 
                 # Verificar se encontrou na coluna correta
                 linhas_tabela = self.page.locator('table tbody tr').count()
@@ -720,7 +1510,8 @@ class AtacadaoPlaywrightClient:
             partes = data_br.split('/')
             if len(partes) == 3:
                 return f"{partes[2]}-{partes[1]}-{partes[0]}"
-        except:
+        except Exception as e:
+            logger.error(f"Erro na conversão de data: {e}")
             pass
         return ""
     
@@ -744,6 +1535,47 @@ class AtacadaoPlaywrightClient:
         except Exception as e:
             logger.error(f"Erro ao verificar status: {e}")
             return None
+    
+    def determinar_tipo_veiculo_por_peso(self, peso_total):
+        """
+        Determina o tipo de veículo baseado no peso total
+        
+        Regras:
+        - Até 2.000 kg: ID 5 (F4000-3/4)
+        - Até 4.000 kg: ID 11 (Toco-Baú)
+        - Até 7.000 kg: ID 8 (Truck-Baú)
+        - Acima de 7.000 kg: ID 2 (Carreta-Baú)
+        
+        Args:
+            peso_total: Peso total em kg
+            
+        Returns:
+            str: ID do tipo de veículo
+        """
+        try:
+            # Converter para float se necessário
+            peso = float(peso_total) if peso_total else 0
+            
+            if peso <= 2000:
+                tipo_id = '5'  # F4000-3/4
+                tipo_nome = 'F4000-3/4'
+            elif peso <= 4000:
+                tipo_id = '11'  # Toco-Baú
+                tipo_nome = 'Toco-Baú'
+            elif peso <= 7000:
+                tipo_id = '8'  # Truck-Baú
+                tipo_nome = 'Truck-Baú'
+            else:
+                tipo_id = '2'  # Carreta-Baú
+                tipo_nome = 'Carreta-Baú'
+            
+            logger.info(f"Peso total: {peso:.2f} kg → Tipo de veículo: {tipo_nome} (ID: {tipo_id})")
+            return tipo_id
+            
+        except Exception as e:
+            logger.error(f"Erro ao determinar tipo de veículo: {e}")
+            # Retorna Toco-Baú como padrão em caso de erro
+            return '11'
     
     def fechar(self):
         """Fecha o navegador"""

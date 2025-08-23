@@ -2,8 +2,9 @@
 Módulo de integração com portal Atacadão (Hodie Booking)
 """
 
-from .client import AtacadaoClient
 from .config import ATACADAO_CONFIG
-from .mapper import AtacadaoMapper
+from .playwright_client import AtacadaoPlaywrightClient
+from .models import ProdutoDeParaAtacadao
+from .playwright_client_simple import AtacadaoPlaywrightSimple
 
-__all__ = ['AtacadaoClient', 'ATACADAO_CONFIG', 'AtacadaoMapper']
+__all__ = ['ATACADAO_CONFIG', 'AtacadaoPlaywrightClient', 'ProdutoDeParaAtacadao', 'AtacadaoPlaywrightSimple']

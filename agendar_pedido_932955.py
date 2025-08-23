@@ -4,7 +4,7 @@ Script para agendar o pedido 932955 com item 35640 (5 unidades)
 """
 
 from playwright.sync_api import sync_playwright
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
 import logging
 
@@ -261,33 +261,95 @@ def agendar_pedido():
             campo_data_iso = page.locator('input[name="data_desejada_iso"]')
             campo_data_visivel = page.locator('input[name="data_desejada"]')
             
+            print(f"   📊 DEBUG: Campo visível encontrado: {campo_data_visivel.count()} elementos")
+            print(f"   📊 DEBUG: Campo ISO encontrado: {campo_data_iso.count()} elementos")
+            
+            # Verificar valores ANTES de preencher
+            if campo_data_visivel.count() > 0:
+                valor_inicial = campo_data_visivel.input_value()
+                print(f"   📊 DEBUG: Valor inicial do campo visível: '{valor_inicial}'")
+                
+                # Verificar atributos do campo
+                readonly = campo_data_visivel.get_attribute('readonly')
+                disabled = campo_data_visivel.get_attribute('disabled')
+                tipo = campo_data_visivel.get_attribute('type')
+                classe = campo_data_visivel.get_attribute('class')
+                print(f"   📊 DEBUG: readonly={readonly}, disabled={disabled}, type={tipo}")
+                print(f"   📊 DEBUG: classes='{classe}'")
+            
             try:
                 # Método 1: Clicar no campo para focar
                 if campo_data_visivel.count() > 0:
                     print("   Clicando no campo de data desejada...")
                     campo_data_visivel.click()
+                    print(f"   📊 DEBUG: Campo clicado, aguardando 0.5s...")
                     time.sleep(0.5)
                     
+                    # Verificar se o campo tem foco
+                    campo_focado = page.evaluate('document.activeElement.name')
+                    print(f"   📊 DEBUG: Campo com foco: '{campo_focado}'")
+                    
                     # Limpar campo usando Ctrl+A e Delete
+                    print(f"   📊 DEBUG: Pressionando Ctrl+A...")
                     page.keyboard.press('Control+A')
+                    print(f"   📊 DEBUG: Pressionando Delete...")
                     page.keyboard.press('Delete')
                     time.sleep(0.5)
+                    
+                    # Verificar se campo foi limpo
+                    valor_apos_limpar = campo_data_visivel.input_value()
+                    print(f"   📊 DEBUG: Valor após limpar: '{valor_apos_limpar}'")
                     
                     # Digitar a data
                     print(f"   Digitando data: {data_agendamento}")
                     page.keyboard.type(data_agendamento)
                     time.sleep(0.5)
                     
+                    # Verificar valor após digitar
+                    valor_apos_digitar = campo_data_visivel.input_value()
+                    print(f"   📊 DEBUG: Valor após digitar: '{valor_apos_digitar}'")
+                    
                     # Pressionar Tab para sair do campo e validar
+                    print(f"   📊 DEBUG: Pressionando Tab para validar...")
                     page.keyboard.press('Tab')
+                    time.sleep(0.5)
+                    
+                    # Verificar valor final
+                    valor_final = campo_data_visivel.input_value()
+                    print(f"   📊 DEBUG: Valor FINAL do campo: '{valor_final}'")
+                    
+                    # Verificar se campo tem erro
+                    container = campo_data_visivel.locator('xpath=ancestor::div[contains(@class, "form-group")]').first
+                    if container.count() > 0:
+                        classes_container = container.get_attribute('class') or ''
+                        print(f"   📊 DEBUG: Classes do container: '{classes_container}'")
+                        if 'has-error' in classes_container or 'erro' in classes_container:
+                            print(f"   ❌ ERRO: Campo marcado com erro após preenchimento!")
+                    
                     print(f"   ✅ Data desejada preenchida: {data_agendamento}")
                     
                 # Método 2: Se houver campo ISO, preencher também
                 if campo_data_iso.count() > 0:
+                    print(f"   📊 DEBUG: Executando Método 2 - JavaScript")
+                    
+                    # Verificar valores ANTES do JavaScript
+                    valor_antes_js = campo_data_visivel.input_value()
+                    valor_iso_antes = campo_data_iso.input_value()
+                    print(f"   📊 DEBUG: Antes JS - Visível: '{valor_antes_js}', ISO: '{valor_iso_antes}'")
+                    
                     # Converter para formato ISO
                     data_iso = "2025-08-27"
+                    print(f"   📊 DEBUG: Preenchendo campo ISO com: {data_iso}")
                     page.evaluate(f'document.querySelector(\'input[name="data_desejada_iso"]\').value = "{data_iso}"')
+                    
+                    print(f"   📊 DEBUG: Preenchendo campo visível com: {data_agendamento}")
                     page.evaluate(f'document.querySelector(\'input[name="data_desejada"]\').value = "{data_agendamento}"')
+                    
+                    # Verificar valores DEPOIS do JavaScript
+                    valor_depois_js = campo_data_visivel.input_value()
+                    valor_iso_depois = campo_data_iso.input_value()
+                    print(f"   📊 DEBUG: Depois JS - Visível: '{valor_depois_js}', ISO: '{valor_iso_depois}'")
+                    
                     print(f"   ✅ Data desejada preenchida via JavaScript: {data_agendamento}")
                     
             except Exception as e:
@@ -316,23 +378,64 @@ def agendar_pedido():
             campo_leadtime = page.locator('input[name="leadtime_minimo"]')
             campo_leadtime_iso = page.locator('input[name="leadtime_minimo_iso"]')
             
+            print(f"   📊 DEBUG: Campo leadtime encontrado: {campo_leadtime.count()} elementos")
+            print(f"   📊 DEBUG: Campo leadtime_iso encontrado: {campo_leadtime_iso.count()} elementos")
+            
             if campo_leadtime.count() > 0:
+                # Verificar valores ANTES
+                valor_inicial_lead = campo_leadtime.input_value()
+                print(f"   📊 DEBUG: Valor inicial leadtime: '{valor_inicial_lead}'")
+                
+                # Verificar atributos
+                readonly_lead = campo_leadtime.get_attribute('readonly')
+                disabled_lead = campo_leadtime.get_attribute('disabled')
+                classe_lead = campo_leadtime.get_attribute('class')
+                print(f"   📊 DEBUG: readonly={readonly_lead}, disabled={disabled_lead}")
+                print(f"   📊 DEBUG: classes='{classe_lead}'")
+                
                 try:
                     # Método 1: Clicar e digitar
                     print("   Clicando no campo de disponibilidade de entrega...")
                     campo_leadtime.click()
+                    print(f"   📊 DEBUG: Campo clicado, aguardando 0.5s...")
                     time.sleep(0.5)
                     
+                    # Verificar foco
+                    campo_focado_lead = page.evaluate('document.activeElement.name')
+                    print(f"   📊 DEBUG: Campo com foco: '{campo_focado_lead}'")
+                    
                     # Limpar e digitar
+                    print(f"   📊 DEBUG: Pressionando Ctrl+A...")
                     page.keyboard.press('Control+A')
+                    print(f"   📊 DEBUG: Pressionando Delete...")
                     page.keyboard.press('Delete')
                     time.sleep(0.5)
+                    
+                    valor_apos_limpar_lead = campo_leadtime.input_value()
+                    print(f"   📊 DEBUG: Valor após limpar: '{valor_apos_limpar_lead}'")
                     
                     print(f"   Digitando data: {data_agendamento}")
                     page.keyboard.type(data_agendamento)
                     time.sleep(0.5)
                     
+                    valor_apos_digitar_lead = campo_leadtime.input_value()
+                    print(f"   📊 DEBUG: Valor após digitar: '{valor_apos_digitar_lead}'")
+                    
+                    print(f"   📊 DEBUG: Pressionando Tab...")
                     page.keyboard.press('Tab')
+                    time.sleep(0.5)
+                    
+                    valor_final_lead = campo_leadtime.input_value()
+                    print(f"   📊 DEBUG: Valor FINAL leadtime: '{valor_final_lead}'")
+                    
+                    # Verificar erro
+                    container_lead = campo_leadtime.locator('xpath=ancestor::div[contains(@class, "form-group")]').first
+                    if container_lead.count() > 0:
+                        classes_container_lead = container_lead.get_attribute('class') or ''
+                        print(f"   📊 DEBUG: Classes do container: '{classes_container_lead}'")
+                        if 'has-error' in classes_container_lead or 'erro' in classes_container_lead:
+                            print(f"   ❌ ERRO: Campo leadtime marcado com erro!")
+                    
                     print(f"   ✅ Disponibilidade de entrega preenchida: {data_agendamento}")
                     
                     # Preencher campo ISO também

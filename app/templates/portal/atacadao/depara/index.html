@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}De-Para Produtos Atacadão{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="mb-0">
+                                <i class="fas fa-exchange-alt"></i> De-Para Produtos Atacadão
+                            </h5>
+                        </div>
+                        <div class="col-md-6 text-right">
+                            <a href="{{ url_for('portal.portal_depara.novo') }}" class="btn btn-success btn-sm">
+                                <i class="fas fa-plus"></i> Novo Mapeamento
+                            </a>
+                            <a href="{{ url_for('portal.portal_depara.importar') }}" class="btn btn-warning btn-sm">
+                                <i class="fas fa-file-excel"></i> Importar Planilha
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <!-- Filtros -->
+                    <form method="GET" class="mb-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <input type="text" 
+                                           name="search" 
+                                           class="form-control" 
+                                           placeholder="Buscar por código ou descrição..."
+                                           value="{{ search }}">
+                                    <div class="input-group-append">
+                                        <button class="btn btn-outline-secondary" type="submit">
+                                            <i class="fas fa-search"></i> Buscar
+                                        </button>
+                                        {% if search %}
+                                        <a href="{{ url_for('portal.portal_depara.index') }}" class="btn btn-outline-danger">
+                                            <i class="fas fa-times"></i> Limpar
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 text-right">
+                                <span class="badge bg-info">
+                                    Total: {{ mapeamentos.total }} mapeamentos
+                                </span>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <!-- Tabela -->
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th width="10%">Nosso Código</th>
+                                    <th width="25%">Nossa Descrição</th>
+                                    <th width="10%">Cód. Atacadão</th>
+                                    <th width="25%">Desc. Atacadão</th>
+                                    <th width="10%">CNPJ Cliente</th>
+                                    <th width="5%">Fator</th>
+                                    <th width="5%">Status</th>
+                                    <th width="10%">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in mapeamentos.items %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ item.codigo_nosso }}</strong>
+                                    </td>
+                                    <td>
+                                        <small>{{ item.descricao_nosso or '-' }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary">{{ item.codigo_atacadao }}</span>
+                                    </td>
+                                    <td>
+                                        <small>{{ item.descricao_atacadao }}</small>
+                                    </td>
+                                    <td>
+                                        {% if item.cnpj_cliente %}
+                                            <small>{{ item.cnpj_cliente }}</small>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.fator_conversao != 1.0 %}
+                                            <span class="badge bg-warning">{{ item.fator_conversao }}</span>
+                                        {% else %}
+                                            <span class="text-muted">1.0</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.ativo %}
+                                            <span class="badge bg-success">Ativo</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Inativo</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <a href="{{ url_for('portal.portal_depara.editar', id=item.id) }}" 
+                                               class="btn btn-outline-primary"
+                                               title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <button type="button" 
+                                                    class="btn btn-outline-danger btn-excluir"
+                                                    data-id="{{ item.id }}"
+                                                    data-codigo="{{ item.codigo_nosso }}"
+                                                    title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">
+                                        <i class="fas fa-info-circle"></i> Nenhum mapeamento encontrado
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Paginação -->
+                    {% if mapeamentos.pages > 1 %}
+                    <nav aria-label="Paginação">
+                        <ul class="pagination justify-content-center">
+                            {% if mapeamentos.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ mapeamentos.prev_num }}&search={{ search }}">
+                                    Anterior
+                                </a>
+                            </li>
+                            {% endif %}
+                            
+                            {% for page_num in mapeamentos.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                                {% if page_num %}
+                                    {% if page_num != mapeamentos.page %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_num }}&search={{ search }}">
+                                            {{ page_num }}
+                                        </a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                    {% endif %}
+                                {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if mapeamentos.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ mapeamentos.next_num }}&search={{ search }}">
+                                    Próxima
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Excluir mapeamento
+    $('.btn-excluir').click(function() {
+        const id = $(this).data('id');
+        const codigo = $(this).data('codigo');
+        
+        if (confirm(`Confirma exclusão do mapeamento do produto ${codigo}?`)) {
+            $.ajax({
+                url: `/portal/portal/atacadao/depara/excluir/${id}`,
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        alert(response.message);
+                        location.reload();
+                    } else {
+                        alert('Erro: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    alert('Erro ao excluir mapeamento');
+                }
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

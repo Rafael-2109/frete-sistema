@@ -29,13 +29,15 @@ def corrigir_trigger():
             try:
                 db.session.execute(text(sql_remove_trigger))
                 print("✅ Trigger removido")
-            except:
+            except Exception as e:
+                print(f"⚠️ Erro ao remover trigger: {e}")
                 print("⚠️ Trigger não existia ou já foi removido")
             
             try:
                 db.session.execute(text(sql_add_column))
                 print("✅ Coluna atualizado_em adicionada")
-            except:
+            except Exception as e:
+                print(f"⚠️ Erro ao adicionar coluna: {e}")
                 print("⚠️ Coluna já existe")
             
             db.session.commit()
