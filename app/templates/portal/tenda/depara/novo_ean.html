@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Portal Tenda - Novo De-Para EAN{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-plus"></i> Novo De-Para EAN
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="codigo_nosso" class="form-label">
+                                    Código Nosso <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="codigo_nosso" name="codigo_nosso" 
+                                       required autofocus>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="ean" class="form-label">
+                                    EAN (Código de Barras) <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="ean" name="ean" 
+                                       required maxlength="20">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="descricao_nosso" class="form-label">Descrição Nosso</label>
+                                <input type="text" class="form-control" id="descricao_nosso" name="descricao_nosso">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="descricao_ean" class="form-label">Descrição EAN</label>
+                                <input type="text" class="form-control" id="descricao_ean" name="descricao_ean">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="fator_conversao" class="form-label">
+                                    Fator de Conversão
+                                    <small class="text-muted">(padrão: 1.0)</small>
+                                </label>
+                                <input type="number" class="form-control" id="fator_conversao" name="fator_conversao" 
+                                       step="0.0001" value="1.0">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="cnpj_cliente" class="form-label">
+                                    CNPJ Cliente
+                                    <small class="text-muted">(vazio = geral)</small>
+                                </label>
+                                <input type="text" class="form-control" id="cnpj_cliente" name="cnpj_cliente" 
+                                       placeholder="00.000.000/0000-00">
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('portal_tenda_depara.listar_ean') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> Salvar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Ajuda -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="fas fa-info-circle"></i> Informações
+                    </h6>
+                    <ul class="mb-0">
+                        <li><strong>Código Nosso:</strong> Código interno do produto no seu sistema</li>
+                        <li><strong>EAN:</strong> Código de barras do produto no portal Tenda</li>
+                        <li><strong>Fator de Conversão:</strong> Multiplicador para conversão de unidades (ex: 12 para converter dúzia em unidade)</li>
+                        <li><strong>CNPJ Cliente:</strong> Se preenchido, o De-Para será específico para este cliente. Se vazio, será geral.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -12,7 +12,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-bp = Blueprint('portal_agendamento', __name__, url_prefix='/portal/atacadao/agendamento')
+bp = Blueprint('portal_agendamento', __name__, url_prefix='/atacadao/agendamento')
 
 @bp.route('/status')
 @login_required

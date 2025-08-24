@@ -23,3 +23,13 @@ portal_bp.register_blueprint(agendamento_bp)
 # Registrar rotas de Verificação de Protocolo do Atacadão
 from app.portal.atacadao.verificacao_protocolo import verificacao_protocolo_bp
 portal_bp.register_blueprint(verificacao_protocolo_bp, url_prefix='/atacadao')
+
+# ========== PORTAL TENDA ==========
+
+# Registrar rotas De-Para do Tenda
+from app.portal.tenda.routes_depara import bp as tenda_depara_bp
+portal_bp.register_blueprint(tenda_depara_bp)
+
+# Registrar rotas de Agendamento do Tenda
+from app.portal.tenda.routes_agendamento import bp as tenda_agendamento_bp
+portal_bp.register_blueprint(tenda_agendamento_bp)

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Portal Tenda - Editar Local de Entrega{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-edit"></i> Editar Local de Entrega
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        <div class="mb-3">
+                            <label class="form-label">CNPJ Cliente</label>
+                            <input type="text" class="form-control" value="{{ local.cnpj_cliente }}" disabled>
+                            <div class="form-text">Este campo não pode ser alterado</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="nome_cliente" class="form-label">Nome do Cliente</label>
+                            <input type="text" class="form-control" id="nome_cliente" name="nome_cliente"
+                                   value="{{ local.nome_cliente or '' }}">
+                        </div>
+
+                        <hr>
+
+                        <div class="mb-3">
+                            <label for="grupo_empresarial_nome" class="form-label">
+                                Grupo Empresarial <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="grupo_empresarial_nome" 
+                                   name="grupo_empresarial_nome" required
+                                   value="{{ local.grupo_empresarial_nome }}">
+                            <div class="form-text">
+                                Nome exato do grupo empresarial como aparece no portal
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="filial_nome" class="form-label">
+                                Filial <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="filial_nome" 
+                                   name="filial_nome" required
+                                   value="{{ local.filial_nome }}">
+                            <div class="form-text">
+                                Nome exato da filial como aparece no portal
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('portal_tenda_depara.listar_local') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Salvar Alterações
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Informações -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="fas fa-info-circle"></i> Informações
+                    </h6>
+                    <ul class="mb-0">
+                        <li>Criado em: {{ local.criado_em.strftime('%d/%m/%Y %H:%M') if local.criado_em else '-' }}</li>
+                        <li>Última atualização: {{ local.atualizado_em.strftime('%d/%m/%Y %H:%M') if local.atualizado_em else '-' }}</li>
+                        <li>Criado por: {{ local.criado_por or 'Sistema' }}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

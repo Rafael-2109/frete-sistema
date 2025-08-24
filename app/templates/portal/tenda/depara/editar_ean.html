@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Portal Tenda - Editar De-Para EAN{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-edit"></i> Editar De-Para EAN
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Código Nosso</label>
+                                <input type="text" class="form-control" value="{{ depara.codigo_nosso }}" disabled>
+                                <div class="form-text">Este campo não pode ser alterado</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">EAN (Código de Barras)</label>
+                                <input type="text" class="form-control" value="{{ depara.ean }}" disabled>
+                                <div class="form-text">Este campo não pode ser alterado</div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="descricao_nosso" class="form-label">Descrição Nosso</label>
+                                <input type="text" class="form-control" id="descricao_nosso" name="descricao_nosso"
+                                       value="{{ depara.descricao_nosso or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="descricao_ean" class="form-label">Descrição EAN</label>
+                                <input type="text" class="form-control" id="descricao_ean" name="descricao_ean"
+                                       value="{{ depara.descricao_ean or '' }}">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="fator_conversao" class="form-label">
+                                    Fator de Conversão
+                                </label>
+                                <input type="number" class="form-control" id="fator_conversao" name="fator_conversao" 
+                                       step="0.0001" value="{{ depara.fator_conversao }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">CNPJ Cliente</label>
+                                <input type="text" class="form-control" 
+                                       value="{{ depara.cnpj_cliente or 'Geral' }}" disabled>
+                                <div class="form-text">Este campo não pode ser alterado</div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('portal_tenda_depara.listar_ean') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Salvar Alterações
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Informações -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="fas fa-info-circle"></i> Informações
+                    </h6>
+                    <ul class="mb-0">
+                        <li>Criado em: {{ depara.criado_em.strftime('%d/%m/%Y %H:%M') if depara.criado_em else '-' }}</li>
+                        <li>Última atualização: {{ depara.atualizado_em.strftime('%d/%m/%Y %H:%M') if depara.atualizado_em else '-' }}</li>
+                        <li>Criado por: {{ depara.criado_por or 'Sistema' }}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

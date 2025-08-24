@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Portal Tenda - Gerenciar Filiais{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Portal Tenda - Gerenciar Filiais</h1>
+        <a href="{{ url_for('portal.central_portais') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar à Central
+        </a>
+    </div>
+    
+    <div class="row">
+        <!-- Card Principal De-Para Local de Entrega -->
+        <div class="col-md-8 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-map-marker-alt"></i> De-Para Local de Entrega (Filiais)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        O De-Para de Filiais mapeia o CNPJ do cliente para o Grupo Empresarial e 
+                        Filial corretos no portal Tenda, garantindo que a entrega seja agendada 
+                        no local certo.
+                    </p>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> <strong>Atenção:</strong> 
+                        Os nomes do Grupo Empresarial e Filial devem ser EXATAMENTE iguais aos que 
+                        aparecem no portal Tenda.
+                    </div>
+
+                    <div class="btn-group-vertical w-100">
+                        <a href="{{ url_for('portal.portal_tenda_depara.listar_local') }}" class="btn btn-outline-primary text-start">
+                            <i class="fas fa-list"></i> Listar Locais
+                            <small class="d-block text-muted">Visualize todos os locais de entrega cadastrados</small>
+                        </a>
+                        <a href="{{ url_for('portal.portal_tenda_depara.novo_local') }}" class="btn btn-outline-success text-start">
+                            <i class="fas fa-plus"></i> Novo Local
+                            <small class="d-block text-muted">Cadastre um novo local de entrega</small>
+                        </a>
+                        <a href="{{ url_for('portal.portal_tenda_depara.importar_local') }}" class="btn btn-outline-info text-start">
+                            <i class="fas fa-file-excel"></i> Importar XLSX
+                            <small class="d-block text-muted">Importe múltiplos locais via planilha</small>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Card de Instruções -->
+        <div class="col-md-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-question-circle"></i> Como Funciona
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <h6>Mapeamento Automático</h6>
+                    <p class="small">
+                        Quando um agendamento é criado, o sistema:
+                    </p>
+                    <ol class="small">
+                        <li>Identifica o CNPJ do cliente</li>
+                        <li>Busca o De-Para correspondente</li>
+                        <li>Seleciona automaticamente o Grupo e Filial no portal</li>
+                    </ol>
+                    
+                    <h6>Grupos Empresariais Comuns</h6>
+                    <ul class="small">
+                        <li>TENDA ATACADO SA</li>
+                        <li>TENDA ATACADO SP</li>
+                        <li>TENDA ATACADO RJ</li>
+                    </ul>
+                    
+                    <h6>Exemplos de Filiais</h6>
+                    <ul class="small">
+                        <li>BNSU - CD</li>
+                        <li>CT03 - AMOREIRAS</li>
+                        <li>CT05 - CAMPINAS</li>
+                        <li>CT08 - SANTOS</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Formato para Importação -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-table"></i> Formato XLSX para Importação
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p>Para importar via planilha, use o seguinte formato:</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>cnpj_cliente</th>
+                                    <th>nome_cliente</th>
+                                    <th>grupo_empresarial_nome</th>
+                                    <th>filial_nome</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>01157555000100</td>
+                                    <td>Cliente Exemplo SP</td>
+                                    <td>TENDA ATACADO SA</td>
+                                    <td>CT03 - AMOREIRAS</td>
+                                </tr>
+                                <tr>
+                                    <td>01157555000200</td>
+                                    <td>Cliente Exemplo RJ</td>
+                                    <td>TENDA ATACADO SA</td>
+                                    <td>CT05 - CAMPINAS</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="alert alert-info mt-3">
+                        <strong>Importante:</strong> Para obter os nomes exatos do Grupo Empresarial e Filial, 
+                        acesse o portal Tenda e copie os valores que aparecem nos campos de seleção durante 
+                        o processo de agendamento.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

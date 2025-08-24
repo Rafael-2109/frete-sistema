@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Portal Tenda - Novo Local de Entrega{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-map-marker-alt"></i> Novo Local de Entrega
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        <div class="mb-3">
+                            <label for="cnpj_cliente" class="form-label">
+                                CNPJ Cliente <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="cnpj_cliente" name="cnpj_cliente" 
+                                   placeholder="00.000.000/0000-00" required autofocus>
+                            <div class="form-text">
+                                CNPJ do cliente que será mapeado para o local de entrega
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="nome_cliente" class="form-label">Nome do Cliente</label>
+                            <input type="text" class="form-control" id="nome_cliente" name="nome_cliente">
+                            <div class="form-text">
+                                Nome do cliente (opcional, para referência)
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="mb-3">
+                            <label for="grupo_empresarial_nome" class="form-label">
+                                Grupo Empresarial <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="grupo_empresarial_nome" 
+                                   name="grupo_empresarial_nome" required
+                                   placeholder="Ex: TENDA ATACADO SA">
+                            <div class="form-text">
+                                Nome exato do grupo empresarial como aparece no portal (campo "Filtro Destinatário")
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="filial_nome" class="form-label">
+                                Filial <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="filial_nome" 
+                                   name="filial_nome" required
+                                   placeholder="Ex: CT03 - AMOREIRAS">
+                            <div class="form-text">
+                                Nome exato da filial como aparece no portal (campo "Local de Entrega")
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('portal_tenda_depara.listar_local') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> Salvar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Ajuda -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="fas fa-info-circle"></i> Informações Importantes
+                    </h6>
+                    <ul class="mb-0">
+                        <li>O <strong>CNPJ</strong> deve ser único - cada cliente pode ter apenas um local de entrega</li>
+                        <li>O <strong>Grupo Empresarial</strong> e <strong>Filial</strong> devem ser escritos EXATAMENTE como aparecem no portal</li>
+                        <li>Estes valores são case-sensitive (diferenciam maiúsculas de minúsculas)</li>
+                        <li>Para obter os nomes corretos, acesse o portal Tenda e copie os valores dos campos</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

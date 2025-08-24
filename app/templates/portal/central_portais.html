@@ -1,0 +1,719 @@
+{% extends "base.html" %}
+
+{% block title %}Central de Portais de Agendamento{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">
+            <i class="fas fa-globe"></i> Central de Portais de Agendamento
+        </h1>
+        <div>
+            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#modalComoFunciona">
+                <i class="fas fa-question-circle"></i> Como Funciona?
+            </button>
+            <a href="/carteira/" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Cards dos Portais -->
+    <div class="row">
+        <!-- Portal Atacadão -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-shopping-cart"></i> Portal Atacadão
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        <strong>Status:</strong> <span class="badge bg-success">Ativo</span>
+                    </p>
+                    <p class="card-text">
+                        Automação completa para agendamento de entregas no portal do Atacadão.
+                    </p>
+                    <div class="list-group list-group-flush mb-3">
+                        <a href="/portal/atacadao/depara/" class="list-group-item list-group-item-action">
+                            <i class="fas fa-barcode"></i> De-Para Códigos Atacadão
+                            <small class="text-muted d-block">Mapeamento de códigos internos para códigos do portal</small>
+                        </a>
+                        <!-- Verificação de Protocolos (Em desenvolvimento)
+                        <a href="#" class="list-group-item list-group-item-action disabled">
+                            <i class="fas fa-check-circle"></i> Verificar Protocolos
+                            <small class="text-muted d-block">Consultar status de agendamentos</small>
+                        </a>
+                        -->
+                    </div>
+                </div>
+                <div class="card-footer text-muted">
+                    <small>
+                        <i class="fas fa-link"></i> Portal: atacadao.hodiebooking.com.br
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Portal Tenda -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-store"></i> Portal Tenda
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        <strong>Status:</strong> <span class="badge bg-warning text-dark">Desenvolvimento</span>
+                    </p>
+                    <p class="card-text">
+                        Sistema de agendamento integrado com o portal Agendar Entrega do Tenda.
+                    </p>
+                    <div class="list-group list-group-flush mb-3">
+                        <a href="/portal/tenda/depara/ean" class="list-group-item list-group-item-action">
+                            <i class="fas fa-barcode"></i> De-Para Códigos EAN
+                            <small class="text-muted d-block">Mapeamento para códigos de barras EAN</small>
+                        </a>
+                        <a href="/portal/tenda/depara/filiais" class="list-group-item list-group-item-action">
+                            <i class="fas fa-map-marker-alt"></i> De-Para Filiais
+                            <small class="text-muted d-block">Mapeamento de CNPJ para filiais</small>
+                        </a>
+                    </div>
+                </div>
+                <div class="card-footer text-muted">
+                    <small>
+                        <i class="fas fa-link"></i> Portal: v1.agendarentrega.com
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Portal Sendas (Em Breve) -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-secondary">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-truck"></i> Portal Sendas/Assaí
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        <strong>Status:</strong> <span class="badge bg-secondary">Em Breve</span>
+                    </p>
+                    <div class="text-center py-5">
+                        <i class="fas fa-clock fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Em Breve</h5>
+                        <p class="text-muted">
+                            A integração com o portal Sendas/Assaí será disponibilizada em breve.
+                        </p>
+                    </div>
+                </div>
+                <div class="card-footer text-muted">
+                    <small>
+                        <i class="fas fa-info-circle"></i> Em desenvolvimento
+                    </small>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Modal Como Funciona -->
+<div class="modal fade" id="modalComoFunciona" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-question-circle"></i> Como Funciona a Automação de Portais?
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="accordion" id="accordionComoFunciona">
+                    <!-- Demonstração Prática -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDemonstracao">
+                                <i class="fas fa-play-circle me-2 text-danger"></i> <strong>DEMONSTRAÇÃO AO VIVO - Veja Como Funciona!</strong>
+                            </button>
+                        </h2>
+                        <div id="collapseDemonstracao" class="accordion-collapse collapse show" data-bs-parent="#accordionComoFunciona">
+                            <div class="accordion-body">
+                                <div class="alert alert-info mb-4">
+                                    <i class="fas fa-magic"></i> <strong>Veja a mágica acontecer!</strong> 
+                                    Acompanhe um exemplo real de como o sistema faz um agendamento automático.
+                                </div>
+
+                                <!-- Exemplo Prático Passo a Passo -->
+                                <div class="demo-container">
+                                    <h5 class="text-primary mb-3">🫒 Exemplo Real: Agendamento de Azeitonas Campo Belo</h5>
+                                    
+                                    <!-- Passo 1 -->
+                                    <div class="step-card mb-3 p-3 border rounded">
+                                        <div class="d-flex align-items-start">
+                                            <div class="step-number bg-primary text-white rounded-circle p-2 me-3" style="min-width: 40px; text-align: center;">1</div>
+                                            <div class="flex-grow-1">
+                                                <h6>Você clica em "Agendar no Portal"</h6>
+                                                <div class="bg-light p-2 rounded mt-2">
+                                                    <small class="text-muted">Sistema recebe dados reais:</small>
+                                                    <pre class="mb-0"><code>Pedido: #932955
+Cliente: Atacadão Campinas - CNPJ: 75.315.333/0085-02
+Produto: 4320162 - AZEITONA VERDE FATIADA (30 caixas)
+Data desejada: 28/08/2025</code></pre>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Passo 2 -->
+                                    <div class="step-card mb-3 p-3 border rounded">
+                                        <div class="d-flex align-items-start">
+                                            <div class="step-number bg-warning text-dark rounded-circle p-2 me-3" style="min-width: 40px; text-align: center;">2</div>
+                                            <div class="flex-grow-1">
+                                                <h6>Sistema faz a "tradução" (De-Para)</h6>
+                                                <div class="row mt-2">
+                                                    <div class="col-md-5">
+                                                        <div class="bg-danger text-white p-2 rounded">
+                                                            <small>NOSSO SISTEMA</small>
+                                                            <div>Código: <strong>4320162</strong></div>
+                                                            <div class="small">AZEITONA VERDE FATIADA</div>
+                                                            <div class="small">CX 6X2 KG - CAMPO BELO</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-2 text-center py-3">
+                                                        <i class="fas fa-arrow-right fa-2x text-primary"></i>
+                                                    </div>
+                                                    <div class="col-md-5">
+                                                        <div class="bg-success text-white p-2 rounded">
+                                                            <small>PORTAL ATACADÃO</small>
+                                                            <div>EAN: <strong>17898075641576</strong></div>
+                                                            <div>Código: <strong>35646</strong></div>
+                                                            <div class="small">AZEITONA VERDE FATIADA</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="alert alert-info mt-2 mb-0">
+                                                    <small><i class="fas fa-info-circle"></i> <strong>De-Para Real:</strong> O sistema converte automaticamente nosso código interno (4320162) para o código que o Atacadão reconhece (35646) e o EAN do produto (17898075641576)</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Passo 3 -->
+                                    <div class="step-card mb-3 p-3 border rounded bg-light">
+                                        <div class="d-flex align-items-start">
+                                            <div class="step-number bg-info text-white rounded-circle p-2 me-3" style="min-width: 40px; text-align: center;">3</div>
+                                            <div class="flex-grow-1">
+                                                <h6>Robô entra em ação (acontece em segundos!)</h6>
+                                                <div class="automation-demo mt-3">
+                                                    <!-- Simulação Visual com Código Real -->
+                                                    <div class="browser-mockup border rounded p-2 bg-white">
+                                                        <div class="browser-header bg-secondary text-white p-1 rounded-top d-flex align-items-center">
+                                                            <div class="browser-dots d-flex me-3">
+                                                                <span class="dot bg-danger rounded-circle d-inline-block me-1" style="width: 12px; height: 12px;"></span>
+                                                                <span class="dot bg-warning rounded-circle d-inline-block me-1" style="width: 12px; height: 12px;"></span>
+                                                                <span class="dot bg-success rounded-circle d-inline-block" style="width: 12px; height: 12px;"></span>
+                                                            </div>
+                                                            <small>v1.agendarentrega.com (Portal Tenda)</small>
+                                                        </div>
+                                                        <div class="browser-content p-3">
+                                                            <!-- Mostrando código real do portal -->
+                                                            <div class="code-demo mb-3">
+                                                                <h6 class="text-primary mb-2">
+                                                                    <i class="fas fa-code"></i> O que o robô "vê" no portal:
+                                                                </h6>
+                                                                <div class="bg-dark text-light p-2 rounded" style="font-family: 'Courier New', monospace; font-size: 0.85rem;">
+                                                                    <div class="mb-2">
+                                                                        <span class="text-warning">// Selecionando tipo de remetente</span><br>
+                                                                        <span class="text-info">&lt;select</span> <span class="text-success">id="tipoRemetente"</span><span class="text-info">&gt;</span><br>
+                                                                        &nbsp;&nbsp;<span class="text-info">&lt;option</span> <span class="text-success">value="F"</span><span class="text-info">&gt;</span>Fornecedor<span class="text-info">&lt;/option&gt;</span><br>
+                                                                        <span class="text-info">&lt;/select&gt;</span>
+                                                                    </div>
+                                                                    <div class="mb-2">
+                                                                        <span class="text-warning">// Preenchendo CNPJ</span><br>
+                                                                        <span class="text-info">&lt;input</span> <span class="text-success">id="fornecedor"</span> <span class="text-success">value="61.724.241/0003-30"</span><span class="text-info">/&gt;</span>
+                                                                    </div>
+                                                                    <div class="mb-2">
+                                                                        <span class="text-warning">// Escolhendo local de entrega</span><br>
+                                                                        <span class="text-info">&lt;select</span> <span class="text-success">id="selectPedido"</span><span class="text-info">&gt;</span><br>
+                                                                        &nbsp;&nbsp;<span class="text-info">&lt;option&gt;</span>CT03 - AMOREIRAS<span class="text-info">&lt;/option&gt;</span><br>
+                                                                        <span class="text-info">&lt;/select&gt;</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Ações do robô em tempo real -->
+                                                            <div class="typing-animation">
+                                                                <h6 class="text-success mb-2">
+                                                                    <i class="fas fa-robot"></i> Ações executadas automaticamente:
+                                                                </h6>
+                                                                <div class="typing-step mb-2">
+                                                                    <code class="text-primary">await page.selectOption('#tipoRemetente', 'F')</code>
+                                                                    <span class="ms-2">✅</span>
+                                                                </div>
+                                                                <div class="typing-step mb-2">
+                                                                    <code class="text-primary">await page.fill('#fornecedor', '61724241000330')</code>
+                                                                    <span class="ms-2">✅</span>
+                                                                </div>
+                                                                <div class="typing-step mb-2">
+                                                                    <code class="text-primary">await page.click('.opcoes-clientes')</code>
+                                                                    <span class="ms-2">✅</span>
+                                                                </div>
+                                                                <div class="typing-step mb-2">
+                                                                    <code class="text-primary">await page.selectOption('#veiculos', 'CARRETA')</code>
+                                                                    <span class="ms-2">✅</span>
+                                                                </div>
+                                                                <div class="typing-step mb-2">
+                                                                    <code class="text-primary">await page.fill('#qtdVolume', '30')</code>
+                                                                    <span class="ms-2">✅</span>
+                                                                </div>
+                                                                <div class="typing-step mb-2">
+                                                                    <code class="text-primary">await page.click('button#confirmar')</code>
+                                                                    <span class="ms-2">✅</span>
+                                                                </div>
+                                                                <div class="typing-step text-success fw-bold">
+                                                                    <i class="fas fa-check-circle"></i> Protocolo capturado: AG-2508230014931
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Passo 4 - Resultado -->
+                                    <div class="step-card p-3 border rounded bg-success text-white">
+                                        <div class="d-flex align-items-start">
+                                            <div class="step-number bg-white text-success rounded-circle p-2 me-3" style="min-width: 40px; text-align: center;">✓</div>
+                                            <div class="flex-grow-1">
+                                                <h6>Pronto! Agendamento Confirmado</h6>
+                                                <div class="bg-white text-dark p-3 rounded mt-2">
+                                                    <div class="row">
+                                                        <div class="col-md-12 mb-2">
+                                                            <strong>📦 Produto:</strong> AZEITONA VERDE FATIADA - 30 caixas (6x2 KG)
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <strong>🎫 Protocolo Gerado:</strong> AG-2508230014931
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <strong>⏱️ Tempo Total:</strong> 45 segundos
+                                                        </div>
+                                                    </div>
+                                                    <hr>
+                                                    <small class="text-muted">
+                                                        O protocolo foi salvo automaticamente no sistema e um e-mail de confirmação foi enviado.
+                                                        <br><strong>Peso Total:</strong> 360 kg (30 caixas x 12 kg)
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Comparação Manual vs Automático -->
+                                <div class="comparison-table mt-5">
+                                    <h5 class="text-center mb-3">📊 Comparação: Manual vs Automático</h5>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="card border-danger">
+                                                <div class="card-header bg-danger text-white">
+                                                    <i class="fas fa-user"></i> Processo Manual
+                                                </div>
+                                                <div class="card-body">
+                                                    <ul class="list-unstyled">
+                                                        <li>❌ Abrir o portal</li>
+                                                        <li>❌ Fazer login</li>
+                                                        <li>❌ Procurar código correto</li>
+                                                        <li>❌ Digitar informações</li>
+                                                        <li>❌ Conferir dados</li>
+                                                        <li>❌ Anotar protocolo</li>
+                                                    </ul>
+                                                    <div class="text-center">
+                                                        <h4 class="text-danger">⏱️ 10-15 minutos</h4>
+                                                        <small>Por agendamento</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card border-success">
+                                                <div class="card-header bg-success text-white">
+                                                    <i class="fas fa-robot"></i> Processo Automático
+                                                </div>
+                                                <div class="card-body">
+                                                    <ul class="list-unstyled">
+                                                        <li>✅ Um clique</li>
+                                                        <li>✅ Sistema faz tudo</li>
+                                                        <li>✅ Sem erros de digitação</li>
+                                                        <li>✅ Protocolo salvo automaticamente</li>
+                                                        <li>✅ E-mail de confirmação</li>
+                                                        <li>✅ Pode fazer vários ao mesmo tempo</li>
+                                                    </ul>
+                                                    <div class="text-center">
+                                                        <h4 class="text-success">⏱️ 45 segundos</h4>
+                                                        <small>Por agendamento</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visão Geral -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVisaoGeral">
+                                <i class="fas fa-eye me-2"></i> Visão Geral
+                            </button>
+                        </h2>
+                        <div id="collapseVisaoGeral" class="accordion-collapse collapse" data-bs-parent="#accordionComoFunciona">
+                            <div class="accordion-body">
+                                <p>
+                                    Nossa automação de portais utiliza tecnologia de ponta para realizar agendamentos de forma 
+                                    automática nos portais dos clientes, eliminando trabalho manual repetitivo e reduzindo erros.
+                                </p>
+                                <p>
+                                    <strong>Como um robô navegador:</strong> O sistema age como se fosse você navegando no portal, 
+                                    preenchendo formulários e clicando em botões, mas de forma muito mais rápida e precisa.
+                                </p>
+                                <div class="alert alert-success">
+                                    <i class="fas fa-check-circle"></i> <strong>Benefícios:</strong>
+                                    <ul class="mb-0">
+                                        <li>Redução de 95% no tempo de agendamento</li>
+                                        <li>Eliminação de erros de digitação</li>
+                                        <li>Padronização do processo</li>
+                                        <li>Registro automático de protocolos</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Como Funciona Tecnicamente -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTecnico">
+                                <i class="fas fa-cogs me-2"></i> Detalhes Técnicos
+                            </button>
+                        </h2>
+                        <div id="collapseTecnico" class="accordion-collapse collapse" data-bs-parent="#accordionComoFunciona">
+                            <div class="accordion-body">
+                                <h6>🤖 Tecnologia Playwright</h6>
+                                <p>
+                                    Utilizamos o <strong>Playwright</strong>, uma ferramenta desenvolvida pela Microsoft que controla 
+                                    navegadores reais (Chrome, Firefox, Safari) de forma programática.
+                                </p>
+                                
+                                <h6>🔄 Fluxo do Processo</h6>
+                                <ol>
+                                    <li><strong>Preparação:</strong> Sistema coleta dados da separação (produtos, quantidades, CNPJ)</li>
+                                    <li><strong>De-Para:</strong> Converte códigos internos para códigos do portal</li>
+                                    <li><strong>Navegação:</strong> Abre navegador invisível e faz login no portal</li>
+                                    <li><strong>Preenchimento:</strong> Preenche todos os campos necessários</li>
+                                    <li><strong>Confirmação:</strong> Submete formulário e captura protocolo</li>
+                                    <li><strong>Registro:</strong> Salva protocolo no banco de dados</li>
+                                </ol>
+
+                                <h6>📍 Endpoints da API</h6>
+                                <div class="bg-light p-2 rounded">
+                                    <code>/portal/[cliente]/agendamento/preparar/[lote_id]</code> - Prepara agendamento<br>
+                                    <code>/portal/[cliente]/agendamento/confirmar</code> - Executa no portal<br>
+                                    <code>/portal/[cliente]/depara/api/buscar</code> - Consulta De-Para
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- De-Para Explicado -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDePara">
+                                <i class="fas fa-exchange-alt me-2"></i> O que é De-Para?
+                            </button>
+                        </h2>
+                        <div id="collapseDePara" class="accordion-collapse collapse" data-bs-parent="#accordionComoFunciona">
+                            <div class="accordion-body">
+                                <p>
+                                    <strong>De-Para</strong> é um mapeamento que "traduz" informações do nosso sistema para o 
+                                    formato esperado pelo portal do cliente.
+                                </p>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header bg-light">
+                                                <strong>De-Para de Produtos (Exemplos Reais)</strong>
+                                            </div>
+                                            <div class="card-body">
+                                                <p class="mb-2"><strong>Conversão automática:</strong></p>
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Nosso Código</th>
+                                                                <th>→</th>
+                                                                <th>Código Portal</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <tr>
+                                                                <td>4320162</td>
+                                                                <td>→</td>
+                                                                <td>35646</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td>4310162</td>
+                                                                <td>→</td>
+                                                                <td>35642</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td>4360162</td>
+                                                                <td>→</td>
+                                                                <td>35645</td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <small class="text-muted">
+                                                    <strong>EAN:</strong> 17898075641576 (código de barras)
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header bg-light">
+                                                <strong>De-Para de Locais</strong>
+                                            </div>
+                                            <div class="card-body">
+                                                <p>Mapeia CNPJ do cliente para:</p>
+                                                <ul>
+                                                    <li>Grupo Empresarial</li>
+                                                    <li>Filial de entrega</li>
+                                                </ul>
+                                                <small class="text-muted">
+                                                    Exemplo: 01157555000100 → CT03 - AMOREIRAS
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Segurança -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSeguranca">
+                                <i class="fas fa-shield-alt me-2"></i> Segurança e Confiabilidade
+                            </button>
+                        </h2>
+                        <div id="collapseSeguranca" class="accordion-collapse collapse" data-bs-parent="#accordionComoFunciona">
+                            <div class="accordion-body">
+                                <h6>🔒 Medidas de Segurança</h6>
+                                <ul>
+                                    <li><strong>Credenciais Seguras:</strong> Senhas criptografadas no banco</li>
+                                    <li><strong>Sessões Isoladas:</strong> Cada agendamento em sessão própria</li>
+                                    <li><strong>Logs Completos:</strong> Registro de todas as ações</li>
+                                    <li><strong>Retry Automático:</strong> Tenta novamente em caso de falha</li>
+                                </ul>
+
+                                <h6>✅ Validações</h6>
+                                <ul>
+                                    <li>Verifica se todos os produtos têm De-Para</li>
+                                    <li>Valida CNPJ e local de entrega</li>
+                                    <li>Confirma protocolo antes de finalizar</li>
+                                    <li>Detecta e reporta erros do portal</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Estilos para animações e visual melhorado -->
+<style>
+    /* Animação de digitação */
+    @keyframes typing {
+        from { opacity: 0; transform: translateX(-10px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    
+    .typing-step {
+        animation: typing 0.5s ease-in-out;
+        animation-fill-mode: both;
+    }
+    
+    .typing-step:nth-child(1) { animation-delay: 0.5s; }
+    .typing-step:nth-child(2) { animation-delay: 1s; }
+    .typing-step:nth-child(3) { animation-delay: 1.5s; }
+    .typing-step:nth-child(4) { animation-delay: 2s; }
+    .typing-step:nth-child(5) { animation-delay: 2.5s; }
+    .typing-step:nth-child(6) { animation-delay: 3s; }
+    .typing-step:nth-child(7) { animation-delay: 3.5s; }
+    
+    /* Animação de pulso para números dos passos */
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+    
+    .step-number {
+        animation: pulse 2s infinite;
+    }
+    
+    /* Hover effects nos cards de passo */
+    .step-card {
+        transition: all 0.3s ease;
+    }
+    
+    .step-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    /* Browser mockup mais realista */
+    .browser-mockup {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .browser-dots span {
+        transition: all 0.3s ease;
+    }
+    
+    .browser-mockup:hover .browser-dots span {
+        transform: scale(1.2);
+    }
+    
+    /* Animação de código sendo digitado */
+    @keyframes codeAppear {
+        from { 
+            opacity: 0;
+            background-color: #ffff00;
+        }
+        to { 
+            opacity: 1;
+            background-color: transparent;
+        }
+    }
+    
+    .code-highlight {
+        animation: codeAppear 1s ease;
+    }
+    
+    /* Seta animada */
+    @keyframes arrowMove {
+        0%, 100% { transform: translateX(0); }
+        50% { transform: translateX(10px); }
+    }
+    
+    .fa-arrow-right {
+        animation: arrowMove 2s infinite;
+    }
+    
+    /* Cards de comparação com hover */
+    .comparison-table .card {
+        transition: all 0.3s ease;
+    }
+    
+    .comparison-table .card:hover {
+        transform: scale(1.05);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    }
+    
+    /* Destaque no accordion ativo */
+    .accordion-button:not(.collapsed) {
+        background-color: #e3f2fd;
+        color: #1976d2;
+        font-weight: bold;
+    }
+    
+    /* Smooth scroll para demonstração */
+    .demo-container {
+        scroll-behavior: smooth;
+    }
+    
+    /* Badge animado para "AO VIVO" */
+    @keyframes live {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    
+    .badge-live {
+        background-color: #ff0000;
+        color: white;
+        animation: live 1.5s infinite;
+    }
+</style>
+
+<!-- Script para efeitos interativos -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Adicionar efeito de digitação ao abrir a demonstração
+    const demoAccordion = document.getElementById('collapseDemonstracao');
+    
+    if (demoAccordion) {
+        demoAccordion.addEventListener('shown.bs.collapse', function () {
+            // Reiniciar animações quando abrir
+            const typingSteps = document.querySelectorAll('.typing-step');
+            typingSteps.forEach((step, index) => {
+                step.style.animation = 'none';
+                setTimeout(() => {
+                    step.style.animation = '';
+                }, 100 * index);
+            });
+        });
+    }
+    
+    // Highlight de código ao passar o mouse
+    const codeBlocks = document.querySelectorAll('.bg-dark.text-light div');
+    codeBlocks.forEach(block => {
+        block.addEventListener('mouseenter', function() {
+            this.classList.add('code-highlight');
+        });
+        
+        block.addEventListener('mouseleave', function() {
+            setTimeout(() => {
+                this.classList.remove('code-highlight');
+            }, 500);
+        });
+    });
+    
+    // Simular cliques nos steps ao clicar
+    const stepCards = document.querySelectorAll('.step-card');
+    stepCards.forEach(card => {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', function() {
+            // Adicionar efeito de seleção
+            stepCards.forEach(c => c.classList.remove('border-primary', 'shadow'));
+            this.classList.add('border-primary', 'shadow');
+            
+            // Se for o último step, mostrar efeito de sucesso
+            if (this.querySelector('.step-number').textContent === '✓') {
+                this.style.transform = 'scale(1.05)';
+                setTimeout(() => {
+                    this.style.transform = '';
+                }, 300);
+            }
+        });
+    });
+});
+</script>
+
+{% endblock %}

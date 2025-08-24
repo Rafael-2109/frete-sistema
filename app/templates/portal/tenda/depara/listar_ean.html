@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Portal Tenda - Listar De-Para EAN{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Portal Tenda - De-Para EAN</h1>
+        <div>
+            <a href="{{ url_for('portal_tenda_depara.novo_ean') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Novo De-Para
+            </a>
+            <a href="{{ url_for('portal_tenda_depara.importar_ean') }}" class="btn btn-info">
+                <i class="fas fa-file-excel"></i> Importar XLSX
+            </a>
+            <a href="{{ url_for('portal_tenda_depara.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label for="codigo_nosso" class="form-label">Código Nosso</label>
+                    <input type="text" class="form-control" id="codigo_nosso" name="codigo_nosso" 
+                           value="{{ request.args.get('codigo_nosso', '') }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="ean" class="form-label">EAN</label>
+                    <input type="text" class="form-control" id="ean" name="ean" 
+                           value="{{ request.args.get('ean', '') }}">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('portal_tenda_depara.listar_ean') }}" class="btn btn-light ms-2">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Código Nosso</th>
+                            <th>Descrição Nosso</th>
+                            <th>EAN</th>
+                            <th>Descrição EAN</th>
+                            <th>Fator Conversão</th>
+                            <th>CNPJ Cliente</th>
+                            <th width="150">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in depara_list.items %}
+                        <tr>
+                            <td><strong>{{ item.codigo_nosso }}</strong></td>
+                            <td>{{ item.descricao_nosso or '-' }}</td>
+                            <td><code>{{ item.ean }}</code></td>
+                            <td>{{ item.descricao_ean or '-' }}</td>
+                            <td>{{ item.fator_conversao }}</td>
+                            <td>{{ item.cnpj_cliente or 'Geral' }}</td>
+                            <td>
+                                <a href="{{ url_for('portal_tenda_depara.editar_ean', id=item.id) }}" 
+                                   class="btn btn-sm btn-primary" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <form method="post" action="{{ url_for('portal_tenda_depara.excluir_ean', id=item.id) }}" 
+                                      style="display: inline-block;"
+                                      onsubmit="return confirm('Tem certeza que deseja excluir este De-Para?');">
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">
+                                Nenhum De-Para EAN cadastrado.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if depara_list.pages > 1 %}
+            <nav aria-label="Paginação">
+                <ul class="pagination justify-content-center">
+                    {% if depara_list.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('portal_tenda_depara.listar_ean', page=depara_list.prev_num, **request.args) }}">
+                            Anterior
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for page_num in depara_list.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            <li class="page-item {% if page_num == depara_list.page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('portal_tenda_depara.listar_ean', page=page_num, **request.args) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if depara_list.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('portal_tenda_depara.listar_ean', page=depara_list.next_num, **request.args) }}">
+                            Próximo
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Portal Tenda - Importar Locais de Entrega{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-excel"></i> Importar Locais de Entrega via XLSX
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="arquivo" class="form-label">
+                                Arquivo XLSX <span class="text-danger">*</span>
+                            </label>
+                            <input type="file" class="form-control" id="arquivo" name="arquivo" 
+                                   accept=".xlsx,.xls" required>
+                            <div class="form-text">
+                                Formatos aceitos: .xlsx, .xls
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('portal_tenda_depara.listar_local') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            <button type="submit" class="btn btn-info">
+                                <i class="fas fa-upload"></i> Importar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Formato do arquivo -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-table"></i> Formato do Arquivo XLSX
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p>O arquivo deve conter as seguintes colunas (na primeira linha):</p>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>cnpj_cliente</th>
+                                    <th>nome_cliente</th>
+                                    <th>grupo_empresarial_nome</th>
+                                    <th>filial_nome</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>01157555000100</td>
+                                    <td>Cliente Exemplo SP</td>
+                                    <td>TENDA ATACADO SA</td>
+                                    <td>CT03 - AMOREIRAS</td>
+                                </tr>
+                                <tr>
+                                    <td>01157555000200</td>
+                                    <td>Cliente Exemplo RJ</td>
+                                    <td>TENDA ATACADO SA</td>
+                                    <td>CT05 - CAMPINAS</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <strong>Observações:</strong>
+                        <ul class="mb-0">
+                            <li>Colunas obrigatórias: <code>cnpj_cliente</code>, <code>grupo_empresarial_nome</code> e <code>filial_nome</code></li>
+                            <li>A coluna <code>nome_cliente</code> é opcional</li>
+                            <li>O CNPJ pode ser informado com ou sem formatação</li>
+                            <li>Registros existentes serão atualizados</li>
+                            <li>Novos registros serão criados</li>
+                            <li>Os nomes do grupo e filial devem ser EXATAMENTE como aparecem no portal</li>
+                        </ul>
+                    </div>
+
+                    <a href="#" class="btn btn-sm btn-outline-primary" onclick="baixarModelo(); return false;">
+                        <i class="fas fa-download"></i> Baixar Modelo XLSX
+                    </a>
+                </div>
+            </div>
+
+            <!-- Exemplos de Grupos e Filiais -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-building"></i> Exemplos de Grupos e Filiais
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Grupos Empresariais comuns:</strong></p>
+                    <ul>
+                        <li>TENDA ATACADO SA</li>
+                        <li>TENDA ATACADO SP</li>
+                        <li>TENDA ATACADO RJ</li>
+                    </ul>
+                    
+                    <p><strong>Filiais comuns:</strong></p>
+                    <ul>
+                        <li>BNSU - CD</li>
+                        <li>CT03 - AMOREIRAS</li>
+                        <li>CT05 - CAMPINAS</li>
+                        <li>CT08 - SANTOS</li>
+                        <li>CT10 - SANTO ANDRÉ</li>
+                    </ul>
+                    
+                    <div class="alert alert-warning">
+                        <strong>Importante:</strong> Estes são apenas exemplos. Você deve usar os nomes EXATOS 
+                        que aparecem no portal Tenda ao criar o agendamento.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function baixarModelo() {
+    // Criar dados de exemplo
+    const data = [
+        ['cnpj_cliente', 'nome_cliente', 'grupo_empresarial_nome', 'filial_nome'],
+        ['01157555000100', 'Cliente Exemplo SP', 'TENDA ATACADO SA', 'CT03 - AMOREIRAS'],
+        ['01157555000200', 'Cliente Exemplo RJ', 'TENDA ATACADO SA', 'CT05 - CAMPINAS']
+    ];
+    
+    // Criar workbook
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Locais de Entrega');
+    
+    // Baixar arquivo
+    XLSX.writeFile(wb, 'modelo_locais_entrega_tenda.xlsx');
+}
+</script>
+
+<!-- Adicionar biblioteca XLSX se não estiver carregada -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+{% endblock %}

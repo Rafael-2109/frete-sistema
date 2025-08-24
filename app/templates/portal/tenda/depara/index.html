@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Portal Tenda - De-Para{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4">Portal Tenda - Gerenciar De-Para</h1>
+    
+    <div class="row">
+        <!-- Card De-Para EAN -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-barcode"></i> De-Para EAN (Produtos)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        Mapeamento de códigos internos para EAN (código de barras) dos produtos.
+                    </p>
+                    <div class="btn-group-vertical w-100">
+                        <a href="{{ url_for('portal_tenda_depara.listar_ean') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-list"></i> Listar De-Para EAN
+                        </a>
+                        <a href="{{ url_for('portal_tenda_depara.novo_ean') }}" class="btn btn-outline-success">
+                            <i class="fas fa-plus"></i> Novo De-Para EAN
+                        </a>
+                        <a href="{{ url_for('portal_tenda_depara.importar_ean') }}" class="btn btn-outline-info">
+                            <i class="fas fa-file-excel"></i> Importar XLSX
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Card De-Para Local de Entrega -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-map-marker-alt"></i> De-Para Local de Entrega
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        Mapeamento de CNPJ do cliente para Grupo Empresarial e Filial no portal.
+                    </p>
+                    <div class="btn-group-vertical w-100">
+                        <a href="{{ url_for('portal_tenda_depara.listar_local') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-list"></i> Listar Locais
+                        </a>
+                        <a href="{{ url_for('portal_tenda_depara.novo_local') }}" class="btn btn-outline-success">
+                            <i class="fas fa-plus"></i> Novo Local
+                        </a>
+                        <a href="{{ url_for('portal_tenda_depara.importar_local') }}" class="btn btn-outline-info">
+                            <i class="fas fa-file-excel"></i> Importar XLSX
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Instruções -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle"></i> Instruções
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <h6>Formato XLSX para De-Para EAN:</h6>
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>codigo_nosso</th>
+                                <th>descricao_nosso</th>
+                                <th>ean</th>
+                                <th>descricao_ean</th>
+                                <th>fator_conversao</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>PROD001</td>
+                                <td>Produto Exemplo</td>
+                                <td>7891234567890</td>
+                                <td>Produto EAN</td>
+                                <td>1.0</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <h6 class="mt-3">Formato XLSX para Local de Entrega:</h6>
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>cnpj_cliente</th>
+                                <th>nome_cliente</th>
+                                <th>grupo_empresarial_nome</th>
+                                <th>filial_nome</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>01157555000100</td>
+                                <td>Cliente Exemplo</td>
+                                <td>TENDA ATACADO SA</td>
+                                <td>CT03 - AMOREIRAS</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

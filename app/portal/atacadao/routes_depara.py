@@ -15,11 +15,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-bp = Blueprint('portal_depara', __name__, url_prefix='/portal/atacadao/depara')
+bp = Blueprint('portal_depara', __name__, url_prefix='/atacadao/depara')
 
 @bp.route('/')
 @login_required
 def index():
+    """Página inicial do De-Para Atacadão"""
+    return render_template('portal/atacadao/depara/index.html')
+
+@bp.route('/listar')
+@login_required
+def listar():
     """Lista todos os mapeamentos De-Para"""
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '')
@@ -40,7 +46,7 @@ def index():
     
     mapeamentos = query.paginate(page=page, per_page=50, error_out=False)
     
-    return render_template('portal/atacadao/depara/index.html',
+    return render_template('portal/atacadao/depara/listar.html',
                          mapeamentos=mapeamentos,
                          search=search)
 

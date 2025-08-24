@@ -111,7 +111,6 @@ extract-msg==0.45.0  # Para ler arquivos .msg do Outlook
 # ==========================================
 # PORTAL INTEGRATION - BROWSER AUTOMATION
 # ==========================================
-# Para integração com portais de agendamento (Atacadão, Sendas, Tenda)
 # Escolha uma das opções abaixo conforme necessidade:
 
 # Opção 1: Selenium (para Chrome Debug Mode - RECOMENDADO)

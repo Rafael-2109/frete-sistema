@@ -13,8 +13,8 @@ GRUPOS_EMPRESARIAIS = {
         'portal': 'atacadao',
         'prefixos': [
             '93209765',  # Atacadão S.A.
-            '75315333',  # Atacadão Distribuição
-            '00063960'   # Atacadão Comercial
+            '75315333',  # Atacadão S.A.
+            '00063960'   # Atacadão S.A.
         ]
     },
     'tenda': {

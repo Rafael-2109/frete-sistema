@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Portal Tenda - Locais de Entrega{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Portal Tenda - Locais de Entrega</h1>
+        <div>
+            <a href="{{ url_for('portal_tenda_depara.novo_local') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Novo Local
+            </a>
+            <a href="{{ url_for('portal_tenda_depara.importar_local') }}" class="btn btn-info">
+                <i class="fas fa-file-excel"></i> Importar XLSX
+            </a>
+            <a href="{{ url_for('portal_tenda_depara.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>CNPJ Cliente</th>
+                            <th>Nome Cliente</th>
+                            <th>Grupo Empresarial</th>
+                            <th>Filial</th>
+                            <th width="150">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for local in locais %}
+                        <tr>
+                            <td>
+                                <code>{{ local.cnpj_cliente }}</code>
+                            </td>
+                            <td>{{ local.nome_cliente or '-' }}</td>
+                            <td>
+                                <strong>{{ local.grupo_empresarial_nome }}</strong>
+                            </td>
+                            <td>
+                                <span class="badge bg-primary">{{ local.filial_nome }}</span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('portal_tenda_depara.editar_local', id=local.id) }}" 
+                                   class="btn btn-sm btn-primary" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <form method="post" action="{{ url_for('portal_tenda_depara.excluir_local', id=local.id) }}" 
+                                      style="display: inline-block;"
+                                      onsubmit="return confirm('Tem certeza que deseja excluir este local?');">
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">
+                                Nenhum local de entrega cadastrado.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informações -->
+    <div class="card mt-3">
+        <div class="card-body">
+            <h6 class="card-title">
+                <i class="fas fa-info-circle"></i> Como funciona o De-Para de Local
+            </h6>
+            <p>Este mapeamento associa o CNPJ do cliente com:</p>
+            <ul class="mb-0">
+                <li><strong>Grupo Empresarial:</strong> Usado no campo "Filtro Destinatário" do portal</li>
+                <li><strong>Filial:</strong> Usado no campo "Local de Entrega" do portal</li>
+            </ul>
+            <p class="mt-2 mb-0">
+                Quando um agendamento for criado, o sistema automaticamente selecionará o grupo e filial 
+                corretos baseado no CNPJ do cliente.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

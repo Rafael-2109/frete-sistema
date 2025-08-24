@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Portal Tenda - Importar De-Para EAN{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-excel"></i> Importar De-Para EAN via XLSX
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="arquivo" class="form-label">
+                                Arquivo XLSX <span class="text-danger">*</span>
+                            </label>
+                            <input type="file" class="form-control" id="arquivo" name="arquivo" 
+                                   accept=".xlsx,.xls" required>
+                            <div class="form-text">
+                                Formatos aceitos: .xlsx, .xls
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="cnpj_cliente" class="form-label">
+                                CNPJ Cliente
+                                <small class="text-muted">(opcional - deixe vazio para De-Para geral)</small>
+                            </label>
+                            <input type="text" class="form-control" id="cnpj_cliente" name="cnpj_cliente" 
+                                   placeholder="00.000.000/0000-00">
+                            <div class="form-text">
+                                Se informado, todos os registros importados serão associados a este CNPJ
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('portal_tenda_depara.listar_ean') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            <button type="submit" class="btn btn-info">
+                                <i class="fas fa-upload"></i> Importar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Formato do arquivo -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-table"></i> Formato do Arquivo XLSX
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p>O arquivo deve conter as seguintes colunas (na primeira linha):</p>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>codigo_nosso</th>
+                                    <th>descricao_nosso</th>
+                                    <th>ean</th>
+                                    <th>descricao_ean</th>
+                                    <th>fator_conversao</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>PROD001</td>
+                                    <td>Produto Exemplo</td>
+                                    <td>7891234567890</td>
+                                    <td>Produto no Portal</td>
+                                    <td>1.0</td>
+                                </tr>
+                                <tr>
+                                    <td>PROD002</td>
+                                    <td>Outro Produto</td>
+                                    <td>7899876543210</td>
+                                    <td>Descrição Portal</td>
+                                    <td>12.0</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <strong>Observações:</strong>
+                        <ul class="mb-0">
+                            <li>Colunas obrigatórias: <code>codigo_nosso</code> e <code>ean</code></li>
+                            <li>As demais colunas são opcionais</li>
+                            <li>Se <code>fator_conversao</code> não for informado, será usado 1.0</li>
+                            <li>Registros existentes serão atualizados</li>
+                            <li>Novos registros serão criados</li>
+                        </ul>
+                    </div>
+
+                    <a href="#" class="btn btn-sm btn-outline-primary" onclick="baixarModelo(); return false;">
+                        <i class="fas fa-download"></i> Baixar Modelo XLSX
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function baixarModelo() {
+    // Criar dados de exemplo
+    const data = [
+        ['codigo_nosso', 'descricao_nosso', 'ean', 'descricao_ean', 'fator_conversao'],
+        ['PROD001', 'Produto Exemplo', '7891234567890', 'Produto no Portal', '1.0'],
+        ['PROD002', 'Outro Produto', '7899876543210', 'Descrição Portal', '12.0']
+    ];
+    
+    // Criar workbook
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'De-Para EAN');
+    
+    // Baixar arquivo
+    XLSX.writeFile(wb, 'modelo_depara_ean_tenda.xlsx');
+}
+</script>
+
+<!-- Adicionar biblioteca XLSX se não estiver carregada -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+{% endblock %}

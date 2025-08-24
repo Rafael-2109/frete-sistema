@@ -40,6 +40,12 @@ def index():
                          integracoes=integracoes,
                          stats=stats)
 
+@portal_bp.route('/central')
+@login_required
+def central_portais():
+    """Central de Portais de Agendamento - Nova interface unificada"""
+    return render_template('portal/central_portais.html')
+
 @portal_bp.route('/agendar/<lote_id>')
 @login_required
 def agendar_lote(lote_id):

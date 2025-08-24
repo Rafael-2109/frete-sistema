@@ -3,14 +3,13 @@ Rotas para configuração de sessões dos portais
 Permite configurar sessões sem acesso ao Shell
 """
 
-from flask import render_template, request, jsonify, flash, redirect, url_for
-from flask_login import login_required, current_user
+from flask import render_template, request, jsonify
+from flask_login import login_required
 from app.portal import portal_bp
 from app.portal.models import PortalConfiguracao, PortalSessao
 from app.portal.session_manager import SessionManager
 from app.portal.utils.grupo_empresarial import GrupoEmpresarial
 from app import db
-from cryptography.fernet import Fernet
 from datetime import datetime, timedelta
 import os
 import json
@@ -274,7 +273,8 @@ def fazer_login_automatico_atacadao(client, usuario, senha):
                     email_preenchido = True
                     logger.info(f"Email preenchido com seletor: {seletor}")
                     break
-            except:
+            except Exception as e:
+                logger.error(f"Erro ao preencher email: {e}")
                 continue
         
         if not email_preenchido:
@@ -290,7 +290,8 @@ def fazer_login_automatico_atacadao(client, usuario, senha):
                     senha_preenchida = True
                     logger.info(f"Senha preenchida com seletor: {seletor}")
                     break
-            except:
+            except Exception as e:
+                logger.error(f"Erro ao preencher senha: {e}")
                 continue
         
         if not senha_preenchida:
@@ -312,7 +313,8 @@ def fazer_login_automatico_atacadao(client, usuario, senha):
                     client.page.locator(seletor).first.click()
                     logger.info(f"Botão de login clicado: {seletor}")
                     break
-            except:
+            except Exception as e:
+                logger.error(f"Erro ao clicar em login: {e}")
                 continue
         
         # Aguardar login processar

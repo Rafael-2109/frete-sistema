@@ -1,55 +1,50 @@
 {% extends "base.html" %}
 
-{% block title %}Portal Atacadão - Gerenciar Códigos{% endblock %}
+{% block title %}Portal Tenda - Gerenciar Códigos EAN{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4 mt-3">
-        <h1 class="h3">Portal Atacadão - Gerenciar Códigos</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Portal Tenda - Gerenciar Códigos EAN</h1>
         <a href="{{ url_for('portal.central_portais') }}" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Voltar à Central
         </a>
     </div>
     
     <div class="row">
-        <!-- Card Principal De-Para -->
+        <!-- Card Principal De-Para EAN -->
         <div class="col-md-8 mb-4">
             <div class="card">
-                <div class="card-header bg-success text-white">
+                <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
-                        <i class="fas fa-barcode"></i> De-Para Códigos Atacadão
+                        <i class="fas fa-barcode"></i> De-Para EAN (Produtos)
                     </h5>
                 </div>
                 <div class="card-body">
                     <p class="card-text">
-                        O De-Para do Atacadão converte nossos códigos internos de produtos para os 
-                        códigos reconhecidos pelo portal do Atacadão, permitindo agendamentos automáticos.
+                        O De-Para EAN é essencial para o funcionamento dos agendamentos no Portal Tenda. 
+                        Ele converte nossos códigos internos de produtos para os códigos EAN (código de barras) 
+                        que o portal reconhece.
                     </p>
                     
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle"></i> <strong>Importante:</strong> 
-                        Cada produto que será agendado no portal precisa ter seu De-Para configurado.
+                        Sem o De-Para configurado, o sistema não conseguirá criar agendamentos para os produtos.
                     </div>
 
                     <div class="btn-group-vertical w-100">
-                        <a href="{{ url_for('portal.portal_depara.listar') }}" class="btn btn-outline-primary text-start">
-                            <i class="fas fa-list"></i> Listar De-Para
+                        <a href="{{ url_for('portal.portal_tenda_depara.listar_ean') }}" class="btn btn-outline-primary text-start">
+                            <i class="fas fa-list"></i> Listar De-Para EAN
                             <small class="d-block text-muted">Visualize e gerencie todos os mapeamentos cadastrados</small>
                         </a>
-                        <a href="{{ url_for('portal.portal_depara.novo') }}" class="btn btn-outline-success text-start">
-                            <i class="fas fa-plus"></i> Novo De-Para
+                        <a href="{{ url_for('portal.portal_tenda_depara.novo_ean') }}" class="btn btn-outline-success text-start">
+                            <i class="fas fa-plus"></i> Novo De-Para EAN
                             <small class="d-block text-muted">Cadastre um novo mapeamento manualmente</small>
                         </a>
-                        <a href="{{ url_for('portal.portal_depara.importar') }}" class="btn btn-outline-info text-start">
-                            <i class="fas fa-file-excel"></i> Importar CSV
-                            <small class="d-block text-muted">Importe múltiplos mapeamentos via arquivo</small>
+                        <a href="{{ url_for('portal.portal_tenda_depara.importar_ean') }}" class="btn btn-outline-info text-start">
+                            <i class="fas fa-file-excel"></i> Importar XLSX
+                            <small class="d-block text-muted">Importe múltiplos mapeamentos via planilha</small>
                         </a>
-                        <!-- Exportar (Em desenvolvimento)
-                        <a href="#" class="btn btn-outline-warning text-start disabled">
-                            <i class="fas fa-download"></i> Exportar CSV
-                            <small class="d-block text-muted">Baixe todos os mapeamentos atuais</small>
-                        </a>
-                        -->
                     </div>
                 </div>
             </div>
@@ -60,27 +55,27 @@
             <div class="card">
                 <div class="card-header">
                     <h6 class="mb-0">
-                        <i class="fas fa-question-circle"></i> Como Funciona
+                        <i class="fas fa-question-circle"></i> Como Usar
                     </h6>
                 </div>
                 <div class="card-body">
                     <h6>Para que serve?</h6>
                     <p class="small">
-                        O De-Para traduz nossos códigos internos para os códigos que o 
-                        portal do Atacadão reconhece, permitindo agendamentos automáticos.
+                        O portal Tenda identifica produtos pelo código EAN (código de barras). 
+                        Este De-Para conecta nossos códigos internos aos EANs do Tenda.
                     </p>
                     
                     <h6>Quando atualizar?</h6>
                     <ul class="small">
                         <li>Ao cadastrar novos produtos</li>
-                        <li>Quando o Atacadão alterar códigos</li>
+                        <li>Quando o Tenda alterar códigos</li>
                         <li>Para corrigir erros de mapeamento</li>
                     </ul>
                     
                     <h6>Fator de Conversão</h6>
                     <p class="small">
                         Use quando a unidade de medida for diferente. 
-                        Ex: Se vendemos em caixas mas o Atacadão compra em unidades, 
+                        Ex: Se vendemos em caixas mas o Tenda compra em unidades, 
                         use fator 12 (1 caixa = 12 unidades).
                     </p>
                 </div>
@@ -94,47 +89,44 @@
             <div class="card">
                 <div class="card-header">
                     <h6 class="mb-0">
-                        <i class="fas fa-table"></i> Formato CSV para Importação
+                        <i class="fas fa-table"></i> Formato XLSX para Importação
                     </h6>
                 </div>
                 <div class="card-body">
-                    <p>Para importar via arquivo CSV, use o seguinte formato:</p>
+                    <p>Para importar via planilha, use o seguinte formato:</p>
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered">
                             <thead class="table-light">
                                 <tr>
                                     <th>codigo_nosso</th>
                                     <th>descricao_nosso</th>
-                                    <th>codigo_atacadao</th>
-                                    <th>descricao_atacadao</th>
+                                    <th>ean</th>
+                                    <th>descricao_ean</th>
                                     <th>fator_conversao</th>
-                                    <th>cnpj_cliente</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
                                     <td>PROD001</td>
                                     <td>Produto Exemplo</td>
-                                    <td>AT123456</td>
-                                    <td>Produto no Atacadão</td>
+                                    <td>7891234567890</td>
+                                    <td>Produto no Portal</td>
                                     <td>1.0</td>
-                                    <td>12345678901234</td>
                                 </tr>
                                 <tr>
                                     <td>PROD002</td>
                                     <td>Outro Produto</td>
-                                    <td>AT789012</td>
-                                    <td>Descrição Atacadão</td>
+                                    <td>7899876543210</td>
+                                    <td>Descrição Portal</td>
                                     <td>12.0</td>
-                                    <td></td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                     
-                    <div class="alert alert-info mt-3">
-                        <strong>Dica:</strong> O campo cnpj_cliente é opcional. Use-o apenas quando 
-                        o mesmo produto tiver códigos diferentes para clientes específicos.
+                    <div class="alert alert-warning mt-3">
+                        <strong>Dica:</strong> Você pode obter os códigos EAN diretamente com o Tenda ou 
+                        consultando as notas fiscais de compra.
                     </div>
                 </div>
             </div>
