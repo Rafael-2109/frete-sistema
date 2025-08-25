@@ -15,6 +15,13 @@ import os
 import json
 import logging
 
+# Fix para Playwright Sync em loop asyncio
+try:
+    import nest_asyncio
+    nest_asyncio.apply()
+except ImportError:
+    pass  # Se não tiver nest_asyncio, continuar sem ele
+
 logger = logging.getLogger(__name__)
 
 # Inicializar gerenciador de sessões

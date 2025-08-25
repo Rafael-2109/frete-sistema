@@ -119,6 +119,7 @@ webdriver-manager==4.0.1   # Gerenciamento de drivers
 
 # Opção 2: Playwright (alternativa moderna)
 playwright==1.40.0       # Automação multi-browser (descomentado se preferir)
+nest-asyncio==1.6.0      # Fix para Playwright Sync em loop asyncio
 
 # Dependências adicionais para portal
 cryptography==41.0.7       # Criptografia de cookies/sessões (já incluído acima)

@@ -9,8 +9,8 @@ echo "Instalando dependências..."
 pip install -r requirements.txt
 
 # 2. Instalar Playwright e navegadores (para Portal Atacadão)
-echo "Instalando Playwright..."
-pip install playwright
+echo "Instalando Playwright e nest-asyncio..."
+pip install playwright nest-asyncio
 playwright install chromium
 playwright install-deps chromium || echo "Dependências instaladas pelo Render"
 

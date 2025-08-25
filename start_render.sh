@@ -36,6 +36,23 @@ else
     echo " ✅ Dependências do Chrome já instaladas"
 fi
 
+# 🎭 INSTALAR NAVEGADORES DO PLAYWRIGHT SE NECESSÁRIO
+echo " Verificando Playwright..."
+if ! python -c "import playwright" 2>/dev/null; then
+    echo " ⚠️ Playwright não encontrado, instalando..."
+    pip install playwright nest-asyncio
+fi
+
+# Verificar se os navegadores do Playwright estão instalados
+if [ ! -d "$HOME/.cache/ms-playwright" ]; then
+    echo " Instalando navegadores do Playwright..."
+    python -m playwright install chromium
+    python -m playwright install-deps chromium
+    echo " ✅ Navegadores do Playwright instalados"
+else
+    echo " ✅ Navegadores do Playwright já instalados"
+fi
+
 # Configurar encoding UTF-8
 export PYTHONIOENCODING=utf-8
 export LANG=C.UTF-8
