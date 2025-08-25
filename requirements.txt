@@ -123,3 +123,5 @@ playwright==1.40.0       # Automação multi-browser (descomentado se preferir)
 # Dependências adicionais para portal
 cryptography==41.0.7       # Criptografia de cookies/sessões (já incluído acima)
 PyPDF2==3.0.1
+pdfplumber==0.13.0
+pypdf==5.1.0

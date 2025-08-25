@@ -13,6 +13,67 @@ from decimal import Decimal
 
 class DemandaService:
     
+    def calcular_demanda_realizada(self, cod_produto, mes, ano, grupo=None):
+        """Calcula demanda realizada do FaturamentoProduto para um produto/mês/ano"""
+        
+        from app.faturamento.models import FaturamentoProduto
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"=== INÍCIO calcular_demanda_realizada ===")
+        logger.info(f"Produto: {cod_produto}, Mês: {mes}, Ano: {ano}, Grupo: {grupo}")
+        
+        # Busca faturamentos do mês/ano
+        query = db.session.query(
+            func.sum(FaturamentoProduto.qtd_produto_faturado)
+        ).filter(
+            FaturamentoProduto.cod_produto == cod_produto,
+            extract('month', FaturamentoProduto.data_fatura) == mes,
+            extract('year', FaturamentoProduto.data_fatura) == ano,
+            FaturamentoProduto.status_nf != 'Cancelado'  # Não contar NFs canceladas
+        )
+        
+        # Filtro por grupo se especificado
+        if grupo and grupo != '':
+            if grupo == 'RESTANTE':
+                # Busca todos os prefixos cadastrados
+                from app.manufatura.models import GrupoEmpresarial
+                todos_prefixos = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.ativo == True
+                ).all()
+                
+                # Exclui CNPJs que pertencem a algum grupo
+                if todos_prefixos:
+                    for prefixo_tuple in todos_prefixos:
+                        prefixo = prefixo_tuple[0]
+                        query = query.filter(
+                            func.substr(FaturamentoProduto.cnpj_cliente, 1, 8) != prefixo
+                        )
+            else:
+                # Busca prefixos do grupo específico
+                from app.manufatura.models import GrupoEmpresarial
+                prefixos_grupo = db.session.query(GrupoEmpresarial.prefixo_cnpj).filter(
+                    GrupoEmpresarial.nome_grupo == grupo,
+                    GrupoEmpresarial.ativo == True
+                ).all()
+                
+                if prefixos_grupo:
+                    from sqlalchemy import or_
+                    prefixos = [p[0] for p in prefixos_grupo]
+                    cnpj_filters = []
+                    for prefixo in prefixos:
+                        cnpj_filters.append(
+                            func.substr(FaturamentoProduto.cnpj_cliente, 1, 8) == prefixo
+                        )
+                    if cnpj_filters:
+                        query = query.filter(or_(*cnpj_filters))
+        
+        resultado = query.scalar()
+        valor_final = float(resultado or 0)
+        logger.info(f"Demanda realizada calculada: {valor_final}")
+        logger.info(f"=== FIM calcular_demanda_realizada ===")
+        return valor_final
+    
     def calcular_demanda_ativa(self, cod_produto, grupo=None):
         """Calcula demanda ativa da carteira para um produto específico"""
         

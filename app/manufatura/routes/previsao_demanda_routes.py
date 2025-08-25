@@ -87,6 +87,9 @@ def register_previsao_demanda_routes(bp):
                 ),
                 'demanda_ativa': service.calcular_demanda_ativa(
                     cod_produto, grupo
+                ),
+                'demanda_realizada': service.calcular_demanda_realizada(
+                    cod_produto, mes, ano, grupo
                 )
             }
             
@@ -98,12 +101,71 @@ def register_previsao_demanda_routes(bp):
             logger.error(f"[COMPARACOES] Erro: {str(e)}", exc_info=True)
             return jsonify({'erro': str(e)}), 500
     
+    @bp.route('/api/previsao-demanda/buscar-existentes')
+    @login_required
+    def buscar_previsoes_existentes():
+        """Busca previsões já cadastradas para o mês/ano/grupo"""
+        try:
+            mes = int(request.args.get('mes'))
+            ano = int(request.args.get('ano'))
+            grupo = request.args.get('grupo', '')
+            
+            # Busca previsões existentes
+            query = PrevisaoDemanda.query.filter_by(
+                data_mes=mes,
+                data_ano=ano
+            )
+            
+            # Filtro por grupo se especificado
+            if grupo:
+                query = query.filter_by(nome_grupo=grupo)
+            
+            previsoes = query.all()
+            
+            # Retorna dicionário com cod_produto como chave
+            resultado = {}
+            for p in previsoes:
+                resultado[p.cod_produto] = {
+                    'qtd_prevista': float(p.qtd_demanda_prevista or 0),
+                    'qtd_realizada': float(p.qtd_demanda_realizada or 0),
+                    'disparo_producao': p.disparo_producao or 'MTS'
+                }
+            
+            return jsonify(resultado)
+            
+        except Exception as e:
+            return jsonify({'erro': str(e)}), 500
+    
     @bp.route('/api/previsao-demanda/salvar', methods=['POST'])
     @login_required
     def salvar_previsao_editada():
         """Salva previsão editada pelo usuário"""
         try:
             dados = request.json
+            
+            # CORREÇÃO: Não salvar se qtd_prevista for 0 ou None
+            qtd_prevista = dados.get('qtd_prevista', 0)
+            if qtd_prevista == 0 or qtd_prevista is None:
+                # Se já existe um registro, deleta
+                previsao_existente = PrevisaoDemanda.query.filter_by(
+                    data_mes=dados['mes'],
+                    data_ano=dados['ano'],
+                    cod_produto=dados['cod_produto'],
+                    nome_grupo=dados.get('grupo', 'GERAL')
+                ).first()
+                
+                if previsao_existente:
+                    db.session.delete(previsao_existente)
+                    db.session.commit()
+                    return jsonify({
+                        'sucesso': True,
+                        'mensagem': 'Previsão removida (qtd = 0)'
+                    })
+                else:
+                    return jsonify({
+                        'sucesso': True,
+                        'mensagem': 'Nada a salvar (qtd = 0)'
+                    })
             
             # Busca ou cria previsão
             previsao = PrevisaoDemanda.query.filter_by(
@@ -124,10 +186,14 @@ def register_previsao_demanda_routes(bp):
                 db.session.add(previsao)
             
             # Atualiza valores
-            previsao.qtd_demanda_prevista = dados['qtd_prevista']
+            previsao.qtd_demanda_prevista = qtd_prevista
             previsao.disparo_producao = dados.get('disparo_producao', 'MTS')
             previsao.criado_por = current_user.nome if current_user.is_authenticated else 'Sistema'
             previsao.criado_em = datetime.utcnow()
+            
+            # Se houver demanda realizada, atualiza também
+            if 'qtd_realizada' in dados:
+                previsao.qtd_demanda_realizada = dados['qtd_realizada']
             
             db.session.commit()
             

@@ -303,6 +303,9 @@
                             <th rowspan="2" class="align-middle text-center" style="background-color: #e7f3ff;">
                                 Demanda<br>Prevista
                             </th>
+                            <th rowspan="2" class="align-middle text-center" style="background-color: #fff3e7;">
+                                Demanda<br>Realizada
+                            </th>
                             <th rowspan="2" class="align-middle text-center">Disparo</th>
                             <th rowspan="2" class="align-middle text-center">Ações</th>
                         </tr>
@@ -323,7 +326,7 @@
                     </thead>
                     <tbody id="tbody-previsao">
                         <tr>
-                            <td colspan="7" class="text-center text-muted">
+                            <td colspan="8" class="text-center text-muted">
                                 <i class="fas fa-info-circle me-2"></i>
                                 Configure os parâmetros acima e clique em "Buscar Produtos"
                             </td>
@@ -441,6 +444,7 @@ var comparacoesConfig = {
 
 var produtosCarregados = [];
 var comparacoesCarregadas = {};
+var previsoesExistentes = {};
 
 // Inicialização
 $(document).ready(function() {
@@ -600,7 +604,7 @@ function carregarDados() {
     
     // Limpa tabela
     $('#tbody-previsao').html(
-        '<tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Carregando...</td></tr>'
+        '<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Carregando...</td></tr>'
     );
     
     // Busca produtos reais do histórico filtrados por grupo
@@ -647,9 +651,22 @@ function carregarDados() {
         promises.push(promise);
     });
     
-            // Quando todas as comparações forem carregadas
+            // Quando todas as comparações forem carregadas, busca previsões existentes
             $.when.apply($, promises).done(function() {
-                renderizarTabela();
+                // Busca previsões já cadastradas
+                $.get('/manufatura/api/previsao-demanda/buscar-existentes', {
+                    mes: mes,
+                    ano: ano,
+                    grupo: grupo
+                }).done(function(previsoes) {
+                    console.log('Previsões existentes:', previsoes);
+                    previsoesExistentes = previsoes;
+                    renderizarTabela();
+                }).fail(function() {
+                    console.log('Nenhuma previsão existente encontrada');
+                    previsoesExistentes = {};
+                    renderizarTabela();
+                });
             }).fail(function() {
                 alert('Erro ao carregar comparações');
                 renderizarTabela();
@@ -670,7 +687,7 @@ function renderizarTabela() {
     
     if (produtosCarregados.length === 0) {
         $tbody.html(
-            '<tr><td colspan="7" class="text-center text-muted">Nenhum produto encontrado</td></tr>'
+            '<tr><td colspan="8" class="text-center text-muted">Nenhum produto encontrado</td></tr>'
         );
         return;
     }
@@ -716,18 +733,26 @@ function renderizarTabela() {
         }
         
         // Coluna Demanda Prevista (editável)
+        var previsaoExistente = previsoesExistentes[produto.cod] || {};
         var $tdPrevista = $('<td>').addClass('text-right editable-cell previsto-value');
         var $inputPrevista = $('<input>')
             .attr('type', 'number')
             .attr('step', '0.001')
             .addClass('form-control form-control-sm')
-            .val(0)
+            .val(previsaoExistente.qtd_prevista || 0)  // Usa valor existente se houver
             .on('change', function() {
                 salvarPrevisaoIndividual(produto.cod, $(this).val());
             });
         $tdPrevista.append($inputPrevista);
         $tdPrevista.append('<span class="save-indicator"><i class="fas fa-check"></i></span>');
         $tr.append($tdPrevista);
+        
+        // Coluna Demanda Realizada (somente leitura - vem de FaturamentoProduto)
+        var demandaRealizada = comparacoes.demanda_realizada || 0;
+        var $tdRealizada = $('<td>').addClass('text-right')
+            .css('background-color', '#fff9f3')
+            .html('<strong>' + formatarNumero(demandaRealizada) + '</strong>');
+        $tr.append($tdRealizada);
         
         // Coluna Disparo (editável)
         var $tdDisparo = $('<td>').addClass('text-center');
@@ -737,6 +762,7 @@ function renderizarTabela() {
                 '<option value="MTS">MTS</option>' +
                 '<option value="MTO">MTO</option>'
             )
+            .val(previsaoExistente.disparo_producao || 'MTS')  // Usa valor existente se houver
             .on('change', function() {
                 salvarPrevisaoIndividual(produto.cod, null, $(this).val());
             });
@@ -817,14 +843,29 @@ function salvarTodasPrevisoes() {
     if (!confirm('Salvar todas as previsões?')) return;
     
     var promises = [];
+    var produtosSalvos = 0;
+    var produtosIgnorados = 0;
     
     $('tr[data-produto]').each(function() {
         var codProduto = $(this).data('produto');
-        promises.push(salvarPrevisaoIndividual(codProduto));
+        var qtdPrevista = parseFloat($(this).find('input[type="number"]').val());
+        
+        // Só salva se qtd > 0
+        if (qtdPrevista > 0) {
+            promises.push(salvarPrevisaoIndividual(codProduto));
+            produtosSalvos++;
+        } else {
+            produtosIgnorados++;
+        }
     });
     
     $.when.apply($, promises).done(function() {
-        alert('Todas as previsões foram salvas!');
+        var mensagem = 'Previsões salvas!\n';
+        mensagem += '✅ ' + produtosSalvos + ' produtos salvos\n';
+        if (produtosIgnorados > 0) {
+            mensagem += '⏭️ ' + produtosIgnorados + ' produtos ignorados (qtd = 0)';
+        }
+        alert(mensagem);
     });
 }
 
