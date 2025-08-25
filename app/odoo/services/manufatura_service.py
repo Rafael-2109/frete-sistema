@@ -502,12 +502,30 @@ class ManufaturaOdooService:
                          'price_total', 'tax_id']
                     )
                     
+                    # Buscar dados dos produtos para obter o default_code
+                    product_ids = [l['product_id'][0] for l in linhas if l.get('product_id')]
+                    produtos_dict = {}
+                    if product_ids:
+                        produtos = self.connection.search_read(
+                            'product.product',
+                            [['id', 'in', product_ids]],
+                            ['id', 'default_code', 'name']
+                        )
+                        produtos_dict = {p['id']: p for p in produtos}
+                    
                     # Processar cada linha
                     for linha in linhas:
+                        # Obter produto do dicionário
+                        product_id = linha['product_id'][0] if linha.get('product_id') else None
+                        produto_info = produtos_dict.get(product_id, {})
+                        
+                        # Usar default_code como cod_produto (mesmo padrão da CarteiraPrincipal)
+                        cod_produto_real = produto_info.get('default_code', '')
+                        
                         # Verificar se já existe
                         existe = HistoricoPedidos.query.filter_by(
                             num_pedido=ped_odoo.get('name'),
-                            cod_produto=str(linha['product_id'][0]) if linha.get('product_id') else None
+                            cod_produto=cod_produto_real
                         ).first()
                         
                         if not existe:
@@ -522,11 +540,11 @@ class ManufaturaOdooService:
                                     self.logger.error(f"Erro ao processar data de pedido: {e}")
                                     pass
                             
-                            # Processar nome do produto - remover código [XXX] do início
-                            nome_produto_completo = linha['product_id'][1] if linha.get('product_id') else None
+                            # Usar nome do produto do dicionário ou do linha
+                            nome_produto_completo = produto_info.get('name') or (linha['product_id'][1] if linha.get('product_id') else None)
                             nome_produto_limpo = nome_produto_completo
                             if nome_produto_completo and ']' in nome_produto_completo:
-                                # Remove [codigo] do início do nome
+                                # Remove [codigo] do início do nome se existir
                                 nome_produto_limpo = nome_produto_completo.split(']', 1)[-1].strip()
                             
                             # Criar histórico
@@ -537,7 +555,7 @@ class ManufaturaOdooService:
                                 raz_social_red=ped_odoo['partner_id'][1] if ped_odoo.get('partner_id') else None,
                                 vendedor=ped_odoo['user_id'][1] if ped_odoo.get('user_id') else None,
                                 equipe_vendas=ped_odoo['team_id'][1] if ped_odoo.get('team_id') else None,
-                                cod_produto=str(linha['product_id'][0]) if linha.get('product_id') else None,
+                                cod_produto=cod_produto_real,  # CORRIGIDO: Usando default_code
                                 nome_produto=nome_produto_limpo,
                                 qtd_produto_pedido=Decimal(str(linha.get('product_uom_qty', 0))),
                                 preco_produto_pedido=Decimal(str(linha.get('price_unit', 0))),

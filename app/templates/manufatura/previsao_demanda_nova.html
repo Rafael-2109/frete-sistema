@@ -216,6 +216,20 @@
                             </tr>
                             <tr>
                                 <td>
+                                    <i class="fas fa-calendar-minus text-purple me-2"></i>
+                                    Mês Anterior
+                                </td>
+                                <td>
+                                    <div class="comparison-selector" data-comparison="mes_anterior">
+                                        <button class="btn btn-sm btn-outline-primary" data-column="1">Coluna 1</button>
+                                        <button class="btn btn-sm btn-outline-primary" data-column="2">Coluna 2</button>
+                                        <button class="btn btn-sm btn-outline-primary" data-column="3">Coluna 3</button>
+                                        <button class="btn btn-sm btn-outline-secondary active" data-column="0">Não incluir</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
                                     <i class="fas fa-calendar-alt text-success me-2"></i>
                                     Mesmo Mês Ano Anterior
                                 </td>
@@ -420,6 +434,7 @@
 var comparacoesConfig = {
     media_3_meses: { coluna: 0, label: 'Média 3M' },
     media_6_meses: { coluna: 0, label: 'Média 6M' },
+    mes_anterior: { coluna: 0, label: 'Mês Anterior' },
     ano_anterior: { coluna: 0, label: 'Ano Anterior' },
     demanda_ativa: { coluna: 0, label: 'Carteira' }
 };
@@ -473,7 +488,7 @@ $(document).ready(function() {
 
 // Carrega grupos empresariais
 function carregarGrupos() {
-    $.get('{{ url_for("manufatura.listar_grupos_empresariais") }}')
+    $.get('/manufatura/api/previsao-demanda/listar-grupos')
     .done(function(grupos) {
         var $select = $('#grupo-empresarial');
         $select.empty();
@@ -589,8 +604,10 @@ function carregarDados() {
     );
     
     // Busca produtos reais do histórico filtrados por grupo
-    $.get('{{ url_for("manufatura.listar_produtos_historico") }}', { grupo: grupo })
+    $.get('/manufatura/api/previsao-demanda/produtos-historico', { grupo: grupo })
         .done(function(produtos) {
+            console.log('Produtos recebidos do backend:', produtos);
+            
             if (!produtos || produtos.length === 0) {
                 produtosCarregados = [];
                 renderizarTabela();
@@ -599,7 +616,8 @@ function carregarDados() {
             
             // Transforma para o formato esperado
             produtosCarregados = produtos.map(function(p) {
-                return {
+                console.log('Produto original:', p);
+                var produtoFormatado = {
                     cod: p.cod_produto,
                     nome: p.nome_produto,
                     qtd_total: p.qtd_total,
@@ -607,17 +625,23 @@ function carregarDados() {
                     primeira_venda: p.primeira_venda,
                     ultima_venda: p.ultima_venda
                 };
+                console.log('Produto formatado:', produtoFormatado);
+                return produtoFormatado;
             });
+            
+            console.log('Produtos carregados:', produtosCarregados);
             
             // Para cada produto, busca comparações
             var promises = [];
             produtosCarregados.forEach(function(produto) {
-        var promise = $.get('{{ url_for("manufatura.calcular_comparacoes") }}', {
+        console.log('Buscando comparações para produto:', produto.cod);
+        var promise = $.get('/manufatura/api/previsao-demanda/calcular-comparacoes', {
             mes: mes,
             ano: ano,
             cod_produto: produto.cod,
             grupo: grupo
         }).done(function(comparacoes) {
+            console.log('Comparações recebidas para', produto.cod, ':', comparacoes);
             comparacoesCarregadas[produto.cod] = comparacoes;
         });
         promises.push(promise);
@@ -652,11 +676,16 @@ function renderizarTabela() {
     }
     
     produtosCarregados.forEach(function(produto, index) {
+        console.log('Renderizando produto:', produto);
         var comparacoes = comparacoesCarregadas[produto.cod] || {};
+        console.log('Comparações para', produto.cod, ':', comparacoes);
         
         var $tr = $('<tr>').attr('data-produto', produto.cod);
         
         // Coluna Produto - Mostrando código e nome corretamente
+        console.log('Código do produto:', produto.cod);
+        console.log('Nome do produto:', produto.nome);
+        
         $tr.append(
             $('<td>').addClass('table-sticky')
                 .attr('data-codigo', produto.cod)
@@ -758,7 +787,7 @@ function salvarPrevisaoIndividual(codProduto, qtdPrevista, disparoProducao) {
     };
     
     $.ajax({
-        url: '{{ url_for("manufatura.salvar_previsao_editada") }}',
+        url: '/manufatura/api/previsao-demanda/salvar',
         method: 'POST',
         data: JSON.stringify(dados),
         contentType: 'application/json',
@@ -868,7 +897,7 @@ function salvarGrupo() {
     };
     
     $.ajax({
-        url: '{{ url_for("manufatura.criar_grupo_empresarial") }}',
+        url: '/manufatura/api/grupos-empresariais/criar',
         method: 'POST',
         data: JSON.stringify(dados),
         contentType: 'application/json',
@@ -890,7 +919,7 @@ function salvarGrupo() {
 
 // Carrega grupos cadastrados para a tabela
 function carregarGruposCadastrados() {
-    $.get('{{ url_for("manufatura.listar_grupos_crud") }}')
+    $.get('/manufatura/api/grupos-empresariais/listar')
     .done(function(grupos) {
         var $tbody = $('#tbody-grupos');
         $tbody.empty();
@@ -925,7 +954,7 @@ function carregarGruposCadastrados() {
 
 // Edita grupo (carrega dados no formulário)
 function editarGrupo(nomeGrupo) {
-    $.get('{{ url_for("manufatura.listar_grupos_crud") }}')
+    $.get('/manufatura/api/grupos-empresariais/listar')
     .done(function(grupos) {
         var grupo = grupos.find(g => g.nome_grupo === nomeGrupo);
         if (grupo) {
@@ -942,7 +971,7 @@ function deletarGrupo(nomeGrupo) {
     if (!confirm('Deseja realmente desativar o grupo "' + nomeGrupo + '"?')) return;
     
     $.ajax({
-        url: '{{ url_for("manufatura.deletar_grupo_empresarial", nome_grupo="_NOME_") }}'.replace('_NOME_', nomeGrupo),
+        url: '/manufatura/api/grupos-empresariais/' + encodeURIComponent(nomeGrupo),
         method: 'DELETE',
         headers: {
             'X-CSRFToken': $('meta[name="csrf-token"]').attr('content')

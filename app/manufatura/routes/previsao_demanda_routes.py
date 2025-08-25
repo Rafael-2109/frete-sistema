@@ -59,11 +59,15 @@ def register_previsao_demanda_routes(bp):
         """Calcula comparações de histórico para análise"""
         try:
             from app.manufatura.services.demanda_service import DemandaService
+            import logging
+            logger = logging.getLogger(__name__)
             
             mes = int(request.args.get('mes'))
             ano = int(request.args.get('ano'))
             cod_produto = request.args.get('cod_produto')
             grupo = request.args.get('grupo')
+            
+            logger.info(f"[COMPARACOES] Recebido: mes={mes}, ano={ano}, cod_produto={cod_produto}, grupo={grupo}")
             
             service = DemandaService()
             
@@ -75,17 +79,23 @@ def register_previsao_demanda_routes(bp):
                 'media_6_meses': service.calcular_media_historica(
                     cod_produto, 6, mes, ano, grupo
                 ),
+                'mes_anterior': service.calcular_mes_anterior(
+                    cod_produto, mes, ano, grupo
+                ),
                 'ano_anterior': service.calcular_mesmo_mes_ano_anterior(
-                    cod_produto, mes, ano - 1, grupo
+                    cod_produto, mes, ano, grupo
                 ),
                 'demanda_ativa': service.calcular_demanda_ativa(
                     cod_produto, grupo
                 )
             }
             
+            logger.info(f"[COMPARACOES] Retornando: {comparacoes}")
+            
             return jsonify(comparacoes)
             
         except Exception as e:
+            logger.error(f"[COMPARACOES] Erro: {str(e)}", exc_info=True)
             return jsonify({'erro': str(e)}), 500
     
     @bp.route('/api/previsao-demanda/salvar', methods=['POST'])
@@ -293,6 +303,57 @@ def register_previsao_demanda_routes(bp):
             
         except Exception as e:
             db.session.rollback()
+            return jsonify({'erro': str(e)}), 500
+    
+    @bp.route('/api/previsao-demanda/debug-carteira/<cod_produto>')
+    @login_required
+    def debug_carteira(cod_produto):
+        """Debug endpoint para verificar dados da CarteiraPrincipal"""
+        try:
+            from app.carteira.models import CarteiraPrincipal
+            
+            # Total de registros do produto
+            total = db.session.query(CarteiraPrincipal).filter(
+                CarteiraPrincipal.cod_produto == cod_produto
+            ).count()
+            
+            # Registros com saldo > 0
+            com_saldo = db.session.query(CarteiraPrincipal).filter(
+                CarteiraPrincipal.cod_produto == cod_produto,
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            ).count()
+            
+            # Soma total
+            soma = db.session.query(
+                func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
+            ).filter(
+                CarteiraPrincipal.cod_produto == cod_produto,
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            ).scalar()
+            
+            # Primeiros 5 registros
+            amostras = db.session.query(
+                CarteiraPrincipal.num_pedido,
+                CarteiraPrincipal.qtd_saldo_produto_pedido,
+                CarteiraPrincipal.cnpj_cpf
+            ).filter(
+                CarteiraPrincipal.cod_produto == cod_produto,
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            ).limit(5).all()
+            
+            return jsonify({
+                'cod_produto': cod_produto,
+                'total_registros': total,
+                'registros_com_saldo': com_saldo,
+                'soma_total': float(soma or 0),
+                'amostras': [{
+                    'pedido': a.num_pedido,
+                    'saldo': float(a.qtd_saldo_produto_pedido),
+                    'cnpj': a.cnpj_cpf
+                } for a in amostras]
+            })
+            
+        except Exception as e:
             return jsonify({'erro': str(e)}), 500
     
     @bp.route('/api/grupos-empresariais/<nome_grupo>', methods=['DELETE'])
